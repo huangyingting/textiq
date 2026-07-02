@@ -638,6 +638,28 @@ describe("applyVnextShapeOp", () => {
     assert.deepEqual(opts.line, { color: "000000", width: 1 });
   });
 
+  test("image-retry fill is embedded as an image with stroke overlay", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextShapeOp(
+      slide as never,
+      makeShapeOp({
+        fill: {
+          kind: "image",
+          assetId: "data:image/svg+xml;base64,PHN2Zy8+",
+          fit: "cover",
+        },
+        stroke: { color: "000000", widthPt: 1 },
+      }),
+    );
+    assert.equal(calls[0].kind, "addImage");
+    const imageOpts = calls[0].args[0] as Record<string, unknown>;
+    assert.ok("data" in imageOpts);
+    assert.deepEqual(imageOpts.sizing, { type: "cover", w: 4, h: 2 });
+    assert.equal(calls[1].kind, "addShape");
+    const strokeOpts = calls[1].args[1] as Record<string, unknown>;
+    assert.deepEqual(strokeOpts.fill, { transparency: 100 });
+  });
+
   test("shape op only calls addShape", () => {
     const { slide, calls } = makeMockSlide();
     applyVnextShapeOp(slide as never, makeShapeOp());

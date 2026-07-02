@@ -11,7 +11,8 @@
  *   inches at this boundary. The default pixel basis is 960×540 (matches
  *   `resolveDeckRenderTree` default). Pass `canvasWidthPx`/`canvasHeightPx`
  *   to override.
- * - Gradient and image fills emit diagnostics and fall back to a solid color.
+ * - Gradient, pattern, and image fills use image-retry fallback metadata when
+ *   PptxGenJS has no native fill representation.
  * - Effect styles (glass, blur, glow) emit unsupported-export-feature
  *   diagnostics; the shape still renders with a solid fill fallback.
  * - This module has no browser or PptxGenJS dependencies.
@@ -37,6 +38,7 @@ export type {
   VnextPptxBackgroundOp,
   VnextPptxConnectorOp,
   VnextPptxDeckSpec,
+  VnextPptxImageFill,
   VnextPptxImageOp,
   VnextPptxLayout,
   VnextPptxOp,
@@ -93,8 +95,8 @@ function convertSlide(
  *
  * - Operation frames are converted from pixels (at the given pixel basis) to
  *   PPTX inches derived from the canvas format.
- * - Gradient / image fills emit `unsupported-export-feature` diagnostics and
- *   fall back to a solid color.
+ * - Gradient / pattern / image fills use image-retry fallback metadata when
+ *   PptxGenJS has no native fill representation.
  * - Glass/blur/glow effects emit `unsupported-export-feature` diagnostics.
  * - Carry-forward diagnostics from the `ExportDeckSpec` are preserved.
  */

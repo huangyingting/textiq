@@ -299,7 +299,7 @@ describe("buildVnextPptxSpec — E05 image and visual fidelity", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVnextPptxSpec — diagnostics", () => {
-  test("gradient fill emits unsupported-export-feature diagnostic", () => {
+  test("linear gradient fill uses deterministic image-retry fallback", () => {
     const pkgWithGradient = buildMinimalThemePackage("gradient-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
@@ -322,8 +322,14 @@ describe("buildVnextPptxSpec — diagnostics", () => {
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
     assert.ok(
+      pptx.slides[0].background.imageFill?.assetId.startsWith(
+        "data:image/svg+xml;base64,",
+      ),
+      "Expected SVG image-retry fallback for PptxGenJS gradient limitation",
+    );
+    assert.ok(
       pptx.diagnostics.some((d) => d.code === "unsupported-export-feature"),
-      "Expected unsupported-export-feature diagnostic for gradient fill",
+      "Expected unsupported-export-feature diagnostic naming image-retry fallback",
     );
   });
 
@@ -399,7 +405,7 @@ describe("buildVnextPptxSpec — speaker notes", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVnextPptxSpec — radial gradient and image fill fallback", () => {
-  test("radial gradient fill emits unsupported-export-feature diagnostic", () => {
+  test("radial gradient fill uses deterministic image-retry fallback", () => {
     const pkgWithRadial = buildMinimalThemePackage("radial-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
@@ -422,12 +428,18 @@ describe("buildVnextPptxSpec — radial gradient and image fill fallback", () =>
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
     assert.ok(
+      pptx.slides[0].background.imageFill?.assetId.startsWith(
+        "data:image/svg+xml;base64,",
+      ),
+      "Expected SVG image-retry fallback for radial gradient",
+    );
+    assert.ok(
       pptx.diagnostics.some((d) => d.code === "unsupported-export-feature"),
       "Expected unsupported-export-feature for radial gradient",
     );
   });
 
-  test("image fill emits unsupported-export-feature diagnostic", () => {
+  test("image fill uses the image-retry tier", () => {
     const pkgWithImageFill = buildMinimalThemePackage("image-fill-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
@@ -448,9 +460,10 @@ describe("buildVnextPptxSpec — radial gradient and image fill fallback", () =>
     const renderTree = resolveDeckRenderTree(deck, pkgWithImageFill);
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
-    assert.ok(
-      pptx.diagnostics.some((d) => d.code === "unsupported-export-feature"),
-      "Expected unsupported-export-feature for image fill",
+    assert.deepEqual(
+      pptx.slides[0].background.imageFill,
+      { kind: "image", assetId: "https://example.com/bg.jpg", fit: "cover" },
+      "Expected image fill to become background image-retry metadata",
     );
   });
 
@@ -484,7 +497,7 @@ describe("buildVnextPptxSpec — radial gradient and image fill fallback", () =>
     );
   });
 
-  test("pattern fill emits unsupported-export-feature diagnostic", () => {
+  test("pattern fill uses deterministic image-retry fallback", () => {
     const pkgWithPattern = buildMinimalThemePackage("pattern-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
@@ -508,8 +521,75 @@ describe("buildVnextPptxSpec — radial gradient and image fill fallback", () =>
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
     assert.ok(
+      pptx.slides[0].background.imageFill?.assetId.startsWith(
+        "data:image/svg+xml;base64,",
+      ),
+      "Expected SVG image-retry fallback for pattern fill",
+    );
+    assert.ok(
       pptx.diagnostics.some((d) => d.code === "unsupported-export-feature"),
       "Expected unsupported-export-feature for pattern fill",
+    );
+  });
+
+  test("shape pattern fill is carried as image-retry fill metadata", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "slide-pattern-shape",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "shape",
+              id: "shape-pattern",
+              shape: "rect",
+              frame: { x: 96, y: 54, w: 192, h: 108 },
+              style: {
+                fill: {
+                  type: "pattern",
+                  kind: "dots",
+                  color: "#111111",
+                  background: "#eeeeee",
+                },
+              },
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const op = pptx.slides[0].ops[0];
+    assert.equal(op.type, "shape");
+    if (op.type === "shape") {
+      assert.equal(typeof op.fill, "object");
+      assert.ok(
+        typeof op.fill === "object" &&
+          op.fill.assetId.startsWith("data:image/svg+xml;base64,"),
+      );
+    }
+  });
+
+  test("empty image fill keeps deterministic unsupported diagnostic", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "slide-empty-image-fill",
+          background: {
+            type: "background",
+            fill: { type: "image", assetId: "" },
+          },
+          operations: [],
+        },
+      ],
+    });
+    assert.equal(pptx.slides[0].background.imageFill, undefined);
+    assert.ok(
+      pptx.diagnostics.some((d) => d.code === "unsupported-export-feature"),
+      "Expected unsupported-export-feature when image retry has no asset",
     );
   });
 });
@@ -841,7 +921,10 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
 
     const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
     assert.ok(shapeOp);
-    assert.equal(shapeOp.fill, "CCCCCC");
+    assert.ok(
+      typeof shapeOp.fill === "object" &&
+        shapeOp.fill.assetId.startsWith("data:image/svg+xml;base64,"),
+    );
     assert.deepEqual(shapeOp.stroke, { color: "000000", widthPt: 2 });
     assert.equal(shapeOp.rotation, -12);
 
@@ -1042,7 +1125,11 @@ describe("buildVnextPptxSpec — direct operation conversion edge cases", () => 
     assert.equal(pptx.layout, "LAYOUT_CUSTOM");
     assert.ok(pptx.slideH > 0);
     assert.equal(pptx.slides[0].notes, "Keep these notes");
-    assert.equal(pptx.slides[0].background.fill, "224466");
+    assert.ok(
+      pptx.slides[0].background.imageFill?.assetId.startsWith(
+        "data:image/svg+xml;base64,",
+      ),
+    );
     assert.equal(pptx.slides[0].ops.length, 7);
 
     const textOp = pptx.slides[0].ops.find((op) => op.id === "text-rich");

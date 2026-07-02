@@ -1,9 +1,32 @@
 import type { ConnectorEndpoint } from "../schema";
 import type {
   VnextPptxConnectorOp,
+  VnextPptxImageFill,
   VnextPptxShapeOp,
 } from "../pptx-export-adapter";
 import type { PptxSlide } from "./shared";
+
+function imageSource(assetId: string): { data: string } | { path: string } {
+  return assetId.startsWith("data:") ? { data: assetId } : { path: assetId };
+}
+
+function addImageFill(
+  slide: PptxSlide,
+  fill: VnextPptxImageFill,
+  op: Pick<VnextPptxShapeOp, "x" | "y" | "w" | "h" | "rotation">,
+): void {
+  slide.addImage({
+    ...imageSource(fill.assetId),
+    x: op.x,
+    y: op.y,
+    w: op.w,
+    h: op.h,
+    ...(fill.fit === "contain" || fill.fit === "cover"
+      ? { sizing: { type: fill.fit, w: op.w, h: op.h } }
+      : {}),
+    ...(op.rotation !== undefined ? { rotate: op.rotation } : {}),
+  });
+}
 
 /**
  * Maps a v7 shape name string to a PptxGenJS shape name.
@@ -30,6 +53,21 @@ export function applyVnextShapeOp(
   const shapeName = vnextShapeToName(shape) as Parameters<
     PptxSlide["addShape"]
   >[0];
+  if (fill !== undefined && typeof fill !== "string") {
+    addImageFill(slide, fill, op);
+    if (stroke !== undefined) {
+      slide.addShape(shapeName, {
+        x,
+        y,
+        w,
+        h,
+        fill: { transparency: 100 },
+        line: { color: stroke.color, width: stroke.widthPt },
+        ...(rotation !== undefined ? { rotate: rotation } : {}),
+      });
+    }
+    return;
+  }
   slide.addShape(shapeName, {
     x,
     y,
