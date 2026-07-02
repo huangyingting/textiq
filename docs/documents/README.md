@@ -26,12 +26,6 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 | Dashboard view model        | [`src/lib/dashboard/view-model.ts`](../../src/lib/dashboard/view-model.ts)                       |
 | Onboarding sample document  | [`src/lib/onboarding/seed-sample-document.ts`](../../src/lib/onboarding/seed-sample-document.ts) |
 
-## Plans
-
-| Document                         | Type | Scope                                                                                 |
-| -------------------------------- | ---- | ------------------------------------------------------------------------------------- |
-| [tables-plan.md](tables-plan.md) | Plan | Remaining document table authoring controls for row/column edits and caption editing. |
-
 ## Creation Paths
 
 Template creation resolves a requested template id through the template catalog.
