@@ -11,17 +11,18 @@ These documents describe the runtime presentation layer: the slide editor UI,
 stage interactions, present mode, and export pipeline. They sit between the
 persisted deck contract and the React components that render/edit slides.
 
-| Document                                                                         | Type         | Scope                                                                                              |
-| -------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
-| [slide-editor.md](slide-editor.md)                                               | Architecture | Slide editor runtime, stage/inspector boundaries, autosave, source links, and presence.            |
-| [slide-stage-interactions.md](slide-stage-interactions.md)                       | Design       | Stage hit-testing, preselection, selection, drag, edit, keyboard, connector, and overlap behavior. |
-| [theme-packages.md](theme-packages.md)                                           | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                   |
-| [assets.md](assets.md)                                                           | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                      |
-| [rendering-and-export.md](rendering-and-export.md)                               | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.           |
-| [vnext-editor-decomposition-plan.md](vnext-editor-decomposition-plan.md)         | Plan         | Remaining P0 work for table direct-edit ownership and final editor shell collapse.                 |
-| [legacy-retirement-plan.md](legacy-retirement-plan.md)                           | Plan         | Product-gated retirement plan for residual legacy v6 presentation imports and surface deletion.    |
-| [vnext-test-strategy-plan.md](vnext-test-strategy-plan.md)                       | Plan         | Remaining P1 work for React-internals retirement in presentation tests.                            |
-| [vnext-render-source-boundaries-plan.md](vnext-render-source-boundaries-plan.md) | Plan         | Remaining P2 provenance typing after completed vNext boundary splits.                              |
+| Document                                                                         | Type         | Scope                                                                                                                         |
+| -------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| [slide-editor.md](slide-editor.md)                                               | Architecture | Slide editor runtime, stage/inspector boundaries, autosave, source links, and presence.                                       |
+| [slide-stage-interactions.md](slide-stage-interactions.md)                       | Design       | Stage hit-testing, preselection, selection, drag, edit, keyboard, connector, and overlap behavior.                            |
+| [theme-packages.md](theme-packages.md)                                           | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                                              |
+| [assets.md](assets.md)                                                           | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                                                 |
+| [rendering-and-export.md](rendering-and-export.md)                               | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.                                      |
+| [vnext-editor-decomposition-plan.md](vnext-editor-decomposition-plan.md)         | Plan         | Remaining P0 work for table direct-edit ownership and final editor shell collapse.                                            |
+| [legacy-retirement-plan.md](legacy-retirement-plan.md)                           | Plan         | Product-gated retirement plan for residual legacy v6 presentation imports and surface deletion.                               |
+| [vnext-test-strategy-plan.md](vnext-test-strategy-plan.md)                       | Plan         | Remaining P1 work for React-internals retirement in presentation tests.                                                       |
+| [vnext-render-source-boundaries-plan.md](vnext-render-source-boundaries-plan.md) | Plan         | Remaining P2 provenance typing after completed vNext boundary splits.                                                         |
+| [pptx-fidelity-plan.md](pptx-fidelity-plan.md)                                   | Plan         | Ranked PPTX export fidelity strategy for gradients, pattern/image fills, effects, curved connectors, and visual placeholders. |
 
 Future presentation work should live in this directory as `*-plan.md` and must
 separate current behavior from target behavior, phases, and acceptance checks.
