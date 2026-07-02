@@ -18,7 +18,7 @@ import {
   buildTextContent,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 import {
   DeckGenerationDiagnosticsNotice,
   DeckGenerationPreviewVNext,

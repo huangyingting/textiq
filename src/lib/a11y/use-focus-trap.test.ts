@@ -5,7 +5,7 @@ import {
   FocusTrapTestElement,
   installFocusTrapDom,
 } from "@/test/focus-trap-dom";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 import { useFocusTrap } from "./use-focus-trap";
 
 function runHook(render: () => void): () => void {
