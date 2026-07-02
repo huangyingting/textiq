@@ -732,6 +732,95 @@ describe("applyVnextTableOp", () => {
     assert.deepEqual(rows[1][0].options?.fill, { color: "EEEEEE" });
   });
 
+  test("alternateRowFill is applied to alternating data rows", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextTableOp(
+      slide as never,
+      makeTableOp({ rowFill: "FFFFFF", alternateRowFill: "F1F5F9" }),
+    );
+    const rows = calls[0].args[0] as Array<
+      Array<{ options?: Record<string, unknown> }>
+    >;
+    assert.deepEqual(rows[1][0].options?.fill, { color: "FFFFFF" });
+    assert.deepEqual(rows[2][0].options?.fill, { color: "F1F5F9" });
+  });
+
+  test("cell rich runs are passed through with run options", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextTableOp(
+      slide as never,
+      makeTableOp({
+        table: {
+          ...makeTable(),
+          rows: [
+            {
+              id: "r1",
+              cells: [
+                {
+                  text: "Rich",
+                  runs: [
+                    {
+                      text: "Ri",
+                      bold: true,
+                      localStyle: { color: "#ff0000", fontSizePt: 14 },
+                    },
+                    { text: "ch", italic: true },
+                  ],
+                },
+                { text: "1" },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const rows = calls[0].args[0] as Array<Array<{ text: unknown }>>;
+    assert.deepEqual(rows[1][0].text, [
+      { text: "Ri", options: { bold: true, color: "FF0000", fontSize: 14 } },
+      { text: "ch", options: { italic: true } },
+    ]);
+  });
+
+  test("border and cell margin are passed to addTable options", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextTableOp(
+      slide as never,
+      makeTableOp({
+        border: { color: "334455", widthPt: 1.5, dash: "dashed" },
+        cellMargin: [0.1, 0.2, 0.3, 0.4],
+      }),
+    );
+    const opts = calls[0].args[1] as Record<string, unknown>;
+    assert.deepEqual(opts.border, {
+      color: "334455",
+      pt: 1.5,
+      type: "dash",
+    });
+    assert.deepEqual(opts.margin, [0.1, 0.2, 0.3, 0.4]);
+  });
+
+  test("caption is emitted as a text box above the table", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextTableOp(
+      slide as never,
+      makeTableOp({
+        table: { ...makeTable(), caption: "Revenue by quarter" },
+        textStyle: { fontSize: 10, fontFace: "Inter", color: "111827" },
+      }),
+    );
+    assert.equal(calls[0].kind, "addText");
+    assert.equal(calls[0].args[0], "Revenue by quarter");
+    const captionOptions = calls[0].args[1] as Record<string, unknown>;
+    assert.equal(captionOptions.x, 1);
+    assert.ok(Math.abs((captionOptions.y as number) - 0.65) < 0.001);
+    assert.equal(captionOptions.w, 10);
+    assert.equal(captionOptions.h, 0.3);
+    assert.equal(captionOptions.fontSize, 10);
+    assert.equal(captionOptions.fontFace, "Inter");
+    assert.equal(captionOptions.color, "111827");
+    assert.equal(calls[1].kind, "addTable");
+  });
+
   test("passes x, y, w, h to addTable options", () => {
     const { slide, calls } = makeMockSlide();
     applyVnextTableOp(slide as never, makeTableOp({ x: 2, y: 3, w: 9, h: 5 }));
