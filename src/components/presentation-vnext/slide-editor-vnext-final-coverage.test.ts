@@ -21,7 +21,7 @@ import {
   makeDOMRect,
   TestHTMLElement,
 } from "@/test/fake-dom";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import {
   SlideEditorVNext,
   type SlideEditorVNextProps,
@@ -152,7 +152,7 @@ function installBrowserGlobals({ desktop = false, syncTimers = false } = {}) {
 }
 
 function createHookRenderer({ runEffects = false } = {}) {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     idPrefix: "final-id",
     runEffects,
     runLayoutEffects: runEffects,

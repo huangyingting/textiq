@@ -29,7 +29,7 @@ import {
   buildTableNode,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { withReactTestDispatcher } from "@/test/react-server-renderer";
+import { renderWithReact } from "@/test/react-server-renderer";
 import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import type {
   NodeSourceMetadata,
@@ -258,28 +258,7 @@ function render(element: ReturnType<typeof createElement>): string {
 }
 
 function withFakeHooks<T>(renderComponent: () => T): T {
-  return withReactTestDispatcher(
-    {
-      useState: <S>(initial: S | (() => S)) => [
-        typeof initial === "function" ? (initial as () => S)() : initial,
-        () => undefined,
-      ],
-      useReducer: <S>(_: unknown, initial: S) => [initial, () => undefined],
-      useRef: <T>(initial: T) => ({ current: initial }),
-      useMemo: <T>(factory: () => T) => factory(),
-      useCallback: <T>(callback: T) => callback,
-      useId: () => "fake-react-id",
-      useContext: () => undefined,
-      useEffect: () => undefined,
-      useLayoutEffect: () => undefined,
-      useInsertionEffect: () => undefined,
-      useSyncExternalStore: () => undefined,
-      useTransition: () => [false, () => undefined],
-      useDeferredValue: <T>(value: T) => value,
-    },
-    renderComponent,
-    { requireInternals: false },
-  );
+  return renderWithReact(renderComponent);
 }
 
 function collectHandlers(

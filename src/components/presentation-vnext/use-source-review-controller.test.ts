@@ -15,7 +15,7 @@ import {
   buildTextNode,
   resetBuilderCounter,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 
 import {
   createSelectionState,
@@ -122,7 +122,7 @@ describe("useSourceReviewController", () => {
   });
 
   test("refreshes source review items and preserves controller status", () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const sourceBlockIndex = buildSourceBlockIndex();
     let currentDeck = buildSourceLinkedDeck();
     let activeSlideIndex = 0;
@@ -185,7 +185,7 @@ describe("useSourceReviewController", () => {
   });
 
   test("review source links selects the first issue and opens the source inspector", () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const sourceBlockIndex = buildSourceBlockIndex();
     let currentDeck = buildSourceLinkedDeck();
     let activeSlideIndex = 0;

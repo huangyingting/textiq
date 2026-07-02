@@ -9,8 +9,8 @@ import {
   buildTextNode,
 } from "@/test/builders/deck-v7";
 import {
-  createReactHookRenderer,
-  type ReactHookRendererOptions,
+  createServerRenderHarness,
+  type ServerRenderHarnessOptions,
 } from "@/test/react-server-renderer";
 import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
 import {
@@ -40,8 +40,8 @@ type FakeRect = {
   height: number;
 };
 
-function createHookRenderer(options: ReactHookRendererOptions = {}) {
-  return createReactHookRenderer({
+function createHookRenderer(options: ServerRenderHarnessOptions = {}) {
+  return createServerRenderHarness({
     idPrefix: "interaction-hooks-id",
     ...options,
   });
