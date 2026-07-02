@@ -660,6 +660,25 @@ describe("applyVnextShapeOp", () => {
     assert.deepEqual(strokeOpts.fill, { transparency: 100 });
   });
 
+  test("native glow is forwarded as a zero-distance outer shadow", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextShapeOp(
+      slide as never,
+      makeShapeOp({
+        effect: { kind: "glow", color: "66CCFF", blurPt: 8, opacity: 0.5 },
+      }),
+    );
+    const opts = calls[0].args[1] as Record<string, unknown>;
+    assert.deepEqual(opts.shadow, {
+      type: "outer",
+      color: "66CCFF",
+      opacity: 0.5,
+      blur: 8,
+      angle: 0,
+      offset: 0,
+    });
+  });
+
   test("shape op only calls addShape", () => {
     const { slide, calls } = makeMockSlide();
     applyVnextShapeOp(slide as never, makeShapeOp());
@@ -906,6 +925,35 @@ describe("applyVnextConnectorOp", () => {
     );
     const opts = calls[0].args[1] as Record<string, unknown>;
     assert.equal(opts.line, undefined);
+  });
+
+  test("curved connector uses native arc geometry", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextConnectorOp(
+      slide as never,
+      makeConnectorOp({
+        routing: "curved",
+        x: 1,
+        y: 2,
+        w: 4,
+        h: 2,
+        stroke: { color: "00AAFF", widthPt: 1.5, dash: "dashed" },
+        endArrow: "arrow",
+      }),
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].args[0], "arc");
+    const opts = calls[0].args[1] as Record<string, unknown>;
+    assert.equal(opts.x, 1);
+    assert.equal(opts.y, 2);
+    assert.equal(opts.w, 4);
+    assert.equal(opts.h, 2);
+    assert.deepEqual(opts.line, {
+      color: "00AAFF",
+      width: 1.5,
+      dashType: "dash",
+      endArrowType: "arrow",
+    });
   });
 });
 

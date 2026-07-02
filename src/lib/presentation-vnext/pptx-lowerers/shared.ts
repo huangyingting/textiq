@@ -1,9 +1,15 @@
 import type { CanvasSpec } from "../types";
-import type { FillStyle, GradientStop, StyleObject } from "../style-schema";
+import type {
+  EffectStyle,
+  FillStyle,
+  GradientStop,
+  StyleObject,
+} from "../style-schema";
 import type { DiagnosticCollector } from "../diagnostics";
 import type {
   VnextPptxImageFill,
   VnextPptxLayout,
+  VnextPptxEffect,
   VnextPptxTextStyle,
 } from "../pptx-export-types";
 
@@ -149,6 +155,7 @@ function fillSvg(
       gradientStops(fill),
     )}</linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
   }
+
   if (fill.type === "radialGradient") {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><radialGradient id="g" cx="${fill.cx ?? 50}%" cy="${fill.cy ?? 50}%" r="${fill.r ?? fill.rx ?? fill.ry ?? 70}%">${stopsXml(
       gradientStops(fill),
@@ -176,6 +183,90 @@ function fillSvg(
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="#${fallback}"/></svg>`;
 }
 
+function cssColor(color: unknown, fallback: string): string {
+  return `#${toHex(typeof color === "string" ? color : fallback)}`;
+}
+
+function effectShapeBody(shape: string, fill: string): string {
+  if (shape === "ellipse" || shape === "circle") {
+    return `<ellipse cx="256" cy="256" rx="230" ry="230" fill="${escapeXml(fill)}"/>`;
+  }
+  if (shape === "diamond") {
+    return `<path d="M256 18 494 256 256 494 18 256Z" fill="${escapeXml(fill)}"/>`;
+  }
+  if (shape === "triangle") {
+    return `<path d="M256 28 492 484 20 484Z" fill="${escapeXml(fill)}"/>`;
+  }
+  const rx = shape === "roundRect" ? 48 : 0;
+  return `<rect x="18" y="18" width="476" height="476" rx="${rx}" fill="${escapeXml(fill)}"/>`;
+}
+
+export function effectToImageRetryFill(
+  style: StyleObject,
+  shape: string,
+  dc: DiagnosticCollector,
+  ctx: string,
+): VnextPptxImageFill | undefined {
+  const effect = style.effect;
+  if (!effect || effect.kind === "none" || effect.kind === "glow") return;
+  if (style.fill && style.fill.type !== "solid") {
+    dc.warning(
+      "unsupported-export-feature",
+      `${ctx}: "${effect.kind}" effect needs whole-node rasterization, but this shape also has a non-solid fill; retaining editable PPTX fallback`,
+      { path: `${ctx}.effect`, action: { type: "replace-style-ref" } },
+    );
+    return;
+  }
+  const fill = cssColor(style.fill?.color, "#ffffff");
+  const blur =
+    effect.kind === "blur"
+      ? Math.max(0.5, Math.min(24, effect.radiusPt))
+      : effect.intensity === "strong"
+        ? 10
+        : effect.intensity === "medium"
+          ? 6
+          : 3;
+  const glassOverlay =
+    effect.kind === "glass"
+      ? `<rect x="18" y="18" width="476" height="238" rx="48" fill="#ffffff" opacity="0.30"/><rect x="18" y="18" width="476" height="476" rx="48" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="10"/>`
+      : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><filter id="fx" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs><g filter="url(#fx)">${effectShapeBody(shape, fill)}</g>${glassOverlay}</svg>`;
+  dc.warning(
+    "unsupported-export-feature",
+    `${ctx}: "${effect.kind}" effect uses image-retry fallback because PptxGenJS has no faithful native effect mapping`,
+    {
+      path: `${ctx}.effect`,
+      action: { type: "replace-style-ref" },
+      details: { exportFeature: "pptx-effect-image-retry" },
+    },
+  );
+  return { kind: "image", assetId: svgDataUri(svg), fit: "cover" };
+}
+
+export function effectToNativeGlow(
+  effect: EffectStyle | undefined,
+  dc: DiagnosticCollector,
+  ctx: string,
+): VnextPptxEffect | undefined {
+  if (!effect || effect.kind === "none") return undefined;
+  if (effect.kind !== "glow") return undefined;
+  if (!Number.isFinite(effect.blurPt) || effect.blurPt <= 0) {
+    dc.warning(
+      "unsupported-export-feature",
+      `${ctx}: glow effect has invalid blur radius; retaining editable PPTX fallback`,
+      { path: `${ctx}.effect`, action: { type: "replace-style-ref" } },
+    );
+    return undefined;
+  }
+  return {
+    kind: "glow",
+    color: resolveColor(effect.color, "#ffffff", dc, `${ctx}.effect.color`),
+    blurPt: Math.max(0.5, Math.min(30, effect.blurPt)),
+    ...(effect.opacity !== undefined
+      ? { opacity: Math.max(0, Math.min(1, effect.opacity)) }
+      : {}),
+  };
+}
 export function fillToPptxFill(
   fill: FillStyle | undefined,
   dc: DiagnosticCollector,
@@ -308,11 +399,11 @@ export function checkEffect(
 ): void {
   if (!style.effect) return;
   const kind = style.effect.kind;
-  if (kind === "glass" || kind === "blur" || kind === "glow") {
+  if (kind === "glass" || kind === "blur") {
     dc.warning(
       "unsupported-export-feature",
-      `${ctx}: "${kind}" effect uses a deterministic export fallback`,
-      { path: ctx, action: { type: "replace-style-ref" } },
+      `${ctx}: "${kind}" effect needs raster image-retry fallback; retaining editable PPTX fallback because no node raster asset is available`,
+      { path: `${ctx}.effect`, action: { type: "replace-style-ref" } },
     );
   }
 }

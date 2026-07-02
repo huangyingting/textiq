@@ -1,5 +1,5 @@
 import type { VnextPptxImageOp } from "../pptx-export-adapter";
-import type { PptxCoord, PptxSlide } from "./shared";
+import { effectToPptxShadow, type PptxCoord, type PptxSlide } from "./shared";
 
 export async function applyVnextImageOp(
   slide: PptxSlide,
@@ -13,6 +13,7 @@ export async function applyVnextImageOp(
     ? { data: assetId }
     : { path: assetId };
   const sizing = imageSizingOptions(op);
+  const shadow = effectToPptxShadow(op.effect);
   slide.addImage({
     ...source,
     x,
@@ -22,6 +23,7 @@ export async function applyVnextImageOp(
     ...(sizing !== undefined ? { sizing } : {}),
     ...(alt ? { altText: alt } : {}),
     ...(rotation !== undefined ? { rotate: rotation } : {}),
+    ...(shadow !== undefined ? { shadow } : {}),
   });
 }
 
