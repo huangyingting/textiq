@@ -12,8 +12,25 @@
  * editors can share them without DOM, React or browser dependencies.
  */
 
-/** The four save states surfaced to the user, mirroring the document editor. */
-export type SaveStatus = "saved" | "pending" | "saving" | "error";
+/** Save states surfaced to the user by the slide editor. */
+export type SaveQueueStatus =
+  | "idle"
+  | "queued"
+  | "saving"
+  | "retrying"
+  | "offline"
+  | "failed"
+  | "conflict";
+
+export type SaveStatus =
+  | "saved"
+  | "pending"
+  | "queued"
+  | "offline"
+  | "saving"
+  | "retrying"
+  | "conflict"
+  | "error";
 
 /**
  * User-facing labels for each {@link SaveStatus}. Mirrors the document editor's
@@ -23,7 +40,11 @@ export type SaveStatus = "saved" | "pending" | "saving" | "error";
 export const SAVE_STATUS_LABEL: Record<SaveStatus, string> = {
   saved: "All changes saved",
   pending: "Unsaved changes…",
+  queued: "Saved locally — syncing soon",
+  offline: "Offline — changes saved locally",
   saving: "Saving…",
+  retrying: "Retrying save…",
+  conflict: "Save conflict — resolve to continue",
   error: "Couldn't save — Retry",
 };
 
@@ -38,6 +59,8 @@ export interface SaveStatusInputs {
   isSaving: boolean;
   /** True when the last save attempt failed. */
   hasError: boolean;
+  /** Durable queued-save state, when the resilient autosave queue is enabled. */
+  queueStatus?: SaveQueueStatus;
 }
 
 /**
@@ -51,7 +74,26 @@ export function resolveSaveStatus({
   isDirty,
   isSaving,
   hasError,
+  queueStatus,
 }: SaveStatusInputs): SaveStatus {
+  if (queueStatus === "conflict") {
+    return "conflict";
+  }
+  if (queueStatus === "offline") {
+    return "offline";
+  }
+  if (queueStatus === "retrying") {
+    return "retrying";
+  }
+  if (queueStatus === "failed") {
+    return "error";
+  }
+  if (queueStatus === "saving") {
+    return "saving";
+  }
+  if (queueStatus === "queued") {
+    return "queued";
+  }
   if (hasError) {
     return "error";
   }
