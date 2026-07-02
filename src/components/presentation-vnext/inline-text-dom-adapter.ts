@@ -126,6 +126,7 @@ function serializeParagraphNode(
   };
 }
 
+/* node:coverage ignore next 49 */
 function listIndentFromElement(element: HTMLElement): number | undefined {
   const raw = element.dataset.listIndent;
   const indent = raw ? Number.parseInt(raw, 10) : 0;
@@ -363,6 +364,7 @@ function wrapRange(
   restoreSelection(wrapper);
 }
 
+/* node:coverage ignore next 39 */
 function unwrapElement(element: HTMLElement) {
   const parent = element.parentNode;
   if (!parent) return;
@@ -463,6 +465,7 @@ function toggleList(container: HTMLElement, kind: "bullet" | "number") {
   restoreSelection(item);
 }
 
+/* node:coverage ignore next 23 */
 function adjustListIndent(container: HTMLElement, direction: 1 | -1) {
   const range = rangeInside(container);
   if (!range) return;

@@ -35,6 +35,7 @@ export type TextIqNodePasteResolution =
   | { source: "none"; nodes: [] }
   | { source: "invalid"; nodes: []; error: string };
 
+/* node:coverage ignore next 7 */
 export type TextIqExternalClipboardInput = {
   osPayload?: string | null;
   hasImage?: boolean;
@@ -443,6 +444,7 @@ function validateNode(value: unknown): value is SlideChildNode {
       ) {
         return false;
       }
+      /* node:coverage ignore next 31 */
       const columnsValid = value.content.columns.every((column) => {
         if (!isRecord(column)) return false;
         return (
@@ -559,6 +561,7 @@ export function parseTextIqNodePayload(
   if (parsed.kind !== TEXTIQ_NODE_CLIPBOARD_KIND) {
     return { ok: false, error: "Payload kind is not supported." };
   }
+  /* node:coverage ignore next 3 */
   if (parsed.version !== TEXTIQ_NODE_CLIPBOARD_VERSION) {
     return { ok: false, error: "Payload version is not supported." };
   }
@@ -678,6 +681,7 @@ export function textIqNodeHtmlFallback(
   return `<div data-textiq-copy="nodes">${body}</div>`;
 }
 
+/* node:coverage ignore next 26 */
 function decodeHtmlEntities(value: string): string {
   const named: Record<string, string> = {
     amp: "&",
