@@ -8,6 +8,8 @@ import {
 } from "@/lib/presentation-vnext/clipboard/node-payload";
 import {
   canReadTextIqNodeClipboard,
+  clipboardImageBlobToFile,
+  readTextIqNodeClipboard,
   readTextIqNodeClipboardPayload,
   writeTextIqNodesToClipboard,
 } from "./node-clipboard";
@@ -120,6 +122,38 @@ describe("TextIQ browser node clipboard helpers", () => {
 
     assert.equal(canReadTextIqNodeClipboard(), true);
     assert.equal(await readTextIqNodeClipboardPayload(), "payload");
+  });
+
+  test("reads TextIQ, image, HTML, and plain text clipboard representations", async () => {
+    const imageBlob = new Blob(["png"], { type: "image/png" });
+    setNavigator({
+      clipboard: {
+        read: async () => [
+          new TestClipboardItem({ "image/png": imageBlob }),
+          new TestClipboardItem({
+            "text/html": new Blob(["<p>Hello</p>"], { type: "text/html" }),
+            "text/plain": new Blob(["Hello"], { type: "text/plain" }),
+          }),
+          new TestClipboardItem({
+            [TEXTIQ_NODE_CLIPBOARD_MIME]: new Blob(["payload"], {
+              type: TEXTIQ_NODE_CLIPBOARD_MIME,
+            }),
+          }),
+        ],
+      },
+    });
+
+    const read = await readTextIqNodeClipboard();
+    assert.equal(read.textIqPayload, "payload");
+    assert.equal(read.image?.blob, imageBlob);
+    assert.equal(read.image?.type, "image/png");
+    assert.equal(read.html, "<p>Hello</p>");
+    assert.equal(read.plainText, "Hello");
+
+    const file = clipboardImageBlobToFile(imageBlob, "image/png");
+    assert.equal(file.name, "clipboard-image.png");
+    assert.equal(file.type, "image/png");
+    assert.equal(file.size, imageBlob.size);
   });
 
   test("falls back to null when reads are unsupported, absent, or denied", async () => {

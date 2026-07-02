@@ -214,11 +214,16 @@ import {
   VISUAL_PICKER_FAILURE_MESSAGE,
 } from "./visual-picker-recovery";
 import { KeyboardShortcutHelpDialog } from "@/components/presentation-shared/keyboard-shortcut-help-dialog";
-import { resolveTextIqNodePaste } from "@/lib/presentation-vnext/clipboard/node-payload";
+import {
+  clipboardImageNode,
+  clipboardTextNode,
+  resolveExternalTextIqNodePaste,
+} from "@/lib/presentation-vnext/clipboard/node-payload";
 import { SlideEditorFooter } from "./slide-editor-footer";
 import {
   canReadTextIqNodeClipboard,
-  readTextIqNodeClipboardPayload,
+  clipboardImageBlobToFile,
+  readTextIqNodeClipboard,
   writeTextIqNodesToClipboard,
 } from "./node-clipboard";
 import {
@@ -1165,10 +1170,68 @@ export function SlideEditorVNext({
 
   async function handlePasteNodes() {
     if (!activeSlide) return;
-    const osPayload = await readTextIqNodeClipboardPayload();
-    const resolved = resolveTextIqNodePaste(osPayload, clipboardNodes);
+    const clipboard = await readTextIqNodeClipboard();
+    const resolved = resolveExternalTextIqNodePaste({
+      osPayload: clipboard.textIqPayload,
+      hasImage: clipboard.image !== null,
+      html: clipboard.html,
+      plainText: clipboard.plainText,
+      memoryNodes: clipboardNodes,
+    });
     if (resolved.source === "invalid") {
       setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
+      return;
+    }
+    if (resolved.source === "image") {
+      if (!clipboard.image) return;
+      try {
+        const file = clipboardImageBlobToFile(
+          clipboard.image.blob,
+          clipboard.image.type,
+        );
+        const uploadedImage = await deckWithUploadedImageAsset(file);
+        if (!uploadedImage) {
+          setToolbarError(
+            "Pasted image upload failed. Please try another image.",
+          );
+          return;
+        }
+        const result = insertNode(
+          uploadedImage.deckWithAsset,
+          activeSlide.id,
+          clipboardImageNode(
+            { assetId: uploadedImage.assetId, alt: uploadedImage.alt },
+            nextLayeredZIndex(activeSlide, "image"),
+          ),
+        );
+        onDeckChange(result.deck);
+        setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+        focusSelectedNodeSoon(result.nodeId);
+        setToolbarError(null);
+        setStageAnnouncement("Pasted image from clipboard.");
+      } catch {
+        setToolbarError(
+          "Pasted image upload failed. Please try another image.",
+        );
+      }
+      return;
+    }
+    if (resolved.source === "html" || resolved.source === "plain-text") {
+      const rawText =
+        resolved.source === "html" ? clipboard.html : clipboard.plainText;
+      if (!rawText) return;
+      const node = clipboardTextNode(
+        rawText,
+        nextLayeredZIndex(activeSlide, "text"),
+        { html: resolved.source === "html" },
+      );
+      if (!node) return;
+      const result = insertNode(deck, activeSlide.id, node);
+      onDeckChange(result.deck);
+      setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+      focusSelectedNodeSoon(result.nodeId);
+      setToolbarError(null);
+      setStageAnnouncement("Pasted text from clipboard.");
       return;
     }
     if (resolved.nodes.length === 0) return;
