@@ -1,18 +1,8 @@
-import { buildDeckFromBlocks, type Deck } from "@/lib/document/deck-model";
-import { pickFreshestDeck } from "@/lib/visual/fresh-deck";
 import {
   looksLikeDeckV7,
   openDeckFromJson,
 } from "@/lib/presentation-vnext/open-deck";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { DocumentBlock } from "@/lib/content";
-import type { Visual } from "@/lib/visual/schema";
-
-export interface LegacyDeckExportContext {
-  kind: "legacy";
-  deck: Deck;
-  visuals: Map<string, Visual>;
-}
 
 export interface DeckV7ExportContext {
   kind: "v7";
@@ -24,22 +14,7 @@ export interface DeckExportErrorContext {
   message: string;
 }
 
-export type DeckExportContext =
-  | LegacyDeckExportContext
-  | DeckV7ExportContext
-  | DeckExportErrorContext;
-
-export function buildDeckVisualMap(
-  blocks: ReadonlyArray<DocumentBlock>,
-): Map<string, Visual> {
-  const visuals = new Map<string, Visual>();
-  for (const block of blocks) {
-    if (block.kind === "visual") {
-      visuals.set(block.visualId, block.visual);
-    }
-  }
-  return visuals;
-}
+export type DeckExportContext = DeckV7ExportContext | DeckExportErrorContext;
 
 function pickFreshestDeckV7(
   freshestDeckJson: unknown,
@@ -66,7 +41,6 @@ function pickFreshestDeckV7(
 }
 
 export function resolveDeckExportContext(
-  blocks: ReadonlyArray<DocumentBlock>,
   freshestDeckJson: unknown,
   initialDeckJson: unknown,
 ): DeckExportContext {
@@ -77,10 +51,8 @@ export function resolveDeckExportContext(
   if (deckV7?.kind === "error") {
     return deckV7;
   }
-  const baseDeck = buildDeckFromBlocks([...blocks]);
   return {
-    kind: "legacy",
-    deck: pickFreshestDeck(freshestDeckJson, initialDeckJson, baseDeck),
-    visuals: buildDeckVisualMap(blocks),
+    kind: "error",
+    message: "PPTX export requires a current DeckV7 presentation.",
   };
 }

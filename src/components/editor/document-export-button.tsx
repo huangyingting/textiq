@@ -8,7 +8,6 @@
  *   – "Export as PDF"        → multi-page PDF (text + every visual in reading order)
  *   – "Export as PPTX"       → the edited deck (honoring `deckJson`: slide order,
  *                              retitling, free-form elements, per-slide theming)
- *   – "Slide SVGs / PNGs"    → one image per authored slide, bundled as a ZIP
  *   – "Infographic PNG/PDF"  → one tall composed image (text + visuals in order)
  *
  * It reads the current Lexical editor state to traverse the document blocks
@@ -37,7 +36,6 @@ import { downloadBlob } from "@/lib/visual/export";
 import { sanitizeFilename } from "@/lib/visual/export-filename";
 import { useUserEntitlements } from "@/lib/billing/use-user-entitlements";
 import { resolveExportPolicy } from "@/lib/visual/export-policy";
-import { runExportPreflight } from "@/lib/visual/export-preflight";
 import { resolveDeckExportContext } from "@/lib/visual/deck-export-context";
 import {
   bucketBytes,
@@ -56,7 +54,6 @@ interface DocumentExportButtonProps {
 }
 
 type ExportStatus = "idle" | "exporting" | "error";
-type DeckSlideImageFormat = "svg" | "png";
 
 /** Ordered list of infographic width presets shown in the sub-menu. */
 const WIDTH_PRESET_LIST = (
@@ -65,8 +62,7 @@ const WIDTH_PRESET_LIST = (
 
 /**
  * A dropdown button placed in the editor header that exports the whole
- * document as a PDF, PPTX deck, per-slide SVG/PNG bundle, or infographic
- * PNG/PDF.
+ * document as a PDF, PPTX deck, or infographic PNG/PDF.
  * Uses `--ds-*` semantic tokens so it matches the surrounding app chrome.
  *
  * Fetches the current user's plan entitlements via /api/user/entitlements so
@@ -185,35 +181,6 @@ export function DocumentExportButton({
     }
   };
 
-  const preflightDeckExport = (
-    deck: Parameters<typeof runExportPreflight>[0],
-    target: "pptx" | "image",
-  ): boolean => {
-    const result = runExportPreflight(deck, {
-      target,
-      exportPolicy,
-    });
-    if (result.hasFatal) {
-      setErrorMsg(
-        result.diagnostics
-          .filter((diagnostic) => diagnostic.severity === "fatal")
-          .map((diagnostic) => diagnostic.message)
-          .join(" "),
-      );
-      setStatus("error");
-      return false;
-    }
-    setWarningMsg(
-      result.hasWarnings
-        ? result.diagnostics
-            .filter((diagnostic) => diagnostic.severity === "warning")
-            .map((diagnostic) => diagnostic.message)
-            .join(" ")
-        : null,
-    );
-    return true;
-  };
-
   const handleExportPDF = async () => {
     setErrorMsg(null);
     setWarningMsg(null);
@@ -250,13 +217,12 @@ export function DocumentExportButton({
   const handleExportPPTX = async () => {
     if (!canPptx) return;
     setErrorMsg(null);
+    setWarningMsg(null);
     setStatus("exporting");
     setIsOpen(false);
     const startedAt = trackExportStart("pptx");
     try {
-      const blocks = await getBlocks();
       const context = resolveDeckExportContext(
-        blocks,
         await fetchDeckJson(),
         initialDeckJson,
       );
@@ -266,32 +232,9 @@ export function DocumentExportButton({
         setStatus("error");
         return;
       }
-      if (context.kind === "v7") {
-        const { exportDeckV7AsPPTX } =
-          await import("@/lib/presentation-vnext/pptx-vnext-apply");
-        const blob = await exportDeckV7AsPPTX(context.deck);
-        if (!blob) {
-          trackExportFailure("pptx", startedAt, "empty_blob");
-          setErrorMsg("PPTX export failed");
-          setStatus("error");
-          return;
-        }
-        trackExportSuccess("pptx", startedAt, blob);
-        downloadBlob(blob, safeFilename("pptx"));
-        setStatus("idle");
-        return;
-      }
-      const { exportDeckAsPPTX } =
-        await import("@/lib/presentation/export/deck-export");
-      if (!preflightDeckExport(context.deck, "pptx")) {
-        trackExportFailure("pptx", startedAt, "preflight_fatal");
-        return;
-      }
-      const blob = await exportDeckAsPPTX(
-        context.deck,
-        context.visuals,
-        getSvg,
-      );
+      const { exportDeckV7AsPPTX } =
+        await import("@/lib/presentation-vnext/pptx-vnext-apply");
+      const blob = await exportDeckV7AsPPTX(context.deck);
       if (!blob) {
         trackExportFailure("pptx", startedAt, "empty_blob");
         setErrorMsg("PPTX export failed");
@@ -304,71 +247,6 @@ export function DocumentExportButton({
     } catch {
       trackExportFailure("pptx", startedAt, "exception");
       setErrorMsg("PPTX export failed");
-      setStatus("error");
-    }
-  };
-
-  const handleExportSlideImages = async (format: DeckSlideImageFormat) => {
-    const outputFormat = `slides-${format}`;
-    setErrorMsg(null);
-    setWarningMsg(null);
-    setStatus("exporting");
-    setIsOpen(false);
-    const startedAt = trackExportStart(outputFormat);
-    try {
-      const { exportDeckAsSlideImages } =
-        await import("@/lib/presentation/export/deck-export");
-      const blocks = await getBlocks();
-      const context = resolveDeckExportContext(
-        blocks,
-        await fetchDeckJson(),
-        initialDeckJson,
-      );
-      if (context.kind === "error") {
-        trackExportFailure(outputFormat, startedAt, "deck_context_error");
-        setErrorMsg(context.message);
-        setStatus("error");
-        return;
-      }
-      if (context.kind === "v7") {
-        trackExportFailure(outputFormat, startedAt, "unsupported_deck_v7");
-        setErrorMsg(
-          "Slide image export is not available for DeckV7 yet. Export PPTX instead.",
-        );
-        setStatus("error");
-        return;
-      }
-      if (!preflightDeckExport(context.deck, "image")) {
-        trackExportFailure(outputFormat, startedAt, "preflight_fatal");
-        return;
-      }
-
-      // Ensure self-hosted slide fonts are loaded before rasterizing so the
-      // exported pixels use the real fonts, not a fallback.
-      await loadSlideFonts();
-      const blob = await exportDeckAsSlideImages(
-        context.deck,
-        context.visuals,
-        getSvg,
-        {
-          format,
-        },
-      );
-      if (!blob) {
-        trackExportFailure(outputFormat, startedAt, "empty_blob");
-        setErrorMsg("Slide image export failed");
-        setStatus("error");
-        return;
-      }
-      trackExportSuccess(outputFormat, startedAt, blob);
-      downloadBlob(
-        blob,
-        `${sanitizeFilename(documentTitle, "document")}-slides.zip`,
-      );
-      setStatus("idle");
-    } catch {
-      trackExportFailure(outputFormat, startedAt, "exception");
-      setErrorMsg("Slide image export failed");
       setStatus("error");
     }
   };
@@ -511,30 +389,6 @@ export function DocumentExportButton({
                     to unlock.
                   </p>
                 )}
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleExportSlideImages("svg")}
-                  className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}`}
-                >
-                  <span>Slide SVGs</span>
-                  <span className="text-xs text-ds-text-muted">
-                    ZIP · one file per slide
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleExportSlideImages("png")}
-                  className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}`}
-                >
-                  <span>Slide PNGs</span>
-                  <span className="text-xs text-ds-text-muted">
-                    ZIP · one image per slide
-                  </span>
-                </button>
               </div>
 
               {/* ── Infographic section ───────────────────────────────────── */}
