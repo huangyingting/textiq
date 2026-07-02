@@ -22,6 +22,7 @@ export type ReviewActionDescriptor = {
 
 export type SourceReviewActionType =
   | "go-to-target"
+  | "go-to-source"
   | "refresh-source-link"
   | "relink-source"
   | "mark-source-unlinked"
@@ -118,6 +119,13 @@ const SOURCE_REVIEW_ACTION_DESCRIPTORS: Record<
   "go-to-target": {
     label: "Go to target",
     shortLabel: "Go",
+    severity: "neutral",
+    repairEligibility: "navigation-only",
+    safety: "safe",
+  },
+  "go-to-source": {
+    label: "Jump to source block",
+    shortLabel: "Source",
     severity: "neutral",
     repairEligibility: "navigation-only",
     safety: "safe",

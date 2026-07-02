@@ -2518,6 +2518,7 @@ export function SlideEditorVNext({
     handleRefreshSourceAt,
     handleUnlinkSourceAt,
     handleRelinkSourceAt,
+    handleNavigateSourceBlock,
     handleDismissSourceAt,
     handleRefreshAllSources,
     handleSyncFromDocument,
@@ -4676,6 +4677,7 @@ export function SlideEditorVNext({
           onRefresh={handleRefreshSourceAt}
           onUnlink={handleUnlinkSourceAt}
           onRelink={handleRelinkSourceAt}
+          onNavigateSource={handleNavigateSourceBlock}
           onDismiss={handleDismissSourceAt}
           onRefreshAll={handleRefreshAllSources}
           statusMessage={sourceReviewStatus}

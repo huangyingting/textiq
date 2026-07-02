@@ -17,7 +17,10 @@ const block: SourceBlockIndexEntry = {
   kind: "text",
   hash: "hash-1",
   displayLabel: "Executive summary",
-  refresh: { kind: "text", text: "Executive summary" },
+  refresh: {
+    kind: "text",
+    text: "Executive summary with customer retention details and forecast assumptions.",
+  },
 };
 
 function makeTextBlock(id: string, label: string): SourceBlockIndexEntry {
@@ -103,6 +106,7 @@ describe("SourceReviewPanel", () => {
         onRefresh: () => undefined,
         onUnlink: () => undefined,
         onRelink: () => undefined,
+        onNavigateSource: () => undefined,
         onDismiss: () => undefined,
         onRefreshAll: () => undefined,
         statusMessage: "Refreshed 1 source links; skipped 1.",
@@ -112,6 +116,11 @@ describe("SourceReviewPanel", () => {
     assert.match(html, /Source Review/);
     assert.match(html, /Slide 1/);
     assert.match(html, /Narrative/);
+    assert.match(
+      html,
+      /Executive summary with customer retention details and forecast assumptions\./,
+    );
+    assert.match(html, /Source block not found\./);
     assert.match(html, /Stale/);
     assert.match(html, /Orphaned/);
     assert.match(html, /Refresh all safe stale \(1\)/);
@@ -122,6 +131,11 @@ describe("SourceReviewPanel", () => {
     assert.ok(
       html.includes(
         `aria-label="${sourceReviewActionAriaLabel("go-to-target", items[0])}"`,
+      ),
+    );
+    assert.ok(
+      html.includes(
+        `aria-label="${sourceReviewActionAriaLabel("go-to-source", items[0])}"`,
       ),
     );
     assert.ok(
@@ -155,6 +169,7 @@ describe("SourceReviewPanel", () => {
       onRefresh: () => calls.push("refresh"),
       onUnlink: () => calls.push("unlink"),
       onRelink: () => calls.push("relink"),
+      onNavigateSource: () => calls.push("source"),
       onDismiss: () => calls.push("dismiss"),
       onRefreshAll: () => calls.push("refresh-all"),
     });
@@ -164,6 +179,7 @@ describe("SourceReviewPanel", () => {
     assert.deepEqual(calls, [
       "refresh-all",
       "select",
+      "source",
       "refresh",
       "unlink",
       "dismiss",
@@ -180,6 +196,7 @@ describe("SourceReviewPanel", () => {
       onUnlink: () => undefined,
       onRelink: (slideId, nodeId, selectedBlock) =>
         calls.push(`${slideId}:${nodeId}:${selectedBlock.id}`),
+      onNavigateSource: () => undefined,
       onDismiss: () => undefined,
       onRefreshAll: () => undefined,
     });
@@ -207,6 +224,7 @@ describe("SourceReviewPanel", () => {
       onUnlink: () => undefined,
       onRelink: (slideId, nodeId, selectedBlock) =>
         calls.push(`${slideId}:${nodeId}:${selectedBlock.id}`),
+      onNavigateSource: () => undefined,
       onDismiss: () => undefined,
       onRefreshAll: () => undefined,
     });
@@ -216,5 +234,27 @@ describe("SourceReviewPanel", () => {
     select("text:block-9");
 
     assert.deepEqual(calls, ["slide-2:node-orphan:block-9"]);
+  });
+
+  test("routes source navigation to the resolved document block", () => {
+    const calls: string[] = [];
+    const element = SourceReviewPanel({
+      items: [items[0]],
+      sourceBlocks: [block],
+      onSelect: () => undefined,
+      onRefresh: () => undefined,
+      onUnlink: () => undefined,
+      onRelink: () => undefined,
+      onNavigateSource: (documentId, blockId) =>
+        calls.push(`${documentId}:${blockId}`),
+      onDismiss: () => undefined,
+      onRefreshAll: () => undefined,
+    });
+
+    const sourceHandler = collectClickHandlers(element)[2];
+    assert.ok(sourceHandler);
+    sourceHandler();
+
+    assert.deepEqual(calls, ["doc-1:block-1"]);
   });
 });
