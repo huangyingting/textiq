@@ -34,15 +34,17 @@ describe("SlideEditorVNext shell failures", () => {
     const exportButton = findRequiredElement(
       tree,
       (element) => {
-        if (element.type !== "button") return false;
         const buttonProps = element.props as {
           "aria-label"?: string;
+          label?: string;
           role?: string;
           children?: ReactNode;
         };
         return (
+          buttonProps.label === "Export as PPTX" ||
           buttonProps["aria-label"] === "Export as PPTX" ||
-          (buttonProps.role === "menuitem" &&
+          (element.type === "button" &&
+            buttonProps.role === "menuitem" &&
             flattenText(buttonProps.children).includes("Export PPTX"))
         );
       },
@@ -116,17 +118,19 @@ describe("SlideEditorVNext shell failures", () => {
     const presentButton = findRequiredElement(
       tree,
       (element) =>
-        element.type === "button" &&
-        (element.props as { "aria-label"?: string })["aria-label"] ===
-          "Present slides",
+        (element.props as { "aria-label"?: string; label?: string })[
+          "aria-label"
+        ] === "Present slides" ||
+        (element.props as { label?: string }).label === "Present slides",
       "Expected present roundtrip button.",
     );
     const shareButton = findRequiredElement(
       tree,
       (element) =>
-        element.type === "button" &&
-        (element.props as { "aria-label"?: string })["aria-label"] ===
-          "Share slides",
+        (element.props as { "aria-label"?: string; label?: string })[
+          "aria-label"
+        ] === "Share slides" ||
+        (element.props as { label?: string }).label === "Share slides",
       "Expected share roundtrip button.",
     );
 

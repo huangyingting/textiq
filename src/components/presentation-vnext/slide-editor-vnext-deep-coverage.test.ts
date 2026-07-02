@@ -185,10 +185,25 @@ function typeName(type: unknown): string {
 function clickByLabel(tree: ReactNode, label: string): unknown {
   const props = findProps(
     tree,
-    (candidate) => candidate["aria-label"] === label,
+    (candidate) =>
+      (candidate["aria-label"] === label || candidate.label === label) &&
+      typeof candidate.onClick === "function",
   );
   assert.equal(typeof props.onClick, "function", label);
   return (props.onClick as () => unknown)();
+}
+
+function clickPopoverTrigger(tree: ReactNode, popoverLabel: string): unknown {
+  const props = findProps(
+    tree,
+    (candidate) =>
+      candidate["aria-label"] === popoverLabel && "trigger" in candidate,
+  );
+  const trigger = props.trigger;
+  assert.ok(isValidElement(trigger));
+  const onClick = (trigger.props as ElementProps).onClick;
+  assert.equal(typeof onClick, "function", popoverLabel);
+  return (onClick as () => unknown)();
 }
 
 function keyEvent(key: string, extras: Partial<Record<string, unknown>> = {}) {
@@ -437,7 +452,7 @@ describe("SlideEditorVNext render and interaction branches", () => {
       }),
     );
 
-    assert.match(emptyHtml, /Slide editing tools/);
+    assert.match(emptyHtml, /Deck tools/);
     assert.match(emptyHtml, /No selection/);
     assert.doesNotMatch(emptyHtml, /Close slide editor/);
     assert.match(savingHtml, /Saving/);
@@ -478,7 +493,9 @@ describe("SlideEditorVNext render and interaction branches", () => {
       let tree = renderer.run(() => SlideEditorVNext(props));
       tree = renderer.run(() => SlideEditorVNext(props));
 
-      await clickByLabel(tree, "Save slide deck");
+      clickPopoverTrigger(tree, "More deck commands");
+      tree = renderer.run(() => SlideEditorVNext(props));
+      await clickByLabel(tree, "Save now");
       await clickByLabel(tree, "Present slides");
       await clickByLabel(tree, "Share slides");
       await clickByLabel(tree, "Export as PPTX");
@@ -507,22 +524,11 @@ describe("SlideEditorVNext render and interaction branches", () => {
     }
   });
 
-  test("handles stage keyboard help, diagnostics review navigation, and deck title escape", () => {
+  test("handles stage keyboard help and diagnostics review navigation", () => {
     const browser = installBrowserGlobals();
     try {
       const renderer = createHookRenderer();
       let tree = renderer.run(() => SlideEditorVNext(editorProps()));
-      clickByLabel(tree, "Rename deck");
-      tree = renderer.run(() => SlideEditorVNext(editorProps()));
-      const titleInput = findProps(
-        tree,
-        (props) => props["aria-label"] === "Deck title",
-      );
-      (titleInput.onChange as (event: unknown) => void)({
-        currentTarget: { value: "Escaped title" },
-      });
-      (titleInput.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
-      tree = renderer.run(() => SlideEditorVNext(editorProps()));
       const root = findProps(
         tree,
         (props) => props["data-slide-editor-vnext"] === "true",

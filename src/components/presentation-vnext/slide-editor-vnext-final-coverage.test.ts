@@ -263,7 +263,9 @@ function pointerEvent(
 function clickByLabel(tree: ReactNode, label: string): unknown {
   const props = findProps(
     tree,
-    (candidate) => candidate["aria-label"] === label,
+    (candidate) =>
+      (candidate["aria-label"] === label || candidate.label === label) &&
+      typeof candidate.onClick === "function",
   );
   assert.equal(typeof props.onClick, "function", label);
   return (props.onClick as () => unknown)();
@@ -666,17 +668,11 @@ test("SlideEditorVNext final coverage drives mobile menus, notes, zoom, and pick
 
     clickPopoverTrigger(tree, "Document source commands");
     tree = harness.render();
-    driveMenuKeyBranches(panelWithText(tree, "Sync from document"));
+    driveMenuKeyBranches(panelWithText(tree, "Refresh all source links"));
 
-    clickPopoverTrigger(tree, "More toolbar commands");
+    clickPopoverTrigger(tree, "More deck commands");
     tree = harness.render();
     driveMenuKeyBranches(panelWithText(tree, "Snap to guides"));
-    const ratioCommand = findProps(
-      tree,
-      (props, element) =>
-        props.role === "menuitemradio" && textContent(element).includes("4:3"),
-    );
-    (ratioCommand.onClick as () => void)();
 
     clickPopoverTrigger(tree, "Zoom presets");
     tree = harness.render();

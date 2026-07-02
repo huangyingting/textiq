@@ -21,6 +21,7 @@ and pointer state rules, see
 | Route page          | [`src/app/app/documents/[id]/slides/page.tsx`](../../src/app/app/documents/%5Bid%5D/slides/page.tsx)                                           |
 | Route controller    | [`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.tsx) |
 | Editor shell        | [`src/components/presentation-vnext/slide-editor-vnext.tsx`](../../src/components/presentation-vnext/slide-editor-vnext.tsx)                   |
+| Deck toolbar        | [`src/components/presentation-vnext/toolbar/deck-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/deck-toolbar.tsx)               |
 | Read-only canvas    | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                               |
 | Node renderer       | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)                 |
 | Inspector           | [`src/components/presentation-vnext/inspector/inspector-shell.tsx`](../../src/components/presentation-vnext/inspector/inspector-shell.tsx)     |
@@ -107,18 +108,19 @@ The desktop editor is a current-object workflow:
 
 | Surface        | Responsibility                                                                                                         |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Top toolbar    | Deck/session controls: theme, deck chrome, add slide, ratio, source, snap, shortcuts, undo/redo, save, and close.      |
+| Top toolbar    | Deck-level controls: theme, ratio, deck chrome, source, regenerate, undo/redo, present/share, export, more, and close. |
 | Canvas popover | Frequent verbs for the current object: slide verbs, element formatting, arrange, object actions.                       |
 | Stage          | Direct manipulation of slide elements on a fixed-format canvas.                                                        |
 | Inspector      | One active task panel (Slide/Text/Shape/Image/Adjust/Line/Arrange/Effects/Source/Notes/Layers) for the current object. |
-| Bottom dock    | Zoom, notes, rail toggle, and status.                                                                                  |
+| Bottom dock    | Title/slide identity, zoom, notes, rail toggle, snap, save status, diagnostics, presence, and mode/status.             |
 | Slide rail     | Select, duplicate, remove, and reorder slides.                                                                         |
 
 On smaller surfaces, the inspector can render as a sheet while the stage remains
 the same controlled editor surface. The bottom dock also compacts for narrow
-viewports: rail toggle, Notes, and zoom stay visible; save/diagnostics/mode
-details collapse into a keyboard-reachable status popover; and the dock applies
-bottom safe-area padding when pinned to the viewport edge.
+viewports: rail toggle, Notes, zoom, and snap stay reachable; title, source,
+save, diagnostics, presence, and mode details collapse into a
+keyboard-reachable status popover; and the dock applies bottom safe-area
+padding when pinned to the viewport edge.
 Desktop and mobile status surfaces announce save state with live regions:
 steady-state save labels are polite updates, and save failures are assertive.
 
@@ -145,27 +147,34 @@ render path.
 
 ## Top Toolbar
 
-The top toolbar is a compact deck/session command surface. It uses stable
-first-level text controls where space matters and icon buttons for compact view
-commands:
+The top toolbar is a compact deck-level command surface. It does not own deck
+identity, save/diagnostic/presence state, snap, or selected-object editing
+commands; those live in the bottom dock or current-object surfaces. It uses
+stable first-level text controls for deck setup and output, with icon buttons
+for compact route/actions:
 
 ```text
-Slide kit | Deck chrome | Add slide | Slide ratio | Source | Snap | Regenerate | Shortcuts       Undo Redo | Save status | Save | Close
+Theme | Ratio | Deck chrome || Source | Rebuild || More | Undo Redo | Present | Share | Export PPTX | Close
 ```
 
-- **Slide kit** selects the active theme package: theme tokens, package
-  templates, and the deck chrome baseline. The visible label includes the
-  current kit name.
+- **Theme** selects the active theme package: theme tokens, package templates,
+  and the deck chrome baseline.
 - **Deck chrome** opens global deck chrome controls for deck-level frame,
   header/footer, and shared chrome styling.
-- **Add slide** opens the slide template picker and creates a new slide from the
-  active slide kit templates, deck-local custom templates, or fallback built-in
-  templates. The picker updates automatically after the slide kit changes.
 - **Slide ratio** changes the deck format through the ratio selector.
+- **Rebuild** appears on the canonical slides route as a compact label for
+  deterministic whole-deck regenerate from the latest saved document content.
+  It then saves through the DeckV7 CAS path. It is not an AI command.
+- **More** contains low-frequency editor/deck utilities such as keyboard
+  shortcuts, manual save, diagnostics fallback access, and a snap fallback.
+- **Present** and **Share** stay as icon-only deck-level route actions.
+- **Export PPTX** stays first-level as the primary deck output action.
+- **Close** is the fixed rightmost full-screen editor exit.
 - **Insert actions** live in the current-object surfaces: slide templates come
-  from Add slide, while text, image, shape, visual, connector, and table
-  insertion are exposed through the canvas popover and inspector. Newly inserted
-  objects become selected so those surfaces take over editing.
+  from the canvas popover/current-object commands, while text, image, shape,
+  visual, connector, and table insertion are exposed through the canvas popover
+  and inspector. Newly inserted objects become selected so those surfaces take
+  over editing.
 - **Design/style controls** own deck canvas size, slide kit style
   customization, presentation theme tokens, current-slide background,
   current-slide accent, clearing current-slide background/accent overrides, and
@@ -175,12 +184,12 @@ Slide kit | Deck chrome | Add slide | Slide ratio | Source | Snap | Regenerate |
 - **Source** owns source-link review status, sync/review actions, selected-node
   refresh/unlink actions, and direct insertion of document blocks (text/table/
   visual) through `document-source-commands.ts`.
-- **Snap** toggles snap-to-grid directly from the toolbar.
-- **Regenerate** appears on the canonical slides route and deterministically
-  rebuilds the whole deck from latest saved document content, then saves through
-  the DeckV7 CAS path. It is not an AI command.
-- **Shortcuts** opens the keyboard shortcut dialog. Zoom remains in the bottom
-  dock.
+- **Snap** is an editing assist in the bottom dock, not a deck-content command
+  in the top toolbar.
+- **Save state**, **diagnostics**, **presence**, deck title, and current slide
+  identity live in the bottom dock. Save failures expose retry from status;
+  manual save remains in More.
+- **Shortcuts** opens from More. Zoom remains in the bottom dock.
 
 Toolbar popovers that execute commands expose menu semantics
 (`role="menu"`/`menuitem*`) and keyboard traversal so assistive technology gets

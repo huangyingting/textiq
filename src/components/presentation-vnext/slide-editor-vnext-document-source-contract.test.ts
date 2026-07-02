@@ -14,7 +14,7 @@ const sourceReviewController = readFileSync(
 describe("SlideEditorVNext document-source command surface", () => {
   test("renders document-source command controls", () => {
     assert.equal(source.includes('aria-label="Document source"'), true);
-    assert.equal(source.includes("Sync from document"), true);
+    assert.equal(source.includes("Refresh all source links"), true);
     assert.equal(source.includes("From document"), true);
   });
 

@@ -45,24 +45,18 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  ClipboardPaste,
-  Copy,
   Edit3,
   FileDown,
   Grid3x3,
-  Group,
   Keyboard,
   LayoutPanelLeft,
+  MoreHorizontal,
   MonitorPlay,
   Redo2,
   RefreshCw,
-  Scissors,
-  Save,
   Share2,
   StickyNote,
-  Ungroup,
   Undo2,
-  Users,
   X,
 } from "lucide-react";
 
@@ -242,6 +236,14 @@ import {
   type SelectionDistributeMode,
   type SelectionMatchSizeMode,
 } from "./toolbar/context-toolbar";
+import {
+  DeckToolbar,
+  DeckToolbarButton,
+  DeckToolbarDivider,
+  DeckToolbarGroup,
+  DeckToolbarIconButton,
+  DeckToolbarRow,
+} from "./toolbar/deck-toolbar";
 import { Filmstrip } from "./filmstrip/filmstrip";
 import {
   readFilmstripCollapsed,
@@ -325,7 +327,6 @@ import {
   moveMenuCommandFocus,
 } from "@/lib/a11y/menu-command-semantics";
 import {
-  hasRemotePeers,
   presencePeerLabel,
   useSlidePresence,
   type SlidePresenceAwareness,
@@ -994,8 +995,6 @@ export function SlideEditorVNext({
   const [inlineEditNodeId, setInlineEditNodeId] = useState<string | null>(null);
   const [inlineEditInitialCaret, setInlineEditInitialCaret] =
     useState<InlineTextInitialCaret | null>(null);
-  const [deckTitleEditing, setDeckTitleEditing] = useState(false);
-  const [deckTitleDraft, setDeckTitleDraft] = useState(deck.title ?? "Slides");
 
   function enterInlineEdit(
     nodeId: string,
@@ -1015,12 +1014,6 @@ export function SlideEditorVNext({
       (candidate) => candidate.id === packageId,
     );
     onDeckChange(setThemePackage(deck, packageId, nextPackage?.version));
-  }
-
-  function handleDeckTitleCommit() {
-    const title = deckTitleDraft.trim();
-    onDeckChange({ ...deck, title: title.length > 0 ? title : undefined });
-    setDeckTitleEditing(false);
   }
 
   function handleCanvasRatioChange(format: "16:9" | "4:3" | "square") {
@@ -3882,7 +3875,6 @@ export function SlideEditorVNext({
   const activeSlideName = slideDisplayName(activeSlide, activeSlideIndex);
   const selectedNodeSummary = selectedSummary(selectedIds.length);
   const diagnosticSummary = diagnosticsSummary(diagnostics.length);
-  const isCompactToolbar = !isDesktopInspectorViewport;
   const currentCanvasFormat: "16:9" | "4:3" | "square" =
     deck.canvas.format === "custom" ? "16:9" : deck.canvas.format;
   const saveErrorAnnouncement =
@@ -4062,805 +4054,407 @@ export function SlideEditorVNext({
       {/* ------------------------------------------------------------------ */}
       {/* Top Toolbar                                                         */}
       {/* ------------------------------------------------------------------ */}
-      <header
-        role="toolbar"
-        aria-label="Slide editing tools"
-        data-slide-editor-chrome="true"
-        className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-border-subtle bg-ds-surface-chrome px-3 py-2 backdrop-blur"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex min-w-0 flex-col">
-            {deckTitleEditing ? (
-              <input
-                value={deckTitleDraft}
-                autoFocus
-                onChange={(event) =>
-                  setDeckTitleDraft(event.currentTarget.value)
-                }
-                onBlur={handleDeckTitleCommit}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") handleDeckTitleCommit();
-                  if (event.key === "Escape") {
-                    setDeckTitleDraft(deck.title ?? "Slides");
-                    setDeckTitleEditing(false);
-                  }
-                }}
-                className="h-6 min-w-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-1.5 text-sm font-semibold text-ds-text-primary outline-none focus:border-ds-accent focus:ring-2 focus:ring-ds-focus-ring/20"
-                aria-label="Deck title"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setDeckTitleDraft(deck.title ?? "Slides");
-                  setDeckTitleEditing(true);
-                }}
-                className="truncate text-left text-sm font-semibold text-ds-text-primary underline-offset-2 hover:underline"
-                aria-label="Rename deck"
-              >
-                {deck.title ?? "Slides"}
-              </button>
-            )}
-            <span className="truncate text-[11px] text-ds-text-muted">
-              {activeSlideName} · {deck.slides.length} slides · {pkg.name}
-            </span>
-          </div>
-        </div>
-        <div className="flex min-w-0 items-center justify-end gap-1.5">
-          {!isCompactToolbar ? (
-            <>
-              <label className="flex items-center gap-1.5 text-xs text-ds-text-muted">
-                Theme
-                <select
-                  value={deck.theme.packageId}
-                  onChange={(event) =>
-                    handleThemePackageChange(event.currentTarget.value)
-                  }
-                  className="h-8 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary"
-                >
-                  {themePackages.map((themePackageOption) => (
-                    <option
-                      key={themePackageOption.id}
-                      value={themePackageOption.id}
-                    >
-                      {themePackageOption.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex items-center gap-1.5 text-xs text-ds-text-muted">
-                Ratio
-                <select
-                  value={currentCanvasFormat}
-                  onChange={(event) =>
-                    handleCanvasRatioChange(
-                      event.currentTarget.value as "16:9" | "4:3" | "square",
-                    )
-                  }
-                  className="h-8 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary"
-                >
-                  <option value="16:9">16:9</option>
-                  <option value="4:3">4:3</option>
-                  <option value="square">1:1</option>
-                </select>
-              </label>
-            </>
-          ) : null}
-
-          <Popover
-            open={sourceMenuOpen}
-            onClose={() => setSourceMenuOpen(false)}
-            role="menu"
-            aria-label="Document source commands"
-            portal
-            className="w-72 p-2"
-            trigger={
-              <button
-                ref={sourceMenuTriggerRef}
-                type="button"
-                aria-label="Document source"
-                aria-haspopup="menu"
-                aria-expanded={sourceMenuOpen}
-                aria-controls={sourceMenuOpen ? sourceMenuId : undefined}
-                onClick={() => setSourceMenuOpen((open) => !open)}
-                className={cx(
-                  "relative flex h-8 items-center gap-1 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
-                  FOCUS_RING,
-                )}
-              >
-                Source
-                <ChevronDown size={12} aria-hidden="true" />
-                {sourceReview.length > 0 ? (
-                  <span className="absolute -right-1 -top-1 rounded-full bg-ds-warning-surface px-1 text-[10px] font-bold text-ds-warning-text">
-                    {sourceReview.length}
-                  </span>
-                ) : null}
-              </button>
-            }
-          >
-            <div
-              ref={sourceMenuPanelRef}
-              id={sourceMenuId}
-              className="space-y-1"
-              onKeyDown={handleSourceMenuKeyDown}
+      <DeckToolbar>
+        <DeckToolbarRow>
+          <DeckToolbarGroup label="Deck setup">
+            <select
+              aria-label="Deck theme"
+              value={deck.theme.packageId}
+              onChange={(event) =>
+                handleThemePackageChange(event.currentTarget.value)
+              }
+              className={cx(
+                "h-8 max-w-36 shrink-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary",
+                FOCUS_RING,
+              )}
             >
-              <div className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-secondary">
-                {sourceStatusLabel}
-              </div>
-              {documentSourceIndex ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleSyncFromDocument}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
+              {themePackages.map((themePackageOption) => (
+                <option
+                  key={themePackageOption.id}
+                  value={themePackageOption.id}
                 >
-                  Sync from document
-                </button>
-              ) : null}
-              {sourceReview.length > 0 ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleReviewSourceLinks}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Review source links
-                </button>
-              ) : null}
-              {selectedSource && selectedNode && activeSlide ? (
-                <>
-                  <div className="my-1 border-t border-ds-border-subtle" />
-                  <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                    Selected source
-                  </p>
-                  <p className="truncate px-2 py-1 text-[11px] text-ds-text-secondary">
-                    {(selectedSource.blockKind ?? "source").toString()} ·{" "}
-                    {selectedSource.blockId ?? "linked"}
-                  </p>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      void handleRefreshSelectedSource();
-                      closeSourceMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Refresh selected source
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      handleUnlinkSourceAt(activeSlide.id, selectedNode.id);
-                      closeSourceMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Mark selected as unlinked
-                  </button>
-                </>
-              ) : null}
-              {documentInsertBlocks.length > 0 ? (
-                <>
-                  <div className="my-1 border-t border-ds-border-subtle" />
-                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                    From document
-                  </p>
-                  {documentInsertBlocks.map((block) => (
-                    <button
-                      key={`${block.kind}:${block.id}`}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => handleInsertDocumentSourceBlock(block)}
-                      className={cx(
-                        "flex w-full min-w-0 flex-col items-start rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                        FOCUS_RING,
-                      )}
-                    >
-                      <span className="w-full truncate font-medium text-ds-text-primary">
-                        {block.displayLabel}
-                      </span>
-                      <span className="w-full truncate text-[10px] text-ds-text-muted">
-                        {sourceBlockKindLabel(block.kind)} · {block.id}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              ) : null}
-            </div>
-          </Popover>
-
-          <Popover
-            open={deckChromeToolbarOpen}
-            onClose={() => setDeckChromeToolbarOpen(false)}
-            aria-label="Deck chrome controls"
-            portal
-            className="max-h-[calc(100vh-6rem)] w-[22rem] overflow-y-auto p-0"
-            trigger={
-              <button
-                type="button"
-                aria-haspopup="dialog"
-                aria-expanded={deckChromeToolbarOpen}
-                aria-label="Deck chrome"
-                onClick={() => setDeckChromeToolbarOpen((open) => !open)}
-                className={cx(
-                  "flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
-                  FOCUS_RING,
-                )}
-              >
-                Deck chrome
-              </button>
-            }
-          >
-            <div
-              ref={deckChromeToolbarPanelRef}
-              data-deck-chrome-toolbar-panel="true"
+                  {themePackageOption.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Slide ratio"
+              value={currentCanvasFormat}
+              onChange={(event) =>
+                handleCanvasRatioChange(
+                  event.currentTarget.value as "16:9" | "4:3" | "square",
+                )
+              }
+              className={cx(
+                "h-8 shrink-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary",
+                FOCUS_RING,
+              )}
             >
-              <DeckChromePanel
-                idPrefix="deck-chrome-toolbar"
-                chrome={deck.chrome}
-                slideProps={activeSlide?.props}
-                onUpdateChrome={handleUpdateDeckChrome}
-                onUpdateSlideProps={handleUpdateProps}
-              />
-            </div>
-          </Popover>
-
-          {!isCompactToolbar ? (
-            <>
-              <Tooltip
-                label={
-                  snapToGuides ? "Snap to guides: on" : "Snap to guides: off"
-                }
-                side="bottom"
-              >
-                <button
-                  type="button"
-                  aria-label="Toggle snap to guides"
-                  aria-pressed={snapToGuides}
-                  onClick={toggleSnapToGuides}
-                  className={cx(
-                    "flex h-8 items-center gap-1.5 rounded-ds-sm border px-2.5 text-xs font-medium transition-colors",
-                    snapToGuides
-                      ? "border-ds-accent-border bg-ds-accent-surface text-ds-accent-text"
-                      : "border-ds-border-subtle bg-ds-surface text-ds-text-primary hover:bg-ds-state-hover",
-                    FOCUS_RING,
-                  )}
-                >
-                  <Grid3x3 size={14} aria-hidden="true" />
-                  Snap
-                </button>
-              </Tooltip>
-
-              <div
-                className="mx-1 h-5 w-px bg-ds-border-subtle"
-                aria-hidden="true"
-              />
-
-              {onRegenerate ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void handleRegenerate()}
-                    aria-label="Regenerate slides from document"
-                    disabled={saveStatus === "saving"}
-                    className="flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover disabled:opacity-40"
-                  >
-                    <RefreshCw size={14} aria-hidden="true" />
-                    Regenerate
-                  </button>
-
-                  <div
-                    className="mx-1 h-5 w-px bg-ds-border-subtle"
-                    aria-hidden="true"
-                  />
-                </>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={handleCopyNodes}
-                aria-label="Copy selected nodes"
-                disabled={selectedIds.length === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                <Copy size={14} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={handleCutNodes}
-                aria-label="Cut selected nodes"
-                disabled={selectedIds.length === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                <Scissors size={14} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={handlePasteNodes}
-                aria-label="Paste nodes"
-                disabled={clipboardNodes.length === 0 || !activeSlide}
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                <ClipboardPaste size={14} aria-hidden="true" />
-              </button>
-
-              <button
-                type="button"
-                onClick={
-                  selectedNode?.type === "group"
-                    ? handleUngroupSelection
-                    : handleGroupSelection
-                }
-                aria-label={
-                  selectedNode?.type === "group"
-                    ? "Ungroup selected nodes"
-                    : "Group selected nodes"
-                }
-                disabled={
-                  selectedNode?.type === "group"
-                    ? false
-                    : selectedIds.length < 2
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                {selectedNode?.type === "group" ? (
-                  <Ungroup size={14} aria-hidden="true" />
-                ) : (
-                  <Group size={14} aria-hidden="true" />
-                )}
-              </button>
-
-              <div
-                className="mx-1 h-5 w-px bg-ds-border-subtle"
-                aria-hidden="true"
-              />
-
-              <button
-                type="button"
-                onClick={() => setShortcutHelpOpen(true)}
-                aria-label="Keyboard shortcuts"
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary"
-              >
-                <Keyboard size={14} aria-hidden="true" />
-              </button>
-
-              <button
-                type="button"
-                onClick={onUndo}
-                aria-label="Undo"
-                disabled={!canUndo}
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                <Undo2 size={14} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={onRedo}
-                aria-label="Redo"
-                disabled={!canRedo}
-                className="flex h-8 w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
-              >
-                <Redo2 size={14} aria-hidden="true" />
-              </button>
-
-              <div
-                className="mx-1 h-5 w-px bg-ds-border-subtle"
-                aria-hidden="true"
-              />
-
-              <div
-                className="flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-secondary"
-                aria-label={
-                  hasRemotePeers(slidePresence.peers)
-                    ? `Slide collaborators: ${remotePresencePeers
-                        .map((peer) =>
-                          presencePeerSummary(peer, deck, activeSlide?.id),
-                        )
-                        .join("; ")}`
-                    : "No other slide collaborators"
-                }
-              >
-                <Users size={13} aria-hidden="true" />
-                <span className="font-medium">
-                  {remotePresencePeers.length > 0
-                    ? `${remotePresencePeers.length} present`
-                    : "Solo"}
-                </span>
-              </div>
-
-              <div
-                className="mx-1 h-5 w-px bg-ds-border-subtle"
-                aria-hidden="true"
-              />
-
-              <button
-                type="button"
-                onClick={() => setDeckDiagnosticsReviewOpen(true)}
-                aria-label={`Open deck diagnostics review (${diagnosticsSummary(
-                  diagnostics.length,
-                )})`}
-                className="flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover"
-              >
-                Diagnostics
-                {diagnostics.length > 0 ? (
-                  <span className="rounded-full bg-ds-danger-surface px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-ds-danger-text">
-                    {diagnostics.length}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-ds-text-muted">0</span>
-                )}
-              </button>
-            </>
-          ) : (
+              <option value="16:9">16:9</option>
+              <option value="4:3">4:3</option>
+              <option value="square">1:1</option>
+            </select>
             <Popover
-              open={compactToolbarMenuOpen}
-              onClose={() => setCompactToolbarMenuOpen(false)}
+              open={deckChromeToolbarOpen}
+              onClose={() => setDeckChromeToolbarOpen(false)}
+              aria-label="Deck chrome controls"
+              portal
+              className="max-h-[calc(100vh-6rem)] w-[22rem] overflow-y-auto p-0"
+              trigger={
+                <DeckToolbarButton
+                  label="Deck chrome"
+                  active={deckChromeToolbarOpen}
+                  hasPopup="dialog"
+                  expanded={deckChromeToolbarOpen}
+                  onClick={() => setDeckChromeToolbarOpen((open) => !open)}
+                >
+                  Deck chrome
+                </DeckToolbarButton>
+              }
+            >
+              <div
+                ref={deckChromeToolbarPanelRef}
+                data-deck-chrome-toolbar-panel="true"
+              >
+                <DeckChromePanel
+                  idPrefix="deck-chrome-toolbar"
+                  chrome={deck.chrome}
+                  slideProps={activeSlide?.props}
+                  onUpdateChrome={handleUpdateDeckChrome}
+                  onUpdateSlideProps={handleUpdateProps}
+                />
+              </div>
+            </Popover>
+          </DeckToolbarGroup>
+
+          <DeckToolbarDivider />
+
+          <DeckToolbarGroup label="Document source">
+            <Popover
+              open={sourceMenuOpen}
+              onClose={() => setSourceMenuOpen(false)}
               role="menu"
-              aria-label="More toolbar commands"
+              aria-label="Document source commands"
               portal
               className="w-72 p-2"
               trigger={
                 <button
-                  ref={compactToolbarMenuTriggerRef}
+                  ref={sourceMenuTriggerRef}
                   type="button"
-                  aria-label="Open additional toolbar commands"
+                  aria-label="Document source"
                   aria-haspopup="menu"
-                  aria-expanded={compactToolbarMenuOpen}
-                  aria-controls={
-                    compactToolbarMenuOpen ? compactToolbarMenuId : undefined
-                  }
-                  onClick={() => setCompactToolbarMenuOpen((open) => !open)}
+                  aria-expanded={sourceMenuOpen}
+                  aria-controls={sourceMenuOpen ? sourceMenuId : undefined}
+                  onClick={() => setSourceMenuOpen((open) => !open)}
                   className={cx(
-                    "flex h-8 items-center gap-1 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
+                    "relative flex h-8 items-center gap-1 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
                     FOCUS_RING,
                   )}
                 >
-                  More
+                  Source
                   <ChevronDown size={12} aria-hidden="true" />
+                  {sourceReview.length > 0 ? (
+                    <span className="absolute -right-1 -top-1 rounded-full bg-ds-warning-surface px-1 text-[10px] font-bold text-ds-warning-text">
+                      {sourceReview.length}
+                    </span>
+                  ) : null}
                 </button>
               }
             >
               <div
-                ref={compactToolbarMenuPanelRef}
-                id={compactToolbarMenuId}
+                ref={sourceMenuPanelRef}
+                id={sourceMenuId}
                 className="space-y-1"
-                onKeyDown={handleCompactToolbarMenuKeyDown}
+                onKeyDown={handleSourceMenuKeyDown}
               >
-                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                  Theme
-                </p>
-                {themePackages.map((themePackageOption) => (
-                  <button
-                    key={themePackageOption.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={
-                      deck.theme.packageId === themePackageOption.id
-                    }
-                    onClick={() => {
-                      handleThemePackageChange(themePackageOption.id);
-                      closeCompactToolbarMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    <span className="truncate">{themePackageOption.name}</span>
-                    {deck.theme.packageId === themePackageOption.id ? (
-                      <span className="text-[10px] text-ds-text-muted">
-                        Current
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-
-                <div className="my-1 border-t border-ds-border-subtle" />
-                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                  Ratio
-                </p>
-                {[
-                  { value: "16:9" as const, label: "16:9" },
-                  { value: "4:3" as const, label: "4:3" },
-                  { value: "square" as const, label: "1:1" },
-                ].map((ratioOption) => (
-                  <button
-                    key={ratioOption.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={currentCanvasFormat === ratioOption.value}
-                    onClick={() => {
-                      handleCanvasRatioChange(ratioOption.value);
-                      closeCompactToolbarMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    <span>{ratioOption.label}</span>
-                    {currentCanvasFormat === ratioOption.value ? (
-                      <span className="text-[10px] text-ds-text-muted">
-                        Current
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-
-                <div className="my-1 border-t border-ds-border-subtle" />
-                {onRegenerate ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      void handleRegenerate();
-                      closeCompactToolbarMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Regenerate from document
-                  </button>
-                ) : null}
-                <div className="my-1 border-t border-ds-border-subtle" />
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={snapToGuides}
-                  onClick={() => {
-                    toggleSnapToGuides();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  <span>Snap to guides</span>
-                  <span className="text-[10px] text-ds-text-muted">
-                    {snapToGuides ? "On" : "Off"}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={selectedIds.length === 0}
-                  onClick={() => {
-                    handleCopyNodes();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  Copy selected nodes
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={selectedIds.length === 0}
-                  onClick={() => {
-                    handleCutNodes();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  Cut selected nodes
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={clipboardNodes.length === 0 || !activeSlide}
-                  onClick={() => {
-                    handlePasteNodes();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  Paste nodes
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={
-                    selectedNode?.type === "group"
-                      ? false
-                      : selectedIds.length < 2
-                  }
-                  onClick={() => {
-                    if (selectedNode?.type === "group") {
-                      handleUngroupSelection();
-                    } else {
-                      handleGroupSelection();
-                    }
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  {selectedNode?.type === "group"
-                    ? "Ungroup selected nodes"
-                    : "Group selected nodes"}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setShortcutHelpOpen(true);
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Keyboard shortcuts
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={!canUndo}
-                  onClick={() => {
-                    onUndo?.();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  Undo
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={!canRedo}
-                  onClick={() => {
-                    onRedo?.();
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
-                    FOCUS_RING,
-                  )}
-                >
-                  Redo
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setDeckDiagnosticsReviewOpen(true);
-                    closeCompactToolbarMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  <span>Diagnostics</span>
-                  <span className="text-[10px] text-ds-text-muted">
-                    {diagnostics.length}
-                  </span>
-                </button>
-                {onExportPptx ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      void handleExportPptx();
-                      closeCompactToolbarMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Export PPTX
-                  </button>
-                ) : null}
                 <div className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-secondary">
-                  {remotePresencePeers.length > 0
-                    ? `${remotePresencePeers.length} collaborator${remotePresencePeers.length === 1 ? "" : "s"} present`
-                    : "No other slide collaborators"}
+                  {sourceStatusLabel}
                 </div>
+                {documentSourceIndex ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleSyncFromDocument}
+                    className={cx(
+                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Refresh all source links
+                  </button>
+                ) : null}
+                {sourceReview.length > 0 ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleReviewSourceLinks}
+                    className={cx(
+                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Review source links
+                  </button>
+                ) : null}
+                {selectedSource && selectedNode && activeSlide ? (
+                  <>
+                    <div className="my-1 border-t border-ds-border-subtle" />
+                    <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
+                      Selected source
+                    </p>
+                    <p className="truncate px-2 py-1 text-[11px] text-ds-text-secondary">
+                      {(selectedSource.blockKind ?? "source").toString()} ·{" "}
+                      {selectedSource.blockId ?? "linked"}
+                    </p>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        void handleRefreshSelectedSource();
+                        closeSourceMenuAndRestoreFocus();
+                      }}
+                      className={cx(
+                        "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                        FOCUS_RING,
+                      )}
+                    >
+                      Refresh selected source
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        handleUnlinkSourceAt(activeSlide.id, selectedNode.id);
+                        closeSourceMenuAndRestoreFocus();
+                      }}
+                      className={cx(
+                        "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                        FOCUS_RING,
+                      )}
+                    >
+                      Mark selected as unlinked
+                    </button>
+                  </>
+                ) : null}
+                {documentInsertBlocks.length > 0 ? (
+                  <>
+                    <div className="my-1 border-t border-ds-border-subtle" />
+                    <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
+                      From document
+                    </p>
+                    {documentInsertBlocks.map((block) => (
+                      <button
+                        key={`${block.kind}:${block.id}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => handleInsertDocumentSourceBlock(block)}
+                        className={cx(
+                          "flex w-full min-w-0 flex-col items-start rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                          FOCUS_RING,
+                        )}
+                      >
+                        <span className="w-full truncate font-medium text-ds-text-primary">
+                          {block.displayLabel}
+                        </span>
+                        <span className="w-full truncate text-[10px] text-ds-text-muted">
+                          {sourceBlockKindLabel(block.kind)} · {block.id}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                ) : null}
               </div>
             </Popover>
-          )}
+            {onRegenerate ? (
+              <DeckToolbarButton
+                label="Regenerate deck from document"
+                tooltip="Regenerate deck from document"
+                disabled={saveStatus === "saving"}
+                onClick={() => void handleRegenerate()}
+              >
+                <RefreshCw size={14} aria-hidden="true" />
+                Rebuild
+              </DeckToolbarButton>
+            ) : null}
+          </DeckToolbarGroup>
+        </DeckToolbarRow>
+
+        <DeckToolbarGroup label="Deck actions" className="justify-end">
+          <Popover
+            open={compactToolbarMenuOpen}
+            onClose={() => setCompactToolbarMenuOpen(false)}
+            role="menu"
+            aria-label="More deck commands"
+            portal
+            className="w-64 p-2"
+            trigger={
+              <button
+                ref={compactToolbarMenuTriggerRef}
+                type="button"
+                aria-label="Open more deck commands"
+                aria-haspopup="menu"
+                aria-expanded={compactToolbarMenuOpen}
+                aria-controls={
+                  compactToolbarMenuOpen ? compactToolbarMenuId : undefined
+                }
+                onClick={() => setCompactToolbarMenuOpen((open) => !open)}
+                className={cx(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-ds-md border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <MoreHorizontal size={15} aria-hidden="true" />
+              </button>
+            }
+          >
+            <div
+              ref={compactToolbarMenuPanelRef}
+              id={compactToolbarMenuId}
+              className="space-y-1"
+              onKeyDown={handleCompactToolbarMenuKeyDown}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="Keyboard shortcuts"
+                onClick={() => {
+                  setShortcutHelpOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <Keyboard size={14} aria-hidden="true" />
+                Keyboard shortcuts
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={snapToGuides}
+                onClick={() => {
+                  toggleSnapToGuides();
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <span>Snap to guides</span>
+                <span className="text-[10px] text-ds-text-muted">
+                  {snapToGuides ? "On" : "Off"}
+                </span>
+              </button>
+              {onSave ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Save now"
+                  disabled={saveStatus === "saving"}
+                  onClick={() => {
+                    void onSave(deck);
+                    closeCompactToolbarMenuAndRestoreFocus();
+                  }}
+                  className={cx(
+                    "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
+                    FOCUS_RING,
+                  )}
+                >
+                  <span>Save now</span>
+                  <span className="text-[10px] text-ds-text-muted">
+                    {saveStatusLabel}
+                  </span>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setDeckDiagnosticsReviewOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <span>Diagnostics</span>
+                <span className="text-[10px] text-ds-text-muted">
+                  {diagnostics.length}
+                </span>
+              </button>
+            </div>
+          </Popover>
+
+          <DeckToolbarDivider />
+
+          <DeckToolbarGroup label="Undo and redo">
+            <DeckToolbarIconButton
+              label="Undo"
+              disabled={!canUndo}
+              onClick={onUndo}
+            >
+              <Undo2 size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+            <DeckToolbarIconButton
+              label="Redo"
+              disabled={!canRedo}
+              onClick={onRedo}
+            >
+              <Redo2 size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+          </DeckToolbarGroup>
 
           {onPresent ? (
-            <button
-              type="button"
+            <DeckToolbarIconButton
+              label="Present slides"
+              disabled={saveStatus === "saving"}
               onClick={() =>
                 void handleRoundtripAction(
                   onPresent,
                   "Presentation route failed. Please try again.",
                 )
               }
-              aria-label="Present slides"
-              disabled={saveStatus === "saving"}
-              className="flex h-8 w-8 items-center justify-center rounded-ds-md border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
             >
               <MonitorPlay size={14} aria-hidden="true" />
-            </button>
+            </DeckToolbarIconButton>
           ) : null}
           {onShare ? (
-            <button
-              type="button"
+            <DeckToolbarIconButton
+              label="Share slides"
+              disabled={saveStatus === "saving"}
               onClick={() =>
                 void handleRoundtripAction(
                   onShare,
                   "Share route failed. Please try again.",
                 )
               }
-              aria-label="Share slides"
-              disabled={saveStatus === "saving"}
-              className="flex h-8 w-8 items-center justify-center rounded-ds-md border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40"
             >
               <Share2 size={14} aria-hidden="true" />
-            </button>
+            </DeckToolbarIconButton>
           ) : null}
-          {onSave ? (
-            <button
-              type="button"
-              onClick={() => void onSave(deck)}
-              aria-label="Save slide deck"
-              disabled={saveStatus === "saving"}
-              className="flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover"
-            >
-              <Save size={14} aria-hidden="true" />
-              {saveStatus === "saving" ? "Saving" : "Save"}
-            </button>
-          ) : null}
-          {!isCompactToolbar && onExportPptx ? (
-            <button
-              type="button"
+          {onExportPptx ? (
+            <DeckToolbarButton
+              label="Export as PPTX"
               onClick={() => void handleExportPptx()}
-              aria-label="Export as PPTX"
-              className="flex h-8 items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover"
+              className="font-semibold"
             >
               <FileDown size={14} aria-hidden="true" />
               Export PPTX
-            </button>
+            </DeckToolbarButton>
           ) : null}
           {onClose ? (
-            <button
-              type="button"
+            <DeckToolbarIconButton
+              label="Close slide editor"
               onClick={handleCloseRequest}
-              aria-label="Close slide editor"
-              className="flex h-8 w-8 items-center justify-center rounded-ds-md border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary"
             >
               <X size={16} aria-hidden="true" />
-            </button>
+            </DeckToolbarIconButton>
           ) : null}
-        </div>
-      </header>
+        </DeckToolbarGroup>
+      </DeckToolbar>
 
       {/* Toolbar action error banner */}
       {toolbarError ? (
@@ -5353,15 +4947,32 @@ export function SlideEditorVNext({
         data-slide-bottom-dock="true"
         className="tiq-safe-bottom-dock grid min-h-9 shrink-0 grid-cols-1 items-center gap-2 bg-transparent px-3 py-1 text-[11px] text-ds-text-muted sm:h-9 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3 sm:py-0"
       >
-        <div className="hidden min-w-0 items-center gap-3 sm:flex">
-          <span className="truncate">{selectedNodeSummary}</span>
-          {remotePresencePeers.length > 0 ? (
-            <span className="truncate">
-              {remotePresencePeers
-                .map((peer) => presencePeerSummary(peer, deck, activeSlide?.id))
-                .join(" · ")}
-            </span>
-          ) : null}
+        <div className="hidden min-w-0 items-center gap-2 sm:flex">
+          <span className="truncate font-medium text-ds-text-secondary">
+            {deck.title ?? "Slides"}
+          </span>
+          <span aria-hidden="true" className="text-ds-border-strong">
+            ·
+          </span>
+          <span className="truncate">
+            {activeSlideName} (
+            {Math.min(activeSlideIndex + 1, deck.slides.length)}/
+            {deck.slides.length})
+          </span>
+          <span
+            aria-hidden="true"
+            className="hidden text-ds-border-strong lg:inline"
+          >
+            ·
+          </span>
+          <span className="hidden truncate lg:inline">{pkg.name}</span>
+          <span
+            aria-hidden="true"
+            className="hidden text-ds-border-strong xl:inline"
+          >
+            ·
+          </span>
+          <span className="hidden truncate xl:inline">{sourceStatusLabel}</span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:flex-nowrap sm:justify-center">
           <Tooltip
@@ -5502,6 +5113,27 @@ export function SlideEditorVNext({
               </button>
             </div>
           </Popover>
+          <Tooltip
+            label={snapToGuides ? "Snap to guides: on" : "Snap to guides: off"}
+            side="top"
+          >
+            <button
+              type="button"
+              aria-label="Toggle snap to guides"
+              aria-pressed={snapToGuides}
+              onClick={toggleSnapToGuides}
+              className={cx(
+                "flex h-7 items-center gap-1 rounded-ds-md px-1.5 text-[11px] font-semibold transition-colors sm:px-2",
+                snapToGuides
+                  ? "bg-ds-accent-surface text-ds-accent-text"
+                  : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
+                FOCUS_RING,
+              )}
+            >
+              <Grid3x3 size={13} aria-hidden />
+              Snap
+            </button>
+          </Tooltip>
           <Popover
             open={footerStatusMenuOpen}
             onClose={() => setFooterStatusMenuOpen(false)}
@@ -5536,10 +5168,21 @@ export function SlideEditorVNext({
               className="space-y-2 text-xs"
               onKeyDown={handleFooterStatusMenuKeyDown}
             >
+              <p className="truncate font-medium text-ds-text-primary">
+                {deck.title ?? "Slides"}
+              </p>
+              <p>
+                {activeSlideName} (
+                {Math.min(activeSlideIndex + 1, deck.slides.length)}/
+                {deck.slides.length})
+              </p>
+              <p>{pkg.name}</p>
+              <p>{sourceStatusLabel}</p>
               {saveStatus === "error" && onSave ? (
                 <button
                   type="button"
                   role="menuitem"
+                  aria-label={saveStatusLabel}
                   onClick={() => {
                     void onSave(deck);
                     closeFooterStatusMenuAndRestoreFocus();
@@ -5574,6 +5217,30 @@ export function SlideEditorVNext({
               {activeGroupId ? <p>Group edit</p> : null}
               {tableEditingNodeId ? <p>Table edit</p> : null}
               <p>{selectionModeLabel}</p>
+              <p>
+                {remotePresencePeers.length > 0
+                  ? remotePresencePeers
+                      .map((peer) =>
+                        presencePeerSummary(peer, deck, activeSlide?.id),
+                      )
+                      .join(" · ")
+                  : "Solo"}
+              </p>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={snapToGuides}
+                onClick={() => {
+                  toggleSnapToGuides();
+                  closeFooterStatusMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "rounded-ds-sm px-1.5 py-1 text-left font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                Snap to guides: {snapToGuides ? "on" : "off"}
+              </button>
             </div>
           </Popover>
         </div>
@@ -5587,6 +5254,7 @@ export function SlideEditorVNext({
             <button
               type="button"
               onClick={() => void onSave(deck)}
+              aria-label={saveStatusLabel}
               className="text-ds-danger-text underline-offset-2 hover:underline"
             >
               {saveStatusLabel}
@@ -5606,6 +5274,21 @@ export function SlideEditorVNext({
               {saveErrorMessage}
             </span>
           ) : null}
+          <span
+            aria-label={
+              remotePresencePeers.length > 0
+                ? `Slide collaborators: ${remotePresencePeers
+                    .map((peer) =>
+                      presencePeerSummary(peer, deck, activeSlide?.id),
+                    )
+                    .join("; ")}`
+                : "No other slide collaborators"
+            }
+          >
+            {remotePresencePeers.length > 0
+              ? `${remotePresencePeers.length} present`
+              : "Solo"}
+          </span>
           <button
             type="button"
             onClick={() => setDeckDiagnosticsReviewOpen(true)}
@@ -5620,6 +5303,7 @@ export function SlideEditorVNext({
           {activeGroupId ? <span>Group edit</span> : null}
           {tableEditingNodeId ? <span>Table edit</span> : null}
           <span>{selectionModeLabel}</span>
+          <span className="truncate">{selectedNodeSummary}</span>
         </div>
       </footer>
     </div>

@@ -84,7 +84,7 @@ test("SlideEditorVNext renders the full editor shell for mixed slide content", (
     }),
   );
 
-  assert.match(html, /Slide editing tools/);
+  assert.match(html, /Deck tools/);
   assert.match(html, /Mixed slide/);
 });
 

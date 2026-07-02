@@ -210,7 +210,9 @@ function maybeProps(
 function clickByLabel(tree: ReactNode, label: string): unknown {
   const props = maybeProps(
     tree,
-    (candidate) => candidate["aria-label"] === label,
+    (candidate) =>
+      (candidate["aria-label"] === label || candidate.label === label) &&
+      typeof candidate.onClick === "function",
   );
   assert.ok(
     props,
@@ -679,18 +681,6 @@ test("SlideEditorVNext direct state coverage drives toolbar, source, diagnostics
     const harness = createHarness();
     let tree = harness.render();
 
-    clickByLabel(tree, "Rename deck");
-    tree = harness.render();
-    const titleInput = findProps(
-      tree,
-      (props) => props["aria-label"] === "Deck title",
-    );
-    (titleInput.onChange as (event: unknown) => void)({
-      currentTarget: { value: "Renamed coverage deck" },
-    });
-    (titleInput.onKeyDown as (event: unknown) => void)(keyEvent("Enter"));
-    tree = harness.render();
-
     clickPopoverTrigger(tree, "Document source commands");
     tree = harness.render();
 
@@ -742,7 +732,7 @@ test("SlideEditorVNext direct state coverage drives toolbar, source, diagnostics
     });
     tree = harness.render();
 
-    clickPopoverTrigger(tree, "More toolbar commands");
+    clickPopoverTrigger(tree, "More deck commands");
     tree = harness.render();
     assert.ok((await invokeVisibleMenuClicks(tree)) >= 4);
     tree = harness.render();
@@ -940,7 +930,8 @@ test("SlideEditorVNext direct state coverage drives toolbar, source, diagnostics
       contextToolbarProps(harness.render())
         .onInsertVisual as () => Promise<void>
     )();
-    await clickByLabel(harness.render(), "Save slide deck");
+    clickPopoverTrigger(harness.render(), "More deck commands");
+    await clickByLabel(harness.render(), "Save now");
     await clickByLabel(harness.render(), "Close slide editor");
     tree = harness.render();
     const closeDialog = maybeProps(
@@ -1194,9 +1185,8 @@ test("SlideEditorVNext direct state coverage drives desktop toolbar branches", a
     tree = harness.render();
 
     clickByLabel(tree, "Toggle snap to guides");
-    clickByLabel(tree, "Copy selected nodes");
-    clickByLabel(tree, "Cut selected nodes");
-    clickByLabel(tree, "Paste nodes");
+    clickPopoverTrigger(tree, "More deck commands");
+    tree = harness.render();
     clickByLabel(tree, "Keyboard shortcuts");
     await clickByLabel(tree, "Export as PPTX");
     clickByLabelPrefix(tree, "Open deck diagnostics review");

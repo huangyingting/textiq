@@ -59,7 +59,7 @@ test("SlideEditorVNext renders optional-toolbar fallbacks without optional actio
     }),
   );
 
-  assert.match(html, /Slide editing tools/);
+  assert.match(html, /Deck tools/);
   assert.match(html, /Saved locally/);
   assert.doesNotMatch(html, /Close slide editor/);
   assert.doesNotMatch(html, /Export as PPTX/);

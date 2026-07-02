@@ -8,7 +8,7 @@ import { google } from "@/lib/env";
 import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
 import { linkOAuthLocalUser } from "@/lib/auth/oauth-user-service";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
@@ -58,3 +58,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const handlers = nextAuth.handlers;
+export const auth = nextAuth.auth;
+export const signIn = nextAuth.signIn;
+export const signOut = nextAuth.signOut;

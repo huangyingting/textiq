@@ -10,23 +10,28 @@ const source = readFileSync(
   new URL("./slide-editor-vnext.tsx", import.meta.url),
   "utf8",
 );
+const deckToolbarSource = readFileSync(
+  new URL("./toolbar/deck-toolbar.tsx", import.meta.url),
+  "utf8",
+);
 const shellControllerSource = readFileSync(
   new URL("./use-slide-editor-shell-controller.tsx", import.meta.url),
   "utf8",
 );
 
 describe("SlideEditorVNext toolbar command ownership", () => {
-  test("exposes the top command row as a named editing toolbar landmark", () => {
+  test("exposes the top command row as a named deck toolbar landmark", () => {
+    assert.equal(source.includes("<DeckToolbar>"), true);
     assert.match(
-      source,
-      /<header[\s\S]*role="toolbar"[\s\S]*aria-label="Slide editing tools"/,
+      deckToolbarSource,
+      /<header[\s\S]*role="toolbar"[\s\S]*aria-label="Deck tools"/,
     );
   });
 
   test("renders deck chrome in the top toolbar as a keyboard-focusable dialog command", () => {
     assert.match(
       source,
-      /aria-haspopup="dialog"[\s\S]*aria-label="Deck chrome"[\s\S]*setDeckChromeToolbarOpen\(\(open\) => !open\)/,
+      /label="Deck chrome"[\s\S]*hasPopup="dialog"[\s\S]*setDeckChromeToolbarOpen\(\(open\) => !open\)/,
     );
     assert.equal(source.includes('aria-label="Deck chrome controls"'), true);
   });
@@ -38,16 +43,13 @@ describe("SlideEditorVNext toolbar command ownership", () => {
     );
   });
 
-  test("compacts secondary toolbar commands behind a More menu on narrow viewports", () => {
-    assert.equal(
-      source.includes("const isCompactToolbar = !isDesktopInspectorViewport;"),
-      true,
+  test("keeps low-frequency toolbar commands behind a More menu", () => {
+    assert.equal(source.includes('aria-label="Open more deck commands"'), true);
+    assert.equal(source.includes('aria-label="More deck commands"'), true);
+    assert.match(
+      source,
+      /aria-label="More deck commands"[\s\S]*Keyboard shortcuts[\s\S]*Snap to guides[\s\S]*Save now[\s\S]*Diagnostics/,
     );
-    assert.equal(
-      source.includes('aria-label="Open additional toolbar commands"'),
-      true,
-    );
-    assert.equal(source.includes('aria-label="More toolbar commands"'), true);
   });
 
   test("portals top toolbar popovers out of clipped editor chrome", () => {
@@ -61,7 +63,7 @@ describe("SlideEditorVNext toolbar command ownership", () => {
     );
     assert.match(
       source,
-      /<Popover[\s\S]*aria-label="More toolbar commands"[\s\S]*portal[\s\S]*className="w-72 p-2"/,
+      /<Popover[\s\S]*aria-label="More deck commands"[\s\S]*portal[\s\S]*className="w-64 p-2"/,
     );
   });
 
@@ -82,18 +84,23 @@ describe("SlideEditorVNext toolbar command ownership", () => {
     );
   });
 
-  test("preserves compact access to theme, ratio, diagnostics, and export actions", () => {
-    assert.match(
-      source,
-      /aria-label="More toolbar commands"[\s\S]*Theme[\s\S]*Ratio[\s\S]*Diagnostics[\s\S]*Export PPTX/,
+  test("keeps first-layer deck actions visible and status actions out of the main row", () => {
+    assert.equal(source.includes('label="Deck setup"'), true);
+    assert.equal(source.includes('aria-label="Deck theme"'), true);
+    assert.equal(source.includes('aria-label="Slide ratio"'), true);
+    assert.equal(source.includes('label="Deck chrome"'), true);
+    assert.equal(source.includes('aria-label="Document source"'), true);
+    assert.equal(
+      source.includes('label="Regenerate deck from document"'),
+      true,
     );
-    assert.match(
-      source,
-      /aria-label="Document source"[\s\S]*aria-label="Save slide deck"[\s\S]*aria-label="Close slide editor"/,
-    );
+    assert.equal(source.includes('label="Export as PPTX"'), true);
+    assert.equal(source.includes('label="Close slide editor"'), true);
+    assert.equal(source.includes('aria-label="Save slide deck"'), false);
   });
 
-  test("exposes a pressed-state snap toggle in the top toolbar", () => {
+  test("exposes a pressed-state snap toggle in the footer status controls", () => {
+    assert.equal(source.includes('data-slide-bottom-dock="true"'), true);
     assert.equal(source.includes('aria-label="Toggle snap to guides"'), true);
     assert.equal(source.includes("aria-pressed={snapToGuides}"), true);
     assert.equal(source.includes("onClick={toggleSnapToGuides}"), true);
@@ -137,10 +144,7 @@ describe("SlideEditorVNext toolbar command ownership", () => {
   });
 
   test("wires keyboard shortcut help button to the shared dialog surface", () => {
-    assert.equal(
-      source.includes("onClick={() => setShortcutHelpOpen(true)}"),
-      true,
-    );
+    assert.equal(source.includes("setShortcutHelpOpen(true)"), true);
     assert.equal(source.includes('aria-label="Keyboard shortcuts"'), true);
     assert.equal(
       source.includes(
@@ -203,8 +207,8 @@ describe("SlideEditorVNext toolbar command ownership", () => {
   });
 
   test("exposes present/share roundtrip commands in the top toolbar", () => {
-    assert.equal(source.includes('aria-label="Present slides"'), true);
-    assert.equal(source.includes('aria-label="Share slides"'), true);
+    assert.equal(source.includes('label="Present slides"'), true);
+    assert.equal(source.includes('label="Share slides"'), true);
     assert.equal(
       source.includes("void handleRoundtripAction(") &&
         source.includes("onPresent") &&

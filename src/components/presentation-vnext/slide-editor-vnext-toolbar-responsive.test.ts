@@ -24,26 +24,28 @@ function renderEditor(
 }
 
 describe("SlideEditorVNext responsive toolbar compaction", () => {
-  test("renders compact primary commands while keeping source, save, and close reachable", () => {
+  test("renders deck-level primary commands while keeping source, more, and close reachable", () => {
     const html = renderEditor({
       onSave: async () => ({ ok: true, data: undefined }),
       onExportPptx: async () => undefined,
       onClose: () => undefined,
     });
 
+    assert.match(html, /aria-label="Deck tools"/);
     assert.match(html, /aria-label="Document source"/);
-    assert.match(html, /aria-label="Open additional toolbar commands"/);
-    assert.match(html, /aria-label="Save slide deck"/);
+    assert.match(html, /aria-label="Open more deck commands"/);
+    assert.doesNotMatch(html, /aria-label="Save slide deck"/);
     assert.match(html, /aria-label="Close slide editor"/);
   });
 
-  test("hides the wide inline command strip in compact markup", () => {
+  test("keeps title, status, and snap in footer markup instead of top labels", () => {
     const html = renderEditor({
       onSave: async () => ({ ok: true, data: undefined }),
       onExportPptx: async () => undefined,
     });
 
-    assert.doesNotMatch(html, /aria-label="Toggle snap to guides"/);
+    assert.match(html, /data-slide-bottom-dock="true"/);
+    assert.match(html, /aria-label="Toggle snap to guides"/);
     assert.doesNotMatch(html, /<label[^>]*>\s*Theme\s*<\/label>/);
     assert.doesNotMatch(html, /<label[^>]*>\s*Ratio\s*<\/label>/);
   });
