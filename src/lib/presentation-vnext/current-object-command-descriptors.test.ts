@@ -93,6 +93,46 @@ describe("current-object command descriptor catalog", () => {
         (descriptor) => descriptor.id === "source.review",
       ),
     );
+    const connector = currentObjectCommandDescriptor("connector.create");
+    assert.deepEqual(connector.currentObjects, [
+      "text",
+      "shape",
+      "image",
+      "visual",
+      "table",
+    ]);
+    assert.deepEqual(
+      connector.owners.map((owner) => `${owner.surface}:${owner.ownerId}`),
+      [
+        "stage:connector-endpoint-gesture",
+        "keyboard:slide-editor-keyboard",
+        "popover:context-toolbar",
+      ],
+    );
+    assert.deepEqual(connector.disabledReasons, [
+      "missing-selection",
+      "unsupported-current-object",
+      "missing-handler",
+    ]);
+  });
+
+  test("throws descriptive errors for invalid descriptor lookups", () => {
+    assert.throws(
+      () => currentObjectCommandDescriptor("missing" as never),
+      /Unknown current-object command descriptor: missing/,
+    );
+    assert.throws(
+      () => currentObjectAlignCommandDescriptor("diagonal" as never),
+      /Unknown current-object align command mode: diagonal/,
+    );
+    assert.throws(
+      () => currentObjectReorderCommandDescriptor("sideways" as never),
+      /Unknown current-object reorder command mode: sideways/,
+    );
+    assert.throws(
+      () => currentObjectInsertNodeCommandDescriptor("video" as never),
+      /Unknown current-object insert node kind: video/,
+    );
   });
 });
 

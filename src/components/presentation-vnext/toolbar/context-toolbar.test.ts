@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, test } from "node:test";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import {
   buildContextToolbarReorderActions,
   buildSlideToolInsertActions,
+  ContextToolbar,
   contextToolbarTextRoleFontSizePt,
   isContextToolbarInlineTextCommandEnabled,
   isContextToolbarTextRole,
@@ -35,11 +37,15 @@ import {
   resolveContextToolbarTextRole,
   restoreFocusAfterContextToolbarEscape,
   seedContextToolbarStyles,
+  type SelectionAlignMode,
+  type SelectionDistributeMode,
+  type SelectionMatchSizeMode,
   tableWithAddedColumn,
   tableWithAddedRow,
   tableWithDeletedLastColumn,
   tableWithDeletedLastRow,
 } from "./context-toolbar";
+import { createHookRenderer } from "../slide-editor-vnext-failure-test-utils";
 import type { SlideChildNode } from "@/lib/presentation-vnext/schema";
 import type { StyleObject } from "@/lib/presentation-vnext/style-schema";
 import {
@@ -52,9 +58,112 @@ const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(
   "document",
 );
 const source = readFileSync(
-  new URL("./context-toolbar.tsx", import.meta.url),
+  new URL("./floating-toolbar.tsx", import.meta.url),
   "utf8",
 );
+
+type ElementLike = ReactElement<Record<string, unknown>>;
+
+function expandToolbarTree(
+  node: ReactNode,
+  collected: ElementLike[] = [],
+): ElementLike[] {
+  if (Array.isArray(node)) {
+    for (const child of node) expandToolbarTree(child, collected);
+    return collected;
+  }
+  if (!isValidElement(node)) return collected;
+  const element = node as ElementLike;
+  collected.push(element);
+  if (
+    typeof element.type === "function" &&
+    [
+      "TBtn",
+      "Divider",
+      "ColorInput",
+      "ToolbarSelect",
+      "ToolbarNumber",
+    ].includes(element.type.name)
+  ) {
+    expandToolbarTree(
+      (element.type as (props: Record<string, unknown>) => ReactNode)(
+        element.props,
+      ),
+      collected,
+    );
+  }
+  const props = element.props as { children?: ReactNode; trigger?: ReactNode };
+  expandToolbarTree(props.children, collected);
+  expandToolbarTree(props.trigger, collected);
+  return collected;
+}
+
+function renderToolbar(
+  overrides: Partial<Parameters<typeof ContextToolbar>[0]>,
+): ElementLike[] {
+  const shapeNode: SlideChildNode = {
+    id: "shape-1",
+    type: "shape",
+    role: "card",
+    layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+    content: { shape: "rect" },
+    localStyle: { text: { weight: 700, italic: true } },
+  };
+  const harness = createHookRenderer();
+  return expandToolbarTree(
+    harness.run(() =>
+      ContextToolbar({
+        selectedIds: ["shape-1"],
+        selectedNode: shapeNode,
+        selectedResolvedStyle: undefined,
+        isInlineEditing: false,
+        isDragging: false,
+        isDecorationSelected: false,
+        onDelete: () => undefined,
+        onCut: () => undefined,
+        onDuplicate: () => undefined,
+        onGroup: () => undefined,
+        onUngroup: () => undefined,
+        onBringForward: () => undefined,
+        onSendBackward: () => undefined,
+        onUpdateSelectedContent: () => undefined,
+        onUpdateSelectedLayout: () => undefined,
+        onUpdateSelectedLocalStyle: () => undefined,
+        onUpdateSelectedAttributes: () => undefined,
+        ...overrides,
+      }),
+    ),
+  );
+}
+
+function labels(elements: readonly ElementLike[]): string[] {
+  return elements
+    .map((element) => element.props["aria-label"] ?? element.props.label)
+    .filter((label): label is string => typeof label === "string");
+}
+
+function invokeToolbarControls(elements: readonly ElementLike[]): void {
+  for (const element of elements) {
+    const props = element.props;
+    if (typeof props.onClick === "function" && props.disabled !== true) {
+      props.onClick();
+    }
+    if (typeof props.onChange === "function" && props.disabled !== true) {
+      props.onChange({ currentTarget: { value: "#123456" } });
+    }
+    if (typeof props.onSubmit === "function") {
+      props.onSubmit({ preventDefault: () => undefined });
+    }
+    if (typeof props.onKeyDown === "function") {
+      props.onKeyDown({
+        key: "Escape",
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+        target: null,
+      });
+    }
+  }
+}
 
 describe("buildSlideToolInsertActions", () => {
   test("returns all current-object insertion actions in stable order", () => {
@@ -274,6 +383,44 @@ describe("seedContextToolbarStyles", () => {
     assert.equal(seed.connectorStrokeWidth, 2.5);
     assert.equal(seed.connectorStartArrow, "filled");
     assert.equal(seed.connectorEndArrow, "none");
+  });
+
+  test("seeds fallback style controls from local styles and defaults", () => {
+    const node: SlideChildNode = {
+      id: "shape-local",
+      type: "shape",
+      role: "card",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+      content: { shape: "rect" },
+      localStyle: {
+        fill: { type: "solid", color: "#f8fafc" },
+        stroke: { color: "#64748b", widthPt: 2 },
+        connector: {
+          stroke: { color: "#334155", widthPt: 4 },
+          startArrow: "arrow",
+          endArrow: "filled",
+        },
+        text: { color: "#0f172a", fontSizePt: 20 },
+        opacity: 0.5,
+      },
+    };
+
+    const localSeed = seedContextToolbarStyles(node, undefined);
+    assert.equal(localSeed.fillColor, "#f8fafc");
+    assert.equal(localSeed.shapeStrokeColor, "#64748b");
+    assert.equal(localSeed.shapeStrokeWidth, 2);
+    assert.equal(localSeed.connectorStrokeColor, "#334155");
+    assert.equal(localSeed.connectorStrokeWidth, 4);
+    assert.equal(localSeed.connectorStartArrow, "arrow");
+    assert.equal(localSeed.connectorEndArrow, "filled");
+    assert.equal(localSeed.textColor, "#0f172a");
+    assert.equal(localSeed.fontSize, 20);
+    assert.equal(localSeed.opacity, 0.5);
+
+    const defaultSeed = seedContextToolbarStyles(undefined, undefined);
+    assert.equal(defaultSeed.fillColor, "#ffffff");
+    assert.equal(defaultSeed.connectorEndArrow, "arrow");
+    assert.equal(defaultSeed.opacity, 1);
   });
 });
 
@@ -786,5 +933,273 @@ describe("context toolbar routing helpers", () => {
     assert.equal(skippedDelete, false);
     assert.equal(deleteCalls, 1);
     assert.equal(detachCalls, 1);
+  });
+});
+
+describe("ContextToolbar render branches", () => {
+  test("renders slide insertion tools when no object is selected", () => {
+    const elements = renderToolbar({
+      selectedIds: [],
+      selectedNode: undefined,
+      onUpdateSlideLocalStyle: () => undefined,
+      onInsertSlide: () => undefined,
+      onInsertText: () => undefined,
+      onInsertShape: () => undefined,
+      onInsertImage: () => undefined,
+      onInsertVisual: () => undefined,
+      onInsertConnector: () => undefined,
+      onInsertTable: () => undefined,
+      onDuplicateSlide: () => undefined,
+      onDeleteSlide: () => undefined,
+      canDeleteSlide: false,
+    });
+
+    assert.ok(labels(elements).includes("Slide background"));
+    assert.ok(labels(elements).includes("Add slide"));
+    assert.ok(labels(elements).includes("Insert connector"));
+    assert.ok(labels(elements).includes("Delete slide"));
+  });
+
+  test("renders text and shape controls for a selected shape", () => {
+    const elements = renderToolbar({});
+    const renderedLabels = labels(elements);
+
+    assert.ok(renderedLabels.includes("Bold"));
+    assert.ok(renderedLabels.includes("Text role"));
+    assert.ok(renderedLabels.includes("Bullet list"));
+    assert.ok(renderedLabels.includes("Text color"));
+    assert.ok(renderedLabels.includes("Fill color"));
+    assert.ok(renderedLabels.includes("Border color"));
+    assert.ok(renderedLabels.includes("Opacity"));
+    assert.ok(renderedLabels.includes("Rotate left 15°"));
+    assert.ok(renderedLabels.includes("Bring to front"));
+    assert.ok(renderedLabels.includes("More"));
+  });
+
+  test("renders media, visual, connector, table, multi-select, and decoration branches", () => {
+    const imageNode: SlideChildNode = {
+      id: "image-1",
+      type: "image",
+      role: "image",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+      content: {
+        assetId: "asset-1",
+        crop: { top: 1, right: 2, bottom: 3, left: 4 },
+        fit: "contain",
+      },
+      localStyle: {},
+    };
+    const visualNode: SlideChildNode = {
+      id: "visual-1",
+      type: "visual",
+      role: "visual",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+      content: { visualId: "visual-1", transparentBackground: true },
+      localStyle: { visual: { styleThemeId: "accent" } },
+    };
+    const connectorNode: SlideChildNode = {
+      id: "connector-1",
+      type: "connector",
+      role: "connector",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+      content: {
+        from: { kind: "point", point: { x: 0, y: 0 } },
+        to: { kind: "point", point: { x: 10, y: 10 } },
+        routing: "curved",
+      },
+      localStyle: {},
+    };
+    const tableNode: SlideChildNode = {
+      id: "table-1",
+      type: "table",
+      role: "table",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+      content: {
+        columns: [{ id: "col-1", label: "A" }],
+        rows: [{ id: "row-1", cells: [{ text: "A" }] }],
+      },
+      localStyle: {},
+    };
+
+    assert.ok(
+      labels(
+        renderToolbar({
+          selectedIds: ["image-1"],
+          selectedNode: imageNode,
+          onReplaceImage: () => undefined,
+          onResetImageCrop: () => undefined,
+        }),
+      ).includes("Reset crop"),
+    );
+    assert.ok(
+      labels(
+        renderToolbar({
+          selectedIds: ["visual-1"],
+          selectedNode: visualNode,
+          onReplaceVisual: () => undefined,
+        }),
+      ).includes("Visual theme"),
+    );
+    assert.ok(
+      labels(
+        renderToolbar({
+          selectedIds: ["connector-1"],
+          selectedNode: connectorNode,
+        }),
+      ).includes("End arrow"),
+    );
+    assert.ok(
+      labels(
+        renderToolbar({
+          selectedIds: ["table-1"],
+          selectedNode: tableNode,
+          onEnterTableEdit: () => undefined,
+        }),
+      ).includes("Toggle header row"),
+    );
+    assert.ok(
+      labels(
+        renderToolbar({
+          selectedIds: ["a", "b", "c"],
+          selectedNode: { ...tableNode, id: "a" },
+          onAlignSelection: () => undefined,
+          onDistributeSelection: () => undefined,
+          onMatchSize: () => undefined,
+        }),
+      ).includes("Distribute horizontally"),
+    );
+    assert.ok(
+      labels(
+        renderToolbar({
+          isDecorationSelected: true,
+          onDetachDecoration: () => undefined,
+        }),
+      ).includes("Detach from theme"),
+    );
+    assert.ok(renderToolbar({ isDragging: true }).length > 0);
+  });
+
+  test("invokes public controls from rendered toolbar variants", () => {
+    const calls: unknown[] = [];
+    const callbacks = {
+      onDelete: () => calls.push("delete"),
+      onCut: () => calls.push("cut"),
+      onDuplicate: () => calls.push("duplicate"),
+      onGroup: () => calls.push("group"),
+      onUngroup: () => calls.push("ungroup"),
+      onBringForward: () => calls.push("forward"),
+      onSendBackward: () => calls.push("backward"),
+      onBringToFront: () => calls.push("front"),
+      onSendToBack: () => calls.push("back"),
+      onAlignSelection: (mode: SelectionAlignMode) => calls.push(mode),
+      onDistributeSelection: (mode: SelectionDistributeMode) =>
+        calls.push(mode),
+      onMatchSize: (mode: SelectionMatchSizeMode) => calls.push(mode),
+      onUpdateSelectedContent: (patch: unknown) => calls.push(patch),
+      onUpdateSelectedLayout: (patch: unknown) => calls.push(patch),
+      onUpdateSelectedLocalStyle: (patch: unknown) => calls.push(patch),
+      onUpdateSelectedAttributes: (patch: unknown) => calls.push(patch),
+      onReplaceImage: () => calls.push("replace-image"),
+      onReplaceVisual: () => calls.push("replace-visual"),
+      onResetImageCrop: () => calls.push("reset-crop"),
+      onEnterTableEdit: () => calls.push("table-edit"),
+      onUpdateSlideLocalStyle: (patch: unknown) => calls.push(patch),
+      onInsertSlide: () => calls.push("insert-slide"),
+      onInsertText: () => calls.push("insert-text"),
+      onInsertShape: () => calls.push("insert-shape"),
+      onInsertImage: () => calls.push("insert-image"),
+      onInsertVisual: () => calls.push("insert-visual"),
+      onInsertConnector: () => calls.push("insert-connector"),
+      onInsertTable: () => calls.push("insert-table"),
+      onDuplicateSlide: () => calls.push("duplicate-slide"),
+      onDeleteSlide: () => calls.push("delete-slide"),
+      onDetachDecoration: () => calls.push("detach"),
+      onRequestStageFocus: () => calls.push("stage-focus"),
+    };
+    const variants = [
+      renderToolbar({ selectedIds: [], selectedNode: undefined, ...callbacks }),
+      renderToolbar({ ...callbacks }),
+      renderToolbar({
+        selectedIds: ["image-1"],
+        selectedNode: {
+          id: "image-1",
+          type: "image",
+          role: "image",
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+          content: {
+            assetId: "asset-1",
+            crop: { top: 1, right: 2, bottom: 3, left: 4 },
+            fit: "cover",
+          },
+        } as unknown as SlideChildNode,
+        ...callbacks,
+      }),
+      renderToolbar({
+        selectedIds: ["visual-1"],
+        selectedNode: {
+          id: "visual-1",
+          type: "visual",
+          role: "visual",
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+          content: { visualId: "visual-1", transparentBackground: false },
+          localStyle: { visual: { styleThemeId: "default" } },
+        } as unknown as SlideChildNode,
+        ...callbacks,
+      }),
+      renderToolbar({
+        selectedIds: ["connector-1"],
+        selectedNode: {
+          id: "connector-1",
+          type: "connector",
+          role: "connector",
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+          content: {
+            from: { kind: "point", point: { x: 0, y: 0 } },
+            to: { kind: "point", point: { x: 10, y: 10 } },
+            routing: "straight",
+          },
+          localStyle: { connector: { startArrow: "none", endArrow: "arrow" } },
+        } as unknown as SlideChildNode,
+        ...callbacks,
+      }),
+      renderToolbar({
+        selectedIds: ["table-1"],
+        selectedNode: {
+          id: "table-1",
+          type: "table",
+          role: "table",
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+          content: {
+            columns: [
+              { id: "col-1", label: "A" },
+              { id: "col-2", label: "B" },
+            ],
+            rows: [
+              { id: "row-1", cells: [{ text: "A" }, { text: "B" }] },
+              { id: "row-2", cells: [{ text: "C" }, { text: "D" }] },
+            ],
+            header: false,
+          },
+        } as unknown as SlideChildNode,
+        ...callbacks,
+      }),
+      renderToolbar({
+        selectedIds: ["a", "b", "c"],
+        selectedNode: {
+          id: "a",
+          type: "group",
+          role: "group",
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
+          children: [],
+        } as unknown as SlideChildNode,
+        ...callbacks,
+      }),
+    ];
+
+    for (const elements of variants) invokeToolbarControls(elements);
+
+    assert.ok(calls.includes("insert-slide"));
+    assert.ok(calls.includes("delete"));
+    assert.ok(calls.length > 10);
   });
 });
