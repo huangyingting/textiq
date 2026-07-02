@@ -16,6 +16,7 @@ import {
   stampSlideSources,
   uniqueStrings,
 } from "./document-slide-plan-provenance";
+import { buildDeckDerivationExtra } from "./provenance-extra";
 
 export type CompileDocumentSlidePlanResult =
   | {
@@ -103,8 +104,7 @@ export function compileDocumentSlidePlanToDeckV7({
         contentHash: plan.source.contentHash,
         ...(plan.locale ? { locale: plan.locale } : {}),
         extra: {
-          derivation: {
-            pipelineVersion: 1,
+          derivation: buildDeckDerivationExtra({
             planner: plan.planner,
             mode: plan.mode,
             ...(plan.source.documentId
@@ -112,9 +112,9 @@ export function compileDocumentSlidePlanToDeckV7({
               : {}),
             sourceContentHash: plan.source.contentHash,
             sourceBlockIds,
-            ...(omittedBlockIds.length > 0 ? { omittedBlockIds } : {}),
+            omittedBlockIds,
             generatedAt: linkedAt,
-          },
+          }),
         },
       },
     };

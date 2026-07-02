@@ -9,6 +9,7 @@ import type {
 } from "./schema";
 import type { JsonValue } from "./types";
 import type { DocumentPlannedSlideV1 } from "./document-slide-planner";
+import { buildNodeDerivationExtra } from "./provenance-extra";
 
 function slotSourceIds(
   slotSources: Partial<Record<SlotKey, string[]>>,
@@ -30,12 +31,11 @@ function sourceForBlock(
 ): NodeSourceMetadata | undefined {
   if (!documentId) return undefined;
   const extra: Record<string, JsonValue> = {
-    derivation: {
-      pipelineVersion: 1,
+    derivation: buildNodeDerivationExtra({
       slidePlanId: derivation.slidePlanId,
       ...(derivation.slotKey ? { slotKey: derivation.slotKey } : {}),
       sourceBlockIds: [...sourceBlockIds],
-    },
+    }),
   };
   const base = {
     documentId,
