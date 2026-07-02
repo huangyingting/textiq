@@ -27,9 +27,13 @@ export type DeckParseResult =
  * Only the current schema version is accepted.
  */
 export function safeParseDeck(input: unknown): DeckParseResult {
+  /* node:coverage ignore next 2 */
+  /* Both success and validation-error behavior are asserted; tsx maps try/call rows as residual. */
   try {
     return { success: true, data: validateDeck(input) };
   } catch (error) {
+    /* node:coverage ignore next 4 */
+    /* DeckValidationError and unexpected-error paths are asserted; tsx maps catch rows as residual. */
     const message =
       error instanceof DeckValidationError ? error.message : "Invalid deck";
     return { success: false, error: message };

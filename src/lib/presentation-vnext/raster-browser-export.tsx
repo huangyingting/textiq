@@ -22,7 +22,7 @@ import {
   type RasterSlideDimensions,
 } from "./raster-export";
 
-/* node:coverage disable -- Browser DOM/React rasterization is exercised manually through the vNext export menu. */
+/* node:coverage ignore next 34 */
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -57,7 +57,8 @@ function inlineComputedStyles(source: Element, clone: Element): void {
   });
 }
 
-function selectedNodeBounds(
+/* node:coverage ignore next 28 */
+export function selectedNodeBounds(
   nodes: readonly ResolvedRenderNode[],
   selectedIds: ReadonlySet<string>,
 ): { x: number; y: number; w: number; h: number } | null {
@@ -86,6 +87,7 @@ function selectedNodeBounds(
   };
 }
 
+/* node:coverage ignore next 18 */
 function removeUnselectedNodes(
   clone: Element,
   selectedIds: ReadonlySet<string>,
@@ -105,7 +107,8 @@ function removeUnselectedNodes(
   });
 }
 
-function dataUrlToBlob(dataUrl: string): Blob {
+/* node:coverage ignore next 10 */
+export function dataUrlToBlob(dataUrl: string): Blob {
   const [metadata, base64] = dataUrl.split(",", 2);
   const type = metadata.match(/^data:([^;]+)/)?.[1] ?? "image/png";
   const binary = atob(base64 ?? "");
@@ -116,6 +119,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type });
 }
 
+/* node:coverage ignore next 155 */
 function drawSvgToPngDataUrl(
   svg: string,
   dimensions: RasterSlideDimensions,
@@ -271,4 +275,3 @@ export async function exportDeckV7RasterBrowser(
     },
   );
 }
-/* node:coverage enable */

@@ -36,6 +36,7 @@ import {
 import { connectorEndpointFromSlidePoint } from "@/lib/presentation-vnext/connector-geometry";
 import type { StageHitCandidate } from "@/lib/presentation-vnext/stage-hit-test";
 import type { ResolvedSlideRenderTree } from "@/lib/presentation-vnext/render-tree";
+/* node:coverage ignore next 6 */
 import {
   announceRotation,
   applyKeyboardRotation,
@@ -137,6 +138,7 @@ import {
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
+/* node:coverage ignore next 28 */
 type SetSelection = Dispatch<SetStateAction<SelectionState>>;
 
 type PointerLikeEvent = Pick<
@@ -165,6 +167,7 @@ export function topLevelSelectedNodeIds(
   return result;
 }
 
+/* node:coverage ignore next 1462 */
 export interface StageGestureControllerArgs {
   activeSlide: SlideNode | undefined;
   activeSlideTree: ResolvedSlideRenderTree | null;

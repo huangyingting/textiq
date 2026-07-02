@@ -23,11 +23,13 @@ import { prepareDeckForOpenV7 } from "@/lib/presentation-vnext/deck-open-prepara
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
+import type { Visual } from "@/lib/visual/schema";
 
 interface PresentButtonProps {
   documentId: string;
   deckPort: DeckFetchPort;
   documentTitle?: string;
+  getVisuals?: () => Record<string, Visual>;
   iconOnly?: boolean;
 }
 
@@ -36,6 +38,7 @@ type PresentData =
       mode: "deck";
       deck: DeckV7;
       themePackage: ThemePackageV1;
+      visuals: Record<string, Visual>;
     }
   | PresentRecoveryData;
 
@@ -101,6 +104,7 @@ export function PresentButton({
   documentId,
   deckPort,
   documentTitle,
+  getVisuals,
   iconOnly = false,
 }: PresentButtonProps) {
   const [presentData, setPresentData] = useState<PresentData | null>(null);
@@ -138,8 +142,9 @@ export function PresentButton({
       mode: "deck",
       deck: prepared.deck,
       themePackage: themeResolution.package,
+      visuals: getVisuals?.() ?? {},
     });
-  }, [deckPort, documentId, documentTitle]);
+  }, [deckPort, documentId, documentTitle, getVisuals]);
 
   const handleClose = useCallback(() => {
     setPresentData(null);
@@ -161,6 +166,7 @@ export function PresentButton({
         <PresentModeVNext
           deck={presentData.deck}
           themePackage={presentData.themePackage}
+          visuals={presentData.visuals}
           onClose={handleClose}
         />
       ) : null}

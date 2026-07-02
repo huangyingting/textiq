@@ -3,7 +3,10 @@ import { describe, test } from "node:test";
 
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 
-import { findSlideIndexForFocus } from "./use-stage-focus-controller";
+import {
+  findSlideIndexForFocus,
+  focusStageNode,
+} from "./use-stage-focus-controller";
 
 const deck = {
   schemaVersion: 7,
@@ -49,4 +52,18 @@ describe("findSlideIndexForFocus", () => {
   test("returns -1 for removed focus targets", () => {
     assert.equal(findSlideIndexForFocus(deck, "missing-node"), -1);
   });
+});
+
+test("focusStageNode delegates to the focus geometry registry target", () => {
+  const focused: unknown[] = [];
+  focusStageNode(
+    {
+      focus: (target: unknown) => {
+        focused.push(target);
+      },
+    } as unknown as Parameters<typeof focusStageNode>[0],
+    "node-1",
+  );
+
+  assert.deepEqual(focused, ["stage:node:node-1"]);
 });

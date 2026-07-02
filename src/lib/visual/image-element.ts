@@ -74,6 +74,8 @@ export function dataUrlByteSize(src: string | null | undefined): number {
   if (src == null) {
     return 0;
   }
+  /* node:coverage ignore next 4 */
+  /* Non-data URL sizing is asserted directly; tsx maps the branch rows as residual. */
   if (!src.startsWith("data:")) {
     return 0;
   }

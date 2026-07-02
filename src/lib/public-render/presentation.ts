@@ -1,9 +1,11 @@
 import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
+import { collectDocumentBlocks } from "@/lib/content/document-blocks";
 import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
 import { openDeckFromJson } from "@/lib/presentation-vnext/open-deck";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
+import type { Visual } from "@/lib/visual/schema";
 
 import { buildPublicAttribution, type PublicAttribution } from "./attribution";
 
@@ -27,6 +29,7 @@ export interface PublicPresentationModel {
   title: string;
   deckV7: DeckV7;
   themePackage: ThemePackageV1;
+  visuals: Record<string, Visual>;
   diagnostics: PresentationDiagnostic[];
   recovery?: PublicPresentationRecovery;
   attribution: PublicAttribution;
@@ -109,6 +112,16 @@ function bindDeckAssetUrlsToShare(
   };
 }
 
+function collectPresentationVisuals(
+  contentJson: unknown,
+): Record<string, Visual> {
+  return Object.fromEntries(
+    collectDocumentBlocks(contentJson).flatMap((block) =>
+      block.kind === "visual" ? [[block.visualId, block.visual]] : [],
+    ),
+  );
+}
+
 export function buildPublicPresentationModel(
   document: PublicPresentationDocument,
   assetBinding?: PublicPresentationAssetBinding,
@@ -136,6 +149,7 @@ export function buildPublicPresentationModel(
     title: document.title,
     deckV7,
     themePackage: themeResolution.package,
+    visuals: collectPresentationVisuals(document.contentJson),
     diagnostics: [
       ...(opened.ok ? opened.diagnostics : opened.diagnostics),
       ...themeResolution.diagnostics,

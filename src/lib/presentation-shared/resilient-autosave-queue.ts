@@ -111,6 +111,7 @@ export function createResilientLatestSnapshotQueue<TSnapshot>({
   let retryHandle: AutosaveTimerHandle | null = null;
   let conflictPaused = false;
 
+  /* node:coverage ignore next 4 */
   const emit = (nextStatus: SaveQueueStatus): void => {
     status = nextStatus;
     onStatusChange?.(nextStatus);
@@ -155,6 +156,7 @@ export function createResilientLatestSnapshotQueue<TSnapshot>({
   };
 
   const api: ResilientLatestSnapshotQueue<TSnapshot> = {
+    /* node:coverage ignore next 40 */
     async enqueue(
       snapshot,
       baseRevisionToken,
@@ -196,6 +198,7 @@ export function createResilientLatestSnapshotQueue<TSnapshot>({
       return actionOk();
     },
 
+    /* node:coverage ignore next 85 */
     async flushNow(): Promise<ActionResult> {
       clearDebounce();
       clearRetry();

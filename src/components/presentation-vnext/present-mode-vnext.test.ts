@@ -13,8 +13,10 @@ import {
   buildSlideV7,
   buildVisualNode,
 } from "@/test/builders/deck-v7";
+import { DEFAULT_STYLE, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 
 const RENDERED_VISUAL_SRC = "https://example.com/rendered-visual.png";
+const LIVE_VISUAL_ID = "doc-visual-live";
 
 function buildVisualBackedDeck() {
   const slide = buildSlideV7("visual-focus", [
@@ -45,6 +47,32 @@ function buildVisualBackedDeck() {
   });
 }
 
+function buildLiveVisualDeck() {
+  const slide = buildSlideV7("visual-focus", [
+    buildVisualNode({
+      content: {
+        visualId: LIVE_VISUAL_ID,
+        alt: "Journey map",
+      },
+    }),
+  ]);
+
+  return buildDeckV7([slide]);
+}
+
+const LIVE_VISUALS = {
+  [LIVE_VISUAL_ID]: {
+    version: VISUAL_SCHEMA_VERSION,
+    type: "flowchart" as const,
+    title: "Journey map",
+    width: 960,
+    height: 540,
+    nodes: [{ id: "n1", label: "Start" }],
+    edges: [],
+    style: { ...DEFAULT_STYLE },
+  },
+};
+
 describe("visual-backed asset rendering parity", () => {
   test("PresentModeVNext resolves visual-backed assets", () => {
     const html = renderToStaticMarkup(
@@ -68,5 +96,35 @@ describe("visual-backed asset rendering parity", () => {
     );
 
     assert.match(html, new RegExp(`src="${RENDERED_VISUAL_SRC}"`));
+  });
+
+  test("PresentModeVNext renders live document visuals", () => {
+    const html = renderToStaticMarkup(
+      createElement(PresentModeVNext, {
+        deck: buildLiveVisualDeck(),
+        themePackage: buildMinimalThemePackage(),
+        visuals: LIVE_VISUALS,
+        onClose: () => undefined,
+      }),
+    );
+
+    assert.match(html, /<svg/);
+    assert.match(html, /Start/);
+    assert.doesNotMatch(html, /Visual placeholder/);
+  });
+
+  test("PublicPresentViewerVNext renders live document visuals", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicPresentViewerVNext, {
+        deck: buildLiveVisualDeck(),
+        themePackage: buildMinimalThemePackage(),
+        title: "Deck",
+        visuals: LIVE_VISUALS,
+      }),
+    );
+
+    assert.match(html, /<svg/);
+    assert.match(html, /Start/);
+    assert.doesNotMatch(html, /Visual placeholder/);
   });
 });

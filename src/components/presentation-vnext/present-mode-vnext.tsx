@@ -20,6 +20,7 @@ import { FOCUS_RING } from "@/components/ui/tokens";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation-vnext/neutral-theme-package";
+import type { Visual } from "@/lib/visual/schema";
 import {
   exitBrowserFullscreen,
   getFullscreenElement,
@@ -53,6 +54,8 @@ export interface PresentModeVNextProps {
   deck: DeckV7;
   /** Theme package to use for rendering. Defaults to the neutral package. */
   themePackage?: ThemePackageV1 | null;
+  /** Live document visual payloads keyed by visual id. */
+  visuals?: Record<string, Visual>;
   /** Called when the user exits presentation mode. */
   onClose: () => void;
 }
@@ -70,6 +73,7 @@ export interface PresentModeVNextProps {
 export function PresentModeVNext({
   deck,
   themePackage,
+  visuals,
   onClose,
 }: PresentModeVNextProps): JSX.Element {
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
@@ -117,6 +121,10 @@ export function PresentModeVNext({
   function resolveDeckAsset(assetId: string): string | undefined {
     return resolveDeckAssetSource(deck, assetId);
   }
+  const resolveVisual = useCallback(
+    (visualId: string): Visual | undefined => visuals?.[visualId],
+    [visuals],
+  );
 
   const topHudVisible =
     hudVisible ||
@@ -412,6 +420,7 @@ export function PresentModeVNext({
               slide={currentSlideTree}
               canvas={canvas}
               assetResolver={resolveDeckAsset}
+              visualResolver={resolveVisual}
             />
           </div>
         </div>
@@ -457,6 +466,7 @@ export function PresentModeVNext({
             nextSlideTree={nextSlideTree}
             canvas={canvas ?? deck.canvas}
             assetResolver={resolveDeckAsset}
+            visualResolver={resolveVisual}
           />
         </div>
       )}
@@ -502,6 +512,7 @@ export function PresentModeVNext({
           renderTree={renderTree}
           currentIndex={currentIndex}
           assetResolver={resolveDeckAsset}
+          visualResolver={resolveVisual}
           onJump={handleJumpToSlide}
           onClose={closeOverview}
         />

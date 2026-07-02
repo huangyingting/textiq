@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
   type RefObject,
@@ -31,6 +32,10 @@ const VIEWPORT_INSET = 8;
 // (surfaces park here for a frame before their own layout effect measures), so
 // the viewport clamp leaves them alone rather than yanking them into view.
 const OFFSCREEN_SENTINEL = -900;
+
+const subscribeToMountedSnapshot = () => () => undefined;
+const getMountedSnapshot = () => true;
+const getServerMountedSnapshot = () => false;
 
 export type FloatingSurfaceProps = {
   open: boolean;
@@ -96,6 +101,11 @@ export function FloatingSurface({
 }: FloatingSurfaceProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const popMotion = usePopMotion();
+  const mounted = useSyncExternalStore(
+    subscribeToMountedSnapshot,
+    getMountedSnapshot,
+    getServerMountedSnapshot,
+  );
   const [clamped, setClamped] = useState(position);
   const { top: posTop, left: posLeft } = position;
 
@@ -168,7 +178,7 @@ export function FloatingSurface({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, closeOnEscape, onClose]);
 
-  if (typeof document === "undefined") {
+  if (!mounted) {
     return null;
   }
 

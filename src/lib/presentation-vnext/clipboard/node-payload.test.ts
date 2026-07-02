@@ -177,6 +177,10 @@ describe("TextIQ node clipboard payload", () => {
     );
     assert.equal(parseTextIqNodePayload(payloadWith({ nodes: [] })).ok, false);
     assert.equal(
+      parseTextIqNodePayload(payloadWith({ nodes: "not-array" })).ok,
+      false,
+    );
+    assert.equal(
       parseTextIqNodePayload("x".repeat(TEXTIQ_NODE_CLIPBOARD_MAX_BYTES + 1))
         .ok,
       false,
@@ -208,6 +212,59 @@ describe("TextIQ node clipboard payload", () => {
       ],
       [{ id: "bad", type: "visual", content: { assetId: 1 } }],
       [{ id: "bad", type: "group", component: "unknown", children: [] }],
+      [
+        {
+          ...textNode,
+          layout: { frame: { x: 0, y: 0, w: 1 }, zIndex: 1 },
+        },
+      ],
+      [
+        {
+          ...textNode,
+          layout: {
+            frame: { x: 0, y: 0, w: 1, h: 1 },
+            zIndex: 1,
+            anchor: "bad",
+          },
+        },
+      ],
+      [
+        {
+          ...textNode,
+          layout: {
+            frame: { x: 0, y: 0, w: 1, h: 1 },
+            zIndex: 1,
+            constraints: { minW: "wide" },
+          },
+        },
+      ],
+      [
+        {
+          ...textNode,
+          content: {
+            paragraphs: [{ id: "bad-list", text: "x", list: { kind: "bad" } }],
+          },
+        },
+      ],
+      [
+        {
+          ...textNode,
+          content: {
+            paragraphs: [{ id: "bad-run", text: "x", runs: [{ text: 1 }] }],
+          },
+        },
+      ],
+      [{ id: "bad", type: "connector", content: { from: { kind: "bad" } } }],
+      [
+        {
+          id: "bad",
+          type: "table",
+          content: {
+            columns: [{ id: "column", label: "Column" }],
+            rows: [{ id: "row", cells: [{ text: 1 }] }],
+          },
+        },
+      ],
     ];
 
     for (const candidate of invalidNodes) {
@@ -348,6 +405,22 @@ describe("TextIQ node clipboard payload", () => {
         : 0,
       TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS,
     );
+    const exact = clipboardTextNode("short", 1);
+    assert.equal(
+      exact?.type === "text" ? exact.content.paragraphs[0]?.text : "",
+      "short",
+    );
+  });
+
+  test("handles invalid and edge-case HTML entity decoding", () => {
+    const text = sanitizedClipboardHtmlToText(
+      "<p>&nbsp;&apos;&#x110000;&#99999999;&AMP;</p>",
+    );
+
+    assert.match(text, / '/);
+    assert.match(text, /&#x110000;/);
+    assert.match(text, /&#99999999;/);
+    assert.match(text, /&/);
   });
 
   test("builds a plain-text fallback without exposing raw JSON", () => {

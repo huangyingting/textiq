@@ -4,6 +4,7 @@ import { LinkNode } from "@lexical/link";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { LexicalCollaboration } from "@lexical/react/LexicalCollaborationContext";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
@@ -19,7 +20,7 @@ import { readingTimeMinutes, wordCount } from "@/lib/document-stats";
 import { createEditorPlugin, EditorPluginHost } from "@/lib/lexical/editor-api";
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { createCoreEditorPlugins } from "@/lib/lexical/editor-plugins";
-import { shouldAutosaveUpdate } from "@/lib/content";
+import { collectDocumentBlocks, shouldAutosaveUpdate } from "@/lib/content";
 import { ensureLexicalBlockIdSupport } from "@/lib/lexical/block-id-runtime";
 import { ensureLexicalTableCaptionSupport } from "@/lib/lexical/table-caption-runtime";
 import { useLexicalAutosave } from "@/lib/lexical/use-autosave";
@@ -154,12 +155,25 @@ function RoutedPresentButton({
   documentId: string;
   documentTitle: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const deckPort = useMemo(() => ({ fetchDeckJson }), []);
+  const getVisuals = useCallback(() => {
+    let visuals: ReturnType<typeof collectDocumentBlocks> = [];
+    editor.getEditorState().read(() => {
+      visuals = collectDocumentBlocks(editor.getEditorState().toJSON());
+    });
+    return Object.fromEntries(
+      visuals.flatMap((block) =>
+        block.kind === "visual" ? [[block.visualId, block.visual]] : [],
+      ),
+    );
+  }, [editor]);
   return (
     <PresentButton
       documentId={documentId}
       deckPort={deckPort}
       documentTitle={documentTitle}
+      getVisuals={getVisuals}
     />
   );
 }

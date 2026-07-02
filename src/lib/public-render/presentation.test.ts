@@ -7,8 +7,10 @@ import {
   buildImageAsset,
   buildImageNode,
   buildSlideV7,
+  buildVisualNode,
   resetBuilderCounter,
 } from "@/test/builders/deck-v7";
+import { DEFAULT_STYLE, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 
 import {
   buildPublicPresentationModel,
@@ -155,4 +157,47 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
     "/api/slide-assets/doc-1/uploads/protected.png?cache=1&shareId=share123&shareMode=present",
   );
   assert.equal(model.deckV7.assets.images["external-img"]?.src, externalSrc);
+});
+
+test("buildPublicPresentationModel exposes live document visuals for present rendering", () => {
+  resetBuilderCounter();
+  const v7Deck = buildDeckV7([
+    buildSlideV7("visual-focus", [
+      buildVisualNode({
+        content: {
+          visualId: "visual-live-1",
+          alt: "Live journey map",
+        },
+      }),
+    ]),
+  ]);
+  const visual = {
+    version: VISUAL_SCHEMA_VERSION,
+    type: "flowchart" as const,
+    title: "Live journey map",
+    width: 960,
+    height: 540,
+    nodes: [{ id: "n1", label: "Start" }],
+    edges: [],
+    style: { ...DEFAULT_STYLE },
+  };
+
+  const model = buildPublicPresentationModel({
+    title: "Live visual deck",
+    contentJson: {
+      root: {
+        children: [
+          {
+            type: "visual",
+            visualId: "visual-live-1",
+            visual,
+          },
+        ],
+      },
+    },
+    deckJson: v7Deck,
+    owner: { name: "Ava", plan: "pro" },
+  });
+
+  assert.equal(model.visuals["visual-live-1"], visual);
 });
