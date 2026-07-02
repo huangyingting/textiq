@@ -63,10 +63,11 @@ function hr() {
   return { type: "horizontalrule" };
 }
 
-function table(rows: string[][]) {
+function table(rows: string[][], caption?: string) {
   return {
     type: "table",
     bid: "table-1",
+    ...(caption ? { caption } : {}),
     children: rows.map((row) => ({
       type: "tablerow",
       children: row.map((cell) => ({
@@ -302,6 +303,35 @@ test("collects rich text runs inside table cells", () => {
     assert.deepEqual(block.rows[0].cells[1], {
       text: "Done",
       runs: [{ text: "Done", bold: true }],
+    });
+
+    test("collects explicit table captions without inferring adjacent paragraph text", () => {
+      const blocks = collectDocumentBlocks(
+        state([
+          paragraph("Nearby paragraph is not a caption"),
+          table(
+            [
+              ["Region", "ARR"],
+              ["NA", "$12M"],
+            ],
+            "  Explicit caption  ",
+          ),
+          paragraph("Trailing paragraph is not a caption either"),
+          table([
+            ["Product", "Users"],
+            ["Core", "42"],
+          ]),
+        ]),
+      );
+
+      assert.equal(blocks[1].kind, "table");
+      assert.equal(blocks[3].kind, "table");
+      if (blocks[1].kind === "table") {
+        assert.equal(blocks[1].caption, "Explicit caption");
+      }
+      if (blocks[3].kind === "table") {
+        assert.equal(blocks[3].caption, undefined);
+      }
     });
   }
 });
