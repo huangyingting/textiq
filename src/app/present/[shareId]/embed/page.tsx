@@ -43,6 +43,7 @@ export default async function PresentEmbedPage({
     <PublicPresentViewerVNext
       deck={presentation.deckV7}
       themePackage={presentation.themePackage}
+      visuals={presentation.visuals}
       title={presentation.title}
       embed
       recovery={presentation.recovery}

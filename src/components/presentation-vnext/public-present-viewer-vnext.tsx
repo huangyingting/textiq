@@ -23,6 +23,7 @@ import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-sche
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation-vnext/neutral-theme-package";
 import { resolveDeckAssetSource } from "@/lib/presentation-vnext/deck-asset-source";
 import { presentCanvasAspectRatio } from "@/lib/presentation-vnext/present-shell";
+import type { Visual } from "@/lib/visual/schema";
 import {
   PRESENTATION_NAVIGATION_SHORTCUT_IDS,
   initialPublicPresentHashSlideIndex,
@@ -43,6 +44,8 @@ export interface PublicPresentViewerVNextProps {
   deck: DeckV7;
   /** Theme package for rendering. Defaults to the neutral package. */
   themePackage?: ThemePackageV1 | null;
+  /** Live document visual payloads keyed by visual id. */
+  visuals?: Record<string, Visual>;
   /** Document title — used for accessibility labelling. */
   title: string;
   /** When true, suppresses the top-bar HUD for chrome-free iframe embedding. */
@@ -64,6 +67,7 @@ export interface PublicPresentViewerVNextProps {
 export function PublicPresentViewerVNext({
   deck,
   themePackage,
+  visuals,
   title,
   embed = false,
   showAttribution = false,
@@ -124,6 +128,11 @@ export function PublicPresentViewerVNext({
   function resolveDeckAsset(assetId: string): string | undefined {
     return resolveDeckAssetSource(deck, assetId);
   }
+
+  const resolveVisual = useCallback(
+    (visualId: string): Visual | undefined => visuals?.[visualId],
+    [visuals],
+  );
 
   if (recovery) {
     const details = [
@@ -232,6 +241,7 @@ export function PublicPresentViewerVNext({
               slide={currentSlideTree}
               canvas={canvas}
               assetResolver={resolveDeckAsset}
+              visualResolver={resolveVisual}
             />
           </div>
         </div>

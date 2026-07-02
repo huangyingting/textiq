@@ -17,6 +17,7 @@ import type {
   SlideNode,
 } from "@/lib/presentation-vnext/schema";
 import type { ResolvedDeckRenderTree } from "@/lib/presentation-vnext/render-tree";
+import type { Visual } from "@/lib/visual/schema";
 import {
   PRESENT_MODE_SHORTCUTS,
   formatPresentElapsedTime,
@@ -245,6 +246,7 @@ export interface SlideOverviewPanelVNextProps {
   renderTree: ResolvedDeckRenderTree;
   currentIndex: number;
   assetResolver?: (id: string) => string | undefined;
+  visualResolver?: (id: string) => Visual | undefined;
   onJump: (index: number) => void;
   onClose: () => void;
 }
@@ -257,6 +259,7 @@ export interface PresenterPanelVNextProps {
   nextSlideTree?: ResolvedDeckRenderTree["slides"][number];
   canvas: ResolvedDeckRenderTree["canvas"];
   assetResolver?: (id: string) => string | undefined;
+  visualResolver?: (id: string) => Visual | undefined;
 }
 
 export function PresenterPanelVNext({
@@ -267,6 +270,7 @@ export function PresenterPanelVNext({
   nextSlideTree,
   canvas,
   assetResolver,
+  visualResolver,
 }: PresenterPanelVNextProps): JSX.Element {
   const previewAspectRatio =
     canvas.width > 0 && canvas.height > 0
@@ -319,6 +323,7 @@ export function PresenterPanelVNext({
                 slide={nextSlideTree}
                 canvas={canvas}
                 assetResolver={assetResolver}
+                visualResolver={visualResolver}
                 preview
               />
             </div>
@@ -337,6 +342,7 @@ export function SlideOverviewPanelVNext({
   renderTree,
   currentIndex,
   assetResolver,
+  visualResolver,
   onJump,
   onClose,
 }: SlideOverviewPanelVNextProps): JSX.Element {
@@ -409,6 +415,7 @@ export function SlideOverviewPanelVNext({
                       slide={slideTree}
                       canvas={renderTree.canvas}
                       assetResolver={assetResolver}
+                      visualResolver={visualResolver}
                       preview
                     />
                   </div>

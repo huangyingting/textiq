@@ -60,6 +60,7 @@ export default async function PresentPage({
     <PublicPresentViewerVNext
       deck={presentation.deckV7}
       themePackage={presentation.themePackage}
+      visuals={presentation.visuals}
       title={presentation.title}
       recovery={presentation.recovery}
       showAttribution={presentation.attribution.showAttribution}
