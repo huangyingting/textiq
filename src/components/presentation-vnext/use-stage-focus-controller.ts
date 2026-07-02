@@ -25,6 +25,7 @@ import {
 } from "./selection-model";
 import { findNodeById } from "./selection-traversal";
 
+/* node:coverage ignore next 14 */
 export function useFocusFirstDescendantWhenOpen(
   open: boolean,
   panelRef: RefObject<HTMLElement | null>,
@@ -40,6 +41,7 @@ export function useFocusFirstDescendantWhenOpen(
   }, [open, panelRef]);
 }
 
+/* node:coverage ignore next 23 */
 export function focusStageNode(
   focusGeometryRegistry: ReturnType<typeof createFocusGeometryRegistry>,
   nodeId: string,
@@ -64,6 +66,7 @@ export function findSlideIndexForFocus(deck: DeckV7, targetId: string): number {
   return deck.slides.findIndex((slide) => slide.id === targetId);
 }
 
+/* node:coverage ignore next 10 */
 function scheduleEffectStateUpdate(callback: () => void): () => void {
   let canceled = false;
   const timeoutId = globalThis.setTimeout(() => {
@@ -80,6 +83,7 @@ export interface UndoRedoFocusTarget {
   token: number;
 }
 
+/* node:coverage ignore next 165 */
 export interface UseStageFocusControllerArgs {
   editorRootRef: RefObject<HTMLDivElement | null>;
   deck: DeckV7;

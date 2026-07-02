@@ -202,4 +202,202 @@ describe("createResilientLatestSnapshotQueue", () => {
     assert.equal(queue.getPending(), null);
     assert.equal(storage.readStored(), null);
   });
+
+  test("reports local storage failures and preserves status helpers", async () => {
+    const statuses: string[] = [];
+    const queue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage: {
+        load: async () => null,
+        save: async () => {
+          throw new Error("disk full");
+        },
+        remove: async () => undefined,
+      },
+      onStatusChange: (status) => statuses.push(status),
+      save: async () => ({ ok: true, revisionToken: null }),
+    });
+
+    const result = await queue.enqueue({ title: "fail" }, null);
+
+    assert.equal(result.ok, false);
+    assert.match(result.ok ? "" : result.error, /disk full/);
+    assert.equal(queue.getStatus(), "failed");
+    assert.equal(queue.isFlushing(), false);
+    assert.deepEqual(statuses, ["failed"]);
+  });
+
+  test("shares an in-flight flush and exposes flushing state", async () => {
+    const saveResult = deferred<SaveQueueSaveResult>();
+    let calls = 0;
+    const queue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage: createMemorySaveQueueStorage<TestDeck>(),
+      save: async () => {
+        calls += 1;
+        return saveResult.promise;
+      },
+    });
+
+    await queue.enqueue({ title: "in flight" }, "rev-0");
+    const firstFlush = queue.flushNow();
+    const secondFlush = queue.flushNow();
+    assert.equal(queue.isFlushing(), true);
+
+    saveResult.resolve({ ok: true, revisionToken: null });
+    assert.equal((await firstFlush).ok, true);
+    assert.equal((await secondFlush).ok, true);
+    assert.equal(calls, 1);
+    assert.equal(queue.isFlushing(), false);
+  });
+
+  test("classifies fatal, retryable, offline, and thrown failures", async () => {
+    const manual = createManualTimer();
+    let online = true;
+    let mode: "fatal" | "retryable" | "throw" = "fatal";
+    const storage = createMemorySaveQueueStorage<TestDeck>();
+    const queue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage,
+      timer: manual.timer,
+      retryDelaysMs: [5, 10],
+      isOnline: () => online,
+      save: async () => {
+        if (mode === "throw") throw new Error("network exploded");
+        return {
+          ok: false,
+          error: mode === "fatal" ? "fatal error" : "retry later",
+          retryable: mode !== "fatal",
+        };
+      },
+    });
+
+    const fatal = await queue.enqueue({ title: "fatal" }, null, {
+      flush: true,
+    });
+    assert.equal(fatal.ok, false);
+    assert.equal(queue.getStatus(), "failed");
+    assert.equal(storage.readStored()?.lastErrorClass, "fatal");
+    assert.deepEqual(manual.pendingHandles(), []);
+
+    mode = "retryable";
+    const retryable = await queue.enqueue({ title: "retryable" }, null, {
+      flush: true,
+    });
+    assert.equal(retryable.ok, false);
+    assert.equal(storage.readStored()?.lastErrorClass, "transient");
+    assert.deepEqual(manual.delays.slice(-1), [5]);
+
+    online = false;
+    mode = "throw";
+    const thrownOffline = await queue.flushNow();
+    assert.equal(thrownOffline.ok, false);
+    assert.equal(queue.getStatus(), "offline");
+    assert.equal(storage.readStored()?.lastErrorClass, "offline");
+  });
+
+  test("recovers only matching documents and restores conflict pause", async () => {
+    const otherStorage = createMemorySaveQueueStorage<TestDeck>({
+      documentId: "other",
+      snapshot: { title: "other" },
+      baseRevisionToken: null,
+      enqueuedAt: 1,
+      attemptCount: 0,
+      lastErrorClass: null,
+      serializedByteSize: 2,
+      sequence: 1,
+    });
+    const otherQueue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage: otherStorage,
+      save: async () => ({ ok: true, revisionToken: null }),
+    });
+    assert.equal(await otherQueue.recover(), null);
+    assert.equal(otherQueue.getStatus(), "idle");
+
+    const conflictStorage = createMemorySaveQueueStorage<TestDeck>({
+      documentId: "doc",
+      snapshot: { title: "conflict" },
+      baseRevisionToken: "rev-old",
+      enqueuedAt: 1,
+      attemptCount: 1,
+      lastErrorClass: "conflict",
+      serializedByteSize: 2,
+      sequence: 7,
+    });
+    const conflictQueue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage: conflictStorage,
+      save: async () => ({ ok: true, revisionToken: null }),
+    });
+
+    assert.equal((await conflictQueue.recover())?.sequence, 7);
+    assert.equal(conflictQueue.getStatus(), "conflict");
+    const retry = await conflictQueue.flushNow();
+    assert.equal(retry.ok, false);
+    assert.match(retry.ok ? "" : retry.error, /resolve the conflict/);
+  });
+
+  test("localStorage adapter handles size caps and missing browser storage", async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    Reflect.deleteProperty(globalThis, "window");
+    const serverStorage = (
+      await import("./resilient-autosave-queue")
+    ).createBrowserLocalStorageSaveQueueStorage<TestDeck>({
+      documentId: "doc",
+    });
+    await serverStorage.save({
+      documentId: "doc",
+      snapshot: { title: "server" },
+      baseRevisionToken: null,
+      enqueuedAt: 1,
+      attemptCount: 0,
+      lastErrorClass: null,
+      serializedByteSize: 2,
+      sequence: 1,
+    });
+    assert.equal(await serverStorage.load(), null);
+
+    const stored = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => stored.get(key) ?? null,
+          setItem: (key: string, value: string) => stored.set(key, value),
+          removeItem: (key: string) => stored.delete(key),
+        },
+      },
+    });
+    try {
+      const browserStorage = (
+        await import("./resilient-autosave-queue")
+      ).createBrowserLocalStorageSaveQueueStorage<TestDeck>({
+        documentId: "doc",
+        storageKeyPrefix: "test",
+        maxBytes: 20,
+      });
+      await assert.rejects(
+        () =>
+          browserStorage.save({
+            documentId: "doc",
+            snapshot: { title: "too large" },
+            baseRevisionToken: null,
+            enqueuedAt: 1,
+            attemptCount: 0,
+            lastErrorClass: null,
+            serializedByteSize: 2,
+            sequence: 1,
+          }),
+        /local save cap/,
+      );
+    } finally {
+      if (previousWindow)
+        Object.defineProperty(globalThis, "window", previousWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
 });
