@@ -1,8 +1,8 @@
 ---
 type: "plan"
-status: "active — authoring controls pending"
+status: "active — caption editing pending"
 last_updated: "2026-07-02"
-description: "Remaining plan for document table authoring controls. Table parsing, extraction, projections, source references, and presentation mapping are implemented; row/column controls and caption editing remain pending."
+description: "Remaining plan for document table authoring controls. Table parsing, extraction, projections, source references, presentation mapping, and row/column controls are implemented; caption editing remains pending."
 ---
 
 # Document Table Authoring Controls Plan
@@ -13,15 +13,20 @@ registered, simple table insertion works, table blocks extract as
 export, source references, staleness, AI deck context, deterministic slide
 derivation, and vNext source refresh.
 
-This plan now tracks only the remaining document-editor authoring controls.
+This plan now tracks only the remaining document-editor caption controls.
+
+## Completed Work
+
+| Slice               | Work                                                                                                        | Exit criteria                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Row/column controls | Added document-editor UI for inserting and deleting table rows and columns, using Lexical table primitives. | Users can add/remove rows and columns without editing serialized content or reimporting tables. |
 
 ## Remaining Work
 
-| Slice               | Work                                                                                                                      | Exit criteria                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Row/column controls | Add document-editor UI for inserting and deleting table rows and columns, using Lexical table primitives where available. | Users can add/remove rows and columns without editing serialized content or reimporting tables. |
-| Caption editing     | Add an explicit caption editing surface for document tables and persist it through the existing table block extraction.   | Users can set, update, clear, autosave, and re-open a table caption from the editor UI.         |
-| Authoring tests     | Cover the remaining controls in focused editor/document tests.                                                            | Tests prove row/column mutation, caption persistence, undo/redo, and serialization round-trip.  |
+| Slice           | Work                                                                                                                    | Exit criteria                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Caption editing | Add an explicit caption editing surface for document tables and persist it through the existing table block extraction. | Users can set, update, clear, autosave, and re-open a table caption from the editor UI. |
+| Authoring tests | Cover the remaining caption controls in focused editor/document tests.                                                  | Tests prove caption persistence and round-trip behavior.                                |
 
 ## Constraints
 
