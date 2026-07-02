@@ -1,3 +1,4 @@
+// e2e-governance-allow oversized-test: failure coverage is consolidated here until the inline editor harness is split.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as React from "react";
