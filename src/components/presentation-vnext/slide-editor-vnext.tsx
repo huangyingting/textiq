@@ -214,7 +214,13 @@ import {
   VISUAL_PICKER_FAILURE_MESSAGE,
 } from "./visual-picker-recovery";
 import { KeyboardShortcutHelpDialog } from "@/components/presentation-shared/keyboard-shortcut-help-dialog";
+import { resolveTextIqNodePaste } from "@/lib/presentation-vnext/clipboard/node-payload";
 import { SlideEditorFooter } from "./slide-editor-footer";
+import {
+  canReadTextIqNodeClipboard,
+  readTextIqNodeClipboardPayload,
+  writeTextIqNodesToClipboard,
+} from "./node-clipboard";
 import {
   canvasAspectRatio,
   canvasFrameStyle,
@@ -1142,21 +1148,40 @@ export function SlideEditorVNext({
     focusStageViewportSoon();
   }
 
-  function handleCopyNodes() {
+  async function handleCopyNodes() {
     if (!activeSlide || selectedIds.length === 0) return;
     const copied = selectedIds
       .map((id) => findNodeById(activeSlide.children, id))
       .filter((node): node is SlideChildNode => node !== undefined);
+    if (copied.length === 0) return;
     setClipboardNodes(copied);
+    const wroteClipboard = await writeTextIqNodesToClipboard(copied);
+    setStageAnnouncement(
+      wroteClipboard
+        ? `Copied ${copied.length} ${copied.length === 1 ? "node" : "nodes"} to clipboard.`
+        : `Copied ${copied.length} ${copied.length === 1 ? "node" : "nodes"}.`,
+    );
   }
 
-  function handlePasteNodes() {
-    if (!activeSlide || clipboardNodes.length === 0) return;
-    const result = pasteNodes(deck, activeSlide.id, clipboardNodes);
+  async function handlePasteNodes() {
+    if (!activeSlide) return;
+    const osPayload = await readTextIqNodeClipboardPayload();
+    const resolved = resolveTextIqNodePaste(osPayload, clipboardNodes);
+    if (resolved.source === "invalid") {
+      setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
+      return;
+    }
+    if (resolved.nodes.length === 0) return;
+    const result = pasteNodes(deck, activeSlide.id, resolved.nodes);
     onDeckChange(result.deck);
     if (result.nodeIds.length > 0) {
       setSelection((s) => setSelectedNodeIds(s, result.nodeIds));
       focusSelectedNodeSoon(result.nodeIds[0]);
+      setStageAnnouncement(
+        `Pasted ${result.nodeIds.length} ${
+          result.nodeIds.length === 1 ? "node" : "nodes"
+        }${resolved.source === "os" ? " from clipboard" : ""}.`,
+      );
     }
   }
 
@@ -1188,12 +1213,18 @@ export function SlideEditorVNext({
     );
   }
 
-  function handleCutNodes() {
+  async function handleCutNodes() {
     if (!activeSlide || selectedIds.length === 0) return;
     const result = cutNodes(deck, activeSlide.id, selectedIds);
     if (result.nodes.length === 0) return;
     setClipboardNodes(result.nodes);
+    const wroteClipboard = await writeTextIqNodesToClipboard(result.nodes);
     applySelectionDeletion(selectedIds, result.deck);
+    setStageAnnouncement(
+      wroteClipboard
+        ? `Cut ${result.nodes.length} ${result.nodes.length === 1 ? "node" : "nodes"} to clipboard.`
+        : `Cut ${result.nodes.length} ${result.nodes.length === 1 ? "node" : "nodes"}.`,
+    );
   }
 
   function handleGroupSelection() {
@@ -2622,7 +2653,9 @@ export function SlideEditorVNext({
                     node={contextNode}
                     candidates={candidates}
                     selectedCount={selectedIds.length}
-                    canPaste={clipboardNodes.length > 0}
+                    canPaste={
+                      clipboardNodes.length > 0 || canReadTextIqNodeClipboard()
+                    }
                     canGroup={selectedIds.length >= 2}
                     canUngroup={selectedNode?.type === "group"}
                     onClose={() => setContextMenu(null)}
