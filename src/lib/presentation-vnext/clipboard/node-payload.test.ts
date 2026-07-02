@@ -3,12 +3,19 @@ import { describe, test } from "node:test";
 
 import type { SlideChildNode } from "../schema";
 import {
+  buildTextIqNodeCopyOutPayload,
+  clipboardImageNodeFromUpload,
+  clipboardTextNode,
   parseTextIqNodePayload,
+  resolveExternalTextIqNodePaste,
   resolveTextIqNodePaste,
+  sanitizedClipboardHtmlToText,
   serializeTextIqNodePayload,
+  textIqNodeHtmlFallback,
   textIqNodePlainTextFallback,
   TEXTIQ_NODE_CLIPBOARD_KIND,
   TEXTIQ_NODE_CLIPBOARD_MAX_BYTES,
+  TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS,
   TEXTIQ_NODE_CLIPBOARD_MIME,
   TEXTIQ_NODE_CLIPBOARD_SCHEMA_VERSION,
   TEXTIQ_NODE_CLIPBOARD_VERSION,
@@ -234,6 +241,115 @@ describe("TextIQ node clipboard payload", () => {
     assert.equal(resolveTextIqNodePaste(undefined, []).source, "none");
   });
 
+  test("orders external paste sources before the in-memory node buffer", () => {
+    const osPayload = serializeTextIqNodePayload([nodes[0]]);
+    assert.equal(
+      resolveExternalTextIqNodePaste({
+        osPayload,
+        hasImage: true,
+        html: "<p>HTML</p>",
+        plainText: "plain",
+        memoryNodes: [nodes[1]],
+      }).source,
+      "os",
+    );
+    assert.equal(
+      resolveExternalTextIqNodePaste({
+        hasImage: true,
+        html: "<p>HTML</p>",
+        plainText: "plain",
+        memoryNodes: [nodes[1]],
+      }).source,
+      "image",
+    );
+    assert.equal(
+      resolveExternalTextIqNodePaste({
+        html: "<p>HTML</p>",
+        plainText: "plain",
+        memoryNodes: [nodes[1]],
+      }).source,
+      "html",
+    );
+    assert.equal(
+      resolveExternalTextIqNodePaste({
+        plainText: "plain",
+        memoryNodes: [nodes[1]],
+      }).source,
+      "plain-text",
+    );
+    assert.equal(
+      resolveExternalTextIqNodePaste({ memoryNodes: [nodes[1]] }).source,
+      "memory",
+    );
+  });
+
+  test("uploads clipboard images through a mocked boundary before creating image nodes", async () => {
+    const pasted = await clipboardImageNodeFromUpload(
+      { type: "image/png", size: 12 },
+      25,
+      async (image) => {
+        assert.equal(image.type, "image/png");
+        return { assetId: "asset-from-upload", alt: "clipboard-image.png" };
+      },
+    );
+
+    assert.equal(pasted.type, "image");
+    assert.deepEqual(pasted.layout, {
+      frame: { x: 18, y: 18, w: 40, h: 28 },
+      zIndex: 25,
+    });
+    assert.deepEqual(pasted.content, {
+      assetId: "asset-from-upload",
+      alt: "clipboard-image.png",
+    });
+  });
+
+  test("converts sanitized HTML into text nodes and strips dangerous markup", () => {
+    const text = sanitizedClipboardHtmlToText(
+      '<p>Hello <strong>safe</strong></p><script>alert("x")</script><img src=x onerror=alert(1)>',
+    );
+    assert.match(text, /Hello\s+safe/);
+    assert.equal(text.includes("alert"), false);
+    assert.equal(text.includes("onerror"), false);
+
+    const node = clipboardTextNode(
+      "<h1>Title</h1><p>Body &amp; details &#x2713; &#10003; &unknown;</p><style>.x{color:red}</style>",
+      42,
+      { html: true },
+    );
+    assert.equal(node?.type, "text");
+    assert.equal(node?.layout?.zIndex, 42);
+    assert.deepEqual(
+      node?.type === "text"
+        ? node.content.paragraphs.map((paragraph) => paragraph.text)
+        : [],
+      ["Title", "Body & details ✓ ✓ &unknown;"],
+    );
+  });
+
+  test("normalizes and limits plain text into v7 text node paragraphs", () => {
+    const node = clipboardTextNode("First line\r\nSecond line\n\nThird", 9);
+    assert.equal(node?.type, "text");
+    assert.deepEqual(
+      node?.type === "text"
+        ? node.content.paragraphs.map((paragraph) => paragraph.text)
+        : [],
+      ["First line", "Second line", "Third"],
+    );
+    assert.equal(clipboardTextNode(" \n\t ", 1), null);
+
+    const oversized = clipboardTextNode(
+      `${"x".repeat(TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS + 5)}\ntruncated`,
+      1,
+    );
+    assert.equal(
+      oversized?.type === "text"
+        ? oversized.content.paragraphs[0]?.text.length
+        : 0,
+      TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS,
+    );
+  });
+
   test("builds a plain-text fallback without exposing raw JSON", () => {
     assert.equal(
       textIqNodePlainTextFallback([textNode]),
@@ -241,7 +357,28 @@ describe("TextIQ node clipboard payload", () => {
     );
     assert.equal(
       textIqNodePlainTextFallback([nodes[1], nodes[2]]),
-      "2 TextIQ nodes",
+      "2 TextIQ nodes\nImage alt",
     );
+  });
+
+  test("builds sanitized HTML and aggregate copy-out payloads", () => {
+    const html = textIqNodeHtmlFallback([
+      {
+        ...textNode,
+        content: {
+          paragraphs: [{ id: "xss", text: '<script>alert("x")</script>' }],
+        },
+      },
+      nodes[1],
+    ]);
+
+    assert.match(html, /data-textiq-copy="nodes"/);
+    assert.match(html, /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /asset-image-1/);
+
+    const payload = buildTextIqNodeCopyOutPayload([textNode]);
+    assert.equal(parseTextIqNodePayload(payload.textIqPayload).ok, true);
+    assert.match(payload.html, /Hello TextIQ/);
+    assert.equal(payload.plainText, "1 TextIQ node\nHello TextIQ");
   });
 });

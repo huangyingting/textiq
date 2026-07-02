@@ -1,4 +1,5 @@
-import type { SlideChildNode } from "../schema";
+import { defaultImageNode, defaultTextNode } from "../node-asset-factories";
+import type { ImageNode, SlideChildNode, TextNode } from "../schema";
 
 export const TEXTIQ_NODE_CLIPBOARD_MIME = "application/x-textiq-nodes+json";
 export const TEXTIQ_NODE_CLIPBOARD_VERSION = 1;
@@ -6,6 +7,8 @@ export const TEXTIQ_NODE_CLIPBOARD_KIND = "textiq.presentation-vnext.nodes";
 export const TEXTIQ_NODE_CLIPBOARD_SCHEMA_VERSION = 7;
 export const TEXTIQ_NODE_CLIPBOARD_MAX_BYTES = 1_000_000;
 export const TEXTIQ_NODE_CLIPBOARD_MAX_NODES = 100;
+export const TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS = 20_000;
+export const TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_PARAGRAPHS = 40;
 
 type JsonObject = Record<string, unknown>;
 
@@ -14,6 +17,12 @@ export type TextIqNodeClipboardPayloadV1 = {
   version: typeof TEXTIQ_NODE_CLIPBOARD_VERSION;
   schemaVersion: typeof TEXTIQ_NODE_CLIPBOARD_SCHEMA_VERSION;
   nodes: SlideChildNode[];
+};
+
+export type TextIqNodeCopyOutPayload = {
+  textIqPayload: string;
+  html: string;
+  plainText: string;
 };
 
 export type TextIqNodePayloadParseResult =
@@ -25,6 +34,28 @@ export type TextIqNodePasteResolution =
   | { source: "memory"; nodes: SlideChildNode[] }
   | { source: "none"; nodes: [] }
   | { source: "invalid"; nodes: []; error: string };
+
+export type TextIqExternalClipboardInput = {
+  osPayload?: string | null;
+  hasImage?: boolean;
+  html?: string | null;
+  plainText?: string | null;
+  memoryNodes: readonly SlideChildNode[];
+};
+
+export type TextIqExternalPasteDecision =
+  | { source: "os"; nodes: SlideChildNode[] }
+  | { source: "image"; nodes: [] }
+  | { source: "html"; nodes: [] }
+  | { source: "plain-text"; nodes: [] }
+  | { source: "memory"; nodes: SlideChildNode[] }
+  | { source: "none"; nodes: [] }
+  | { source: "invalid"; nodes: []; error: string };
+
+export type ClipboardImageUpload = {
+  assetId: string;
+  alt: string;
+};
 
 const BASE_NODE_KEYS = new Set([
   "id",
@@ -554,15 +585,202 @@ export function resolveTextIqNodePaste(
   return { source: "memory", nodes: cloneNodes(memoryNodes) };
 }
 
+export function resolveExternalTextIqNodePaste(
+  input: TextIqExternalClipboardInput,
+): TextIqExternalPasteDecision {
+  const osResolution = resolveTextIqNodePaste(input.osPayload, []);
+  if (osResolution.source === "invalid" || osResolution.source === "os") {
+    return osResolution;
+  }
+  if (input.hasImage) return { source: "image", nodes: [] };
+  if (hasClipboardText(input.html)) return { source: "html", nodes: [] };
+  if (hasClipboardText(input.plainText))
+    return { source: "plain-text", nodes: [] };
+  return resolveTextIqNodePaste(null, input.memoryNodes);
+}
+
+function hasClipboardText(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function truncateClipboardText(value: string): string {
+  return value.length > TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS
+    ? value.slice(0, TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_CHARS)
+    : value;
+}
+
+function escapeClipboardHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return "&#39;";
+    }
+  });
+}
+
+function textNodePlainText(node: SlideChildNode): string {
+  if (node.type !== "text") return "";
+  return node.content.paragraphs
+    .map((paragraph) => paragraph.text)
+    .join("\n")
+    .trim();
+}
+
+function tableNodePlainText(node: SlideChildNode): string {
+  if (node.type !== "table") return "";
+  return node.content.rows
+    .map((row) => row.cells.map((cell) => cell.text).join("\t"))
+    .join("\n")
+    .trim();
+}
+
+function nodeAccessibleLabel(node: SlideChildNode): string {
+  if (node.accessibility?.label) return node.accessibility.label;
+  if (node.name) return node.name;
+  if (node.type === "image" || node.type === "visual")
+    return node.content.alt ?? "";
+  return "";
+}
+
+function nodeCopyOutText(node: SlideChildNode): string {
+  const text = textNodePlainText(node) || tableNodePlainText(node);
+  if (text) return text;
+  if (node.type === "group") {
+    return node.children.map(nodeCopyOutText).filter(Boolean).join("\n").trim();
+  }
+  return nodeAccessibleLabel(node);
+}
+
+export function textIqNodeHtmlFallback(
+  nodes: readonly SlideChildNode[],
+): string {
+  const body = nodes
+    .map((node) => {
+      const text = nodeCopyOutText(node);
+      const label = nodeAccessibleLabel(node) || `${node.type} node`;
+      const content = text
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => `<p>${escapeClipboardHtml(line)}</p>`)
+        .join("");
+      return `<section data-textiq-node-type="${escapeClipboardHtml(node.type)}" aria-label="${escapeClipboardHtml(label)}">${content || `<p>${escapeClipboardHtml(label)}</p>`}</section>`;
+    })
+    .join("");
+  return `<div data-textiq-copy="nodes">${body}</div>`;
+}
+
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+    const lower = String(code).toLowerCase();
+    if (lower.startsWith("#x")) {
+      const parsed = Number.parseInt(lower.slice(2), 16);
+      return Number.isFinite(parsed) && parsed >= 0 && parsed <= 0x10ffff
+        ? String.fromCodePoint(parsed)
+        : entity;
+    }
+    if (lower.startsWith("#")) {
+      const parsed = Number.parseInt(lower.slice(1), 10);
+      return Number.isFinite(parsed) && parsed >= 0 && parsed <= 0x10ffff
+        ? String.fromCodePoint(parsed)
+        : entity;
+    }
+    return named[lower] ?? entity;
+  });
+}
+
+export function sanitizedClipboardHtmlToText(html: string): string {
+  return decodeHtmlEntities(
+    html
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)\b[^>]*>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "\n• ")
+      .replace(/<[^>]*>/g, " "),
+  );
+}
+
+export function clipboardTextParagraphs(rawText: string): string[] {
+  const normalized = truncateClipboardText(rawText)
+    .replace(/\r\n?/g, "\n")
+    .split(/\n{2,}|\n/)
+    .map((paragraph) => paragraph.replace(/[ \t\f\v]+/g, " ").trim())
+    .filter((paragraph) => paragraph.length > 0);
+  return normalized.slice(0, TEXTIQ_NODE_CLIPBOARD_MAX_TEXT_PARAGRAPHS);
+}
+
+export function clipboardTextNode(
+  rawText: string,
+  zIndex: number,
+  options: { html?: boolean } = {},
+): SlideChildNode | null {
+  const text = options.html ? sanitizedClipboardHtmlToText(rawText) : rawText;
+  const paragraphs = clipboardTextParagraphs(text);
+  if (paragraphs.length === 0) return null;
+  const node = defaultTextNode(zIndex) as TextNode;
+  return {
+    ...node,
+    content: {
+      ...node.content,
+      paragraphs: paragraphs.map((paragraph, index) => ({
+        id: `${node.id}-p-${index + 1}`,
+        text: paragraph,
+      })),
+    },
+  };
+}
+
+export function clipboardImageNode(
+  upload: ClipboardImageUpload,
+  zIndex: number,
+): SlideChildNode {
+  const node = defaultImageNode(zIndex) as ImageNode;
+  return {
+    ...node,
+    content: { ...node.content, assetId: upload.assetId, alt: upload.alt },
+  };
+}
+
+export async function clipboardImageNodeFromUpload<TImage>(
+  image: TImage,
+  zIndex: number,
+  uploadImage: (image: TImage) => Promise<ClipboardImageUpload>,
+): Promise<SlideChildNode> {
+  return clipboardImageNode(await uploadImage(image), zIndex);
+}
+
 export function textIqNodePlainTextFallback(
   nodes: readonly SlideChildNode[],
 ): string {
   const label =
     nodes.length === 1 ? "1 TextIQ node" : `${nodes.length} TextIQ nodes`;
-  const text = nodes
-    .flatMap((node) => (node.type === "text" ? node.content.paragraphs : []))
-    .map((paragraph) => paragraph.text)
-    .join("\n")
-    .trim();
+  const text = nodes.map(nodeCopyOutText).filter(Boolean).join("\n").trim();
   return text ? `${label}\n${text}` : label;
+}
+
+export function buildTextIqNodeCopyOutPayload(
+  nodes: readonly SlideChildNode[],
+): TextIqNodeCopyOutPayload {
+  return {
+    textIqPayload: serializeTextIqNodePayload(nodes),
+    html: textIqNodeHtmlFallback(nodes),
+    plainText: textIqNodePlainTextFallback(nodes),
+  };
 }
