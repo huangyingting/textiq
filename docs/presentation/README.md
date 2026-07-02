@@ -22,6 +22,7 @@ persisted deck contract and the React components that render/edit slides.
 | [legacy-retirement-plan.md](legacy-retirement-plan.md)                           | Plan         | Product-gated retirement plan for residual legacy v6 presentation imports and surface deletion.                               |
 | [vnext-test-strategy-plan.md](vnext-test-strategy-plan.md)                       | Plan         | Remaining P1 work for React-internals retirement in presentation tests.                                                       |
 | [vnext-render-source-boundaries-plan.md](vnext-render-source-boundaries-plan.md) | Plan         | Remaining P2 provenance typing after completed vNext boundary splits.                                                         |
+| [clipboard-interop-plan.md](clipboard-interop-plan.md)                           | Plan         | v7 clipboard interoperability: portable node payload, OS paste/copy, and graceful copy-out fallbacks.                         |
 | [pptx-fidelity-plan.md](pptx-fidelity-plan.md)                                   | Plan         | Ranked PPTX export fidelity strategy for gradients, pattern/image fills, effects, curved connectors, and visual placeholders. |
 
 Future presentation work should live in this directory as `*-plan.md` and must
