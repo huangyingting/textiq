@@ -7,6 +7,7 @@ import {
   type RequireCommentDocumentContext,
 } from "@/lib/comments";
 import { prisma } from "@/lib/prisma";
+import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation-vnext/brand-kit/persistence";
 
 import {
   buildDocumentEditorViewModel,
@@ -71,12 +72,16 @@ export async function loadDocumentEditorViewModel({
     return null;
   }
 
-  const [initialComments, allTags] = await Promise.all([
+  const [initialComments, allTags, customThemes] = await Promise.all([
     commentService.listComments(document.id),
     prisma.tag.findMany({
       where: { ownerId: userId },
       orderBy: { name: "asc" },
       select: userTagSelect,
+    }),
+    loadCustomThemePackagesForDeckJson(document.deckJson, {
+      userId,
+      workspaceId: document.workspaceId,
     }),
   ]);
 
@@ -86,5 +91,6 @@ export async function loadDocumentEditorViewModel({
     userName,
     initialComments,
     allTags,
+    customThemePackages: customThemes.packages,
   });
 }

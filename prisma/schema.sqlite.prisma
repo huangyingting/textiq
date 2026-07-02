@@ -12,34 +12,37 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
-  name              String?
-  image             String?
-  passwordHash      String?
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  image               String?
+  passwordHash        String?
   // Email verification (#162): null until the user confirms ownership of their
   // address via a verification link; stamped with the confirmation time.
-  emailVerified     DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  emailVerified       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   // Monetization: tier + credit balance
-  plan              String    @default("free")
-  creditBalance     Int       @default(0)
-  creditPeriodStart DateTime?
+  plan                String    @default("free")
+  creditBalance       Int       @default(0)
+  creditPeriodStart   DateTime?
   // Onboarding: once dismissed (or completed), the checklist is never shown again
-  onboardingDismissed Boolean @default(false)
+  onboardingDismissed Boolean   @default(false)
 
-  documents       Document[]        @relation("DocumentOwner")
-  ownedWorkspaces Workspace[]       @relation("WorkspaceOwner")
-  memberships     WorkspaceMember[]
-  comments        Comment[]
-  tags            Tag[]
-  brands          Brand[]           @relation("BrandOwner")
-  subscription    Subscription?
-  passwordResetTokens PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-  documentVersions    DocumentVersion[]
-  commentReads        CommentRead[]
+  documents                      Document[]               @relation("DocumentOwner")
+  ownedWorkspaces                Workspace[]              @relation("WorkspaceOwner")
+  memberships                    WorkspaceMember[]
+  comments                       Comment[]
+  tags                           Tag[]
+  brands                         Brand[]                  @relation("BrandOwner")
+  brandKitDrafts                 BrandKitDraft[]          @relation("BrandKitDraftOwner")
+  themePackageSnapshots          ThemePackageSnapshot[]   @relation("ThemePackageSnapshotOwner")
+  publishedThemePackageSnapshots ThemePackageSnapshot[]   @relation("ThemePackageSnapshotPublisher")
+  subscription                   Subscription?
+  passwordResetTokens            PasswordResetToken[]
+  emailVerificationTokens        EmailVerificationToken[]
+  documentVersions               DocumentVersion[]
+  commentReads                   CommentRead[]
 }
 
 // A single-use, time-boxed credential for confirming a user owns their email
@@ -86,13 +89,65 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner       User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members     WorkspaceMember[]
-  documents   Document[]
-  assets      Asset[]
-  inviteLinks InviteLink[]
+  owner                 User                   @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members               WorkspaceMember[]
+  documents             Document[]
+  assets                Asset[]
+  inviteLinks           InviteLink[]
+  brandKitDrafts        BrandKitDraft[]
+  themePackageSnapshots ThemePackageSnapshot[]
 
   @@index([ownerId])
+}
+
+model BrandKitDraft {
+  id                   String   @id @default(cuid())
+  slug                 String
+  name                 String
+  ownerId              String
+  workspaceId          String?
+  scope                String
+  scopeKey             String
+  sourcePresetId       String?
+  version              String
+  revisionId           String
+  revisionNumber       Int
+  draftJson            Json
+  latestPackageId      String?
+  latestPackageVersion String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  owner     User                   @relation("BrandKitDraftOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  snapshots ThemePackageSnapshot[]
+
+  @@unique([scopeKey, slug])
+  @@index([ownerId])
+  @@index([workspaceId])
+  @@index([latestPackageId, latestPackageVersion])
+}
+
+model ThemePackageSnapshot {
+  id             String   @id @default(cuid())
+  packageId      String
+  packageVersion String
+  draftId        String?
+  ownerId        String
+  workspaceId    String?
+  publishedById  String?
+  packageJson    Json
+  createdAt      DateTime @default(now())
+
+  draft       BrandKitDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  owner       User           @relation("ThemePackageSnapshotOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publishedBy User?          @relation("ThemePackageSnapshotPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([packageId, packageVersion])
+  @@index([packageId])
+  @@index([ownerId])
+  @@index([workspaceId])
 }
 
 model WorkspaceMember {
@@ -110,29 +165,29 @@ model WorkspaceMember {
 }
 
 model Document {
-  id          String   @id @default(cuid())
-  title       String   @default("Untitled")
-  content     String   @default("")
-  contentJson Json?
-  deckJson              Json?
-  deckRevisionToken     String?
-  ownerId               String
-  workspaceId String?
-  shareId     String?  @unique
-  slug        String?  @unique
-  isShared    Boolean  @default(false)
+  id                  String    @id @default(cuid())
+  title               String    @default("Untitled")
+  content             String    @default("")
+  contentJson         Json?
+  deckJson            Json?
+  deckRevisionToken   String?
+  ownerId             String
+  workspaceId         String?
+  shareId             String?   @unique
+  slug                String?   @unique
+  isShared            Boolean   @default(false)
   // Share-link lifecycle & access policy (issue #101).
   shareExpiresAt      DateTime?
-  shareEmbedEnabled   Boolean  @default(true)
-  sharePresentEnabled Boolean  @default(true)
+  shareEmbedEnabled   Boolean   @default(true)
+  sharePresentEnabled Boolean   @default(true)
   // Public metadata privacy controls (Epic N15): links default to generic,
   // non-discoverable unfurls unless the owner explicitly opts in.
-  shareMetadataMode   String   @default("generic")
-  shareDiscoverable   Boolean  @default(false)
-  favorite    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  shareMetadataMode   String    @default("generic")
+  shareDiscoverable   Boolean   @default(false)
+  favorite            Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
   // Best-effort collaboration recovery snapshot (#497). When a dirty collab
   // room is evicted, the server flushes the room's Yjs update (base64) here so
@@ -142,14 +197,14 @@ model Document {
   // normal load path.
   collabRecoverySnapshot String?
   collabRecoverySavedAt  DateTime?
-  owner     User       @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  visuals   Visual[]
-  comments  Comment[]
-  tags      Tag[]      @relation("DocumentTags")
-  versions  DocumentVersion[]
-  commentReads CommentRead[]
-  assets    Asset[]
+  owner                  User              @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace              Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  visuals                Visual[]
+  comments               Comment[]
+  tags                   Tag[]             @relation("DocumentTags")
+  versions               DocumentVersion[]
+  commentReads           CommentRead[]
+  assets                 Asset[]
 
   @@index([ownerId])
   @@index([workspaceId])
@@ -228,17 +283,17 @@ model DocumentVersion {
 }
 
 model Comment {
-  id           String   @id @default(cuid())
-  documentId   String
-  authorId     String
-  body         String
-  resolved     Boolean  @default(false)
-  parentId     String?
+  id             String   @id @default(cuid())
+  documentId     String
+  authorId       String
+  body           String
+  resolved       Boolean  @default(false)
+  parentId       String?
   // Optional anchor tying a top-level comment to text or a visual element.
   // anchorType: null (whole document) | "text" | "visual".
-  anchorType   String?
-  anchorText   String?
-  anchorNodeId String?
+  anchorType     String?
+  anchorText     String?
+  anchorNodeId   String?
   // Slide-level anchor fields (Epic #380). All nullable so existing comments
   // are unaffected. slideId references a Slide.id in the deckJson. elementId
   // references a SlideElement.id within that slide. anchorGeometry holds an
@@ -246,8 +301,8 @@ model Comment {
   slideId        String?
   elementId      String?
   anchorGeometry Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   document Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -335,26 +390,26 @@ model RateLimitHit {
 // and defaults fall through to the visual DEFAULT_STYLE. `fontFamily`
 // overrides the visual's font when the brand is applied.
 model Brand {
-  id           String   @id @default(cuid())
-  name         String
-  ownerId      String
+  id          String   @id @default(cuid())
+  name        String
+  ownerId     String
   // Color fields (all optional — null means "keep visual default")
-  palette      Json?
-  background   String?
-  nodeFill     String?
-  nodeStroke   String?
-  nodeText     String?
-  edgeColor    String?
+  palette     Json?
+  background  String?
+  nodeFill    String?
+  nodeStroke  String?
+  nodeText    String?
+  edgeColor   String?
   // Typography
-  fontFamily   String?
+  fontFamily  String?
   // Brand media is stored as protected `Asset` rows (served via
   // /api/brand-assets/…), not as raw data URLs. `logoAssetId` and `fontAssetId`
   // point at the owning brand's logo/font asset. Display URLs are derived from
   // the referenced asset's `storageKey` at read time and are never persisted.
-  logoAssetId  String?
-  fontAssetId  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  logoAssetId String?
+  fontAssetId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   owner  User    @relation("BrandOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   // Assets scoped to this brand (logo, font, future media). Cleared to null on
@@ -443,15 +498,13 @@ model Asset {
 
 /**
  * Durable ledger entry for AI generation credit usage.
- *
  * Lifecycle: reserved → captured (on success) or refunded (on failure).
  * Idempotent by `idempotencyKey`: callers must supply a stable per-request
  * key (e.g. a request UUID) so retries never double-charge.
- *
  * Status values:
- *   "reserved"  — intent recorded; credits NOT yet deducted.
- *   "captured"  — generation succeeded; credits atomically deducted.
- *   "refunded"  — generation failed; entry tombstoned; credits unchanged.
+ * "reserved"  — intent recorded; credits NOT yet deducted.
+ * "captured"  — generation succeeded; credits atomically deducted.
+ * "refunded"  — generation failed; entry tombstoned; credits unchanged.
  */
 model UsageLedgerEntry {
   id             String    @id @default(cuid())

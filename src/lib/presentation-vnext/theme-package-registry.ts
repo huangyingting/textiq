@@ -67,6 +67,10 @@ export type ThemePackageResolution = {
   diagnostics: PresentationDiagnostic[];
 };
 
+export type ThemePackageResolverOptions = {
+  customPackages?: readonly ThemePackageV1[];
+};
+
 export function resolveThemePackageIdV7(
   packageId: string | null | undefined,
 ): string {
@@ -86,12 +90,28 @@ export function listThemePackagesV7(): readonly ThemePackageV1[] {
 
 export function resolveThemePackageForDeck(
   deck: Pick<DeckV7, "theme">,
+  options: ThemePackageResolverOptions = {},
 ): ThemePackageResolution {
   const requestedPackageId = resolveThemePackageIdV7(deck.theme.packageId);
   const themePackage = PACKAGE_BY_ID.get(requestedPackageId);
   if (themePackage) {
     return {
       package: themePackage,
+      requestedPackageId,
+      fallback: false,
+      diagnostics: [],
+    };
+  }
+
+  const customPackage = options.customPackages?.find(
+    (candidate) =>
+      candidate.id === requestedPackageId &&
+      (!deck.theme.packageVersion ||
+        candidate.version === deck.theme.packageVersion),
+  );
+  if (customPackage) {
+    return {
+      package: customPackage,
       requestedPackageId,
       fallback: false,
       diagnostics: [],

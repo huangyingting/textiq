@@ -497,6 +497,20 @@ export {
   listThemePackagesV7,
   resolveThemePackageForDeck,
 } from "./theme-package-registry";
+export {
+  brandKitPackageIdForDraft,
+  compileBrandKitDraft,
+} from "./brand-kit/compiler";
+export type {
+  BrandKitCompileResult,
+  BrandKitDiagnostic,
+  BrandKitDraftV1,
+  BrandKitImageAsset,
+  BrandKitRevision,
+  BrandKitScope,
+  BrandKitStatePalette,
+  BrandKitTypographyRole,
+} from "./brand-kit/schema";
 
 // Native v7 starter decks
 export { createBlankDeckV7 } from "./empty-deck";

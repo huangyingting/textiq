@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation-vnext/brand-kit/persistence";
 
 import {
   resolvePublicRenderWithSource,
@@ -16,10 +17,15 @@ export async function resolvePublicRender(input: ResolvePublicRenderInput) {
   return resolvePublicRenderWithSource(
     {
       async findByShareId(shareId) {
-        return (await prisma.document.findFirst({
+        const document = (await prisma.document.findFirst({
           where: { shareId },
           select: selectForPublicRenderProjection(input.projection),
         })) as PublicRenderDocumentRow | null;
+        if (!document || input.projection !== "presentation") return document;
+        const customThemes = await loadCustomThemePackagesForDeckJson(
+          document.deckJson,
+        );
+        return { ...document, customThemePackages: customThemes.packages };
       },
       async findByDocumentId(documentId) {
         return (await prisma.document.findUnique({

@@ -29,6 +29,33 @@ test("resolveThemePackageForDeck returns the requested v7 package", () => {
   assert.deepEqual(result.diagnostics, []);
 });
 
+test("resolveThemePackageForDeck accepts validated custom packages at load boundaries", () => {
+  const customPackage = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:custom",
+    version: "1.0.0+r1",
+    name: "Custom",
+  };
+  const validation = validateThemePackage(customPackage);
+  assert.equal(validation.valid, true);
+  if (!validation.valid) return;
+
+  const result = resolveThemePackageForDeck(
+    {
+      theme: {
+        packageId: validation.package.id,
+        packageVersion: validation.package.version,
+      },
+    },
+    { customPackages: [validation.package] },
+  );
+
+  assert.equal(result.package.id, validation.package.id);
+  assert.equal(result.package.version, validation.package.version);
+  assert.equal(result.fallback, false);
+  assert.deepEqual(result.diagnostics, []);
+});
+
 test("resolveThemePackageIdV7 shares built-in aliases without blocking custom ids", () => {
   assert.equal(resolveThemePackageIdV7(undefined), "neutral");
   assert.equal(resolveThemePackageIdV7("default"), "clarity");

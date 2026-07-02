@@ -15,6 +15,7 @@ export interface PublicPresentationDocument {
     name: string | null;
     plan: string;
   };
+  customThemePackages?: ThemePackageV1[];
 }
 
 export interface PublicPresentationAssetBinding {
@@ -117,7 +118,9 @@ export function buildPublicPresentationModel(
     ? opened.deck
     : createBlankDeckV7({ title: document.title });
   const deckV7 = bindDeckAssetUrlsToShare(rawDeckV7, assetBinding);
-  const themeResolution = resolveThemePackageForDeck(deckV7);
+  const themeResolution = resolveThemePackageForDeck(deckV7, {
+    customPackages: document.customThemePackages ?? [],
+  });
   const recovery = opened.ok
     ? undefined
     : {
