@@ -97,6 +97,7 @@ import {
   groupNodes,
   ungroupNodes,
   applyTemplate,
+  buildDeckOutline,
 } from "@/lib/presentation-vnext";
 
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation-vnext/neutral-theme-package";
@@ -1541,6 +1542,15 @@ export function SlideEditorVNext({
   // ---------------------------------------------------------------------------
 
   const renderTree = useDeckV7RenderTree(deck, pkg);
+  const deckOutline = useMemo(
+    () =>
+      renderTree
+        ? buildDeckOutline(renderTree, {
+            assets: deck.assets,
+          })
+        : undefined,
+    [deck.assets, renderTree],
+  );
   const activeSlideTree = renderTree?.slides[activeSlideIndex] ?? null;
   const stageNodeGestureDrafts = buildStageNodeGestureDrafts({
     moveGestureDraft,
@@ -2838,6 +2848,9 @@ export function SlideEditorVNext({
                     focusedNodeId={focusedNodeId ?? firstSelectedId ?? null}
                     focusGeometryRegistry={focusGeometryRegistry}
                     className="shadow-ds-xl"
+                    deckOutline={deckOutline}
+                    outlineActiveSlideIndex={activeSlideIndex}
+                    outlineCurrentNodeId={focusedNodeId ?? firstSelectedId}
                   />
 
                   {/* Inline text editor overlay */}
