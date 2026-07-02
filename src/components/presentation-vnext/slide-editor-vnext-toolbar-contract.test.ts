@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 import { MIN_DECK_SLIDES_MESSAGE } from "@/lib/presentation-vnext";
 import { buildDeckV7, buildMinimalDeckV7 } from "@/test/builders/deck-v7";
-import { deleteActiveSlideFromToolbar } from "./slide-editor-vnext";
+import { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
 
 const source = readFileSync(
   new URL("./slide-editor-vnext.tsx", import.meta.url),
@@ -12,6 +12,10 @@ const source = readFileSync(
 );
 const deckToolbarSource = readFileSync(
   new URL("./toolbar/deck-toolbar.tsx", import.meta.url),
+  "utf8",
+);
+const footerSource = readFileSync(
+  new URL("./slide-editor-footer.tsx", import.meta.url),
   "utf8",
 );
 const shellControllerSource = readFileSync(
@@ -164,25 +168,31 @@ describe("SlideEditorVNext toolbar command ownership", () => {
 
   test("gives zoom and status popovers menu trigger semantics", () => {
     assert.equal(
-      source.includes("aria-label={`Set slide zoom (${stageZoomPercent}%)`}"),
+      footerSource.includes(
+        "aria-label={`Set slide zoom (${stageZoomPercent}%)`}",
+      ),
       true,
     );
     assert.equal(
-      source.includes("aria-controls={zoomMenuOpen ? zoomMenuId : undefined}"),
+      footerSource.includes(
+        "aria-controls={zoomMenuOpen ? zoomMenuId : undefined}",
+      ),
       true,
     );
     assert.equal(
-      source.includes(
+      footerSource.includes(
         "aria-label={`Footer status: ${saveStatusLabel}. ${diagnosticSummary}.`}",
       ),
       true,
     );
     assert.equal(
-      source.includes("footerStatusMenuOpen ? footerStatusMenuId : undefined"),
+      footerSource.includes(
+        "footerStatusMenuOpen ? footerStatusMenuId : undefined",
+      ),
       true,
     );
-    assert.equal(source.includes('aria-haspopup="menu"'), true);
-    assert.equal(source.includes('role="menu"'), true);
+    assert.equal(footerSource.includes('aria-haspopup="menu"'), true);
+    assert.equal(footerSource.includes('role="menu"'), true);
   });
 
   test("routes toolbar menu keyboard handling through menu command helpers", () => {
@@ -196,9 +206,9 @@ describe("SlideEditorVNext toolbar command ownership", () => {
       ),
       true,
     );
-    assert.equal(source.includes("onKeyDown={handleZoomMenuKeyDown}"), true);
+    assert.equal(footerSource.includes("onKeyDown={onZoomMenuKeyDown}"), true);
     assert.equal(
-      source.includes("onKeyDown={handleFooterStatusMenuKeyDown}"),
+      footerSource.includes("onKeyDown={onFooterStatusMenuKeyDown}"),
       true,
     );
     assert.equal(source.includes("moveMenuCommandFocus({"), true);
@@ -210,8 +220,8 @@ describe("SlideEditorVNext toolbar command ownership", () => {
   });
 
   test("marks zoom and status commands with menu item roles", () => {
-    assert.equal(source.includes('role="menuitemradio"'), true);
-    assert.equal(source.includes('role="menuitem"'), true);
+    assert.equal(footerSource.includes('role="menuitemradio"'), true);
+    assert.equal(footerSource.includes('role="menuitem"'), true);
   });
 
   test("exposes present/share roundtrip commands in the top toolbar", () => {

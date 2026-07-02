@@ -1,8 +1,8 @@
 ---
 Type: "plan"
-Status: "active — region layout cleanup pending"
+Status: "completed"
 Last updated: "2026-07-02"
-description: "Remaining P0 work to finish shrinking SlideEditorVNext by extracting stage gesture handlers and reducing shell-owned layout wiring."
+description: "Completed P0 work that shrank SlideEditorVNext by extracting stage gesture handlers, geometry, and shell-owned layout wiring."
 ---
 
 # vNext Editor Decomposition Plan
@@ -21,13 +21,17 @@ controllers and descriptors without owning stage edit behavior.
   `editor-commands.ts`.
 - 2026-07-02: Moved stage overlay geometry math into
   `stage-overlay-geometry.ts` with focused public unit coverage.
+- 2026-07-02: Extracted editor chrome owners for inspector/add-slide/dialog
+  regions, footer/status chrome, toolbar slide deletion, and editor stage-fit
+  helpers. Moved shell-only assertions for those behaviors to focused owner
+  tests.
 
-## Remaining Work
+## Completed Slices
 
-| Slice                 | Work                                                                                                                                                    | Exit criteria                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Region layout cleanup | Reduce shell-owned responsive chrome wiring for filmstrip, toolbar menus, footer status, inspector sheet, diagnostics review, and source review panels. | `SlideEditorVNext` primarily composes regions, passes callbacks, and owns only unavoidable shell refs. |
-| Coverage handoff      | Replace shell-only assertions for moved behavior with focused controller, overlay, adapter, component, or browser tests.                                | Refactors can validate the touched owner without mounting the full editor shell.                       |
+| Slice                 | Work                                                                                                                                                 | Exit criteria                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Region layout cleanup | Reduced shell-owned responsive chrome wiring for inspector sheet, add-slide dialog, diagnostics review, footer status, and editor stage-fit helpers. | `SlideEditorVNext` primarily composes regions, passes callbacks, and owns only unavoidable shell refs. |
+| Coverage handoff      | Replaced shell-only assertions for moved behavior with focused toolbar action, footer, stage-fit, and inspector-region owner tests.                  | Refactors can validate the touched owner without mounting the full editor shell.                       |
 
 ## Constraints
 

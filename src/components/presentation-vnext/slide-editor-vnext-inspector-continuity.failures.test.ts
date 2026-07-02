@@ -4,10 +4,10 @@ import type { ReactElement, ReactNode } from "react";
 
 import { InspectorShell } from "./inspector";
 import {
-  SlideEditorInspectorRegion,
   SlideEditorVNext,
   type SlideEditorVNextImageUploadResult,
 } from "./slide-editor-vnext";
+import { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 import {
   buildEditorDeck,
   collectElements,

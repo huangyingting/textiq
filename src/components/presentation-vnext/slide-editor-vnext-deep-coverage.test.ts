@@ -25,10 +25,10 @@ import {
   routeCloseRequest,
   setupBeforeUnloadGuard,
   SlideEditorCloseConfirmDialog,
-  SlideEditorInspectorRegion,
   SlideEditorVNext,
   type SlideEditorVNextProps,
 } from "./slide-editor-vnext";
+import { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 
 type ElementProps = Record<string, unknown>;
 
@@ -180,6 +180,13 @@ function typeName(type: unknown): string {
   if (typeof type === "string") return type;
   if (typeof type === "function") return type.name;
   return String(type);
+}
+
+function footerProps(tree: ReactNode): ElementProps {
+  return findProps(
+    tree,
+    (_props, element) => typeName(element.type) === "SlideEditorFooter",
+  );
 }
 
 function clickByLabel(tree: ReactNode, label: string): unknown {
@@ -537,7 +544,7 @@ describe("SlideEditorVNext render and interaction branches", () => {
       );
       (root.onKeyDown as (event: unknown) => void)(keyEvent("?"));
       (root.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
-      clickByLabel(tree, "Open deck diagnostics review (2 diagnostics)");
+      (footerProps(tree).onOpenDiagnosticsReview as () => void)();
       tree = renderer.run(() => SlideEditorVNext(editorProps()));
       const review = findProps(
         tree,

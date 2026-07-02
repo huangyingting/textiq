@@ -35,27 +35,21 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type JSX,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 import {
   ChevronDown,
-  ChevronUp,
-  Edit3,
   FileDown,
   Grid3x3,
   Keyboard,
-  LayoutPanelLeft,
   MoreHorizontal,
   MonitorPlay,
   Redo2,
   RefreshCw,
   Share2,
-  StickyNote,
   Undo2,
   X,
 } from "lucide-react";
@@ -85,7 +79,6 @@ import {
 import type { InspectorPanelId } from "@/lib/presentation-vnext/inspector-panel-ui";
 import type { ResolvedRenderNode } from "@/lib/presentation-vnext/render-tree";
 import {
-  MIN_DECK_SLIDES_MESSAGE,
   emptySlideSpecFromLayout,
   slideSpecFromSlide,
   updateSlideLocalStyle,
@@ -112,11 +105,7 @@ import { listThemePackagesV7 } from "@/lib/presentation-vnext/theme-package-regi
 import { resolveNodeFontCss } from "@/lib/presentation-vnext/node-font-css";
 import { resolveDeckAssetSource } from "@/lib/presentation-vnext/deck-asset-source";
 import { STAGE_CHROME_Z_INDEX } from "@/lib/presentation-vnext/stage-chrome";
-import {
-  fitCanvasToViewport,
-  type CanvasStageFit,
-  type StageFitSize,
-} from "@/lib/presentation-vnext/stage-fit";
+import {} from "@/lib/presentation-vnext/stage-fit";
 import {
   hitTestSlideNodes,
   type StageHitCandidate,
@@ -224,21 +213,32 @@ import {
   VISUAL_PICKER_FAILURE_MESSAGE,
 } from "./visual-picker-recovery";
 import { KeyboardShortcutHelpDialog } from "@/components/presentation-shared/keyboard-shortcut-help-dialog";
+import { SlideEditorFooter } from "./slide-editor-footer";
+import {
+  canvasAspectRatio,
+  canvasFrameStyle,
+  canvasStageFit,
+  stageScrollContentStyle,
+} from "./slide-editor-stage-fit";
+import { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
+import {
+  FocusTrapped,
+  SlideEditorInspectorRegion,
+} from "./slide-editor-vnext-regions";
 import { Popover } from "@/components/ui/popover";
-import { Tooltip } from "@/components/ui/tooltip";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
-import { useFocusTrap } from "@/lib/a11y/use-focus-trap";
 import {
   focusFirstMenuCommand,
   isMenuCommandNavigationKey,
   moveMenuCommandFocus,
 } from "@/lib/a11y/menu-command-semantics";
 import {
-  presencePeerLabel,
   useSlidePresence,
   type SlidePresenceAwareness,
-  type SlidePresencePeer,
 } from "@/lib/presentation-shared/use-slide-presence";
+
+export { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
+export { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 
 export {
   handleCloseConfirmAction,
@@ -249,7 +249,6 @@ export {
 
 const TEMPLATE_REGISTRY = createDefaultTemplateRegistry();
 const TEMPLATE_OPTIONS = TEMPLATE_REGISTRY.all();
-const ZOOM_PERCENT_PRESETS = [200, 150, 125, 100, 75, 50, 25] as const;
 const DESKTOP_INSPECTOR_MEDIA_QUERY = "(min-width: 1024px)";
 
 function isDesktopInspectorViewport(): boolean {
@@ -293,112 +292,6 @@ function useDesktopInspectorViewport(): boolean {
   }, []);
 
   return isDesktopViewport;
-}
-
-function FocusTrapped({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useFocusTrap(ref);
-  return <div ref={ref}>{children}</div>;
-}
-
-interface SlideEditorInspectorRegionProps {
-  isDesktopInspectorViewport: boolean;
-  activeSlide: SlideNode | undefined;
-  inspectorSheetOpen: boolean;
-  onOpenMobileInspector: () => void;
-  onCloseMobileInspector: () => void;
-  renderInspectorShell: () => JSX.Element;
-}
-
-export function SlideEditorInspectorRegion({
-  isDesktopInspectorViewport,
-  activeSlide,
-  inspectorSheetOpen,
-  onOpenMobileInspector,
-  onCloseMobileInspector,
-  renderInspectorShell,
-}: SlideEditorInspectorRegionProps): JSX.Element {
-  const showMobileInspector =
-    !isDesktopInspectorViewport && Boolean(activeSlide);
-
-  return (
-    <>
-      {isDesktopInspectorViewport ? (
-        <div className="absolute bottom-4 right-4 top-4 z-panel hidden w-80 overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay shadow-ds-overlay lg:flex">
-          {renderInspectorShell()}
-        </div>
-      ) : null}
-
-      {showMobileInspector ? (
-        <div className="lg:hidden">
-          <button
-            type="button"
-            data-floating-panel="true"
-            aria-label="Edit slide"
-            aria-haspopup="dialog"
-            aria-expanded={inspectorSheetOpen}
-            onClick={onOpenMobileInspector}
-            className={cx(
-              "tiq-safe-fab fixed z-modal flex h-12 w-12 items-center justify-center rounded-full bg-ds-accent text-ds-text-on-accent shadow-ds-overlay transition-colors hover:bg-ds-accent-hover",
-              FOCUS_RING,
-            )}
-          >
-            <Edit3 aria-hidden="true" className="h-5 w-5" />
-          </button>
-
-          {inspectorSheetOpen ? (
-            <>
-              <div
-                data-floating-panel="true"
-                aria-hidden="true"
-                onClick={onCloseMobileInspector}
-                className="fixed inset-0 z-modal bg-ds-backdrop"
-              />
-              <FocusTrapped>
-                <div
-                  data-floating-panel="true"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Slide inspector"
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      event.stopPropagation();
-                      onCloseMobileInspector();
-                    }
-                  }}
-                  className="tiq-mobile-sheet fixed inset-x-0 bottom-0 z-modal flex max-h-[85vh] flex-col overflow-hidden rounded-t-2xl border-t border-ds-border-subtle bg-ds-surface-base shadow-ds-popover"
-                >
-                  <div className="relative flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-ds-border-subtle"
-                    />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ds-text-muted">
-                      Edit slide
-                    </p>
-                    <button
-                      type="button"
-                      aria-label="Close slide inspector"
-                      onClick={onCloseMobileInspector}
-                      className={cx(
-                        "tiq-touch-target flex h-7 w-7 items-center justify-center rounded-full text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                        FOCUS_RING,
-                      )}
-                    >
-                      <X size={16} aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    {renderInspectorShell()}
-                  </div>
-                </div>
-              </FocusTrapped>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </>
-  );
 }
 
 export type SlideEditorVNextImageUploadResult = V7ImageUploadResult;
@@ -494,89 +387,6 @@ export interface SlideEditorVNextProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const STAGE_VIEWPORT_FALLBACK: StageFitSize = { width: 1120, height: 630 };
-const DESKTOP_INSPECTOR_OVERLAY_WIDTH = 352;
-
-function canvasAspectRatio(deck: DeckV7): number {
-  const width = deck.canvas.width > 0 ? deck.canvas.width : 16;
-  const height = deck.canvas.height > 0 ? deck.canvas.height : 9;
-  return width / height;
-}
-
-function canvasStageFit(
-  deck: DeckV7,
-  zoomPercent: number,
-  viewport: StageFitSize | null,
-  isDesktopInspectorViewport: boolean,
-): CanvasStageFit {
-  const safeViewport = viewport ?? STAGE_VIEWPORT_FALLBACK;
-  const rightOverlayWidth = isDesktopInspectorViewport
-    ? DESKTOP_INSPECTOR_OVERLAY_WIDTH
-    : 0;
-  return fitCanvasToViewport({
-    viewport: safeViewport,
-    aspectRatio: canvasAspectRatio(deck),
-    zoomPercent,
-    rightOverlayWidth,
-  });
-}
-
-function canvasFrameStyle(stageFit: CanvasStageFit): CSSProperties {
-  return {
-    position: "absolute",
-    left: stageFit.frame.left,
-    top: stageFit.frame.top,
-    width: stageFit.frame.width,
-    height: stageFit.frame.height,
-  };
-}
-
-function stageScrollContentStyle(stageFit: CanvasStageFit): CSSProperties {
-  return {
-    position: "relative",
-    width: stageFit.scrollContentSize.width,
-    height: stageFit.scrollContentSize.height,
-  };
-}
-
-function slideDisplayName(slide: SlideNode | undefined, index: number): string {
-  return slide?.name ?? `Slide ${index + 1}`;
-}
-
-function selectedSummary(count: number): string {
-  if (count === 0) return "No selection";
-  if (count === 1) return "1 node selected";
-  return `${count} nodes selected`;
-}
-
-function diagnosticsSummary(count: number): string {
-  if (count === 0) return "No diagnostics";
-  if (count === 1) return "1 diagnostic";
-  return `${count} diagnostics`;
-}
-
-function presencePeerSummary(
-  peer: SlidePresencePeer,
-  deck: DeckV7,
-  activeSlideId: string | undefined,
-): string {
-  const label = presencePeerLabel(peer);
-  if (!peer.selectedSlideId) return `${label}: in deck`;
-  if (peer.selectedSlideId === activeSlideId) {
-    if (peer.selectedNodeIds.length === 1) return `${label}: selecting 1 node`;
-    if (peer.selectedNodeIds.length > 1) {
-      return `${label}: selecting ${peer.selectedNodeIds.length} nodes`;
-    }
-    return `${label}: viewing this slide`;
-  }
-  const slideIndex = deck.slides.findIndex(
-    (slide) => slide.id === peer.selectedSlideId,
-  );
-  return slideIndex >= 0
-    ? `${label}: on ${slideDisplayName(deck.slides[slideIndex], slideIndex)}`
-    : `${label}: in deck`;
-}
-
 function dedupeDiagnostics(
   diagnostics: readonly PresentationDiagnostic[],
 ): PresentationDiagnostic[] {
@@ -607,34 +417,6 @@ function readImageFileAsDataUrl(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
-}
-
-export function deleteActiveSlideFromToolbar(
-  deck: DeckV7,
-  activeSlideId: string | undefined,
-): {
-  deleted: boolean;
-  nextDeck: DeckV7;
-  nextIndex: number;
-  statusMessage?: string;
-} {
-  if (!activeSlideId) {
-    return { deleted: false, nextDeck: deck, nextIndex: 0 };
-  }
-  if (deck.slides.length <= 1) {
-    return {
-      deleted: false,
-      nextDeck: deck,
-      nextIndex: 0,
-      statusMessage: MIN_DECK_SLIDES_MESSAGE,
-    };
-  }
-  const result = deleteSlide(deck, activeSlideId);
-  return {
-    deleted: result.deck !== deck,
-    nextDeck: result.deck,
-    nextIndex: result.index,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -2077,27 +1859,8 @@ export function SlideEditorVNext({
   );
   const stageFrameStyle = canvasFrameStyle(stageFit);
   const stageScrollStyle = stageScrollContentStyle(stageFit);
-  const activeSlideName = slideDisplayName(activeSlide, activeSlideIndex);
-  const selectedNodeSummary = selectedSummary(selectedIds.length);
-  const diagnosticSummary = diagnosticsSummary(diagnostics.length);
-  const hasCustomDeckTitle = Boolean(
-    deck.title && deck.title.trim() && deck.title.trim() !== "Slides",
-  );
-  const shouldShowSourceStatus = sourceReview.length > 0;
-  const shouldShowSaveStatus = saveStatus !== "saved" || hasUnsavedWork;
-  const shouldShowDiagnosticsStatus = diagnostics.length > 0;
-  const shouldShowPresenceStatus = remotePresencePeers.length > 0;
-  const shouldShowSelectionStatus = selectedIds.length > 0;
   const currentCanvasFormat: "16:9" | "4:3" | "square" =
     deck.canvas.format === "custom" ? "16:9" : deck.canvas.format;
-  const saveErrorAnnouncement =
-    saveStatus === "error"
-      ? saveErrorMessage
-        ? `${saveStatusLabel}. ${saveErrorMessage}`
-        : saveStatusLabel
-      : null;
-  const selectionModeLabel =
-    selection.mode === "layers" ? "Layers mode" : "Normal mode";
   const activeTemplate = activeSlide
     ? TEMPLATE_REGISTRY.get(activeSlide.template.kind)
     : undefined;
@@ -3225,335 +2988,49 @@ export function SlideEditorVNext({
         />
       )}
 
-      {/* Footer status bar */}
-      <footer
-        data-slide-bottom-dock="true"
-        className="tiq-safe-bottom-dock grid min-h-9 shrink-0 grid-cols-1 items-center gap-2 bg-transparent px-3 py-1 text-[11px] text-ds-text-muted sm:h-9 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3 sm:py-0"
-      >
-        <div className="hidden min-w-0 items-center gap-2 sm:flex">
-          {hasCustomDeckTitle ? (
-            <span className="truncate font-medium text-ds-text-secondary">
-              {deck.title}
-            </span>
-          ) : null}
-          {hasCustomDeckTitle && shouldShowSourceStatus ? (
-            <span aria-hidden="true" className="text-ds-border-strong">
-              ·
-            </span>
-          ) : null}
-          {shouldShowSourceStatus ? (
-            <button
-              type="button"
-              onClick={handleReviewSourceLinks}
-              className={cx(
-                "truncate rounded-ds-sm px-1.5 py-1 text-ds-warning-text transition-colors hover:bg-ds-warning-surface",
-                FOCUS_RING,
-              )}
-            >
-              {sourceReview.length} source{" "}
-              {sourceReview.length === 1 ? "issue" : "issues"}
-            </button>
-          ) : null}
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:flex-nowrap sm:justify-center">
-          <Tooltip
-            label={
-              filmstripCollapsed
-                ? "Show slide thumbnails"
-                : "Hide slide thumbnails"
-            }
-            side="top"
-          >
-            <button
-              type="button"
-              aria-label={
-                filmstripCollapsed
-                  ? "Show slide thumbnails"
-                  : "Hide slide thumbnails"
-              }
-              aria-pressed={!filmstripCollapsed}
-              onClick={toggleFilmstripCollapsed}
-              className={cx(
-                "flex h-7 items-center gap-1 rounded-ds-md px-1.5 text-[11px] font-semibold transition-colors sm:px-2",
-                !filmstripCollapsed
-                  ? "bg-ds-accent-surface text-ds-accent-text"
-                  : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <LayoutPanelLeft size={13} aria-hidden />
-              Slides
-              {filmstripCollapsed ? (
-                <ChevronUp size={11} aria-hidden />
-              ) : (
-                <ChevronDown size={11} aria-hidden />
-              )}
-            </button>
-          </Tooltip>
-          <button
-            type="button"
-            aria-pressed={inspectorPanelRequest?.panel === "notes"}
-            onClick={handleNotesControlClick}
-            className={cx(
-              "flex h-7 items-center gap-1 rounded-ds-md px-1.5 text-[11px] font-semibold transition-colors sm:px-2",
-              inspectorPanelRequest?.panel === "notes"
-                ? "bg-ds-accent-surface text-ds-accent-text"
-                : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
-              FOCUS_RING,
-            )}
-          >
-            <StickyNote size={13} aria-hidden />
-            Notes
-          </button>
-          <span className="hidden truncate font-medium text-ds-text-muted sm:inline">
-            Slide {Math.min(activeSlideIndex + 1, deck.slides.length)} of{" "}
-            {deck.slides.length}
-          </span>
-          <div
-            className="mx-1 hidden h-5 w-px bg-ds-border-subtle sm:block"
-            aria-hidden="true"
-          />
-          <input
-            type="range"
-            min={25}
-            max={200}
-            step={5}
-            value={stageZoomPercent}
-            onChange={(event) =>
-              setStageZoomPercent(Number(event.currentTarget.value))
-            }
-            aria-label="Slide zoom"
-            className="hidden w-24 accent-ds-accent sm:block sm:w-28 lg:w-32"
-          />
-          <Popover
-            open={zoomMenuOpen}
-            onClose={() => setZoomMenuOpen(false)}
-            role="menu"
-            aria-label="Zoom presets"
-            placement="top"
-            className="w-20 p-1"
-            trigger={
-              <button
-                ref={zoomMenuTriggerRef}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={zoomMenuOpen}
-                aria-controls={zoomMenuOpen ? zoomMenuId : undefined}
-                aria-label={`Set slide zoom (${stageZoomPercent}%)`}
-                onClick={() => setZoomMenuOpen((open) => !open)}
-                className={cx(
-                  "h-7 min-w-12 rounded-ds-md px-1.5 text-[11px] font-semibold tabular-nums text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary sm:min-w-14 sm:px-2",
-                  FOCUS_RING,
-                )}
-              >
-                {stageZoomPercent}%
-              </button>
-            }
-          >
-            <div
-              ref={zoomMenuPanelRef}
-              id={zoomMenuId}
-              className="flex flex-col"
-              onKeyDown={handleZoomMenuKeyDown}
-            >
-              {ZOOM_PERCENT_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={preset === stageZoomPercent}
-                  onClick={() => {
-                    setFooterZoom(preset);
-                    closeZoomMenuAndRestoreFocus();
-                  }}
-                  className={cx(
-                    "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    preset === stageZoomPercent
-                      ? "bg-ds-state-hover text-ds-text-primary"
-                      : "text-ds-text-secondary",
-                    FOCUS_RING,
-                  )}
-                >
-                  {preset}%
-                </button>
-              ))}
-              <div className="my-1 border-t border-ds-border-subtle" />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setFooterZoom(100);
-                  closeZoomMenuAndRestoreFocus();
-                }}
-                className={cx(
-                  "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                Fit
-              </button>
-            </div>
-          </Popover>
-          <Popover
-            open={footerStatusMenuOpen}
-            onClose={() => setFooterStatusMenuOpen(false)}
-            role="menu"
-            aria-label="Footer status"
-            placement="top"
-            align="end"
-            className="w-56 p-2.5 sm:hidden"
-            trigger={
-              <button
-                ref={footerStatusMenuTriggerRef}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={footerStatusMenuOpen}
-                aria-controls={
-                  footerStatusMenuOpen ? footerStatusMenuId : undefined
-                }
-                aria-label={`Footer status: ${saveStatusLabel}. ${diagnosticSummary}.`}
-                onClick={() => setFooterStatusMenuOpen((open) => !open)}
-                className={cx(
-                  "h-7 rounded-ds-md px-2 text-[11px] font-semibold text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary sm:hidden",
-                  FOCUS_RING,
-                )}
-              >
-                Status
-              </button>
-            }
-          >
-            <div
-              ref={footerStatusMenuPanelRef}
-              id={footerStatusMenuId}
-              className="space-y-2 text-xs"
-              onKeyDown={handleFooterStatusMenuKeyDown}
-            >
-              <p className="truncate font-medium text-ds-text-primary">
-                {deck.title ?? "Slides"}
-              </p>
-              <p>
-                {activeSlideName} (
-                {Math.min(activeSlideIndex + 1, deck.slides.length)}/
-                {deck.slides.length})
-              </p>
-              {hasCustomDeckTitle ? <p>{deck.title}</p> : null}
-              {shouldShowSourceStatus ? <p>{sourceStatusLabel}</p> : null}
-              {saveStatus === "error" && onSave ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label={saveStatusLabel}
-                  onClick={() => {
-                    void onSave(deck);
-                    closeFooterStatusMenuAndRestoreFocus();
-                  }}
-                  className="text-ds-danger-text underline-offset-2 hover:underline"
-                >
-                  {saveStatusLabel}
-                </button>
-              ) : shouldShowSaveStatus ? (
-                <p>{saveStatusLabel}</p>
-              ) : null}
-              {saveStatus === "error" && saveErrorMessage ? (
-                <p className="max-w-[200px] text-ds-danger-text">
-                  {saveErrorMessage}
-                </p>
-              ) : null}
-              {shouldShowDiagnosticsStatus ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setDeckDiagnosticsReviewOpen(true);
-                    closeFooterStatusMenuAndRestoreFocus();
-                  }}
-                  aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
-                  className={cx(
-                    "rounded-ds-sm px-1.5 py-1 text-left font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  {diagnosticSummary}
-                </button>
-              ) : null}
-              {activeGroupId ? <p>Group edit</p> : null}
-              {tableEditingNodeId ? <p>Table edit</p> : null}
-              {selection.mode !== "normal" ? <p>{selectionModeLabel}</p> : null}
-              {shouldShowSelectionStatus ? <p>{selectedNodeSummary}</p> : null}
-              {shouldShowPresenceStatus ? (
-                <p>
-                  {remotePresencePeers
-                    .map((peer) =>
-                      presencePeerSummary(peer, deck, activeSlide?.id),
-                    )
-                    .join(" · ")}
-                </p>
-              ) : null}
-            </div>
-          </Popover>
-        </div>
-        {saveErrorAnnouncement ? (
-          <span role="alert" className="sr-only">
-            {saveErrorAnnouncement}
-          </span>
-        ) : null}
-        <div className="hidden min-w-0 shrink-0 items-center justify-end gap-3 sm:flex">
-          {saveStatus === "error" && onSave ? (
-            <button
-              type="button"
-              onClick={() => void onSave(deck)}
-              aria-label={saveStatusLabel}
-              className="text-ds-danger-text underline-offset-2 hover:underline"
-            >
-              {saveStatusLabel}
-            </button>
-          ) : shouldShowSaveStatus ? (
-            <span role="status" aria-live="polite" aria-atomic="true">
-              {saveStatusLabel}
-            </span>
-          ) : null}
-          {saveStatus === "error" && saveErrorMessage ? (
-            <span
-              role="status"
-              aria-live="assertive"
-              aria-atomic="true"
-              className="max-w-[260px] truncate text-ds-danger-text"
-            >
-              {saveErrorMessage}
-            </span>
-          ) : null}
-          {shouldShowPresenceStatus ? (
-            <span
-              aria-label={`Slide collaborators: ${remotePresencePeers
-                .map((peer) => presencePeerSummary(peer, deck, activeSlide?.id))
-                .join("; ")}`}
-            >
-              {remotePresencePeers.length} present
-            </span>
-          ) : null}
-          {shouldShowDiagnosticsStatus ? (
-            <button
-              type="button"
-              onClick={() => setDeckDiagnosticsReviewOpen(true)}
-              aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
-              className={cx(
-                "rounded-ds-sm px-1.5 py-1 text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              {diagnosticSummary}
-            </button>
-          ) : null}
-          {activeGroupId ? <span>Group edit</span> : null}
-          {tableEditingNodeId ? <span>Table edit</span> : null}
-          {selection.mode !== "normal" ? (
-            <span>{selectionModeLabel}</span>
-          ) : null}
-          {shouldShowSelectionStatus ? (
-            <span className="truncate">{selectedNodeSummary}</span>
-          ) : null}
-        </div>
-      </footer>
+      <SlideEditorFooter
+        deck={deck}
+        activeSlide={activeSlide}
+        activeSlideIndex={activeSlideIndex}
+        filmstripCollapsed={filmstripCollapsed}
+        inspectorPanel={inspectorPanelRequest?.panel}
+        stageZoomPercent={stageZoomPercent}
+        zoomMenuOpen={zoomMenuOpen}
+        zoomMenuId={zoomMenuId}
+        zoomMenuTriggerRef={zoomMenuTriggerRef}
+        zoomMenuPanelRef={zoomMenuPanelRef}
+        footerStatusMenuOpen={footerStatusMenuOpen}
+        footerStatusMenuId={footerStatusMenuId}
+        footerStatusMenuTriggerRef={footerStatusMenuTriggerRef}
+        footerStatusMenuPanelRef={footerStatusMenuPanelRef}
+        hasUnsavedWork={hasUnsavedWork}
+        saveStatus={saveStatus}
+        saveStatusLabel={saveStatusLabel}
+        saveErrorMessage={saveErrorMessage}
+        sourceReviewCount={sourceReview.length}
+        sourceStatusLabel={sourceStatusLabel}
+        diagnosticsCount={diagnostics.length}
+        activeGroupId={activeGroupId}
+        tableEditingNodeId={tableEditingNodeId}
+        selectionMode={selection.mode}
+        selectedCount={selectedIds.length}
+        remotePresencePeers={remotePresencePeers}
+        onSave={onSave}
+        onToggleFilmstripCollapsed={toggleFilmstripCollapsed}
+        onNotesClick={handleNotesControlClick}
+        onSetStageZoomPercent={setStageZoomPercent}
+        onSetFooterZoom={setFooterZoom}
+        onSetZoomMenuOpen={setZoomMenuOpen}
+        onSetFooterStatusMenuOpen={setFooterStatusMenuOpen}
+        onCloseZoomMenuAndRestoreFocus={closeZoomMenuAndRestoreFocus}
+        onCloseFooterStatusMenuAndRestoreFocus={
+          closeFooterStatusMenuAndRestoreFocus
+        }
+        onZoomMenuKeyDown={handleZoomMenuKeyDown}
+        onFooterStatusMenuKeyDown={handleFooterStatusMenuKeyDown}
+        onReviewSourceLinks={handleReviewSourceLinks}
+        onOpenDiagnosticsReview={() => setDeckDiagnosticsReviewOpen(true)}
+      />
     </div>
   );
 }

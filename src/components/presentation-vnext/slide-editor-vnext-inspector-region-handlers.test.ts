@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { buildSlideV7 } from "@/test/builders/deck-v7";
-import { SlideEditorInspectorRegion } from "./slide-editor-vnext";
+import { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {
   if (Array.isArray(node)) {

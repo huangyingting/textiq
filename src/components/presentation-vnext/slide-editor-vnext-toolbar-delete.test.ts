@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildDeckV7, buildSlideV7 } from "@/test/builders/deck-v7";
-import { deleteActiveSlideFromToolbar } from "./slide-editor-vnext";
+import { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
 
 test("deleteActiveSlideFromToolbar ignores missing active slide selection", () => {
   const deck = buildDeckV7([buildSlideV7("content", [], { id: "slide-a" })]);
