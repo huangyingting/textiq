@@ -480,20 +480,25 @@ describe("strikethrough toolbar persistence wiring", () => {
 
 describe("text role semantic persistence", () => {
   test("normalizes and validates context-toolbar text role options", () => {
+    assert.equal(isContextToolbarTextRole("kicker"), true);
     assert.equal(isContextToolbarTextRole("title"), true);
     assert.equal(isContextToolbarTextRole("quote"), true);
+    assert.equal(isContextToolbarTextRole("metric"), true);
     assert.equal(isContextToolbarTextRole("card"), false);
     assert.equal(resolveContextToolbarTextRole(undefined), "body");
     assert.equal(resolveContextToolbarTextRole("card"), "body");
+    assert.equal(resolveContextToolbarTextRole("kicker"), "kicker");
     assert.equal(resolveContextToolbarTextRole("subtitle"), "subtitle");
   });
 
   test("maps text roles to stable toolbar font-size presets", () => {
+    assert.equal(contextToolbarTextRoleFontSizePt("kicker"), 11);
     assert.equal(contextToolbarTextRoleFontSizePt("title"), 34);
     assert.equal(contextToolbarTextRoleFontSizePt("subtitle"), 24);
     assert.equal(contextToolbarTextRoleFontSizePt("body"), 18);
     assert.equal(contextToolbarTextRoleFontSizePt("quote"), 26);
     assert.equal(contextToolbarTextRoleFontSizePt("caption"), 11);
+    assert.equal(contextToolbarTextRoleFontSizePt("metric"), 40);
   });
 
   test("routes text-role changes through node attributes and disables without selection", () => {
@@ -694,7 +699,7 @@ describe("context toolbar routing helpers", () => {
     const stylePatches: unknown[] = [];
 
     routeContextToolbarTextRoleChange({
-      role: "title",
+      role: "kicker",
       onUpdateSelectedAttributes: (patch) => attributes.push(patch),
       onUpdateSelectedLocalStyle: (patch) => stylePatches.push(patch),
     });
@@ -704,8 +709,8 @@ describe("context toolbar routing helpers", () => {
       onUpdateSelectedLocalStyle: (patch) => stylePatches.push(patch),
     });
 
-    assert.deepEqual(attributes, [{ role: "title" }]);
-    assert.deepEqual(stylePatches, [{ text: { fontSizePt: 34 } }]);
+    assert.deepEqual(attributes, [{ role: "kicker" }]);
+    assert.deepEqual(stylePatches, [{ text: { fontSizePt: 11 } }]);
   });
 
   test("routes image crop and fit commands through selected-content patches", () => {

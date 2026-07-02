@@ -16,6 +16,10 @@ describe("resolveNodeFontCss", () => {
           color: "#123456",
           lineHeight: 1.25,
           align: "center",
+          letterSpacingEm: 0.08,
+          textTransform: "uppercase",
+          verticalAlign: "bottom",
+          paragraphSpacingPt: 3,
         },
       }),
       {
@@ -27,6 +31,12 @@ describe("resolveNodeFontCss", () => {
         color: "#123456",
         lineHeight: 1.25,
         textAlign: "center",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
+        rowGap: "3pt",
       },
     );
   });

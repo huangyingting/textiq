@@ -102,6 +102,8 @@ const CONTEXT_TOOLBAR_TEXT_ROLES = [
   "body",
   "quote",
   "caption",
+  "kicker",
+  "metric",
 ] as const satisfies readonly SlideChildNode["role"][];
 
 type ContextToolbarTextRole = (typeof CONTEXT_TOOLBAR_TEXT_ROLES)[number];
@@ -115,6 +117,8 @@ const CONTEXT_TOOLBAR_TEXT_ROLE_FONT_SIZE_PT: Record<
   body: 18,
   quote: 26,
   caption: 11,
+  kicker: 11,
+  metric: 40,
 };
 
 export type SelectionAlignMode =
@@ -1381,6 +1385,8 @@ export function ContextToolbar({
               <option value="body">Body</option>
               <option value="quote">Quote</option>
               <option value="caption">Caption</option>
+              <option value="kicker">Kicker</option>
+              <option value="metric">Metric</option>
             </ToolbarSelect>
             <TBtn
               label="Bullet list"
