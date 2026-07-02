@@ -193,7 +193,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
     );
   });
 
-  test("double-clicking a preselected overlapping text edits it instead of the selected text", () => {
+  test("double-clicking text does not bypass the click-to-edit selection system", () => {
     const hookRenderer = createHookRenderer();
     const currentDeck = buildDeckV7([
       buildSlideV7(
@@ -264,8 +264,8 @@ describe("SlideEditorVNext inline text editor failures", () => {
     const hiddenNodeIds = (
       updatedStageCanvas.props as { hiddenNodeIds?: ReadonlySet<string> }
     ).hiddenNodeIds;
-    assert.equal(hiddenNodeIds?.has("selected-under-edit"), false);
-    assert.equal(hiddenNodeIds?.has("preselected-over-edit"), true);
+    assert.notEqual(hiddenNodeIds?.has("selected-under-edit"), true);
+    assert.notEqual(hiddenNodeIds?.has("preselected-over-edit"), true);
   });
 
   test("pressing another node exits the first node's inline edit", () => {
@@ -593,7 +593,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
       });
     });
 
-    test("double-clicking an existing text node enters edit mode without inserting", () => {
+    test("double-clicking an existing text node does not insert or force inline edit", () => {
       const hookRenderer = createHookRenderer();
       let deckChangeCount = 0;
       let currentDeck = buildDeckV7([
@@ -663,7 +663,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
           hiddenNodeIds?: ReadonlySet<string>;
         }
       ).hiddenNodeIds;
-      assert.ok(hiddenNodeIds?.has("existing-text"));
+      assert.notEqual(hiddenNodeIds?.has("existing-text"), true);
     });
 
     test("clicking the already-selected text node enters edit mode at the click point", () => {

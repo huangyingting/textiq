@@ -2212,11 +2212,6 @@ export function SlideEditorVNext({
       });
       return;
     }
-    if (node.type === "text") {
-      setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
-      applyStageTargetContext(target);
-      enterInlineEdit(targetNodeId);
-    }
   }
 
   function handleInlineEditCommit(

@@ -116,6 +116,7 @@ test("inline text DOM adapter mounts rich HTML and commits serialized content on
     assert.match(container.innerHTML, /Unsafe &amp;/);
     assert.match(container.innerHTML, /&lt;tag&gt;/);
     assert.match(container.innerHTML, /data-list-kind="bullet"/);
+    assert.match(container.innerHTML, />•<\/span>/);
 
     selectNodeContents(window, container.firstElementChild ?? container);
     adapter.applyCommand(container, { command: "align-center" });
@@ -128,6 +129,7 @@ test("inline text DOM adapter mounts rich HTML and commits serialized content on
     assert.equal(exit.paragraphs[0]?.runs?.[0]?.bold, true);
     assert.equal(exit.paragraphs[1]?.id, "p-list");
     assert.equal(exit.paragraphs[1]?.text, "箇条書き");
+    assert.doesNotMatch(exit.paragraphs[1]?.text ?? "", /•/);
     assert.deepEqual(exit.paragraphs[1]?.list, { kind: "bullet", indent: 2 });
     assert.equal(adapter.commit(container).kind, "none");
   });

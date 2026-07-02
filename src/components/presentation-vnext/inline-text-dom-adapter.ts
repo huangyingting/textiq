@@ -88,6 +88,12 @@ function collectRuns(node: Node, inherited: InlineRunStyle = {}): TextRun[] {
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return [];
   const element = node as HTMLElement;
+  if (
+    element.getAttribute("aria-hidden") === "true" ||
+    element.getAttribute("contenteditable") === "false"
+  ) {
+    return [];
+  }
   if (element.tagName.toLowerCase() === "br") return [{ text: "\n" }];
   const style = styleFromElement(element, inherited);
   return Array.from(element.childNodes).flatMap((child) =>
@@ -223,18 +229,102 @@ function runToHtml(run: TextRun): string {
   return `<span${styleAttr}>${escapeHtml(run.text)}</span>`;
 }
 
+type OrderedListNumberStyle = NonNullable<
+  NonNullable<Paragraph["list"]>["numberStyle"]
+>;
+
+function toAlphabeticMarker(value: number, uppercase: boolean): string {
+  if (value <= 0) return "0";
+  let remaining = Math.floor(value);
+  let marker = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    marker = String.fromCharCode(97 + (remaining % 26)) + marker;
+    remaining = Math.floor(remaining / 26);
+  }
+  return uppercase ? marker.toUpperCase() : marker;
+}
+
+function toLowerRomanMarker(value: number): string {
+  if (value <= 0) return "0";
+  const numerals: Array<[number, string]> = [
+    [1000, "m"],
+    [900, "cm"],
+    [500, "d"],
+    [400, "cd"],
+    [100, "c"],
+    [90, "xc"],
+    [50, "l"],
+    [40, "xl"],
+    [10, "x"],
+    [9, "ix"],
+    [5, "v"],
+    [4, "iv"],
+    [1, "i"],
+  ];
+  let remaining = Math.floor(value);
+  let marker = "";
+  for (const [amount, symbol] of numerals) {
+    while (remaining >= amount) {
+      marker += symbol;
+      remaining -= amount;
+    }
+  }
+  return marker;
+}
+
+function formatOrderedListMarker(
+  value: number,
+  style: OrderedListNumberStyle | undefined,
+): string {
+  switch (style) {
+    case "lower-alpha":
+      return `${toAlphabeticMarker(value, false)}.`;
+    case "upper-alpha":
+      return `${toAlphabeticMarker(value, true)}.`;
+    case "lower-roman":
+      return `${toLowerRomanMarker(value)}.`;
+    default:
+      return `${value}.`;
+  }
+}
+
+function orderedListMarkers(paragraphs: readonly Paragraph[]): string[] {
+  const counters = new Array(6).fill(0) as number[];
+  return paragraphs.map((paragraph) => {
+    if (paragraph.list?.kind !== "number") {
+      counters.fill(0);
+      return "1.";
+    }
+    const indent = Math.max(
+      0,
+      Math.min(counters.length - 1, paragraph.list.indent ?? 0),
+    );
+    for (let depth = indent + 1; depth < counters.length; depth += 1) {
+      counters[depth] = 0;
+    }
+    counters[indent] += 1;
+    return formatOrderedListMarker(
+      counters[indent],
+      paragraph.list.numberStyle,
+    );
+  });
+}
+
 export function paragraphsToHtml(paragraphs: Paragraph[]): string {
+  const numberMarkers = orderedListMarkers(paragraphs);
   return paragraphs
-    .map((paragraph) => {
+    .map((paragraph, index) => {
       const text = paragraph.runs?.length
         ? paragraph.runs.map(runToHtml).join("")
         : escapeHtml(paragraph.text);
-      if (!paragraph.list) return `<div>${text || "<br>"}</div>`;
+      if (!paragraph.list) return `<p style="margin:0">${text || "<br>"}</p>`;
       const indent = paragraph.list.indent ?? 0;
       const indentAttr = indent > 0 ? ` data-list-indent="${indent}"` : "";
-      const indentStyle =
-        indent > 0 ? ` style="padding-left:${indent * 1.5}em"` : "";
-      return `<div data-list-kind="${paragraph.list.kind}"${indentAttr}${indentStyle}>${text || "<br>"}</div>`;
+      const indentStyle = indent > 0 ? `;padding-left:${indent * 1.5}em` : "";
+      const marker =
+        paragraph.list.kind === "number" ? numberMarkers[index] : "•";
+      return `<p data-list-kind="${paragraph.list.kind}"${indentAttr} style="display:flex;gap:0.4em;margin:0${indentStyle}"><span aria-hidden="true" contenteditable="false" style="flex:0 0 auto">${marker}</span><span>${text || "<br>"}</span></p>`;
     })
     .join("");
 }
