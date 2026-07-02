@@ -11,6 +11,7 @@ import {
 } from "@/lib/share-access";
 import { shareIdFromParam } from "@/lib/slug";
 import type { DocumentRoleInput } from "@/lib/auth/document-permissions";
+import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 
 /* node:coverage disable */
 import { buildPublicAttribution, type PublicAttribution } from "./attribution";
@@ -45,6 +46,7 @@ export type PublicRenderDocumentRow = ShareAccessFields &
       name: string | null;
       plan: string;
     };
+    customThemePackages?: ThemePackageV1[];
   };
 
 export interface PublicDocumentModel {

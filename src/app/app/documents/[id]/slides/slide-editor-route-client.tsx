@@ -41,6 +41,7 @@ import { decideDeckOpen } from "@/lib/presentation-vnext/open-deck";
 import { exportDeckV7AsPPTX } from "@/lib/presentation-vnext/pptx-vnext-apply";
 import { exportDeckV7RasterBrowser } from "@/lib/presentation-vnext/raster-browser-export";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 import {
   SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE,
   hasUnresolvedDeckSaveConflict,
@@ -90,6 +91,7 @@ export interface SlideEditorRouteClientProps {
   canManage: boolean;
   userId: string;
   userName: string;
+  customThemePackages?: ThemePackageV1[];
 }
 
 function openInitialDeck({
@@ -204,6 +206,7 @@ export function SlideEditorRouteClient({
   canManage,
   userId,
   userName,
+  customThemePackages = [],
 }: SlideEditorRouteClientProps) {
   const router = useRouter();
   const initialOpenState = useMemo(
@@ -306,7 +309,9 @@ export function SlideEditorRouteClient({
     };
   }, [persistDeck]);
 
-  const themeResolution = deck ? resolveThemePackageForDeck(deck) : null;
+  const themeResolution = deck
+    ? resolveThemePackageForDeck(deck, { customPackages: customThemePackages })
+    : null;
   const editorDiagnostics = [
     ...deckDiagnostics,
     ...(themeResolution?.diagnostics ?? []),

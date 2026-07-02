@@ -43,6 +43,7 @@ export default async function DocumentSlidesPage({
       canManage={viewModel.canManage}
       userId={viewModel.userId}
       userName={viewModel.userName}
+      customThemePackages={viewModel.customThemePackages}
     />
   );
 }
