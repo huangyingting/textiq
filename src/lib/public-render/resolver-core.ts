@@ -11,7 +11,7 @@ import {
 } from "@/lib/share-access";
 import { shareIdFromParam } from "@/lib/slug";
 import type { DocumentRoleInput } from "@/lib/auth/document-permissions";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 
 /* node:coverage disable */
 import { buildPublicAttribution, type PublicAttribution } from "./attribution";

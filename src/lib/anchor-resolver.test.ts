@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type {
-  DeckV7,
-  SlideChildNode,
-  SlideNode,
-} from "./presentation-vnext/schema";
-import { hashDocumentBlock } from "./presentation-shared/document-block-hash";
+import type { Deck, SlideChildNode, SlideNode } from "./presentation/schema";
+import { hashDocumentBlock } from "./presentation/document-block-hash";
 import type { SlideCommentAnchor } from "./document/deck-kernel/slide-comment-anchors";
 import {
   resolveBlockRef,
@@ -59,7 +55,7 @@ function slide(id: string, elements: SlideChildNode[] = []): SlideNode {
   };
 }
 
-function deck(slides: SlideNode[]): DeckV7 {
+function deck(slides: SlideNode[]): Deck {
   return {
     schemaVersion: 7,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { PublicPresentViewerVNext } from "@/components/presentation-vnext/public-present-viewer-vnext";
+import { PublicPresentViewer } from "@/components/presentation/public-present-viewer";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { buildPresentEmbedRenderInput } from "@/lib/public-render/present-embed-route";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
@@ -40,8 +40,8 @@ export default async function PresentEmbedPage({
   const { presentation } = result;
 
   return (
-    <PublicPresentViewerVNext
-      deck={presentation.deckV7}
+    <PublicPresentViewer
+      deck={presentation.deck}
       themePackage={presentation.themePackage}
       visuals={presentation.visuals}
       title={presentation.title}

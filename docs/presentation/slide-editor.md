@@ -20,27 +20,27 @@ and pointer state rules, see
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Route page          | [`src/app/app/documents/[id]/slides/page.tsx`](../../src/app/app/documents/%5Bid%5D/slides/page.tsx)                                           |
 | Route controller    | [`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.tsx) |
-| Editor shell        | [`src/components/presentation-vnext/slide-editor-vnext.tsx`](../../src/components/presentation-vnext/slide-editor-vnext.tsx)                   |
-| Deck toolbar        | [`src/components/presentation-vnext/toolbar/deck-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/deck-toolbar.tsx)               |
-| Read-only canvas    | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                               |
-| Node renderer       | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)                 |
-| Inspector           | [`src/components/presentation-vnext/inspector/inspector-shell.tsx`](../../src/components/presentation-vnext/inspector/inspector-shell.tsx)     |
-| Context toolbar     | [`src/components/presentation-vnext/toolbar/context-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/context-toolbar.tsx)         |
-| Filmstrip           | [`src/components/presentation-vnext/filmstrip/filmstrip.tsx`](../../src/components/presentation-vnext/filmstrip/filmstrip.tsx)                 |
-| Stage fit           | [`src/lib/presentation-vnext/stage-fit.ts`](../../src/lib/presentation-vnext/stage-fit.ts)                                                     |
-| Stage chrome        | [`src/lib/presentation-vnext/stage-chrome.ts`](../../src/lib/presentation-vnext/stage-chrome.ts)                                               |
-| Stage guides        | [`src/lib/presentation-vnext/stage-guides.ts`](../../src/lib/presentation-vnext/stage-guides.ts)                                               |
-| Selection geometry  | [`src/lib/presentation-vnext/selection-geometry.ts`](../../src/lib/presentation-vnext/selection-geometry.ts)                                   |
-| Deck commands       | [`src/lib/presentation-vnext/editor-commands.ts`](../../src/lib/presentation-vnext/editor-commands.ts)                                         |
-| Document derivation | [`src/lib/presentation-vnext/document-slide-plan.ts`](../../src/lib/presentation-vnext/document-slide-plan.ts)                                 |
-| Source links        | [`src/lib/presentation-vnext/source-links.ts`](../../src/lib/presentation-vnext/source-links.ts)                                               |
-| Presence state      | [`src/lib/presentation-vnext/slide-editor-collaboration-state.ts`](../../src/lib/presentation-vnext/slide-editor-collaboration-state.ts)       |
+| Editor shell        | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                                           |
+| Deck toolbar        | [`src/components/presentation/toolbar/deck-toolbar.tsx`](../../src/components/presentation/toolbar/deck-toolbar.tsx)                           |
+| Read-only canvas    | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                                           |
+| Node renderer       | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)                             |
+| Inspector           | [`src/components/presentation/inspector/inspector-shell.tsx`](../../src/components/presentation/inspector/inspector-shell.tsx)                 |
+| Context toolbar     | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)                     |
+| Filmstrip           | [`src/components/presentation/filmstrip/filmstrip.tsx`](../../src/components/presentation/filmstrip/filmstrip.tsx)                             |
+| Stage fit           | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                                 |
+| Stage chrome        | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                                           |
+| Stage guides        | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                                           |
+| Selection geometry  | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                                               |
+| Deck commands       | [`src/lib/presentation/editor-commands.ts`](../../src/lib/presentation/editor-commands.ts)                                                     |
+| Document derivation | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)                                             |
+| Source links        | [`src/lib/presentation/source-links.ts`](../../src/lib/presentation/source-links.ts)                                                           |
+| Presence state      | [`src/lib/presentation/slide-editor-collaboration-state.ts`](../../src/lib/presentation/slide-editor-collaboration-state.ts)                   |
 | Open/save state     | [`src/components/editor/use-slide-editor-open.ts`](../../src/components/editor/use-slide-editor-open.ts)                                       |
-| Autosave scheduler  | [`src/lib/presentation-shared/slide-autosave-scheduler.ts`](../../src/lib/presentation-shared/slide-autosave-scheduler.ts)                     |
+| Autosave scheduler  | [`src/lib/presentation/slide-autosave-scheduler.ts`](../../src/lib/presentation/slide-autosave-scheduler.ts)                                   |
 
 ## Ownership Model
 
-`SlideEditorVNext` is the editing surface. The canonical `/slides` route owns
+`SlideEditor` is the editing surface. The canonical `/slides` route owns
 open/save state for full-page editing; the legacy document-page overlay hook is
 not the primary editor lifecycle. Together the route controller and editor own:
 
@@ -65,15 +65,15 @@ The slides route keeps the same owning document and persisted deck fields:
 
 - `Document.contentJson` is the saved source used for deterministic derivation
   and source review.
-- `Document.deckJson` is the editable DeckV7 payload.
+- `Document.deckJson` is the editable Deck payload.
 - `Document.deckRevisionToken` is used for optimistic save conflict detection.
 
 Route open behavior is deterministic and credit-free:
 
-1. Open saved valid DeckV7 when present.
+1. Open saved valid Deck when present.
 2. If no deck is saved, derive a faithful baseline from the latest saved
    `contentJson`.
-3. If the saved document content has no usable blocks, open a blank DeckV7.
+3. If the saved document content has no usable blocks, open a blank Deck.
 4. Invalid non-empty deck JSON opens recovery instead of silently overwriting
    with a blank deck.
 
@@ -81,7 +81,7 @@ Route open behavior is deterministic and credit-free:
 the latest saved server `contentJson`. It does not call AI, spend credits, or
 read unsaved Lexical state from the document route. Regenerate replaces the
 current deck immediately, pushes the previous deck into undo history, and saves
-through the same DeckV7 CAS path.
+through the same Deck CAS path.
 
 AI deck generation is not part of the canonical slides route first version. If
 AI proposal/rewrite returns later, it should be an explicit command distinct
@@ -164,7 +164,7 @@ Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Pre
 - **Slide ratio** changes the deck format through the ratio selector.
 - **Rebuild** appears on the canonical slides route as a compact label for
   deterministic whole-deck regenerate from the latest saved document content.
-  It then saves through the DeckV7 CAS path. It is not an AI command.
+  It then saves through the Deck CAS path. It is not an AI command.
 - **Snap** toggles snap-to-guides for canvas editing. It is visible in the deck
   toolbar because it affects the whole editing session.
 - **More** contains low-frequency editor/deck utilities such as keyboard
@@ -204,7 +204,7 @@ current object.
 
 ## Stage Runtime
 
-`SlideEditorVNext` renders `SlideCanvasVNext` and overlays editing chrome. The
+`SlideEditor` renders `SlideCanvas` and overlays editing chrome. The
 stage is responsible for pointer/keyboard interaction only; deck mutations are
 routed through `onDeckChange` callbacks and pure helpers in
 `editor-commands.ts` / `source-links.ts` / `document-source-commands.ts`.
@@ -236,7 +236,7 @@ The canvas is fully keyboard operable (see
 [slide canvas keyboard accessibility](../system/slide-canvas-keyboard-accessibility.md);
 issues #530–#535). Pure
 selection, geometry, stage-fit, and stage-guide helpers live under
-`src/lib/presentation-vnext/` and `src/components/presentation-vnext/`; the
+`src/lib/presentation/` and `src/components/presentation/`; the
 editor shell keeps thin wiring around those helpers.
 
 - **Move:** Arrow nudges the selection by `1%`, Shift+Arrow by `5%`. Locked
@@ -269,18 +269,18 @@ editor shell keeps thin wiring around those helpers.
   end / start endpoint anchor. Free-draw routing remains pointer-only and is
   tracked in #1574.
 - **Help:** `?` (or View > Keyboard shortcuts) opens the shortcut help dialog
-  (`canvasShortcutHelp` in `src/lib/presentation-shared/canvas-shortcut-help.ts`).
+  (`canvasShortcutHelp` in `src/lib/presentation/canvas-shortcut-help.ts`).
 
 ## Canvas Contract
 
-`SlideCanvasVNext` is read-only. It renders the current
+`SlideCanvas` is read-only. It renders the current
 `ResolvedSlideRenderModel`, including theme-decoration layers, slide elements,
 and deck chrome. The stage wraps it with editing affordances, but
 rendering itself is shared with present/public viewers.
 
 The editor can pass `hiddenElementIds` to hide elements during inline editing or
 layer-list visibility toggles. The `editable` flag affects empty-image treatment
-only; it does not make `SlideCanvasVNext` mutate state.
+only; it does not make `SlideCanvas` mutate state.
 
 ## Inspector Runtime
 
@@ -300,7 +300,7 @@ never drift. With no element selected the current object is the slide
 `Effects`, and `Layers`, with `Source` only when the element has a `source`; a
 multi-selection exposes `Arrange / Effects / Layers`. There is no fallback
 routing: when the selection changes so the active panel no longer applies,
-`SlideEditorVNext` closes the right panel instead of guessing a replacement.
+`SlideEditor` closes the right panel instead of guessing a replacement.
 The object-identity header names the current object but no longer exposes a
 permanent `Name` input — element naming lives in `Layers`.
 
@@ -324,12 +324,12 @@ their color and blur/offset controls; renderers consume those
 
 Deck-level chrome is not edited in the right inspector. The top toolbar
 `Deck chrome` popover owns global logo, footer, page number, watermark, border,
-and safe-area configuration. Those controls update DeckV7 chrome state; normal
+and safe-area configuration. Those controls update Deck chrome state; normal
 slide editing hit-testing, selection, clipboard, z-order, and layer-list
 mutations operate only on slide child nodes.
 
 The inspector must not infer missing context. If a workflow requires full source
-document blocks or document id, those values are passed by `SlideEditorVNext`.
+document blocks or document id, those values are passed by `SlideEditor`.
 
 ## Popover Runtime
 
@@ -346,13 +346,13 @@ panel bridge.
 
 ## Mutation Flow
 
-Most user actions flow through pure v7 helpers:
+Most user actions flow through pure presentation helpers:
 
 ```text
 UI event
-  -> SlideEditorVNext handler
+  -> SlideEditor handler
   -> editor-commands.ts / source-links.ts / document-source-commands.ts helper
-  -> next DeckV7
+  -> next Deck
   -> onDeckChange
   -> useSlideEditorOpen undo stack + autosave scheduler
   -> saveDeckJson (manual save or debounced autosave)
@@ -372,13 +372,13 @@ optional per-slide overrides under `slide.props.deckChrome`.
 `useSlideEditorOpen` uses debounced full-deck saves (`saveDeckJson`) with
 revision tokens:
 
-1. Any deck edit calls `handleDeckV7Change`, marks dirty, and schedules autosave
+1. Any deck edit calls `handleDeckChange`, marks dirty, and schedules autosave
    via `createSlideAutosaveScheduler`.
-2. Autosave (or explicit Save) calls `persistDeckV7`, which writes the full deck
+2. Autosave (or explicit Save) calls `persistDeck`, which writes the full deck
    through `deckPort.saveDeckJson`.
 3. If save succeeds, the editor stores the returned revision token and clears
    dirty/error state.
-4. If save conflicts, the editor surfaces `ConflictRecoveryDialogV7` with keep
+4. If save conflicts, the editor surfaces `ConflictRecoveryDialog` with keep
    mine / use theirs / dismiss choices.
 
 Conflict recovery has three user outcomes:
@@ -393,12 +393,12 @@ Presence is advisory only. It shows who has the deck open and which slide they
 are viewing, but optimistic revision tokens are the conflict authority.
 
 `saveDeckPatch` remains available only as a compatibility endpoint and currently
-returns `{ ok: "fallback" }`; v7 runtime autosave does not enqueue or persist
+returns `{ ok: "fallback" }`; presentation runtime autosave does not enqueue or persist
 `DeckPatch[]` records.
 
 ## Document Sync And Source Links
 
-`SlideEditorVNext` receives `sourceBlockIndex` and can optionally use host-side
+`SlideEditor` receives `sourceBlockIndex` and can optionally use host-side
 `onRefreshSource` logic. Source review uses `classifyDeckSourceLinks`,
 `sourceReviewItems`, and `sourceLinkDiagnostics` to surface stale/orphan/unknown
 links.
@@ -417,19 +417,19 @@ refs must carry explicit `blockKind`.
 ## Invariants
 
 1. `useSlideEditorOpen` owns open/save/autosave/revision-token state.
-2. `SlideEditorVNext` owns interaction state and emits immutable `DeckV7` updates via `onDeckChange`.
-3. `SlideCanvasVNext` is shared and read-only.
+2. `SlideEditor` owns interaction state and emits immutable `Deck` updates via `onDeckChange`.
+3. `SlideCanvas` is shared and read-only.
 4. Node geometry stays in percentage `LayoutBox.frame` units.
-5. Node content, local style, and source-link edits write DeckV7 node fields (`SlideNode.children`).
-6. v7 autosave writes full deck snapshots through `saveDeckJson`.
+5. Node content, local style, and source-link edits write Deck node fields (`SlideNode.children`).
+6. presentation autosave writes full deck snapshots through `saveDeckJson`.
 7. Conflicts are resolved by revision token, not by presence.
 
 ## Primary Tests
 
-- `src/lib/presentation-vnext/editor-commands*.test.ts`
-- [`src/lib/presentation-vnext/source-links.test.ts`](../../src/lib/presentation-vnext/source-links.test.ts)
-- [`src/lib/presentation-vnext/stage-chrome.test.ts`](../../src/lib/presentation-vnext/stage-chrome.test.ts)
-- [`src/lib/presentation-vnext/slide-editor-collaboration-state.test.ts`](../../src/lib/presentation-vnext/slide-editor-collaboration-state.test.ts)
-- [`src/components/presentation-vnext/slide-canvas-render.test.ts`](../../src/components/presentation-vnext/slide-canvas-render.test.ts)
-- [`src/lib/presentation-shared/slide-autosave-scheduler.test.ts`](../../src/lib/presentation-shared/slide-autosave-scheduler.test.ts)
+- `src/lib/presentation/editor-commands*.test.ts`
+- [`src/lib/presentation/source-links.test.ts`](../../src/lib/presentation/source-links.test.ts)
+- [`src/lib/presentation/stage-chrome.test.ts`](../../src/lib/presentation/stage-chrome.test.ts)
+- [`src/lib/presentation/slide-editor-collaboration-state.test.ts`](../../src/lib/presentation/slide-editor-collaboration-state.test.ts)
+- [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
+- [`src/lib/presentation/slide-autosave-scheduler.test.ts`](../../src/lib/presentation/slide-autosave-scheduler.test.ts)
 - [`e2e/slides-smoke.spec.ts`](../../e2e/slides-smoke.spec.ts)

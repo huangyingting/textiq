@@ -669,7 +669,7 @@ test.describe("deterministic profile document editor smoke", () => {
     ).toBeVisible();
   });
 
-  test("deckv7 create-edit-save-reopen-export-share roundtrip stays deterministic", async ({
+  test("deckpresentation create-edit-save-reopen-export-share roundtrip stays deterministic", async ({
     page,
     browser,
   }) => {
@@ -712,7 +712,7 @@ test.describe("deterministic profile document editor smoke", () => {
       (await titleNode.getAttribute("aria-label")) ??
       `Text: ${E2E_PROFILE_FIXTURE.slideTitleText}`;
     const originalTitle = originalLabel.replace(/^Text:\s*/i, "").trim();
-    const roundtripSuffix = "[DeckV7 roundtrip]";
+    const roundtripSuffix = "[Deck roundtrip]";
     const editedTitle = originalTitle.endsWith(roundtripSuffix)
       ? originalTitle.slice(0, -roundtripSuffix.length).trim()
       : `${originalTitle} ${roundtripSuffix}`;

@@ -1,10 +1,10 @@
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import { collectDocumentBlocks } from "@/lib/content/document-blocks";
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
-import { openDeckFromJson } from "@/lib/presentation-vnext/open-deck";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
-import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
+import { openDeckFromJson } from "@/lib/presentation/open-deck";
+import type { Deck } from "@/lib/presentation/schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
 import type { Visual } from "@/lib/visual/schema";
 
 import { buildPublicAttribution, type PublicAttribution } from "./attribution";
@@ -27,7 +27,7 @@ export interface PublicPresentationAssetBinding {
 
 export interface PublicPresentationModel {
   title: string;
-  deckV7: DeckV7;
+  deck: Deck;
   themePackage: ThemePackageV1;
   visuals: Record<string, Visual>;
   diagnostics: PresentationDiagnostic[];
@@ -79,9 +79,9 @@ function bindSlideAssetUrlToShare(
 }
 
 function bindDeckAssetUrlsToShare(
-  deck: DeckV7,
+  deck: Deck,
   binding?: PublicPresentationAssetBinding,
-): DeckV7 {
+): Deck {
   if (!binding?.shareId) {
     return deck;
   }
@@ -127,11 +127,11 @@ export function buildPublicPresentationModel(
   assetBinding?: PublicPresentationAssetBinding,
 ): PublicPresentationModel {
   const opened = openDeckFromJson(document.deckJson);
-  const rawDeckV7 = opened.ok
+  const rawDeck = opened.ok
     ? opened.deck
-    : createBlankDeckV7({ title: document.title });
-  const deckV7 = bindDeckAssetUrlsToShare(rawDeckV7, assetBinding);
-  const themeResolution = resolveThemePackageForDeck(deckV7, {
+    : createBlankDeck({ title: document.title });
+  const deck = bindDeckAssetUrlsToShare(rawDeck, assetBinding);
+  const themeResolution = resolveThemePackageForDeck(deck, {
     customPackages: document.customThemePackages ?? [],
   });
   const recovery = opened.ok
@@ -147,7 +147,7 @@ export function buildPublicPresentationModel(
 
   return {
     title: document.title,
-    deckV7,
+    deck,
     themePackage: themeResolution.package,
     visuals: collectPresentationVisuals(document.contentJson),
     diagnostics: [

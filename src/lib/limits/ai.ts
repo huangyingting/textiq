@@ -27,7 +27,7 @@ export const AI_DECK_INPUT_LIMIT: LimitDefinition = {
   unit: "chars",
   enforcement: "enforced",
   diagnostic: { scope: "api.generate-deck", metric: "aiDeckInputChars" },
-  source: "src/lib/ai/run-vnext-deck-generation.ts",
+  source: "src/lib/ai/run-deck-generation.ts",
 };
 
 export const GENERATED_DECK_SLIDE_LIMIT: LimitDefinition = {
@@ -47,7 +47,7 @@ export const DECK_OUTPUT_TOKEN_LIMIT: LimitDefinition = {
   unit: "count",
   enforcement: "warning",
   diagnostic: { scope: "api.generate-deck", metric: "deckOutputTokens" },
-  source: "src/lib/ai/vnext-deck-prompt.ts",
+  source: "src/lib/ai/deck-prompt.ts",
 };
 
 export function formatVisualInputTooLongError(length: number): string {

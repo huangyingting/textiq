@@ -23,7 +23,7 @@ import {
   type ShapeElement,
   type SlideElement,
 } from "@/lib/document/deck-model";
-import { isPrimarilyCjk } from "@/lib/presentation-shared/slide-fonts";
+import { isPrimarilyCjk } from "@/lib/presentation/slide-fonts";
 import type { ExportPolicy } from "@/lib/visual/export-policy";
 import { getFidelity } from "@/lib/visual/export-fidelity";
 import {

@@ -26,7 +26,7 @@ import { ExportWorkflowMessage } from "@/components/visual/export-workflow-chrom
 import { useVisualSvgRegistry } from "@/components/editor/visual-svg-registry";
 import type { DeckFetchPort } from "@/lib/action-ports";
 import { collectDocumentBlocks } from "@/lib/content";
-import { loadSlideFonts } from "@/lib/presentation-shared/slide-font-loading";
+import { loadSlideFonts } from "@/lib/presentation/slide-font-loading";
 import {
   INFOGRAPHIC_WIDTH_PRESETS,
   DEFAULT_INFOGRAPHIC_CONFIG,
@@ -232,9 +232,9 @@ export function DocumentExportButton({
         setStatus("error");
         return;
       }
-      const { exportDeckV7AsPPTX } =
-        await import("@/lib/presentation-vnext/pptx-vnext-apply");
-      const blob = await exportDeckV7AsPPTX(context.deck);
+      const { exportDeckAsPPTX } =
+        await import("@/lib/presentation/pptx-apply");
+      const blob = await exportDeckAsPPTX(context.deck);
       if (!blob) {
         trackExportFailure("pptx", startedAt, "empty_blob");
         setErrorMsg("PPTX export failed");

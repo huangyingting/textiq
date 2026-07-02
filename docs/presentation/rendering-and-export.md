@@ -14,21 +14,21 @@ see [theme-packages.md](theme-packages.md).
 
 ## Source Files
 
-| Area                  | Source                                                                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared slide canvas   | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                               |
-| Node renderer         | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)                 |
-| Render resolver       | [`src/lib/presentation-vnext/render-resolver.ts`](../../src/lib/presentation-vnext/render-resolver.ts)                                         |
-| Render tree contract  | [`src/lib/presentation-vnext/render-tree.ts`](../../src/lib/presentation-vnext/render-tree.ts)                                                 |
-| In-app present mode   | [`src/components/presentation-vnext/present-mode-vnext.tsx`](../../src/components/presentation-vnext/present-mode-vnext.tsx)                   |
-| Public present viewer | [`src/components/presentation-vnext/public-present-viewer-vnext.tsx`](../../src/components/presentation-vnext/public-present-viewer-vnext.tsx) |
-| Export spec builder   | [`src/lib/presentation-vnext/export-spec.ts`](../../src/lib/presentation-vnext/export-spec.ts)                                                 |
-| PPTX spec adapter     | [`src/lib/presentation-vnext/pptx-export-adapter.ts`](../../src/lib/presentation-vnext/pptx-export-adapter.ts)                                 |
-| PPTX applier          | [`src/lib/presentation-vnext/pptx-vnext-apply.ts`](../../src/lib/presentation-vnext/pptx-vnext-apply.ts)                                       |
+| Area                  | Source                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Shared slide canvas   | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                   |
+| Node renderer         | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)     |
+| Render resolver       | [`src/lib/presentation/render-resolver.ts`](../../src/lib/presentation/render-resolver.ts)                             |
+| Render tree contract  | [`src/lib/presentation/render-tree.ts`](../../src/lib/presentation/render-tree.ts)                                     |
+| In-app present mode   | [`src/components/presentation/present-mode.tsx`](../../src/components/presentation/present-mode.tsx)                   |
+| Public present viewer | [`src/components/presentation/public-present-viewer.tsx`](../../src/components/presentation/public-present-viewer.tsx) |
+| Export spec builder   | [`src/lib/presentation/export-spec.ts`](../../src/lib/presentation/export-spec.ts)                                     |
+| PPTX spec adapter     | [`src/lib/presentation/pptx-export-adapter.ts`](../../src/lib/presentation/pptx-export-adapter.ts)                     |
+| PPTX applier          | [`src/lib/presentation/pptx-apply.ts`](../../src/lib/presentation/pptx-apply.ts)                                       |
 
 ## Rendering Contract
 
-`SlideCanvasVNext` renders one slide from a `ResolvedSlideRenderTree`. It is
+`SlideCanvas` renders one slide from a `ResolvedSlideRenderTree`. It is
 shared by:
 
 - the editor stage;
@@ -65,15 +65,15 @@ Supported element rendering:
 | `group`     | Renders nested child nodes in group-local order while preserving group lock/selection metadata.                               |
 
 Renderers do not synthesize nodes from flat slide fields. A stored deck must
-already be valid DeckV7 with slide content under `SlideNode.children`.
+already be valid Deck with slide content under `SlideNode.children`.
 When a container-rendered node uses `fill.type: "image"`, the renderer draws the
 fill as a separate overlay layer and applies `fill.opacity` there so node
 content does not fade with the background image.
 
 ## Present Mode
 
-`PresentModeVNext` is a full-screen, portal-mounted surface for the authenticated
-app. It renders the current slide through the shared DeckV7 canvas and adds
+`PresentMode` is a full-screen, portal-mounted surface for the authenticated
+app. It renders the current slide through the shared Deck canvas and adds
 presentation chrome:
 
 - keyboard navigation: arrows, space, page keys, home/end;
@@ -89,7 +89,7 @@ presentation chrome:
 The present surface fits the active slide format into the available viewport via
 `fitAspectRatio` and `slideAspectRatio`. It does not mutate the deck.
 
-Public present/share viewers use the same vNext rendering primitive so public
+Public present/share viewers use the same presentation rendering primitive so public
 output tracks in-app rendering.
 
 ## Export Pipeline
@@ -98,23 +98,23 @@ The PPTX export path is split into a pure spec builder and a browser/PPTX
 applier.
 
 ```text
-DeckV7 + ThemePackageV1
+Deck + ThemePackageV1
   -> resolveDeckRenderTree
   -> buildExportSpec
-  -> buildVnextPptxSpec
-  -> applyVnextPptxSpec / exportDeckV7AsPPTX
+  -> buildPptxSpec
+  -> applyPptxSpec / exportDeckAsPPTX
   -> PptxGenJS file Blob
 ```
 
 `buildExportSpec` is DOM-free and unit tested. It consumes the same resolved
-render tree order as `SlideCanvasVNext`, converts resolved nodes into export
-operations, and carries diagnostics forward. `buildVnextPptxSpec` converts those
-operations into inch-based PPTX operations; `applyVnextPptxSpec` owns PptxGenJS
+render tree order as `SlideCanvas`, converts resolved nodes into export
+operations, and carries diagnostics forward. `buildPptxSpec` converts those
+operations into inch-based PPTX operations; `applyPptxSpec` owns PptxGenJS
 side effects.
 
 Table export currently stays as a native table operation end to end:
-`buildExportSpec` emits `tableShape`, `buildVnextPptxSpec` maps it to
-`VnextPptxTableOp`, and `applyVnextPptxSpec` calls `slide.addTable(...)`.
+`buildExportSpec` emits `tableShape`, `buildPptxSpec` maps it to
+`PptxTableOp`, and `applyPptxSpec` calls `slide.addTable(...)`.
 Current adapter coverage maps column labels, row cell `text`, per-cell rich
 `runs`, frame geometry, table text style, resolved
 `headerFill`/`rowFill`/`alternateRowFill`, borders, and cell padding. Captions
@@ -124,7 +124,7 @@ solid fallbacks and emit `unsupported-export-feature` diagnostics.
 
 Visual operations use a rendered asset when one is available and otherwise emit
 a deterministic placeholder with channel colors and diagnostics. PptxGenJS 4.0.1
-does not expose native gradient or pattern fill props, so vNext PPTX export uses
+does not expose native gradient or pattern fill props, so presentation PPTX export uses
 the image-retry tier for gradient, pattern, image fills, and simple glass/blur
 shape effects that cannot stay as a solid fill. Simple glow maps to a native
 zero-distance outer shadow when color, blur, and opacity are representable.
@@ -152,7 +152,7 @@ surface warnings separately.
 ## Slide Fonts
 
 Slide typography uses self-hosted fonts from the registry in
-[`src/lib/presentation-shared/slide-fonts.ts`](../../src/lib/presentation-shared/slide-fonts.ts),
+[`src/lib/presentation/slide-fonts.ts`](../../src/lib/presentation/slide-fonts.ts),
 served from `public/fonts/slides/` and loaded via
 [`src/app/slide-fonts.css`](../../src/app/slide-fonts.css). This keeps rendering
 deterministic across platforms.
@@ -213,28 +213,28 @@ Preflight warnings describe expected fidelity changes before the export starts.
 
 ## Support Matrix
 
-| Category               | Product render behavior                                      | PPTX export behavior                                                                                                                                                                                                              | Diagnostics                                                                              |
-| ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Slide backgrounds      | Solid, gradient, pattern, and image fills render.            | Solid supported; gradients, patterns, and image fills use image-retry metadata because PptxGenJS 4.0.1 does not expose native gradient/pattern fill props.                                                                        | Yes when image-retry replaces unsupported native fill metadata or no retry asset exists. |
-| Text                   | Paragraphs, runs, alignment, rotation, and local style.      | Text boxes/runs, font face, size, color, bold/italic/underline, alignment, rotation.                                                                                                                                              | Missing tokens diagnose.                                                                 |
-| Images                 | Asset-resolved image render with fit/crop surface rules.     | URL/data/file source embeds as image with alt text and rotation.                                                                                                                                                                  | Missing assets diagnose before export.                                                   |
-| Visuals                | Asset-backed visuals render; unresolved visuals placeholder. | Rendered visual asset embeds as image; visual-id-only nodes use a labeled placeholder.                                                                                                                                            | Placeholder and unsupported visual channels diagnose.                                    |
-| Shapes                 | Core shapes render; path fallback styling is deterministic.  | Core shapes map to PptxGenJS shapes; solid fills stay native; gradient, pattern, image fills, and simple glass/blur effects use image-retry fills with stroke overlays where needed; simple glow maps to native shadow metadata.  | Unsupported native fill/effect mappings diagnose.                                        |
-| Connectors             | Straight, elbow, and curved SVG paths with dash/arrows.      | Straight and elbow preserve endpoints, dash, stroke, and arrows; simple point-to-point curved connectors export as editable native arc geometry; unsupported curved geometry keeps an editable straight fallback.                 | Unsupported curved geometry diagnoses.                                                   |
-| Tables                 | Header/body rows, fills, alternate rows, borders, text.      | Native `tableShape` -> `VnextPptxTableOp` -> `slide.addTable(...)`; exports column labels, cell text/runs, frame, table text style, header/row/alternate-row fills, borders, padding, and captions as text boxes above the table. | Unsupported table fill types emit `unsupported-export-feature` fallback diagnostics.     |
-| Decorations/chrome     | Theme decorations and chrome render outside user nodes.      | Decoration/chrome nodes export in render order; unsupported styles diagnose as style fallbacks.                                                                                                                                   | Yes when fallback is lossy.                                                              |
-| Effects                | Blur, glass, glow render in CSS where supported.             | Shape glass/blur use image-retry when the affected shape can be represented safely; simple glow maps to native outer-shadow metadata; other unsupported effect placements keep editable fallbacks with diagnostics.               | Yes when raster/native mapping is unavailable or lossy.                                  |
-| Blend/clip/image masks | Product CSS behavior where implemented.                      | Not native in current PPTX adapter unless represented by image asset.                                                                                                                                                             | Diagnostic required when user-visible.                                                   |
+| Category               | Product render behavior                                      | PPTX export behavior                                                                                                                                                                                                             | Diagnostics                                                                              |
+| ---------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Slide backgrounds      | Solid, gradient, pattern, and image fills render.            | Solid supported; gradients, patterns, and image fills use image-retry metadata because PptxGenJS 4.0.1 does not expose native gradient/pattern fill props.                                                                       | Yes when image-retry replaces unsupported native fill metadata or no retry asset exists. |
+| Text                   | Paragraphs, runs, alignment, rotation, and local style.      | Text boxes/runs, font face, size, color, bold/italic/underline, alignment, rotation.                                                                                                                                             | Missing tokens diagnose.                                                                 |
+| Images                 | Asset-resolved image render with fit/crop surface rules.     | URL/data/file source embeds as image with alt text and rotation.                                                                                                                                                                 | Missing assets diagnose before export.                                                   |
+| Visuals                | Asset-backed visuals render; unresolved visuals placeholder. | Rendered visual asset embeds as image; visual-id-only nodes use a labeled placeholder.                                                                                                                                           | Placeholder and unsupported visual channels diagnose.                                    |
+| Shapes                 | Core shapes render; path fallback styling is deterministic.  | Core shapes map to PptxGenJS shapes; solid fills stay native; gradient, pattern, image fills, and simple glass/blur effects use image-retry fills with stroke overlays where needed; simple glow maps to native shadow metadata. | Unsupported native fill/effect mappings diagnose.                                        |
+| Connectors             | Straight, elbow, and curved SVG paths with dash/arrows.      | Straight and elbow preserve endpoints, dash, stroke, and arrows; simple point-to-point curved connectors export as editable native arc geometry; unsupported curved geometry keeps an editable straight fallback.                | Unsupported curved geometry diagnoses.                                                   |
+| Tables                 | Header/body rows, fills, alternate rows, borders, text.      | Native `tableShape` -> `PptxTableOp` -> `slide.addTable(...)`; exports column labels, cell text/runs, frame, table text style, header/row/alternate-row fills, borders, padding, and captions as text boxes above the table.     | Unsupported table fill types emit `unsupported-export-feature` fallback diagnostics.     |
+| Decorations/chrome     | Theme decorations and chrome render outside user nodes.      | Decoration/chrome nodes export in render order; unsupported styles diagnose as style fallbacks.                                                                                                                                  | Yes when fallback is lossy.                                                              |
+| Effects                | Blur, glass, glow render in CSS where supported.             | Shape glass/blur use image-retry when the affected shape can be represented safely; simple glow maps to native outer-shadow metadata; other unsupported effect placements keep editable fallbacks with diagnostics.              | Yes when raster/native mapping is unavailable or lossy.                                  |
+| Blend/clip/image masks | Product CSS behavior where implemented.                      | Not native in current PPTX adapter unless represented by image asset.                                                                                                                                                            | Diagnostic required when user-visible.                                                   |
 
-Representative checks live in `src/lib/presentation-vnext/render-export-parity.test.ts`,
-`src/lib/presentation-vnext/pptx-export-adapter.test.ts`, and
-`src/lib/public-render/presentation.test.ts`. New DeckV7 node kinds, styles,
+Representative checks live in `src/lib/presentation/render-export-parity.test.ts`,
+`src/lib/presentation/pptx-export-adapter.test.ts`, and
+`src/lib/public-render/presentation.test.ts`. New Deck node kinds, styles,
 effects, or chrome layers must update render behavior, export behavior,
 diagnostics, and focused tests together.
 
 ## Invariants
 
-1. `SlideCanvasVNext` is the shared runtime renderer.
+1. `SlideCanvas` is the shared runtime renderer.
 2. Render/export code consumes `resolveDeckRenderTree` output.
 3. Export specs are pure and testable without DOM/PptxGenJS.
 4. Browser/PPTX appliers consume specs and own file-generation side effects.
@@ -243,11 +243,11 @@ diagnostics, and focused tests together.
 
 ## Primary Tests
 
-- [`src/lib/presentation-vnext/render-resolver.test.ts`](../../src/lib/presentation-vnext/render-resolver.test.ts)
-- [`src/lib/presentation-vnext/export-spec.test.ts`](../../src/lib/presentation-vnext/export-spec.test.ts)
-- [`src/lib/presentation-vnext/pptx-export-adapter.test.ts`](../../src/lib/presentation-vnext/pptx-export-adapter.test.ts)
-- [`src/lib/presentation-vnext/pptx-vnext-apply.test.ts`](../../src/lib/presentation-vnext/pptx-vnext-apply.test.ts)
-- [`src/lib/presentation-vnext/render-export-parity.test.ts`](../../src/lib/presentation-vnext/render-export-parity.test.ts)
-- [`src/components/presentation-vnext/slide-canvas-render.test.ts`](../../src/components/presentation-vnext/slide-canvas-render.test.ts)
+- [`src/lib/presentation/render-resolver.test.ts`](../../src/lib/presentation/render-resolver.test.ts)
+- [`src/lib/presentation/export-spec.test.ts`](../../src/lib/presentation/export-spec.test.ts)
+- [`src/lib/presentation/pptx-export-adapter.test.ts`](../../src/lib/presentation/pptx-export-adapter.test.ts)
+- [`src/lib/presentation/pptx-apply.test.ts`](../../src/lib/presentation/pptx-apply.test.ts)
+- [`src/lib/presentation/render-export-parity.test.ts`](../../src/lib/presentation/render-export-parity.test.ts)
+- [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
 - [`e2e/slides-smoke.spec.ts`](../../e2e/slides-smoke.spec.ts)
 - [`e2e/public-pages.spec.ts`](../../e2e/public-pages.spec.ts)

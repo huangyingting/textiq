@@ -2,7 +2,7 @@
 type: "plan"
 status: "complete"
 last_updated: "2026-07-02"
-description: "Remaining P2 work for a content-first screen-reader deck outline and per-node narration on the vNext slide stage."
+description: "Remaining P2 work for a content-first screen-reader deck outline and per-node narration on the presentation slide stage."
 ---
 
 # Stage Accessibility Outline Plan

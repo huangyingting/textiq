@@ -10,7 +10,7 @@ import type {
 import {
   SLIDE_FORMATS,
   type SlideFormat,
-} from "@/lib/presentation-shared/slide-format";
+} from "@/lib/presentation/slide-format";
 
 export class DeckValidationError extends Error {
   constructor(message: string) {

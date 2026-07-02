@@ -3,10 +3,10 @@
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/session";
-import { compileBrandKitDraft } from "@/lib/presentation-vnext/brand-kit/compiler";
-import { persistCompiledBrandKitDraft } from "@/lib/presentation-vnext/brand-kit/persistence";
-import type { BrandKitDraftV1 } from "@/lib/presentation-vnext/brand-kit/schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
+import { compileBrandKitDraft } from "@/lib/presentation/brand-kit/compiler";
+import { persistCompiledBrandKitDraft } from "@/lib/presentation/brand-kit/persistence";
+import type { BrandKitDraftV1 } from "@/lib/presentation/brand-kit/schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 
 export async function saveBrandKitDraft(
   draft: BrandKitDraftV1,

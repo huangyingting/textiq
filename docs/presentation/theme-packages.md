@@ -2,22 +2,22 @@
 type: "contract"
 status: "current"
 last_updated: "2026-06-29"
-description: "Theme packages are the v7 presentation editor's bundled visual-style units. A package owns theme tokens, named style refs, optional decorations, and package assets. Semantic templates are global v7 registry entries, not package-local templates."
+description: "Theme packages are the presentation editor's bundled visual-style units. A package owns theme tokens, named style refs, optional decorations, and package assets. Semantic templates are global presentation registry entries, not package-local templates."
 ---
 
 # Presentation Theme Packages
 
-Theme packages are the v7 presentation editor's bundled visual-style units. A
+Theme packages are the presentation editor's bundled visual-style units. A
 package owns theme tokens, named style refs, optional decorations, and package
-assets. Semantic templates are global v7 registry entries, not package-local
+assets. Semantic templates are global presentation registry entries, not package-local
 templates.
 
 Theme packages do not reintroduce v6 deck fields. Applying a package writes the
-v7 theme binding on the deck:
+presentation theme binding on the deck:
 
-- `DeckV7.theme.packageId`
-- `DeckV7.theme.packageVersion`
-- optional `DeckV7.theme.overrides`
+- `Deck.theme.packageId`
+- `Deck.theme.packageVersion`
+- optional `Deck.theme.overrides`
 
 Slides keep their `SlideNode.template.kind`, `children`, content, local style,
 and source metadata. Switching a package changes visual resolution, not the
@@ -42,7 +42,7 @@ even when the visible style names are refreshed.
 | `pulse`     | Tech Terminal Mono    | Neon terminal-style decks with mono typography and grids. |
 
 The canonical semantic template catalog is defined globally by
-`SEMANTIC_TEMPLATE_KINDS` in `src/lib/presentation-vnext/template-registry.ts`.
+`SEMANTIC_TEMPLATE_KINDS` in `src/lib/presentation/template-registry.ts`.
 It includes opening, core, compare, proof, flow, decision, business, and closing
 templates such as `cover`, `executive-summary`, `evidence`, `table`, `roadmap`,
 `recommendation`, and `appendix`.
@@ -53,11 +53,11 @@ Several semantic kinds may reuse the same render family. For example,
 runtime template id so AI plans and editor UI can reason in content terms.
 
 All eight packages are derived from the validated prototype pipeline under
-`prototypes/slide-themes`. The visual source is the native v7
-`ThemePackageV1` manifest in `prototypes/slide-themes/theme-packages-v7.ts`.
+`prototypes/slide-themes`. The visual source is the native presentation
+`ThemePackageV1` manifest in `prototypes/slide-themes/theme-packages.ts`.
 The generator validates those packages, compiles every global semantic template
-kind into schema-valid `DeckV7` preview decks, writes generated v7 package JSON,
-and renders static previews through the shared v7 render tree. Run the full
+kind into schema-valid `Deck` preview decks, writes generated presentation package JSON,
+and renders static previews through the shared presentation render tree. Run the full
 pipeline with `npm run slide-themes:generate`; use `npm run slide-themes:build`
 or `npm run slide-themes:html` when only one step is needed.
 
@@ -77,7 +77,7 @@ package styles until the user clears them.
 
 ## Template Identity
 
-V7 slide identity is semantic. A slide stores its template provenance as:
+slide identity is semantic. A slide stores its template provenance as:
 
 ```ts
 SlideNode.template.kind;
@@ -91,7 +91,7 @@ style packages only.
 ## Editor Surfaces
 
 The theme picker presents packages as the primary theme choices. Selecting a
-theme package updates the deck's v7 theme binding.
+theme package updates the deck's presentation theme binding.
 
 The Add slide picker uses the global semantic template registry and groups
 templates by metadata group: Opening, Core, Compare, Proof, Flow, Decision,
@@ -103,7 +103,7 @@ consumers. It is not duplicated inside theme packages.
 
 ## Master Boundary
 
-V7 has no slide masters in the active package path. Shared visual personality is
+has no slide masters in the active package path. Shared visual personality is
 expressed as package styles and `ThemeDecorationRecipe` entries, then injected by
 `resolveDeckRenderTree` according to slide chrome/decoration props.
 

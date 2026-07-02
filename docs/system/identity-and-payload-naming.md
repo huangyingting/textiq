@@ -43,7 +43,7 @@ interfaces just to adopt them.
 
 Comment anchors keep their historical `anchorNodeId` DB column, but current code
 treats that value as a durable document block/visual id. It is not a live Lexical
-`NodeKey`. Use the explicit adapters in `src/lib/presentation-vnext/source-links.ts`
+`NodeKey`. Use the explicit adapters in `src/lib/presentation/source-links.ts`
 and `src/lib/comments/anchors.ts`.
 
 ## AssetReference vs ResolvedAssetUrl
@@ -77,7 +77,7 @@ Result-shape conventions:
 - Use `ok: true | false` with `data` / `error` for public action results
   (`ActionResult<T>`).
 - Use `success: true | false` for parser/schema validation results when that is
-  the existing API (`safeParseDeckV7` and similar validators).
+  the existing API (`safeParseDeck` and similar validators).
 - Use `valid: boolean` only for predicate-like validation summaries.
 - Use `payload` for raw request/body content before validation; use `data` for
   validated or returned domain data.

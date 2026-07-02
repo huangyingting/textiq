@@ -3,12 +3,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { SEMANTIC_TEMPLATE_KINDS } from "@/lib/presentation-vnext/template-registry";
-import { validateThemePackage } from "@/lib/presentation-vnext/theme-package-schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import { SEMANTIC_TEMPLATE_KINDS } from "@/lib/presentation/template-registry";
+import { validateThemePackage } from "@/lib/presentation/theme-package-schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
 
 function readDeck(id: string) {
-  const parsed = safeParseDeckV7(
+  const parsed = safeParseDeck(
     JSON.parse(
       readFileSync(
         join(process.cwd(), `prototypes/slide-themes/decks/${id}.deck.json`),
@@ -60,7 +60,7 @@ function readPackageFixture(id: string): Record<string, unknown> {
   ) as Record<string, unknown>;
 }
 
-test("native v7 packages materialize every semantic template into preview decks", () => {
+test("native presentation packages materialize every semantic template into preview decks", () => {
   for (const id of [
     "clarity",
     "ocean",
@@ -93,7 +93,7 @@ test("native v7 packages materialize every semantic template into preview decks"
   }
 });
 
-test("native v7 packages retain distinctive style packages", () => {
+test("native presentation packages retain distinctive style packages", () => {
   const clarity = readPackage("clarity");
   const ocean = readPackage("ocean");
   const pulse = readPackage("pulse");
@@ -108,7 +108,7 @@ test("native v7 packages retain distinctive style packages", () => {
   assert.ok(pulse.decorations?.scanLine);
 });
 
-test("native v7 package fixtures reject malformed assets, decorations, and unknown fields", () => {
+test("native presentation package fixtures reject malformed assets, decorations, and unknown fields", () => {
   const baseFixture = readPackageFixture("clarity");
   const malformedFixtures: Array<{
     name: string;

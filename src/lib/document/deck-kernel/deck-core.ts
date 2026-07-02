@@ -1,6 +1,6 @@
 /** Core legacy v6 deck and slide schema types. */
 
-import type { SlideFormat } from "@/lib/presentation-shared/slide-format";
+import type { SlideFormat } from "@/lib/presentation/slide-format";
 import type { SlideElement } from "./deck-elements";
 import { STYLE_THEME_IDS } from "./presentation-theme-ids";
 

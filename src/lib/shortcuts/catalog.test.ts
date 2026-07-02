@@ -13,7 +13,7 @@ import {
   shortcutDisplayTokens,
   shortcutsForScope,
 } from "./catalog";
-import { V7_CANVAS_RUNTIME_SHORTCUT_IDS } from "./canvas-runtime";
+import { _CANVAS_RUNTIME_SHORTCUT_IDS } from "./canvas-runtime";
 
 describe("shortcut catalog registry (#737, #751)", () => {
   test("has unique ids and complete executable metadata", () => {
@@ -170,14 +170,14 @@ describe("shortcut catalog registry (#737, #751)", () => {
     assert.equal(matchesShortcut("canvas.rotate.step", key("}")), false);
   });
 
-  test("v7 canvas catalog ids stay aligned with runtime handler ids", () => {
+  test("presentation canvas catalog ids stay aligned with runtime handler ids", () => {
     const canvasIds = SHORTCUT_REGISTRY.filter(
       (shortcut) => shortcut.surface === "slide-canvas",
     ).map((shortcut) => shortcut.id);
-    assert.equal(canvasIds.length, V7_CANVAS_RUNTIME_SHORTCUT_IDS.length);
+    assert.equal(canvasIds.length, _CANVAS_RUNTIME_SHORTCUT_IDS.length);
     assert.deepEqual(
       canvasIds.slice().sort(),
-      Array.from(V7_CANVAS_RUNTIME_SHORTCUT_IDS).sort(),
+      Array.from(_CANVAS_RUNTIME_SHORTCUT_IDS).sort(),
     );
   });
 });

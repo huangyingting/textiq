@@ -2,7 +2,7 @@
 type: "plan"
 status: "active — implementation pending"
 last_updated: "2026-07-02"
-description: "Remaining P2 work for authoring user/workspace brand kits as validated v7 theme packages."
+description: "Remaining P2 work for authoring user/workspace brand kits as validated presentation theme packages."
 ---
 
 # Theme Brand Kit Authoring Plan
@@ -12,7 +12,7 @@ description: "Remaining P2 work for authoring user/workspace brand kits as valid
 **Priority:** P2.
 
 Let users author custom brand kits that compile to validated `ThemePackageV1`
-snapshots consumed by the existing v7 render, present, public render, and export
+snapshots consumed by the existing presentation render, present, public render, and export
 paths.
 
 ## Remaining Work

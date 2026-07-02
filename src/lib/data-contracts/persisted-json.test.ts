@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
+import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 
 import {
   PERSISTED_JSON_CONTRACTS,
@@ -9,7 +9,7 @@ import {
 } from "./persisted-json";
 
 function validDeck(): unknown {
-  return buildMinimalDeckV7();
+  return buildMinimalDeck();
 }
 
 function validVisual(): Record<string, unknown> {
@@ -38,11 +38,11 @@ test("persisted JSON registry points at current validators", () => {
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["Document.deckJson"].validator,
-    "@/lib/presentation-vnext/validation#safeParseDeckV7",
+    "@/lib/presentation/validation#safeParseDeck",
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["DocumentVersion.deckJson"].validator,
-    "@/lib/presentation-vnext/validation#safeParseDeckV7",
+    "@/lib/presentation/validation#safeParseDeck",
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["Visual.data"].validate(validVisual()).success,
@@ -50,7 +50,7 @@ test("persisted JSON registry points at current validators", () => {
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["DocumentVersion.deckJson"].validate(
-      buildMinimalDeckV7(),
+      buildMinimalDeck(),
     ).success,
     true,
   );

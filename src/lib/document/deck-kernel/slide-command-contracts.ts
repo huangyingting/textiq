@@ -14,7 +14,7 @@ import type { DistributiveOmit, ElementPatch } from "./deck-mutation-shared";
 import type { PresentationThemeOverridesPatch } from "./presentation-theme-overrides";
 import type { AlignMode, DistributeMode, MatchSizeMode } from "./element-align";
 import type { ArrangeMode } from "./element-arrange";
-import type { SlideFormat } from "@/lib/presentation-shared/slide-format";
+import type { SlideFormat } from "@/lib/presentation/slide-format";
 import type { SlideTemplateKind } from "./slide-templates";
 
 export interface AddSlideCommand {

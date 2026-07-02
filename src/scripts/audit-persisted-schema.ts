@@ -4,7 +4,7 @@
  * Thin DB-reading wrapper around the pure audit core in
  * `src/lib/schema-audit/audit.ts`. Connects via the app Prisma client (honoring
  * `DB_PROVIDER` / `DATABASE_URL`), scans every `Document.deckJson`, embedded
- * `Document.contentJson` visual, `Visual.data` row, and active DeckV7 source
+ * `Document.contentJson` visual, `Visual.data` row, and active Deck source
  * metadata (`slides[].source` and `slides[].children[].source`), and reports
  * violations using SAFE identifiers only (row id / document id / schema area /
  * failure reason) — never document content.

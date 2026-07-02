@@ -6,8 +6,8 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 
 import { Prisma } from "../src/generated/prisma/client";
-import { openDeckFromJson } from "../src/lib/presentation-vnext/open-deck";
-import { safeParseDeckV7 } from "../src/lib/presentation-vnext/validation";
+import { openDeckFromJson } from "../src/lib/presentation/open-deck";
+import { safeParseDeck } from "../src/lib/presentation/validation";
 import { deriveStorageKey } from "../src/lib/slides/asset-storage";
 import {
   VISUAL_KIND_TO_PRISMA,
@@ -17,7 +17,7 @@ import {
   E2E_PROFILE_FIXTURE,
   buildE2EProfileContentJson,
   buildE2EProfileDeck,
-  buildE2EProfileDeckV7,
+  buildE2EProfileDeckFixture,
   buildE2EProfileFixtureDescriptor,
   buildE2EProfileVisual,
   fixtureAssetChecksum,
@@ -276,13 +276,13 @@ async function main() {
   });
 
   // Persist the deck once the asset id is known so the ImageNode carries a real
-  // `assetId`. Validate through the v7 parser and open boundary so a broken
+  // `assetId`. Validate through the presentation parser and open boundary so a broken
   // fixture fails loudly before it is written to Document.deckJson.
   const rawDeck = buildE2EProfileDeck(assetUrl, asset.id);
-  const parsedDeck = safeParseDeckV7(rawDeck);
+  const parsedDeck = safeParseDeck(rawDeck);
   if (!parsedDeck.success) {
     throw new Error(
-      `Fixture deck failed v7 validation: ${parsedDeck.errors.join("; ")}`,
+      `Fixture deck failed presentation validation: ${parsedDeck.errors.join("; ")}`,
     );
   }
   const openedDeck = openDeckFromJson(parsedDeck.data);
@@ -296,13 +296,13 @@ async function main() {
   });
 
   // -------------------------------------------------------------------------
-  // 5b. Dedicated v7 layout screenshot document.
+  // 5b. Dedicated presentation layout screenshot document.
   // -------------------------------------------------------------------------
-  const rawLayoutDeck = buildE2EProfileDeckV7();
-  const parsedLayoutDeck = safeParseDeckV7(rawLayoutDeck);
+  const rawLayoutDeck = buildE2EProfileDeckFixture();
+  const parsedLayoutDeck = safeParseDeck(rawLayoutDeck);
   if (!parsedLayoutDeck.success) {
     throw new Error(
-      `Fixture v7 layout deck failed validation: ${parsedLayoutDeck.errors.join("; ")}`,
+      `Fixture presentation layout deck failed validation: ${parsedLayoutDeck.errors.join("; ")}`,
     );
   }
   const layoutContentJson = buildE2EProfileContentJson(

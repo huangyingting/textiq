@@ -6,9 +6,12 @@ import {
   buildGenerateDeckSuccessLogFields,
   buildGenerateDeckSuccessResponse,
 } from "./route-logic";
-import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation-shared/theme-packages";
-import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import { buildContentSlide, buildDeckV7 } from "@/test/builders/deck-v7";
+import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation/theme-package-ids";
+import { makeDiagnostic } from "@/lib/presentation/diagnostics";
+import {
+  buildContentSlide,
+  buildDeck,
+} from "@/test/builders/presentation-deck";
 
 const payload: GenerateDeckPayload = {
   contentJson: { root: { children: [] } },
@@ -21,7 +24,7 @@ const payload: GenerateDeckPayload = {
 };
 
 test("generate deck success helpers preserve result payload and telemetry", () => {
-  const deck = buildDeckV7([buildContentSlide()]);
+  const deck = buildDeck([buildContentSlide()]);
   const diagnostics = [
     makeDiagnostic("missing-required-slot", "warning", "Filled title"),
   ];

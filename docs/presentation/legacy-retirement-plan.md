@@ -20,8 +20,8 @@ remains a supported mode.
 | Slice                       | Work                                                                                                                                                              | Exit criteria                                                                                                         |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | External dynamic references | Removed non-test dynamic v6 export imports from outside the legacy tree.                                                                                          | The legacy-reference search finds no non-test references outside current owned modules.                               |
-| Legacy component tree       | Deleted `src/components/presentation/**`; current UI lives under `src/components/presentation-vnext/**` and shared component modules.                             | No product route or editor entry point imports the legacy component surface.                                          |
-| Legacy library tree         | Deleted `src/lib/presentation/**`; current shared helpers were rehomed under document, command, visual, content, comments, presentation-shared, and vNext owners. | Legacy deck, command, export, theme, presenter, public-viewer, and fallback contracts are gone or explicitly rehomed. |
+| Legacy component tree       | Deleted `src/components/presentation/**`; current UI lives under `src/components/presentation/**` and shared component modules.                                   | No product route or editor entry point imports the legacy component surface.                                          |
+| Legacy library tree         | Deleted `src/lib/presentation/**`; current shared helpers were rehomed under document, command, visual, content, comments, presentation, and presentation owners. | Legacy deck, command, export, theme, presenter, public-viewer, and fallback contracts are gone or explicitly rehomed. |
 | Test/support cleanup        | Removed legacy-only tests, fixtures, builders, docs, and README references in the same deletion slice.                                                            | Focused presentation, public-render, visual/export, and document-generation checks pass without v6 helpers.           |
 
 ## Current Counts
@@ -34,8 +34,8 @@ remains a supported mode.
 
 ## Constraints
 
-- Keep the vNext production import boundary at zero legacy presentation imports.
-- Do not add v6-to-v7 compatibility layers.
+- Keep the presentation production import boundary at zero legacy presentation imports.
+- Do not add v6-to-presentation compatibility layers.
 - Keep current, data-agnostic behavior under explicit non-legacy owners; do not
   recreate fallback-only behavior.
 

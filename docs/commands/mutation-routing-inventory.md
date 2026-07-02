@@ -87,8 +87,8 @@ The command routing rule is:
     "surface": "document.deckJson",
     "category": "slide-command",
     "currentEntryPoints": [
-      "src/lib/presentation-vnext/editor-commands.ts",
-      "src/components/presentation-vnext/slide-editor-vnext.tsx"
+      "src/lib/presentation/editor-commands.ts",
+      "src/components/presentation/slide-editor.tsx"
     ],
     "persistence": [
       "src/app/app/documents/[id]/actions.ts::saveDeckJson",
@@ -118,9 +118,9 @@ The command routing rule is:
     "surface": "slide.element.source",
     "category": "slide-command",
     "currentEntryPoints": [
-      "src/lib/presentation-vnext/source-links.ts",
-      "src/components/presentation-vnext/source-review-panel.tsx",
-      "src/components/presentation-vnext/slide-editor-vnext.tsx"
+      "src/lib/presentation/source-links.ts",
+      "src/components/presentation/source-review-panel.tsx",
+      "src/components/presentation/slide-editor.tsx"
     ],
     "persistence": "saveDeckJson/saveDeckPatch through deckJson",
     "busDisposition": "wrapped as UPDATE_ELEMENT_SOURCE / REMOVE_SOURCE_ELEMENT commands"
@@ -230,8 +230,8 @@ This is not user intent.
 
 Deck mutations already have the right separation:
 
-- `src/lib/presentation-vnext/editor-commands.ts` owns pure DeckV7 mutations;
-- `src/components/presentation-vnext/slide-editor-vnext.tsx` owns editor state,
+- `src/lib/presentation/editor-commands.ts` owns pure Deck mutations;
+- `src/components/presentation/slide-editor.tsx` owns editor state,
   history, and autosave handoff;
 - `saveDeckJson` and `saveDeckPatch` are the persistence endpoints guarded by
   document capability checks and revision tokens.
@@ -259,11 +259,11 @@ for the visual/deck executor introduced in Epic #436.
 
 ### 7. Source refs on slide elements
 
-Source-link refresh, unlink, relink, and orphan dismissal route through DeckV7
+Source-link refresh, unlink, relink, and orphan dismissal route through Deck
 source-link helpers and editor command handlers. The active surfaces are
-`src/lib/presentation-vnext/source-links.ts`,
-`src/components/presentation-vnext/source-review-panel.tsx`, and
-`src/components/presentation-vnext/slide-editor-vnext.tsx`:
+`src/lib/presentation/source-links.ts`,
+`src/components/presentation/source-review-panel.tsx`, and
+`src/components/presentation/slide-editor.tsx`:
 
 - refresh updates node source metadata and content where safe;
 - unlink/relink updates node source metadata explicitly;

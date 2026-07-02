@@ -2,7 +2,7 @@
  * Pure helpers for slide comment anchor semantics (Epic #380).
  *
  * A comment may carry an optional slide-level anchor that pins it to a
- * specific location inside a {@link DeckV7}. This module resolves and
+ * specific location inside a {@link Deck}. This module resolves and
  * manipulates those anchors without any I/O or React dependencies — fully
  * testable under `node --test`.
  *
@@ -18,7 +18,7 @@
  * `anchorGeometry` stores a simple `{x, y}` point.
  */
 
-import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
+import type { Deck, SlideChildNode } from "@/lib/presentation/schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,8 +46,8 @@ export interface SlideCommentAnchor {
   /** Slide.id from deckJson. Null → deck-level comment. */
   slideId?: string | null;
   /**
-   * V7 SlideChildNode.id within the slide. The DB column is still named
-   * `elementId`, but the runtime value is a v7 node id.
+   *  SlideChildNode.id within the slide. The DB column is still named
+   * `elementId`, but the runtime value is a presentation node id.
    */
   elementId?: string | null;
   /**
@@ -81,7 +81,7 @@ export type AnchorState = "deck" | "attached" | "orphaned" | "unknown";
  */
 export function resolveAnchorState(
   anchor: SlideCommentAnchor,
-  deck: DeckV7 | null | undefined,
+  deck: Deck | null | undefined,
 ): AnchorState {
   if (!anchor.slideId) {
     return "deck";

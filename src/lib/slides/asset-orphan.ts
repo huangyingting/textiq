@@ -54,7 +54,7 @@ export const ASSET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  * Recognised locations:
  *  - `deck.slides[n].backgroundAssetId`
  *  - `deck.slides[n].elements[m].assetId`  (ImageElement)
- *  - `deck.slides[n].children[*].content.assetId` (v7 image/visual nodes)
+ *  - `deck.slides[n].children[*].content.assetId` (presentation image/visual nodes)
  *  - `deck.assets.visuals[*].id` and visual registry keys
  *  - `deck.chrome.logo.assetId`
  *  - `deck.theme.overrides.chrome.logo.assetId`

@@ -105,13 +105,13 @@
             "paragraphs": [
               {
                 "id": "para-0006",
-                "text": "A native v7 semantic preview generated from slots."
+                "text": "A native presentation semantic preview generated from slots."
               }
             ]
           }
         }
       ],
-      "notes": "Cover preview generated from the native v7 template registry.",
+      "notes": "Cover preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -257,7 +257,7 @@
           ]
         }
       ],
-      "notes": "Agenda preview generated from the native v7 template registry.",
+      "notes": "Agenda preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -332,7 +332,7 @@
           }
         }
       ],
-      "notes": "Section Divider preview generated from the native v7 template registry.",
+      "notes": "Section Divider preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -435,7 +435,7 @@
               },
               {
                 "id": "para-000t",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -443,7 +443,7 @@
               },
               {
                 "id": "para-000u",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -453,7 +453,7 @@
           }
         }
       ],
-      "notes": "Executive Summary preview generated from the native v7 template registry.",
+      "notes": "Executive Summary preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -556,7 +556,7 @@
               },
               {
                 "id": "para-0012",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -564,7 +564,7 @@
               },
               {
                 "id": "para-0013",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -574,7 +574,7 @@
           }
         }
       ],
-      "notes": "Content preview generated from the native v7 template registry.",
+      "notes": "Content preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -675,7 +675,7 @@
           }
         }
       ],
-      "notes": "Detail preview generated from the native v7 template registry.",
+      "notes": "Detail preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -750,7 +750,7 @@
           }
         }
       ],
-      "notes": "Quote preview generated from the native v7 template registry.",
+      "notes": "Quote preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -871,13 +871,13 @@
             "paragraphs": [
               {
                 "id": "para-001o",
-                "text": "Generated from DeckV7, ThemePackageV1, and the semantic template registry."
+                "text": "Generated from Deck, ThemePackageV1, and the semantic template registry."
               }
             ]
           }
         }
       ],
-      "notes": "Big Stat preview generated from the native v7 template registry.",
+      "notes": "Big Stat preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -972,7 +972,7 @@
           ]
         }
       ],
-      "notes": "Metric Row preview generated from the native v7 template registry.",
+      "notes": "Metric Row preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1093,7 +1093,7 @@
           }
         }
       ],
-      "notes": "Insight preview generated from the native v7 template registry.",
+      "notes": "Insight preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1196,7 +1196,7 @@
               },
               {
                 "id": "para-002a",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1204,7 +1204,7 @@
               },
               {
                 "id": "para-002b",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1214,7 +1214,7 @@
           }
         }
       ],
-      "notes": "Evidence preview generated from the native v7 template registry.",
+      "notes": "Evidence preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1338,7 +1338,7 @@
                 ]
               }
             ],
-            "caption": "Native v7 table slot sample",
+            "caption": "Native presentation table slot sample",
             "header": true
           }
         },
@@ -1363,13 +1363,13 @@
             "paragraphs": [
               {
                 "id": "para-002h",
-                "text": "Generated from DeckV7, ThemePackageV1, and the semantic template registry."
+                "text": "Generated from Deck, ThemePackageV1, and the semantic template registry."
               }
             ]
           }
         }
       ],
-      "notes": "Table preview generated from the native v7 template registry.",
+      "notes": "Table preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1472,7 +1472,7 @@
               },
               {
                 "id": "para-002p",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1480,7 +1480,7 @@
               },
               {
                 "id": "para-002q",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1544,7 +1544,7 @@
               },
               {
                 "id": "para-002v",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1552,7 +1552,7 @@
               },
               {
                 "id": "para-002w",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -1562,7 +1562,7 @@
           }
         }
       ],
-      "notes": "Comparison preview generated from the native v7 template registry.",
+      "notes": "Comparison preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1682,7 +1682,7 @@
           ]
         }
       ],
-      "notes": "Matrix preview generated from the native v7 template registry.",
+      "notes": "Matrix preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1848,13 +1848,13 @@
             "paragraphs": [
               {
                 "id": "para-003g",
-                "text": "Generated from DeckV7, ThemePackageV1, and the semantic template registry."
+                "text": "Generated from Deck, ThemePackageV1, and the semantic template registry."
               }
             ]
           }
         }
       ],
-      "notes": "Framework preview generated from the native v7 template registry.",
+      "notes": "Framework preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -1974,7 +1974,7 @@
           ]
         }
       ],
-      "notes": "Process preview generated from the native v7 template registry.",
+      "notes": "Process preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2119,7 +2119,7 @@
           ]
         }
       ],
-      "notes": "Timeline preview generated from the native v7 template registry.",
+      "notes": "Timeline preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2265,7 +2265,7 @@
           ]
         }
       ],
-      "notes": "Roadmap preview generated from the native v7 template registry.",
+      "notes": "Roadmap preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2356,13 +2356,13 @@
             "paragraphs": [
               {
                 "id": "para-004e",
-                "text": "Generated from DeckV7, ThemePackageV1, and the semantic template registry."
+                "text": "Generated from Deck, ThemePackageV1, and the semantic template registry."
               }
             ]
           }
         }
       ],
-      "notes": "Architecture preview generated from the native v7 template registry.",
+      "notes": "Architecture preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2491,7 +2491,7 @@
               },
               {
                 "id": "para-004o",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -2499,7 +2499,7 @@
               },
               {
                 "id": "para-004p",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -2561,7 +2561,7 @@
           }
         }
       ],
-      "notes": "Case Study preview generated from the native v7 template registry.",
+      "notes": "Case Study preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2685,12 +2685,12 @@
                 ]
               }
             ],
-            "caption": "Native v7 table slot sample",
+            "caption": "Native presentation table slot sample",
             "header": true
           }
         }
       ],
-      "notes": "Risks preview generated from the native v7 template registry.",
+      "notes": "Risks preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2793,7 +2793,7 @@
               },
               {
                 "id": "para-0055",
-                "text": "Resolve visual style from the v7 theme package",
+                "text": "Resolve visual style from the presentation theme package",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -2801,7 +2801,7 @@
               },
               {
                 "id": "para-0056",
-                "text": "Render the shared DeckV7 preview path",
+                "text": "Render the shared Deck preview path",
                 "list": {
                   "kind": "bullet",
                   "indent": 0
@@ -2811,7 +2811,7 @@
           }
         }
       ],
-      "notes": "Recommendation preview generated from the native v7 template registry.",
+      "notes": "Recommendation preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -2982,7 +2982,7 @@
           ]
         }
       ],
-      "notes": "Pricing preview generated from the native v7 template registry.",
+      "notes": "Pricing preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -3128,7 +3128,7 @@
           ]
         }
       ],
-      "notes": "Team preview generated from the native v7 template registry.",
+      "notes": "Team preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -3219,13 +3219,13 @@
             "paragraphs": [
               {
                 "id": "para-005y",
-                "text": "Generated from DeckV7, ThemePackageV1, and the semantic template registry."
+                "text": "Generated from Deck, ThemePackageV1, and the semantic template registry."
               }
             ]
           }
         }
       ],
-      "notes": "Visual Focus preview generated from the native v7 template registry.",
+      "notes": "Visual Focus preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -3320,13 +3320,13 @@
             "paragraphs": [
               {
                 "id": "para-0065",
-                "text": "A native v7 semantic preview generated from slots."
+                "text": "A native presentation semantic preview generated from slots."
               }
             ]
           }
         }
       ],
-      "notes": "Closing preview generated from the native v7 template registry.",
+      "notes": "Closing preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -3401,7 +3401,7 @@
           }
         }
       ],
-      "notes": "Appendix preview generated from the native v7 template registry.",
+      "notes": "Appendix preview generated from the native presentation template registry.",
       "props": {
         "decoration": "default",
         "chrome": "default"
@@ -3410,7 +3410,7 @@
   ],
   "metadata": {
     "extra": {
-      "source": "prototypes/slide-themes/theme-packages-v7.ts"
+      "source": "prototypes/slide-themes/theme-packages.ts"
     }
   }
 }

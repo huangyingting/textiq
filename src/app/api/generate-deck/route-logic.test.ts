@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { DECK_SCHEMA_VERSION_V7 } from "@/lib/presentation-vnext/schema";
-import type { DeckV7, SlideNode } from "@/lib/presentation-vnext/schema";
+import { DECK_SCHEMA_VERSION } from "@/lib/presentation/schema";
+import type { Deck, SlideNode } from "@/lib/presentation/schema";
 import {
-  buildDeckV7,
+  buildDeck,
   buildCoverSlide,
   buildContentSlide,
   buildTableSlide,
   buildVisualSlide,
-  buildSlideV7,
+  buildSlide,
   buildImageNode,
   resetBuilderCounter,
-} from "@/test/builders/deck-v7";
-import type { RunVnextDeckGenerationResult } from "@/lib/ai/run-vnext-deck-generation";
-import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
+} from "@/test/builders/presentation-deck";
+import type { RunDeckGenerationResult } from "@/lib/ai/run-deck-generation";
+import { makeDiagnostic } from "@/lib/presentation/diagnostics";
 
 import type { GenerateDeckPayload } from "./parser";
 import {
@@ -27,12 +27,12 @@ const CONTENT_JSON = {
   root: { children: [{ type: "paragraph", children: [{ text: "Roadmap" }] }] },
 };
 
-function makeDeckV7(withTable = false): DeckV7 {
+function makeDeck(withTable = false): Deck {
   resetBuilderCounter();
   const slides: SlideNode[] = withTable
     ? [buildCoverSlide(), buildTableSlide()]
     : [buildCoverSlide(), buildContentSlide()];
-  return buildDeckV7(slides, { theme: { packageId: "noir" } });
+  return buildDeck(slides, { theme: { packageId: "noir" } });
 }
 
 function makePayload(): GenerateDeckPayload {
@@ -49,7 +49,7 @@ function makePayload(): GenerateDeckPayload {
 
 const complete = async () => "{}";
 
-function makeVnextResult(deck: DeckV7): RunVnextDeckGenerationResult {
+function makeDeckResult(deck: Deck): RunDeckGenerationResult {
   return {
     deck,
     truncated: false,
@@ -58,8 +58,8 @@ function makeVnextResult(deck: DeckV7): RunVnextDeckGenerationResult {
   };
 }
 
-test("generateDeckForRoute calls runVnext with correct inputs", async () => {
-  let vnextCalls = 0;
+test("generateDeckForRoute calls runDeck with correct inputs", async () => {
+  let deckCalls = 0;
   const diagnostics = [
     makeDiagnostic("slot-over-capacity", "warning", "Adjusted slot payload", {
       slideId: "slide-1",
@@ -69,11 +69,11 @@ test("generateDeckForRoute calls runVnext with correct inputs", async () => {
   const result = await generateDeckForRoute(
     { payload: makePayload(), complete },
     {
-      runVnext: async (input) => {
-        vnextCalls += 1;
+      runDeck: async (input) => {
+        deckCalls += 1;
         assert.equal(input.themePackageId, "noir");
         return {
-          deck: makeDeckV7(true),
+          deck: makeDeck(true),
           truncated: true,
           selectedKindCounts: { cover: 1, table: 1 },
           diagnostics,
@@ -82,7 +82,7 @@ test("generateDeckForRoute calls runVnext with correct inputs", async () => {
     },
   );
 
-  assert.equal(vnextCalls, 1);
+  assert.equal(deckCalls, 1);
   assert.equal(result.planner, "ai");
   assert.equal(result.mode, "faithful");
   assert.equal(result.themePackageId, "noir");
@@ -91,21 +91,21 @@ test("generateDeckForRoute calls runVnext with correct inputs", async () => {
   assert.deepEqual(result.diagnostics, diagnostics);
 });
 
-test("generateDeckForRoute returns a DeckV7 with schemaVersion 7", async () => {
-  const deck = makeDeckV7();
+test("generateDeckForRoute returns a Deck with schemaVersion 7", async () => {
+  const deck = makeDeck();
   const result = await generateDeckForRoute(
     { payload: makePayload(), complete },
-    { runVnext: async () => makeVnextResult(deck) },
+    { runDeck: async () => makeDeckResult(deck) },
   );
-  assert.equal(result.deck.schemaVersion, DECK_SCHEMA_VERSION_V7);
+  assert.equal(result.deck.schemaVersion, DECK_SCHEMA_VERSION);
 });
 
-test("generateDeckForRoute propagates vnext failures", async () => {
+test("generateDeckForRoute propagates presentation failures", async () => {
   await assert.rejects(
     generateDeckForRoute(
       { payload: makePayload(), complete, requestId: "req-1" },
       {
-        runVnext: async () => {
+        runDeck: async () => {
           throw new Error("generation failed");
         },
       },
@@ -114,8 +114,8 @@ test("generateDeckForRoute propagates vnext failures", async () => {
   );
 });
 
-test("buildGenerateDeckSuccessResponse includes vnext metadata", () => {
-  const deck = makeDeckV7(true);
+test("buildGenerateDeckSuccessResponse includes presentation metadata", () => {
+  const deck = makeDeck(true);
   const diagnostics = [
     makeDiagnostic("missing-required-slot", "warning", "Filled missing slot", {
       slideId: "slide-2",
@@ -142,12 +142,12 @@ test("buildGenerateDeckSuccessResponse includes vnext metadata", () => {
     cover: 1,
     table: 1,
   });
-  // deck in response is DeckV7
-  assert.equal(response.deck.schemaVersion, DECK_SCHEMA_VERSION_V7);
+  // deck in response is Deck
+  assert.equal(response.deck.schemaVersion, DECK_SCHEMA_VERSION);
 });
 
-test("buildGenerateDeckSuccessLogFields includes vnext telemetry", () => {
-  const deck = makeDeckV7(true);
+test("buildGenerateDeckSuccessLogFields includes presentation telemetry", () => {
+  const deck = makeDeck(true);
   const fields = buildGenerateDeckSuccessLogFields(
     {
       deck,
@@ -175,16 +175,16 @@ test("buildGenerateDeckSuccessLogFields includes vnext telemetry", () => {
   assert.deepEqual(fields.selectedKindCounts, { cover: 1, table: 1 });
 });
 
-test("computeV7RouteMetrics: percentSlidesWithVisual never exceeds 1", () => {
+test("computeRouteMetrics: percentSlidesWithVisual never exceeds 1", () => {
   resetBuilderCounter();
   // Slide with TWO image nodes — should count as 1, not 2.
-  const twoImageSlide = buildSlideV7("visual-focus", [
+  const twoImageSlide = buildSlide("visual-focus", [
     buildImageNode("img-a"),
     buildImageNode("img-b"),
   ]);
   // One plain content slide (no visuals).
   const plainSlide = buildContentSlide();
-  const deck = buildDeckV7([twoImageSlide, plainSlide]);
+  const deck = buildDeck([twoImageSlide, plainSlide]);
 
   const fields = buildGenerateDeckSuccessLogFields(
     {
@@ -201,9 +201,9 @@ test("computeV7RouteMetrics: percentSlidesWithVisual never exceeds 1", () => {
   assert.equal(fields.percentSlidesWithVisual, 0.5);
 });
 
-test("computeV7RouteMetrics: visual-only deck percentSlidesWithVisual is 1", () => {
+test("computeRouteMetrics: visual-only deck percentSlidesWithVisual is 1", () => {
   resetBuilderCounter();
-  const deck = buildDeckV7([buildVisualSlide(), buildVisualSlide()]);
+  const deck = buildDeck([buildVisualSlide(), buildVisualSlide()]);
 
   const fields = buildGenerateDeckSuccessLogFields(
     {

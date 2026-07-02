@@ -12,24 +12,24 @@ import { createPortal } from "react-dom";
 
 import { LayoutPanelLeft } from "lucide-react";
 
-import { ConflictRecoveryDialogV7 } from "@/components/presentation-vnext/conflict-recovery-dialog-v7";
+import { ConflictRecoveryDialog } from "@/components/presentation/conflict-recovery-dialog";
 import { SlideEditorOpenDialog } from "@/components/editor/slide-editor-open-dialog";
-import { SlideEditorVNext } from "@/components/presentation-vnext/slide-editor-vnext";
-import { DeckGenerationPreviewVNext } from "@/components/presentation-vnext/deck-generation-preview-vnext";
+import { SlideEditor } from "@/components/presentation/slide-editor";
+import { DeckGenerationPreview } from "@/components/presentation/deck-generation-preview";
 import { collectDocumentBlocks } from "@/lib/content/document-blocks";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import type { DeckActionPort, SlideAssetActionPort } from "@/lib/action-ports";
 import type { ActionResult } from "@/lib/action-result";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { useSlideEditorOpen } from "@/components/editor/use-slide-editor-open";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import { buildSourceBlockIndex } from "@/lib/presentation-vnext/block-index";
-import { openDeckFromJson } from "@/lib/presentation-vnext/open-deck";
-import { exportDeckV7AsPPTX } from "@/lib/presentation-vnext/pptx-vnext-apply";
-import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
-import { hashDocumentBlock } from "@/lib/presentation-shared/document-block-hash";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import { buildSourceBlockIndex } from "@/lib/presentation/block-index";
+import { openDeckFromJson } from "@/lib/presentation/open-deck";
+import { exportDeckAsPPTX } from "@/lib/presentation/pptx-apply";
+import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
+import { hashDocumentBlock } from "@/lib/presentation/document-block-hash";
 import { useFocusTrap } from "@/lib/a11y/use-focus-trap";
-import type { SlidePresenceAwareness } from "@/lib/presentation-shared/use-slide-presence";
+import type { SlidePresenceAwareness } from "@/lib/presentation/use-slide-presence";
 import { downloadBlob } from "@/lib/visual/export";
 
 export function SlideEditorOpenRecovery({
@@ -235,20 +235,20 @@ export function SlideEditorButton({
 }: SlideEditorButtonProps) {
   const {
     open,
-    deckV7,
-    deckOpenDiagnosticsV7,
-    deckOpenErrorV7,
+    deck,
+    deckOpenDiagnostics,
+    deckOpenError,
     saveStatus,
     saveStatusLabel,
     saveErrorMessage,
     hasUnsavedWork,
-    handleDeckV7Change,
-    handleSaveV7,
-    handleUndoV7,
-    handleRedoV7,
-    undoRedoFocusV7,
-    canUndoV7,
-    canRedoV7,
+    handleDeckChange,
+    handleSave,
+    handleUndo,
+    handleRedo,
+    undoRedoFocus,
+    canUndo,
+    canRedo,
     handleOpen,
     handleClose,
     aiEnabled,
@@ -258,14 +258,14 @@ export function SlideEditorButton({
     handleOpenDialogApply,
     handleOpenDialogDerive,
     handleOpenDialogClose,
-    aiPreviewV7,
-    handleAiPreviewV7Apply,
-    handleAiPreviewV7Derive,
-    handleAiPreviewV7Cancel,
-    conflictStateV7,
-    handleConflictKeepMineV7,
-    handleConflictUseTheirsV7,
-    handleConflictDismissV7,
+    aiPreview,
+    handleAiPreviewApply,
+    handleAiPreviewDerive,
+    handleAiPreviewCancel,
+    conflictState,
+    handleConflictKeepMine,
+    handleConflictUseTheirs,
+    handleConflictDismiss,
   } = useSlideEditorOpen({
     documentId,
     initialDeckJson,
@@ -275,9 +275,9 @@ export function SlideEditorButton({
     onCloseRightSurface,
   });
 
-  const themeResolution = deckV7 ? resolveThemePackageForDeck(deckV7) : null;
+  const themeResolution = deck ? resolveThemePackageForDeck(deck) : null;
   const editorDiagnostics = [
-    ...deckOpenDiagnosticsV7,
+    ...deckOpenDiagnostics,
     ...(themeResolution?.diagnostics ?? []),
   ];
   const documentBlocks = useMemo(
@@ -301,22 +301,22 @@ export function SlideEditorButton({
     ((value: { visualId?: string; alt?: string } | undefined) => void) | null
   >(null);
 
-  const handleExportV7Pptx = useCallback(async () => {
-    if (!deckV7) return;
-    const opened = openDeckFromJson(deckV7);
+  const handleExportPptx = useCallback(async () => {
+    if (!deck) return;
+    const opened = openDeckFromJson(deck);
     if (!opened.ok) {
       throw new Error(opened.error);
     }
-    const blob = await exportDeckV7AsPPTX(
+    const blob = await exportDeckAsPPTX(
       opened.deck,
       themeResolution?.package ??
         resolveThemePackageForDeck(opened.deck).package,
     );
     if (!blob) throw new Error("PPTX export returned empty result");
     downloadBlob(blob, "presentation.pptx");
-  }, [deckV7, themeResolution]);
+  }, [deck, themeResolution]);
 
-  const handleUploadV7Image = useCallback(
+  const handleUploadImage = useCallback(
     async (file: File) => {
       if (!slideAssetPort) {
         throw new Error("Slide asset upload is not configured.");
@@ -350,12 +350,12 @@ export function SlideEditorButton({
     [documentId, slideAssetPort],
   );
 
-  const handleRefreshV7Source = useCallback(
+  const handleRefreshSource = useCallback(
     async ({
       node,
       source,
     }: Parameters<
-      NonNullable<Parameters<typeof SlideEditorVNext>[0]["onRefreshSource"]>
+      NonNullable<Parameters<typeof SlideEditor>[0]["onRefreshSource"]>
     >[0]) => {
       if (!initialContentJson || source.documentId !== documentId)
         return undefined;
@@ -413,7 +413,7 @@ export function SlideEditorButton({
     [documentBlocks, documentId, initialContentJson],
   );
 
-  const handlePickV7Visual = useCallback(async () => {
+  const handlePickVisual = useCallback(async () => {
     if (visualBlocks.length === 0) return undefined;
     return await new Promise<{ visualId?: string; alt?: string } | undefined>(
       (resolve) => {
@@ -453,45 +453,45 @@ export function SlideEditorButton({
         />
       ) : null}
 
-      {aiPreviewV7 && !open ? (
-        <DeckGenerationPreviewVNext
-          proposedDeck={aiPreviewV7.proposedDeck}
-          baselineDeck={aiPreviewV7.baselineDeck}
-          truncated={aiPreviewV7.truncated}
-          generationDiagnostics={aiPreviewV7.generationDiagnostics}
-          contentJson={aiPreviewV7.contentJson}
-          options={aiPreviewV7.options}
-          onApply={handleAiPreviewV7Apply}
-          onDerive={handleAiPreviewV7Derive}
-          onCancel={handleAiPreviewV7Cancel}
+      {aiPreview && !open ? (
+        <DeckGenerationPreview
+          proposedDeck={aiPreview.proposedDeck}
+          baselineDeck={aiPreview.baselineDeck}
+          truncated={aiPreview.truncated}
+          generationDiagnostics={aiPreview.generationDiagnostics}
+          contentJson={aiPreview.contentJson}
+          options={aiPreview.options}
+          onApply={handleAiPreviewApply}
+          onDerive={handleAiPreviewDerive}
+          onCancel={handleAiPreviewCancel}
         />
       ) : null}
 
-      {open && deckV7 ? (
+      {open && deck ? (
         <SlideEditorOverlay>
-          <SlideEditorVNext
+          <SlideEditor
             documentId={documentId}
-            deck={deckV7}
+            deck={deck}
             themePackage={themeResolution?.package}
             diagnostics={editorDiagnostics}
             saveStatus={saveStatus}
             saveStatusLabel={saveStatusLabel}
             saveErrorMessage={saveErrorMessage}
             hasUnsavedWork={hasUnsavedWork}
-            canUndo={canUndoV7}
-            canRedo={canRedoV7}
-            onUndo={handleUndoV7}
-            onRedo={handleRedoV7}
-            undoRedoFocus={undoRedoFocusV7}
-            onDeckChange={handleDeckV7Change}
-            onUploadImage={slideAssetPort ? handleUploadV7Image : undefined}
-            onPickVisual={handlePickV7Visual}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            undoRedoFocus={undoRedoFocus}
+            onDeckChange={handleDeckChange}
+            onUploadImage={slideAssetPort ? handleUploadImage : undefined}
+            onPickVisual={handlePickVisual}
             documentBlocks={documentBlocks}
             sourceBlockIndex={sourceBlockIndex}
-            onRefreshSource={handleRefreshV7Source}
-            onSave={handleSaveV7}
+            onRefreshSource={handleRefreshSource}
+            onSave={handleSave}
             onClose={handleClose}
-            onExportPptx={handleExportV7Pptx}
+            onExportPptx={handleExportPptx}
             onPresent={onPresentRoundtrip}
             onShare={onShareRoundtrip}
             presenceAwareness={presenceAwareness}
@@ -501,25 +501,25 @@ export function SlideEditorButton({
         </SlideEditorOverlay>
       ) : null}
 
-      {open && !deckV7 && deckOpenErrorV7 ? (
+      {open && !deck && deckOpenError ? (
         <SlideEditorOverlay>
           <SlideEditorOpenRecovery
-            error={deckOpenErrorV7.error}
-            diagnostics={deckOpenErrorV7.diagnostics}
-            validationErrors={deckOpenErrorV7.validationErrors}
+            error={deckOpenError.error}
+            diagnostics={deckOpenError.diagnostics}
+            validationErrors={deckOpenError.validationErrors}
             onClose={handleClose}
           />
         </SlideEditorOverlay>
       ) : null}
 
-      {conflictStateV7 ? (
-        <ConflictRecoveryDialogV7
+      {conflictState ? (
+        <ConflictRecoveryDialog
           open={true}
-          localDeck={conflictStateV7.localDeck}
-          serverRevisionToken={conflictStateV7.serverRevisionToken}
-          onKeepMine={handleConflictKeepMineV7}
-          onUseTheirs={handleConflictUseTheirsV7}
-          onDismiss={handleConflictDismissV7}
+          localDeck={conflictState.localDeck}
+          serverRevisionToken={conflictState.serverRevisionToken}
+          onKeepMine={handleConflictKeepMine}
+          onUseTheirs={handleConflictUseTheirs}
+          onDismiss={handleConflictDismiss}
         />
       ) : null}
 

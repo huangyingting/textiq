@@ -12,16 +12,16 @@ resolution, export behavior, and cleanup.
 
 ## Source Files
 
-| Area                           | Source                                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Upload server action           | [`src/app/app/documents/[id]/slide-asset-actions.ts`](../../src/app/app/documents/%5Bid%5D/slide-asset-actions.ts)                               |
-| Protected serving route        | [`src/app/api/slide-assets/[documentId]/[...path]/route.ts`](../../src/app/api/slide-assets/%5BdocumentId%5D/%5B...path%5D/route.ts)             |
-| Validation                     | [`src/lib/slides/asset-upload.ts`](../../src/lib/slides/asset-upload.ts)                                                                         |
-| Storage adapter                | [`src/lib/slides/asset-storage.ts`](../../src/lib/slides/asset-storage.ts)                                                                       |
-| Resolver                       | [`src/lib/slides/asset-resolver.ts`](../../src/lib/slides/asset-resolver.ts)                                                                     |
-| Orphan cleanup                 | [`src/lib/slides/asset-orphan.ts`](../../src/lib/slides/asset-orphan.ts)                                                                         |
-| Inspector image controls       | [`src/components/presentation-vnext/inspector/node-content-panel.tsx`](../../src/components/presentation-vnext/inspector/node-content-panel.tsx) |
-| Context toolbar image controls | [`src/components/presentation-vnext/toolbar/context-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/context-toolbar.tsx)           |
+| Area                           | Source                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Upload server action           | [`src/app/app/documents/[id]/slide-asset-actions.ts`](../../src/app/app/documents/%5Bid%5D/slide-asset-actions.ts)                   |
+| Protected serving route        | [`src/app/api/slide-assets/[documentId]/[...path]/route.ts`](../../src/app/api/slide-assets/%5BdocumentId%5D/%5B...path%5D/route.ts) |
+| Validation                     | [`src/lib/slides/asset-upload.ts`](../../src/lib/slides/asset-upload.ts)                                                             |
+| Storage adapter                | [`src/lib/slides/asset-storage.ts`](../../src/lib/slides/asset-storage.ts)                                                           |
+| Resolver                       | [`src/lib/slides/asset-resolver.ts`](../../src/lib/slides/asset-resolver.ts)                                                         |
+| Orphan cleanup                 | [`src/lib/slides/asset-orphan.ts`](../../src/lib/slides/asset-orphan.ts)                                                             |
+| Inspector image controls       | [`src/components/presentation/inspector/node-content-panel.tsx`](../../src/components/presentation/inspector/node-content-panel.tsx) |
+| Context toolbar image controls | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)           |
 
 ## Data Flow
 
@@ -32,7 +32,7 @@ Slide editor image replace flow
   -> write bytes through AssetStorageAdapter
   -> create/deduplicate Asset row
   -> return { assetId, url }
-  -> persist assetId in DeckV7 assets and image node content
+  -> persist assetId in Deck assets and image node content
 ```
 
 Assets are document-scoped. The returned URL is a protected route under
@@ -41,7 +41,7 @@ Assets are document-scoped. The returned URL is a protected route under
 Vocabulary:
 
 - `AssetReference` means persisted identity, such as `ImageNode.content.assetId`
-  or an entry in `DeckV7.assets.images` / `DeckV7.assets.visuals`.
+  or an entry in `Deck.assets.images` / `Deck.assets.visuals`.
 - `ResolvedAssetUrl` means a derived display URL returned by upload, storage,
   or asset resolver code.
 
@@ -110,7 +110,7 @@ Slide renderers and export paths use the asset resolver contract:
 
 - `ImageNode.content.assetId`;
 - `VisualNode.content.assetId`;
-- `DeckV7.assets.visuals[*].id` when a visual asset points at a rendered image.
+- `Deck.assets.visuals[*].id` when a visual asset points at a rendered image.
 
 Server/export paths should resolve from asset ids when available instead of
 treating cached URLs as authoritative.

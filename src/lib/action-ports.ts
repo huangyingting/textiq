@@ -18,8 +18,8 @@ import type { Visual } from "@/lib/visual/schema";
 import type {
   BrandKitDiagnostic,
   BrandKitDraftV1,
-} from "@/lib/presentation-vnext/brand-kit/schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
+} from "@/lib/presentation/brand-kit/schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 
 export interface DeckFetchPort {
   fetchDeckJson: (documentId: string) => Promise<FetchDeckResult>;

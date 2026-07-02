@@ -10,7 +10,7 @@
 
 import type { Deck } from "../deck-core";
 import type { TextRun } from "../deck-elements";
-import type { SlideFormat } from "@/lib/presentation-shared/slide-format";
+import type { SlideFormat } from "@/lib/presentation/slide-format";
 import type { Visual } from "@/lib/visual/schema";
 import { toHex } from "@/lib/visual/pptx-shapes";
 import type { PptxSpec } from "@/lib/visual/pptx-shapes";

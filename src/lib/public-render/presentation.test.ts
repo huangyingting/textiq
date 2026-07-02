@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  buildDeckV7,
+  buildDeck,
   buildCoverSlide,
   buildImageAsset,
   buildImageNode,
-  buildSlideV7,
+  buildSlide,
   buildVisualNode,
   resetBuilderCounter,
-} from "@/test/builders/deck-v7";
+} from "@/test/builders/presentation-deck";
 import { DEFAULT_STYLE, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 
 import {
@@ -17,34 +17,34 @@ import {
   buildPublicPresentationModelAny,
 } from "./presentation";
 
-test("buildPublicPresentationModel carries valid v7 deckJson", () => {
+test("buildPublicPresentationModel carries valid presentation deckJson", () => {
   resetBuilderCounter();
-  const v7Deck = buildDeckV7([buildCoverSlide()], {
+  const presentationDeck = buildDeck([buildCoverSlide()], {
     theme: { packageId: "ocean" },
   });
   const model = buildPublicPresentationModel({
     title: "Public deck",
     contentJson: { root: { children: [] } },
-    deckJson: v7Deck,
+    deckJson: presentationDeck,
     owner: { name: "Ava", plan: "free" },
   });
 
   assert.equal(model.title, "Public deck");
-  assert.equal(model.deckV7.schemaVersion, 7);
-  assert.equal(model.themePackage.id, v7Deck.theme.packageId);
-  assert.equal(model.deckV7.slides[0].id, v7Deck.slides[0].id);
+  assert.equal(model.deck.schemaVersion, 7);
+  assert.equal(model.themePackage.id, presentationDeck.theme.packageId);
+  assert.equal(model.deck.slides[0].id, presentationDeck.slides[0].id);
   assert.equal(model.attribution.ownerName, "Ava");
 });
 
-test("buildPublicPresentationModel resolves runtime v7 theme package fallback diagnostics", () => {
+test("buildPublicPresentationModel resolves runtime presentation theme package fallback diagnostics", () => {
   resetBuilderCounter();
-  const v7Deck = buildDeckV7([buildCoverSlide()], {
+  const presentationDeck = buildDeck([buildCoverSlide()], {
     theme: { packageId: "missing-package" },
   });
   const model = buildPublicPresentationModel({
     title: "Public deck",
     contentJson: { root: { children: [] } },
-    deckJson: v7Deck,
+    deckJson: presentationDeck,
     owner: { name: "Ava", plan: "free" },
   });
 
@@ -69,27 +69,27 @@ test("buildPublicPresentationModel exposes recovery for invalid deckJson", () =>
   assert.equal(model.attribution.ownerName, "Document owner");
 });
 
-test("buildPublicPresentationModelAny returns the v7-only model", () => {
+test("buildPublicPresentationModelAny returns the presentation-only model", () => {
   resetBuilderCounter();
-  const v7Deck = buildDeckV7([buildCoverSlide()]);
+  const presentationDeck = buildDeck([buildCoverSlide()]);
   const model = buildPublicPresentationModelAny({
-    title: "vNext deck",
+    title: "presentation deck",
     contentJson: { root: { children: [] } },
-    deckJson: v7Deck,
+    deckJson: presentationDeck,
     owner: { name: "Alex", plan: "pro" },
   });
 
-  assert.equal(model.title, "vNext deck");
-  assert.equal(model.deckV7.schemaVersion, 7);
+  assert.equal(model.title, "presentation deck");
+  assert.equal(model.deck.schemaVersion, 7);
   assert.equal(model.attribution.ownerName, "Alex");
 });
 
-test("buildPublicPresentationModel keeps v7 protected asset references instead of contentJson fallback", () => {
+test("buildPublicPresentationModel keeps presentation protected asset references instead of contentJson fallback", () => {
   resetBuilderCounter();
   const assetSrc = "/api/slide-assets/doc-1/uploads/protected.png";
-  const v7Deck = buildDeckV7(
+  const presentationDeck = buildDeck(
     [
-      buildSlideV7("visual-focus", [
+      buildSlide("visual-focus", [
         buildImageNode("protected-img", { id: "protected-image-node" }),
       ]),
     ],
@@ -110,13 +110,13 @@ test("buildPublicPresentationModel keeps v7 protected asset references instead o
     contentJson: {
       slides: [{ id: "legacy-slide", elements: [{ id: "legacy-image" }] }],
     },
-    deckJson: v7Deck,
+    deckJson: presentationDeck,
     owner: { name: "Ava", plan: "pro" },
   });
 
-  assert.equal(model.deckV7.schemaVersion, 7);
-  assert.equal(model.deckV7.slides[0].children[0]?.id, "protected-image-node");
-  assert.equal(model.deckV7.assets.images["protected-img"]?.src, assetSrc);
+  assert.equal(model.deck.schemaVersion, 7);
+  assert.equal(model.deck.slides[0].children[0]?.id, "protected-image-node");
+  assert.equal(model.deck.assets.images["protected-img"]?.src, assetSrc);
   assert.equal(model.themePackage.id, "neutral");
 });
 
@@ -124,8 +124,8 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
   resetBuilderCounter();
   const boundImageSrc = "/api/slide-assets/doc-1/uploads/protected.png?cache=1";
   const externalSrc = "https://cdn.example.com/hero.png";
-  const v7Deck = buildDeckV7(
-    [buildSlideV7("content", [buildImageNode("protected-img")])],
+  const presentationDeck = buildDeck(
+    [buildSlide("content", [buildImageNode("protected-img")])],
     {
       assets: {
         images: {
@@ -146,23 +146,23 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
     {
       title: "Share-bound public deck",
       contentJson: { root: { children: [] } },
-      deckJson: v7Deck,
+      deckJson: presentationDeck,
       owner: { name: "Ava", plan: "pro" },
     },
     { shareId: "share123", mode: "present" },
   );
 
   assert.equal(
-    model.deckV7.assets.images["protected-img"]?.src,
+    model.deck.assets.images["protected-img"]?.src,
     "/api/slide-assets/doc-1/uploads/protected.png?cache=1&shareId=share123&shareMode=present",
   );
-  assert.equal(model.deckV7.assets.images["external-img"]?.src, externalSrc);
+  assert.equal(model.deck.assets.images["external-img"]?.src, externalSrc);
 });
 
 test("buildPublicPresentationModel exposes live document visuals for present rendering", () => {
   resetBuilderCounter();
-  const v7Deck = buildDeckV7([
-    buildSlideV7("visual-focus", [
+  const presentationDeck = buildDeck([
+    buildSlide("visual-focus", [
       buildVisualNode({
         content: {
           visualId: "visual-live-1",
@@ -195,7 +195,7 @@ test("buildPublicPresentationModel exposes live document visuals for present ren
         ],
       },
     },
-    deckJson: v7Deck,
+    deckJson: presentationDeck,
     owner: { name: "Ava", plan: "pro" },
   });
 

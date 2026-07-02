@@ -10,13 +10,9 @@
  * actions, tests, and the browser without any adaptation.
  */
 
-import { hashDocumentBlock } from "./presentation-shared/document-block-hash";
+import { hashDocumentBlock } from "./presentation/document-block-hash";
 import type { SourceRef } from "./document/deck-kernel/deck";
-import type {
-  DeckV7,
-  SlideChildNode,
-  SlideNode,
-} from "./presentation-vnext/schema";
+import type { Deck, SlideChildNode, SlideNode } from "./presentation/schema";
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
@@ -131,7 +127,7 @@ export function resolveSourceRef(
 
 export function resolveSlideRef(
   slideId: string,
-  deck: DeckV7,
+  deck: Deck,
 ): AnchorResolution<SlideNode> {
   if (!isNonEmptyId(slideId)) {
     return { status: "invalid", reason: "Slide id is empty." };
@@ -145,7 +141,7 @@ export function resolveSlideRef(
 export function resolveSlideElementRef(
   slideId: string,
   elementId: string,
-  deck: DeckV7,
+  deck: Deck,
 ): AnchorResolution<SlideChildNode> {
   if (!isNonEmptyId(slideId)) {
     return { status: "invalid", reason: "Slide id is empty." };
@@ -192,7 +188,7 @@ function findSlideNodeById(
 export function resolveCommentAnchor(
   /* node:coverage ignore next -- Signature parameter row is a source-map artifact. */
   anchor: SlideCommentAnchor,
-  deck: DeckV7 | null | undefined,
+  deck: Deck | null | undefined,
 ): AnchorResolution<SlideCommentAnchor> {
   const state = resolveAnchorState(anchor, deck);
   switch (state) {

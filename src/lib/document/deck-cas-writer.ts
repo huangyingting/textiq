@@ -5,7 +5,7 @@ import { MAX_DECK_JSON_BYTES, formatDeckTooLargeError } from "@/lib/limits";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import { safeParseDeck } from "@/lib/presentation/validation";
 
 export type DeckCasDb = {
   document: {
@@ -46,9 +46,9 @@ export async function writeDeckWithCas({
   db = prisma,
   onSuccess,
 }: DeckCasWriteOptions): Promise<SaveDeckResult> {
-  const v7Result = safeParseDeckV7(deckJson);
-  if (!v7Result.success) {
-    const reason = v7Result.errors.join("; ");
+  const presentationResult = safeParseDeck(deckJson);
+  if (!presentationResult.success) {
+    const reason = presentationResult.errors.join("; ");
     reportSchemaFailure("deck-parse-failed", {
       area: telemetryArea,
       documentId,
@@ -57,7 +57,7 @@ export async function writeDeckWithCas({
     return fail(`Invalid deck: ${reason}`, "invalid_deck", false);
   }
 
-  const parsedData = v7Result.data;
+  const parsedData = presentationResult.data;
   const serialized = JSON.stringify(parsedData);
   const serializedBytes = Buffer.byteLength(serialized, "utf8");
   if (serializedBytes > MAX_DECK_JSON_BYTES) {

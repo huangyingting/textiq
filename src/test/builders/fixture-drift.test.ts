@@ -8,9 +8,9 @@ import {
   validateAnchorGeometry,
 } from "@/lib/comments/anchors";
 import { buildDeckSource } from "@/lib/ai/deck-source";
-import { safeParseDeck } from "@/lib/document/deck-schema";
-import { openDeckFromJson } from "@/lib/presentation-vnext/open-deck";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
+import { openDeckFromJson } from "@/lib/presentation/open-deck";
+import { safeParseDeck as safeParsePresentationDeck } from "@/lib/presentation/validation";
 import { createBlankVisual } from "@/lib/visual/blank";
 import { FIXTURE_LIST } from "@/lib/visual/fixtures";
 import {
@@ -34,7 +34,7 @@ import {
   buildE2EProfileVisual,
   e2eProfileAssetChecksum,
 } from "@/test/builders/e2e-profile";
-import type { TextNode } from "@/lib/presentation-vnext/schema";
+import type { TextNode } from "@/lib/presentation/schema";
 import {
   buildContentJson,
   buildHeadingNode,
@@ -50,7 +50,7 @@ import { validateAssetUploadPolicy } from "@/lib/assets/upload-policy";
 import { deriveStorageKey } from "@/lib/slides/asset-storage";
 
 test("deck builder default is current-schema valid", () => {
-  const result = safeParseDeck(buildDeck());
+  const result = safeParseLegacyDeck(buildDeck());
   assert.equal(result.success, true);
   if (result.success) {
     assert.ok(result.data.schemaVersion, "schemaVersion is required");
@@ -481,7 +481,7 @@ test("E2E profile builders are the seed/spec single source of truth", () => {
     `/api/slide-assets/${storageKey}`,
     "asset-1",
   );
-  assert.equal(safeParseDeckV7(deck).success, true);
+  assert.equal(safeParsePresentationDeck(deck).success, true);
   const opened = openDeckFromJson(deck);
   assert.equal(opened.ok, true);
   assert.equal(deck.slides.length, 2);

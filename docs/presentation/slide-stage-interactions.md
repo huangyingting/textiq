@@ -2,46 +2,46 @@
 type: "design"
 status: "current"
 last_updated: "2026-07-02"
-description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit DeckV7 nodes when many nodes overlap. It is the interaction contract for the vNext slide editor stage, not the persisted deck schema."
+description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit Deck nodes when many nodes overlap. It is the interaction contract for the presentation slide editor stage, not the persisted deck schema."
 ---
 
 # Slide Stage Interactions
 
 This document defines how the slide editor stage should choose, preview, select,
-move, resize, and edit DeckV7 nodes when many nodes overlap. It is the
-interaction contract for the vNext slide editor stage, not the persisted deck
+move, resize, and edit Deck nodes when many nodes overlap. It is the
+interaction contract for the presentation slide editor stage, not the persisted deck
 schema.
 
 ## Legacy Parity Status
 
-vNext already owns the production stage interaction model. A bulk port of the
+presentation already owns the production stage interaction model. A bulk port of the
 legacy v6 stage editor is not needed: legacy interaction code is coupled to v6
-flat element arrays and `groupId`, while vNext uses DeckV7 node trees,
-`GroupNode.children`, and vNext command helpers. Verified parity includes
+flat element arrays and `groupId`, while presentation uses Deck node trees,
+`GroupNode.children`, and presentation command helpers. Verified parity includes
 align/distribute/match-size, Shift+nudge, select-all, group/ungroup,
 undo/redo, rotation snapping, keyboard connector flow, clipboard,
 duplicate/delete, connector endpoint editing, group-bounds multi-selection
 resize/rotate, and deterministic double-click finalization. The remaining
-difference is a UX affordance only: vNext creates connectors by
+difference is a UX affordance only: presentation creates connectors by
 insert-then-endpoint-drag rather than a single drag-from-source gesture.
 
 ## Source Files
 
-| Area                  | Source                                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Stage UI/controller   | [`src/components/presentation-vnext/slide-editor-vnext.tsx`](../../src/components/presentation-vnext/slide-editor-vnext.tsx)               |
-| Read-only canvas      | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                           |
-| Node renderer         | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)             |
-| Selection model       | [`src/components/presentation-vnext/selection-model.ts`](../../src/components/presentation-vnext/selection-model.ts)                       |
-| Selection geometry    | [`src/lib/presentation-vnext/selection-geometry.ts`](../../src/lib/presentation-vnext/selection-geometry.ts)                               |
-| Stage pointer helpers | [`src/components/presentation-vnext/stage-pointer-interactions.ts`](../../src/components/presentation-vnext/stage-pointer-interactions.ts) |
-| Stage gesture drafts  | [`src/components/presentation-vnext/stage-gesture-feedback.tsx`](../../src/components/presentation-vnext/stage-gesture-feedback.tsx)       |
-| Multi-select geometry | [`src/components/presentation-vnext/multi-selection-transform.ts`](../../src/components/presentation-vnext/multi-selection-transform.ts)   |
-| Table editing         | [`src/components/presentation-vnext/use-table-cell-editing.ts`](../../src/components/presentation-vnext/use-table-cell-editing.ts)         |
-| Stage chrome layering | [`src/lib/presentation-vnext/stage-chrome.ts`](../../src/lib/presentation-vnext/stage-chrome.ts)                                           |
-| Stage fit             | [`src/lib/presentation-vnext/stage-fit.ts`](../../src/lib/presentation-vnext/stage-fit.ts)                                                 |
-| Stage guides          | [`src/lib/presentation-vnext/stage-guides.ts`](../../src/lib/presentation-vnext/stage-guides.ts)                                           |
-| Context toolbar       | [`src/components/presentation-vnext/toolbar/context-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/context-toolbar.tsx)     |
+| Area                  | Source                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Stage UI/controller   | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                           |
+| Read-only canvas      | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                           |
+| Node renderer         | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)             |
+| Selection model       | [`src/components/presentation/selection-model.ts`](../../src/components/presentation/selection-model.ts)                       |
+| Selection geometry    | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                               |
+| Stage pointer helpers | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts) |
+| Stage gesture drafts  | [`src/components/presentation/stage-gesture-feedback.tsx`](../../src/components/presentation/stage-gesture-feedback.tsx)       |
+| Multi-select geometry | [`src/components/presentation/multi-selection-transform.ts`](../../src/components/presentation/multi-selection-transform.ts)   |
+| Table editing         | [`src/components/presentation/use-table-cell-editing.ts`](../../src/components/presentation/use-table-cell-editing.ts)         |
+| Stage chrome layering | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                           |
+| Stage fit             | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                 |
+| Stage guides          | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                           |
+| Context toolbar       | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)     |
 
 ## Goals
 
@@ -59,7 +59,7 @@ insert-then-endpoint-drag rather than a single drag-from-source gesture.
 ## Interaction State Machine
 
 The stage should be treated as a small state machine, even though some state is
-currently represented by refs and React state in `SlideEditorVNext`.
+currently represented by refs and React state in `SlideEditor`.
 
 | State           | Meaning                                                                | Hover preselect? | Main transitions                                                                                  |
 | --------------- | ---------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
@@ -440,17 +440,17 @@ Implementation guidance:
 6. Connector/line hit testing is distance based, not bounding-box based.
 7. Locked nodes can be selected for inspection but must not be mutated or enter
    edit modes through pointer, transform, or keyboard shortcuts.
-8. `SlideCanvasVNext` remains read-only; all interaction logic lives in the stage.
+8. `SlideCanvas` remains read-only; all interaction logic lives in the stage.
 
 ## Primary Tests
 
-- [`src/components/presentation-vnext/selection-model.test.ts`](../../src/components/presentation-vnext/selection-model.test.ts)
-- [`src/components/presentation-vnext/stage-pointer-interactions.test.ts`](../../src/components/presentation-vnext/stage-pointer-interactions.test.ts)
-- [`src/components/presentation-vnext/slide-editor-vnext-node-drag-threshold.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-node-drag-threshold.test.ts)
-- [`src/components/presentation-vnext/slide-editor-vnext-inline-text-editor.failures.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-inline-text-editor.failures.test.ts)
-- [`src/components/presentation-vnext/slide-editor-vnext-stage-selection.failures.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-stage-selection.failures.test.ts)
-- [`src/components/presentation-vnext/multi-selection-transform.test.ts`](../../src/components/presentation-vnext/multi-selection-transform.test.ts)
-- [`src/lib/presentation-vnext/selection-geometry.test.ts`](../../src/lib/presentation-vnext/selection-geometry.test.ts)
-- [`src/lib/presentation-vnext/stage-chrome.test.ts`](../../src/lib/presentation-vnext/stage-chrome.test.ts)
-- [`src/lib/presentation-vnext/stage-fit.test.ts`](../../src/lib/presentation-vnext/stage-fit.test.ts)
-- [`src/lib/presentation-vnext/stage-guides.test.ts`](../../src/lib/presentation-vnext/stage-guides.test.ts)
+- [`src/components/presentation/selection-model.test.ts`](../../src/components/presentation/selection-model.test.ts)
+- [`src/components/presentation/stage-pointer-interactions.test.ts`](../../src/components/presentation/stage-pointer-interactions.test.ts)
+- [`src/components/presentation/slide-editor-node-drag-threshold.test.ts`](../../src/components/presentation/slide-editor-node-drag-threshold.test.ts)
+- [`src/components/presentation/slide-editor-inline-text-editor.failures.test.ts`](../../src/components/presentation/slide-editor-inline-text-editor.failures.test.ts)
+- [`src/components/presentation/slide-editor-stage-selection.failures.test.ts`](../../src/components/presentation/slide-editor-stage-selection.failures.test.ts)
+- [`src/components/presentation/multi-selection-transform.test.ts`](../../src/components/presentation/multi-selection-transform.test.ts)
+- [`src/lib/presentation/selection-geometry.test.ts`](../../src/lib/presentation/selection-geometry.test.ts)
+- [`src/lib/presentation/stage-chrome.test.ts`](../../src/lib/presentation/stage-chrome.test.ts)
+- [`src/lib/presentation/stage-fit.test.ts`](../../src/lib/presentation/stage-fit.test.ts)
+- [`src/lib/presentation/stage-guides.test.ts`](../../src/lib/presentation/stage-guides.test.ts)

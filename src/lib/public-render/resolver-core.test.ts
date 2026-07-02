@@ -9,10 +9,10 @@ import {
 } from "./resolver-core";
 import {
   buildCoverSlide,
-  buildDeckV7,
+  buildDeck,
   buildImageAsset,
   resetBuilderCounter,
-} from "@/test/builders/deck-v7";
+} from "@/test/builders/presentation-deck";
 import {
   PUBLIC_RENDER_ASSET_ACCESS_SELECT,
   PUBLIC_RENDER_DOCUMENT_SELECT,
@@ -269,7 +269,7 @@ test("resolvePublicRenderWithSource returns metadata defaults for older shared r
 
 test("resolvePublicRenderWithSource builds presentation projections for present mode", async () => {
   resetBuilderCounter();
-  const deckWithProtectedAsset = buildDeckV7([buildCoverSlide()], {
+  const deckWithProtectedAsset = buildDeck([buildCoverSlide()], {
     assets: {
       images: {
         "asset-1": buildImageAsset("asset-1", {
@@ -296,7 +296,7 @@ test("resolvePublicRenderWithSource builds presentation projections for present 
   assert.equal(result.presentation.title, "Shared Doc");
   assert.equal(result.presentation.attribution.ownerName, "Document owner");
   assert.equal(
-    result.presentation.deckV7.assets.images["asset-1"]?.src,
+    result.presentation.deck.assets.images["asset-1"]?.src,
     "/api/slide-assets/doc-1/uploads/protected.png?shareId=share123&shareMode=present",
   );
 });

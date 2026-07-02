@@ -16,7 +16,7 @@ import type {
 } from "./deck-elements";
 import { makeElementId, makeSlideId } from "./deck-ids";
 import { isMasterChromeTemplateElement } from "./global-master-chrome";
-import type { SlideFormat } from "@/lib/presentation-shared/slide-format";
+import type { SlideFormat } from "@/lib/presentation/slide-format";
 import type {
   ThemePackageRenderFamily,
   ThemePackageTemplateKind,

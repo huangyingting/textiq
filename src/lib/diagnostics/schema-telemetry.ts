@@ -12,7 +12,7 @@
  * The contract is deliberately narrow:
  *  - Callers pass a {@link SchemaFailureCategory} and a small bag of SAFE
  *    identifiers (ids, counts, an opaque validator `reason` string).
- *  - The validator `reason` strings produced by `safeParseDeckV7` /
+ *  - The validator `reason` strings produced by `safeParseDeck` /
  *    `safeParseVisual` / `validateSourceRef` describe the schema violation
  *    (e.g. "Deck.slides[0].id must be a non-empty string"), and this module
  *    still sanitizes `reason` defensively in case a future validator regresses.

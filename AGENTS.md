@@ -10,8 +10,8 @@ Project rules for AI coding agents.
 - When schemas change, update code, fixtures, tests, docs, and generated artifacts together.
 - Preserve user work: never revert uncommitted changes, commit, branch, or run destructive git commands unless asked.
 - Use structured parsers/APIs instead of brittle string manipulation.
-- Presentation/editor work targets v7; no v6 bridges, aliases, or conversion paths unless asked.
-- vNext UI migration starts from legacy parity; compare legacy behavior/layout before adding new visual structure.
+- Presentation/editor work targets the current presentation subsystem; no v6 bridges, aliases, or conversion paths unless asked.
+- Presentation UI changes start from existing behavior/layout parity before adding new visual structure.
 - Docs describe current behavior, stay flat under `docs/<subsystem>/`, and update indexes/references on rename or delete.
 - Docs must declare `Type`, `Status`, and `Last updated`; put future work in owning-subsystem `*-plan.md` files.
 

@@ -1,12 +1,9 @@
-import {
-  looksLikeDeckV7,
-  openDeckFromJson,
-} from "@/lib/presentation-vnext/open-deck";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import { looksLikeDeck, openDeckFromJson } from "@/lib/presentation/open-deck";
+import type { Deck } from "@/lib/presentation/schema";
 
-export interface DeckV7ExportContext {
-  kind: "v7";
-  deck: DeckV7;
+export interface PresentationDeckExportContext {
+  kind: "presentation";
+  deck: Deck;
 }
 
 export interface DeckExportErrorContext {
@@ -14,29 +11,34 @@ export interface DeckExportErrorContext {
   message: string;
 }
 
-export type DeckExportContext = DeckV7ExportContext | DeckExportErrorContext;
+export type DeckExportContext =
+  | PresentationDeckExportContext
+  | DeckExportErrorContext;
 
-function pickFreshestDeckV7(
+function pickFreshestDeck(
   freshestDeckJson: unknown,
   initialDeckJson: unknown,
-): { kind: "v7"; deck: DeckV7 } | { kind: "error"; message: string } | null {
+):
+  | { kind: "presentation"; deck: Deck }
+  | { kind: "error"; message: string }
+  | null {
   const candidates = [
     { source: "saved", raw: freshestDeckJson },
     { source: "initial", raw: initialDeckJson },
   ] as const;
-  let firstInvalidDeckV7Error: string | null = null;
+  let firstInvalidDeckError: string | null = null;
   for (const candidate of candidates) {
-    if (!looksLikeDeckV7(candidate.raw)) continue;
+    if (!looksLikeDeck(candidate.raw)) continue;
     const opened = openDeckFromJson(candidate.raw);
     if (opened.ok) {
-      return { kind: "v7", deck: opened.deck };
+      return { kind: "presentation", deck: opened.deck };
     }
-    if (!firstInvalidDeckV7Error) {
-      firstInvalidDeckV7Error = `The ${candidate.source} DeckV7 could not be exported: ${opened.error}`;
+    if (!firstInvalidDeckError) {
+      firstInvalidDeckError = `The ${candidate.source} Deck could not be exported: ${opened.error}`;
     }
   }
-  return firstInvalidDeckV7Error
-    ? { kind: "error", message: firstInvalidDeckV7Error }
+  return firstInvalidDeckError
+    ? { kind: "error", message: firstInvalidDeckError }
     : null;
 }
 
@@ -44,15 +46,15 @@ export function resolveDeckExportContext(
   freshestDeckJson: unknown,
   initialDeckJson: unknown,
 ): DeckExportContext {
-  const deckV7 = pickFreshestDeckV7(freshestDeckJson, initialDeckJson);
-  if (deckV7?.kind === "v7") {
-    return deckV7;
+  const deck = pickFreshestDeck(freshestDeckJson, initialDeckJson);
+  if (deck?.kind === "presentation") {
+    return deck;
   }
-  if (deckV7?.kind === "error") {
-    return deckV7;
+  if (deck?.kind === "error") {
+    return deck;
   }
   return {
     kind: "error",
-    message: "PPTX export requires a current DeckV7 presentation.",
+    message: "PPTX export requires a current Deck presentation.",
   };
 }

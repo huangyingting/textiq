@@ -3,8 +3,8 @@
 /**
  * Present button rendered in the document editor toolbar.
  *
- * Fetches the freshest saved DeckV7 and renders it through PresentModeVNext.
- * Missing deck JSON starts a native blank DeckV7; invalid non-empty deck JSON
+ * Fetches the freshest saved Deck and renders it through PresentMode.
+ * Missing deck JSON starts a native blank Deck; invalid non-empty deck JSON
  * renders recovery diagnostics instead of silently presenting a blank deck.
  *
  * The present mode is read-only; it never mutates Lexical/Yjs state.
@@ -13,16 +13,16 @@
 import { MonitorPlay } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import { PresentModeVNext } from "@/components/presentation-vnext/present-mode-vnext";
+import { PresentMode } from "@/components/presentation/present-mode";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import type { DeckFetchPort } from "@/lib/action-ports";
 import { logInfo } from "@/lib/log";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
-import { prepareDeckForOpenV7 } from "@/lib/presentation-vnext/deck-open-preparation-v7";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
-import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
+import { prepareDeckForOpen } from "@/lib/presentation/deck-open-preparation";
+import type { Deck } from "@/lib/presentation/schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
 import type { Visual } from "@/lib/visual/schema";
 
 interface PresentButtonProps {
@@ -36,7 +36,7 @@ interface PresentButtonProps {
 type PresentData =
   | {
       mode: "deck";
-      deck: DeckV7;
+      deck: Deck;
       themePackage: ThemePackageV1;
       visuals: Record<string, Visual>;
     }
@@ -98,7 +98,7 @@ function PresentOpenRecovery({
  * A toolbar button that opens the in-app Present mode for the current document.
  *
  * Placed in the editor header alongside Export and Share. On click it prefers
- * the saved DeckV7 before rendering {@link PresentModeVNext}.
+ * the saved Deck before rendering {@link PresentMode}.
  */
 export function PresentButton({
   documentId,
@@ -112,13 +112,12 @@ export function PresentButton({
 
   const handlePresent = useCallback(async () => {
     setIsLoading(true);
-    const prepared = await prepareDeckForOpenV7({
+    const prepared = await prepareDeckForOpen({
       documentId,
       deckPort,
-      fallbackDeck: () =>
-        createBlankDeckV7({ documentId, title: documentTitle }),
+      fallbackDeck: () => createBlankDeck({ documentId, title: documentTitle }),
       onFetchFailure: ({ reason, error }) => {
-        logInfo("editor.present", "v7-open-fetch-failed", {
+        logInfo("editor.present", "presentation-open-fetch-failed", {
           documentId,
           reason,
           error,
@@ -163,7 +162,7 @@ export function PresentButton({
       />
 
       {presentData?.mode === "deck" ? (
-        <PresentModeVNext
+        <PresentMode
           deck={presentData.deck}
           themePackage={presentData.themePackage}
           visuals={presentData.visuals}

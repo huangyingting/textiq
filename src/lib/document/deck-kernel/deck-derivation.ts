@@ -5,8 +5,8 @@ import {
   type DocumentBlock,
   type DocumentTextBlock,
 } from "@/lib/content";
-import { fnv1aHash32 } from "@/lib/presentation-shared/fnv-hash";
-import { DEFAULT_SLIDE_FORMAT as DEFAULT_DECK_SLIDE_FORMAT } from "@/lib/presentation-shared/slide-format";
+import { fnv1aHash32 } from "@/lib/presentation/fnv-hash";
+import { DEFAULT_SLIDE_FORMAT as DEFAULT_DECK_SLIDE_FORMAT } from "@/lib/presentation/slide-format";
 import {
   LEGACY_DECK_SCHEMA_VERSION,
   type Deck,
@@ -21,7 +21,7 @@ import type {
   TextRun,
 } from "./deck-elements";
 import type { SourceRef } from "./deck-source-refs";
-import { hashDocumentBlock } from "@/lib/presentation-shared/document-block-hash";
+import { hashDocumentBlock } from "@/lib/presentation/document-block-hash";
 
 /** Maximum visible bullets per content slide before text overflows to notes. */
 export const MAX_BULLETS = 5;

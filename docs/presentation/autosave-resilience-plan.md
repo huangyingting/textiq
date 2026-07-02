@@ -2,23 +2,23 @@
 type: "plan"
 status: "active — implementation pending"
 last_updated: "2026-07-02"
-description: "Remaining P2 work for measuring v7 autosave cost and implementing offline-resilient latest-snapshot saves or patch persistence if measurements require it."
+description: "Remaining P2 work for measuring presentation autosave cost and implementing offline-resilient latest-snapshot saves or patch persistence if measurements require it."
 ---
 
-# V7 Autosave Resilience Plan
+# Autosave Resilience Plan
 
 ## Priority And Goal
 
 **Priority:** P2.
 
 Reduce large-deck autosave cost and data-loss risk while preserving current
-DeckV7 save correctness and revision-token conflict handling.
+Deck save correctness and revision-token conflict handling.
 
 ## Remaining Work
 
 | Slice                           | Work                                                                                                                                                                          | Exit criteria                                                                                                                    |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Snapshot measurement            | Measure v7 full-snapshot payload size, serialization time, save latency, failure classes, and editor responsiveness on representative decks.                                  | Results cover 5/25/75/150/300-slide fixtures under reliable, throttled, flaky, and offline-then-online profiles.                 |
+| Snapshot measurement            | Measure presentation full-snapshot payload size, serialization time, save latency, failure classes, and editor responsiveness on representative decks.                        | Results cover 5/25/75/150/300-slide fixtures under reliable, throttled, flaky, and offline-then-online profiles.                 |
 | Resilient latest-snapshot queue | Add a durable per-document queue that stores only the latest unsaved snapshot, coalesces edits, retries with backoff, and flushes on manual save.                             | Offline edits survive refresh/reconnect, retries do not block editing, and successful saves update the revision token safely.    |
 | Connectivity recovery           | Retry queued saves on online, visibility regain, route focus, editor mount, and explicit user retry.                                                                          | Queued/offline/retrying/conflict states transition predictably without overwriting conflicts.                                    |
 | Save-status UX                  | Replace the generic failure copy with Offline, Retrying, Persistent failure, Conflict, Retry now, and unload-warning states.                                                  | Users can tell whether changes are durable locally, syncing, failed, or blocked by conflict.                                     |
@@ -37,20 +37,20 @@ DeckV7 save correctness and revision-token conflict handling.
 ## Measurement Results (2026-07-02)
 
 Deterministic payload measurement uses
-`measureDeckSnapshotPayload` against representative DeckV7 fixtures assembled
-from the existing v7 test builders. The utility serializes the full DeckV7 JSON
+`measureDeckSnapshotPayload` against representative Deck fixtures assembled
+from the existing presentation test builders. The utility serializes the full Deck JSON
 snapshot with `JSON.stringify` and records UTF-8 byte length.
 
-| Slides | Serialized DeckV7 JSON bytes | KiB    |
-| ------ | ---------------------------- | ------ |
-| 1      | 868                          | 0.85   |
-| 5      | 3,328                        | 3.25   |
-| 10     | 6,321                        | 6.17   |
-| 25     | 15,300                       | 14.94  |
-| 50     | 30,265                       | 29.56  |
-| 75     | 45,230                       | 44.17  |
-| 150    | 90,125                       | 88.01  |
-| 300    | 179,915                      | 175.70 |
+| Slides | Serialized Deck JSON bytes | KiB    |
+| ------ | -------------------------- | ------ |
+| 1      | 868                        | 0.85   |
+| 5      | 3,328                      | 3.25   |
+| 10     | 6,321                      | 6.17   |
+| 25     | 15,300                     | 14.94  |
+| 50     | 30,265                     | 29.56  |
+| 75     | 45,230                     | 44.17  |
+| 150    | 90,125                     | 88.01  |
+| 300    | 179,915                    | 175.70 |
 
 Large-deck acceptance thresholds for keeping resilient full-snapshot autosave:
 
@@ -75,7 +75,7 @@ the 1 MiB large-deck payload threshold. Combined with the shipped resilient
 latest-snapshot autosave queue/recovery/UX, real `DeckPatch[]` persistence is
 not required now.
 
-Keep v7 autosave on full-deck `saveDeckJson` snapshots and leave
+Keep presentation autosave on full-deck `saveDeckJson` snapshots and leave
 `saveDeckPatch` fallback-only. Revisit DeckPatch persistence only if a
 representative deck exceeds any recorded threshold: over 1 MiB serialized JSON,
 p95 save latency over 2 seconds reliable or 5 seconds throttled/flaky/recovery,

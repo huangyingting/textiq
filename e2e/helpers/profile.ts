@@ -48,7 +48,7 @@ export function profileDocPath(): string {
   return `/app/documents/${E2E_PROFILE_FIXTURE.documentId}`;
 }
 
-/** App editor URL for the seeded v7 layout screenshot document. */
+/** App editor URL for the seeded presentation layout screenshot document. */
 export function profileLayoutDocPath(): string {
   return `/app/documents/${E2E_PROFILE_FIXTURE.layoutDocumentId}`;
 }

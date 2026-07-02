@@ -352,7 +352,7 @@ describe("mirrorVisualNodesInTx: visual mirror diff writes", () => {
 // sanitizeRestoredDeck
 // ---------------------------------------------------------------------------
 
-const VALID_DECK = {
+const VALID_LEGACY_DECK = {
   schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
   canvas: { format: "16:9" },
   design: { themeId: "indigo" },
@@ -386,7 +386,7 @@ const VALID_DECK = {
   ],
 };
 
-const VALID_DECK_V7 = {
+const VALID_DECK = {
   schemaVersion: 7,
   canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
   theme: { packageId: "neutral" },
@@ -402,7 +402,7 @@ const VALID_DECK_V7 = {
   ],
 };
 
-const VALID_RESTORE_DECK_V7 = {
+const VALID_RESTORE_DECK = {
   schemaVersion: 7,
   canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
   theme: { packageId: "neutral" },
@@ -417,7 +417,7 @@ const VALID_RESTORE_DECK_V7 = {
   },
   slides: [
     {
-      id: "slide-restore-v7",
+      id: "slide-restore-presentation",
       type: "slide",
       template: { kind: "cover" },
       style: { ref: "slide.cover" },
@@ -494,7 +494,7 @@ function lexicalStateWithVisual(visualId: string): unknown {
   };
 }
 
-function collectDeckV7VisualIds(deck: any): string[] {
+function collectDeckVisualIds(deck: any): string[] {
   const visualIds: string[] = [];
   const visit = (nodes: any[]) => {
     for (const node of nodes) {
@@ -526,12 +526,12 @@ describe("sanitizeRestoredDeck", () => {
     // Restored content only has vis-keep; vis-drop is orphaned.
     const restoredContent = lexicalStateWithVisual("vis-keep");
     const result = sanitizeRestoredDeck(
-      VALID_DECK as unknown as Prisma.JsonValue,
+      VALID_LEGACY_DECK as unknown as Prisma.JsonValue,
       restoredContent,
     );
     // The result should be a Prisma.InputJsonValue (not DbNull)
     assert.notEqual(result, Prisma.DbNull);
-    const deck = result as typeof VALID_DECK;
+    const deck = result as typeof VALID_LEGACY_DECK;
     const elements = deck.slides[0].elements ?? [];
     const visIds = elements
       .filter((e) => e.kind === "visual")
@@ -578,11 +578,11 @@ describe("sanitizeRestoredDeck", () => {
       },
     };
     const result = sanitizeRestoredDeck(
-      VALID_DECK as unknown as Prisma.JsonValue,
+      VALID_LEGACY_DECK as unknown as Prisma.JsonValue,
       restoredContent,
     );
     assert.notEqual(result, Prisma.DbNull);
-    const deck = result as typeof VALID_DECK;
+    const deck = result as typeof VALID_LEGACY_DECK;
     const elements = deck.slides[0].elements ?? [];
     // Both vis-keep and vis-drop are in the restored content, so both should remain.
     const visualElements = elements.filter((e) => e.kind === "visual");
@@ -593,16 +593,16 @@ describe("sanitizeRestoredDeck", () => {
     );
   });
 
-  test("reconciles DeckV7 child visual references during restore", () => {
+  test("reconciles Deck child visual references during restore", () => {
     const restoredContent = lexicalStateWithVisual("vis-keep");
     const result = sanitizeRestoredDeck(
-      VALID_RESTORE_DECK_V7 as unknown as Prisma.JsonValue,
+      VALID_RESTORE_DECK as unknown as Prisma.JsonValue,
       restoredContent,
     );
 
     assert.notEqual(result, Prisma.DbNull);
     const deck = result as any;
-    const visualIds = collectDeckV7VisualIds(deck);
+    const visualIds = collectDeckVisualIds(deck);
     assert.deepEqual(visualIds, ["vis-keep"]);
 
     const group = deck.slides[0].children.find(
@@ -838,7 +838,7 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => null);
     stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
       contentJson: EMPTY_LEXICAL_STATE,
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
     }));
     const createVersion = stubPrismaMethod(
       t,
@@ -853,7 +853,7 @@ describe("deck persistence operations", () => {
       count: 0,
     }));
 
-    const result = await persistDeck("doc-save", VALID_DECK_V7, null, {
+    const result = await persistDeck("doc-save", VALID_DECK, null, {
       userId: "user-editor",
     });
 
@@ -863,7 +863,7 @@ describe("deck persistence operations", () => {
 
   test("persistDeck floats deleted-slide comment anchors after CAS success", async (t) => {
     const beforeDeck = {
-      ...VALID_DECK_V7,
+      ...VALID_DECK,
       slides: [
         {
           id: "slide-delete",
@@ -882,7 +882,7 @@ describe("deck persistence operations", () => {
       ],
     };
     const nextDeck = {
-      ...VALID_DECK_V7,
+      ...VALID_DECK,
       slides: [beforeDeck.slides[1]],
     };
 
@@ -926,7 +926,7 @@ describe("deck persistence operations", () => {
 
   test("persistDeck floats deleted-node comment anchors to slide level after CAS success", async (t) => {
     const beforeDeck = {
-      ...VALID_DECK_V7,
+      ...VALID_DECK,
       slides: [
         {
           id: "slide-keep",
@@ -1003,10 +1003,10 @@ describe("deck persistence operations", () => {
 
   test("persistDeck floats orphaned current anchors when previous deck load fails", async (t) => {
     const nextDeck = {
-      ...VALID_DECK_V7,
+      ...VALID_DECK,
       slides: [
         {
-          ...VALID_DECK_V7.slides[0],
+          ...VALID_DECK.slides[0],
           children: [
             {
               id: "node-keep",
@@ -1068,7 +1068,7 @@ describe("deck persistence operations", () => {
   });
 
   test("persistDeck does not reconcile comment anchors when CAS conflicts", async (t) => {
-    const nextDeck = VALID_DECK_V7;
+    const nextDeck = VALID_DECK;
 
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 0,
@@ -1572,7 +1572,7 @@ describe("document snapshot and restore operations", () => {
 
     const staleWriteResult = await writeDeckWithCas({
       documentId: "doc-restore",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: preRestoreToken,
       telemetryArea: "test",
       db: casDb,
@@ -1701,7 +1701,7 @@ describe("visual persistence exported flows", () => {
 
   test("reconcileDeckAfterMirror strips deck visuals without live rows", async (t) => {
     stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      deckJson: VALID_DECK,
+      deckJson: VALID_LEGACY_DECK,
     }));
     stubPrismaMethod(t, prisma.visual, "findMany", async () => [
       { anchorBlockId: "vis-keep" },

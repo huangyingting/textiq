@@ -143,22 +143,22 @@ mirror. This guards against partial-mirror edge cases.
 
 ## 4. Slides/Deck Persistence
 
-**Source files:**  
-`src/lib/document/persistence-service.ts` (`persistDeck`, `patchDeck`)  
-`src/app/app/documents/[id]/actions.ts` (`saveDeckJson`, `saveDeckPatch`)  
-`src/lib/document/deck-cas-writer.ts`  
-`src/lib/presentation-vnext/schema.ts`  
-`src/lib/presentation-vnext/validation.ts`  
-`src/lib/presentation-vnext/editor-commands.ts`
+**Source files:**
+`src/lib/document/persistence-service.ts` (`persistDeck`, `patchDeck`)
+`src/app/app/documents/[id]/actions.ts` (`saveDeckJson`, `saveDeckPatch`)
+`src/lib/document/deck-cas-writer.ts`
+`src/lib/presentation/schema.ts`
+`src/lib/presentation/validation.ts`
+`src/lib/presentation/editor-commands.ts`
 
 ### 4.1 Storage
 
 `Document.deckJson` holds the entire deck as a single JSON column, separate
 from `contentJson`. Deck edits never modify `contentJson` and vice versa.
 `Document.deckRevisionToken` is a random token used for optimistic CAS locking.
-Persisted decks must be valid DeckV7 JSON (`schemaVersion: 7`). Each slide is a
+Persisted decks must be valid Deck JSON (`schemaVersion: 7`). Each slide is a
 `SlideNode` with authored content in `children`; renderers and exporters consume
-the resolved DeckV7 render tree.
+the resolved Deck render tree.
 
 ### 4.2 Write paths
 
@@ -170,7 +170,7 @@ the resolved DeckV7 render tree.
 Both write paths use revision-token compare-and-swap. Missing or stale tokens
 are conflicts; successful writes mint a new token.
 
-See [data-model/deck.md](../data-model/deck.md) for the full DeckV7 schema and
+See [data-model/deck.md](../data-model/deck.md) for the full Deck schema and
 sync contract.
 
 ### 4.3 Version snapshots
@@ -334,15 +334,15 @@ reflect the restored content.
 `src/lib/commands/command-envelope.ts`  
 `src/lib/commands/visual-command-adapter.ts`  
 `src/lib/commands/visual-commands.ts`  
-`src/lib/presentation-vnext/editor-commands.ts`
+`src/lib/presentation/editor-commands.ts`
 
 There is **no runtime command bus** and no `command-bus.ts` module. Commands are
 serializable `CommandEnvelope` records executed by **pure executors** behind thin
 adapters:
 
-- **Deck/slide commands** are immutable DeckV7 transforms in
-  `src/lib/presentation-vnext/editor-commands.ts`. The vNext slide editor owns
-  UI state, history, and autosave handoff, then persists validated DeckV7 JSON
+- **Deck/slide commands** are immutable Deck transforms in
+  `src/lib/presentation/editor-commands.ts`. The presentation slide editor owns
+  UI state, history, and autosave handoff, then persists validated Deck JSON
   through the deck CAS writer.
 - **Visual commands** are defined as `VisualCommandPayload` ops in
   `src/lib/commands/visual-commands.ts`. UI surfaces call `applyVisualCommand()`
@@ -401,7 +401,7 @@ durable command log yet.
 | [../ai/generation.md](../ai/generation.md)                                             | Current  | AI generation request flow and validation contracts      |
 | [../auth/README.md](../auth/README.md)                                                 | Current  | Authentication and account lifecycle                     |
 | [../collaboration/README.md](../collaboration/README.md)                               | Current  | Collaboration room model and runtime readiness           |
-| [../data-model/deck.md](../data-model/deck.md)                                         | Current  | DeckV7 schema, source refs, rendering, and persistence   |
+| [../data-model/deck.md](../data-model/deck.md)                                         | Current  | Deck schema, source refs, rendering, and persistence     |
 | [../data-model/database-persistence.md](../data-model/database-persistence.md)         | Current  | Prisma provider resolution and relational model          |
 | [../data-model/document-persistence.md](../data-model/document-persistence.md)         | Current  | Document save transactions and version restore           |
 | [../data-model/visual-mirror.md](../data-model/visual-mirror.md)                       | Current  | Visual projection contract                               |

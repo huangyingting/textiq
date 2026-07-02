@@ -1,7 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import type { Deck } from "@/lib/presentation/schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
 
 import {
   COMMENT_ANCHOR_NODE_ID_MAX_LENGTH,
@@ -32,7 +32,7 @@ type CommentDb = Pick<typeof prisma, "comment" | "commentRead">;
 const SLIDE_COMMENT_DECK_MISSING_ERROR =
   "Slide comments require a saved deck on this document.";
 const SLIDE_COMMENT_DECK_INVALID_ERROR =
-  "Slide comments require a valid saved v7 deck.";
+  "Slide comments require a valid saved presentation deck.";
 const SLIDE_COMMENT_ANCHOR_ORPHANED_ERROR =
   "Slide comment anchor must reference an existing slide or element in the saved deck.";
 
@@ -52,13 +52,13 @@ export type CommentMutationResult = {
 
 export type CommentService = ReturnType<typeof createCommentService>;
 
-export type LoadDeckV7ForDocument = (documentId: string) => Promise<DeckV7>;
+export type LoadDeckForDocument = (documentId: string) => Promise<Deck>;
 
 type CommentServiceDeps = {
   db?: CommentDb;
   now?: () => Date;
   requireDocumentContext: RequireCommentDocumentContext;
-  loadDeckV7ForDocument?: LoadDeckV7ForDocument;
+  loadDeckForDocument?: LoadDeckForDocument;
 };
 
 function commentSelect() {
@@ -117,7 +117,7 @@ export function createCommentService({
   db = prisma,
   now = () => new Date(),
   requireDocumentContext,
-  loadDeckV7ForDocument = async (documentId: string): Promise<DeckV7> => {
+  loadDeckForDocument = async (documentId: string): Promise<Deck> => {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       select: { deckJson: true },
@@ -125,7 +125,7 @@ export function createCommentService({
     if (!document?.deckJson) {
       throw new Error(SLIDE_COMMENT_DECK_MISSING_ERROR);
     }
-    const parsed = safeParseDeckV7(document.deckJson);
+    const parsed = safeParseDeck(document.deckJson);
     if (!parsed.success) {
       throw new Error(SLIDE_COMMENT_DECK_INVALID_ERROR);
     }
@@ -198,7 +198,7 @@ export function createCommentService({
           elementId,
           geometry,
         };
-        const deck = await loadDeckV7ForDocument(documentId);
+        const deck = await loadDeckForDocument(documentId);
         if (resolveAnchorState(slideAnchor, deck) !== "attached") {
           throw new Error(SLIDE_COMMENT_ANCHOR_ORPHANED_ERROR);
         }
@@ -355,7 +355,7 @@ export function createCommentService({
 
   async function getOrphanedCommentIds(
     documentId: string,
-    deck: DeckV7,
+    deck: Deck,
   ): Promise<string[]> {
     await requireDocumentContext(documentId, "view");
 
@@ -381,7 +381,7 @@ export function createCommentService({
 
   async function floatOrphanedCommentsAfterRestore(
     documentId: string,
-    deck: DeckV7,
+    deck: Deck,
   ): Promise<{ floatedCount: number }> {
     const orphanedIds = await getOrphanedCommentIds(documentId, deck);
 

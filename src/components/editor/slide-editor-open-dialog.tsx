@@ -33,9 +33,9 @@ import {
   useDeckGeneration,
   type DeckGenerationOptions,
 } from "@/lib/ai/use-deck-generation";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { ThemePackageId } from "@/lib/presentation-shared/theme-packages";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import type { Deck } from "@/lib/presentation/schema";
+import type { ThemePackageId } from "@/lib/presentation/theme-package-ids";
 
 type DeckLength = NonNullable<DeckGenerationOptions["length"]>;
 
@@ -59,11 +59,11 @@ export interface SlideEditorOpenDialogProps {
    */
   isEmptyDocument?: boolean;
   /**
-   * Hand a successfully generated DeckV7 to the parent (it owns how it opens —
+   * Hand a successfully generated Deck to the parent (it owns how it opens —
    * issue #269 routes this through a preview/diff before opening the editor).
    */
   onApply: (result: {
-    deckV7: DeckV7;
+    deck: Deck;
     truncated: boolean;
     diagnostics: PresentationDiagnostic[];
     options: DeckGenerationOptions;
@@ -109,7 +109,7 @@ export function SlideEditorOpenDialog({
     // which presents the preview/diff (issue #269).
     if (result.ok) {
       onApply({
-        deckV7: result.deckV7,
+        deck: result.deck,
         truncated: result.truncated,
         diagnostics: result.diagnostics,
         options: opts,

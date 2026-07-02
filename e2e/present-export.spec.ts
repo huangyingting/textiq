@@ -233,10 +233,10 @@ test.describe("present + export", () => {
     const presentRegion = page.getByRole("region", { name: "Presentation" });
     const state = await detectPresentationState(page, presentRegion);
     if (state === "recovery") {
-      // e2e-governance-allow test-skip: seeded profile may contain a non-v7 deck, making safe-area HUD assertions inapplicable.
+      // e2e-governance-allow test-skip: seeded profile may contain a non-presentation deck, making safe-area HUD assertions inapplicable.
       test.skip(
         true,
-        "present: fixture resolved to a non-v7 deck; skipping safe-area HUD assertions",
+        "present: fixture resolved to a non-presentation deck; skipping safe-area HUD assertions",
       );
     }
     expect(state, "present: in-app presentation region missing").toBe("region");
@@ -289,10 +289,10 @@ test.describe("present + export", () => {
     const region = page.getByRole("region", { name: /^Presentation/ });
     const state = await detectPresentationState(page, region);
     if (state === "recovery") {
-      // e2e-governance-allow test-skip: seeded public fixture may contain a non-v7 deck, making safe-area HUD assertions inapplicable.
+      // e2e-governance-allow test-skip: seeded public fixture may contain a non-presentation deck, making safe-area HUD assertions inapplicable.
       test.skip(
         true,
-        "present: public fixture resolved to a non-v7 deck; skipping safe-area HUD assertions",
+        "present: public fixture resolved to a non-presentation deck; skipping safe-area HUD assertions",
       );
     }
     expect(state, "present: public presentation region missing").toBe("region");

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
 
 import { resolveDeckExportContext } from "./deck-export-context";
 
-test("resolveDeckExportContext uses saved DeckV7 when present", () => {
-  const blank = createBlankDeckV7({ title: "Saved deck v7" });
-  const deckV7 = {
+test("resolveDeckExportContext uses saved Deck when present", () => {
+  const blank = createBlankDeck({ title: "Saved deck presentation" });
+  const deck = {
     ...blank,
     slides: [
       {
@@ -23,9 +23,9 @@ test("resolveDeckExportContext uses saved DeckV7 when present", () => {
     ],
   };
 
-  const context = resolveDeckExportContext(deckV7, null);
-  assert.equal(context.kind, "v7");
-  if (context.kind === "v7") {
+  const context = resolveDeckExportContext(deck, null);
+  assert.equal(context.kind, "presentation");
+  if (context.kind === "presentation") {
     assert.equal(context.deck.slides[0]?.id, "slide-b");
     assert.equal(context.deck.slides[0]?.notes, "Second slide notes");
     assert.equal(context.deck.slides[1]?.id, "slide-a");
@@ -33,23 +33,23 @@ test("resolveDeckExportContext uses saved DeckV7 when present", () => {
   }
 });
 
-test("resolveDeckExportContext returns error for invalid DeckV7 payloads", () => {
-  const invalidDeckV7 = {
-    ...createBlankDeckV7(),
+test("resolveDeckExportContext returns error for invalid Deck payloads", () => {
+  const invalidDeck = {
+    ...createBlankDeck(),
     slides: [],
   };
 
-  const context = resolveDeckExportContext(invalidDeckV7, null);
+  const context = resolveDeckExportContext(invalidDeck, null);
   assert.equal(context.kind, "error");
   if (context.kind === "error") {
-    assert.match(context.message, /DeckV7/);
+    assert.match(context.message, /Deck/);
   }
 });
 
-test("resolveDeckExportContext rejects missing DeckV7 payloads", () => {
+test("resolveDeckExportContext rejects missing Deck payloads", () => {
   const context = resolveDeckExportContext(null, null);
   assert.equal(context.kind, "error");
   if (context.kind === "error") {
-    assert.match(context.message, /DeckV7/);
+    assert.match(context.message, /Deck/);
   }
 });

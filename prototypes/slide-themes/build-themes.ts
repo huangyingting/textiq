@@ -1,8 +1,8 @@
 /**
- * Builds v7 semantic preview decks and v7 theme package JSON artifacts.
+ * Builds presentation semantic preview decks and presentation theme package JSON artifacts.
  *
- * `theme-packages-v7.ts` is the source of truth. This script does not read or
- * upgrade legacy v6 package JSON; generated decks are native `DeckV7` payloads.
+ * `theme-packages.ts` is the source of truth. This script does not read or
+ * upgrade legacy v6 package JSON; generated decks are native `Deck` payloads.
  *
  * Run from the repo root:
  *   node --import tsx prototypes/slide-themes/build-themes.ts
@@ -15,26 +15,26 @@ import { fileURLToPath } from "node:url";
 import type {
   SemanticSlideSpecV1,
   SlotValue,
-} from "@/lib/presentation-vnext/semantic-deck-plan";
+} from "@/lib/presentation/semantic-deck-plan";
 import {
-  DECK_SCHEMA_VERSION_V7,
-  type DeckV7,
+  DECK_SCHEMA_VERSION,
+  type Deck,
   type SemanticTemplateKind,
   type SlideNode,
   type SlotKey,
-} from "@/lib/presentation-vnext/schema";
+} from "@/lib/presentation/schema";
 import {
   compileSlide,
   resetIdCounter,
-} from "@/lib/presentation-vnext/template-compiler";
-import { SEMANTIC_TEMPLATE_KINDS } from "@/lib/presentation-vnext/template-registry";
-import { createDefaultTemplateRegistry } from "@/lib/presentation-vnext/theme-packages";
+} from "@/lib/presentation/template-compiler";
+import { SEMANTIC_TEMPLATE_KINDS } from "@/lib/presentation/template-registry";
+import { createDefaultTemplateRegistry } from "@/lib/presentation/theme-packages";
 import {
   validateThemePackage,
   type ThemePackageV1,
-} from "@/lib/presentation-vnext/theme-package-schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
-import { THEME_PACKAGE_SOURCES } from "./theme-packages-v7";
+} from "@/lib/presentation/theme-package-schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
+import { THEME_PACKAGE_SOURCES } from "./theme-packages";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const deckOutDir = join(here, "decks");
@@ -70,10 +70,10 @@ function sampleText(slot: SlotKey, kind: SemanticTemplateKind): string {
   if (slot === "kicker") return kind.replace(/-/g, " ");
   if (slot === "title") return `${kind.replace(/-/g, " ")} template`;
   if (slot === "subtitle") {
-    return "A native v7 semantic preview generated from slots.";
+    return "A native presentation semantic preview generated from slots.";
   }
   if (slot === "caption") {
-    return "Generated from DeckV7, ThemePackageV1, and the semantic template registry.";
+    return "Generated from Deck, ThemePackageV1, and the semantic template registry.";
   }
   if (slot === "quote") {
     return "Design is the contract between structure and attention.";
@@ -95,8 +95,8 @@ function sampleSlotValue(slot: SlotKey, kind: SemanticTemplateKind): SlotValue {
       type: "bullets",
       items: [
         { text: "Compile semantic slots into node trees" },
-        { text: "Resolve visual style from the v7 theme package" },
-        { text: "Render the shared DeckV7 preview path" },
+        { text: "Resolve visual style from the presentation theme package" },
+        { text: "Render the shared Deck preview path" },
       ],
     };
   }
@@ -118,7 +118,7 @@ function sampleSlotValue(slot: SlotKey, kind: SemanticTemplateKind): SlotValue {
       type: "cards",
       items: [
         { title: "Plan", body: "Typed semantic intent" },
-        { title: "Compile", body: "Stable v7 nodes" },
+        { title: "Compile", body: "Stable presentation nodes" },
         { title: "Render", body: "Resolved tree output" },
       ],
     };
@@ -142,7 +142,7 @@ function sampleSlotValue(slot: SlotKey, kind: SemanticTemplateKind): SlotValue {
         ["Theme", "Package", "Resolved style"],
         ["Preview", "Renderer", "HTML"],
       ],
-      caption: "Native v7 table slot sample",
+      caption: "Native presentation table slot sample",
     };
   }
   if (slot === "visualId") {
@@ -160,7 +160,8 @@ function sampleSlotValue(slot: SlotKey, kind: SemanticTemplateKind): SlotValue {
 
 function sampleSlideSpec(kind: SemanticTemplateKind): SemanticSlideSpecV1 {
   const template = registry.get(kind);
-  if (!template) throw new Error(`Missing v7 semantic template: ${kind}`);
+  if (!template)
+    throw new Error(`Missing presentation semantic template: ${kind}`);
   const slots: SemanticSlideSpecV1["slots"] = {};
   for (const slot of Object.keys(template.slots) as SlotKey[]) {
     slots[slot] = sampleSlotValue(slot, kind);
@@ -171,15 +172,16 @@ function sampleSlideSpec(kind: SemanticTemplateKind): SemanticSlideSpecV1 {
     density: template.supports.density[0],
     emphasis: template.supports.emphasis[0],
     slots,
-    speakerNotes: `${template.label} preview generated from the native v7 template registry.`,
+    speakerNotes: `${template.label} preview generated from the native presentation template registry.`,
   };
 }
 
-function previewDeckForThemePackage(themePackage: ThemePackageV1): DeckV7 {
+function previewDeckForThemePackage(themePackage: ThemePackageV1): Deck {
   resetIdCounter();
   const slides: SlideNode[] = SEMANTIC_TEMPLATE_KINDS.map((kind, index) => {
     const template = registry.get(kind);
-    if (!template) throw new Error(`Missing v7 semantic template: ${kind}`);
+    if (!template)
+      throw new Error(`Missing presentation semantic template: ${kind}`);
     const { slide, diagnostics } = compileSlide(
       sampleSlideSpec(kind),
       template,
@@ -204,7 +206,7 @@ function previewDeckForThemePackage(themePackage: ThemePackageV1): DeckV7 {
   });
 
   return {
-    schemaVersion: DECK_SCHEMA_VERSION_V7,
+    schemaVersion: DECK_SCHEMA_VERSION,
     id: `preview-${themePackage.id}`,
     title: `${themePackage.name} semantic template preview`,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
@@ -212,7 +214,7 @@ function previewDeckForThemePackage(themePackage: ThemePackageV1): DeckV7 {
     assets: { images: {} },
     slides,
     metadata: {
-      extra: { source: "prototypes/slide-themes/theme-packages-v7.ts" },
+      extra: { source: "prototypes/slide-themes/theme-packages.ts" },
     },
   };
 }
@@ -222,31 +224,31 @@ for (const themePackage of THEME_PACKAGE_SOURCES) {
   if (!packageValidation.valid) {
     failures += 1;
     console.error(
-      `✗ ${themePackage.id} v7 package validation failed: ${packageValidation.diagnostics
+      `✗ ${themePackage.id} presentation package validation failed: ${packageValidation.diagnostics
         .map((diagnostic) => diagnostic.message)
         .join("; ")}`,
     );
     continue;
   }
 
-  let deck: DeckV7;
+  let deck: Deck;
   try {
     deck = previewDeckForThemePackage(themePackage);
   } catch (error) {
     failures += 1;
     console.error(
-      `✗ ${themePackage.id} v7 preview deck failed to compile: ${
+      `✗ ${themePackage.id} presentation preview deck failed to compile: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
     continue;
   }
 
-  const parsed = safeParseDeckV7(deck);
+  const parsed = safeParseDeck(deck);
   if (!parsed.success) {
     failures += 1;
     console.error(
-      `✗ ${themePackage.id} preview deck FAILED v7 schema validation: ${parsed.errors.join("; ")}`,
+      `✗ ${themePackage.id} preview deck FAILED presentation schema validation: ${parsed.errors.join("; ")}`,
     );
     continue;
   }
@@ -270,7 +272,7 @@ for (const themePackage of THEME_PACKAGE_SOURCES) {
     tagline: themePackage.tagline ?? "",
     file: `decks/${deckFile}`,
     packageFile: `packages/${packageFile}`,
-    schemaVersion: DECK_SCHEMA_VERSION_V7,
+    schemaVersion: DECK_SCHEMA_VERSION,
     slides: parsed.data.slides.length,
     fonts: {
       heading: themePackage.tokens.fonts.heading,
@@ -279,7 +281,8 @@ for (const themePackage of THEME_PACKAGE_SOURCES) {
     accent: themePackage.tokens.colors.accent.fill,
     templates: SEMANTIC_TEMPLATE_KINDS.map((kind) => {
       const template = registry.get(kind);
-      if (!template) throw new Error(`Missing v7 semantic template: ${kind}`);
+      if (!template)
+        throw new Error(`Missing presentation semantic template: ${kind}`);
       return {
         kind,
         label: template.label,
@@ -291,7 +294,7 @@ for (const themePackage of THEME_PACKAGE_SOURCES) {
   });
 
   console.log(
-    `✓ ${themePackage.name.padEnd(24)} valid v7 — theme-packages-v7.ts → decks/${deckFile}`,
+    `✓ ${themePackage.name.padEnd(24)} valid presentation — theme-packages.ts → decks/${deckFile}`,
   );
 }
 
@@ -302,10 +305,12 @@ writeFileSync(
 );
 
 if (failures > 0) {
-  console.error(`\n${failures} v7 theme package(s) failed validation.`);
+  console.error(
+    `\n${failures} presentation theme package(s) failed validation.`,
+  );
   process.exit(1);
 }
 
 console.log(
-  `\nAll ${manifest.length} v7 theme packages validated and written.`,
+  `\nAll ${manifest.length} presentation theme packages validated and written.`,
 );

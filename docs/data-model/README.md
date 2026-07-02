@@ -10,13 +10,13 @@ description: "These documents define persisted JSON contracts and database proje
 These documents define persisted JSON contracts and database projections. They
 are the first place to update when a schema or source-of-truth boundary changes.
 
-| Document                                                                             | Type         | Scope                                                                                       |
-| ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------- |
-| [deck.md](deck.md)                                                                   | Contract     | Current DeckV7 `Document.deckJson` shape, schema gate, open/save boundaries, render/export. |
-| [document-persistence.md](document-persistence.md)                                   | Architecture | Document save transactions, visual mirror rebuilds, deck CAS writes, and version restore.   |
-| [database-persistence.md](database-persistence.md)                                   | Architecture | Prisma provider resolution, client setup, relational groups, and retention semantics.       |
-| [visual-mirror.md](visual-mirror.md)                                                 | Contract     | Projection from Lexical visual nodes in `contentJson` to `Visual` rows.                     |
-| [../system/identity-and-payload-naming.md](../system/identity-and-payload-naming.md) | Reference    | Durable id, source-ref/anchor, asset reference, and payload suffix vocabulary.              |
+| Document                                                                             | Type         | Scope                                                                                     |
+| ------------------------------------------------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------- |
+| [deck.md](deck.md)                                                                   | Contract     | Current Deck `Document.deckJson` shape, schema gate, open/save boundaries, render/export. |
+| [document-persistence.md](document-persistence.md)                                   | Architecture | Document save transactions, visual mirror rebuilds, deck CAS writes, and version restore. |
+| [database-persistence.md](database-persistence.md)                                   | Architecture | Prisma provider resolution, client setup, relational groups, and retention semantics.     |
+| [visual-mirror.md](visual-mirror.md)                                                 | Contract     | Projection from Lexical visual nodes in `contentJson` to `Visual` rows.                   |
+| [../system/identity-and-payload-naming.md](../system/identity-and-payload-naming.md) | Reference    | Durable id, source-ref/anchor, asset reference, and payload suffix vocabulary.            |
 
 ## Rules
 

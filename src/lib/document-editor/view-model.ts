@@ -1,7 +1,7 @@
 import { documentCapabilities } from "@/lib/auth/document-permissions";
 import type { CommentThread } from "@/lib/comments";
 import type { DocumentTag } from "@/lib/document/tags";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 
 export interface DocumentEditorViewModel {
   documentId: string;

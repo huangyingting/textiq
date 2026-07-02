@@ -101,7 +101,7 @@ test("#396: collectDeckAssetRefs ignores slides without asset refs", () => {
   assert.equal(refs.size, 0);
 });
 
-test("#1253: collectDeckAssetRefs extracts v7 image and visual node asset ids", () => {
+test("#1253: collectDeckAssetRefs extracts presentation image and visual node asset ids", () => {
   const deck = {
     schemaVersion: 7,
     assets: { images: {}, visuals: {} },
@@ -109,7 +109,11 @@ test("#1253: collectDeckAssetRefs extracts v7 image and visual node asset ids", 
       {
         id: "s1",
         children: [
-          { type: "image", id: "img", content: { assetId: "img-v7-1" } },
+          {
+            type: "image",
+            id: "img",
+            content: { assetId: "img-presentation-1" },
+          },
           {
             type: "group",
             id: "group",
@@ -117,7 +121,7 @@ test("#1253: collectDeckAssetRefs extracts v7 image and visual node asset ids", 
               {
                 type: "visual",
                 id: "visual",
-                content: { assetId: "visual-v7-1" },
+                content: { assetId: "visual-presentation-1" },
               },
             ],
           },
@@ -126,8 +130,8 @@ test("#1253: collectDeckAssetRefs extracts v7 image and visual node asset ids", 
     ],
   };
   const refs = collectDeckAssetRefs(deck);
-  assert.ok(refs.has("img-v7-1"));
-  assert.ok(refs.has("visual-v7-1"));
+  assert.ok(refs.has("img-presentation-1"));
+  assert.ok(refs.has("visual-presentation-1"));
   assert.equal(refs.size, 2);
 });
 
@@ -260,7 +264,7 @@ test("#396: markOrphanedAssets preserves assets referenced in version snapshots"
   assert.ok(!db.markedIds.includes("version-bg-1"));
 });
 
-test("#1253: markOrphanedAssets preserves assets referenced by v7 visual registry", async () => {
+test("#1253: markOrphanedAssets preserves assets referenced by presentation visual registry", async () => {
   const db = makeMockDb({
     deckJson: {
       schemaVersion: 7,
@@ -283,7 +287,7 @@ test("#1253: markOrphanedAssets preserves assets referenced by v7 visual registr
   assert.ok(!db.markedIds.includes("visual-asset-1"));
 });
 
-test("#1253: markOrphanedAssets preserves assets referenced by v7 visual nodes", async () => {
+test("#1253: markOrphanedAssets preserves assets referenced by presentation visual nodes", async () => {
   const db = makeMockDb({
     deckJson: {
       schemaVersion: 7,
