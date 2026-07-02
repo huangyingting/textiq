@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
-import { DECK_SCHEMA_VERSION_V7 } from "@/lib/presentation-vnext/schema";
+import { DECK_SCHEMA_VERSION } from "@/lib/presentation/schema";
 import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
 
@@ -23,8 +23,8 @@ const LEGACY_DECK = {
   ],
 };
 
-const VALID_DECK_V7 = {
-  schemaVersion: DECK_SCHEMA_VERSION_V7,
+const VALID_DECK = {
+  schemaVersion: DECK_SCHEMA_VERSION,
   canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
   theme: { packageId: "neutral" },
   assets: { images: {} },
@@ -74,7 +74,7 @@ describe("writeDeckWithCas", () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
       documentId: "doc-1",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
@@ -91,7 +91,7 @@ describe("writeDeckWithCas", () => {
     const { db } = makeDb({ updateCount: 0, serverToken: "new-server-token" });
     const result = await writeDeckWithCas({
       documentId: "doc-1",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "stale-token",
       telemetryArea: "test",
       db,
@@ -103,7 +103,7 @@ describe("writeDeckWithCas", () => {
     });
   });
 
-  test("does not run success side effects when a v7 CAS write conflicts", async () => {
+  test("does not run success side effects when a presentation CAS write conflicts", async () => {
     let snapshotCount = 0;
     const { db } = makeDb({
       updateCount: 0,
@@ -111,7 +111,7 @@ describe("writeDeckWithCas", () => {
     });
     const result = await writeDeckWithCas({
       documentId: "doc-1",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "stale-token",
       telemetryArea: "test",
       db,
@@ -131,7 +131,7 @@ describe("writeDeckWithCas", () => {
     const { db } = makeDb({ updateCount: 0, exists: false });
     const result = await writeDeckWithCas({
       documentId: "missing",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "stale-token",
       telemetryArea: "test",
       db,
@@ -151,7 +151,7 @@ describe("writeDeckWithCas", () => {
     });
     const result = await writeDeckWithCas({
       documentId: "doc-1",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
@@ -171,7 +171,7 @@ describe("writeDeckWithCas", () => {
     });
     const result = await writeDeckWithCas({
       documentId: "doc-1",
-      deckJson: VALID_DECK_V7,
+      deckJson: VALID_DECK,
       clientToken: "stale-token",
       telemetryArea: "test",
       db,
@@ -202,12 +202,12 @@ describe("writeDeckWithCas", () => {
   test("rejects nested unknown child-node/content fields before writing", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
-      documentId: "doc-v7-nested-unknown",
+      documentId: "doc-presentation-nested-unknown",
       deckJson: {
-        ...VALID_DECK_V7,
+        ...VALID_DECK,
         slides: [
           {
-            ...VALID_DECK_V7.slides[0],
+            ...VALID_DECK.slides[0],
             children: [
               {
                 id: "text-node-unknown",
@@ -240,10 +240,10 @@ describe("writeDeckWithCas", () => {
   test("rejects decks whose UTF-8 payload exceeds the save limit", async () => {
     const multibyteText = "漢🙂".repeat(80_000);
     const oversizedDeck = {
-      ...VALID_DECK_V7,
+      ...VALID_DECK,
       slides: [
         {
-          ...VALID_DECK_V7.slides[0],
+          ...VALID_DECK.slides[0],
           children: [
             {
               id: "node-utf8",
@@ -284,12 +284,12 @@ describe("writeDeckWithCas", () => {
     assert.equal(calls.length, 0);
   });
 
-  test("accepts a valid v7 deck and writes it", async () => {
+  test("accepts a valid presentation deck and writes it", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     let snapshotCount = 0;
     const result = await writeDeckWithCas({
-      documentId: "doc-v7",
-      deckJson: VALID_DECK_V7,
+      documentId: "doc-presentation",
+      deckJson: VALID_DECK,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
@@ -302,7 +302,7 @@ describe("writeDeckWithCas", () => {
     assert.equal(snapshotCount, 1);
     // Verify the write happened with the correct CAS predicate.
     assert.deepEqual((calls[0] as { where: unknown }).where, {
-      id: "doc-v7",
+      id: "doc-presentation",
       deckRevisionToken: "client-token",
     });
   });
@@ -310,8 +310,8 @@ describe("writeDeckWithCas", () => {
   test("keeps success when onSuccess side effects throw", async () => {
     const { db } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
-      documentId: "doc-v7",
-      deckJson: VALID_DECK_V7,
+      documentId: "doc-presentation",
+      deckJson: VALID_DECK,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
@@ -338,15 +338,15 @@ describe("writeDeckWithCas", () => {
     assert.equal(calls.length, 0);
   });
 
-  test("rejects v7-shaped decks that still carry v6 slide elements", async () => {
+  test("rejects presentation-shaped decks that still carry v6 slide elements", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
-      documentId: "doc-v7-elements",
+      documentId: "doc-presentation-elements",
       deckJson: {
-        ...VALID_DECK_V7,
+        ...VALID_DECK,
         slides: [
           {
-            ...VALID_DECK_V7.slides[0],
+            ...VALID_DECK.slides[0],
             elements: [],
           },
         ],
@@ -361,15 +361,15 @@ describe("writeDeckWithCas", () => {
     assert.equal(calls.length, 0);
   });
 
-  test("rejects a structurally invalid v7 deck before writing", async () => {
+  test("rejects a structurally invalid presentation deck before writing", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
-    const badV7 = {
-      schemaVersion: DECK_SCHEMA_VERSION_V7,
+    const bad = {
+      schemaVersion: DECK_SCHEMA_VERSION,
       slides: "not-an-array",
     };
     const result = await writeDeckWithCas({
-      documentId: "doc-v7",
-      deckJson: badV7,
+      documentId: "doc-presentation",
+      deckJson: bad,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
@@ -384,22 +384,22 @@ describe("writeDeckWithCas", () => {
     );
   });
 
-  test("v7 deck survives a CAS conflict correctly", async () => {
+  test("presentation deck survives a CAS conflict correctly", async () => {
     const { db } = makeDb({
       updateCount: 0,
-      serverToken: "server-v7-token",
+      serverToken: "server-presentation-token",
     });
     const result = await writeDeckWithCas({
-      documentId: "doc-v7",
-      deckJson: VALID_DECK_V7,
-      clientToken: "stale-v7-token",
+      documentId: "doc-presentation",
+      deckJson: VALID_DECK,
+      clientToken: "stale-presentation-token",
       telemetryArea: "test",
       db,
     });
 
     assert.deepEqual(result, {
       ok: "conflict",
-      serverRevisionToken: "server-v7-token",
+      serverRevisionToken: "server-presentation-token",
     });
   });
 });

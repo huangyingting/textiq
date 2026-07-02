@@ -4,7 +4,7 @@ import {
   resolveAnchorState,
   type SlideCommentAnchor,
 } from "@/lib/comments/slide-comment-anchors";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import type { Deck } from "@/lib/presentation/schema";
 
 export function applySlideDeleteToAnchors(
   records: readonly SlideCommentAnchor[],
@@ -29,7 +29,7 @@ export function applyElementDeleteToAnchors(
 
 export function findOrphanedAnchors(
   records: readonly SlideCommentAnchor[],
-  deck: DeckV7,
+  deck: Deck,
 ): SlideCommentAnchor[] {
   return records.filter(
     (anchor) => resolveAnchorState(anchor, deck) === "orphaned",

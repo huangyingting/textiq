@@ -24,7 +24,7 @@
  */
 
 import type { Deck, Slide } from "./deck-core";
-import { fnv1aHash32 } from "@/lib/presentation-shared/fnv-hash";
+import { fnv1aHash32 } from "@/lib/presentation/fnv-hash";
 
 /** Normalizes a title for matching/hashing: trimmed and lower-cased. */
 export function normalizeTitle(title: string): string {

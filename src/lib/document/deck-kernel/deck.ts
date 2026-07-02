@@ -4,7 +4,7 @@
  * This facade is the sole stable import surface for all deck types and
  * helpers. Consumers must import from here, not from the internal modules.
  * This surface is the legacy v6 deck model (`Slide.elements[]`).
- * Current persisted runtime contracts are DeckV7 in `presentation-vnext`.
+ * Current persisted runtime contracts are Deck in `presentation`.
  */
 
 export {
@@ -14,8 +14,8 @@ export {
   resolveSlideFormat,
   slideAspectRatio,
   slideFormatConfig,
-} from "@/lib/presentation-shared/slide-format";
-export type { SlideFormat } from "@/lib/presentation-shared/slide-format";
+} from "@/lib/presentation/slide-format";
+export type { SlideFormat } from "@/lib/presentation/slide-format";
 
 export {
   LEGACY_DECK_SCHEMA_VERSION,

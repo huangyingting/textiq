@@ -49,9 +49,9 @@ Operational material lives under [../operations/](../operations/README.md).
   visuals.
 - `Visual` rows are a derived projection of visual nodes in `contentJson`.
 - `Document.deckJson` is the source of truth for slides.
-- Persisted decks must be current DeckV7 payloads with slide content under
+- Persisted decks must be current Deck payloads with slide content under
   `SlideNode.children`.
-- Render, export, and editor surfaces consume DeckV7 nodes directly; they do not
+- Render, export, and editor surfaces consume Deck nodes directly; they do not
   synthesize old deck shapes at runtime.
 - Deck saves are guarded by revision-token compare-and-swap.
 - Collaboration websocket upgrades require authorization.

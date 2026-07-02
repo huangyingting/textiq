@@ -1,14 +1,14 @@
 import { countWords } from "@/lib/ai/deck-metrics";
 import type { CompleteFn } from "@/lib/ai/generate";
 import {
-  runVnextDeckGeneration,
-  type RunVnextDeckGenerationInput,
-  type RunVnextDeckGenerationResult,
-} from "@/lib/ai/run-vnext-deck-generation";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
-import type { ThemePackageId } from "@/lib/presentation-shared/theme-packages";
+  runDeckGeneration,
+  type RunDeckGenerationInput,
+  type RunDeckGenerationResult,
+} from "@/lib/ai/run-deck-generation";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import type { Deck } from "@/lib/presentation/schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
+import type { ThemePackageId } from "@/lib/presentation/theme-package-ids";
 import { logInfo } from "@/lib/log";
 
 import type { GenerateDeckPayload } from "./parser";
@@ -16,7 +16,7 @@ import type { GenerateDeckPayload } from "./parser";
 export const GENERATE_DECK_LOG_SCOPE = "api.generate-deck";
 
 export interface GenerateDeckRouteResult {
-  deck: DeckV7;
+  deck: Deck;
   truncated: boolean;
   diagnostics: PresentationDiagnostic[];
   planner: "ai";
@@ -35,9 +35,7 @@ export interface GenerateDeckResponseMetadata {
 }
 
 export interface GenerateDeckRouteDeps {
-  runVnext(
-    input: RunVnextDeckGenerationInput,
-  ): Promise<RunVnextDeckGenerationResult>;
+  runDeck(input: RunDeckGenerationInput): Promise<RunDeckGenerationResult>;
   logInfo(
     scope: string,
     message: string,
@@ -46,7 +44,7 @@ export interface GenerateDeckRouteDeps {
 }
 
 const defaultDeps: GenerateDeckRouteDeps = {
-  runVnext: runVnextDeckGeneration,
+  runDeck: runDeckGeneration,
   logInfo,
 };
 
@@ -60,7 +58,7 @@ export async function generateDeckForRoute(
 ): Promise<GenerateDeckRouteResult> {
   const deps = { ...defaultDeps, ...overrides };
   const { payload, complete } = input;
-  const result = await deps.runVnext({
+  const result = await deps.runDeck({
     contentJson: payload.contentJson,
     visuals: payload.visuals,
     themePackageId: payload.themePackageId,
@@ -78,7 +76,7 @@ export async function generateDeckForRoute(
   };
 }
 
-function countTableSlides(deck: DeckV7): number {
+function countTableSlides(deck: Deck): number {
   let count = 0;
   for (const slide of deck.slides) {
     const children = Array.isArray(slide.children) ? slide.children : [];
@@ -90,10 +88,10 @@ function countTableSlides(deck: DeckV7): number {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal v7 route metrics (content-free, safe to log)
+// Minimal presentation route metrics (content-free, safe to log)
 // ---------------------------------------------------------------------------
 
-interface V7RouteMetrics {
+interface RouteMetrics {
   slideCount: number;
   wordsPerSlide: number;
   percentSlidesWithVisual: number;
@@ -101,10 +99,10 @@ interface V7RouteMetrics {
   sourceWordCount?: number;
 }
 
-function computeV7RouteMetrics(
-  deck: DeckV7,
+function computeRouteMetrics(
+  deck: Deck,
   options: { sourceWordCount?: number } = {},
-): V7RouteMetrics {
+): RouteMetrics {
   const slideCount = deck.slides.length;
   let totalWords = 0;
   let slidesWithVisual = 0;
@@ -130,9 +128,9 @@ function computeV7RouteMetrics(
   const wordsPerSlide = slideCount > 0 ? totalWords / slideCount : 0;
   const percentSlidesWithVisual =
     slideCount > 0 ? slidesWithVisual / slideCount : 0;
-  const schemaValid = safeParseDeckV7(deck).success;
+  const schemaValid = safeParseDeck(deck).success;
 
-  const metrics: V7RouteMetrics = {
+  const metrics: RouteMetrics = {
     slideCount,
     wordsPerSlide,
     percentSlidesWithVisual,
@@ -168,12 +166,12 @@ function buildGenerateDeckResponseMetadata(
 export function buildGenerateDeckSuccessResponse(
   result: GenerateDeckRouteResult,
 ): {
-  deck: DeckV7;
+  deck: Deck;
   truncated: boolean;
   diagnostics: PresentationDiagnostic[];
   metadata: GenerateDeckResponseMetadata;
 } {
-  const metrics = computeV7RouteMetrics(result.deck);
+  const metrics = computeRouteMetrics(result.deck);
   return {
     deck: result.deck,
     truncated: result.truncated,
@@ -190,7 +188,7 @@ export function buildGenerateDeckSuccessLogFields(
     latencyMs: number;
   },
 ): Record<string, unknown> {
-  const metrics = computeV7RouteMetrics(result.deck, {
+  const metrics = computeRouteMetrics(result.deck, {
     sourceWordCount: countWords(context.payload.outline),
   });
   return {

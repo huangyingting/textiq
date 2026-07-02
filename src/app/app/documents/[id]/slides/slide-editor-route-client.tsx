@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ConflictRecoveryDialogV7 } from "@/components/presentation-vnext/conflict-recovery-dialog-v7";
-import { SlideEditorVNext } from "@/components/presentation-vnext/slide-editor-vnext";
+import { ConflictRecoveryDialog } from "@/components/presentation/conflict-recovery-dialog";
+import { SlideEditor } from "@/components/presentation/slide-editor";
 import { Button } from "@/components/ui";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { isEffectivelyEmptyEditorState } from "@/lib/ai/empty-content";
@@ -16,39 +16,39 @@ import {
   buildDocumentShareUrl,
   toPresentShareUrl,
 } from "@/lib/document/share-routes";
-import { hashDocumentBlock } from "@/lib/presentation-shared/document-block-hash";
+import { hashDocumentBlock } from "@/lib/presentation/document-block-hash";
 import {
   SAVE_STATUS_LABEL,
   resolveSaveErrorMessage,
   resolveSaveStatus,
   type SaveStatus,
-} from "@/lib/presentation-shared/save-status";
+} from "@/lib/presentation/save-status";
 import {
   createSlideAutosaveScheduler,
   type SlideAutosaveScheduler,
-} from "@/lib/presentation-shared/slide-autosave-scheduler";
-import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation-shared/theme-packages";
-import { buildSourceBlockIndex } from "@/lib/presentation-vnext/block-index";
+} from "@/lib/presentation/slide-autosave-scheduler";
+import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation/theme-package-ids";
+import { buildSourceBlockIndex } from "@/lib/presentation/block-index";
 import {
   CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE,
-  reloadConflictServerDeckV7,
-} from "@/lib/presentation-vnext/conflict-recovery-reload-v7";
-import { deriveDeckV7FromDocumentContent } from "@/lib/presentation-vnext/deck-derivation";
-import { pickUndoFocusTarget } from "@/lib/presentation-vnext/deck-diff";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
-import { decideDeckOpen } from "@/lib/presentation-vnext/open-deck";
-import { exportDeckV7AsPPTX } from "@/lib/presentation-vnext/pptx-vnext-apply";
-import { exportDeckV7RasterBrowser } from "@/lib/presentation-vnext/raster-browser-export";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
+  reloadConflictServerDeck,
+} from "@/lib/presentation/conflict-recovery-reload";
+import { deriveDeckFromDocumentContent } from "@/lib/presentation/deck-derivation";
+import { pickUndoFocusTarget } from "@/lib/presentation/deck-diff";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
+import { decideDeckOpen } from "@/lib/presentation/open-deck";
+import { exportDeckAsPPTX } from "@/lib/presentation/pptx-apply";
+import { exportDeckRasterBrowser } from "@/lib/presentation/raster-browser-export";
+import type { Deck } from "@/lib/presentation/schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import {
   SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE,
   hasUnresolvedDeckSaveConflict,
   updateConflictLocalDeck,
-  type SlideEditorConflictStateV7,
-} from "@/lib/presentation-vnext/slide-editor-collaboration-state";
-import { resolveThemePackageForDeck } from "@/lib/presentation-vnext/theme-package-registry";
+  type SlideEditorConflictState,
+} from "@/lib/presentation/slide-editor-collaboration-state";
+import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
 import { downloadBlob } from "@/lib/visual/export";
 
 import {
@@ -59,7 +59,7 @@ import {
 } from "../actions";
 import { saveBrandKitDraft } from "../brand-kit-actions";
 import { uploadSlideAsset } from "../slide-asset-actions";
-import { persistDeckV7WithRecovery } from "@/components/editor/use-slide-editor-open";
+import { persistDeckWithRecovery } from "@/components/editor/use-slide-editor-open";
 
 type SlideEditorShareState = Pick<
   ShareSettings,
@@ -69,7 +69,7 @@ type SlideEditorShareState = Pick<
 type SlideRouteOpenState =
   | {
       ok: true;
-      deck: DeckV7;
+      deck: Deck;
       diagnostics: PresentationDiagnostic[];
     }
   | {
@@ -120,7 +120,7 @@ function openInitialDeck({
     initialContentJson &&
     !isEffectivelyEmptyEditorState(initialContentJson)
   ) {
-    const derived = deriveDeckV7FromDocumentContent({
+    const derived = deriveDeckFromDocumentContent({
       contentJson: initialContentJson,
       documentId,
       themePackageId: DEFAULT_THEME_PACKAGE_ID,
@@ -135,7 +135,7 @@ function openInitialDeck({
       validationErrors: derived.validationErrors,
     };
   }
-  return { ok: true, deck: createBlankDeckV7({ documentId }), diagnostics: [] };
+  return { ok: true, deck: createBlankDeck({ documentId }), diagnostics: [] };
 }
 
 function SlideRouteRecovery({
@@ -214,7 +214,7 @@ export function SlideEditorRouteClient({
     () => openInitialDeck({ documentId, initialDeckJson, initialContentJson }),
     [documentId, initialContentJson, initialDeckJson],
   );
-  const [deck, setDeck] = useState<DeckV7 | null>(
+  const [deck, setDeck] = useState<Deck | null>(
     initialOpenState.ok ? initialOpenState.deck : null,
   );
   const [openError, setOpenError] = useState<Extract<
@@ -231,14 +231,14 @@ export function SlideEditorRouteClient({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [undoStack, setUndoStack] = useState<DeckV7[]>([]);
-  const [redoStack, setRedoStack] = useState<DeckV7[]>([]);
+  const [undoStack, setUndoStack] = useState<Deck[]>([]);
+  const [redoStack, setRedoStack] = useState<Deck[]>([]);
   const [undoRedoFocus, setUndoRedoFocus] = useState<{
     nodeId: string;
     token: number;
   } | null>(null);
   const [conflictState, setConflictState] =
-    useState<SlideEditorConflictStateV7 | null>(null);
+    useState<SlideEditorConflictState | null>(null);
   const [shareState, setShareState] = useState<SlideEditorShareState>({
     isShared: initialIsShared,
     shareId: initialShareId,
@@ -251,9 +251,9 @@ export function SlideEditorRouteClient({
   >(null);
   const revisionTokenRef = useRef<string | null>(initialDeckRevisionToken);
   const lastSavedRef = useRef<unknown>(initialDeckJson);
-  const noopAiAppliedDeckRef = useRef<DeckV7 | null>(null);
+  const noopAiAppliedDeckRef = useRef<Deck | null>(null);
   const focusTokenRef = useRef(0);
-  const autosaveSchedulerRef = useRef<SlideAutosaveScheduler<DeckV7> | null>(
+  const autosaveSchedulerRef = useRef<SlideAutosaveScheduler<Deck> | null>(
     null,
   );
   const deckPort = useMemo(
@@ -278,25 +278,25 @@ export function SlideEditorRouteClient({
   );
 
   const persistDeck = useCallback(
-    (updatedDeck: DeckV7) =>
-      persistDeckV7WithRecovery({
+    (updatedDeck: Deck) =>
+      persistDeckWithRecovery({
         updatedDeck,
         documentId,
         deckPort,
         revisionTokenRef,
         lastSavedRef,
         aiAppliedDeckRef: noopAiAppliedDeckRef,
-        setV7Dirty: setDirty,
-        setV7Saving: setSaving,
-        setV7SaveError: setSaveError,
-        setConflictStateV7: setConflictState,
+        setDirty: setDirty,
+        setSaving: setSaving,
+        setSaveError: setSaveError,
+        setConflictState: setConflictState,
         onAiDeckSaved: () => undefined,
       }),
     [deckPort, documentId],
   );
 
   useEffect(() => {
-    const scheduler = createSlideAutosaveScheduler<DeckV7>({
+    const scheduler = createSlideAutosaveScheduler<Deck>({
       onDue: (updatedDeck) => {
         void persistDeck(updatedDeck);
       },
@@ -328,12 +328,12 @@ export function SlideEditorRouteClient({
     router.push(documentHref);
   }
 
-  function scheduleAutosave(updatedDeck: DeckV7) {
+  function scheduleAutosave(updatedDeck: Deck) {
     autosaveSchedulerRef.current?.schedule(updatedDeck);
   }
 
   function setNextDeck(
-    updatedDeck: DeckV7,
+    updatedDeck: Deck,
     options: { persistNow?: boolean } = {},
   ) {
     setDeck((current) => {
@@ -352,7 +352,7 @@ export function SlideEditorRouteClient({
     }
   }
 
-  function handleDeckChange(updatedDeck: DeckV7) {
+  function handleDeckChange(updatedDeck: Deck) {
     if (hasUnresolvedDeckSaveConflict(conflictState)) {
       setConflictState(updateConflictLocalDeck(conflictState, updatedDeck));
       setDeck(updatedDeck);
@@ -363,7 +363,7 @@ export function SlideEditorRouteClient({
     setNextDeck(updatedDeck);
   }
 
-  async function handleSave(updatedDeck: DeckV7): Promise<ActionResult> {
+  async function handleSave(updatedDeck: Deck): Promise<ActionResult> {
     autosaveSchedulerRef.current?.cancel();
     return await persistDeck(updatedDeck);
   }
@@ -378,12 +378,12 @@ export function SlideEditorRouteClient({
       !initialContentJson ||
       isEffectivelyEmptyEditorState(initialContentJson)
     ) {
-      const blankDeck = createBlankDeckV7({ documentId });
+      const blankDeck = createBlankDeck({ documentId });
       setNextDeck(blankDeck, { persistNow: true });
       setDeckDiagnostics([]);
       return actionOk();
     }
-    const derived = deriveDeckV7FromDocumentContent({
+    const derived = deriveDeckFromDocumentContent({
       contentJson: initialContentJson,
       documentId,
       themePackageId: deck?.theme.packageId ?? DEFAULT_THEME_PACKAGE_ID,
@@ -435,7 +435,7 @@ export function SlideEditorRouteClient({
   }
 
   async function handleConflictKeepMine(
-    localDeck: DeckV7,
+    localDeck: Deck,
     serverToken: string | null,
   ) {
     const result: SaveDeckResult = await saveDeckJson(
@@ -463,7 +463,7 @@ export function SlideEditorRouteClient({
   }
 
   async function handleConflictUseTheirs() {
-    const reload = await reloadConflictServerDeckV7({ deckPort, documentId });
+    const reload = await reloadConflictServerDeck({ deckPort, documentId });
     if (!reload.ok) {
       setSaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
       throw new Error(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
@@ -507,7 +507,7 @@ export function SlideEditorRouteClient({
 
   async function handleExportPptx() {
     if (!deck) return;
-    const blob = await exportDeckV7AsPPTX(
+    const blob = await exportDeckAsPPTX(
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
@@ -521,7 +521,7 @@ export function SlideEditorRouteClient({
 
   async function handleExportPdf() {
     if (!deck) return;
-    const result = await exportDeckV7RasterBrowser(
+    const result = await exportDeckRasterBrowser(
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
@@ -530,7 +530,7 @@ export function SlideEditorRouteClient({
 
   async function handleExportPng() {
     if (!deck) return;
-    const result = await exportDeckV7RasterBrowser(
+    const result = await exportDeckRasterBrowser(
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
@@ -610,7 +610,7 @@ export function SlideEditorRouteClient({
     node,
     source,
   }: Parameters<
-    NonNullable<Parameters<typeof SlideEditorVNext>[0]["onRefreshSource"]>
+    NonNullable<Parameters<typeof SlideEditor>[0]["onRefreshSource"]>
   >[0]) {
     if (!initialContentJson || source.documentId !== documentId)
       return undefined;
@@ -702,7 +702,7 @@ export function SlideEditorRouteClient({
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-ds-surface">
-      <SlideEditorVNext
+      <SlideEditor
         documentId={documentId}
         deck={deck}
         themePackage={themeResolution?.package}
@@ -790,7 +790,7 @@ export function SlideEditorRouteClient({
       ) : null}
 
       {conflictState ? (
-        <ConflictRecoveryDialogV7
+        <ConflictRecoveryDialog
           open={true}
           localDeck={conflictState.localDeck}
           serverRevisionToken={conflictState.serverRevisionToken}

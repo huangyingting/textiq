@@ -2,28 +2,28 @@
 type: "contract"
 status: "current"
 last_updated: "2026-07-02"
-description: "This document defines the current Document.deckJson contract. Persisted decks must be DeckV7 JSON. Runtime open, save, render, and export paths reject superseded payload shapes instead of repairing or upgrading them."
+description: "This document defines the current Document.deckJson contract. Persisted decks must be Deck JSON. Runtime open, save, render, and export paths reject superseded payload shapes instead of repairing or upgrading them."
 ---
 
-# DeckV7 Persisted Contract
+# Deck Persisted Contract
 
 This document defines the current `Document.deckJson` contract. Persisted decks
-must be DeckV7 JSON. Runtime open, save, render, and export paths reject
+must be Deck JSON. Runtime open, save, render, and export paths reject
 superseded payload shapes instead of repairing or upgrading them.
 
 ## Source Anchors
 
-- `src/lib/presentation-vnext/schema.ts` — DeckV7 TypeScript contract.
-- `src/lib/presentation-vnext/validation.ts` — `safeParseDeckV7` schema gate.
-- `src/lib/presentation-vnext/open-deck.ts` — editor/public open boundary.
+- `src/lib/presentation/schema.ts` — Deck TypeScript contract.
+- `src/lib/presentation/validation.ts` — `safeParseDeck` schema gate.
+- `src/lib/presentation/open-deck.ts` — editor/public open boundary.
 - `src/lib/document/deck-cas-writer.ts` — validated compare-and-swap writes.
-- `src/lib/presentation-vnext/editor-commands.ts` — immutable deck mutations.
-- `src/lib/presentation-vnext/render-resolver.ts` — resolved render tree.
-- `src/lib/presentation-vnext/export-spec.ts` — DOM-free export operations.
+- `src/lib/presentation/editor-commands.ts` — immutable deck mutations.
+- `src/lib/presentation/render-resolver.ts` — resolved render tree.
+- `src/lib/presentation/export-spec.ts` — DOM-free export operations.
 
 ## Contract Boundary
 
-`Document.deckJson` stores a complete `DeckV7` object. It is independent of
+`Document.deckJson` stores a complete `Deck` object. It is independent of
 `Document.contentJson`; document edits and deck edits persist through separate
 write paths. Document content can seed or refresh deck content, but a saved deck
 is its own authored artifact.
@@ -31,7 +31,7 @@ is its own authored artifact.
 The only accepted persisted deck version is `schemaVersion: 7`.
 
 ```ts
-type DeckV7 = {
+type Deck = {
   schemaVersion: 7;
   id?: DeckId;
   title?: string;
@@ -46,11 +46,11 @@ type DeckV7 = {
 
 Unknown top-level keys are rejected. Fields from earlier deck shapes such as
 `elements`, `masters`, `customTemplates`, `design`, and `defaultMasterId` are
-not valid DeckV7 fields.
+not valid Deck fields.
 
 ## Schema Gate
 
-`safeParseDeckV7` validates unknown input without mutating it. It returns typed
+`safeParseDeck` validates unknown input without mutating it. It returns typed
 data only when the full structure is valid.
 
 The gate enforces these deck-level rules:
@@ -67,26 +67,26 @@ The gate enforces these deck-level rules:
 
 Repair is not performed by validation. Import, paste, AI-plan, and authoring
 boundaries must normalize external or partial input before it reaches
-`safeParseDeckV7`.
+`safeParseDeck`.
 
 ## Open Boundary
 
 `openDeckFromJson` is the single open boundary for editor, present-mode, public
-render, and AI-apply handoff. It accepts valid DeckV7 payloads directly and
+render, and AI-apply handoff. It accepts valid Deck payloads directly and
 returns `ok: false` for malformed, missing, unknown, or superseded schema
 versions.
 
 `decideDeckOpen` distinguishes three editor-start cases:
 
-| Mode       | Input condition                                      | Runtime behavior                                     |
-| ---------- | ---------------------------------------------------- | ---------------------------------------------------- |
-| `blank`    | `null` or `undefined` deck candidate                 | Start from an explicit blank deck.                   |
-| `open`     | Valid DeckV7 payload                                 | Use the validated deck directly.                     |
-| `recovery` | Non-empty payload that fails open or DeckV7 validate | Surface recovery diagnostics; do not silently blank. |
+| Mode       | Input condition                                    | Runtime behavior                                     |
+| ---------- | -------------------------------------------------- | ---------------------------------------------------- |
+| `blank`    | `null` or `undefined` deck candidate               | Start from an explicit blank deck.                   |
+| `open`     | Valid Deck payload                                 | Use the validated deck directly.                     |
+| `recovery` | Non-empty payload that fails open or Deck validate | Surface recovery diagnostics; do not silently blank. |
 
 At the document-editor entry point, the `blank` decision is only the persisted
 deck open result. If the current document has usable Lexical content, the Slides
-button supplies a deterministic `deriveDeckV7FromDocumentContent` fallback so
+button supplies a deterministic `deriveDeckFromDocumentContent` fallback so
 the first editor session opens with document-derived slides and semantic slide
 templates. Empty documents still use the explicit blank deck.
 
@@ -94,7 +94,7 @@ There is no runtime migration shim for older deck payloads.
 
 ## Canvas
 
-DeckV7 uses percent-coordinate canvas geometry. `CanvasSpec` carries the slide
+Deck uses percent-coordinate canvas geometry. `CanvasSpec` carries the slide
 format and dimensions, and render/export code converts frames to pixels or
 inches at the boundary that needs those units.
 
@@ -122,7 +122,7 @@ type DeckThemeBinding = {
 };
 ```
 
-Deck-level chrome is stored in `DeckV7.chrome` or in
+Deck-level chrome is stored in `Deck.chrome` or in
 `DeckThemeBinding.overrides.chrome`. Supported chrome slots are:
 
 - `logo`
@@ -174,7 +174,7 @@ type SlideNode = BaseNode & {
 };
 ```
 
-Slide validation rejects keys outside the DeckV7 slide schema. In particular,
+Slide validation rejects keys outside the Deck slide schema. In particular,
 `slides[].elements` is rejected.
 
 Slide template bindings identify semantic intent and optional layout id. Normal
@@ -250,12 +250,12 @@ type NodeSourceMetadata = {
 
 `refresh.state` is one of `fresh`, `stale`, `orphan`, `unlinked`, or `unknown`.
 Source-link classification and refresh logic live in
-`src/lib/presentation-vnext/source-links.ts`; validation only checks the shape.
+`src/lib/presentation/source-links.ts`; validation only checks the shape.
 
 ## Mutations
 
-DeckV7 editor commands are immutable. Each command receives a `DeckV7` and
-returns a new `DeckV7`; resolved styles are not written back into nodes.
+Deck editor commands are immutable. Each command receives a `Deck` and
+returns a new `Deck`; resolved styles are not written back into nodes.
 
 Command families include:
 
@@ -265,7 +265,7 @@ Command families include:
   binding, local style, grouping, z-order, and deletion;
 - asset metadata updates.
 
-Command output must still pass the DeckV7 schema gate before persistence.
+Command output must still pass the Deck schema gate before persistence.
 
 ## Persistence And Revision Tokens
 
@@ -273,8 +273,8 @@ Deck writes go through server actions and `writeDeckWithCas`.
 
 The CAS writer:
 
-1. validates the submitted value with `safeParseDeckV7`;
-2. serializes the parsed DeckV7 payload;
+1. validates the submitted value with `safeParseDeck`;
+2. serializes the parsed Deck payload;
 3. rejects payloads over the deck JSON byte limit;
 4. writes with `deckRevisionToken` compare-and-swap when a client token is
    supplied;
@@ -286,7 +286,7 @@ older deck shape as a compatibility fallback.
 
 ## Render And Export
 
-`resolveDeckRenderTree` converts `DeckV7` plus a loaded theme package into the
+`resolveDeckRenderTree` converts `Deck` plus a loaded theme package into the
 resolved render tree consumed by React renderers, public viewers, and export
 spec builders.
 
@@ -306,7 +306,7 @@ adapters perform file-generation side effects after this pure spec step.
 
 ## Invariants
 
-1. `Document.deckJson` must be valid DeckV7 JSON.
+1. `Document.deckJson` must be valid Deck JSON.
 2. Runtime open/save paths reject superseded deck payload shapes.
 3. Deck repair happens before validation, not inside validation.
 4. Slide content lives in `SlideNode.children`.
@@ -319,10 +319,10 @@ adapters perform file-generation side effects after this pure spec step.
 
 ## Primary Tests
 
-- `src/lib/presentation-vnext/validation.test.ts`
-- `src/lib/presentation-vnext/open-deck.test.ts`
-- `src/lib/presentation-vnext/editor-commands*.test.ts`
-- `src/lib/presentation-vnext/render-resolver.test.ts`
-- `src/lib/presentation-vnext/export-spec.test.ts`
-- `src/lib/presentation-vnext/pptx-export-adapter.test.ts`
+- `src/lib/presentation/validation.test.ts`
+- `src/lib/presentation/open-deck.test.ts`
+- `src/lib/presentation/editor-commands*.test.ts`
+- `src/lib/presentation/render-resolver.test.ts`
+- `src/lib/presentation/export-spec.test.ts`
+- `src/lib/presentation/pptx-export-adapter.test.ts`
 - `src/lib/document/deck-cas-writer.test.ts`

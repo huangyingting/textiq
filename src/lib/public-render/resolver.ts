@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation-vnext/brand-kit/persistence";
+import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation/brand-kit/persistence";
 
 import {
   resolvePublicRenderWithSource,

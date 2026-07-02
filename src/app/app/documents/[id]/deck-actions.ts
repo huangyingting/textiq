@@ -78,10 +78,10 @@ export async function fetchDeckJson(id: string): Promise<FetchDeckResult> {
  * The deck has two write entry points, each with a distinct input contract:
  *  - {@link saveDeckJson} — accepts a **full deck JSON** snapshot.
  *  - {@link saveDeckPatch} — accepts **`DeckPatch[]`** records but currently
- *    returns a compatibility `{ ok: "fallback" }` response for v7 runtime
+ *    returns a compatibility `{ ok: "fallback" }` response for presentation runtime
  *    callers, which then use {@link saveDeckJson}.
  *
- * Active v7 writes use optimistic revision-token CAS via `saveDeckJson`
+ * Active presentation writes use optimistic revision-token CAS via `saveDeckJson`
  * (`clientToken`).
  *
  * @param clientToken - The revision token last received from `fetchDeckJson` or
@@ -116,9 +116,9 @@ export async function saveDeckJson(
 }
 
 /**
- * Compatibility patch endpoint for non-v7 callers.
+ * Compatibility patch endpoint for non-presentation callers.
  *
- * Patch replay is currently disabled for the v7 runtime. Delegates to
+ * Patch replay is currently disabled for the presentation runtime. Delegates to
  * {@link patchDeck}, which validates document availability and returns
  * `{ ok: "fallback" }` for replay attempts so callers can save a full deck via
  * {@link saveDeckJson}.

@@ -12,7 +12,7 @@ description: "Epic: #493 — Persisted schema and cross-projection consistency g
 
 This playbook is the operator's guide for diagnosing and repairing persisted
 payloads that fail their schema validators (`Document.deckJson`, embedded
-`Document.contentJson` visuals, `Visual.data`, active DeckV7 source metadata).
+`Document.contentJson` visuals, `Visual.data`, active Deck source metadata).
 
 ---
 
@@ -62,7 +62,7 @@ The report lists `area`, `documentId`, `rowId`, `anchorId`, and `reason` only.
 For `Document.deckJson`, serialized JSON strings are reported as
 persisted-schema drift; runtime readers expect Prisma JSON values to be parsed
 objects and do not parse string decks. Current deck rows are validated with
-`safeParseDeckV7`.
+`safeParseDeck`.
 
 ---
 

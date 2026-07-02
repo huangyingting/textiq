@@ -43,7 +43,7 @@ type ActionDescriptor<TContext = void> = {
 ```
 
 The descriptor does not own persistence. The owning surface decides how to run
-the action, usually by dispatching a Lexical command, calling a DeckV7 editor
+the action, usually by dispatching a Lexical command, calling a Deck editor
 command, or invoking an injected action port.
 
 `actionTooltip` resolves tooltip text in this order: explicit tooltip,

@@ -16,7 +16,7 @@ them locally or in a dedicated E2E job.
 | `share-fallback.spec.ts`            | Unknown share/present/embed links → not-found fallback                                           |
 | `billing-brand.spec.ts`             | Billing unlimited-credit UI + Brand Studio font persistence                                      |
 | `slides-smoke.spec.ts`              | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                  |
-| `slides-layout-screenshots.spec.ts` | Deterministic v7 layout snapshots (desktop/tablet/mobile + rail/notes/panel states)              |
+| `slides-layout-screenshots.spec.ts` | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)    |
 | `screenshot-regression.spec.ts`     | Slide screenshot regression with deterministic fixtures (opt-in via env var)                     |
 | `import-roundtrip.spec.ts`          | Markdown import → editor render → edit/save/reload; unsupported-type error (profile-gated, #519) |
 | `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)            |
@@ -98,7 +98,7 @@ against it.
   same bcrypt path the app uses);
 - a workspace granting the viewer read-only access;
 - one **shared** document with intro text + an embedded visual, a persisted
-  `deckJson` in `schemaVersion: 7` (`DeckV7`) whose first slide carries known
+  `deckJson` in `schemaVersion: 7` (`Deck`) whose first slide carries known
   text and an `ImageNode` backed by a slide `Asset` (bytes written under
   `storage/slide-assets/…`), and an enabled
   public present/embed share policy;
@@ -203,7 +203,7 @@ established.
 
 ## Layout screenshots (`slides-layout-screenshots.spec.ts`)
 
-This suite snapshots the v7 slide-editor shell (desktop/tablet/mobile) for
+This suite snapshots the presentation slide-editor shell (desktop/tablet/mobile) for
 base, rail-hidden, notes-expanded, and panel-open states using the
 deterministic profile fixture.
 

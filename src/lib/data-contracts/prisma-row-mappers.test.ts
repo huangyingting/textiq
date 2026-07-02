@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
+import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 
 import {
   mapCommentRowToDto,
@@ -21,7 +21,7 @@ import {
 const now = new Date("2026-06-25T15:15:00.000Z");
 
 function deck(): unknown {
-  return buildMinimalDeckV7();
+  return buildMinimalDeck();
 }
 
 function visual(): unknown {

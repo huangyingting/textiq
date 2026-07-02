@@ -14,7 +14,7 @@ import { apiErrorMessageFromPayload } from "@/lib/api/error-message";
 import {
   isThemePackageId,
   type ThemePackageId,
-} from "@/lib/presentation-shared/theme-packages";
+} from "@/lib/presentation/theme-package-ids";
 import {
   DIAGNOSTIC_CATEGORIES,
   DIAGNOSTIC_TARGET_SCOPES,
@@ -23,9 +23,9 @@ import {
   type DiagnosticTarget,
   type DiagnosticTargetScope,
   type PresentationDiagnostic,
-} from "@/lib/presentation-vnext/diagnostics";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+} from "@/lib/presentation/diagnostics";
+import { safeParseDeck } from "@/lib/presentation/validation";
+import type { Deck } from "@/lib/presentation/schema";
 
 export type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 
@@ -68,7 +68,7 @@ export interface DeckGenerationResponseMetadata {
 export type DeckGenerateResult =
   | {
       ok: true;
-      deckV7: DeckV7;
+      deck: Deck;
       truncated: boolean;
       diagnostics: PresentationDiagnostic[];
       metadata?: DeckGenerationResponseMetadata;
@@ -154,7 +154,7 @@ export function buildDeckGenerationBody(
 /* node:coverage ignore start */
 /* Coverage rationale: response parser JSDoc is documentation-only; parser branches are asserted. */
 /**
- * Validate a `{ deck, truncated }` response payload. Returns the parsed DeckV7
+ * Validate a `{ deck, truncated }` response payload. Returns the parsed Deck
  * and the `truncated` flag, or `null` when the payload is missing/invalid.
  */
 /* node:coverage ignore stop */
@@ -393,7 +393,7 @@ function parseDeckResponseDiagnostics(
 }
 
 export function parseDeckResponse(payload: unknown): {
-  deckV7: DeckV7;
+  deck: Deck;
   truncated: boolean;
   diagnostics: PresentationDiagnostic[];
   metadata?: DeckGenerationResponseMetadata;
@@ -417,9 +417,14 @@ export function parseDeckResponse(payload: unknown): {
     !Array.isArray(rawDeck) &&
     (rawDeck as Record<string, unknown>).schemaVersion === 7
   ) {
-    const v7Result = safeParseDeckV7(rawDeck);
-    if (!v7Result.success) return null;
-    return { deckV7: v7Result.data, truncated, diagnostics, ...metaField };
+    const presentationResult = safeParseDeck(rawDeck);
+    if (!presentationResult.success) return null;
+    return {
+      deck: presentationResult.data,
+      truncated,
+      diagnostics,
+      ...metaField,
+    };
   }
 
   return null;
@@ -509,7 +514,7 @@ export async function requestDeckGeneration(
   }
   return {
     ok: true,
-    deckV7: parsed.deckV7,
+    deck: parsed.deck,
     truncated: parsed.truncated,
     diagnostics: parsed.diagnostics,
     ...(parsed.metadata ? { metadata: parsed.metadata } : {}),

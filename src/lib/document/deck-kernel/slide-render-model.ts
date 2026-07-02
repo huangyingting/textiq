@@ -13,7 +13,7 @@ import type {
 import {
   slideFormatConfig,
   type SlideFormat,
-} from "@/lib/presentation-shared/slide-format";
+} from "@/lib/presentation/slide-format";
 import {
   resolveShapeLabelStyle,
   resolveTextElementStyle,

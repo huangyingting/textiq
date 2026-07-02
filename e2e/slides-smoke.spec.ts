@@ -42,7 +42,7 @@ function slidesDocUrl(): string | undefined {
 }
 
 async function readSlideCount(page: Page): Promise<number | null> {
-  const editor = page.locator('[data-slide-editor-vnext="true"]').first();
+  const editor = page.locator('[data-slide-editor="true"]').first();
   if ((await editor.count()) === 0) return null;
   const text = await editor.textContent();
   if (!text) return null;
@@ -53,7 +53,7 @@ async function readSlideCount(page: Page): Promise<number | null> {
 }
 
 async function readVisualNodeCount(page: Page): Promise<number | null> {
-  const editor = page.locator('[data-slide-editor-vnext="true"]').first();
+  const editor = page.locator('[data-slide-editor="true"]').first();
   if ((await editor.count()) === 0) return null;
   return await editor.locator('[data-node-type="visual"]').count();
 }
@@ -107,7 +107,7 @@ function skipOptionalSlidesFixture(reason: string): never {
   throw new Error(reason);
 }
 
-const STAGE_NODE_SELECTOR = '[data-slide-canvas-vnext="true"] [data-node-id]';
+const STAGE_NODE_SELECTOR = '[data-slide-canvas="true"] [data-node-id]';
 
 async function selectedStageNodeId(
   stageShell: Locator,
@@ -516,7 +516,7 @@ test.describe("authenticated workspace accessibility", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("slides editor accessible toolbar controls", () => {
-  test("v7 stage keyboard traversal, resize shortcuts, and live announcements are behavioral", async ({
+  test("presentation stage keyboard traversal, resize shortcuts, and live announcements are behavioral", async ({
     page,
   }) => {
     const creds = ownerCredentials();
@@ -739,7 +739,7 @@ test.describe("slides editor accessible toolbar controls", () => {
     await expect(addSlideTrigger).toBeFocused();
   });
 
-  test("v7 visual picker modal traps focus and restores invoking focus", async ({
+  test("presentation visual picker modal traps focus and restores invoking focus", async ({
     page,
   }) => {
     const creds = ownerCredentials();

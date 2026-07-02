@@ -2,10 +2,10 @@
  * Persisted-payload schema audit (#501).
  *
  * Pure, DB-free auditing of the persisted shapes that the runtime trusts:
- *  - `Document.deckJson`          → {@link safeParseDeckV7}
+ *  - `Document.deckJson`          → {@link safeParseDeck}
  *  - `Document.contentJson` visuals → {@link safeParseVisual} per visual node
  *  - `Visual.data`                → {@link safeParseVisual}
- *  - active DeckV7 `source` metadata → {@link safeParseDeckV7}
+ *  - active Deck `source` metadata → {@link safeParseDeck}
  *
  * The audit reports ONLY safe identifiers and an opaque validator reason — row
  * id / document id / schema area / failure reason — and NEVER any document
@@ -18,7 +18,7 @@
  * runs inside request handling.
  */
 
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import { safeParseDeck } from "@/lib/presentation/validation";
 import { safeParseVisual } from "@/lib/visual/schema";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 import {
@@ -242,7 +242,7 @@ function validateNodeSourceMetadata(
   source: unknown,
   sourcePath: string,
 ): string | null {
-  const parsed = safeParseDeckV7({
+  const parsed = safeParseDeck({
     schemaVersion: 7,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
     theme: { packageId: "audit-validator" },
@@ -269,7 +269,7 @@ function validateNodeSourceMetadata(
     error.includes(sourceErrorPath),
   );
   if (sourceErrors.length === 0) {
-    return `${sourcePath} failed DeckV7 source metadata validation.`;
+    return `${sourcePath} failed Deck source metadata validation.`;
   }
   return sourceErrors
     .map((error) => error.replace(sourceErrorPath, sourcePath))

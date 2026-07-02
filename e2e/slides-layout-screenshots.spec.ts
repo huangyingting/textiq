@@ -8,7 +8,7 @@ import {
 } from "./helpers/profile";
 
 /**
- * Playwright layout screenshots for the v7 slide editor.
+ * Playwright layout screenshots for the presentation slide editor.
  *
  * Coverage:
  *  - desktop / tablet / mobile
@@ -120,7 +120,7 @@ async function openEditor(page: Page): Promise<Locator> {
 
   const stage = editor
     .locator(
-      '[data-slide-stage], [data-slide-stage-shell="true"], [data-slide-canvas-vnext="true"], [data-testid="slide-canvas"], .slide-canvas',
+      '[data-slide-stage], [data-slide-stage-shell="true"], [data-slide-canvas="true"], [data-testid="slide-canvas"], .slide-canvas',
     )
     .first();
   try {

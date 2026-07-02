@@ -11,11 +11,11 @@ import { writeDeckWithCas } from "@/lib/document/deck-cas-writer";
 import { logError } from "@/lib/log";
 import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type {
-  DeckV7,
+  Deck,
   SlideChildNode,
   SlideNode,
-} from "@/lib/presentation-vnext/schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+} from "@/lib/presentation/schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
 import type {
   SaveDeckFailureResult,
   SaveDeckPatchResult,
@@ -43,7 +43,7 @@ function listSlideNodeIds(slide: SlideNode): string[] {
   return nodeIds;
 }
 
-function buildSlideNodeIndex(deck: DeckV7): SlideNodeIndex {
+function buildSlideNodeIndex(deck: Deck): SlideNodeIndex {
   const index: SlideNodeIndex = new Map();
   for (const slide of deck.slides) {
     index.set(slide.id, new Set(listSlideNodeIds(slide)));
@@ -52,8 +52,8 @@ function buildSlideNodeIndex(deck: DeckV7): SlideNodeIndex {
 }
 
 function diffDeletedAnchors(
-  before: DeckV7,
-  after: DeckV7,
+  before: Deck,
+  after: Deck,
 ): { deletedSlides: string[]; deletedNodeIdsBySlide: Map<string, string[]> } {
   const afterSlideIds = new Set(after.slides.map((slide) => slide.id));
   const afterNodeIndex = buildSlideNodeIndex(after);
@@ -77,7 +77,7 @@ function diffDeletedAnchors(
   return { deletedSlides, deletedNodeIdsBySlide };
 }
 
-async function loadPersistedDeckV7(documentId: string): Promise<DeckV7 | null> {
+async function loadPersistedDeck(documentId: string): Promise<Deck | null> {
   try {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -86,12 +86,12 @@ async function loadPersistedDeckV7(documentId: string): Promise<DeckV7 | null> {
     if (!document?.deckJson) {
       return null;
     }
-    const parsed = safeParseDeckV7(document.deckJson);
+    const parsed = safeParseDeck(document.deckJson);
     return parsed.success ? parsed.data : null;
   } catch (error) {
     logError("deck.reconcile", error, {
       documentId,
-      operation: "loadPersistedDeckV7",
+      operation: "loadPersistedDeck",
     });
     return null;
   }
@@ -99,7 +99,7 @@ async function loadPersistedDeckV7(documentId: string): Promise<DeckV7 | null> {
 
 async function floatOrphanedCommentAnchors(
   documentId: string,
-  deck: DeckV7,
+  deck: Deck,
 ): Promise<void> {
   const slideNodeIndex = buildSlideNodeIndex(deck);
   const anchoredComments = await prisma.comment.findMany({
@@ -132,8 +132,8 @@ async function floatOrphanedCommentAnchors(
 
 async function reconcileCommentAnchorsAfterDeckSave(
   documentId: string,
-  previousDeck: DeckV7 | null,
-  nextDeck: DeckV7,
+  previousDeck: Deck | null,
+  nextDeck: Deck,
 ): Promise<void> {
   if (previousDeck) {
     const { deletedSlides, deletedNodeIdsBySlide } = diffDeletedAnchors(
@@ -184,9 +184,9 @@ export async function persistDeck(
   clientToken?: string | null,
   options: { userId?: string | null } = {},
 ): Promise<SaveDeckResult> {
-  const parsedNextDeck = safeParseDeckV7(deckJson);
+  const parsedNextDeck = safeParseDeck(deckJson);
   const previousDeckPromise = parsedNextDeck.success
-    ? loadPersistedDeckV7(documentId)
+    ? loadPersistedDeck(documentId)
     : Promise.resolve(null);
 
   return writeDeckWithCas({
@@ -210,9 +210,9 @@ export async function persistDeck(
 }
 
 /**
- * Compatibility patch entry point for non-v7 clients.
+ * Compatibility patch entry point for non-presentation clients.
  *
- * Patch replay is currently disabled for the v7 runtime, so this operation does
+ * Patch replay is currently disabled for the presentation runtime, so this operation does
  * not attempt to apply any `DeckPatch` records and always returns
  * `{ ok: "fallback" }` after confirming the target document exists.
  */

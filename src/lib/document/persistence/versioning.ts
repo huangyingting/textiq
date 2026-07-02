@@ -8,13 +8,13 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { safeParseDeck } from "@/lib/document/deck-schema";
+import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
 import {
-  DECK_SCHEMA_VERSION_V7,
-  type DeckV7,
+  DECK_SCHEMA_VERSION,
+  type Deck,
   type SlideChildNode,
-} from "@/lib/presentation-vnext/schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+} from "@/lib/presentation/schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
@@ -45,24 +45,24 @@ export function sanitizeRestoredDeck(
     collectVisualNodes(restoredContent).map((n) => n.visualId),
   );
 
-  if (looksLikeDeckV7(rawDeckJson)) {
-    const parsedV7 = safeParseDeckV7(rawDeckJson);
-    if (!parsedV7.success) {
+  if (looksLikeDeck(rawDeckJson)) {
+    const parsed = safeParseDeck(rawDeckJson);
+    if (!parsed.success) {
       reportSchemaFailure("deck-parse-failed", {
         area: "DocumentVersion.deckJson",
-        reason: parsedV7.errors.join("; "),
+        reason: parsed.errors.join("; "),
       });
       return rawDeckJson as Prisma.InputJsonValue;
     }
 
-    const sanitized = reconcileDeckV7VisualReferences(
-      parsedV7.data,
+    const sanitized = reconcileDeckVisualReferences(
+      parsed.data,
       knownVisualIds,
     );
     return sanitized as unknown as Prisma.InputJsonValue;
   }
 
-  const parsedLegacy = safeParseDeck(rawDeckJson);
+  const parsedLegacy = safeParseLegacyDeck(rawDeckJson);
   if (!parsedLegacy.success) {
     reportSchemaFailure("deck-parse-failed", {
       area: "DocumentVersion.deckJson",
@@ -78,48 +78,48 @@ export function sanitizeRestoredDeck(
   return sanitizedLegacy as unknown as Prisma.InputJsonValue;
 }
 
-function looksLikeDeckV7(rawDeckJson: Prisma.JsonValue): boolean {
+function looksLikeDeck(rawDeckJson: Prisma.JsonValue): boolean {
   return (
     typeof rawDeckJson === "object" &&
     rawDeckJson !== null &&
     !Array.isArray(rawDeckJson) &&
-    rawDeckJson.schemaVersion === DECK_SCHEMA_VERSION_V7
+    rawDeckJson.schemaVersion === DECK_SCHEMA_VERSION
   );
 }
 
-function reconcileDeckV7VisualReferences(
-  deck: DeckV7,
+function reconcileDeckVisualReferences(
+  deck: Deck,
   knownVisualIds: ReadonlySet<string>,
-): DeckV7 {
+): Deck {
   return {
     ...deck,
     slides: deck.slides.map((slide) => ({
       ...slide,
-      children: reconcileDeckV7Children(slide.children, knownVisualIds),
+      children: reconcileDeckChildren(slide.children, knownVisualIds),
     })),
   };
 }
 
-function reconcileDeckV7Children(
+function reconcileDeckChildren(
   children: readonly SlideChildNode[],
   knownVisualIds: ReadonlySet<string>,
 ): SlideChildNode[] {
   const reconciled: SlideChildNode[] = [];
 
   for (const child of children) {
-    const next = reconcileDeckV7Child(child, knownVisualIds);
+    const next = reconcileDeckChild(child, knownVisualIds);
     if (next) reconciled.push(next);
   }
 
   return reconciled;
 }
 
-function reconcileDeckV7Child(
+function reconcileDeckChild(
   child: SlideChildNode,
   knownVisualIds: ReadonlySet<string>,
 ): SlideChildNode | null {
   if (child.type === "group") {
-    const children = reconcileDeckV7Children(child.children, knownVisualIds);
+    const children = reconcileDeckChildren(child.children, knownVisualIds);
     if (children.length === 0) return null;
     return { ...child, children };
   }

@@ -4,7 +4,7 @@ import {
   validateSlideId,
 } from "@/lib/comments/anchors";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+import { safeParseDeck } from "@/lib/presentation/validation";
 import { safeParseVisual } from "@/lib/visual/schema";
 
 import {
@@ -36,12 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function validateDeckContract(value: unknown): ContractValidationResult {
-  const parsed = safeParseDeckV7(value);
-  return parsed.success ? ok() : fail(parsed.errors.join("; "));
-}
-
-function validateDeckV7Contract(value: unknown): ContractValidationResult {
-  const parsed = safeParseDeckV7(value);
+  const parsed = safeParseDeck(value);
   return parsed.success ? ok() : fail(parsed.errors.join("; "));
 }
 
@@ -119,7 +114,7 @@ export const PERSISTED_JSON_CONTRACTS = {
   "Document.deckJson": {
     name: "Document.deckJson",
     sourceOfTruth: "Document.deckJson is the source of truth for slides.",
-    validator: "@/lib/presentation-vnext/validation#safeParseDeckV7",
+    validator: "@/lib/presentation/validation#safeParseDeck",
     validate: validateDeckContract,
   },
   "Document.contentJson:visual": {
@@ -133,9 +128,9 @@ export const PERSISTED_JSON_CONTRACTS = {
   "DocumentVersion.deckJson": {
     name: "DocumentVersion.deckJson",
     sourceOfTruth:
-      "DocumentVersion.deckJson snapshots must use DeckV7 (schemaVersion 7).",
-    validator: "@/lib/presentation-vnext/validation#safeParseDeckV7",
-    validate: validateDeckV7Contract,
+      "DocumentVersion.deckJson snapshots must use Deck (schemaVersion 7).",
+    validator: "@/lib/presentation/validation#safeParseDeck",
+    validate: validateDeckContract,
   },
   "DocumentVersion.contentJson:visual": {
     name: "DocumentVersion.contentJson:visual",

@@ -1,23 +1,20 @@
-/** Renders native v7 semantic preview decks into static HTML pages. */
+/** Renders native presentation semantic preview decks into static HTML pages. */
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type {
-  DeckV7,
+  Deck,
   TableContent,
   TextContent,
-} from "@/lib/presentation-vnext/schema";
-import type { ResolvedRenderNode } from "@/lib/presentation-vnext/render-tree";
-import type {
-  FillStyle,
-  StyleObject,
-} from "@/lib/presentation-vnext/style-schema";
-import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
-import { resolveDeckRenderTree } from "@/lib/presentation-vnext/render-resolver";
-import { validateThemePackage } from "@/lib/presentation-vnext/theme-package-schema";
-import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
+} from "@/lib/presentation/schema";
+import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
+import type { FillStyle, StyleObject } from "@/lib/presentation/style-schema";
+import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import { resolveDeckRenderTree } from "@/lib/presentation/render-resolver";
+import { validateThemePackage } from "@/lib/presentation/theme-package-schema";
+import { safeParseDeck } from "@/lib/presentation/validation";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const decksDir = join(here, "decks");
@@ -233,21 +230,21 @@ function readThemePackage(id: string): ThemePackageV1 {
   return result.package;
 }
 
-function readDeck(id: string): DeckV7 {
+function readDeck(id: string): Deck {
   const input = JSON.parse(
     readFileSync(join(decksDir, `${id}.deck.json`), "utf8"),
   );
-  const result = safeParseDeckV7(input);
+  const result = safeParseDeck(input);
   if (!result.success) {
     throw new Error(
-      `${id} deck failed v7 validation: ${result.errors.join("; ")}`,
+      `${id} deck failed presentation validation: ${result.errors.join("; ")}`,
     );
   }
   return result.data;
 }
 
 export function renderPrototypeSlideHtml(
-  deck: DeckV7,
+  deck: Deck,
   themePackage: ThemePackageV1,
   index: number,
 ): string {
@@ -293,7 +290,7 @@ export function runPrototypeHtmlRenderer(): void {
     const slides = deck.slides
       .map((_, index) => renderPrototypeSlideHtml(deck, themePackage, index))
       .join("\n");
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${FONTS_LINK}<title>${esc(themePackage.name)} - v7 theme preview</title><style>${PAGE_CSS}</style></head><body><header><h1>${esc(themePackage.name)}</h1><p>Native v7 semantic theme package · heading ${esc(themePackage.tokens.fonts.heading.split(",")[0])} · accent ${esc(themePackage.tokens.colors.accent.fill)}</p></header><nav>${navLinks}</nav><main class="deck">${slides}</main></body></html>`;
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${FONTS_LINK}<title>${esc(themePackage.name)} - presentation theme preview</title><style>${PAGE_CSS}</style></head><body><header><h1>${esc(themePackage.name)}</h1><p>Native presentation semantic theme package · heading ${esc(themePackage.tokens.fonts.heading.split(",")[0])} · accent ${esc(themePackage.tokens.colors.accent.fill)}</p></header><nav>${navLinks}</nav><main class="deck">${slides}</main></body></html>`;
     writeFileSync(join(outDir, `${id}.html`), html, "utf8");
     console.log(`✓ preview/${id}.html`);
   }
@@ -307,7 +304,7 @@ export function runPrototypeHtmlRenderer(): void {
     })
     .join("");
 
-  const indexHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${FONTS_LINK}<title>Slide themes - v7 gallery</title><style>${PAGE_CSS}</style></head><body><header><h1>Professional slide themes</h1><p>Eight native v7 theme packages rendered through the shared semantic render tree.</p></header><main class="grid">${cards}</main></body></html>`;
+  const indexHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${FONTS_LINK}<title>Slide themes - presentation gallery</title><style>${PAGE_CSS}</style></head><body><header><h1>Professional slide themes</h1><p>Eight native presentation theme packages rendered through the shared semantic render tree.</p></header><main class="grid">${cards}</main></body></html>`;
   writeFileSync(join(outDir, "index.html"), indexHtml, "utf8");
   console.log(
     `✓ preview/index.html\n\nOpen prototypes/slide-themes/preview/index.html`,

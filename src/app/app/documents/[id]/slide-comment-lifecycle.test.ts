@@ -17,10 +17,10 @@ import {
   findOrphanedAnchors,
 } from "@/lib/comments";
 import type {
-  DeckV7,
+  Deck,
   SlideChildNode,
   SlideNode,
-} from "@/lib/presentation-vnext/schema";
+} from "@/lib/presentation/schema";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -51,7 +51,7 @@ function makeSlide(id: string, nodeIds: string[] = []): SlideNode {
   };
 }
 
-function makeDeck(slides: SlideNode[]): DeckV7 {
+function makeDeck(slides: SlideNode[]): Deck {
   return {
     schemaVersion: 7,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },

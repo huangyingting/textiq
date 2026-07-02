@@ -405,7 +405,7 @@ next save. `saveDeckJson` performs an atomic compare-and-swap:
 ### Patch saves (`saveDeckPatch`)
 
 `saveDeckPatch(id, patches, clientToken)` accepts an array of `DeckPatch`
-records, but patch replay is currently disabled in the v7 runtime. The action
+records, but patch replay is currently disabled in the presentation runtime. The action
 returns `{ ok: "fallback" }` as a compatibility signal so callers can retry
 with `saveDeckJson`.
 
@@ -438,13 +438,13 @@ Self-conflicts (same user, two tabs) are handled identically.
 
 ### Presence model
 
-The shared slide editor presence model (`presentation-shared/use-slide-presence.ts`) reuses the Yjs
+The shared slide editor presence model (`presentation/use-slide-presence.ts`) reuses the Yjs
 awareness channel to broadcast who has the deck open and which slide they are
 viewing. Presence is advisory — it does not imply real-time merge. Conflicts
 are handled by the revision-token CAS, not by presence locking. When the
 awareness channel is unavailable the hook degrades gracefully (empty peers).
 
-See [`use-slide-presence.ts`](../../src/lib/presentation-shared/use-slide-presence.ts)
+See [`use-slide-presence.ts`](../../src/lib/presentation/use-slide-presence.ts)
 for the `SlidePresencePayload` shape and `useSlidePresence` hook API.
 
 ## Tests

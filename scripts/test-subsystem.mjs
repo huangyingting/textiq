@@ -103,7 +103,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/data-contracts\//,
       /^src\/lib\/document\//,
-      /^src\/lib\/presentation-vnext\/validation/,
+      /^src\/lib\/presentation\/validation/,
       /^src\/lib\/schema-audit\//,
       /^src\/lib\/db\//,
       /^src\/lib\/db-provider\.test\.ts$/,
@@ -186,11 +186,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
       "Slide editor, deck runtime, exports, assets, and present mode",
     patterns: [
       /^src\/components\/presentation\//,
-      /^src\/components\/presentation-shared\//,
-      /^src\/components\/presentation-vnext\//,
       /^src\/lib\/assets\//,
-      /^src\/lib\/presentation-shared\//,
-      /^src\/lib\/presentation-vnext\//,
+      /^src\/lib\/presentation\//,
       /^src\/lib\/slides\//,
       /^src\/app\/api\/slide-assets\//,
       /^scripts\/(?:perf-budgets|slide-editor-size-budget)\.test\.mjs$/,

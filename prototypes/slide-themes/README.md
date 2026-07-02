@@ -1,24 +1,24 @@
-# Professional Slide Themes (v7)
+# Professional Slide Themes (presentation)
 
-Eight production-ready presentation themes authored against the current **v7
-semantic deck model** (`src/lib/presentation-vnext/schema.ts`). Each theme is a
-native `ThemePackageV1` source plus a schema-valid `DeckV7` preview generated
-from the v7 semantic template registry.
+Eight production-ready presentation themes authored against the current **presentation
+semantic deck model** (`src/lib/presentation/schema.ts`). Each theme is a
+native `ThemePackageV1` source plus a schema-valid `Deck` preview generated
+from the presentation semantic template registry.
 
-`prototypes/slide-themes/theme-packages-v7.ts` is the source of truth for the
+`prototypes/slide-themes/theme-packages.ts` is the source of truth for the
 prototype package pipeline. Generated package JSON, preview decks, manifest, and
-HTML previews are derived from that v7 source. Legacy v6 package JSON is not read
+HTML previews are derived from that presentation source. Legacy v6 package JSON is not read
 or upgraded by the generator.
 
 ## How it's built (uses existing system capabilities)
 
-- `theme-packages-v7.ts` — native `ThemePackageV1` source for the eight theme
+- `theme-packages.ts` — native `ThemePackageV1` source for the eight theme
   packages. Edit this file to change tokens, styles, or decorations.
 - `build-themes.ts` — validates each `ThemePackageV1`, compiles every semantic
-  template kind into a native `DeckV7` preview deck with `safeParseDeckV7`,
+  template kind into a native `Deck` preview deck with `safeParseDeck`,
   writes `packages/<id>.package.json`, writes `decks/<id>.deck.json`, and
   updates `manifest.json`.
-- `render-html.ts` — reads generated v7 packages/decks, resolves the shared v7
+- `render-html.ts` — reads generated presentation packages/decks, resolves the shared presentation
   render tree, and writes static **HTML previews** under `preview/`.
 
 Regenerate (decks first, then previews):
@@ -27,7 +27,7 @@ Regenerate (decks first, then previews):
 npm run slide-themes:generate
 ```
 
-To run the steps separately, use `npm run slide-themes:build` for v7 package and
+To run the steps separately, use `npm run slide-themes:build` for presentation package and
 deck validation, and `npm run slide-themes:html` for static HTML preview
 rendering.
 
@@ -38,7 +38,7 @@ cd prototypes/slide-themes/preview && python3 -m http.server 8777
 # open http://localhost:8777/index.html
 ```
 
-The custom theme rides on `DeckV7.theme.packageId` plus a loaded
+The custom theme rides on `Deck.theme.packageId` plus a loaded
 `ThemePackageV1`. `resolveDeckRenderTree` resolves package tokens, styles, and
 decorations before the preview, editor, present mode, public viewer, and export
 adapters consume the render tree.
@@ -48,12 +48,12 @@ adapters consume the render tree.
 - **No v6 masters or `Slide.elements[]`** are generated. Templates compile into
   `SlideNode` trees and visual language comes from package style refs.
 - **Theme packages own tokens, styles, and decorations only.** Semantic template
-  layout stays in `src/lib/presentation-vnext/theme-packages.ts`.
-- Rich backgrounds from the original style decks are expressed as v7 fills and
+  layout stays in `src/lib/presentation/theme-packages.ts`.
+- Rich backgrounds from the original style decks are expressed as presentation fills and
   decorations: conic gradients, repeating gradients, grid/dot/scanline patterns,
   glass cards, blurred glow fields, hard shadows, rings, and silk overlays.
 - Each preview deck includes a slide for every semantic template kind in
-  `SEMANTIC_TEMPLATE_KINDS` and is validated with `safeParseDeckV7`.
+  `SEMANTIC_TEMPLATE_KINDS` and is validated with `safeParseDeck`.
 
 ## The eight themes
 
@@ -69,5 +69,5 @@ adapters consume the render tree.
 | 8   | **pulse**     | Tech Terminal Mono    | JetBrains Mono          | `#39ff88` | Scan lines, terminal cards, neon mono emphasis     |
 
 See `manifest.json` for the machine-readable index, `packages/*.package.json`
-for generated v7 theme packages, and `decks/*.deck.json` for generated `DeckV7`
+for generated presentation theme packages, and `decks/*.deck.json` for generated `Deck`
 preview decks.

@@ -3,7 +3,7 @@ import {
   type Deck,
   type Slide,
 } from "../deck-core";
-import { SLIDE_FORMATS } from "@/lib/presentation-shared/slide-format";
+import { SLIDE_FORMATS } from "@/lib/presentation/slide-format";
 import {
   validateElement,
   validateBackgroundDesign,

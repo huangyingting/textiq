@@ -18,7 +18,7 @@ boundaries.
 
 - [../data-model/deck.md](../data-model/deck.md) for generated deck schema.
 - [generation.md](generation.md) for the current document source plan,
-  document slide plan, semantic deck plan, and DeckV7 provenance pipeline.
+  document slide plan, semantic deck plan, and Deck provenance pipeline.
 - [../presentation/slide-editor.md](../presentation/slide-editor.md) for the UI
   flow that previews and applies generated decks.
 - [../presentation/rendering-and-export.md](../presentation/rendering-and-export.md)

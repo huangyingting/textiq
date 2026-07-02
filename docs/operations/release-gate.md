@@ -107,7 +107,7 @@ It runs:
 
 The automated gate above validates code. A second, data-facing gate validates
 the **persisted payloads** the runtime trusts — `Document.deckJson`, embedded
-`Document.contentJson` visuals, `Visual.data`, and active DeckV7 source metadata
+`Document.contentJson` visuals, `Visual.data`, and active Deck source metadata
 (`slides[].source`, `slides[].children[].source`).
 Run it against a target database (staging or a production replica) before a
 release wave:
@@ -118,7 +118,7 @@ npm run audit:schema -- --ci
 
 The CLI (`src/scripts/audit-persisted-schema.ts`, core in
 `src/lib/schema-audit/audit.ts`) exits non-zero when any row fails its schema
-validator (`safeParseDeckV7` for `Document.deckJson` and
+validator (`safeParseDeck` for `Document.deckJson` and
 `DocumentVersion.deckJson`) and reports only safe identifiers (document id / row
 id / schema area / failure reason) — never document content. A clean run is a
 precondition for release; drift is remediated with the
@@ -131,7 +131,7 @@ precondition for release; drift is remediated with the
 - `scripts/check-line-coverage.mjs` to run the source and script unit tests
   under Node's built-in line coverage gate. The default minimums are the current
   loaded-source baseline floors: `95%` for `src/**/*.ts[x]` and `99%` for
-  `scripts/**/*.mjs`. The source floor is temporary during v7 backlog closure;
+  `scripts/**/*.mjs`. The source floor is temporary during presentation backlog closure;
   restore/increase it after issues are addressed, with a final hardening target
   to try for `100%`. Raise both with `LINE_COVERAGE_MIN=100`, or override one
   gate with `SOURCE_LINE_COVERAGE_MIN` / `SCRIPT_LINE_COVERAGE_MIN`.
@@ -159,14 +159,14 @@ The following subsystems have dedicated test files that must stay green:
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Block identity (#430)                | `src/lib/lexical/block-id.test.ts`                                                                                                                                                      |
 | Visual mirror diff (#448)            | `src/lib/visual/mirror-diff.test.ts`, `mirror-repair.test.ts`                                                                                                                           |
-| Command envelope (#436)              | `src/lib/commands/`, `src/lib/presentation-vnext/editor-commands*.test.ts`                                                                                                              |
-| Deck save / conflict (#376)          | `src/lib/document/deck-cas-writer.test.ts`, `src/lib/presentation-vnext/slide-editor-collaboration-state.test.ts`                                                                       |
+| Command envelope (#436)              | `src/lib/commands/`, `src/lib/presentation/editor-commands*.test.ts`                                                                                                                    |
+| Deck save / conflict (#376)          | `src/lib/document/deck-cas-writer.test.ts`, `src/lib/presentation/slide-editor-collaboration-state.test.ts`                                                                             |
 | Export preflight (#416)              | `src/lib/visual/export-preflight.test.ts`                                                                                                                                               |
 | Authorization                        | `src/lib/auth/document-permissions.test.ts`, `authz-regression.test.ts`                                                                                                                 |
 | API surface governance (#495)        | `src/app/api/api-route-security-matrix.test.ts`, `src/lib/api/errors.test.ts`, `src/lib/diagnostics/api-abuse.test.ts`, `src/app/api/slide-assets/[documentId]/[...path]/route.test.ts` |
 | Structured diagnostics (#460)        | `src/lib/diagnostics/error-codes.test.ts`                                                                                                                                               |
 | Performance budgets (#461)           | `scripts/perf-budgets.test.mjs`, `scripts/slide-editor-size-budget.test.mjs`                                                                                                            |
-| Autosave / conflict hardening (#459) | `src/lib/presentation-vnext/slide-editor-collaboration-state.test.ts`, `src/lib/document/deck-cas-writer.test.ts`                                                                       |
+| Autosave / conflict hardening (#459) | `src/lib/presentation/slide-editor-collaboration-state.test.ts`, `src/lib/document/deck-cas-writer.test.ts`                                                                             |
 | A11y helpers (#462)                  | `src/lib/a11y/a11y-helpers.test.ts`                                                                                                                                                     |
 
 ---
@@ -203,12 +203,12 @@ Key properties:
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
 
-| Spec (Epic #517)                    | Covers                                                                                                        |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `import-roundtrip.spec.ts`          | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                 |
-| `present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                     |
-| `slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                |
-| `slides-layout-screenshots.spec.ts` | #1449 deterministic v7 layout screenshots (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open) |
+| Spec (Epic #517)                    | Covers                                                                                                                  |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `import-roundtrip.spec.ts`          | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                           |
+| `present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                               |
+| `slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                          |
+| `slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout screenshots (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open) |
 
 See [`e2e/README.md`](../../e2e/README.md) for the full environment-variable
 reference and per-spec run instructions.
@@ -236,14 +236,14 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 | #   | Flow                                | Owner           | Notes                                                                                                                                                                       |
 | --- | ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S-1 | Slide edit and autosave (deck JSON) | **A**           | DeckV7 CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                         |
+| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                           |
 | S-2 | Deck patch save (`saveDeckPatch`)   | **D**           | Current `patchDeck` implementation is fallback-only (`{ ok: "fallback" }`); fallback behavior covered by `persistence-service.test.ts` and `patch-autosave.test.ts` (#1336) |
-| S-3 | Stale revision conflict recovery    | **A**           | DeckV7 stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`          |
+| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`            |
 | S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                        |
 | S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                                       |
 | S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                               |
 | S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                                  |
-| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic v7 layout screenshots in `e2e/slides-layout-screenshots.spec.ts` (#1449)                                                                                      |
+| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout screenshots in `e2e/slides-layout-screenshots.spec.ts` (#1449)                                                                            |
 
 ### Visual projection flows
 
@@ -276,15 +276,15 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Accessibility flows
 
-| #    | Flow                                                    | Owner | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---- | ------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AC-1 | VisualRenderer role=img + aria-label                    | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| AC-2 | Decorative canvas elements aria-hidden                  | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| AC-3 | Icon-only toolbar controls labelled                     | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| AC-4 | Modal dialog semantics                                  | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| AC-5 | Canvas keyboard resize / traversal / announcements      | **D** | v7 keyboard behavior exists in `slide-editor-vnext.tsx`, but release-gate automation is not yet tied to broad direct `SlideEditorVNext` keyboard interaction tests. Current evidence is helper/render-level (`selection-traversal.test.ts`, `slide-canvas-render.test.ts`, `canvas-a11y.test.ts`) plus focused rotation smoke (`slide-editor-vnext-toolbar-command-surface.failures.test.ts`). Track deferred keyboard free-draw connector scope in #1574. |
-| AC-6 | Content-first deck outline and per-node slide semantics | **A** | `slide-canvas-render.test.ts` verifies the screen-reader deck outline, active slide/current-node semantics, per-node narration labels, image labels, and missing-content fallbacks from the vNext outline adapter. This is reading/orientation evidence; it does not replace AC-5 editing-interaction evidence.                                                                                                                                            |
-| AC-7 | Stage reduced-motion and focus-visible conformance      | **A** | `slide-canvas-render.test.ts` verifies reduced-motion guards and design-system `FOCUS_RING` focus-visible styling for outline entries, focusable stage nodes, locked/grouped nodes, and editable table cells. Manual high-contrast review should confirm the DS focus token remains visible against the active theme before release sign-off.                                                                                                              |
+| #    | Flow                                                    | Owner | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-1 | VisualRenderer role=img + aria-label                    | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| AC-2 | Decorative canvas elements aria-hidden                  | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| AC-3 | Icon-only toolbar controls labelled                     | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| AC-4 | Modal dialog semantics                                  | **A** | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| AC-5 | Canvas keyboard resize / traversal / announcements      | **D** | presentation keyboard behavior exists in `slide-editor.tsx`, but release-gate automation is not yet tied to broad direct `SlideEditor` keyboard interaction tests. Current evidence is helper/render-level (`selection-traversal.test.ts`, `slide-canvas-render.test.ts`, `canvas-a11y.test.ts`) plus focused rotation smoke (`slide-editor-toolbar-command-surface.failures.test.ts`). Track deferred keyboard free-draw connector scope in #1574. |
+| AC-6 | Content-first deck outline and per-node slide semantics | **A** | `slide-canvas-render.test.ts` verifies the screen-reader deck outline, active slide/current-node semantics, per-node narration labels, image labels, and missing-content fallbacks from the presentation outline adapter. This is reading/orientation evidence; it does not replace AC-5 editing-interaction evidence.                                                                                                                              |
+| AC-7 | Stage reduced-motion and focus-visible conformance      | **A** | `slide-canvas-render.test.ts` verifies reduced-motion guards and design-system `FOCUS_RING` focus-visible styling for outline entries, focusable stage nodes, locked/grouped nodes, and editable table cells. Manual high-contrast review should confirm the DS focus token remains visible against the active theme before release sign-off.                                                                                                       |
 
 ---
 
@@ -308,14 +308,14 @@ For each flow below, check the indicated owner: **A** = automated test,
   the responsible engineer signs off that it is safe to proceed.
 - A known canvas keyboard limitation (**D**) is present: confirm it is recorded in
   `a11y-helpers.test.ts`, in [Slide canvas keyboard accessibility](../system/slide-canvas-keyboard-accessibility.md),
-  and the deferred-risk list. The v7 editor (`slide-editor-vnext.tsx`) ships
+  and the deferred-risk list. The presentation editor (`slide-editor.tsx`) ships
   keyboard resize/traversal/announcement behavior, but the release gate does not
-  yet have direct `SlideEditorVNext` keyboard interaction tests for those flows.
+  yet have direct `SlideEditor` keyboard interaction tests for those flows.
   Keep **AC-5** as deferred until that coverage lands; track connector free-draw
   follow-up in #1574.
 - Slide patch-save flow (**S-2 / D**) remains deferred while `patchDeck` is
   fallback-only (`{ ok: "fallback" }`): keep #1336 open and do not sign off this
-  path as automated patch persistence until DeckV7 patch replay is implemented.
+  path as automated patch persistence until Deck patch replay is implemented.
 - Performance budgets report `warned: true` (not `exceeded`) for any metric: log the
   finding and plan remediation within the next sprint.
 
@@ -341,7 +341,7 @@ Before each foundation release wave:
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | #430          | Block-anchor identity — `block-id.ts`, `block-id-runtime.ts`                                                                                                                                                                                                              |
 | #448          | Visual projection repair — `mirror-diff.ts`, `mirror-repair.ts`                                                                                                                                                                                                           |
-| #436          | Command envelope — `commands/`, `presentation-vnext/editor-commands.ts`                                                                                                                                                                                                   |
+| #436          | Command envelope — `commands/`, `presentation/editor-commands.ts`                                                                                                                                                                                                         |
 | #379 / #380   | Export pipeline — `export-preflight.ts`, `deck-export.ts`                                                                                                                                                                                                                 |
 | #376          | Conflict recovery — `deck-revision-token.ts`                                                                                                                                                                                                                              |
 | #460          | Structured diagnostics — `src/lib/diagnostics/error-codes.ts`                                                                                                                                                                                                             |
@@ -349,6 +349,6 @@ Before each foundation release wave:
 | #495          | API surface governance — `docs/security/api-route-security-matrix.md`, `src/lib/api/errors.ts`, `src/lib/diagnostics/api-abuse.ts`                                                                                                                                        |
 | #493          | Persisted-schema gates — `src/lib/schema-audit/audit.ts`, `docs/operations/schema-repair-runbook.md`                                                                                                                                                                      |
 | #517          | Release-gate E2E profile — `prisma/seed-e2e.ts`, `e2e/helpers/profile.ts`, `e2e/{import-roundtrip,present-export,slide-asset-upload,slides-layout-screenshots}.spec.ts`, [slide canvas keyboard accessibility decision](../system/slide-canvas-keyboard-accessibility.md) |
-| #1449         | Deterministic v7 layout screenshot gate — `e2e/slides-layout-screenshots.spec.ts`, `playwright.config.ts`, [E2E README](../../e2e/README.md)                                                                                                                              |
-| #1390         | DeckV7 release-gate slide blocker ownership reconciliation — this runbook's S-1/S-2/S-3 rows                                                                                                                                                                              |
+| #1449         | Deterministic presentation layout screenshot gate — `e2e/slides-layout-screenshots.spec.ts`, `playwright.config.ts`, [E2E README](../../e2e/README.md)                                                                                                                    |
+| #1390         | Deck release-gate slide blocker ownership reconciliation — this runbook's S-1/S-2/S-3 rows                                                                                                                                                                                |
 | #1004         | Documentation, ADR, and source-driven verification — [runtime config](runtime-config.md), [API route matrix](../security/api-route-security-matrix.md), [ADR index](../system/architecture-decisions.md), `npm run docs:check`                                            |

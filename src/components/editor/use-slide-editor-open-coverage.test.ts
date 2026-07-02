@@ -7,14 +7,14 @@ import type {
   FetchDeckResult,
   SaveDeckResult,
 } from "@/lib/document/persistence-types";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import type { Deck } from "@/lib/presentation/schema";
 import {
-  buildDeckV7,
-  buildSlideV7,
+  buildDeck,
+  buildSlide,
   buildTextContent,
   buildTextNode,
-} from "@/test/builders/deck-v7";
+} from "@/test/builders/presentation-deck";
 import { renderWithReact } from "@/test/react-server-renderer";
 
 import {
@@ -211,9 +211,9 @@ function emptyEditorJson() {
   };
 }
 
-function deckWithText(text: string, nodeId: string = "text-node-1"): DeckV7 {
-  return buildDeckV7([
-    buildSlideV7(
+function deckWithText(text: string, nodeId: string = "text-node-1"): Deck {
+  return buildDeck([
+    buildSlide(
       "content",
       [
         buildTextNode({
@@ -342,7 +342,7 @@ test("resolveDeckSaveRejectionError uses fallback text for empty errors", () => 
   );
 });
 
-test("useSlideEditorOpen opens a saved v7 deck and closes cleanly", async () => {
+test("useSlideEditorOpen opens a saved presentation deck and closes cleanly", async () => {
   await withAiFlag(undefined, async () => {
     const savedDeck = deckWithText("Saved deck");
     const deckPort = createDeckPort({
@@ -369,8 +369,8 @@ test("useSlideEditorOpen opens a saved v7 deck and closes cleanly", async () => 
 
     hook = runHook(renderer, options);
     assert.equal(hook.open, true);
-    assert.equal(hook.deckV7, savedDeck);
-    assert.deepEqual(hook.deckOpenDiagnosticsV7, []);
+    assert.equal(hook.deck, savedDeck);
+    assert.deepEqual(hook.deckOpenDiagnostics, []);
     assert.equal(hook.saveStatus, "saved");
     assert.equal(opened, 1);
     assert.deepEqual(deckPort.fetchCalls, ["doc-hook"]);
@@ -378,7 +378,7 @@ test("useSlideEditorOpen opens a saved v7 deck and closes cleanly", async () => 
     hook.handleClose();
     hook = runHook(renderer, options);
     assert.equal(hook.open, false);
-    assert.equal(hook.deckV7, null);
+    assert.equal(hook.deck, null);
     assert.equal(hook.hasUnsavedWork, false);
     assert.equal(closed, 1);
     renderer.cleanup();
@@ -442,11 +442,11 @@ test("useSlideEditorOpen derives a first deck from document content when no save
     hook = runHook(renderer, options);
 
     assert.equal(hook.open, true);
-    assert.equal(hook.deckOpenErrorV7, null);
-    assert.equal(hook.deckV7?.metadata?.sourceDocumentId, "doc-hook");
-    assert.notEqual(hook.deckV7?.slides[0]?.id, "slide-blank-1");
+    assert.equal(hook.deckOpenError, null);
+    assert.equal(hook.deck?.metadata?.sourceDocumentId, "doc-hook");
+    assert.notEqual(hook.deck?.slides[0]?.id, "slide-blank-1");
     assert.ok(
-      hook.deckV7?.slides.some((slide) =>
+      hook.deck?.slides.some((slide) =>
         slide.children.some((child) => child.type === "table"),
       ),
     );
@@ -468,8 +468,8 @@ test("useSlideEditorOpen surfaces saved deck open failures", async () => {
     hook = runHook(renderer, options);
 
     assert.equal(hook.open, true);
-    assert.equal(hook.deckV7, null);
-    assert.match(hook.deckOpenErrorV7?.error ?? "", /No deck available/);
+    assert.equal(hook.deck, null);
+    assert.match(hook.deckOpenError?.error ?? "", /No deck available/);
     assert.equal(hook.saveStatus, "error");
     hook.handleClose();
     renderer.cleanup();
@@ -502,58 +502,58 @@ test("useSlideEditorOpen stages, cancels, derives, and applies AI previews", asy
     assert.equal(hook.emptyDocument, false);
 
     hook.handleOpenDialogApply({
-      deckV7: proposedDeck,
+      deck: proposedDeck,
       truncated: true,
       diagnostics: [repeatedDiagnostic, repeatedDiagnostic],
       options: generationOptions,
     });
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
-    assert.equal(hook.aiPreviewV7?.proposedDeck, proposedDeck);
-    assert.equal(hook.aiPreviewV7?.baselineDeck, baselineDeck);
-    assert.equal(hook.aiPreviewV7?.truncated, true);
-    assert.deepEqual(hook.aiPreviewV7?.generationDiagnostics, [
+    assert.equal(hook.aiPreview?.proposedDeck, proposedDeck);
+    assert.equal(hook.aiPreview?.baselineDeck, baselineDeck);
+    assert.equal(hook.aiPreview?.truncated, true);
+    assert.deepEqual(hook.aiPreview?.generationDiagnostics, [
       repeatedDiagnostic,
     ]);
 
-    hook.handleAiPreviewV7Cancel();
+    hook.handleAiPreviewCancel();
     hook = runHook(renderer, options);
-    assert.equal(hook.aiPreviewV7, null);
+    assert.equal(hook.aiPreview, null);
 
     await hook.handleOpen();
     hook = runHook(renderer, options);
     hook.handleOpenDialogApply({
-      deckV7: proposedDeck,
+      deck: proposedDeck,
       truncated: false,
       diagnostics: [],
       options: generationOptions,
     });
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
-    hook.handleAiPreviewV7Derive();
+    hook.handleAiPreviewDerive();
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
     assert.equal(hook.open, true);
-    assert.equal(hook.aiPreviewV7, null);
-    assert.ok((hook.deckV7?.slides.length ?? 0) > 0);
+    assert.equal(hook.aiPreview, null);
+    assert.ok((hook.deck?.slides.length ?? 0) > 0);
 
     hook.handleClose();
     hook = runHook(renderer, options);
     await hook.handleOpen();
     hook = runHook(renderer, options);
     hook.handleOpenDialogApply({
-      deckV7: proposedDeck,
+      deck: proposedDeck,
       truncated: false,
       diagnostics: [],
       options: generationOptions,
     });
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
-    hook.handleAiPreviewV7Apply(appliedDeck, [diagnostic("Apply diagnostic")]);
+    hook.handleAiPreviewApply(appliedDeck, [diagnostic("Apply diagnostic")]);
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
     assert.equal(hook.open, true);
-    assert.equal(hook.deckV7, appliedDeck);
+    assert.equal(hook.deck, appliedDeck);
     assert.equal(deckPort.saveCalls.length, 1);
     assert.equal(deckPort.saveCalls[0]?.deckJson, appliedDeck);
     renderer.cleanup();
@@ -586,8 +586,8 @@ test("useSlideEditorOpen derives from initial content fallback and closes the AI
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
     assert.equal(hook.open, true);
-    assert.equal(hook.deckOpenErrorV7, null);
-    assert.ok((hook.deckV7?.slides.length ?? 0) > 0);
+    assert.equal(hook.deckOpenError, null);
+    assert.ok((hook.deck?.slides.length ?? 0) > 0);
     renderer.cleanup();
   });
 });
@@ -613,13 +613,13 @@ test("useSlideEditorOpen serializes saves and restores undo redo focus", async (
     await hook.handleOpen();
     hook = runHook(renderer, options);
 
-    const manualSave = hook.handleSaveV7(firstDeck);
+    const manualSave = hook.handleSave(firstDeck);
     await waitForAsyncDrain();
     hook = runHook(renderer, options);
-    hook.handleDeckV7Change(secondDeck);
+    hook.handleDeckChange(secondDeck);
     hook = runHook(renderer, options);
-    assert.equal(hook.deckV7, secondDeck);
-    assert.equal(hook.canUndoV7, true);
+    assert.equal(hook.deck, secondDeck);
+    assert.equal(hook.canUndo, true);
     assert.equal(deckPort.saveCalls.length, 1);
 
     firstSave.resolve({ ok: true, revisionToken: "rev-history-1b" });
@@ -630,16 +630,16 @@ test("useSlideEditorOpen serializes saves and restores undo redo focus", async (
     assert.equal(deckPort.saveCalls.length, 2);
     assert.equal(deckPort.saveCalls[1]?.deckJson, secondDeck);
 
-    hook.handleUndoV7();
+    hook.handleUndo();
     hook = runHook(renderer, options);
-    assert.equal(hook.deckV7, firstDeck);
-    assert.equal(hook.canRedoV7, true);
-    assert.equal(hook.undoRedoFocusV7?.nodeId, "history-node");
+    assert.equal(hook.deck, firstDeck);
+    assert.equal(hook.canRedo, true);
+    assert.equal(hook.undoRedoFocus?.nodeId, "history-node");
 
-    hook.handleRedoV7();
+    hook.handleRedo();
     hook = runHook(renderer, options);
-    assert.equal(hook.deckV7, secondDeck);
-    assert.equal(hook.undoRedoFocusV7?.nodeId, "history-node");
+    assert.equal(hook.deck, secondDeck);
+    assert.equal(hook.undoRedoFocus?.nodeId, "history-node");
     hook.handleClose();
     renderer.cleanup();
   });
@@ -675,53 +675,53 @@ test("useSlideEditorOpen handles conflicts, keep-mine, and use-theirs recovery",
     await hook.handleOpen();
     hook = runHook(renderer, options);
 
-    const conflictResult = await hook.handleSaveV7(localDeck);
+    const conflictResult = await hook.handleSave(localDeck);
     assert.equal(conflictResult.ok, false);
     hook = runHook(renderer, options);
-    assert.equal(hook.conflictStateV7?.localDeck, localDeck);
+    assert.equal(hook.conflictState?.localDeck, localDeck);
     assert.match(hook.saveErrorMessage ?? "", /Save conflict/);
 
-    hook.handleDeckV7Change(newerLocalDeck);
+    hook.handleDeckChange(newerLocalDeck);
     hook = runHook(renderer, options);
-    assert.equal(hook.conflictStateV7?.localDeck, newerLocalDeck);
+    assert.equal(hook.conflictState?.localDeck, newerLocalDeck);
     assert.match(
       hook.saveErrorMessage ?? "",
       /resolve the collaboration conflict/,
     );
 
-    await hook.handleConflictKeepMineV7(newerLocalDeck, "rev-server-conflict");
+    await hook.handleConflictKeepMine(newerLocalDeck, "rev-server-conflict");
     hook = runHook(renderer, options);
-    assert.equal(hook.conflictStateV7, null);
+    assert.equal(hook.conflictState, null);
     assert.equal(hook.hasUnsavedWork, false);
 
     await assert.rejects(
-      hook.handleConflictKeepMineV7(localDeck, "rev-stale"),
+      hook.handleConflictKeepMine(localDeck, "rev-stale"),
       /Still conflicted/,
     );
     hook = runHook(renderer, options);
     assert.equal(
-      hook.conflictStateV7?.serverRevisionToken,
+      hook.conflictState?.serverRevisionToken,
       "rev-still-conflicted",
     );
 
     await assert.rejects(
-      hook.handleConflictKeepMineV7(localDeck, "rev-still-conflicted"),
+      hook.handleConflictKeepMine(localDeck, "rev-still-conflicted"),
       /Write rejected/,
     );
 
-    await hook.handleConflictUseTheirsV7();
+    await hook.handleConflictUseTheirs();
     hook = runHook(renderer, options);
-    assert.equal(hook.deckV7, serverDeck);
-    assert.equal(hook.conflictStateV7, null);
+    assert.equal(hook.deck, serverDeck);
+    assert.equal(hook.conflictState, null);
     assert.equal(hook.hasUnsavedWork, false);
 
-    await assert.rejects(hook.handleConflictUseTheirsV7(), /server version/);
+    await assert.rejects(hook.handleConflictUseTheirs(), /server version/);
     hook = runHook(renderer, options);
     assert.match(hook.saveErrorMessage ?? "", /server version/);
 
-    hook.handleConflictDismissV7();
+    hook.handleConflictDismiss();
     hook = runHook(renderer, options);
-    assert.equal(hook.conflictStateV7, null);
+    assert.equal(hook.conflictState, null);
     hook.handleClose();
     renderer.cleanup();
   });

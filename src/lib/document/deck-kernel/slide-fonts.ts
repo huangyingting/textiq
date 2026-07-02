@@ -11,11 +11,11 @@ export {
   resolveSlideFont,
   slideFontCssStack,
   slideFontExportFace,
-} from "@/lib/presentation-shared/slide-fonts";
+} from "@/lib/presentation/slide-fonts";
 export type {
   FontOption,
   SlideFont,
   SlideFontAsset,
   SlideFontStyle,
   SlideFontWeight,
-} from "@/lib/presentation-shared/slide-fonts";
+} from "@/lib/presentation/slide-fonts";

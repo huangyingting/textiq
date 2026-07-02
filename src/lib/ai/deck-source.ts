@@ -3,7 +3,7 @@
  *
  * Turns a serialised Lexical document (`contentJson`) plus the document's
  * visuals into the `{ outline, visualInventory }` compatibility shape consumed
- * by the vNext deck generator for input limits, logging, and fallback prompt
+ * by the presentation deck generator for input limits, logging, and fallback prompt
  * context.
  *
  * Responsibilities:

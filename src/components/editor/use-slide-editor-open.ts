@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Open/close/route state controller for the v7-only slide editor entry point.
+ * Open/close/route state controller for the presentation-only slide editor entry point.
  *
- * Development builds support only DeckV7 at runtime. Legacy deck JSON is not
- * migrated here; when no saved v7 deck is available, the editor derives a deck
- * from the current document content and only falls back to a native blank DeckV7
+ * Development builds support only Deck at runtime. Legacy deck JSON is not
+ * migrated here; when no saved presentation deck is available, the editor derives a deck
+ * from the current document content and only falls back to a native blank Deck
  * for genuinely empty documents.
  */
 
@@ -22,52 +22,52 @@ import { logInfo } from "@/lib/log";
 import {
   DEFAULT_THEME_PACKAGE_ID,
   type ThemePackageId,
-} from "@/lib/presentation-shared/theme-packages";
+} from "@/lib/presentation/theme-package-ids";
 import {
   SAVE_STATUS_LABEL,
   resolveSaveErrorMessage,
   resolveSaveStatus,
   type SaveStatus,
-} from "@/lib/presentation-shared/save-status";
+} from "@/lib/presentation/save-status";
 import {
   createBrowserLocalStorageSaveQueueStorage,
   createResilientLatestSnapshotQueue,
   type ResilientLatestSnapshotQueue,
   type SaveQueueSaveResult,
   type SaveQueueStatus,
-} from "@/lib/presentation-shared/resilient-autosave-queue";
+} from "@/lib/presentation/resilient-autosave-queue";
 import { bucketCount, emitProductTelemetry } from "@/lib/telemetry/product";
-import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
+import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
 import {
   CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE,
-  reloadConflictServerDeckV7,
-} from "@/lib/presentation-vnext/conflict-recovery-reload-v7";
-import { openAiGeneratedDeck } from "@/lib/presentation-vnext/open-deck";
-import { deriveDeckV7FromDocumentContent } from "@/lib/presentation-vnext/deck-derivation";
-import { pickUndoFocusTarget } from "@/lib/presentation-vnext/deck-diff";
+  reloadConflictServerDeck,
+} from "@/lib/presentation/conflict-recovery-reload";
+import { openAiGeneratedDeck } from "@/lib/presentation/open-deck";
+import { deriveDeckFromDocumentContent } from "@/lib/presentation/deck-derivation";
+import { pickUndoFocusTarget } from "@/lib/presentation/deck-diff";
 import {
-  prepareDeckForOpenV7,
-  type PreparedDeckForOpenV7,
-} from "@/lib/presentation-vnext/deck-open-preparation-v7";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+  prepareDeckForOpen,
+  type PreparedDeckForOpen,
+} from "@/lib/presentation/deck-open-preparation";
+import type { Deck } from "@/lib/presentation/schema";
 import {
   dedupePresentationDiagnostics,
   mergePresentationDiagnostics,
-} from "@/lib/presentation-vnext/diagnostic-handoff";
+} from "@/lib/presentation/diagnostic-handoff";
 import {
   SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE,
   hasUnresolvedDeckSaveConflict,
   updateConflictLocalDeck,
-  type SlideEditorConflictStateV7,
-} from "@/lib/presentation-vnext/slide-editor-collaboration-state";
+  type SlideEditorConflictState,
+} from "@/lib/presentation/slide-editor-collaboration-state";
 
-/** State backing the v7 AI deck preview/diff surface. */
-export interface AiPreviewStateV7 {
-  /** The AI-generated v7 deck under review. */
-  proposedDeck: DeckV7;
-  /** The v7 deck the editor would otherwise open. */
-  baselineDeck: DeckV7;
+/** State backing the presentation AI deck preview/diff surface. */
+export interface AiPreviewState {
+  /** The AI-generated presentation deck under review. */
+  proposedDeck: Deck;
+  /** The presentation deck the editor would otherwise open. */
+  baselineDeck: Deck;
   /** Whether the source outline was trimmed to fit the input budget. */
   truncated: boolean;
   /** AI repair/compile diagnostics from generation and preview regenerate. */
@@ -93,7 +93,7 @@ const SAVE_CONFLICT_ERROR_MESSAGE =
 const SAVE_DECK_REJECTED_FALLBACK_MESSAGE =
   "Couldn't save your deck. Check your connection and retry.";
 
-export type SlideEditorOpenErrorV7 = {
+export type SlideEditorOpenError = {
   error: string;
   diagnostics: PresentationDiagnostic[];
   validationErrors?: string[];
@@ -117,37 +117,37 @@ export function resolveDeckSaveRejectionError(error: unknown): string {
   return `${SAVE_DECK_REJECTED_FALLBACK_MESSAGE} (${details})`;
 }
 
-interface PersistDeckV7WithRecoveryParams {
-  updatedDeck: DeckV7;
+interface PersistDeckWithRecoveryParams {
+  updatedDeck: Deck;
   documentId: string;
   deckPort: Pick<DeckActionPort, "saveDeckJson">;
   revisionTokenRef: { current: string | null };
   lastSavedRef: { current: unknown };
-  aiAppliedDeckRef: { current: DeckV7 | null };
-  setV7Dirty: (dirty: boolean) => void;
-  setV7Saving: (saving: boolean) => void;
-  setV7SaveError: (error: string | null) => void;
-  setConflictStateV7: (state: SlideEditorConflictStateV7 | null) => void;
-  onAiDeckSaved: (savedDeck: DeckV7) => void;
+  aiAppliedDeckRef: { current: Deck | null };
+  setDirty: (dirty: boolean) => void;
+  setSaving: (saving: boolean) => void;
+  setSaveError: (error: string | null) => void;
+  setConflictState: (state: SlideEditorConflictState | null) => void;
+  onAiDeckSaved: (savedDeck: Deck) => void;
   shouldApplyCompletionState?: () => boolean;
 }
 
-export async function persistDeckV7WithRecovery({
+export async function persistDeckWithRecovery({
   updatedDeck,
   documentId,
   deckPort,
   revisionTokenRef,
   lastSavedRef,
   aiAppliedDeckRef,
-  setV7Dirty,
-  setV7Saving,
-  setV7SaveError,
-  setConflictStateV7,
+  setDirty,
+  setSaving,
+  setSaveError,
+  setConflictState,
   onAiDeckSaved,
   shouldApplyCompletionState = () => true,
-}: PersistDeckV7WithRecoveryParams): Promise<ActionResult> {
-  setV7Saving(true);
-  setV7SaveError(null);
+}: PersistDeckWithRecoveryParams): Promise<ActionResult> {
+  setSaving(true);
+  setSaveError(null);
   try {
     const saveResult = await deckPort.saveDeckJson(
       documentId,
@@ -159,9 +159,9 @@ export async function persistDeckV7WithRecovery({
       lastSavedRef.current = updatedDeck;
       revisionTokenRef.current = saveResult.revisionToken;
       if (shouldApplyCompletion) {
-        setV7Dirty(false);
-        setV7SaveError(null);
-        setConflictStateV7(null);
+        setDirty(false);
+        setSaveError(null);
+        setConflictState(null);
         if (aiAppliedDeckRef.current) {
           aiAppliedDeckRef.current = null;
           onAiDeckSaved(updatedDeck);
@@ -171,8 +171,8 @@ export async function persistDeckV7WithRecovery({
     }
     if (saveResult.ok === "conflict") {
       if (shouldApplyCompletion) {
-        setV7SaveError(SAVE_CONFLICT_ERROR_MESSAGE);
-        setConflictStateV7({
+        setSaveError(SAVE_CONFLICT_ERROR_MESSAGE);
+        setConflictState({
           localDeck: updatedDeck,
           serverRevisionToken: saveResult.serverRevisionToken,
         });
@@ -180,17 +180,17 @@ export async function persistDeckV7WithRecovery({
       return { ok: false, error: SAVE_CONFLICT_ERROR_MESSAGE };
     }
     if (shouldApplyCompletion) {
-      setV7SaveError(saveResult.error);
+      setSaveError(saveResult.error);
     }
     return { ok: false, error: saveResult.error };
   } catch (error) {
     const rejectionError = resolveDeckSaveRejectionError(error);
     if (shouldApplyCompletionState()) {
-      setV7SaveError(rejectionError);
+      setSaveError(rejectionError);
     }
     return { ok: false, error: rejectionError };
   } finally {
-    setV7Saving(false);
+    setSaving(false);
   }
 }
 
@@ -245,62 +245,62 @@ export function createSerializedDeckPersistor<TDeck>({
 }
 
 interface CreateDeckAutosaveOnDueParams {
-  persistDeckV7: (deck: DeckV7) => Promise<ActionResult>;
+  persistDeck: (deck: Deck) => Promise<ActionResult>;
   log: typeof logInfo;
 }
 
-interface QueuedPersistDeckV7 {
-  deck: DeckV7;
+interface QueuedPersistDeck {
+  deck: Deck;
   requestId: number;
 }
 
 export function createDeckAutosaveOnDue({
-  persistDeckV7,
+  persistDeck,
   log,
-}: CreateDeckAutosaveOnDueParams): (deck: DeckV7) => void {
-  return (deck: DeckV7) => {
-    void persistDeckV7(deck)
+}: CreateDeckAutosaveOnDueParams): (deck: Deck) => void {
+  return (deck: Deck) => {
+    void persistDeck(deck)
       .then((result) => {
         if (!result.ok) {
-          log("editor.slide-editor", "v7-autosave-error", {
+          log("editor.slide-editor", "presentation-autosave-error", {
             error: result.error,
           });
         }
       })
       .catch((error: unknown) => {
-        log("editor.slide-editor", "v7-autosave-error", {
+        log("editor.slide-editor", "presentation-autosave-error", {
           error: resolveDeckSaveRejectionError(error),
         });
       });
   };
 }
 
-interface ApplyAiDeckProposalV7Params {
-  aiDeck: DeckV7;
+interface ApplyAiDeckProposalParams {
+  aiDeck: Deck;
   generationDiagnostics?: PresentationDiagnostic[];
-  aiAppliedDeckRef: { current: DeckV7 | null };
-  enterRecoveryV7: (info: SlideEditorOpenErrorV7) => void;
-  finishOpenV7: (deck: DeckV7, diagnostics?: PresentationDiagnostic[]) => void;
-  cancelAutosaveV7: () => void;
-  setV7Dirty: (dirty: boolean) => void;
-  persistDeckV7: (deck: DeckV7) => Promise<ActionResult>;
+  aiAppliedDeckRef: { current: Deck | null };
+  enterRecovery: (info: SlideEditorOpenError) => void;
+  finishOpen: (deck: Deck, diagnostics?: PresentationDiagnostic[]) => void;
+  cancelAutosave: () => void;
+  setDirty: (dirty: boolean) => void;
+  persistDeck: (deck: Deck) => Promise<ActionResult>;
 }
 
-export function applyAiDeckProposalV7({
+export function applyAiDeckProposal({
   aiDeck,
   generationDiagnostics = [],
   aiAppliedDeckRef,
-  enterRecoveryV7,
-  finishOpenV7,
-  cancelAutosaveV7,
-  setV7Dirty,
-  persistDeckV7,
-}: ApplyAiDeckProposalV7Params): void {
+  enterRecovery,
+  finishOpen,
+  cancelAutosave,
+  setDirty,
+  persistDeck,
+}: ApplyAiDeckProposalParams): void {
   // Route AI proposals through the same open boundary so a malformed deck
   // surfaces recovery diagnostics instead of silently blanking the editor.
   const opened = openAiGeneratedDeck(aiDeck);
   if (!opened.ok) {
-    enterRecoveryV7({
+    enterRecovery({
       error: opened.error,
       diagnostics: mergePresentationDiagnostics(
         generationDiagnostics,
@@ -319,10 +319,10 @@ export function applyAiDeckProposalV7({
     editDistanceBucket: bucketCount(opened.deck.slides.length),
     slideCount: opened.deck.slides.length,
   });
-  cancelAutosaveV7();
-  finishOpenV7(opened.deck, mergedDiagnostics);
-  setV7Dirty(true);
-  void persistDeckV7(opened.deck);
+  cancelAutosave();
+  finishOpen(opened.deck, mergedDiagnostics);
+  setDirty(true);
+  void persistDeck(opened.deck);
 }
 
 export function useSlideEditorOpen({
@@ -339,22 +339,23 @@ export function useSlideEditorOpen({
   const [pendingThemePackageId, setPendingThemePackageId] =
     useState<ThemePackageId>(DEFAULT_THEME_PACKAGE_ID);
   const [emptyDocument, setEmptyDocument] = useState(false);
-  const [aiPreviewV7, setAiPreviewV7] = useState<AiPreviewStateV7 | null>(null);
-  const [deckV7, setDeckV7] = useState<DeckV7 | null>(null);
-  const [deckOpenDiagnosticsV7, setDeckOpenDiagnosticsV7] = useState<
+  const [aiPreview, setAiPreview] = useState<AiPreviewState | null>(null);
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const [deckOpenDiagnostics, setDeckOpenDiagnostics] = useState<
     PresentationDiagnostic[]
   >([]);
-  const [deckOpenErrorV7, setDeckOpenErrorV7] =
-    useState<SlideEditorOpenErrorV7 | null>(null);
-  const [v7Dirty, setV7Dirty] = useState(false);
-  const [v7Saving, setV7Saving] = useState(false);
-  const [v7SaveError, setV7SaveError] = useState<string | null>(null);
-  const [v7QueueStatus, setV7QueueStatus] = useState<SaveQueueStatus>("idle");
-  const [undoStackV7, setUndoStackV7] = useState<DeckV7[]>([]);
-  const [redoStackV7, setRedoStackV7] = useState<DeckV7[]>([]);
-  const [conflictStateV7, setConflictStateV7] =
-    useState<SlideEditorConflictStateV7 | null>(null);
-  const [undoRedoFocusV7, setUndoRedoFocusV7] = useState<{
+  const [deckOpenError, setDeckOpenError] =
+    useState<SlideEditorOpenError | null>(null);
+  const [presentationDirty, setDirty] = useState(false);
+  const [presentationSaving, setSaving] = useState(false);
+  const [presentationSaveError, setSaveError] = useState<string | null>(null);
+  const [presentationQueueStatus, setQueueStatus] =
+    useState<SaveQueueStatus>("idle");
+  const [undoStack, setUndoStack] = useState<Deck[]>([]);
+  const [redoStack, setRedoStack] = useState<Deck[]>([]);
+  const [conflictState, setConflictState] =
+    useState<SlideEditorConflictState | null>(null);
+  const [undoRedoFocus, setUndoRedoFocus] = useState<{
     nodeId: string;
     token: number;
   } | null>(null);
@@ -362,29 +363,29 @@ export function useSlideEditorOpen({
   const aiEnabled = isAiDeckGenClientEnabled();
   const lastSavedRef = useRef<unknown>(initialDeckJson);
   const revisionTokenRef = useRef<string | null>(null);
-  const aiAppliedDeckRef = useRef<DeckV7 | null>(null);
+  const aiAppliedDeckRef = useRef<Deck | null>(null);
   const focusTokenRef = useRef(0);
-  const autosaveQueueRef = useRef<ResilientLatestSnapshotQueue<DeckV7> | null>(
+  const autosaveQueueRef = useRef<ResilientLatestSnapshotQueue<Deck> | null>(
     null,
   );
-  const inFlightPersistV7Ref = useRef<Promise<ActionResult> | null>(null);
-  const latestPersistDeckV7Ref = useRef<QueuedPersistDeckV7 | null>(null);
+  const inFlightPersistRef = useRef<Promise<ActionResult> | null>(null);
+  const latestPersistDeckRef = useRef<QueuedPersistDeck | null>(null);
   const latestPersistRequestIdRef = useRef(0);
-  const saveAgainPersistV7Ref = useRef(false);
+  const saveAgainPersistRef = useRef(false);
 
-  const persistDeckV7WithSingleWrite = useCallback(
-    async (updatedDeck: DeckV7, requestId: number): Promise<ActionResult> => {
-      return persistDeckV7WithRecovery({
+  const persistDeckWithSingleWrite = useCallback(
+    async (updatedDeck: Deck, requestId: number): Promise<ActionResult> => {
+      return persistDeckWithRecovery({
         updatedDeck,
         documentId,
         deckPort,
         revisionTokenRef,
         lastSavedRef,
         aiAppliedDeckRef,
-        setV7Dirty,
-        setV7Saving,
-        setV7SaveError,
-        setConflictStateV7,
+        setDirty,
+        setSaving,
+        setSaveError,
+        setConflictState,
         onAiDeckSaved: (savedDeck) => {
           emitProductTelemetry("product.ai.deck.saved", {
             editDistanceBucket: bucketCount(savedDeck.slides.length),
@@ -397,8 +398,8 @@ export function useSlideEditorOpen({
     },
     [deckPort, documentId],
   );
-  const persistDeckV7 = useCallback(
-    (updatedDeck: DeckV7): Promise<ActionResult> => {
+  const persistDeck = useCallback(
+    (updatedDeck: Deck): Promise<ActionResult> => {
       const queue = autosaveQueueRef.current;
       if (queue) {
         return queue.enqueue(updatedDeck, revisionTokenRef.current, {
@@ -407,61 +408,61 @@ export function useSlideEditorOpen({
       }
       latestPersistRequestIdRef.current += 1;
       const requestId = latestPersistRequestIdRef.current;
-      latestPersistDeckV7Ref.current = { deck: updatedDeck, requestId };
-      if (inFlightPersistV7Ref.current) {
-        saveAgainPersistV7Ref.current = true;
-        return inFlightPersistV7Ref.current;
+      latestPersistDeckRef.current = { deck: updatedDeck, requestId };
+      if (inFlightPersistRef.current) {
+        saveAgainPersistRef.current = true;
+        return inFlightPersistRef.current;
       }
       const savePromise = (async (): Promise<ActionResult> => {
         let lastResult: ActionResult = actionOk();
         try {
           do {
-            saveAgainPersistV7Ref.current = false;
-            const queuedDeck = latestPersistDeckV7Ref.current;
+            saveAgainPersistRef.current = false;
+            const queuedDeck = latestPersistDeckRef.current;
             if (queuedDeck === null) {
               return lastResult;
             }
-            lastResult = await persistDeckV7WithSingleWrite(
+            lastResult = await persistDeckWithSingleWrite(
               queuedDeck.deck,
               queuedDeck.requestId,
             );
             if (
-              latestPersistDeckV7Ref.current?.requestId !== queuedDeck.requestId
+              latestPersistDeckRef.current?.requestId !== queuedDeck.requestId
             ) {
-              saveAgainPersistV7Ref.current = true;
+              saveAgainPersistRef.current = true;
             }
-          } while (saveAgainPersistV7Ref.current);
+          } while (saveAgainPersistRef.current);
           return lastResult;
         } finally {
-          saveAgainPersistV7Ref.current = false;
+          saveAgainPersistRef.current = false;
         }
       })();
-      inFlightPersistV7Ref.current = savePromise;
+      inFlightPersistRef.current = savePromise;
       void savePromise.finally(() => {
-        if (inFlightPersistV7Ref.current === savePromise) {
-          inFlightPersistV7Ref.current = null;
+        if (inFlightPersistRef.current === savePromise) {
+          inFlightPersistRef.current = null;
         }
       });
       return savePromise;
     },
-    [persistDeckV7WithSingleWrite],
+    [persistDeckWithSingleWrite],
   );
 
   useEffect(() => {
-    const queue = createResilientLatestSnapshotQueue<DeckV7>({
+    const queue = createResilientLatestSnapshotQueue<Deck>({
       documentId,
-      storage: createBrowserLocalStorageSaveQueueStorage<DeckV7>({
+      storage: createBrowserLocalStorageSaveQueueStorage<Deck>({
         documentId,
       }),
       isOnline: () =>
         typeof navigator === "undefined" ? true : navigator.onLine !== false,
-      onStatusChange: setV7QueueStatus,
+      onStatusChange: setQueueStatus,
       onSaved: (savedDeck, revisionToken) => {
         lastSavedRef.current = savedDeck;
         revisionTokenRef.current = revisionToken;
-        setV7Dirty(false);
-        setV7SaveError(null);
-        setConflictStateV7(null);
+        setDirty(false);
+        setSaveError(null);
+        setConflictState(null);
         if (aiAppliedDeckRef.current) {
           aiAppliedDeckRef.current = null;
           emitProductTelemetry("product.ai.deck.saved", {
@@ -474,8 +475,8 @@ export function useSlideEditorOpen({
         queuedDeck,
         baseRevisionToken,
       ): Promise<SaveQueueSaveResult> => {
-        setV7Saving(true);
-        setV7SaveError(null);
+        setSaving(true);
+        setSaveError(null);
         try {
           const saveResult = await deckPort.saveDeckJson(
             documentId,
@@ -489,14 +490,14 @@ export function useSlideEditorOpen({
             };
           }
           if (saveResult.ok === "conflict") {
-            setV7SaveError(SAVE_CONFLICT_ERROR_MESSAGE);
-            setConflictStateV7({
+            setSaveError(SAVE_CONFLICT_ERROR_MESSAGE);
+            setConflictState({
               localDeck: queuedDeck,
               serverRevisionToken: saveResult.serverRevisionToken,
             });
             return saveResult;
           }
-          setV7SaveError(saveResult.error);
+          setSaveError(saveResult.error);
           return {
             ok: false,
             error: saveResult.error,
@@ -504,10 +505,10 @@ export function useSlideEditorOpen({
           };
         } catch (error) {
           const rejectionError = resolveDeckSaveRejectionError(error);
-          setV7SaveError(rejectionError);
+          setSaveError(rejectionError);
           return { ok: false, error: rejectionError, retryable: true };
         } finally {
-          setV7Saving(false);
+          setSaving(false);
         }
       },
     });
@@ -536,14 +537,14 @@ export function useSlideEditorOpen({
     };
   }, [deckPort, documentId]);
 
-  const cancelAutosaveV7 = useCallback(() => {
+  const cancelAutosave = useCallback(() => {
     autosaveQueueRef.current?.cancelScheduledFlush();
   }, []);
 
   const fallbackDeck = useCallback(
     (contentJson?: string | null) => {
       if (contentJson && !isEffectivelyEmptyEditorState(contentJson)) {
-        const derived = deriveDeckV7FromDocumentContent({
+        const derived = deriveDeckFromDocumentContent({
           contentJson,
           documentId,
           themePackageId: pendingThemePackageId,
@@ -552,59 +553,59 @@ export function useSlideEditorOpen({
           return { deck: derived.deck, diagnostics: derived.diagnostics };
         }
       }
-      return createBlankDeckV7({ documentId });
+      return createBlankDeck({ documentId });
     },
     [documentId, pendingThemePackageId],
   );
 
-  const finishOpenV7 = useCallback(
-    (startDeck: DeckV7, diagnostics: PresentationDiagnostic[] = []) => {
-      setDeckV7(startDeck);
-      setDeckOpenDiagnosticsV7(diagnostics);
-      setDeckOpenErrorV7(null);
-      setV7Dirty(false);
-      setV7Saving(false);
-      setV7SaveError(null);
-      setUndoStackV7([]);
-      setRedoStackV7([]);
-      setUndoRedoFocusV7(null);
+  const finishOpen = useCallback(
+    (startDeck: Deck, diagnostics: PresentationDiagnostic[] = []) => {
+      setDeck(startDeck);
+      setDeckOpenDiagnostics(diagnostics);
+      setDeckOpenError(null);
+      setDirty(false);
+      setSaving(false);
+      setSaveError(null);
+      setUndoStack([]);
+      setRedoStack([]);
+      setUndoRedoFocus(null);
       setPendingJson(null);
-      setAiPreviewV7(null);
+      setAiPreview(null);
       setOpen(true);
       onOpenRightSurface();
     },
     [onOpenRightSurface],
   );
 
-  const enterRecoveryV7 = useCallback(
-    (info: SlideEditorOpenErrorV7) => {
+  const enterRecovery = useCallback(
+    (info: SlideEditorOpenError) => {
       aiAppliedDeckRef.current = null;
-      cancelAutosaveV7();
-      setDeckV7(null);
-      setDeckOpenDiagnosticsV7(info.diagnostics);
-      setDeckOpenErrorV7(info);
+      cancelAutosave();
+      setDeck(null);
+      setDeckOpenDiagnostics(info.diagnostics);
+      setDeckOpenError(info);
       setPendingJson(null);
-      setAiPreviewV7(null);
-      setV7Dirty(false);
-      setV7Saving(false);
-      setV7SaveError(info.error);
-      setUndoStackV7([]);
-      setRedoStackV7([]);
-      setUndoRedoFocusV7(null);
+      setAiPreview(null);
+      setDirty(false);
+      setSaving(false);
+      setSaveError(info.error);
+      setUndoStack([]);
+      setRedoStack([]);
+      setUndoRedoFocus(null);
       setOpen(true);
       onOpenRightSurface();
     },
-    [cancelAutosaveV7, onOpenRightSurface],
+    [cancelAutosave, onOpenRightSurface],
   );
 
-  const prepareOpenV7 = useCallback(
-    async (contentJson?: string | null): Promise<PreparedDeckForOpenV7> => {
-      return await prepareDeckForOpenV7({
+  const prepareOpen = useCallback(
+    async (contentJson?: string | null): Promise<PreparedDeckForOpen> => {
+      return await prepareDeckForOpen({
         documentId,
         deckPort,
         fallbackDeck: () => fallbackDeck(contentJson),
         onFetchFailure: ({ reason, error }) => {
-          logInfo("editor.slide-editor", "v7-open-fetch-failed", {
+          logInfo("editor.slide-editor", "presentation-open-fetch-failed", {
             documentId,
             reason,
             error,
@@ -615,85 +616,79 @@ export function useSlideEditorOpen({
     [deckPort, documentId, fallbackDeck],
   );
 
-  const openSavedV7 = useCallback(
+  const openSaved = useCallback(
     async (contentJson?: string | null) => {
       aiAppliedDeckRef.current = null;
-      const prepared = await prepareOpenV7(contentJson);
+      const prepared = await prepareOpen(contentJson);
       if (prepared.ok) {
         revisionTokenRef.current = prepared.revisionToken;
-        finishOpenV7(prepared.deck, prepared.diagnostics);
+        finishOpen(prepared.deck, prepared.diagnostics);
         const recovered = await autosaveQueueRef.current?.recover();
         if (recovered) {
-          setDeckV7(recovered.snapshot);
-          setV7Dirty(true);
-          setV7SaveError(null);
+          setDeck(recovered.snapshot);
+          setDirty(true);
+          setSaveError(null);
           void autosaveQueueRef.current?.flushNow();
         }
         return;
       }
-      enterRecoveryV7({
+      enterRecovery({
         error: prepared.error,
         diagnostics: prepared.diagnostics,
         validationErrors: prepared.validationErrors,
       });
     },
-    [enterRecoveryV7, finishOpenV7, prepareOpenV7],
+    [enterRecovery, finishOpen, prepareOpen],
   );
 
-  const openDerivedV7 = useCallback(
+  const openDerived = useCallback(
     async (contentJson: string) => {
       aiAppliedDeckRef.current = null;
-      const derived = deriveDeckV7FromDocumentContent({
+      const derived = deriveDeckFromDocumentContent({
         contentJson,
         documentId,
         themePackageId: pendingThemePackageId,
       });
       if (derived.ok) {
-        finishOpenV7(derived.deck, derived.diagnostics);
+        finishOpen(derived.deck, derived.diagnostics);
         return;
       }
-      enterRecoveryV7({
+      enterRecovery({
         error: derived.error,
         diagnostics: derived.diagnostics,
         validationErrors: derived.validationErrors,
       });
     },
-    [documentId, enterRecoveryV7, finishOpenV7, pendingThemePackageId],
+    [documentId, enterRecovery, finishOpen, pendingThemePackageId],
   );
 
-  const openWithAiDeckV7 = useCallback(
-    (aiDeck: DeckV7, generationDiagnostics: PresentationDiagnostic[] = []) => {
-      applyAiDeckProposalV7({
+  const openWithAiDeck = useCallback(
+    (aiDeck: Deck, generationDiagnostics: PresentationDiagnostic[] = []) => {
+      applyAiDeckProposal({
         aiDeck,
         generationDiagnostics,
         aiAppliedDeckRef,
-        enterRecoveryV7,
-        finishOpenV7,
-        cancelAutosaveV7,
-        setV7Dirty,
-        persistDeckV7,
+        enterRecovery,
+        finishOpen,
+        cancelAutosave,
+        setDirty,
+        persistDeck,
       });
     },
-    [
-      cancelAutosaveV7,
-      enterRecoveryV7,
-      finishOpenV7,
-      persistDeckV7,
-      setV7Dirty,
-    ],
+    [cancelAutosave, enterRecovery, finishOpen, persistDeck, setDirty],
   );
 
-  const showAiPreviewV7 = useCallback(
+  const showAiPreview = useCallback(
     async (
-      proposedDeck: DeckV7,
+      proposedDeck: Deck,
       truncated: boolean,
       generationDiagnostics: PresentationDiagnostic[],
       options: DeckGenerationOptions,
       json: string,
     ) => {
-      const preparedBaseline = await prepareOpenV7(json);
+      const preparedBaseline = await prepareOpen(json);
       if (!preparedBaseline.ok) {
-        enterRecoveryV7({
+        enterRecovery({
           error: preparedBaseline.error,
           diagnostics: preparedBaseline.diagnostics,
           validationErrors: preparedBaseline.validationErrors,
@@ -701,7 +696,7 @@ export function useSlideEditorOpen({
         return;
       }
       setPendingJson(null);
-      setAiPreviewV7({
+      setAiPreview({
         proposedDeck,
         baselineDeck: preparedBaseline.deck,
         truncated,
@@ -712,7 +707,7 @@ export function useSlideEditorOpen({
         contentJson: json,
       });
     },
-    [enterRecoveryV7, prepareOpenV7],
+    [enterRecovery, prepareOpen],
   );
 
   const effectiveContentJson = useCallback(
@@ -740,41 +735,41 @@ export function useSlideEditorOpen({
       return;
     }
 
-    await openSavedV7(contentJson);
-  }, [aiEnabled, editor, effectiveContentJson, openSavedV7]);
+    await openSaved(contentJson);
+  }, [aiEnabled, editor, effectiveContentJson, openSaved]);
 
   const handleClose = useCallback(() => {
     setOpen(false);
-    setDeckV7(null);
-    setDeckOpenDiagnosticsV7([]);
-    setDeckOpenErrorV7(null);
-    setV7Dirty(false);
-    setV7Saving(false);
-    setV7SaveError(null);
-    setUndoStackV7([]);
-    setRedoStackV7([]);
-    setUndoRedoFocusV7(null);
+    setDeck(null);
+    setDeckOpenDiagnostics([]);
+    setDeckOpenError(null);
+    setDirty(false);
+    setSaving(false);
+    setSaveError(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setUndoRedoFocus(null);
     setPendingJson(null);
     setPendingThemePackageId(DEFAULT_THEME_PACKAGE_ID);
     setEmptyDocument(false);
-    setAiPreviewV7(null);
-    setConflictStateV7(null);
+    setAiPreview(null);
+    setConflictState(null);
     aiAppliedDeckRef.current = null;
-    cancelAutosaveV7();
+    cancelAutosave();
     onCloseRightSurface();
-  }, [cancelAutosaveV7, onCloseRightSurface]);
+  }, [cancelAutosave, onCloseRightSurface]);
 
-  const handleSaveV7 = useCallback(
-    async (updatedDeck: DeckV7): Promise<ActionResult> => {
+  const handleSave = useCallback(
+    async (updatedDeck: Deck): Promise<ActionResult> => {
       // Manual save supersedes any debounced autosave: drop the pending timer so
-      // a stale autosave can't fire after we report success (V7-008).
-      cancelAutosaveV7();
-      return persistDeckV7(updatedDeck);
+      // a stale autosave can't fire after we report success (-008).
+      cancelAutosave();
+      return persistDeck(updatedDeck);
     },
-    [cancelAutosaveV7, persistDeckV7],
+    [cancelAutosave, persistDeck],
   );
 
-  const scheduleAutosaveV7 = useCallback((updatedDeck: DeckV7) => {
+  const scheduleAutosave = useCallback((updatedDeck: Deck) => {
     const queue = autosaveQueueRef.current;
     if (queue) {
       void queue
@@ -783,7 +778,7 @@ export function useSlideEditorOpen({
         })
         .then((result) => {
           if (!result.ok) {
-            logInfo("editor.slide-editor", "v7-autosave-error", {
+            logInfo("editor.slide-editor", "presentation-autosave-error", {
               error: result.error,
             });
           }
@@ -792,122 +787,103 @@ export function useSlideEditorOpen({
     }
   }, []);
 
-  const focusAfterHistoryV7 = useCallback(
-    (fromDeck: DeckV7, toDeck: DeckV7) => {
-      const target = pickUndoFocusTarget(fromDeck, toDeck);
-      if (target) {
-        focusTokenRef.current += 1;
-        setUndoRedoFocusV7({ nodeId: target, token: focusTokenRef.current });
-      }
-    },
-    [],
-  );
+  const focusAfterHistory = useCallback((fromDeck: Deck, toDeck: Deck) => {
+    const target = pickUndoFocusTarget(fromDeck, toDeck);
+    if (target) {
+      focusTokenRef.current += 1;
+      setUndoRedoFocus({ nodeId: target, token: focusTokenRef.current });
+    }
+  }, []);
 
-  const handleDeckV7Change = useCallback(
-    (updatedDeck: DeckV7) => {
-      if (hasUnresolvedDeckSaveConflict(conflictStateV7)) {
-        setConflictStateV7(
-          updateConflictLocalDeck(conflictStateV7, updatedDeck),
-        );
-        setDeckV7(updatedDeck);
-        setV7Dirty(true);
-        setV7SaveError(SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE);
+  const handleDeckChange = useCallback(
+    (updatedDeck: Deck) => {
+      if (hasUnresolvedDeckSaveConflict(conflictState)) {
+        setConflictState(updateConflictLocalDeck(conflictState, updatedDeck));
+        setDeck(updatedDeck);
+        setDirty(true);
+        setSaveError(SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE);
         return;
       }
-      setUndoStackV7((stack) =>
-        deckV7 ? [...stack, deckV7].slice(-50) : stack,
-      );
-      setRedoStackV7([]);
-      setDeckV7(updatedDeck);
-      setV7Dirty(true);
-      setV7SaveError(null);
-      if (inFlightPersistV7Ref.current) {
-        void persistDeckV7(updatedDeck);
+      setUndoStack((stack) => (deck ? [...stack, deck].slice(-50) : stack));
+      setRedoStack([]);
+      setDeck(updatedDeck);
+      setDirty(true);
+      setSaveError(null);
+      if (inFlightPersistRef.current) {
+        void persistDeck(updatedDeck);
       } else {
-        scheduleAutosaveV7(updatedDeck);
+        scheduleAutosave(updatedDeck);
       }
     },
-    [conflictStateV7, deckV7, persistDeckV7, scheduleAutosaveV7],
+    [conflictState, deck, persistDeck, scheduleAutosave],
   );
 
-  const handleUndoV7 = useCallback(() => {
-    if (hasUnresolvedDeckSaveConflict(conflictStateV7)) return;
-    setUndoStackV7((stack) => {
+  const handleUndo = useCallback(() => {
+    if (hasUnresolvedDeckSaveConflict(conflictState)) return;
+    setUndoStack((stack) => {
       const previous = stack.at(-1);
-      if (!previous || !deckV7) return stack;
-      setRedoStackV7((redoStack) => [...redoStack, deckV7].slice(-50));
-      focusAfterHistoryV7(deckV7, previous);
-      setDeckV7(previous);
-      setV7Dirty(true);
-      setV7SaveError(null);
-      if (inFlightPersistV7Ref.current) {
-        void persistDeckV7(previous);
+      if (!previous || !deck) return stack;
+      setRedoStack((redoStack) => [...redoStack, deck].slice(-50));
+      focusAfterHistory(deck, previous);
+      setDeck(previous);
+      setDirty(true);
+      setSaveError(null);
+      if (inFlightPersistRef.current) {
+        void persistDeck(previous);
       } else {
-        scheduleAutosaveV7(previous);
+        scheduleAutosave(previous);
       }
       return stack.slice(0, -1);
     });
-  }, [
-    conflictStateV7,
-    deckV7,
-    focusAfterHistoryV7,
-    persistDeckV7,
-    scheduleAutosaveV7,
-  ]);
+  }, [conflictState, deck, focusAfterHistory, persistDeck, scheduleAutosave]);
 
-  const handleRedoV7 = useCallback(() => {
-    if (hasUnresolvedDeckSaveConflict(conflictStateV7)) return;
-    setRedoStackV7((stack) => {
+  const handleRedo = useCallback(() => {
+    if (hasUnresolvedDeckSaveConflict(conflictState)) return;
+    setRedoStack((stack) => {
       const next = stack.at(-1);
-      if (!next || !deckV7) return stack;
-      setUndoStackV7((undoStack) => [...undoStack, deckV7].slice(-50));
-      focusAfterHistoryV7(deckV7, next);
-      setDeckV7(next);
-      setV7Dirty(true);
-      setV7SaveError(null);
-      if (inFlightPersistV7Ref.current) {
-        void persistDeckV7(next);
+      if (!next || !deck) return stack;
+      setUndoStack((undoStack) => [...undoStack, deck].slice(-50));
+      focusAfterHistory(deck, next);
+      setDeck(next);
+      setDirty(true);
+      setSaveError(null);
+      if (inFlightPersistRef.current) {
+        void persistDeck(next);
       } else {
-        scheduleAutosaveV7(next);
+        scheduleAutosave(next);
       }
       return stack.slice(0, -1);
     });
-  }, [
-    conflictStateV7,
-    deckV7,
-    focusAfterHistoryV7,
-    persistDeckV7,
-    scheduleAutosaveV7,
-  ]);
+  }, [conflictState, deck, focusAfterHistory, persistDeck, scheduleAutosave]);
 
   const handleOpenDialogApply = useCallback(
     ({
-      deckV7: generatedV7,
+      deck: generated,
       truncated,
       diagnostics,
       options,
     }: {
-      deckV7: DeckV7;
+      deck: Deck;
       truncated: boolean;
       diagnostics: PresentationDiagnostic[];
       options: DeckGenerationOptions;
     }) => {
       if (!pendingJson) return;
-      void showAiPreviewV7(
-        generatedV7,
+      void showAiPreview(
+        generated,
         truncated,
         diagnostics,
         options,
         pendingJson,
       );
     },
-    [pendingJson, showAiPreviewV7],
+    [pendingJson, showAiPreview],
   );
 
   const handleOpenDialogDerive = useCallback(() => {
     if (!pendingJson) return;
-    void openDerivedV7(pendingJson);
-  }, [openDerivedV7, pendingJson]);
+    void openDerived(pendingJson);
+  }, [openDerived, pendingJson]);
 
   const handleOpenDialogClose = useCallback(() => {
     setPendingJson(null);
@@ -915,27 +891,27 @@ export function useSlideEditorOpen({
     setEmptyDocument(false);
   }, []);
 
-  const handleAiPreviewV7Apply = useCallback(
-    (applied: DeckV7, generationDiagnostics: PresentationDiagnostic[]) => {
-      if (aiPreviewV7) {
-        openWithAiDeckV7(applied, generationDiagnostics);
+  const handleAiPreviewApply = useCallback(
+    (applied: Deck, generationDiagnostics: PresentationDiagnostic[]) => {
+      if (aiPreview) {
+        openWithAiDeck(applied, generationDiagnostics);
       }
     },
-    [aiPreviewV7, openWithAiDeckV7],
+    [aiPreview, openWithAiDeck],
   );
 
-  const handleAiPreviewV7Derive = useCallback(() => {
-    if (aiPreviewV7) {
-      void openDerivedV7(aiPreviewV7.contentJson);
+  const handleAiPreviewDerive = useCallback(() => {
+    if (aiPreview) {
+      void openDerived(aiPreview.contentJson);
     }
-  }, [aiPreviewV7, openDerivedV7]);
+  }, [aiPreview, openDerived]);
 
-  const handleAiPreviewV7Cancel = useCallback(() => {
-    setAiPreviewV7(null);
+  const handleAiPreviewCancel = useCallback(() => {
+    setAiPreview(null);
   }, []);
 
-  const handleConflictKeepMineV7 = useCallback(
-    async (localDeck: DeckV7, serverToken: string | null) => {
+  const handleConflictKeepMine = useCallback(
+    async (localDeck: Deck, serverToken: string | null) => {
       const res: SaveDeckResult = await deckPort.saveDeckJson(
         documentId,
         localDeck,
@@ -945,12 +921,12 @@ export function useSlideEditorOpen({
         await autosaveQueueRef.current?.clear();
         lastSavedRef.current = localDeck;
         revisionTokenRef.current = res.revisionToken;
-        setConflictStateV7(null);
-        setV7Dirty(false);
-        setV7Saving(false);
-        setV7SaveError(null);
+        setConflictState(null);
+        setDirty(false);
+        setSaving(false);
+        setSaveError(null);
       } else if (res.ok === "conflict") {
-        setConflictStateV7({
+        setConflictState({
           localDeck,
           serverRevisionToken: res.serverRevisionToken,
         });
@@ -962,74 +938,78 @@ export function useSlideEditorOpen({
     [deckPort, documentId],
   );
 
-  const handleConflictUseTheirsV7 = useCallback(async () => {
-    const reloadResult = await reloadConflictServerDeckV7({
+  const handleConflictUseTheirs = useCallback(async () => {
+    const reloadResult = await reloadConflictServerDeck({
       deckPort,
       documentId,
     });
     if (!reloadResult.ok) {
-      logInfo("editor.slide-editor", "v7-conflict-use-server-reload-failed", {
-        reason: reloadResult.reason,
-      });
-      setV7SaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
+      logInfo(
+        "editor.slide-editor",
+        "presentation-conflict-use-server-reload-failed",
+        {
+          reason: reloadResult.reason,
+        },
+      );
+      setSaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
       throw new Error(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
     }
     revisionTokenRef.current = reloadResult.revisionToken;
     lastSavedRef.current = reloadResult.deckJson;
-    setDeckV7(reloadResult.deck);
-    setDeckOpenDiagnosticsV7(reloadResult.diagnostics);
-    setDeckOpenErrorV7(null);
-    setV7Dirty(false);
-    setV7Saving(false);
-    setV7SaveError(null);
-    setUndoStackV7([]);
-    setRedoStackV7([]);
-    setUndoRedoFocusV7(null);
-    setConflictStateV7(null);
+    setDeck(reloadResult.deck);
+    setDeckOpenDiagnostics(reloadResult.diagnostics);
+    setDeckOpenError(null);
+    setDirty(false);
+    setSaving(false);
+    setSaveError(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setUndoRedoFocus(null);
+    setConflictState(null);
     await autosaveQueueRef.current?.clear();
   }, [deckPort, documentId]);
 
-  const handleConflictDismissV7 = useCallback(() => {
-    setConflictStateV7(null);
+  const handleConflictDismiss = useCallback(() => {
+    setConflictState(null);
   }, []);
 
   const saveStatus: SaveStatus = resolveSaveStatus({
-    isDirty: v7Dirty,
-    isSaving: v7Saving,
-    hasError: v7SaveError !== null,
-    queueStatus: v7QueueStatus,
+    isDirty: presentationDirty,
+    isSaving: presentationSaving,
+    hasError: presentationSaveError !== null,
+    queueStatus: presentationQueueStatus,
   });
   const hasDurableQueuedWork =
-    v7QueueStatus === "queued" ||
-    v7QueueStatus === "offline" ||
-    v7QueueStatus === "retrying" ||
-    v7QueueStatus === "saving" ||
-    v7QueueStatus === "conflict";
+    presentationQueueStatus === "queued" ||
+    presentationQueueStatus === "offline" ||
+    presentationQueueStatus === "retrying" ||
+    presentationQueueStatus === "saving" ||
+    presentationQueueStatus === "conflict";
 
   return {
     open,
-    deckV7,
-    deckOpenDiagnosticsV7,
-    deckOpenErrorV7,
+    deck,
+    deckOpenDiagnostics,
+    deckOpenError,
     saveStatus,
     saveStatusLabel: SAVE_STATUS_LABEL[saveStatus],
-    saveErrorMessage: resolveSaveErrorMessage(v7SaveError),
+    saveErrorMessage: resolveSaveErrorMessage(presentationSaveError),
     hasUnsavedWork:
       !hasDurableQueuedWork &&
-      (v7Dirty ||
-        v7Saving ||
-        v7SaveError !== null ||
-        v7QueueStatus === "failed"),
-    setDeckV7,
-    handleDeckV7Change,
-    handleSaveV7,
-    handleUndoV7,
-    handleRedoV7,
-    undoRedoFocusV7,
-    canUndoV7:
-      !hasUnresolvedDeckSaveConflict(conflictStateV7) && undoStackV7.length > 0,
-    canRedoV7:
-      !hasUnresolvedDeckSaveConflict(conflictStateV7) && redoStackV7.length > 0,
+      (presentationDirty ||
+        presentationSaving ||
+        presentationSaveError !== null ||
+        presentationQueueStatus === "failed"),
+    setDeck,
+    handleDeckChange,
+    handleSave,
+    handleUndo,
+    handleRedo,
+    undoRedoFocus,
+    canUndo:
+      !hasUnresolvedDeckSaveConflict(conflictState) && undoStack.length > 0,
+    canRedo:
+      !hasUnresolvedDeckSaveConflict(conflictState) && redoStack.length > 0,
     handleOpen,
     handleClose,
     aiEnabled,
@@ -1039,13 +1019,13 @@ export function useSlideEditorOpen({
     handleOpenDialogApply,
     handleOpenDialogDerive,
     handleOpenDialogClose,
-    aiPreviewV7,
-    handleAiPreviewV7Apply,
-    handleAiPreviewV7Derive,
-    handleAiPreviewV7Cancel,
-    conflictStateV7,
-    handleConflictKeepMineV7,
-    handleConflictUseTheirsV7,
-    handleConflictDismissV7,
+    aiPreview,
+    handleAiPreviewApply,
+    handleAiPreviewDerive,
+    handleAiPreviewCancel,
+    conflictState,
+    handleConflictKeepMine,
+    handleConflictUseTheirs,
+    handleConflictDismiss,
   };
 }

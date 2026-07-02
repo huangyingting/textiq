@@ -22,7 +22,7 @@ payloads.
 | ---------------------------------------------------------- | ------------ | -------------------------------------------------------- |
 | [system/architecture.md](system/architecture.md)           | Architecture | System-wide runtime architecture and write paths.        |
 | [system/documentation-map.md](system/documentation-map.md) | Reference    | Code subsystem to documentation ownership map.           |
-| [data-model/deck.md](data-model/deck.md)                   | Contract     | Current DeckV7 `Document.deckJson` persisted contract.   |
+| [data-model/deck.md](data-model/deck.md)                   | Contract     | Current Deck `Document.deckJson` persisted contract.     |
 | [presentation/README.md](presentation/README.md)           | Architecture | Slide editor, rendering, present mode, and export index. |
 | [operations/quality-gates.md](operations/quality-gates.md) | Reference    | Local/CI quality gates and governance scripts.           |
 
@@ -46,7 +46,7 @@ contracts must not depend on plan documents for behavior.
 | ----------------------------------------- | -------------------------------------------------------- | ------------------------------------ |
 | [system/](system/README.md)               | Cross-subsystem architecture, invariants, ADRs, naming.  | Architecture, Reference, ADR         |
 | [data-model/](data-model/README.md)       | Persisted JSON contracts and database projections.       | Contract, Architecture               |
-| [presentation/](presentation/README.md)   | Slide editor runtime, DeckV7 rendering, present/export.  | Architecture, Design, Contract, Plan |
+| [presentation/](presentation/README.md)   | Slide editor runtime, Deck rendering, present/export.    | Architecture, Design, Contract, Plan |
 | [editor/](editor/README.md)               | Lexical document editor and editor-owned comment UX.     | Architecture, Design                 |
 | [documents/](documents/README.md)         | Document creation, listing, tags, search, trash.         | Architecture, Plan                   |
 | [visual/](visual/README.md)               | Visual schemas, registry, rendering, transform/export.   | Contract, Architecture               |

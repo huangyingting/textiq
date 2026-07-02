@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ActionResult } from "@/lib/action-result";
-import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import { createBlankDeck } from "@/lib/presentation/empty-deck";
+import type { Deck } from "@/lib/presentation/schema";
 
 import {
-  applyAiDeckProposalV7,
+  applyAiDeckProposal,
   createSerializedDeckPersistor,
   createDeckAutosaveOnDue,
-  persistDeckV7WithRecovery,
+  persistDeckWithRecovery,
 } from "./use-slide-editor-open";
 
 function waitForAsyncDrain(): Promise<void> {
@@ -27,8 +27,8 @@ function createDeferred<T>() {
   };
 }
 
-test("persistDeckV7WithRecovery clears saving after rejected deck writes", async () => {
-  const deck = createBlankDeckV7({ documentId: "doc-1413" });
+test("persistDeckWithRecovery clears saving after rejected deck writes", async () => {
+  const deck = createBlankDeck({ documentId: "doc-1413" });
   const savingStates: boolean[] = [];
   const dirtyStates: boolean[] = [];
   const saveErrors: Array<string | null> = [];
@@ -36,7 +36,7 @@ test("persistDeckV7WithRecovery clears saving after rejected deck writes", async
   const revisionTokenRef = { current: "rev-1" as string | null };
   const lastSavedRef = { current: { preserved: true } as unknown };
 
-  const result = await persistDeckV7WithRecovery({
+  const result = await persistDeckWithRecovery({
     updatedDeck: deck,
     documentId: "doc-1413",
     deckPort: {
@@ -46,10 +46,10 @@ test("persistDeckV7WithRecovery clears saving after rejected deck writes", async
     revisionTokenRef,
     lastSavedRef,
     aiAppliedDeckRef: { current: null },
-    setV7Dirty: (dirty) => dirtyStates.push(dirty),
-    setV7Saving: (saving) => savingStates.push(saving),
-    setV7SaveError: (error) => saveErrors.push(error),
-    setConflictStateV7: (state) => conflicts.push(state),
+    setDirty: (dirty) => dirtyStates.push(dirty),
+    setSaving: (saving) => savingStates.push(saving),
+    setSaveError: (error) => saveErrors.push(error),
+    setConflictState: (state) => conflicts.push(state),
     onAiDeckSaved: () => {
       throw new Error("unexpected telemetry call");
     },
@@ -68,12 +68,12 @@ test("persistDeckV7WithRecovery clears saving after rejected deck writes", async
   assert.match(saveErrors.at(-1) ?? "", /network unavailable/);
 });
 
-test("persistDeckV7WithRecovery keeps conflict result semantics", async () => {
-  const deck = createBlankDeckV7({ documentId: "doc-1413" });
+test("persistDeckWithRecovery keeps conflict result semantics", async () => {
+  const deck = createBlankDeck({ documentId: "doc-1413" });
   const conflicts: unknown[] = [];
   const saveErrors: Array<string | null> = [];
 
-  const result = await persistDeckV7WithRecovery({
+  const result = await persistDeckWithRecovery({
     updatedDeck: deck,
     documentId: "doc-1413",
     deckPort: {
@@ -85,10 +85,10 @@ test("persistDeckV7WithRecovery keeps conflict result semantics", async () => {
     revisionTokenRef: { current: "rev-1" },
     lastSavedRef: { current: null },
     aiAppliedDeckRef: { current: null },
-    setV7Dirty: () => undefined,
-    setV7Saving: () => undefined,
-    setV7SaveError: (error) => saveErrors.push(error),
-    setConflictStateV7: (state) => conflicts.push(state),
+    setDirty: () => undefined,
+    setSaving: () => undefined,
+    setSaveError: (error) => saveErrors.push(error),
+    setConflictState: (state) => conflicts.push(state),
     onAiDeckSaved: () => undefined,
   });
 
@@ -105,8 +105,8 @@ test("persistDeckV7WithRecovery keeps conflict result semantics", async () => {
   ]);
 });
 
-test("persistDeckV7WithRecovery only uses saveDeckJson autosave path", async () => {
-  const deck = createBlankDeckV7({ documentId: "doc-1336" });
+test("persistDeckWithRecovery only uses saveDeckJson autosave path", async () => {
+  const deck = createBlankDeck({ documentId: "doc-1336" });
   let saveDeckJsonCalls = 0;
   let saveDeckPatchCalls = 0;
   const deckPort = {
@@ -120,17 +120,17 @@ test("persistDeckV7WithRecovery only uses saveDeckJson autosave path", async () 
     },
   };
 
-  const result = await persistDeckV7WithRecovery({
+  const result = await persistDeckWithRecovery({
     updatedDeck: deck,
     documentId: "doc-1336",
     deckPort,
     revisionTokenRef: { current: "rev-1" },
     lastSavedRef: { current: null },
     aiAppliedDeckRef: { current: null },
-    setV7Dirty: () => undefined,
-    setV7Saving: () => undefined,
-    setV7SaveError: () => undefined,
-    setConflictStateV7: () => undefined,
+    setDirty: () => undefined,
+    setSaving: () => undefined,
+    setSaveError: () => undefined,
+    setConflictState: () => undefined,
     onAiDeckSaved: () => undefined,
   });
 
@@ -140,10 +140,10 @@ test("persistDeckV7WithRecovery only uses saveDeckJson autosave path", async () 
 });
 
 test("createDeckAutosaveOnDue catches rejected autosave saves and logs them", async () => {
-  const deck = createBlankDeckV7({ documentId: "doc-1413" });
+  const deck = createBlankDeck({ documentId: "doc-1413" });
   const logs: Array<{ scope: string; message: string; context: unknown }> = [];
   const handler = createDeckAutosaveOnDue({
-    persistDeckV7: async () =>
+    persistDeck: async () =>
       Promise.reject(new Error("session expired")) as Promise<ActionResult>,
     log: (scope, message, context) => {
       logs.push({ scope, message, context });
@@ -155,13 +155,13 @@ test("createDeckAutosaveOnDue catches rejected autosave saves and logs them", as
 
   assert.equal(logs.length, 1);
   assert.deepEqual(logs[0].scope, "editor.slide-editor");
-  assert.deepEqual(logs[0].message, "v7-autosave-error");
+  assert.deepEqual(logs[0].message, "presentation-autosave-error");
   assert.match(JSON.stringify(logs[0].context), /session expired/);
 });
 
 test("createSerializedDeckPersistor serializes overlapping saves and uses refreshed revision tokens", async () => {
-  const firstDeck = createBlankDeckV7({ documentId: "doc-1408" });
-  const secondDeck = createBlankDeckV7({ documentId: "doc-1408" });
+  const firstDeck = createBlankDeck({ documentId: "doc-1408" });
+  const secondDeck = createBlankDeck({ documentId: "doc-1408" });
   const revisionTokenRef = { current: "rev-1" as string | null };
   const latestRequestIdRef = { current: 0 };
   const gate = createDeferred<void>();
@@ -169,11 +169,11 @@ test("createSerializedDeckPersistor serializes overlapping saves and uses refres
     [];
   const dirtyStates: boolean[] = [];
 
-  type QueuedDeckSave = { deck: DeckV7; requestId: number };
+  type QueuedDeckSave = { deck: Deck; requestId: number };
 
-  const persistDeckV7 = createSerializedDeckPersistor<QueuedDeckSave>({
+  const persistDeck = createSerializedDeckPersistor<QueuedDeckSave>({
     persistDeck: ({ deck: updatedDeck, requestId }) =>
-      persistDeckV7WithRecovery({
+      persistDeckWithRecovery({
         updatedDeck,
         documentId: "doc-1408",
         deckPort: {
@@ -189,10 +189,10 @@ test("createSerializedDeckPersistor serializes overlapping saves and uses refres
         revisionTokenRef,
         lastSavedRef: { current: null },
         aiAppliedDeckRef: { current: null },
-        setV7Dirty: (dirty) => dirtyStates.push(dirty),
-        setV7Saving: () => undefined,
-        setV7SaveError: () => undefined,
-        setConflictStateV7: () => undefined,
+        setDirty: (dirty) => dirtyStates.push(dirty),
+        setSaving: () => undefined,
+        setSaveError: () => undefined,
+        setConflictState: () => undefined,
         onAiDeckSaved: () => undefined,
         shouldApplyCompletionState: () =>
           latestRequestIdRef.current === requestId,
@@ -200,12 +200,12 @@ test("createSerializedDeckPersistor serializes overlapping saves and uses refres
   });
 
   latestRequestIdRef.current += 1;
-  const firstSave = persistDeckV7({
+  const firstSave = persistDeck({
     deck: firstDeck,
     requestId: latestRequestIdRef.current,
   });
   latestRequestIdRef.current += 1;
-  const secondSave = persistDeckV7({
+  const secondSave = persistDeck({
     deck: secondDeck,
     requestId: latestRequestIdRef.current,
   });
@@ -230,19 +230,19 @@ test("createSerializedDeckPersistor serializes overlapping saves and uses refres
 });
 
 test("createSerializedDeckPersistor ignores stale conflict outcomes once newer deck save is queued", async () => {
-  const firstDeck = createBlankDeckV7({ documentId: "doc-1404" });
-  const secondDeck = createBlankDeckV7({ documentId: "doc-1404" });
+  const firstDeck = createBlankDeck({ documentId: "doc-1404" });
+  const secondDeck = createBlankDeck({ documentId: "doc-1404" });
   const revisionTokenRef = { current: "rev-1" as string | null };
   const latestRequestIdRef = { current: 0 };
   const gate = createDeferred<void>();
   const saveErrors: Array<string | null> = [];
   const conflicts: unknown[] = [];
 
-  type QueuedDeckSave = { deck: DeckV7; requestId: number };
+  type QueuedDeckSave = { deck: Deck; requestId: number };
 
-  const persistDeckV7 = createSerializedDeckPersistor<QueuedDeckSave>({
+  const persistDeck = createSerializedDeckPersistor<QueuedDeckSave>({
     persistDeck: ({ deck: updatedDeck, requestId }) =>
-      persistDeckV7WithRecovery({
+      persistDeckWithRecovery({
         updatedDeck,
         documentId: "doc-1404",
         deckPort: {
@@ -257,10 +257,10 @@ test("createSerializedDeckPersistor ignores stale conflict outcomes once newer d
         revisionTokenRef,
         lastSavedRef: { current: null },
         aiAppliedDeckRef: { current: null },
-        setV7Dirty: () => undefined,
-        setV7Saving: () => undefined,
-        setV7SaveError: (error) => saveErrors.push(error),
-        setConflictStateV7: (state) => conflicts.push(state),
+        setDirty: () => undefined,
+        setSaving: () => undefined,
+        setSaveError: (error) => saveErrors.push(error),
+        setConflictState: (state) => conflicts.push(state),
         onAiDeckSaved: () => undefined,
         shouldApplyCompletionState: () =>
           latestRequestIdRef.current === requestId,
@@ -268,12 +268,12 @@ test("createSerializedDeckPersistor ignores stale conflict outcomes once newer d
   });
 
   latestRequestIdRef.current += 1;
-  const firstSave = persistDeckV7({
+  const firstSave = persistDeck({
     deck: firstDeck,
     requestId: latestRequestIdRef.current,
   });
   latestRequestIdRef.current += 1;
-  const secondSave = persistDeckV7({
+  const secondSave = persistDeck({
     deck: secondDeck,
     requestId: latestRequestIdRef.current,
   });
@@ -296,30 +296,30 @@ test("createSerializedDeckPersistor ignores stale conflict outcomes once newer d
   assert.match(saveErrors.at(-1) ?? "", /Save conflict/);
 });
 
-test("applyAiDeckProposalV7 opens AI deck as dirty and persists immediately", async () => {
-  const aiDeck = createBlankDeckV7({ documentId: "doc-1341" });
-  const aiAppliedDeckRef = { current: null as DeckV7 | null };
-  const persistedDecks: DeckV7[] = [];
+test("applyAiDeckProposal opens AI deck as dirty and persists immediately", async () => {
+  const aiDeck = createBlankDeck({ documentId: "doc-1341" });
+  const aiAppliedDeckRef = { current: null as Deck | null };
+  const persistedDecks: Deck[] = [];
   const dirtyStates: boolean[] = [];
-  const finished: Array<{ deck: DeckV7; diagnostics: unknown[] | undefined }> =
+  const finished: Array<{ deck: Deck; diagnostics: unknown[] | undefined }> =
     [];
   let canceledAutosave = 0;
 
-  applyAiDeckProposalV7({
+  applyAiDeckProposal({
     aiDeck,
     aiAppliedDeckRef,
     generationDiagnostics: [],
-    enterRecoveryV7: () => {
+    enterRecovery: () => {
       throw new Error("unexpected recovery path");
     },
-    finishOpenV7: (deck, diagnostics) => {
+    finishOpen: (deck, diagnostics) => {
       finished.push({ deck, diagnostics });
     },
-    cancelAutosaveV7: () => {
+    cancelAutosave: () => {
       canceledAutosave += 1;
     },
-    setV7Dirty: (dirty) => dirtyStates.push(dirty),
-    persistDeckV7: async (deck) => {
+    setDirty: (dirty) => dirtyStates.push(dirty),
+    persistDeck: async (deck) => {
       persistedDecks.push(deck);
       return { ok: true, data: undefined };
     },
@@ -335,31 +335,31 @@ test("applyAiDeckProposalV7 opens AI deck as dirty and persists immediately", as
   assert.equal(finished[0]?.deck, persistedDecks[0]);
 });
 
-test("applyAiDeckProposalV7 keeps malformed AI decks in recovery path", () => {
+test("applyAiDeckProposal keeps malformed AI decks in recovery path", () => {
   let recoveryCalls = 0;
   let persistCalls = 0;
   let finishCalls = 0;
   let dirtyCalls = 0;
   let cancelCalls = 0;
-  const aiAppliedDeckRef = { current: null as DeckV7 | null };
+  const aiAppliedDeckRef = { current: null as Deck | null };
 
-  applyAiDeckProposalV7({
-    aiDeck: { invalid: true } as unknown as DeckV7,
+  applyAiDeckProposal({
+    aiDeck: { invalid: true } as unknown as Deck,
     aiAppliedDeckRef,
     generationDiagnostics: [],
-    enterRecoveryV7: () => {
+    enterRecovery: () => {
       recoveryCalls += 1;
     },
-    finishOpenV7: () => {
+    finishOpen: () => {
       finishCalls += 1;
     },
-    cancelAutosaveV7: () => {
+    cancelAutosave: () => {
       cancelCalls += 1;
     },
-    setV7Dirty: () => {
+    setDirty: () => {
       dirtyCalls += 1;
     },
-    persistDeckV7: async () => {
+    persistDeck: async () => {
       persistCalls += 1;
       return { ok: true, data: undefined };
     },

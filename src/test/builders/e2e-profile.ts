@@ -1,4 +1,4 @@
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import type { Deck } from "@/lib/presentation/schema";
 import type { Visual } from "@/lib/visual/schema";
 import { fixtureAssetChecksum, fixturePngBuffer } from "./assets";
 import {
@@ -9,15 +9,15 @@ import {
 } from "./lexical";
 import { buildVisual, buildVisualEdge, buildVisualNode } from "./visual";
 import {
-  buildDeckV7,
-  buildLayoutBox as buildLayoutBoxV7,
+  buildDeck,
+  buildLayoutBox,
   buildShapeNode,
-  buildSlideV7,
-  buildStyleBinding as buildStyleBindingV7,
+  buildSlide,
+  buildStyleBinding,
   buildTextContent,
   buildTextNode,
   buildTitleNode,
-} from "./deck-v7";
+} from "./presentation-deck";
 
 export {
   FIXTURE_PNG_BASE64,
@@ -121,7 +121,7 @@ export function buildE2EProfileContentJson(
   ]);
 }
 
-export function buildE2EProfileDeck(assetUrl: string, assetId: string): DeckV7 {
+export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
   return {
     schemaVersion: 7,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
@@ -231,48 +231,48 @@ export function buildE2EProfileDeck(assetUrl: string, assetId: string): DeckV7 {
   };
 }
 
-export function buildE2EProfileDeckV7(): DeckV7 {
-  const slideOne = buildSlideV7("content", [
+export function buildE2EProfileDeckFixture(): Deck {
+  const slideOne = buildSlide("content", [
     buildTitleNode(F.slideTitleText),
     buildTextNode({
       id: "layout-body",
       role: "body",
-      layout: buildLayoutBoxV7({
+      layout: buildLayoutBox({
         frame: { x: 8, y: 28, w: 56, h: 44 },
         zIndex: 2,
       }),
-      style: buildStyleBindingV7("text.body"),
+      style: buildStyleBinding("text.body"),
       content: buildTextContent([F.slideBodyText, "Layout regression fixture"]),
     }),
     buildShapeNode({
       id: "layout-callout",
       role: "callout",
-      layout: buildLayoutBoxV7({
+      layout: buildLayoutBox({
         frame: { x: 68, y: 30, w: 24, h: 20 },
         zIndex: 3,
       }),
-      style: buildStyleBindingV7("surface.callout"),
+      style: buildStyleBinding("surface.callout"),
       content: { shape: "rect" },
     }),
   ]);
 
-  const slideTwo = buildSlideV7("content", [
+  const slideTwo = buildSlide("content", [
     buildTitleNode(F.slideTwoTitleText),
     buildTextNode({
       id: "layout-details",
       role: "body",
-      layout: buildLayoutBoxV7({
+      layout: buildLayoutBox({
         frame: { x: 8, y: 28, w: 84, h: 48 },
         zIndex: 1,
       }),
-      style: buildStyleBindingV7("text.body"),
+      style: buildStyleBinding("text.body"),
       content: buildTextContent([
         "Use this seeded deck for deterministic screenshot gating.",
       ]),
     }),
   ]);
 
-  return buildDeckV7([slideOne, slideTwo]);
+  return buildDeck([slideOne, slideTwo]);
 }
 
 export function buildE2EProfileFixtureDescriptor(opts: {

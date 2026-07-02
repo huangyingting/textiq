@@ -8,7 +8,7 @@ import {
   requestDeckGeneration,
 } from "./deck-generation-request";
 
-const VALID_DECK_V7 = {
+const VALID_DECK = {
   schemaVersion: 7,
   canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
   theme: { packageId: "neutral" },
@@ -82,17 +82,17 @@ test("buildDeckGenerationBody includes theme package request fields", () => {
   });
 });
 
-test("parseDeckResponse returns DeckV7 and truncated flag", () => {
-  const parsed = parseDeckResponse({ deck: VALID_DECK_V7, truncated: true });
+test("parseDeckResponse returns Deck and truncated flag", () => {
+  const parsed = parseDeckResponse({ deck: VALID_DECK, truncated: true });
   assert.ok(parsed);
   assert.equal(parsed.truncated, true);
-  assert.equal(parsed.deckV7.schemaVersion, 7);
-  assert.equal(parsed.deckV7.slides[0].id, "slide-0001");
+  assert.equal(parsed.deck.schemaVersion, 7);
+  assert.equal(parsed.deck.slides[0].id, "slide-0001");
 });
 
-test("parseDeckResponse returns vnext response metadata", () => {
+test("parseDeckResponse returns presentation response metadata", () => {
   const parsed = parseDeckResponse({
-    deck: VALID_DECK_V7,
+    deck: VALID_DECK,
     truncated: false,
     metadata: {
       planner: "ai",
@@ -117,7 +117,7 @@ test("parseDeckResponse returns vnext response metadata", () => {
 
 test("parseDeckResponse drops invalid metadata fields and empty kind counts", () => {
   const parsed = parseDeckResponse({
-    deck: VALID_DECK_V7,
+    deck: VALID_DECK,
     metadata: {
       planner: "legacy",
       mode: "magic",
@@ -131,14 +131,14 @@ test("parseDeckResponse drops invalid metadata fields and empty kind counts", ()
   assert.ok(parsed);
   assert.equal(parsed.metadata, undefined);
   assert.equal(
-    parseDeckResponse({ deck: VALID_DECK_V7, metadata: [] })?.metadata,
+    parseDeckResponse({ deck: VALID_DECK, metadata: [] })?.metadata,
     undefined,
   );
 });
 
 test("parseDeckResponse preserves valid diagnostics and drops invalid entries", () => {
   const parsed = parseDeckResponse({
-    deck: VALID_DECK_V7,
+    deck: VALID_DECK,
     diagnostics: [
       {
         code: "slot-over-capacity",
@@ -163,7 +163,7 @@ test("parseDeckResponse preserves valid diagnostics and drops invalid entries", 
 });
 
 test("parseDeckResponse defaults truncated to false", () => {
-  const parsed = parseDeckResponse({ deck: VALID_DECK_V7 });
+  const parsed = parseDeckResponse({ deck: VALID_DECK });
   assert.ok(parsed);
   assert.equal(parsed.truncated, false);
 });
@@ -184,10 +184,10 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   } as unknown as Response;
 }
 
-test("requestDeckGeneration returns the parsed DeckV7 on success", async () => {
+test("requestDeckGeneration returns the parsed Deck on success", async () => {
   const fetchImpl = (async () =>
     jsonResponse({
-      deck: VALID_DECK_V7,
+      deck: VALID_DECK,
       truncated: true,
       diagnostics: [
         {
@@ -203,7 +203,7 @@ test("requestDeckGeneration returns the parsed DeckV7 on success", async () => {
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.truncated, true);
-    assert.equal(result.deckV7.schemaVersion, 7);
+    assert.equal(result.deck.schemaVersion, 7);
     assert.equal(result.diagnostics.length, 1);
     assert.equal(result.diagnostics[0].code, "missing-required-slot");
   }
@@ -215,7 +215,7 @@ test("requestDeckGeneration POSTs to /api/generate-deck with the built body", as
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     seenUrl = url;
     seenBody = JSON.parse(String(init?.body));
-    return jsonResponse({ deck: VALID_DECK_V7, truncated: false });
+    return jsonResponse({ deck: VALID_DECK, truncated: false });
   }) as unknown as typeof fetch;
   await requestDeckGeneration(
     CONTENT_JSON,
@@ -442,7 +442,7 @@ test("parseDeckResponse preserves every diagnostic target scope plus optional di
     },
   ];
 
-  const parsed = parseDeckResponse({ deck: VALID_DECK_V7, diagnostics });
+  const parsed = parseDeckResponse({ deck: VALID_DECK, diagnostics });
   assert.ok(parsed);
   assert.deepEqual(
     parsed.diagnostics.map((diagnostic) => diagnostic.target.scope),
@@ -457,7 +457,7 @@ test("parseDeckResponse preserves every diagnostic target scope plus optional di
 
 test("parseDeckResponse rejects diagnostics missing required target identifiers", () => {
   const parsed = parseDeckResponse({
-    deck: VALID_DECK_V7,
+    deck: VALID_DECK,
     diagnostics: [
       {
         code: "missing-slide",
@@ -490,13 +490,13 @@ test("parseDeckResponse rejects diagnostics missing required target identifiers"
 test("parseDeckResponse ignores non-object selected kind counts and metadata", () => {
   assert.equal(
     parseDeckResponse({
-      deck: VALID_DECK_V7,
+      deck: VALID_DECK,
       metadata: { selectedKindCounts: [] },
     })?.metadata,
     undefined,
   );
   assert.equal(
-    parseDeckResponse({ deck: VALID_DECK_V7, metadata: null })?.metadata,
+    parseDeckResponse({ deck: VALID_DECK, metadata: null })?.metadata,
     undefined,
   );
 });

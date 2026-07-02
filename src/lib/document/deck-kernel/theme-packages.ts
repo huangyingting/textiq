@@ -13,7 +13,7 @@ import {
   isBuiltInThemePackageId,
   resolveBuiltInThemePackageId,
   type BuiltInThemePackageId,
-} from "../../presentation-shared/theme-package-ids";
+} from "../../presentation/theme-package-ids";
 import type { Deck, Slide, SlideMaster, SlideTemplate } from "./deck-core";
 import type { PresentationTheme } from "./presentation-theme-types";
 import {

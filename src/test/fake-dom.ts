@@ -26,7 +26,7 @@ export class TestHTMLElement {
 
   closest(selector: string): TestHTMLElement | null {
     if (selector.includes("input") || selector.includes("button")) return null;
-    if (selector.includes("[data-slide-canvas-vnext")) {
+    if (selector.includes("[data-slide-canvas")) {
       return this.getCanvasElement?.() ?? this;
     }
     if (selector.includes("[data-node-id]")) {

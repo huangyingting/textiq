@@ -134,7 +134,7 @@ Current supported ops:
 ### Deck payloads
 
 Deck command envelopes validate addressing and optimistic-lock metadata. The
-DeckV7 mutation semantics remain owned by the presentation-vnext editor command
+Deck mutation semantics remain owned by the presentation editor command
 layer:
 
 ```ts
@@ -143,7 +143,7 @@ type DeckCommandEnvelope<P = unknown> = CommandEnvelope<P>;
 
 `acceptDeckCommandEnvelope` validates `target.surface === "deck"` and the
 submitted `documentId`. Command execution remains outside the envelope parser;
-DeckV7 mutations are implemented in `src/lib/presentation-vnext/editor-commands.ts`.
+Deck mutations are implemented in `src/lib/presentation/editor-commands.ts`.
 
 ---
 

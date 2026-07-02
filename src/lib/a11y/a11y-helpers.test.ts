@@ -364,21 +364,21 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
   }),
   dialogSurfaceDescriptor({
     id: "slide-editor.fullscreen",
-    owner: "src/components/presentation-vnext/slide-editor-vnext.tsx",
+    owner: "src/components/presentation/slide-editor.tsx",
     element: { role: "dialog", ariaLabel: "Slide editor" },
     focusTrap: true,
     coverage: [
-      "src/components/presentation-vnext/slide-editor-vnext.tsx",
+      "src/components/presentation/slide-editor.tsx",
       "e2e/slides-smoke.spec.ts",
     ],
   }),
   dialogSurfaceDescriptor({
     id: "present-mode.fullscreen",
-    owner: "src/components/presentation-vnext/present-mode-vnext.tsx",
+    owner: "src/components/presentation/present-mode.tsx",
     element: { role: "dialog", ariaLabel: "Present mode" },
     focusTrap: true,
     coverage: [
-      "src/components/presentation-vnext/present-mode-vnext.tsx",
+      "src/components/presentation/present-mode.tsx",
       "e2e/present-export.spec.ts",
     ],
   }),
@@ -405,18 +405,18 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
   }),
   slideCanvasKeyboardDescriptor({
     id: "slide-canvas.keyboard",
-    owner: "src/components/presentation-vnext/slide-canvas.tsx",
+    owner: "src/components/presentation/slide-canvas.tsx",
     hasRovingTabIndex: true,
     hasKeyboardNavigation: true,
     hasLiveAnnouncements: true,
     coverage: [
-      "src/lib/presentation-shared/canvas-keyboard-rotate.test.ts",
+      "src/lib/presentation/canvas-keyboard-rotate.test.ts",
       "e2e/slides-smoke.spec.ts",
     ],
   }),
   liveAnnouncementDescriptor({
     id: "slide-canvas.announcements",
-    owner: "src/components/presentation-vnext/slide-editor-vnext.tsx",
+    owner: "src/components/presentation/slide-editor.tsx",
     politeness: "polite",
     messages: [
       "Selected Title text",
@@ -424,7 +424,7 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
       "Resized Box to 20% by 10%",
       "Deleted Box",
     ],
-    coverage: ["src/components/presentation-vnext/slide-canvas-render.test.ts"],
+    coverage: ["src/components/presentation/slide-canvas-render.test.ts"],
   }),
 ];
 
@@ -537,7 +537,7 @@ describe("a11y: known canvas keyboard limitations", () => {
    * ADR 0002: keyboard move (nudge) and resize, deterministic traversal with
    * roving tabindex, focus restoration after mutations, and `aria-live`
    * announcements. The pure decision logic behind these is unit-tested in
-   * `src/lib/presentation-shared/canvas-keyboard-rotate.test.ts`.
+   * `src/lib/presentation/canvas-keyboard-rotate.test.ts`.
    *
    * Covered by the a11y smoke layer:
    *  - Visual SVG: role=img + aria-label (VisualRenderer)

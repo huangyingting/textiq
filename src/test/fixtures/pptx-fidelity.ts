@@ -1,6 +1,6 @@
-import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
-import type { StyleObject } from "@/lib/presentation-vnext/style-schema";
-import { buildDeckV7, buildSlideV7 } from "@/test/builders/deck-v7";
+import type { Deck, SlideChildNode } from "@/lib/presentation/schema";
+import type { StyleObject } from "@/lib/presentation/style-schema";
+import { buildDeck, buildSlide } from "@/test/builders/presentation-deck";
 
 export const PPTX_FIDELITY_DATA_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
@@ -47,7 +47,7 @@ function connector(
   };
 }
 
-export function buildPptxFidelityParityDeck(): DeckV7 {
+export function buildPptxFidelityParityDeck(): Deck {
   const nodes: SlideChildNode[] = [
     shape("fidelity-linear-gradient", 6, 8, {
       fill: { type: "linearGradient", from: "#2563eb", to: "#38bdf8" },
@@ -123,7 +123,7 @@ export function buildPptxFidelityParityDeck(): DeckV7 {
     },
   ];
 
-  return buildDeckV7([buildSlideV7("architecture", nodes)], {
+  return buildDeck([buildSlide("architecture", nodes)], {
     title: "PPTX fidelity parity fixture",
     assets: {
       images: {

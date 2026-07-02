@@ -66,7 +66,7 @@ history to the most recent entries.
 
 Deck writes go through `writeDeckWithCas`:
 
-1. Parse with `safeParseDeckV7`.
+1. Parse with `safeParseDeck`.
 2. Reject oversized serialized deck JSON.
 3. Generate a new revision token.
 4. Update `Document.deckJson` only when the caller's expected token matches.
@@ -74,7 +74,7 @@ Deck writes go through `writeDeckWithCas`:
 
 `persistDeck` writes a full deck. `patchDeck` is currently a compatibility
 shim: it checks document existence and returns `{ ok: "fallback" }` without
-replaying `DeckPatch[]`. `persistDeckCommand` is currently disabled for v7-only
+replaying `DeckPatch[]`. `persistDeckCommand` is currently disabled for presentation-only
 slide editing.
 
 Conflict results return the latest server revision token so clients can recover

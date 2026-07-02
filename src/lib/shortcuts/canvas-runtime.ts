@@ -1,6 +1,6 @@
 import type { ShortcutId } from "./catalog-types";
 
-export const V7_CANVAS_RUNTIME_SHORTCUT_IDS = [
+export const _CANVAS_RUNTIME_SHORTCUT_IDS = [
   "canvas.selection.traverse",
   "canvas.selection.clear",
   "canvas.move.step",

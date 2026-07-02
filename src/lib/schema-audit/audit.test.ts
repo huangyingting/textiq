@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
+import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 import {
   auditAssetScope,
   auditCommentAnchor,
@@ -32,7 +32,7 @@ import {
 const SECRET = "TopSecretConfidentialBodyText";
 
 function validDeck(): unknown {
-  return buildMinimalDeckV7();
+  return buildMinimalDeck();
 }
 
 function legacyV6Deck(): unknown {
@@ -203,7 +203,7 @@ describe("auditRows — invalid rows", () => {
     assert.equal(v?.documentId, "doc-1");
   });
 
-  test("flags invalid DeckV7 source metadata under slides[].children[].source", () => {
+  test("flags invalid Deck source metadata under slides[].children[].source", () => {
     const deck = validDeck() as {
       slides: { children: Array<Record<string, unknown>> }[];
     };

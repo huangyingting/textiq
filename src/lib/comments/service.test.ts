@@ -3,10 +3,10 @@ import { test } from "node:test";
 
 import {
   createCommentService,
-  type LoadDeckV7ForDocument,
+  type LoadDeckForDocument,
   type RequireCommentDocumentContext,
 } from "./service";
-import type { DeckV7 } from "@/lib/presentation-vnext/schema";
+import type { Deck } from "@/lib/presentation/schema";
 
 type FakeAuthor = { id: string; name: string | null; email: string };
 
@@ -74,9 +74,7 @@ function rootComment(partial: Partial<FakeComment> = {}): FakeComment {
   };
 }
 
-function buildDeck(
-  slides: Array<{ id: string; elementIds?: string[] }>,
-): DeckV7 {
+function buildDeck(slides: Array<{ id: string; elementIds?: string[] }>): Deck {
   return {
     schemaVersion: 7,
     canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
@@ -262,7 +260,7 @@ class FakeDb {
 function makeService(
   db: FakeDb,
   userId = "viewer",
-  loadDeckV7ForDocument?: LoadDeckV7ForDocument,
+  loadDeckForDocument?: LoadDeckForDocument,
 ) {
   const seenContexts: string[] = [];
   const requireDocumentContext: RequireCommentDocumentContext = async (
@@ -277,7 +275,7 @@ function makeService(
       db: db as never,
       now: () => new Date("2024-01-02T00:00:00Z"),
       requireDocumentContext,
-      loadDeckV7ForDocument,
+      loadDeckForDocument,
     }),
     seenContexts,
   };
@@ -466,10 +464,10 @@ test("comment service rejects slide comments anchored to missing elements", asyn
 
 test("comment service rejects slide comments when the saved deck is unavailable", async () => {
   const db = new FakeDb();
-  const loadDeckV7ForDocument: LoadDeckV7ForDocument = async () => {
+  const loadDeckForDocument: LoadDeckForDocument = async () => {
     throw new Error("Slide comments require a saved deck on this document.");
   };
-  const { service } = makeService(db, "author-1", loadDeckV7ForDocument);
+  const { service } = makeService(db, "author-1", loadDeckForDocument);
 
   await assert.rejects(
     () =>
@@ -483,10 +481,10 @@ test("comment service rejects slide comments when the saved deck is unavailable"
 
 test("comment service rejects slide comments when the saved deck is invalid", async () => {
   const db = new FakeDb();
-  const loadDeckV7ForDocument: LoadDeckV7ForDocument = async () => {
-    throw new Error("Slide comments require a valid saved v7 deck.");
+  const loadDeckForDocument: LoadDeckForDocument = async () => {
+    throw new Error("Slide comments require a valid saved presentation deck.");
   };
-  const { service } = makeService(db, "author-1", loadDeckV7ForDocument);
+  const { service } = makeService(db, "author-1", loadDeckForDocument);
 
   await assert.rejects(
     () =>
@@ -494,7 +492,7 @@ test("comment service rejects slide comments when the saved deck is invalid", as
         body: "Bad deck",
         slideId: "slide-1",
       }),
-    /valid saved v7 deck/i,
+    /valid saved presentation deck/i,
   );
 });
 
