@@ -3875,6 +3875,14 @@ export function SlideEditorVNext({
   const activeSlideName = slideDisplayName(activeSlide, activeSlideIndex);
   const selectedNodeSummary = selectedSummary(selectedIds.length);
   const diagnosticSummary = diagnosticsSummary(diagnostics.length);
+  const hasCustomDeckTitle = Boolean(
+    deck.title && deck.title.trim() && deck.title.trim() !== "Slides",
+  );
+  const shouldShowSourceStatus = sourceReview.length > 0;
+  const shouldShowSaveStatus = saveStatus !== "saved" || hasUnsavedWork;
+  const shouldShowDiagnosticsStatus = diagnostics.length > 0;
+  const shouldShowPresenceStatus = remotePresencePeers.length > 0;
+  const shouldShowSelectionStatus = selectedIds.length > 0;
   const currentCanvasFormat: "16:9" | "4:3" | "square" =
     deck.canvas.format === "custom" ? "16:9" : deck.canvas.format;
   const saveErrorAnnouncement =
@@ -4125,6 +4133,17 @@ export function SlideEditorVNext({
                 />
               </div>
             </Popover>
+            <DeckToolbarButton
+              label="Toggle snap to guides"
+              tooltip={
+                snapToGuides ? "Snap to guides: on" : "Snap to guides: off"
+              }
+              active={snapToGuides}
+              onClick={toggleSnapToGuides}
+            >
+              <Grid3x3 size={14} aria-hidden="true" />
+              Snap
+            </DeckToolbarButton>
           </DeckToolbarGroup>
 
           <DeckToolbarDivider />
@@ -4328,24 +4347,6 @@ export function SlideEditorVNext({
               >
                 <Keyboard size={14} aria-hidden="true" />
                 Keyboard shortcuts
-              </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={snapToGuides}
-                onClick={() => {
-                  toggleSnapToGuides();
-                  closeCompactToolbarMenuAndRestoreFocus();
-                }}
-                className={cx(
-                  "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                <span>Snap to guides</span>
-                <span className="text-[10px] text-ds-text-muted">
-                  {snapToGuides ? "On" : "Off"}
-                </span>
               </button>
               {onSave ? (
                 <button
@@ -4948,31 +4949,29 @@ export function SlideEditorVNext({
         className="tiq-safe-bottom-dock grid min-h-9 shrink-0 grid-cols-1 items-center gap-2 bg-transparent px-3 py-1 text-[11px] text-ds-text-muted sm:h-9 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3 sm:py-0"
       >
         <div className="hidden min-w-0 items-center gap-2 sm:flex">
-          <span className="truncate font-medium text-ds-text-secondary">
-            {deck.title ?? "Slides"}
-          </span>
-          <span aria-hidden="true" className="text-ds-border-strong">
-            ·
-          </span>
-          <span className="truncate">
-            {activeSlideName} (
-            {Math.min(activeSlideIndex + 1, deck.slides.length)}/
-            {deck.slides.length})
-          </span>
-          <span
-            aria-hidden="true"
-            className="hidden text-ds-border-strong lg:inline"
-          >
-            ·
-          </span>
-          <span className="hidden truncate lg:inline">{pkg.name}</span>
-          <span
-            aria-hidden="true"
-            className="hidden text-ds-border-strong xl:inline"
-          >
-            ·
-          </span>
-          <span className="hidden truncate xl:inline">{sourceStatusLabel}</span>
+          {hasCustomDeckTitle ? (
+            <span className="truncate font-medium text-ds-text-secondary">
+              {deck.title}
+            </span>
+          ) : null}
+          {hasCustomDeckTitle && shouldShowSourceStatus ? (
+            <span aria-hidden="true" className="text-ds-border-strong">
+              ·
+            </span>
+          ) : null}
+          {shouldShowSourceStatus ? (
+            <button
+              type="button"
+              onClick={handleReviewSourceLinks}
+              className={cx(
+                "truncate rounded-ds-sm px-1.5 py-1 text-ds-warning-text transition-colors hover:bg-ds-warning-surface",
+                FOCUS_RING,
+              )}
+            >
+              {sourceReview.length} source{" "}
+              {sourceReview.length === 1 ? "issue" : "issues"}
+            </button>
+          ) : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:flex-nowrap sm:justify-center">
           <Tooltip
@@ -5113,27 +5112,6 @@ export function SlideEditorVNext({
               </button>
             </div>
           </Popover>
-          <Tooltip
-            label={snapToGuides ? "Snap to guides: on" : "Snap to guides: off"}
-            side="top"
-          >
-            <button
-              type="button"
-              aria-label="Toggle snap to guides"
-              aria-pressed={snapToGuides}
-              onClick={toggleSnapToGuides}
-              className={cx(
-                "flex h-7 items-center gap-1 rounded-ds-md px-1.5 text-[11px] font-semibold transition-colors sm:px-2",
-                snapToGuides
-                  ? "bg-ds-accent-surface text-ds-accent-text"
-                  : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <Grid3x3 size={13} aria-hidden />
-              Snap
-            </button>
-          </Tooltip>
           <Popover
             open={footerStatusMenuOpen}
             onClose={() => setFooterStatusMenuOpen(false)}
@@ -5154,7 +5132,7 @@ export function SlideEditorVNext({
                 aria-label={`Footer status: ${saveStatusLabel}. ${diagnosticSummary}.`}
                 onClick={() => setFooterStatusMenuOpen((open) => !open)}
                 className={cx(
-                  "h-7 rounded-ds-md px-2 text-[11px] font-semibold text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  "h-7 rounded-ds-md px-2 text-[11px] font-semibold text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary sm:hidden",
                   FOCUS_RING,
                 )}
               >
@@ -5176,8 +5154,8 @@ export function SlideEditorVNext({
                 {Math.min(activeSlideIndex + 1, deck.slides.length)}/
                 {deck.slides.length})
               </p>
-              <p>{pkg.name}</p>
-              <p>{sourceStatusLabel}</p>
+              {hasCustomDeckTitle ? <p>{deck.title}</p> : null}
+              {shouldShowSourceStatus ? <p>{sourceStatusLabel}</p> : null}
               {saveStatus === "error" && onSave ? (
                 <button
                   type="button"
@@ -5191,56 +5169,44 @@ export function SlideEditorVNext({
                 >
                   {saveStatusLabel}
                 </button>
-              ) : (
+              ) : shouldShowSaveStatus ? (
                 <p>{saveStatusLabel}</p>
-              )}
+              ) : null}
               {saveStatus === "error" && saveErrorMessage ? (
                 <p className="max-w-[200px] text-ds-danger-text">
                   {saveErrorMessage}
                 </p>
               ) : null}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setDeckDiagnosticsReviewOpen(true);
-                  closeFooterStatusMenuAndRestoreFocus();
-                }}
-                aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
-                className={cx(
-                  "rounded-ds-sm px-1.5 py-1 text-left font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                {diagnosticSummary}
-              </button>
+              {shouldShowDiagnosticsStatus ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setDeckDiagnosticsReviewOpen(true);
+                    closeFooterStatusMenuAndRestoreFocus();
+                  }}
+                  aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
+                  className={cx(
+                    "rounded-ds-sm px-1.5 py-1 text-left font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                    FOCUS_RING,
+                  )}
+                >
+                  {diagnosticSummary}
+                </button>
+              ) : null}
               {activeGroupId ? <p>Group edit</p> : null}
               {tableEditingNodeId ? <p>Table edit</p> : null}
-              <p>{selectionModeLabel}</p>
-              <p>
-                {remotePresencePeers.length > 0
-                  ? remotePresencePeers
-                      .map((peer) =>
-                        presencePeerSummary(peer, deck, activeSlide?.id),
-                      )
-                      .join(" · ")
-                  : "Solo"}
-              </p>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={snapToGuides}
-                onClick={() => {
-                  toggleSnapToGuides();
-                  closeFooterStatusMenuAndRestoreFocus();
-                }}
-                className={cx(
-                  "rounded-ds-sm px-1.5 py-1 text-left font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                Snap to guides: {snapToGuides ? "on" : "off"}
-              </button>
+              {selection.mode !== "normal" ? <p>{selectionModeLabel}</p> : null}
+              {shouldShowSelectionStatus ? <p>{selectedNodeSummary}</p> : null}
+              {shouldShowPresenceStatus ? (
+                <p>
+                  {remotePresencePeers
+                    .map((peer) =>
+                      presencePeerSummary(peer, deck, activeSlide?.id),
+                    )
+                    .join(" · ")}
+                </p>
+              ) : null}
             </div>
           </Popover>
         </div>
@@ -5259,11 +5225,11 @@ export function SlideEditorVNext({
             >
               {saveStatusLabel}
             </button>
-          ) : (
+          ) : shouldShowSaveStatus ? (
             <span role="status" aria-live="polite" aria-atomic="true">
               {saveStatusLabel}
             </span>
-          )}
+          ) : null}
           {saveStatus === "error" && saveErrorMessage ? (
             <span
               role="status"
@@ -5274,36 +5240,36 @@ export function SlideEditorVNext({
               {saveErrorMessage}
             </span>
           ) : null}
-          <span
-            aria-label={
-              remotePresencePeers.length > 0
-                ? `Slide collaborators: ${remotePresencePeers
-                    .map((peer) =>
-                      presencePeerSummary(peer, deck, activeSlide?.id),
-                    )
-                    .join("; ")}`
-                : "No other slide collaborators"
-            }
-          >
-            {remotePresencePeers.length > 0
-              ? `${remotePresencePeers.length} present`
-              : "Solo"}
-          </span>
-          <button
-            type="button"
-            onClick={() => setDeckDiagnosticsReviewOpen(true)}
-            aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
-            className={cx(
-              "rounded-ds-sm px-1.5 py-1 text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-              FOCUS_RING,
-            )}
-          >
-            {diagnosticSummary}
-          </button>
+          {shouldShowPresenceStatus ? (
+            <span
+              aria-label={`Slide collaborators: ${remotePresencePeers
+                .map((peer) => presencePeerSummary(peer, deck, activeSlide?.id))
+                .join("; ")}`}
+            >
+              {remotePresencePeers.length} present
+            </span>
+          ) : null}
+          {shouldShowDiagnosticsStatus ? (
+            <button
+              type="button"
+              onClick={() => setDeckDiagnosticsReviewOpen(true)}
+              aria-label={`Open deck diagnostics review (${diagnosticSummary})`}
+              className={cx(
+                "rounded-ds-sm px-1.5 py-1 text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                FOCUS_RING,
+              )}
+            >
+              {diagnosticSummary}
+            </button>
+          ) : null}
           {activeGroupId ? <span>Group edit</span> : null}
           {tableEditingNodeId ? <span>Table edit</span> : null}
-          <span>{selectionModeLabel}</span>
-          <span className="truncate">{selectedNodeSummary}</span>
+          {selection.mode !== "normal" ? (
+            <span>{selectionModeLabel}</span>
+          ) : null}
+          {shouldShowSelectionStatus ? (
+            <span className="truncate">{selectedNodeSummary}</span>
+          ) : null}
         </div>
       </footer>
     </div>

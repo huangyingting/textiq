@@ -670,9 +670,7 @@ test("SlideEditorVNext final coverage drives mobile menus, notes, zoom, and pick
     tree = harness.render();
     driveMenuKeyBranches(panelWithText(tree, "Refresh all source links"));
 
-    clickPopoverTrigger(tree, "More deck commands");
-    tree = harness.render();
-    driveMenuKeyBranches(panelWithText(tree, "Snap to guides"));
+    clickByLabel(tree, "Toggle snap to guides");
 
     clickPopoverTrigger(tree, "Zoom presets");
     tree = harness.render();
@@ -680,7 +678,7 @@ test("SlideEditorVNext final coverage drives mobile menus, notes, zoom, and pick
 
     clickPopoverTrigger(tree, "Footer status");
     tree = harness.render();
-    driveMenuKeyBranches(panelWithText(tree, "Normal mode"));
+    driveMenuKeyBranches(panelWithText(tree, "Save needs attention"));
 
     const zoomRange = findProps(
       tree,

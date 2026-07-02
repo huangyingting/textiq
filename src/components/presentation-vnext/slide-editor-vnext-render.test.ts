@@ -85,7 +85,7 @@ test("SlideEditorVNext renders the full editor shell for mixed slide content", (
   );
 
   assert.match(html, /Deck tools/);
-  assert.match(html, /Mixed slide/);
+  assert.match(html, /data-slide-bottom-dock="true"/);
 });
 
 test("SlideEditorVNext top-level handlers tolerate no-op editor callbacks", async () => {

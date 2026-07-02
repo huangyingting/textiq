@@ -453,7 +453,7 @@ describe("SlideEditorVNext render and interaction branches", () => {
     );
 
     assert.match(emptyHtml, /Deck tools/);
-    assert.match(emptyHtml, /No selection/);
+    assert.doesNotMatch(emptyHtml, /No selection/);
     assert.doesNotMatch(emptyHtml, /Close slide editor/);
     assert.match(savingHtml, /Saving/);
     assert.match(savingHtml, /disabled=""/);

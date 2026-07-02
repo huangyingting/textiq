@@ -38,7 +38,7 @@ describe("SlideEditorVNext responsive toolbar compaction", () => {
     assert.match(html, /aria-label="Close slide editor"/);
   });
 
-  test("keeps title, status, and snap in footer markup instead of top labels", () => {
+  test("keeps routine status quiet while Snap stays in the deck toolbar", () => {
     const html = renderEditor({
       onSave: async () => ({ ok: true, data: undefined }),
       onExportPptx: async () => undefined,
@@ -46,6 +46,10 @@ describe("SlideEditorVNext responsive toolbar compaction", () => {
 
     assert.match(html, /data-slide-bottom-dock="true"/);
     assert.match(html, /aria-label="Toggle snap to guides"/);
+    assert.doesNotMatch(html, />No diagnostics</);
+    assert.doesNotMatch(html, />Solo</);
+    assert.doesNotMatch(html, />Normal mode</);
+    assert.doesNotMatch(html, />No selection</);
     assert.doesNotMatch(html, /<label[^>]*>\s*Theme\s*<\/label>/);
     assert.doesNotMatch(html, /<label[^>]*>\s*Ratio\s*<\/label>/);
   });

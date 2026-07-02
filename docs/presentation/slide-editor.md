@@ -106,21 +106,21 @@ group, or a multiset is selected, those surfaces target that selection.
 
 The desktop editor is a current-object workflow:
 
-| Surface        | Responsibility                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Top toolbar    | Deck-level controls: theme, ratio, deck chrome, source, regenerate, undo/redo, present/share, export, more, and close. |
-| Canvas popover | Frequent verbs for the current object: slide verbs, element formatting, arrange, object actions.                       |
-| Stage          | Direct manipulation of slide elements on a fixed-format canvas.                                                        |
-| Inspector      | One active task panel (Slide/Text/Shape/Image/Adjust/Line/Arrange/Effects/Source/Notes/Layers) for the current object. |
-| Bottom dock    | Title/slide identity, zoom, notes, rail toggle, snap, save status, diagnostics, presence, and mode/status.             |
-| Slide rail     | Select, duplicate, remove, and reorder slides.                                                                         |
+| Surface        | Responsibility                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top toolbar    | Deck-level controls: theme, ratio, deck chrome, snap, source, regenerate, undo/redo, present/share, export, more, and close.                          |
+| Canvas popover | Frequent verbs for the current object: slide verbs, element formatting, arrange, object actions.                                                      |
+| Stage          | Direct manipulation of slide elements on a fixed-format canvas.                                                                                       |
+| Inspector      | One active task panel (Slide/Text/Shape/Image/Adjust/Line/Arrange/Effects/Source/Notes/Layers) for the current object.                                |
+| Bottom dock    | Rail toggle, notes, slide position, zoom, and non-routine status only: save attention, diagnostics, source issues, collaborators, mode, or selection. |
+| Slide rail     | Select, duplicate, remove, and reorder slides.                                                                                                        |
 
 On smaller surfaces, the inspector can render as a sheet while the stage remains
 the same controlled editor surface. The bottom dock also compacts for narrow
-viewports: rail toggle, Notes, zoom, and snap stay reachable; title, source,
-save, diagnostics, presence, and mode details collapse into a
-keyboard-reachable status popover; and the dock applies bottom safe-area
-padding when pinned to the viewport edge.
+viewports: rail toggle, Notes, and zoom stay reachable; source, save,
+diagnostics, presence, and mode details collapse into a keyboard-reachable
+status popover only when they carry useful information. The dock applies bottom
+safe-area padding when pinned to the viewport edge.
 Desktop and mobile status surfaces announce save state with live regions:
 steady-state save labels are polite updates, and save failures are assertive.
 
@@ -148,13 +148,13 @@ render path.
 ## Top Toolbar
 
 The top toolbar is a compact deck-level command surface. It does not own deck
-identity, save/diagnostic/presence state, snap, or selected-object editing
+identity, routine save/diagnostic/presence state, or selected-object editing
 commands; those live in the bottom dock or current-object surfaces. It uses
 stable first-level text controls for deck setup and output, with icon buttons
 for compact route/actions:
 
 ```text
-Theme | Ratio | Deck chrome || Source | Rebuild || More | Undo Redo | Present | Share | Export PPTX | Close
+Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Present | Share | Export PPTX | Close
 ```
 
 - **Theme** selects the active theme package: theme tokens, package templates,
@@ -165,8 +165,10 @@ Theme | Ratio | Deck chrome || Source | Rebuild || More | Undo Redo | Present | 
 - **Rebuild** appears on the canonical slides route as a compact label for
   deterministic whole-deck regenerate from the latest saved document content.
   It then saves through the DeckV7 CAS path. It is not an AI command.
+- **Snap** toggles snap-to-guides for canvas editing. It is visible in the deck
+  toolbar because it affects the whole editing session.
 - **More** contains low-frequency editor/deck utilities such as keyboard
-  shortcuts, manual save, diagnostics fallback access, and a snap fallback.
+  shortcuts, manual save, and diagnostics fallback access.
 - **Present** and **Share** stay as icon-only deck-level route actions.
 - **Export PPTX** stays first-level as the primary deck output action.
 - **Close** is the fixed rightmost full-screen editor exit.
@@ -184,10 +186,10 @@ Theme | Ratio | Deck chrome || Source | Rebuild || More | Undo Redo | Present | 
 - **Source** owns source-link review status, sync/review actions, selected-node
   refresh/unlink actions, and direct insertion of document blocks (text/table/
   visual) through `document-source-commands.ts`.
-- **Snap** is an editing assist in the bottom dock, not a deck-content command
-  in the top toolbar.
 - **Save state**, **diagnostics**, **presence**, deck title, and current slide
-  identity live in the bottom dock. Save failures expose retry from status;
+  identity live in the bottom dock only when useful. Routine states such as
+  "saved", "no diagnostics", "solo", "normal mode", and "no selection" are not
+  rendered as persistent visible text. Save failures expose retry from status;
   manual save remains in More.
 - **Shortcuts** opens from More. Zoom remains in the bottom dock.
 

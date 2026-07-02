@@ -48,7 +48,7 @@ describe("SlideEditorVNext toolbar command ownership", () => {
     assert.equal(source.includes('aria-label="More deck commands"'), true);
     assert.match(
       source,
-      /aria-label="More deck commands"[\s\S]*Keyboard shortcuts[\s\S]*Snap to guides[\s\S]*Save now[\s\S]*Diagnostics/,
+      /aria-label="More deck commands"[\s\S]*Keyboard shortcuts[\s\S]*Save now[\s\S]*Diagnostics/,
     );
   });
 
@@ -99,10 +99,10 @@ describe("SlideEditorVNext toolbar command ownership", () => {
     assert.equal(source.includes('aria-label="Save slide deck"'), false);
   });
 
-  test("exposes a pressed-state snap toggle in the footer status controls", () => {
-    assert.equal(source.includes('data-slide-bottom-dock="true"'), true);
-    assert.equal(source.includes('aria-label="Toggle snap to guides"'), true);
-    assert.equal(source.includes("aria-pressed={snapToGuides}"), true);
+  test("exposes a pressed-state snap toggle in the deck toolbar", () => {
+    assert.equal(source.includes('label="Toggle snap to guides"'), true);
+    assert.equal(source.includes("active={snapToGuides}"), true);
+    assert.equal(deckToolbarSource.includes("aria-pressed={active"), true);
     assert.equal(source.includes("onClick={toggleSnapToGuides}"), true);
   });
 
