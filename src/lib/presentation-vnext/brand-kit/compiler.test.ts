@@ -371,3 +371,152 @@ test("compileBrandKitDraft rejects typography roles referencing missing custom f
     ),
   );
 });
+
+test("compileBrandKitDraft reports malformed optional assets, scope, decorations, and typography", () => {
+  const draft = buildValidBrandKitDraft({
+    schemaVersion: 2 as 1,
+    slug: "x",
+    version: "1",
+    scope: { kind: "workspace", ownerId: "owner" } as BrandKitDraftV1["scope"],
+    revision: {
+      id: "r",
+      number: 0,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: 5 as unknown as string,
+    },
+    palette: {
+      ...buildValidBrandKitDraft().palette,
+      charts: ["#2563eb", 7 as unknown as string],
+    },
+    typography: {
+      ...buildValidBrandKitDraft().typography,
+      display: {
+        family: "Inter",
+        fontAssetId: "missing-font",
+        sizePt: 120,
+        weight: 1200,
+        lineHeight: 3,
+        letterSpacingEm: Number.NaN,
+      },
+    },
+    assets: {
+      logo: {
+        id: "logo",
+        src: "https://example.com/logo.bmp",
+        mimeType: "image/bmp" as NonNullable<
+          NonNullable<BrandKitDraftV1["assets"]>["logo"]
+        >["mimeType"],
+        widthPx: Number.NaN,
+        heightPx: 10,
+        alt: 7 as unknown as string,
+      },
+      fonts: {
+        fontKey: {
+          id: "other",
+          family: "Inter",
+          src: "https://example.com/font.woff2",
+          weight: [400, Number.NaN],
+          style: "oblique" as "italic",
+          contentHash: 7 as unknown as string,
+        },
+      },
+    },
+    decorations: {
+      background: "loud",
+      chrome: "full",
+    } as unknown as BrandKitDraftV1["decorations"],
+  });
+
+  const result = compileBrandKitDraft(draft);
+  assert.equal(result.ok, false);
+  const codes = new Set(
+    result.diagnostics.map((diagnostic) => diagnostic.code),
+  );
+  for (const code of [
+    "invalid-schema-version",
+    "invalid-slug",
+    "invalid-version",
+    "missing-workspace",
+    "invalid-revision",
+    "invalid-color",
+    "invalid-font-size",
+    "invalid-font-weight",
+    "invalid-line-height",
+    "required-number",
+    "invalid-string",
+    "invalid-image-mime",
+    "invalid-font-style",
+    "font-id-mismatch",
+    "invalid-decoration",
+    "missing-font-asset",
+  ]) {
+    assert.equal(codes.has(code), true, `expected ${code}`);
+  }
+});
+
+test("compileBrandKitDraft supports workspace drafts, font assets, and defaults", () => {
+  const draft = buildValidBrandKitDraft({
+    sourcePresetId: undefined,
+    scope: {
+      kind: "workspace",
+      ownerId: "owner-1",
+      workspaceId: "workspace-1",
+    },
+    typography: {
+      ...buildValidBrandKitDraft().typography,
+      heading: {
+        ...buildValidBrandKitDraft().typography.heading,
+        family: "font-1",
+      },
+      body: {
+        ...buildValidBrandKitDraft().typography.body,
+        fontAssetId: "font-1",
+      },
+    },
+    assets: {
+      fonts: {
+        "font-1": {
+          id: "font-1",
+          family: "Acme Sans",
+          src: "https://example.com/acme.woff2",
+          weight: 400,
+          style: "normal",
+        },
+      },
+    },
+    decorations: undefined,
+  });
+
+  const result = compileBrandKitDraft(draft);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.package.id, "brand-kit:workspace-workspace-1:acme-brand");
+  assert.equal(result.package.tagline, "Custom brand kit");
+  assert.equal(result.package.tokens.fonts.heading, "Acme Sans");
+  assert.equal(result.package.tokens.fonts.body, "Acme Sans");
+  assert.equal(result.package.chrome?.logo, undefined);
+  assert.equal(result.package.assets?.fonts?.["font-1"]?.family, "Acme Sans");
+});
+
+test("compileBrandKitDraft rejects non-object input and missing nested objects", () => {
+  const nonObject = compileBrandKitDraft("not a draft");
+  assert.equal(nonObject.ok, false);
+  assert.equal(nonObject.diagnostics[0]?.code, "required-object");
+
+  const malformed = compileBrandKitDraft({
+    ...buildValidBrandKitDraft(),
+    scope: "bad",
+    palette: { ...buildValidBrandKitDraft().palette, charts: "bad" },
+    typography: { ...buildValidBrandKitDraft().typography, mono: null },
+    assets: { logo: null, fonts: { bad: null } },
+  });
+  assert.equal(malformed.ok, false);
+  assert.ok(
+    malformed.diagnostics.some((diagnostic) => diagnostic.path === "scope"),
+  );
+  assert.ok(
+    malformed.diagnostics.some(
+      (diagnostic) => diagnostic.code === "missing-charts",
+    ),
+  );
+});
