@@ -34,6 +34,53 @@ DeckV7 save correctness and revision-token conflict handling.
 - Do not add CRDT/OT infrastructure, real-time collaboration, or v6
   compatibility paths as part of autosave resilience.
 
+## Measurement Results (2026-07-02)
+
+Deterministic payload measurement uses
+`measureDeckSnapshotPayload` against representative DeckV7 fixtures assembled
+from the existing v7 test builders. The utility serializes the full DeckV7 JSON
+snapshot with `JSON.stringify` and records UTF-8 byte length.
+
+| Slides | Serialized DeckV7 JSON bytes | KiB    |
+| ------ | ---------------------------- | ------ |
+| 1      | 868                          | 0.85   |
+| 5      | 3,328                        | 3.25   |
+| 10     | 6,321                        | 6.17   |
+| 25     | 15,300                       | 14.94  |
+| 50     | 30,265                       | 29.56  |
+| 75     | 45,230                       | 44.17  |
+| 150    | 90,125                       | 88.01  |
+| 300    | 179,915                      | 175.70 |
+
+Large-deck acceptance thresholds for keeping resilient full-snapshot autosave:
+
+- **Deck JSON size:** the 300-slide representative deck remains under 1 MiB
+  serialized JSON.
+- **Save latency:** browser or CI profile runs should record p95 end-to-end save
+  latency under 2 seconds on a reliable profile and under 5 seconds on throttled,
+  flaky, or offline-then-online recovery profiles.
+- **Editor responsiveness:** autosave should not drop the active stage below
+  55 FPS on a reliable profile or below 45 FPS during throttled/flaky recovery;
+  autosave should not introduce long tasks over 100 ms.
+
+This CLI-only slice measured deterministic payload size. Browser-dependent save
+latency and stage-FPS runs should use the same 5/25/75/150/300-slide fixtures
+under reliable, throttled, flaky, and offline-then-online profiles and compare
+against the thresholds above.
+
+## DeckPatch Decision
+
+The measured 300-slide full snapshot is 179,915 bytes (175.70 KiB), well below
+the 1 MiB large-deck payload threshold. Combined with the shipped resilient
+latest-snapshot autosave queue/recovery/UX, real `DeckPatch[]` persistence is
+not required now.
+
+Keep v7 autosave on full-deck `saveDeckJson` snapshots and leave
+`saveDeckPatch` fallback-only. Revisit DeckPatch persistence only if a
+representative deck exceeds any recorded threshold: over 1 MiB serialized JSON,
+p95 save latency over 2 seconds reliable or 5 seconds throttled/flaky/recovery,
+or stage responsiveness below the FPS/long-task limits above.
+
 ## Verification
 
 Implementation follow-ups should run focused editor/autosave tests,
