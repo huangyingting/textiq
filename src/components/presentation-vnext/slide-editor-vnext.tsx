@@ -1782,9 +1782,6 @@ export function SlideEditorVNext({
     const deletedCount = deletedIds.length;
     const replacementId = replacementNodeAfterDelete(deletedIds);
     onDeckChange(nextDeck);
-    if (tableEditingNodeId && deletedIds.includes(tableEditingNodeId)) {
-      clearTableEditing();
-    }
     if (activeGroupId && deletedIds.includes(activeGroupId)) {
       setActiveGroupId(null);
     }
@@ -2145,9 +2142,6 @@ export function SlideEditorVNext({
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
       requestInlineEditCommit();
     }
-    if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
-      clearTableEditing();
-    }
     applyStageTargetContext(target);
     setFocusedNodeId(targetNodeId);
     if (!selectedIds.includes(targetNodeId)) {
@@ -2208,10 +2202,6 @@ export function SlideEditorVNext({
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
       requestInlineEditCommit();
     }
-    if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
-      clearTableEditing();
-    }
-
     setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
     setFocusedNodeId(targetNodeId);
 
@@ -2306,7 +2296,6 @@ export function SlideEditorVNext({
     const rect = canvasElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     if (inlineEditNodeId) requestInlineEditCommit();
-    if (tableEditingNodeId) clearTableEditing();
     const point = pointPctFromEvent(event, rect);
     const result = insertNode(
       deck,
@@ -2319,7 +2308,6 @@ export function SlideEditorVNext({
     );
     setFocusedNodeId(result.nodeId);
     setActiveGroupId(null);
-    clearTableEditing();
     enterInlineEdit(result.nodeId, { kind: "start" });
   }
 
@@ -2335,7 +2323,6 @@ export function SlideEditorVNext({
 
     // Pressing the empty stage exits an in-progress inline/table edit.
     if (inlineEditNodeId) requestInlineEditCommit();
-    if (tableEditingNodeId) clearTableEditing();
 
     event.preventDefault();
     const start = pointPctFromEvent(event, rect);
@@ -2598,20 +2585,13 @@ export function SlideEditorVNext({
     return scheduleEffectStateUpdate(() => {
       if (!activeSlide) {
         setActiveGroupId(null);
-        clearTableEditing();
         return;
       }
       if (activeGroupId && !findNodeById(activeSlide.children, activeGroupId)) {
         setActiveGroupId(null);
       }
-      if (
-        tableEditingNodeId &&
-        findNodeById(activeSlide.children, tableEditingNodeId)?.type !== "table"
-      ) {
-        clearTableEditing();
-      }
     });
-  }, [activeGroupId, activeSlide, clearTableEditing, tableEditingNodeId]);
+  }, [activeGroupId, activeSlide]);
 
   // Also find the selected resolved node to support decoration detach
   const selectedResolvedNode: ResolvedRenderNode | undefined =
@@ -2811,9 +2791,6 @@ export function SlideEditorVNext({
     // original node does not stay in edit state while dragging/selecting.
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
       requestInlineEditCommit();
-    }
-    if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
-      clearTableEditing();
     }
     const additive = event.shiftKey || event.metaKey || event.ctrlKey;
     const wasOnlySelectedNode =

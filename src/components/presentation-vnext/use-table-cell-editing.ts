@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useState,
   type Dispatch,
   type KeyboardEvent,
@@ -93,6 +94,17 @@ function focusTableCellSoon(
   }, 0);
 }
 
+function scheduleEffectStateUpdate(callback: () => void): () => void {
+  let canceled = false;
+  const timeoutId = globalThis.setTimeout(() => {
+    if (!canceled) callback();
+  }, 0);
+  return () => {
+    canceled = true;
+    globalThis.clearTimeout(timeoutId);
+  };
+}
+
 export function useTableCellEditing({
   deck,
   activeSlide,
@@ -117,6 +129,29 @@ export function useTableCellEditing({
     setTableEditingNodeId(null);
     setActiveTableCell(null);
   }, []);
+
+  useEffect(() => {
+    if (!tableEditingNodeId) return;
+
+    return scheduleEffectStateUpdate(() => {
+      const selectedOnlyEditingNode =
+        selectedNodeIds.length === 1 &&
+        selectedNodeIds[0] === tableEditingNodeId;
+      const editingNode = activeSlide
+        ? findNodeById(activeSlide.children, tableEditingNodeId)
+        : undefined;
+
+      if (!selectedOnlyEditingNode || editingNode?.type !== "table") {
+        clearTableEditing();
+      }
+    });
+  }, [
+    activeSlide,
+    clearTableEditing,
+    findNodeById,
+    selectedNodeIds,
+    tableEditingNodeId,
+  ]);
 
   const handleEnterTableEdit = useCallback(
     (nodeId = selectedNodeId, options?: EnterTableEditOptions) => {

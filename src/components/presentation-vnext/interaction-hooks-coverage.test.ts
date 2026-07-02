@@ -6,10 +6,18 @@ import {
   buildDeckV7,
   buildSlideV7,
   buildTableNode,
+  buildTextNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-internals";
+import {
+  createReactHookRenderer,
+  type ReactHookRendererOptions,
+} from "@/test/react-internals";
 import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
-import { createSelectionState, type SelectionState } from "./selection-model";
+import {
+  createSelectionState,
+  setSelection as setSelectedNodeIds,
+  type SelectionState,
+} from "./selection-model";
 import { useFilmstripDrag } from "./filmstrip/use-filmstrip-drag";
 import { useTableCellEditing } from "./use-table-cell-editing";
 
@@ -32,8 +40,11 @@ type FakeRect = {
   height: number;
 };
 
-function createHookRenderer() {
-  return createReactHookRenderer({ idPrefix: "interaction-hooks-id" });
+function createHookRenderer(options: ReactHookRendererOptions = {}) {
+  return createReactHookRenderer({
+    idPrefix: "interaction-hooks-id",
+    ...options,
+  });
 }
 
 function rect(
@@ -178,6 +189,10 @@ function tableDeck() {
   const table = buildTableNode({ id: 'table-"quoted"' });
   const slide = buildSlideV7("table", [table], { id: "slide-table" });
   return { deck: buildDeckV7([slide]), slide, table };
+}
+
+async function waitForScheduledEffects() {
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 }
 
 function keyEvent(
@@ -376,6 +391,115 @@ describe("useTableCellEditing", () => {
         document: previousDocument,
       });
     }
+  });
+
+  test("clears table editing when the editing node is deleted", async () => {
+    const { deck, slide, table } = tableDeck();
+    let activeSlide = slide;
+    let selectionState = createSelectionState("normal");
+    const renderer = createHookRenderer({ runEffects: true });
+    const render = () =>
+      renderer.run(() =>
+        useTableCellEditing({
+          deck,
+          activeSlide,
+          selectedNodeId: [...selectionState.nodeIds][0],
+          selectedNodeIds: [...selectionState.nodeIds],
+          findNodeById,
+          setSelection: (next) => {
+            selectionState =
+              typeof next === "function" ? next(selectionState) : next;
+          },
+          setFocusedNodeId: () => undefined,
+          onDeckChange: () => undefined,
+          setStageAnnouncement: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+        }),
+      );
+
+    let hook = render();
+    hook.handleEnterTableEdit(table.id);
+    hook = render();
+    assert.equal(hook.tableEditingNodeId, table.id);
+
+    activeSlide = buildSlideV7("table", [], { id: slide.id });
+    render();
+    await waitForScheduledEffects();
+    hook = render();
+    assert.equal(hook.tableEditingNodeId, null);
+    assert.equal(hook.activeTableCell, null);
+  });
+
+  test("clears table editing when selection moves to a different node", async () => {
+    const table = buildTableNode({ id: "table-editing" });
+    const text = buildTextNode({ id: "text-selected" });
+    const slide = buildSlideV7("table", [table, text]);
+    const deck = buildDeckV7([slide]);
+    let selectionState = createSelectionState("normal");
+    const renderer = createHookRenderer({ runEffects: true });
+    const render = () =>
+      renderer.run(() =>
+        useTableCellEditing({
+          deck,
+          activeSlide: slide,
+          selectedNodeId: [...selectionState.nodeIds][0],
+          selectedNodeIds: [...selectionState.nodeIds],
+          findNodeById,
+          setSelection: (next) => {
+            selectionState =
+              typeof next === "function" ? next(selectionState) : next;
+          },
+          setFocusedNodeId: () => undefined,
+          onDeckChange: () => undefined,
+          setStageAnnouncement: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+        }),
+      );
+
+    let hook = render();
+    hook.handleEnterTableEdit(table.id);
+    hook = render();
+    assert.equal(hook.tableEditingNodeId, table.id);
+
+    selectionState = setSelectedNodeIds(selectionState, [text.id]);
+    render();
+    await waitForScheduledEffects();
+    hook = render();
+    assert.equal(hook.tableEditingNodeId, null);
+    assert.equal(hook.activeTableCell, null);
+  });
+
+  test("keeps table editing when the selected node is the editing node", async () => {
+    const { deck, slide, table } = tableDeck();
+    let selectionState = createSelectionState("normal");
+    const renderer = createHookRenderer({ runEffects: true });
+    const render = () =>
+      renderer.run(() =>
+        useTableCellEditing({
+          deck,
+          activeSlide: slide,
+          selectedNodeId: [...selectionState.nodeIds][0],
+          selectedNodeIds: [...selectionState.nodeIds],
+          findNodeById,
+          setSelection: (next) => {
+            selectionState =
+              typeof next === "function" ? next(selectionState) : next;
+          },
+          setFocusedNodeId: () => undefined,
+          onDeckChange: () => undefined,
+          setStageAnnouncement: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+        }),
+      );
+
+    let hook = render();
+    hook.handleEnterTableEdit(table.id);
+    hook = render();
+    await waitForScheduledEffects();
+    hook = render();
+
+    assert.equal(hook.tableEditingNodeId, table.id);
+    assert.deepEqual(hook.activeTableCell, { rowIndex: 0, colIndex: 0 });
   });
 
   test("returns inert table editing handlers without an active slide", () => {
