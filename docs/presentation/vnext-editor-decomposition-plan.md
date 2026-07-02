@@ -2,7 +2,7 @@
 type: "plan"
 status: "active — shell collapse pending"
 last_updated: "2026-07-02"
-description: "Remaining P0 plan to finish shrinking SlideEditorVNext. Controller, descriptor, overlay, focus registry, and inline text slices are implemented; table direct-edit ownership and final shell collapse remain pending."
+description: "Remaining P0 plan to finish shrinking SlideEditorVNext. Controller, descriptor, overlay, focus registry, inline text, and table direct-edit lifecycle slices are implemented; final shell collapse remains pending."
 ---
 
 # vNext Editor Decomposition Plan
@@ -17,16 +17,16 @@ remain unchanged unless a slice explicitly records a product decision.
 
 The major extraction slices are implemented: current-object descriptors,
 `useStageInteractionController`, overlay extraction, focus/geometry registry,
-inline text adapter, and source/diagnostic review descriptors. The production
-shell is still about 5.5k lines, so the plan remains active.
+inline text adapter, table direct-edit lifecycle ownership, and
+source/diagnostic review descriptors. The production shell is still about 5.5k
+lines, so the plan remains active.
 
 ## Remaining Work
 
-| Slice                   | Work                                                                                                                               | Exit criteria                                                                                           |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Table direct edit owner | Move remaining table direct-edit state and handlers out of the canvas render surface into an owned controller or overlay boundary. | `SlideCanvasVNext` can stay render-focused; table editing dispatches command payloads through an owner. |
-| Final shell collapse    | Delete obsolete editor-local state and inline handlers after the equivalent controller/component tests exist.                      | `SlideEditorVNext` is primarily composition, callback wiring, and region layout.                        |
-| Coverage handoff        | Replace any remaining shell-only assertions for moved behavior with focused controller, overlay, adapter, or component tests.      | Refactors can validate the touched owner without mounting the full editor shell.                        |
+| Slice                | Work                                                                                                                          | Exit criteria                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Final shell collapse | Delete obsolete editor-local state and inline handlers after the equivalent controller/component tests exist.                 | `SlideEditorVNext` is primarily composition, callback wiring, and region layout. |
+| Coverage handoff     | Replace any remaining shell-only assertions for moved behavior with focused controller, overlay, adapter, or component tests. | Refactors can validate the touched owner without mounting the full editor shell. |
 
 ## Current Boundary Requirements
 
