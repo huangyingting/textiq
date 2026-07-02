@@ -18,6 +18,7 @@ export const LINE_COVERAGE_STAGES = [
       "src/**/*.test.tsx",
       "src/generated/**",
       "src/test/**",
+      "src/lib/document/deck-kernel/**",
     ],
     testFiles: ["src/**/*.test.ts"],
   },

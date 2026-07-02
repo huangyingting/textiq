@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const budgets = [
-  ["src/components/presentation/slide-editor.tsx", 3200],
-  ["src/components/presentation/slide-stage-editor.tsx", 2100],
-  ["src/components/presentation/slide-inspector.tsx", 800],
-  ["src/components/presentation/slide-inspector/controls.tsx", 2800],
+  ["src/components/presentation-vnext/slide-editor-vnext.tsx", 3400],
+  ["src/components/presentation-vnext/slide-canvas.tsx", 900],
+  ["src/components/presentation-vnext/inspector/inspector-shell.tsx", 1500],
+  ["src/components/presentation-vnext/toolbar/context-toolbar.tsx", 2300],
 ];
 
 test("slide editor composition roots stay within ownership budgets", async () => {

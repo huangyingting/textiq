@@ -8,7 +8,7 @@
  * returns parsed JSON objects.
  */
 
-import type { Deck } from "../presentation/deck-core";
+import type { Deck } from "../document/deck-kernel/deck-core";
 import { safeParseDeck } from "@/lib/document/deck-schema";
 
 /**

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { buildDashboardViewModel } from "@/lib/dashboard/view-model";
 import { buildDocumentEditorViewModel } from "@/lib/document-editor/view-model";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../document/deck-kernel/deck";
 import { buildPublicPresentationModel } from "@/lib/public-render/presentation";
 import { assertViewModelSerializable } from "@/lib/view-models/serializable";
 

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-import * as legacyDeckBoundary from "@/lib/presentation/deck";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
+import * as legacyDeckBoundary from "../document/deck-kernel/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../document/deck-kernel/deck";
 import { DECK_SCHEMA_VERSION_V7 } from "./schema";
 import {
   decideDeckOpen,

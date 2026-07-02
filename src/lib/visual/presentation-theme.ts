@@ -2,4 +2,4 @@
 export type {
   PresentationTheme,
   VisualDefaultsToken,
-} from "../presentation/presentation-theme";
+} from "../document/deck-kernel/presentation-theme";

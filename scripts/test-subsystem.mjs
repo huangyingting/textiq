@@ -86,7 +86,6 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/actions\//,
       /^src\/lib\/commands\//,
       /^src\/lib\/shortcuts\//,
-      /^src\/lib\/presentation\/slide-commands/,
       /^scripts\/check-action-ports\.test\.mjs$/,
     ],
   },
@@ -96,7 +95,6 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/comments\//,
       /^src\/app\/app\/documents\/.*comment.*\.test\.ts$/,
-      /^src\/lib\/presentation\/slide-comment/,
     ],
   },
   "data-model": {
@@ -105,8 +103,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/data-contracts\//,
       /^src\/lib\/document\//,
-      /^src\/lib\/presentation\/deck/,
-      /^src\/lib\/presentation\/fnv-hash\.test\.ts$/,
+      /^src\/lib\/presentation-vnext\/validation/,
       /^src\/lib\/schema-audit\//,
       /^src\/lib\/db\//,
       /^src\/lib\/db-provider\.test\.ts$/,
@@ -192,7 +189,6 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/components\/presentation-shared\//,
       /^src\/components\/presentation-vnext\//,
       /^src\/lib\/assets\//,
-      /^src\/lib\/presentation\//,
       /^src\/lib\/presentation-shared\//,
       /^src\/lib\/presentation-vnext\//,
       /^src\/lib\/slides\//,

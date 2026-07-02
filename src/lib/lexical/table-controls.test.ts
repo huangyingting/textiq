@@ -27,7 +27,7 @@ import {
   lexicalStateToPlainText,
   type DocumentTableBlock,
 } from "@/lib/content";
-import { buildPresentationBlocks } from "@/lib/presentation/present-blocks";
+import { buildPresentationBlocks } from "../document/deck-kernel/present-blocks";
 import { ensureLexicalTableCaptionSupport } from "@/lib/lexical/table-caption-runtime";
 
 import {

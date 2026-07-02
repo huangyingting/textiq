@@ -6,8 +6,8 @@ import type {
   Slide,
   SlideElement,
   TextElementStyle,
-} from "@/lib/presentation/deck";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
+} from "../document/deck-kernel/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../document/deck-kernel/deck";
 import {
   computeDeckMetrics,
   countWords,

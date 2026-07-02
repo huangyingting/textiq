@@ -31,19 +31,4 @@ export const facadeRules = [
     domainRoot: "src/lib/limits",
     publicConsumers: ["src/lib/limits/limits.test.ts"],
   },
-  {
-    facade: "src/lib/presentation/deck.ts",
-    domainRoot: "src/lib/presentation",
-    publicConsumers: ["src/lib/presentation/deck.test.ts"],
-  },
-  {
-    facade: "src/lib/presentation/deck-mutations.ts",
-    domainRoot: "src/lib/presentation",
-    publicConsumers: ["src/lib/presentation/deck-mutations.test.ts"],
-  },
-  {
-    facade: "src/lib/presentation/deck-theme-tokens.ts",
-    domainRoot: "src/lib/presentation",
-    publicConsumers: ["src/lib/presentation/deck-theme-tokens.test.ts"],
-  },
 ];

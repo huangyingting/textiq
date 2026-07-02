@@ -11,7 +11,7 @@ export type { SlideFormat } from "@/lib/presentation-shared/slide-format";
 export {
   LEGACY_DECK_SCHEMA_VERSION,
   PRESENTATION_THEME_IDS,
-} from "../presentation/deck-core";
+} from "./deck-kernel/deck-core";
 export type {
   Deck,
   MasterChromeKind,
@@ -19,7 +19,7 @@ export type {
   PresentationThemeId,
   Slide,
   SlideMaster,
-} from "../presentation/deck-core";
+} from "./deck-kernel/deck-core";
 export {
   DEFAULT_VISUAL_BOX,
   GLASS_EFFECT_INTENSITIES,
@@ -27,7 +27,7 @@ export {
   IMAGE_MASK_SHAPES,
   buildVisualElement,
   normalizeTextParagraphs,
-} from "../presentation/deck-elements";
+} from "./deck-kernel/deck-elements";
 export type {
   BaseElement,
   BlurEffect,
@@ -71,30 +71,30 @@ export type {
   TextFitMode,
   TextRun,
   VisualElement,
-} from "../presentation/deck-elements";
+} from "./deck-kernel/deck-elements";
 export {
   activeSourceRef,
   isSourceLinked,
   isSourceStale,
   relinkSource,
   unlinkSource,
-} from "../presentation/deck-source-refs";
-export type { SourceRef } from "../presentation/deck-source-refs";
-export { makeElementId, makeSlideId } from "../presentation/deck-ids";
-export { inspectSlideDesignOrigins } from "../presentation/slide-design-origins";
+} from "./deck-kernel/deck-source-refs";
+export type { SourceRef } from "./deck-kernel/deck-source-refs";
+export { makeElementId, makeSlideId } from "./deck-kernel/deck-ids";
+export { inspectSlideDesignOrigins } from "./deck-kernel/slide-design-origins";
 export type {
   SlideDesignOrigin,
   SlideDesignOriginLayer,
   SlideDesignOriginReport,
-} from "../presentation/slide-design-origins";
+} from "./deck-kernel/slide-design-origins";
 export {
   findSourceLinkedElements,
   getSlideTitleFromElements,
   getSlideVisualIds,
   summarizeSlideContent,
-} from "../presentation/slide-helpers";
+} from "./deck-kernel/slide-helpers";
 export {
   MAX_BULLETS,
   buildDeckFromBlocks,
   buildSlideElementsFromContent,
-} from "../presentation/deck-derivation";
+} from "./deck-kernel/deck-derivation";

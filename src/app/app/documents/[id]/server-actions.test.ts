@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, it } from "node:test";
 
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
-import type { DeckPatch } from "@/lib/presentation/slide-commands";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../../../../lib/document/deck-kernel/deck";
+import type { DeckPatch } from "../../../../lib/commands/deck-command-contracts";
 
 type ModuleHooks = {
   registerHooks(hooks: {

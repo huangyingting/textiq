@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-import type { Deck, Slide, SourceRef } from "../presentation/deck";
+import type { Deck, Slide, SourceRef } from "./deck-kernel/deck";
 import type { DocumentBlock } from "@/lib/content";
 import {
   enumerateDeckDependencies,

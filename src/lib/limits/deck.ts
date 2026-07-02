@@ -70,7 +70,7 @@ export const ELEMENTS_PER_SLIDE_LIMIT: LimitDefinition = {
   enforcement: "warning",
   warnAt: ELEMENTS_PER_SLIDE_WARN_COUNT,
   diagnostic: { scope: "deck.elements", metric: "elementsPerSlide" },
-  source: "src/lib/presentation/perf-budgets.ts",
+  source: "src/lib/limits/deck.ts",
 };
 
 export const VISUALS_PER_DOCUMENT_LIMIT: LimitDefinition = {
@@ -81,7 +81,7 @@ export const VISUALS_PER_DOCUMENT_LIMIT: LimitDefinition = {
   enforcement: "warning",
   warnAt: VISUALS_PER_DOCUMENT_WARN_COUNT,
   diagnostic: { scope: "visual.mirror", metric: "visualCount" },
-  source: "src/lib/presentation/perf-budgets.ts",
+  source: "src/lib/limits/deck.ts",
 };
 
 export const INLINE_IMAGE_LIMIT: LimitDefinition = {
@@ -92,7 +92,7 @@ export const INLINE_IMAGE_LIMIT: LimitDefinition = {
   enforcement: "enforced",
   warnAt: INLINE_IMAGE_WARN_BYTES,
   diagnostic: { scope: "deck.image", metric: "inlineImageBytes" },
-  source: "src/lib/presentation/image-element.ts",
+  source: "src/lib/limits/deck.ts",
 };
 
 export const INLINE_IMAGES_LIMIT: LimitDefinition = {
@@ -103,7 +103,7 @@ export const INLINE_IMAGES_LIMIT: LimitDefinition = {
   enforcement: "warning",
   warnAt: INLINE_IMAGES_WARN_COUNT,
   diagnostic: { scope: "deck.image", metric: "inlineImageCount" },
-  source: "src/lib/presentation/perf-budgets.ts",
+  source: "src/lib/limits/deck.ts",
 };
 
 export const TIMING_BUDGETS: readonly LimitDefinition[] = [
@@ -114,7 +114,7 @@ export const TIMING_BUDGETS: readonly LimitDefinition[] = [
     unit: "ms",
     enforcement: "warning",
     diagnostic: { scope: "deck.autosave", metric: "autosaveMs" },
-    source: "src/lib/presentation/perf-budgets.ts",
+    source: "src/lib/limits/deck.ts",
   },
   {
     id: "export.preflight.ms",
@@ -123,7 +123,7 @@ export const TIMING_BUDGETS: readonly LimitDefinition[] = [
     unit: "ms",
     enforcement: "warning",
     diagnostic: { scope: "export.preflight", metric: "preflightMs" },
-    source: "src/lib/presentation/perf-budgets.ts",
+    source: "src/lib/limits/deck.ts",
   },
   {
     id: "editor.open.ms",
@@ -132,7 +132,7 @@ export const TIMING_BUDGETS: readonly LimitDefinition[] = [
     unit: "ms",
     enforcement: "warning",
     diagnostic: { scope: "editor.open", metric: "editorOpenMs" },
-    source: "src/lib/presentation/perf-budgets.ts",
+    source: "src/lib/limits/deck.ts",
   },
 ];
 

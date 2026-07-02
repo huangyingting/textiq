@@ -25,7 +25,7 @@ import type {
   Slide,
   SlideElement,
   TextElement,
-} from "../presentation/deck";
+} from "../document/deck-kernel/deck";
 import { PLAN_ENTITLEMENTS } from "@/lib/billing/catalog";
 import { resolveExportPolicy } from "@/lib/visual/export-policy";
 import {

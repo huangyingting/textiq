@@ -20,7 +20,7 @@ import type {
   SlideElement,
   TextElement,
   TextElementStyle,
-} from "@/lib/presentation/deck";
+} from "../document/deck-kernel/deck";
 import {
   ClientAssetResolver,
   MISSING_ASSET_PLACEHOLDER,
@@ -30,7 +30,7 @@ import {
   type AssetResolverDb,
   type AssetResolverStorage,
 } from "@/lib/slides/asset-resolver";
-import { buildDeckSpecs } from "@/lib/presentation/export/deck-export";
+import { buildDeckSpecs } from "../document/deck-kernel/export/deck-export";
 import {
   fatalDiagnostics,
   runExportPreflight,
