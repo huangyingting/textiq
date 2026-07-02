@@ -19,7 +19,7 @@ import {
   makeDOMRect,
   TestHTMLElement,
 } from "@/test/fake-dom";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 import {
   handleCloseConfirmAction,
   routeCloseRequest,

@@ -11,7 +11,7 @@ import {
 import {
   createReactHookRenderer,
   type ReactHookRendererOptions,
-} from "@/test/react-internals";
+} from "@/test/react-server-renderer";
 import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
 import {
   createSelectionState,

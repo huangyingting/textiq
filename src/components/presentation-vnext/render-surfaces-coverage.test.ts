@@ -33,7 +33,7 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 import { PresentModeVNext } from "./present-mode-vnext";
 import {
   PresenterPanelVNext,

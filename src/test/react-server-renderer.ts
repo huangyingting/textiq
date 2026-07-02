@@ -1,13 +1,5 @@
-import assert from "node:assert/strict";
-import * as React from "react";
-
-type ReactClientInternals = {
-  __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?: {
-    H: unknown;
-  };
-};
-
-export type ReactTestDispatcher = Record<string, unknown>;
+import React, { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 export type ReactHookRendererOptions = {
   firstRefCurrent?: unknown;
@@ -20,36 +12,41 @@ export type ReactHookRendererOptions = {
   runLayoutEffects?: boolean;
 };
 
+export type ReactTestDispatcher = Record<string, unknown>;
+
+export function renderWithReact<T>(render: () => T): T {
+  let result: T | undefined;
+
+  function Probe() {
+    result = render();
+    return (result ?? null) as ReactNode;
+  }
+
+  renderToStaticMarkup(createElement(Probe));
+  return result as T;
+}
+
 export function withReactTestDispatcher<T>(
   dispatcher: ReactTestDispatcher,
   render: () => T,
-  {
-    message = "React internals were unavailable for hook rendering.",
-    requireInternals = true,
-  }: { message?: string; requireInternals?: boolean } = {},
+  _options: { message?: string; requireInternals?: boolean } = {},
 ): T {
-  const internals = (React as unknown as ReactClientInternals)
-    .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
-  if (!internals) {
-    if (!requireInternals) return render();
-    assert.fail(message);
+  const original: ReactTestDispatcher = {};
+  for (const key of Object.keys(dispatcher)) {
+    original[key] = (React as unknown as ReactTestDispatcher)[key];
   }
-
-  const previous = internals.H;
-  internals.H = dispatcher;
+  Object.assign(React, dispatcher);
   try {
     return render();
   } finally {
-    internals.H = previous;
+    Object.assign(React, original);
   }
 }
 
 export function createReactHookRenderer({
   firstRefCurrent,
   idPrefix = "fake-react-id",
-  message,
   preferServerSnapshot = false,
-  requireInternals = true,
   runEffects = false,
   runInsertionEffects = false,
   runLayoutEffects = false,
@@ -162,10 +159,7 @@ export function createReactHookRenderer({
           hookIndex++;
         },
       };
-      return withReactTestDispatcher(dispatcher, render, {
-        message,
-        requireInternals,
-      });
+      return withReactTestDispatcher(dispatcher, render);
     },
     cleanup(): void {
       for (const cleanup of cleanups.splice(0)) cleanup();
