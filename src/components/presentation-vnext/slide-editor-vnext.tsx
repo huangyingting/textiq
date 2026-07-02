@@ -1009,6 +1009,26 @@ export function SlideEditorVNext({
     setInlineEditNodeId(null);
   }
 
+  function requestInlineEditCommit() {
+    if (!inlineEditNodeId) return;
+    if (typeof document === "undefined") {
+      exitInlineEdit();
+      return;
+    }
+    const escapedNodeId = inlineEditNodeId
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
+    const editor = document.querySelector(
+      `[data-inline-editor-vnext="${escapedNodeId}"]`,
+    );
+    const blur = (editor as { blur?: unknown } | null)?.blur;
+    if (typeof blur === "function") {
+      blur.call(editor);
+      return;
+    }
+    exitInlineEdit();
+  }
+
   function handleThemePackageChange(packageId: string) {
     const nextPackage = themePackages.find(
       (candidate) => candidate.id === packageId,
@@ -2117,7 +2137,7 @@ export function SlideEditorVNext({
     event.stopPropagation();
     const targetNodeId = target.nodeId;
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
-      exitInlineEdit();
+      requestInlineEditCommit();
     }
     if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
       clearTableEditing();
@@ -2289,7 +2309,7 @@ export function SlideEditorVNext({
     if (rect.width <= 0 || rect.height <= 0) return;
 
     // Pressing the empty stage exits an in-progress inline/table edit.
-    if (inlineEditNodeId) exitInlineEdit();
+    if (inlineEditNodeId) requestInlineEditCommit();
     if (tableEditingNodeId) clearTableEditing();
 
     event.preventDefault();
@@ -2765,7 +2785,7 @@ export function SlideEditorVNext({
     // Pressing another node exits an in-progress inline/table edit so the
     // original node does not stay in edit state while dragging/selecting.
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
-      exitInlineEdit();
+      requestInlineEditCommit();
     }
     if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
       clearTableEditing();

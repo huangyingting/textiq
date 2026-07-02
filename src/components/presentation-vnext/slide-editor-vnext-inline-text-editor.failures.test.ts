@@ -380,6 +380,127 @@ describe("SlideEditorVNext inline text editor failures", () => {
     );
   });
 
+  test("pressing another text node requests blur commit before switching selection", () => {
+    withMockHTMLElement((createElement) =>
+      withPointerWindow((listeners) => {
+        const hookRenderer = createHookRenderer();
+        const currentDeck = buildDeckV7([
+          buildSlideV7(
+            "content",
+            [
+              buildTextNode({
+                id: "edit-before-switch",
+                layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                content: {
+                  paragraphs: [
+                    { id: "edit-before-switch-p1", text: "Original" },
+                  ],
+                },
+              }),
+              buildTextNode({
+                id: "switch-target",
+                layout: { frame: { x: 60, y: 10, w: 25, h: 12 }, zIndex: 2 },
+              }),
+            ],
+            { id: "slide-commit-before-switch", name: "Slide 1" },
+          ),
+        ]);
+
+        const renderTree = () =>
+          hookRenderer.run(() =>
+            SlideEditorVNext({
+              documentId: "doc-commit-before-switch",
+              deck: currentDeck,
+              onDeckChange: () => undefined,
+            }),
+          );
+        const pointerDownFrom = (root: ReactNode) =>
+          (
+            findRequiredElement(
+              root,
+              (element) => element.type === SlideCanvasVNext,
+              "Expected stage canvas to render.",
+            ).props as {
+              onNodePointerDown?: (
+                nodeId: string,
+                event: React.PointerEvent,
+              ) => void;
+            }
+          ).onNodePointerDown;
+        const pressNode = (
+          pointerDown: (nodeId: string, event: React.PointerEvent) => void,
+          nodeId: string,
+          clientX: number,
+        ) => {
+          const canvasElement = createElement({
+            rect: { left: 0, top: 0, width: 1000, height: 1000 },
+          });
+          const currentTarget = createElement({
+            closestMap: {
+              '[data-slide-canvas-vnext="true"]': canvasElement,
+            },
+          });
+          pointerDown(nodeId, {
+            button: 0,
+            pointerId: 1,
+            clientX,
+            clientY: 120,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          } as unknown as React.PointerEvent);
+          listeners.get("pointerup")?.({
+            clientX,
+            clientY: 120,
+          } as PointerEvent);
+        };
+
+        let tree = renderTree();
+        focusNode(tree, "edit-before-switch");
+        tree = renderTree();
+        const selectedPointerDown = pointerDownFrom(tree);
+        assert.ok(selectedPointerDown);
+        pressNode(selectedPointerDown, "edit-before-switch", 120);
+
+        tree = renderTree();
+        const previousDocument = globalThis.document;
+        let blurCalls = 0;
+        globalThis.document = {
+          querySelector(selector: string) {
+            assert.equal(
+              selector,
+              '[data-inline-editor-vnext="edit-before-switch"]',
+            );
+            return {
+              blur() {
+                blurCalls += 1;
+              },
+            } as unknown as Element;
+          },
+        } as Document;
+
+        try {
+          const switchPointerDown = pointerDownFrom(tree);
+          assert.ok(switchPointerDown);
+          pressNode(switchPointerDown, "switch-target", 620);
+        } finally {
+          if (previousDocument === undefined) {
+            Reflect.deleteProperty(globalThis, "document");
+          } else {
+            globalThis.document = previousDocument;
+          }
+        }
+
+        assert.equal(blurCalls, 1);
+      }),
+    );
+  });
+
   describe("SlideEditorVNext empty-canvas double-click behavior", () => {
     test("inserts a text node at the canvas point and enters inline edit mode", () => {
       withMockHTMLElement((createElement) => {
