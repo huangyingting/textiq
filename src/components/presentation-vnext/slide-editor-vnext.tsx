@@ -64,9 +64,7 @@ import type { ActionResult } from "@/lib/action-result";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import type { SaveStatus } from "@/lib/presentation-shared/save-status";
 import type {
-  ConnectorEndpoint,
   DeckV7,
-  ImageCrop,
   LayoutBox,
   SemanticTemplateKind,
   SlideNode,
@@ -101,10 +99,6 @@ import {
   cutNodes,
   updateNodeContent,
   resetImageCrop,
-  updateNodeLayout,
-  updateNodeRotation,
-  updateNodeLayouts,
-  moveNodesBy,
   deleteNodes,
   duplicateNodes,
   groupNodes,
@@ -117,22 +111,12 @@ import { createDefaultTemplateRegistry } from "@/lib/presentation-vnext/theme-pa
 import { listThemePackagesV7 } from "@/lib/presentation-vnext/theme-package-registry";
 import { resolveNodeFontCss } from "@/lib/presentation-vnext/node-font-css";
 import { resolveDeckAssetSource } from "@/lib/presentation-vnext/deck-asset-source";
-import {
-  alignmentGuidesForFrames,
-  snapFrameToStageGuides,
-  type StageGuide,
-} from "@/lib/presentation-vnext/stage-guides";
 import { STAGE_CHROME_Z_INDEX } from "@/lib/presentation-vnext/stage-chrome";
 import {
   fitCanvasToViewport,
   type CanvasStageFit,
   type StageFitSize,
 } from "@/lib/presentation-vnext/stage-fit";
-import {
-  normalizeSelectionFrame,
-  selectNodesInFrame,
-} from "@/lib/presentation-vnext/selection-geometry";
-import { connectorEndpointFromSlidePoint } from "@/lib/presentation-vnext/connector-geometry";
 import {
   hitTestSlideNodes,
   type StageHitCandidate,
@@ -154,27 +138,11 @@ import {
   type V7VisualPickResult,
 } from "@/lib/presentation-vnext/node-asset-factories";
 import { nextLayeredZIndex } from "@/lib/presentation-vnext/layer-bands";
-import { collectSelectedLayoutEntries } from "./arrangement-geometry";
-import {
-  multiSelectionBounds,
-  rotateMultiSelectionFrames,
-  scaleMultiSelectionFrames,
-  type MultiSelectionTransformEntry,
-} from "./multi-selection-transform";
 
-import {
-  SlideCanvasVNext,
-  type ConnectorEndpointHandle,
-  type CropHandlePosition,
-  type ResizeHandlePosition,
-} from "./slide-canvas";
-import { startPointerDragLifecycle } from "./pointer-drag-lifecycle";
-import { createSingleCommitGesture } from "./single-commit-gesture";
+import { SlideCanvasVNext } from "./slide-canvas";
 import {
   createSelectionState,
   getSelectableNodes,
-  selectNode,
-  toggleNode,
   clearSelection,
   setSelection as setSelectedNodeIds,
   setSelectionMode,
@@ -183,11 +151,9 @@ import {
 } from "./selection-model";
 import {
   adjacentInlineEditableNodeId,
-  adjacentNodeId,
   childIdsForGroup,
   findNodeById,
   flattenEditorNodes,
-  layoutFramesExcluding,
   nodesInReadingOrder,
   parentGroupIdForNode,
 } from "./selection-traversal";
@@ -212,47 +178,26 @@ import {
   stageCandidateNodeIds,
   type StageNodeInteractionTarget,
 } from "./stage-targeting";
-import { StageNodeContextMenu, stageNodeMenuLabel } from "./stage-context-menu";
-import {
-  buildKeyboardConnectorNodeVNext,
-  connectorFrameForEndpointsVNext,
-  cycleConnectorEndpointAnchorVNext,
-  detachConnectorEndpointVNext,
-  isKeyboardConnectableNode,
-  nextKeyboardConnectorTargetIdVNext,
-  selectedKeyboardConnectablePair,
-  startKeyboardConnectorModeVNext,
-} from "./stage-keyboard-interactions";
+import { StageNodeContextMenu } from "./stage-context-menu";
+import { detachConnectorEndpointVNext } from "./stage-keyboard-interactions";
 import {
   buildStageGestureBadge,
   buildStageNodeGestureDrafts,
-  createNodeMovePreview,
-  nodeMoveGestureDrafts,
-  nodeMovePreviewsEqual,
   renderStageGestureBadge,
-  type NodeMovePreview,
 } from "./stage-gesture-feedback";
 import {
   canvasElementFromTarget,
-  canvasRectFromEvent,
   isEditableTarget,
   isStageEditingHandleTarget,
   isStageHandleTarget,
-  nextSemanticSelectUnderNodeId,
   pointPctFromEvent,
-  pointerMovedBeyondThreshold,
-  shouldEnterInlineNodeEditOnClick,
 } from "./stage-pointer-interactions";
 import { useStageInteractionController } from "./use-stage-interaction-controller";
+import { useStageGestureController } from "./use-stage-gesture-controller";
 import {
   useFocusFirstDescendantWhenOpen,
   useStageFocusController,
 } from "./use-stage-focus-controller";
-import { pairDuplicatesAfterOriginals } from "./stage-duplicate";
-import {
-  connectorEndpointsEqual,
-  nearestConnectorAnchor,
-} from "./stage-connector-interactions";
 import {
   AddSlideTemplatePicker,
   type AddSlideTemplateChoice,
@@ -274,7 +219,6 @@ import { useInlineTextEditingController } from "./use-inline-text-editing-contro
 import { useInspectorCommands } from "./inspector-command-descriptors";
 import { SourceReviewPanel } from "./source-review-panel";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
-import { clipboardShortcutActionFromKey } from "./clipboard-shortcuts";
 import {
   runVisualPickerMutation,
   VISUAL_PICKER_FAILURE_MESSAGE,
@@ -295,12 +239,6 @@ import {
   type SlidePresenceAwareness,
   type SlidePresencePeer,
 } from "@/lib/presentation-shared/use-slide-presence";
-import { canvasArrangeShortcutKind } from "@/lib/shortcuts/canvas-runtime";
-import {
-  announceRotation,
-  applyKeyboardRotation,
-  keyboardRotationDelta,
-} from "@/lib/presentation-shared/canvas-keyboard-rotate";
 
 export {
   handleCloseConfirmAction,
@@ -556,29 +494,8 @@ export interface SlideEditorVNextProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function topLevelSelectedNodeIds(
-  nodes: readonly SlideChildNode[],
-  selectedIds: ReadonlySet<string>,
-  insideSelectedGroup = false,
-  result: string[] = [],
-): string[] {
-  for (const node of nodes) {
-    const selected = selectedIds.has(node.id);
-    if (selected && !insideSelectedGroup) result.push(node.id);
-    if (node.type === "group") {
-      topLevelSelectedNodeIds(
-        node.children,
-        selectedIds,
-        insideSelectedGroup || selected,
-        result,
-      );
-    }
-  }
-  return result;
-}
 const STAGE_VIEWPORT_FALLBACK: StageFitSize = { width: 1120, height: 630 };
 const DESKTOP_INSPECTOR_OVERLAY_WIDTH = 352;
-const CLICK_MOVE_THRESHOLD_PX = 4;
 
 function canvasAspectRatio(deck: DeckV7): number {
   const width = deck.canvas.width > 0 ? deck.canvas.width : 16;
@@ -672,100 +589,6 @@ function dedupeDiagnostics(
     result.push(diagnostic);
   }
   return result;
-}
-
-function clampFrame(frame: LayoutBox["frame"]): LayoutBox["frame"] {
-  const w = Math.max(
-    0.5,
-    Math.min(100, Number.isFinite(frame.w) ? frame.w : 0.5),
-  );
-  const h = Math.max(
-    0.5,
-    Math.min(100, Number.isFinite(frame.h) ? frame.h : 0.5),
-  );
-  return {
-    x: Math.max(0, Math.min(100 - w, Number.isFinite(frame.x) ? frame.x : 0)),
-    y: Math.max(0, Math.min(100 - h, Number.isFinite(frame.y) ? frame.y : 0)),
-    w,
-    h,
-  };
-}
-
-function framesEqual(
-  left: LayoutBox["frame"],
-  right: LayoutBox["frame"],
-): boolean {
-  return (
-    left.x === right.x &&
-    left.y === right.y &&
-    left.w === right.w &&
-    left.h === right.h
-  );
-}
-
-function clampCrop(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(95, Math.round(value * 10) / 10));
-}
-
-function cropsEqual(a: ImageCrop, b: ImageCrop): boolean {
-  return (
-    a.top === b.top &&
-    a.right === b.right &&
-    a.bottom === b.bottom &&
-    a.left === b.left
-  );
-}
-
-function normalizeRotationDegrees(rotation: number): number {
-  if (!Number.isFinite(rotation)) return 0;
-  const normalized = ((rotation % 360) + 360) % 360;
-  return Math.round(normalized * 10) / 10;
-}
-
-function snapRotationDegrees(rotation: number, snap: boolean): number {
-  return normalizeRotationDegrees(
-    snap ? Math.round(rotation / 15) * 15 : rotation,
-  );
-}
-
-function resizeFrame(
-  frame: LayoutBox["frame"],
-  handle: ResizeHandlePosition,
-  deltaX: number,
-  deltaY: number,
-): LayoutBox["frame"] {
-  let { x, y, w, h } = frame;
-  if (handle.includes("w")) {
-    x += deltaX;
-    w -= deltaX;
-  }
-  if (handle.includes("e")) {
-    w += deltaX;
-  }
-  if (handle.includes("n")) {
-    y += deltaY;
-    h -= deltaY;
-  }
-  if (handle.includes("s")) {
-    h += deltaY;
-  }
-  if (w < 0.5 && handle.includes("w")) x -= 0.5 - w;
-  if (h < 0.5 && handle.includes("n")) y -= 0.5 - h;
-  return clampFrame({ x, y, w, h });
-}
-
-function applyAspectLock(
-  original: LayoutBox["frame"],
-  next: LayoutBox["frame"],
-): LayoutBox["frame"] {
-  const aspect = original.w / original.h;
-  if (!Number.isFinite(aspect) || aspect <= 0) return next;
-  const widthDelta = Math.abs(next.w - original.w);
-  const heightDelta = Math.abs(next.h - original.h);
-  return widthDelta >= heightDelta
-    ? clampFrame({ ...next, h: next.w / aspect })
-    : clampFrame({ ...next, w: next.h * aspect });
 }
 
 function readImageFileAsDataUrl(file: File): Promise<string> {
@@ -1618,187 +1441,6 @@ export function SlideEditorVNext({
     }
   }
 
-  function insertKeyboardConnector(
-    from: SlideChildNode & { layout: LayoutBox },
-    to: SlideChildNode & { layout: LayoutBox },
-  ) {
-    if (!activeSlide) return;
-    const result = insertNode(
-      deck,
-      activeSlide.id,
-      buildKeyboardConnectorNodeVNext({
-        from,
-        to,
-        zIndex: nextLayeredZIndex(activeSlide, "connector"),
-      }),
-    );
-    onDeckChange(result.deck);
-    setKeyboardConnectorMode(null);
-    setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
-    setActiveGroupId(null);
-    focusSelectedNodeSoon(result.nodeId);
-    setStageAnnouncement(
-      `Connected ${stageNodeMenuLabel(from)} to ${stageNodeMenuLabel(to)}`,
-    );
-  }
-
-  function handleKeyboardConnectorModeKey(
-    event: KeyboardEvent<HTMLDivElement>,
-  ): boolean {
-    if (!activeSlide || !keyboardConnectorMode) return false;
-    const source = findNodeById(
-      activeSlide.children,
-      keyboardConnectorMode.sourceId,
-    );
-    if (!source || !isKeyboardConnectableNode(source)) {
-      setKeyboardConnectorMode(null);
-      return false;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setKeyboardConnectorMode(null);
-      setSelection((s) => setSelectedNodeIds(s, [source.id]));
-      focusSelectedNodeSoon(source.id);
-      setStageAnnouncement("Connector mode canceled");
-      return true;
-    }
-    if (event.key === "Enter") {
-      const target = keyboardConnectorMode.targetId
-        ? findNodeById(activeSlide.children, keyboardConnectorMode.targetId)
-        : undefined;
-      if (target && isKeyboardConnectableNode(target)) {
-        event.preventDefault();
-        insertKeyboardConnector(source, target);
-        return true;
-      }
-      return false;
-    }
-    const direction =
-      event.key === "Tab"
-        ? event.shiftKey
-          ? -1
-          : 1
-        : event.key === "ArrowLeft" || event.key === "ArrowUp"
-          ? -1
-          : event.key === "ArrowRight" || event.key === "ArrowDown"
-            ? 1
-            : null;
-    if (direction === null) return false;
-    event.preventDefault();
-    const targetId = nextKeyboardConnectorTargetIdVNext(
-      activeSlide.children,
-      source.id,
-      keyboardConnectorMode.targetId,
-      direction,
-    );
-    if (!targetId) return true;
-    setKeyboardConnectorMode({ sourceId: source.id, targetId });
-    setSelection((s) => setSelectedNodeIds(s, [targetId, source.id]));
-    setFocusedNodeId(targetId);
-    focusSelectedNodeSoon(targetId);
-    const target = findNodeById(activeSlide.children, targetId);
-    setStageAnnouncement(
-      target
-        ? `Connector target ${stageNodeMenuLabel(target)}. Press Enter to connect.`
-        : "Connector mode target selected",
-    );
-    return true;
-  }
-
-  function handleKeyboardConnectorShortcut(
-    event: KeyboardEvent<HTMLDivElement>,
-  ) {
-    if (!activeSlide) return false;
-    if (event.metaKey || event.ctrlKey || event.altKey) return false;
-    if (event.key.toLowerCase() !== "c") return false;
-    const selectedConnector =
-      selectedIds.length <= 1 && selectedNode?.type === "connector"
-        ? selectedNode
-        : undefined;
-    if (selectedConnector?.layout) {
-      const endpointKey = event.shiftKey ? "from" : "to";
-      const nextEndpoint = cycleConnectorEndpointAnchorVNext(
-        selectedConnector.content[endpointKey],
-      );
-      if (nextEndpoint !== selectedConnector.content[endpointKey]) {
-        event.preventDefault();
-        const nextFrame = connectorFrameForEndpointsVNext(
-          activeSlide.children,
-          selectedConnector.layout.frame,
-          endpointKey === "from"
-            ? nextEndpoint
-            : selectedConnector.content.from,
-          endpointKey === "to" ? nextEndpoint : selectedConnector.content.to,
-        );
-        const updatedContent = updateNodeContent(
-          deck,
-          activeSlide.id,
-          selectedConnector.id,
-          { [endpointKey]: nextEndpoint },
-        );
-        onDeckChange(
-          updateNodeLayout(
-            updatedContent,
-            activeSlide.id,
-            selectedConnector.id,
-            {
-              frame: nextFrame,
-            },
-          ),
-        );
-        focusSelectedNodeSoon(selectedConnector.id);
-        setStageAnnouncement(
-          nextEndpoint.kind === "node"
-            ? `Reattached connector ${endpointKey} endpoint to ${nextEndpoint.anchor}`
-            : `Connector ${endpointKey} endpoint unchanged`,
-        );
-      }
-      return true;
-    }
-
-    const pair = selectedKeyboardConnectablePair(
-      activeSlide.children,
-      selectedIds,
-    );
-    if (pair) {
-      event.preventDefault();
-      insertKeyboardConnector(pair[0], pair[1]);
-      return true;
-    }
-
-    const connectorSource =
-      selectedIds.length <= 1 &&
-      selectedNode &&
-      isKeyboardConnectableNode(selectedNode)
-        ? selectedNode
-        : null;
-    if (connectorSource) {
-      event.preventDefault();
-      const mode = startKeyboardConnectorModeVNext(
-        activeSlide.children,
-        connectorSource.id,
-      );
-      if (!mode?.targetId) {
-        setStageAnnouncement("No connector targets available");
-        return true;
-      }
-      setKeyboardConnectorMode(mode);
-      setSelection((s) =>
-        setSelectedNodeIds(s, [mode.targetId!, connectorSource.id]),
-      );
-      setFocusedNodeId(mode.targetId);
-      focusSelectedNodeSoon(mode.targetId);
-      const target = findNodeById(activeSlide.children, mode.targetId);
-      setStageAnnouncement(
-        target
-          ? `Connector target ${stageNodeMenuLabel(target)}. Press Enter to connect.`
-          : "Connector mode started",
-      );
-      return true;
-    }
-    return false;
-  }
-
   function semanticHitsAtPoint(
     point: { x: number; y: number },
     options: { selectedNodeBonus?: boolean } = {},
@@ -2088,144 +1730,6 @@ export function SlideEditorVNext({
     enterInlineEdit(result.nodeId, { kind: "start" });
   }
 
-  function handleStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!activeSlide || event.button !== 0 || isEditableTarget(event.target)) {
-      return;
-    }
-    if (isStageHandleTarget(event.target)) return;
-    const canvasElement = canvasElementFromTarget(event.target);
-    if (!canvasElement) return;
-    const rect = canvasElement.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-
-    // Pressing the empty stage exits an in-progress inline/table edit.
-    if (inlineEditNodeId) requestInlineEditCommit();
-
-    event.preventDefault();
-    const start = pointPctFromEvent(event, rect);
-    const additive = event.shiftKey || event.metaKey || event.ctrlKey;
-    const baseSelection = new Set(selectedIds);
-    setMarqueeFrame({ ...start, w: 0, h: 0 });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const frame = normalizeSelectionFrame(
-          start,
-          pointPctFromEvent(moveEvent, rect),
-        );
-        setMarqueeFrame(frame);
-        const ids = selectNodesInFrame(activeSlide.children, frame);
-        setSelection((selectionState) =>
-          setSelectedNodeIds(
-            selectionState,
-            additive ? [...baseSelection, ...ids] : ids,
-          ),
-        );
-      },
-      onEnd: (_endEvent, reason) => {
-        setMarqueeFrame((frame) => {
-          const moved = frame && (frame.w > 0.5 || frame.h > 0.5);
-          if (reason === "up" && (moved || additive)) {
-            suppressNextStageClick();
-          }
-          return null;
-        });
-      },
-    });
-  }
-
-  function handleStagePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (
-      !activeSlide ||
-      marqueeFrame ||
-      draggingStage ||
-      activeResizeHandle ||
-      activeCropHandle ||
-      activeRotationNodeId ||
-      activeConnectorEndpoint ||
-      isEditableTarget(event.target) ||
-      isStageEditingHandleTarget(event.target)
-    ) {
-      setHoveredNodeId((current) => (current === null ? current : null));
-      setSlideHovered((current) => (current === false ? current : false));
-      return;
-    }
-    const hits = semanticHitsFromEvent(event, {
-      selectedNodeBonus: false,
-    });
-    const hoverTarget = semanticTargetFromHits(hits);
-    const hoveredId = hoverTarget?.nodeId;
-    setHoveredNodeId((current) =>
-      current === (hoveredId ?? null) ? current : (hoveredId ?? null),
-    );
-    const hoveringSlide = hoveredId === undefined && hits.length === 0;
-    setSlideHovered((current) =>
-      current === hoveringSlide ? current : hoveringSlide,
-    );
-  }
-
-  function handleStagePointerLeave() {
-    semanticCandidateStackRef.current = [];
-    setHoveredNodeId((current) => (current === null ? current : null));
-    setSlideHovered((current) => (current === false ? current : false));
-  }
-
-  function handleCropHandlePointerDown(
-    nodeId: string,
-    handle: CropHandlePosition,
-    event: ReactPointerEvent,
-  ) {
-    if (!activeSlide || event.button !== 0) return;
-    const node = findNodeById(activeSlide.children, nodeId);
-    if (!node || node.type !== "image" || node.locked) return;
-    const rect = canvasRectFromEvent(event);
-    const frame = node.layout?.frame;
-    if (!rect || !frame || frame.w <= 0 || frame.h <= 0) return;
-    const start = pointPctFromEvent(event, rect);
-    const startCrop: ImageCrop = {
-      top: node.content.crop?.top ?? 0,
-      right: node.content.crop?.right ?? 0,
-      bottom: node.content.crop?.bottom ?? 0,
-      left: node.content.crop?.left ?? 0,
-    };
-
-    event.preventDefault();
-    event.stopPropagation();
-    setActiveCropHandle({ nodeId, handle });
-    setSelection((s) => setSelectedNodeIds(s, [nodeId]));
-    const gesture = createSingleCommitGesture<ImageCrop>({
-      initialValue: startCrop,
-      equals: cropsEqual,
-      onPreview: (crop) => setCropGestureDraft(crop ? { nodeId, crop } : null),
-      onCommit: (crop) =>
-        onDeckChange(updateNodeContent(deck, activeSlide.id, nodeId, { crop })),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const point = pointPctFromEvent(moveEvent, rect);
-        const deltaX = ((point.x - start.x) / frame.w) * 100;
-        const deltaY = ((point.y - start.y) / frame.h) * 100;
-        const nextCrop: ImageCrop = { ...startCrop };
-        if (handle === "left")
-          nextCrop.left = clampCrop(startCrop.left + deltaX);
-        if (handle === "right") {
-          nextCrop.right = clampCrop(startCrop.right - deltaX);
-        }
-        if (handle === "top") nextCrop.top = clampCrop(startCrop.top + deltaY);
-        if (handle === "bottom") {
-          nextCrop.bottom = clampCrop(startCrop.bottom - deltaY);
-        }
-        gesture.update(nextCrop);
-        setStageAnnouncement(`Cropping image ${handle}`);
-      },
-      onEnd: () => {
-        gesture.finish();
-        setActiveCropHandle(null);
-      },
-    });
-  }
-
   function handleResetSelectedImageCrop() {
     if (!activeSlide || !selectedNode || selectedNode.type !== "image") return;
     onDeckChange(resetImageCrop(deck, activeSlide.id, selectedNode.id));
@@ -2403,956 +1907,10 @@ export function SlideEditorVNext({
   // Alt-click cycles the selection to the node beneath the current one
   // (select-under). Kept as a helper so both the click fallback and the
   // Alt-drag gesture can reuse the exact legacy behavior.
-  function selectUnderFromHits(hits: readonly StageHitCandidate[]) {
-    const nextId = nextSemanticSelectUnderNodeId(
-      stageCandidateNodeIds(hits),
-      new Set(selectedIds),
-    );
-    if (nextId) {
-      setSelection((s) => setSelectedNodeIds(s, [nextId]));
-      setFocusedNodeId(nextId);
-      applyActiveGroupContext(nextId);
-    }
-  }
 
   // Alt-drag duplicates the dragged node(s) and drops the copies at the moved
   // position, leaving the originals in place (Canva parity). Alt without any
   // movement falls back to select-under so the legacy click behavior is intact.
-  function handleAltNodePointerDown(
-    nodeId: string,
-    event: ReactPointerEvent,
-    hits: readonly StageHitCandidate[],
-  ) {
-    if (!activeSlide) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const target = resolveStageNodeTarget({
-      hits,
-      nodes: activeSlide.children,
-      fallbackNodeId: nodeId,
-    });
-    const rect = canvasRectFromEvent(event);
-    if (!target || !rect || rect.width <= 0 || rect.height <= 0) {
-      selectUnderFromHits(hits);
-      return;
-    }
-
-    const targetNodeId = target.nodeId;
-    const dragIds = selectedIds.includes(targetNodeId)
-      ? topLevelSelectedNodeIds(activeSlide.children, new Set(selectedIds))
-      : [targetNodeId];
-    const originalFrames = new Map<string, LayoutBox["frame"]>();
-    for (const id of dragIds) {
-      const node = findNodeById(activeSlide.children, id);
-      if (!node?.layout || node.locked) continue;
-      originalFrames.set(id, node.layout.frame);
-    }
-    if (originalFrames.size === 0) {
-      selectUnderFromHits(hits);
-      return;
-    }
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
-    );
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let dragThresholdPassed = false;
-    let moved = false;
-    let latestPreview: NodeMovePreview | null = null;
-    const gesture = createSingleCommitGesture<NodeMovePreview>({
-      initialValue: {
-        patches: new Map<string, Partial<LayoutBox>>(),
-        guides: [],
-      },
-      equals: nodeMovePreviewsEqual,
-      onPreview: (preview) => {
-        setMoveGestureDraft(nodeMoveGestureDrafts(preview));
-        setStageGuides(preview?.guides ?? []);
-      },
-      // Alt-drag never mutates the originals — the duplicates are created on
-      // release instead, so the commit path is intentionally empty.
-      onCommit: () => undefined,
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const preview = createNodeMovePreview({
-          startClientX: startX,
-          startClientY: startY,
-          nextClientX: moveEvent.clientX,
-          nextClientY: moveEvent.clientY,
-          rectWidth: rect.width,
-          rectHeight: rect.height,
-          originalFrames,
-          alignmentGuides,
-          snapToGuides: snapToGuides,
-          lockAxis: moveEvent.shiftKey,
-        });
-        if (!preview) return;
-        moved = true;
-        latestPreview = preview;
-        if (!dragThresholdPassed) {
-          dragThresholdPassed = true;
-          setDraggingStage(true);
-        }
-        gesture.update(preview);
-      },
-      onEnd: (_endEvent, reason) => {
-        gesture.finish();
-        setDraggingStage(false);
-        if (reason !== "up") return;
-        if (moved && latestPreview) {
-          suppressNextStageClick();
-          const duplication = duplicateNodes(deck, activeSlide.id, dragIds);
-          if (duplication.duplicatedIds.length === 0) return;
-          const nextChildren =
-            duplication.deck.slides.find(
-              (candidate) => candidate.id === activeSlide.id,
-            )?.children ?? [];
-          const pairs = pairDuplicatesAfterOriginals(
-            nextChildren,
-            new Set(dragIds),
-            new Set(duplication.duplicatedIds),
-          );
-          const framePatches = new Map<string, Partial<LayoutBox>>();
-          for (const [originalId, duplicateId] of pairs) {
-            const frame = latestPreview.patches.get(originalId)?.frame;
-            if (frame) framePatches.set(duplicateId, { frame });
-          }
-          const positioned =
-            framePatches.size > 0
-              ? updateNodeLayouts(
-                  duplication.deck,
-                  activeSlide.id,
-                  framePatches,
-                )
-              : duplication.deck;
-          onDeckChange(positioned);
-          const duplicateIds = [...pairs.values()];
-          if (duplicateIds.length > 0) {
-            setSelection((s) => setSelectedNodeIds(s, duplicateIds));
-            setActiveGroupId(null);
-            focusSelectedNodeSoon(duplicateIds[0]);
-          }
-          setStageAnnouncement(
-            `Duplicated ${duplicateIds.length} ${
-              duplicateIds.length === 1 ? "node" : "nodes"
-            }`,
-          );
-        } else {
-          selectUnderFromHits(hits);
-        }
-      },
-    });
-  }
-
-  function handleNodePointerDown(nodeId: string, event: ReactPointerEvent) {
-    if (!activeSlide || event.button !== 0 || isEditableTarget(event.target)) {
-      return;
-    }
-    const hits = semanticHitsFromEvent(event, { selectedNodeBonus: false });
-    if (event.altKey) {
-      handleAltNodePointerDown(nodeId, event, hits);
-      return;
-    }
-
-    const target = resolveStageNodeTarget({
-      hits,
-      nodes: activeSlide.children,
-      fallbackNodeId: nodeId,
-    });
-    if (!target) return;
-    const targetNodeId = target.nodeId;
-    // Pressing another node exits an in-progress inline/table edit so the
-    // original node does not stay in edit state while dragging/selecting.
-    if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
-      requestInlineEditCommit();
-    }
-    const additive = event.shiftKey || event.metaKey || event.ctrlKey;
-    const wasOnlySelectedNode =
-      selectedIds.length === 1 && selectedIds[0] === targetNodeId;
-    const targetNode = target.node;
-    const selectedCountAtStart = selectedIds.length;
-    const clickEditNode =
-      targetNode && isInlineEditableNode(targetNode) ? targetNode : null;
-    const nextSelection = selectedIds.includes(targetNodeId)
-      ? selection
-      : selectNode(selection, targetNodeId, additive);
-    const dragIds = topLevelSelectedNodeIds(
-      activeSlide.children,
-      new Set(selectedNodeIds(nextSelection)),
-    );
-    setSelection(nextSelection);
-    setFocusedNodeId(targetNodeId);
-    applyStageTargetContext(target);
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
-
-    const originalFrames = new Map<string, LayoutBox["frame"]>();
-    for (const id of dragIds) {
-      const node = findNodeById(activeSlide.children, id);
-      if (!node?.layout || node.locked) continue;
-      originalFrames.set(id, node.layout.frame);
-    }
-    if (originalFrames.size === 0) return;
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
-    );
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let dragThresholdPassed = false;
-    let pointerMovedPastClickThreshold = false;
-    const gesture = createSingleCommitGesture<NodeMovePreview>({
-      initialValue: {
-        patches: new Map<string, Partial<LayoutBox>>(),
-        guides: [],
-      },
-      equals: nodeMovePreviewsEqual,
-      onPreview: (preview) => {
-        setMoveGestureDraft(nodeMoveGestureDrafts(preview));
-        setStageGuides(preview?.guides ?? []);
-      },
-      onCommit: (preview) =>
-        onDeckChange(updateNodeLayouts(deck, activeSlide.id, preview.patches)),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        if (
-          !pointerMovedPastClickThreshold &&
-          pointerMovedBeyondThreshold({
-            startX,
-            startY,
-            nextX: moveEvent.clientX,
-            nextY: moveEvent.clientY,
-            thresholdPx: CLICK_MOVE_THRESHOLD_PX,
-          })
-        ) {
-          pointerMovedPastClickThreshold = true;
-        }
-        const preview = createNodeMovePreview({
-          startClientX: startX,
-          startClientY: startY,
-          nextClientX: moveEvent.clientX,
-          nextClientY: moveEvent.clientY,
-          rectWidth: rect.width,
-          rectHeight: rect.height,
-          originalFrames,
-          alignmentGuides,
-          snapToGuides: snapToGuides && !moveEvent.altKey,
-          lockAxis: moveEvent.shiftKey,
-        });
-        if (!preview) return;
-        if (!dragThresholdPassed) {
-          dragThresholdPassed = true;
-          setHoveredNodeId(null);
-          setDraggingStage(true);
-        }
-        gesture.update(preview);
-      },
-      onEnd: (endEvent, reason) => {
-        gesture.finish();
-        const endedPastClickThreshold = pointerMovedBeyondThreshold({
-          startX,
-          startY,
-          nextX: endEvent.clientX,
-          nextY: endEvent.clientY,
-          thresholdPx: CLICK_MOVE_THRESHOLD_PX,
-        });
-        const moved = pointerMovedPastClickThreshold || endedPastClickThreshold;
-        if (reason === "up" && moved) {
-          suppressNextStageClick();
-        }
-        if (
-          reason === "up" &&
-          clickEditNode &&
-          shouldEnterInlineNodeEditOnClick({
-            mode: "move",
-            moved,
-            wasPrimarySelected: wasOnlySelectedNode,
-            selectedCount: selectedCountAtStart,
-            isInlineEditable: true,
-            locked: clickEditNode.locked,
-          })
-        ) {
-          enterInlineEdit(
-            targetNodeId,
-            initialCaretFromNodeClick(clickEditNode, {
-              clientX: startX,
-              clientY: startY,
-            }),
-          );
-        }
-        setHoveredNodeId(null);
-        setDraggingStage(false);
-      },
-    });
-  }
-
-  function handleResizeHandlePointerDown(
-    nodeId: string,
-    handle: ResizeHandlePosition,
-    event: ReactPointerEvent,
-  ) {
-    if (!activeSlide || event.button !== 0) return;
-    const node = findNodeById(activeSlide.children, nodeId);
-    if (!node?.layout || node.locked) return;
-    const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    setActiveResizeHandle({ nodeId, handle });
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const originalFrame = node.layout.frame;
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set([nodeId])),
-    );
-    const gesture = createSingleCommitGesture<LayoutBox["frame"]>({
-      initialValue: originalFrame,
-      equals: framesEqual,
-      onPreview: (frame) =>
-        setResizeGestureDraft(frame ? { nodeId, frame } : null),
-      onCommit: (frame) =>
-        onDeckChange(
-          updateNodeLayout(deck, activeSlide.id, nodeId, {
-            frame,
-          }),
-        ),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const deltaX = ((moveEvent.clientX - startX) / rect.width) * 100;
-        const deltaY = ((moveEvent.clientY - startY) / rect.height) * 100;
-        // Shift locks the aspect ratio during resize (Canva parity), matching
-        // the always-on lock for nodes that declare preserveAspectRatio.
-        const constrainAspect =
-          node.layout?.constraints?.preserveAspectRatio === true ||
-          moveEvent.shiftKey;
-        const nextFrame = constrainAspect
-          ? applyAspectLock(
-              originalFrame,
-              resizeFrame(originalFrame, handle, deltaX, deltaY),
-            )
-          : resizeFrame(originalFrame, handle, deltaX, deltaY);
-        const snapped =
-          snapToGuides && !moveEvent.altKey
-            ? snapFrameToStageGuides(nextFrame, 0.75, alignmentGuides)
-            : { frame: nextFrame, guides: [] as StageGuide[] };
-        setStageGuides(snapped.guides);
-        gesture.update(snapped.frame);
-      },
-      onEnd: () => {
-        gesture.finish();
-        setActiveResizeHandle(null);
-        setStageGuides([]);
-      },
-    });
-  }
-
-  function selectedTransformEntries(): MultiSelectionTransformEntry[] {
-    if (!activeSlide) return [];
-    const selected = topLevelSelectedNodeIds(
-      activeSlide.children,
-      new Set(selectedIds),
-    );
-    return selected.flatMap((nodeId) => {
-      const node = findNodeById(activeSlide.children, nodeId);
-      if (!node?.layout || node.locked) return [];
-      return [
-        {
-          id: node.id,
-          frame: node.layout.frame,
-          rotation: node.layout.rotation,
-        },
-      ];
-    });
-  }
-
-  function handleMultiResizeHandlePointerDown(
-    handle: ResizeHandlePosition,
-    event: ReactPointerEvent,
-  ) {
-    if (!activeSlide || event.button !== 0) return;
-    const entries = selectedTransformEntries();
-    if (entries.length < 2) return;
-    const startBounds = multiSelectionBounds(entries);
-    const rect = canvasRectFromEvent(event);
-    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let dragging = false;
-    const selectedSet = new Set(entries.map((entry) => entry.id));
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, selectedSet),
-    );
-    const gesture = createSingleCommitGesture<NodeMovePreview>({
-      initialValue: { patches: new Map(), guides: [] },
-      equals: nodeMovePreviewsEqual,
-      onPreview: (preview) => {
-        setMoveGestureDraft(nodeMoveGestureDrafts(preview));
-        setStageGuides(preview?.guides ?? []);
-      },
-      onCommit: (preview) =>
-        onDeckChange(updateNodeLayouts(deck, activeSlide.id, preview.patches)),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        if (
-          !dragging &&
-          pointerMovedBeyondThreshold({
-            startX,
-            startY,
-            nextX: moveEvent.clientX,
-            nextY: moveEvent.clientY,
-            thresholdPx: CLICK_MOVE_THRESHOLD_PX,
-          })
-        ) {
-          dragging = true;
-          setHoveredNodeId(null);
-          setDraggingStage(true);
-        }
-        if (!dragging) return;
-        const deltaX = ((moveEvent.clientX - startX) / rect.width) * 100;
-        const deltaY = ((moveEvent.clientY - startY) / rect.height) * 100;
-        const rawBounds = resizeFrame(startBounds, handle, deltaX, deltaY);
-        const nextBounds = moveEvent.shiftKey
-          ? applyAspectLock(startBounds, rawBounds)
-          : rawBounds;
-        const snapped =
-          snapToGuides && !moveEvent.altKey
-            ? snapFrameToStageGuides(nextBounds, 0.75, alignmentGuides)
-            : { frame: nextBounds, guides: [] as StageGuide[] };
-        gesture.update({
-          patches: scaleMultiSelectionFrames(
-            entries,
-            startBounds,
-            snapped.frame,
-          ),
-          guides: snapped.guides,
-        });
-      },
-      onEnd: () => {
-        gesture.finish();
-        setMoveGestureDraft(null);
-        setStageGuides([]);
-        setDraggingStage(false);
-      },
-    });
-  }
-
-  function handleMultiRotationHandlePointerDown(event: ReactPointerEvent) {
-    if (!activeSlide || event.button !== 0) return;
-    const entries = selectedTransformEntries();
-    if (entries.length < 2) return;
-    const startBounds = multiSelectionBounds(entries);
-    const rect = canvasRectFromEvent(event);
-    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
-    const centerPct = {
-      x: startBounds.x + startBounds.w / 2,
-      y: startBounds.y + startBounds.h / 2,
-    };
-    const center = {
-      x: rect.left + (centerPct.x / 100) * rect.width,
-      y: rect.top + (centerPct.y / 100) * rect.height,
-    };
-    const startAngle =
-      (Math.atan2(event.clientY - center.y, event.clientX - center.x) * 180) /
-      Math.PI;
-    let dragging = false;
-
-    event.preventDefault();
-    event.stopPropagation();
-    const gesture = createSingleCommitGesture<NodeMovePreview>({
-      initialValue: { patches: new Map(), guides: [] },
-      equals: nodeMovePreviewsEqual,
-      onPreview: (preview) =>
-        setMoveGestureDraft(nodeMoveGestureDrafts(preview)),
-      onCommit: (preview) =>
-        onDeckChange(updateNodeLayouts(deck, activeSlide.id, preview.patches)),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        if (
-          !dragging &&
-          pointerMovedBeyondThreshold({
-            startX: event.clientX,
-            startY: event.clientY,
-            nextX: moveEvent.clientX,
-            nextY: moveEvent.clientY,
-            thresholdPx: CLICK_MOVE_THRESHOLD_PX,
-          })
-        ) {
-          dragging = true;
-          setHoveredNodeId(null);
-          setDraggingStage(true);
-        }
-        if (!dragging) return;
-        const angle =
-          (Math.atan2(
-            moveEvent.clientY - center.y,
-            moveEvent.clientX - center.x,
-          ) *
-            180) /
-          Math.PI;
-        const delta = snapRotationDegrees(
-          angle - startAngle,
-          !moveEvent.altKey,
-        );
-        gesture.update({
-          patches: rotateMultiSelectionFrames(
-            entries,
-            centerPct.x,
-            centerPct.y,
-            delta,
-          ),
-          guides: [],
-        });
-        setStageAnnouncement(`Rotated selection ${Math.round(delta)} degrees`);
-      },
-      onEnd: () => {
-        gesture.finish();
-        setMoveGestureDraft(null);
-        setDraggingStage(false);
-      },
-    });
-  }
-
-  function handleRotationHandlePointerDown(
-    nodeId: string,
-    event: ReactPointerEvent,
-  ) {
-    if (!activeSlide || event.button !== 0) return;
-    const node = findNodeById(activeSlide.children, nodeId);
-    if (!node?.layout || node.locked || node.type === "connector") return;
-    const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
-    const frame = node.layout.frame;
-    const center = {
-      x: rect.left + ((frame.x + frame.w / 2) / 100) * rect.width,
-      y: rect.top + ((frame.y + frame.h / 2) / 100) * rect.height,
-    };
-    const startAngle =
-      (Math.atan2(event.clientY - center.y, event.clientX - center.x) * 180) /
-      Math.PI;
-    const startRotation = node.layout.rotation ?? 0;
-
-    event.preventDefault();
-    event.stopPropagation();
-    setActiveRotationNodeId(nodeId);
-    setSelection((s) => setSelectedNodeIds(s, [nodeId]));
-    const gesture = createSingleCommitGesture<number>({
-      initialValue: startRotation,
-      onPreview: (rotation) =>
-        setRotationGestureDraft(
-          rotation === null ? null : { nodeId, rotation },
-        ),
-      onCommit: (rotation) =>
-        onDeckChange(
-          updateNodeRotation(deck, activeSlide.id, nodeId, rotation),
-        ),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const angle =
-          (Math.atan2(
-            moveEvent.clientY - center.y,
-            moveEvent.clientX - center.x,
-          ) *
-            180) /
-          Math.PI;
-        const rotation = snapRotationDegrees(
-          startRotation + angle - startAngle,
-          !moveEvent.altKey,
-        );
-        gesture.update(rotation);
-        setStageAnnouncement(`Rotated to ${Math.round(rotation)} degrees`);
-      },
-      onEnd: () => {
-        gesture.finish();
-        setActiveRotationNodeId(null);
-      },
-    });
-  }
-
-  function handleConnectorEndpointPointerDown(
-    nodeId: string,
-    endpoint: ConnectorEndpointHandle,
-    event: ReactPointerEvent,
-  ) {
-    if (!activeSlide || event.button !== 0) return;
-    const node = findNodeById(activeSlide.children, nodeId);
-    if (!node?.layout || node.type !== "connector" || node.locked) return;
-    const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    setActiveConnectorEndpoint({ nodeId, endpoint });
-    setSelection((s) => setSelectedNodeIds(s, [nodeId]));
-    const connectorFrame = node.layout.frame;
-    const startEndpoint = node.content[endpoint];
-    const gesture = createSingleCommitGesture<ConnectorEndpoint>({
-      initialValue: startEndpoint,
-      equals: connectorEndpointsEqual,
-      onPreview: (value) =>
-        setConnectorGestureDraft(value ? { nodeId, endpoint, value } : null),
-      onCommit: (value) =>
-        onDeckChange(
-          updateNodeContent(deck, activeSlide.id, nodeId, {
-            [endpoint]: value,
-          }),
-        ),
-    });
-
-    startPointerDragLifecycle(event, {
-      onMove: (moveEvent) => {
-        const slidePoint = pointPctFromEvent(moveEvent, rect);
-        const snapped =
-          nearestConnectorAnchor(activeSlide.children, slidePoint, nodeId) ??
-          connectorEndpointFromSlidePoint(slidePoint, connectorFrame);
-        gesture.update(snapped);
-        setStageAnnouncement(
-          snapped.kind === "node"
-            ? `Connector ${endpoint} bound to ${snapped.anchor} anchor`
-            : `Connector ${endpoint} moved`,
-        );
-      },
-      onEnd: () => {
-        gesture.finish();
-        setActiveConnectorEndpoint(null);
-      },
-    });
-  }
-
-  function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    // Don't intercept keys when inline editing is active (inline editor handles them)
-    if (inlineEditNodeId) return;
-    if (isEditableTarget(event.target)) return;
-    if (!activeSlide) return;
-    if (keyboardConnectorMode && handleKeyboardConnectorModeKey(event)) {
-      return;
-    }
-    if (event.key === " ") {
-      const targetNodeId = focusedNodeId ?? firstSelectedId;
-      if (targetNodeId && findNodeById(activeSlide.children, targetNodeId)) {
-        event.preventDefault();
-        setFocusedNodeId(targetNodeId);
-        setSelection((state) =>
-          event.shiftKey
-            ? toggleNode(state, targetNodeId)
-            : setSelectedNodeIds(state, [targetNodeId]),
-        );
-      }
-      return;
-    }
-    if (event.key === "Tab") {
-      const nextId = adjacentNodeId(
-        activeSlide.children,
-        firstSelectedId,
-        event.shiftKey ? -1 : 1,
-      );
-      if (nextId) {
-        setSelection((s) => setSelectedNodeIds(s, [nextId]));
-        setFocusedNodeId(nextId);
-        focusStageNodeSoon(nextId);
-        event.preventDefault();
-      }
-      return;
-    }
-    if (event.key === "Escape") {
-      if (tableEditingNodeId) {
-        const tableId = tableEditingNodeId;
-        clearTableEditing();
-        focusSelectedNodeSoon(tableId);
-        event.preventDefault();
-        return;
-      }
-      if (activeGroupId) {
-        const groupId = activeGroupId;
-        setActiveGroupId(null);
-        setSelection((s) => setSelectedNodeIds(s, [groupId]));
-        focusSelectedNodeSoon(groupId);
-        setStageAnnouncement("Exited group");
-        event.preventDefault();
-        return;
-      }
-      if (selectedIds.length > 0) {
-        setSelection((s) => clearSelection(s));
-      } else {
-        handleCloseRequest();
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (handleKeyboardConnectorShortcut(event)) {
-      return;
-    }
-    // Enter key enters inline edit mode on the selected text/shape node
-    if (event.key === "Enter" && selectedIds.length === 1 && selectedNode) {
-      if (selectedNode.locked) {
-        event.preventDefault();
-        return;
-      }
-      if (selectedNode.type === "group") {
-        setActiveGroupId(selectedNode.id);
-        const firstChildId = childIdsForGroup(
-          activeSlide.children,
-          selectedNode.id,
-        )[0];
-        if (firstChildId) {
-          setSelection((s) => setSelectedNodeIds(s, [firstChildId]));
-          focusSelectedNodeSoon(firstChildId);
-        }
-        setStageAnnouncement("Entered group. Press Escape to exit group.");
-        event.preventDefault();
-        return;
-      }
-      if (selectedNode.type === "table") {
-        handleEnterTableEdit(selectedNode.id);
-        event.preventDefault();
-        return;
-      }
-      if (selectedNode.type === "text") {
-        enterInlineEdit(selectedNode.id);
-        event.preventDefault();
-        return;
-      }
-    }
-
-    const clipboardAction = clipboardShortcutActionFromKey(event);
-
-    if (clipboardAction === "paste") {
-      handlePasteNodes();
-      event.preventDefault();
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-      if (event.shiftKey) {
-        onRedo?.();
-      } else {
-        onUndo?.();
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
-      onRedo?.();
-      event.preventDefault();
-      return;
-    }
-
-    if (
-      (event.metaKey || event.ctrlKey) &&
-      !event.shiftKey &&
-      !event.altKey &&
-      event.key.toLowerCase() === "a"
-    ) {
-      const selectableIds = activeSlideTree
-        ? getSelectableNodes(activeSlideTree, selection.mode).map(
-            (node) => node.id,
-          )
-        : [];
-      if (selectableIds.length > 0) {
-        event.preventDefault();
-        const primaryId = selectableIds[selectableIds.length - 1];
-        const orderedSelection = [
-          primaryId,
-          ...selectableIds.filter((id) => id !== primaryId),
-        ];
-        setSelection((s) => setSelectedNodeIds(s, orderedSelection));
-        setFocusedNodeId(primaryId);
-        focusStageNodeSoon(primaryId);
-      }
-      return;
-    }
-
-    if (event.key === "?") {
-      setShortcutHelpOpen((open) => !open);
-      event.preventDefault();
-      return;
-    }
-
-    if (event.altKey && event.key === "]") {
-      const anchorId = focusedNodeId ?? firstSelectedId;
-      let candidateIds = semanticCandidateStackRef.current;
-      if (anchorId) {
-        const anchorNode = findNodeById(activeSlide.children, anchorId);
-        if (anchorNode?.layout) {
-          candidateIds = stageCandidateNodeIds(
-            semanticHitsAtPoint(
-              {
-                x: anchorNode.layout.frame.x + anchorNode.layout.frame.w / 2,
-                y: anchorNode.layout.frame.y + anchorNode.layout.frame.h / 2,
-              },
-              { selectedNodeBonus: true },
-            ),
-          );
-        }
-      }
-      const nextId = nextSemanticSelectUnderNodeId(
-        candidateIds,
-        new Set(selectedIds),
-      );
-      if (nextId) {
-        setSelection((s) => setSelectedNodeIds(s, [nextId]));
-        focusSelectedNodeSoon(nextId);
-        applyActiveGroupContext(nextId);
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (selectedIds.length === 0) return;
-
-    if (clipboardAction === "copy") {
-      handleCopyNodes();
-      event.preventDefault();
-      return;
-    }
-
-    if (clipboardAction === "cut") {
-      handleCutNodes();
-      event.preventDefault();
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "g") {
-      if (event.shiftKey) {
-        handleUngroupSelection();
-      } else {
-        handleGroupSelection();
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "Delete" || event.key === "Backspace") {
-      handleDeleteSelection();
-      event.preventDefault();
-      return;
-    }
-
-    const nudge = event.shiftKey ? 5 : 1;
-    const deltaByKey: Record<string, { x: number; y: number } | undefined> = {
-      ArrowLeft: { x: -nudge, y: 0 },
-      ArrowRight: { x: nudge, y: 0 },
-      ArrowUp: { x: 0, y: -nudge },
-      ArrowDown: { x: 0, y: nudge },
-    };
-    const delta = deltaByKey[event.key];
-    if (delta) {
-      if (event.altKey) {
-        const patches = new Map<string, Partial<LayoutBox>>();
-        for (const entry of collectSelectedLayoutEntries(
-          activeSlide.children,
-          selectedIds,
-        )) {
-          const resized = clampFrame({
-            ...entry.frame,
-            w: entry.frame.w + delta.x,
-            h: entry.frame.h + delta.y,
-          });
-          patches.set(entry.id, {
-            frame: entry.node.layout?.constraints?.preserveAspectRatio
-              ? applyAspectLock(entry.frame, resized)
-              : resized,
-          });
-        }
-        if (patches.size > 0) {
-          onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-          setStageAnnouncement(
-            `Resized ${patches.size} ${patches.size === 1 ? "node" : "nodes"}`,
-          );
-        }
-        event.preventDefault();
-        return;
-      }
-      onDeckChange(moveNodesBy(deck, activeSlide.id, selectedIds, delta));
-      const direction =
-        delta.x < 0
-          ? "left"
-          : delta.x > 0
-            ? "right"
-            : delta.y < 0
-              ? "up"
-              : "down";
-      setStageAnnouncement(
-        `Moved ${selectedIds.length} ${selectedIds.length === 1 ? "node" : "nodes"} ${direction}`,
-      );
-      event.preventDefault();
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
-      const result = duplicateNodes(deck, activeSlide.id, selectedIds);
-      onDeckChange(result.deck);
-      if (result.duplicatedIds.length > 0) {
-        setSelection((s) => setSelectedNodeIds(s, result.duplicatedIds));
-        focusSelectedNodeSoon(result.duplicatedIds[0]);
-      }
-      event.preventDefault();
-      return;
-    }
-
-    const arrangeKind = canvasArrangeShortcutKind(event);
-    if (arrangeKind) {
-      handleReorderSelection(arrangeKind);
-      event.preventDefault();
-      return;
-    }
-
-    const rotationDelta = keyboardRotationDelta(event);
-    if (rotationDelta !== null) {
-      const patches = new Map<string, Partial<LayoutBox>>();
-      let rotationAnnouncement: string | null = null;
-      for (const entry of collectSelectedLayoutEntries(
-        activeSlide.children,
-        selectedIds,
-      )) {
-        if (entry.node.locked || entry.node.type === "connector") continue;
-        const nextRotation = applyKeyboardRotation(
-          entry.node.layout?.rotation,
-          rotationDelta,
-        );
-        patches.set(entry.id, { rotation: nextRotation.rotation });
-        if (!rotationAnnouncement) {
-          rotationAnnouncement = announceRotation(
-            entry.node.name ?? entry.node.type,
-            nextRotation.angle,
-          );
-        }
-      }
-      if (patches.size > 0) {
-        onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-        setStageAnnouncement(
-          patches.size === 1 && rotationAnnouncement
-            ? rotationAnnouncement
-            : `Rotated ${patches.size} ${patches.size === 1 ? "node" : "nodes"} by ${Math.abs(rotationDelta)}°`,
-        );
-      }
-      event.preventDefault();
-      return;
-    }
-  }
 
   function requestImageRepair(nodeId: string) {
     replaceImageTargetIdRef.current = nodeId;
@@ -3431,6 +1989,84 @@ export function SlideEditorVNext({
     handleSelectSourceItem,
     handleRefreshSourceAt,
     handleUnlinkSourceAt,
+  });
+
+  const {
+    handleConnectorEndpointPointerDown,
+    handleCropHandlePointerDown,
+    handleEditorKeyDown,
+    handleMultiResizeHandlePointerDown,
+    handleMultiRotationHandlePointerDown,
+    handleNodePointerDown,
+    handleResizeHandlePointerDown,
+    handleRotationHandlePointerDown,
+    handleStagePointerDown,
+    handleStagePointerLeave,
+    handleStagePointerMove,
+  } = useStageGestureController({
+    activeSlide,
+    activeSlideTree,
+    activeGroupId,
+    deck,
+    firstSelectedId,
+    focusedNodeId,
+    inlineEditNodeId,
+    keyboardConnectorMode,
+    marqueeFrame,
+    selectedIds,
+    selectedNode,
+    selection,
+    snapToGuides,
+    tableEditingNodeId,
+    draggingStage,
+    activeResizeHandle,
+    activeCropHandle,
+    activeRotationNodeId,
+    activeConnectorEndpoint,
+    semanticCandidateStackRef,
+    enterInlineEdit,
+    requestInlineEditCommit,
+    clearTableEditing,
+    focusSelectedNodeSoon,
+    focusStageNodeSoon,
+    handleCloseRequest,
+    handleCopyNodes,
+    handleCutNodes,
+    handleDeleteSelection,
+    handleEnterTableEdit,
+    handleGroupSelection,
+    handlePasteNodes,
+    handleReorderSelection,
+    handleUngroupSelection,
+    isInlineEditableNode,
+    initialCaretFromNodeClick,
+    onDeckChange,
+    onRedo,
+    onUndo,
+    setActiveGroupId,
+    setActiveConnectorEndpoint,
+    setActiveCropHandle,
+    setActiveResizeHandle,
+    setActiveRotationNodeId,
+    setConnectorGestureDraft,
+    setCropGestureDraft,
+    setDraggingStage,
+    setFocusedNodeId,
+    setHoveredNodeId,
+    setKeyboardConnectorMode,
+    setMarqueeFrame,
+    setMoveGestureDraft,
+    setResizeGestureDraft,
+    setRotationGestureDraft,
+    setSelection,
+    setShortcutHelpOpen,
+    setSlideHovered,
+    setStageAnnouncement,
+    setStageGuides,
+    suppressNextStageClick,
+    semanticHitsAtPoint,
+    semanticHitsFromEvent,
+    semanticTargetFromHits,
   });
 
   const stageFit = canvasStageFit(
