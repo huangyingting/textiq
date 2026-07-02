@@ -27,6 +27,13 @@ export type VnextPptxTextStyle = {
 export type VnextPptxBackgroundOp = {
   type: "background";
   fill?: string;
+  imageFill?: VnextPptxImageFill;
+};
+
+export type VnextPptxImageFill = {
+  kind: "image";
+  assetId: string;
+  fit?: ImageFitMode;
 };
 
 export type VnextPptxTextOp = {
@@ -50,7 +57,7 @@ export type VnextPptxShapeOp = {
   y: number;
   w: number;
   h: number;
-  fill?: string;
+  fill?: string | VnextPptxImageFill;
   stroke?: { color: string; widthPt: number };
   rotation?: number;
   zIndex: number;

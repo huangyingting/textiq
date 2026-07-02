@@ -6,7 +6,12 @@ import type {
   VnextPptxConnectorOp,
   VnextPptxShapeOp,
 } from "../pptx-export-types";
-import { checkEffect, fillToHex, frameToInches, resolveColor } from "./shared";
+import {
+  checkEffect,
+  fillToPptxFill,
+  frameToInches,
+  resolveColor,
+} from "./shared";
 import type { PptxLowererContext } from "./shared";
 
 export function lowerShapeOpToPptx(
@@ -15,7 +20,7 @@ export function lowerShapeOpToPptx(
 ): VnextPptxShapeOp {
   const frame = frameToInches(op.frame, ctx);
   checkEffect(op.style, ctx.dc, `op(shape:${op.id})`);
-  const fill = fillToHex(op.style.fill, ctx.dc, `op(shape:${op.id}).fill`);
+  const fill = fillToPptxFill(op.style.fill, ctx.dc, `op(shape:${op.id}).fill`);
   const stroke = op.style.stroke
     ? {
         color: resolveColor(

@@ -1,7 +1,11 @@
 import type { CanvasSpec } from "../types";
-import type { FillStyle, StyleObject } from "../style-schema";
+import type { FillStyle, GradientStop, StyleObject } from "../style-schema";
 import type { DiagnosticCollector } from "../diagnostics";
-import type { VnextPptxLayout, VnextPptxTextStyle } from "../pptx-export-types";
+import type {
+  VnextPptxImageFill,
+  VnextPptxLayout,
+  VnextPptxTextStyle,
+} from "../pptx-export-types";
 
 export type PptxDimensions = {
   layout: VnextPptxLayout;
@@ -85,6 +89,125 @@ export function resolveColor(
     { path: ctx },
   );
   return toHex(fallback);
+}
+
+type PptxFill = string | VnextPptxImageFill;
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function svgDataUri(svg: string): string {
+  const globals = globalThis as typeof globalThis & {
+    Buffer?: { from(input: string): { toString(encoding: "base64"): string } };
+  };
+  const encoded =
+    globals.Buffer !== undefined
+      ? globals.Buffer.from(svg).toString("base64")
+      : btoa(unescape(encodeURIComponent(svg)));
+  return `data:image/svg+xml;base64,${encoded}`;
+}
+
+function stopsXml(stops: readonly GradientStop[]): string {
+  return stops
+    .map(
+      (stop) =>
+        `<stop offset="${Math.max(0, Math.min(100, stop.offsetPct))}%" stop-color="#${escapeXml(
+          toHex(typeof stop.color === "string" ? stop.color : "#cccccc"),
+        )}"/>`,
+    )
+    .join("");
+}
+
+function gradientStops(
+  fill: Extract<FillStyle, { type: "linearGradient" | "radialGradient" }>,
+): readonly GradientStop[] {
+  if (fill.stops && fill.stops.length > 0) return fill.stops;
+  if (fill.type === "linearGradient") {
+    return [
+      { color: fill.from, offsetPct: 0 },
+      { color: fill.to, offsetPct: 100 },
+    ];
+  }
+  return [
+    { color: fill.inner, offsetPct: 0 },
+    { color: fill.outer, offsetPct: 100 },
+  ];
+}
+
+function fillSvg(
+  fill: Exclude<FillStyle, { type: "solid" | "image" }>,
+): string {
+  const w = 512;
+  const h = 512;
+  if (fill.type === "linearGradient") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0%" y1="50%" x2="100%" y2="50%" gradientTransform="rotate(${fill.angle ?? 0} .5 .5)">${stopsXml(
+      gradientStops(fill),
+    )}</linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  }
+  if (fill.type === "radialGradient") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><radialGradient id="g" cx="${fill.cx ?? 50}%" cy="${fill.cy ?? 50}%" r="${fill.r ?? fill.rx ?? fill.ry ?? 70}%">${stopsXml(
+      gradientStops(fill),
+    )}</radialGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  }
+  if (fill.type === "pattern") {
+    const fg = `#${toHex(typeof fill.color === "string" ? fill.color : "#999999")}`;
+    const bg = `#${toHex(
+      typeof fill.background === "string" ? fill.background : "#ffffff",
+    )}`;
+    const spacing = Math.max(4, Math.round(fill.spacingPct ?? 12));
+    const stroke = Math.max(1, Math.round(fill.strokeWidthPct ?? 2));
+    const body =
+      fill.kind === "dots"
+        ? `<circle cx="${spacing / 2}" cy="${spacing / 2}" r="${stroke}" fill="${fg}"/>`
+        : fill.kind === "grid"
+          ? `<path d="M ${spacing} 0 L 0 0 0 ${spacing}" fill="none" stroke="${fg}" stroke-width="${stroke}"/>`
+          : fill.kind === "scanlines"
+            ? `<path d="M 0 ${spacing / 2} H ${spacing}" stroke="${fg}" stroke-width="${stroke}"/>`
+            : `<path d="M 0 ${spacing} L ${spacing} 0" stroke="${fg}" stroke-width="${stroke}"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><pattern id="p" width="${spacing}" height="${spacing}" patternUnits="userSpaceOnUse" patternTransform="rotate(${fill.angle ?? 0})">${body}</pattern></defs><rect width="100%" height="100%" fill="${bg}"/><rect width="100%" height="100%" fill="url(#p)"/></svg>`;
+  }
+  const first = fill.stops[0]?.color;
+  const fallback = toHex(typeof first === "string" ? first : "#cccccc");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="#${fallback}"/></svg>`;
+}
+
+export function fillToPptxFill(
+  fill: FillStyle | undefined,
+  dc: DiagnosticCollector,
+  ctx: string,
+): PptxFill | undefined {
+  if (!fill) return undefined;
+  if (fill.type === "solid")
+    return resolveColor(fill.color, "#cccccc", dc, ctx);
+  if (fill.type === "image") {
+    if (!fill.assetId) {
+      dc.warning(
+        "unsupported-export-feature",
+        `${ctx}: image fill has no asset for PPTX image-retry fallback; using no fill`,
+        { path: ctx, action: { type: "open-asset-panel" } },
+      );
+      return undefined;
+    }
+    return { kind: "image", assetId: fill.assetId, fit: "cover" };
+  }
+
+  const detail =
+    fill.type === "linearGradient" || fill.type === "radialGradient"
+      ? `${fill.type} cannot be expressed by PptxGenJS 4.0.1 native fill props`
+      : fill.type === "pattern"
+        ? `pattern "${fill.kind}" cannot be expressed by PptxGenJS 4.0.1 native fill props`
+        : `${fill.type} has no native PPTX fill mapping`;
+  dc.warning(
+    "unsupported-export-feature",
+    `${ctx}: ${detail}; using image-retry fallback in PPTX export`,
+    { path: ctx, action: { type: "replace-style-ref" } },
+  );
+  return { kind: "image", assetId: svgDataUri(fillSvg(fill)), fit: "cover" };
 }
 
 /** Converts a FillStyle to a hex color, emitting diagnostics for unsupported types. */

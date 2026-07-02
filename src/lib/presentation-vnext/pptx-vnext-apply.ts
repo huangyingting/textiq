@@ -34,6 +34,7 @@ import {
   type BuildVnextPptxSpecOptions,
 } from "./pptx-export-adapter";
 import { resolveExportSpecAssetSources } from "./pptx-appliers/asset-sources";
+import { applyVnextImageOp } from "./pptx-appliers/image-media-applier";
 import { applyVnextPptxOp } from "./pptx-appliers/operation-applier";
 
 export { resolveExportSpecAssetSources } from "./pptx-appliers/asset-sources";
@@ -61,11 +62,28 @@ const PPTX_MIME =
 async function applyVnextSlide(
   pptx: PptxGenJS,
   slideSpec: VnextPptxSlideSpec,
+  slideW: number,
+  slideH: number,
 ): Promise<void> {
   const slide = pptx.addSlide();
   const bgFill = slideSpec.background.fill;
   slide.background =
     bgFill !== undefined ? { color: bgFill } : { color: "FFFFFF" };
+  if (slideSpec.background.imageFill) {
+    await applyVnextImageOp(slide, {
+      type: "image",
+      id: `${slideSpec.id}:background-fill`,
+      assetId: slideSpec.background.imageFill.assetId,
+      x: 0,
+      y: 0,
+      w: slideW,
+      h: slideH,
+      ...(slideSpec.background.imageFill.fit
+        ? { fit: slideSpec.background.imageFill.fit }
+        : {}),
+      zIndex: Number.NEGATIVE_INFINITY,
+    });
+  }
 
   // Ops are already in render order from the adapter (sorted by zIndex)
   for (const op of slideSpec.ops) {
@@ -94,7 +112,7 @@ export async function applyVnextPptxSpec(
     pptx.layout = spec.layout;
 
     for (const slideSpec of spec.slides) {
-      await applyVnextSlide(pptx, slideSpec);
+      await applyVnextSlide(pptx, slideSpec, spec.slideW, spec.slideH);
     }
 
     const arrayBuffer = (await pptx.write({
