@@ -13,6 +13,7 @@ import { buildExportSpec } from "@/lib/presentation-vnext/export-spec";
 import { buildVnextPptxSpec } from "@/lib/presentation-vnext/pptx-export-adapter";
 import { resolveExportSpecAssetSources } from "@/lib/presentation-vnext/pptx-vnext-apply";
 import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
+import { compileBrandKitDraft } from "@/lib/presentation-vnext/brand-kit/compiler";
 import type { DeckV7, SlideChildNode } from "@/lib/presentation-vnext/schema";
 import type {
   ResolvedDeckRenderTree,
@@ -37,6 +38,114 @@ import { renderPrototypeSlideHtml } from "../../../prototypes/slide-themes/rende
 const DATA_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 const PUBLIC_NOW = new Date("2026-06-30T10:00:00Z");
+
+function buildCustomBrandKitPackage() {
+  const result = compileBrandKitDraft({
+    schemaVersion: 1,
+    id: "parity-brand-draft",
+    name: "Parity Brand",
+    slug: "parity-brand",
+    scope: { kind: "user", ownerId: "parity-user" },
+    version: "2.0.0",
+    revision: {
+      id: "parity-rev",
+      number: 3,
+      createdAt: "2026-07-02T13:22:11.000Z",
+    },
+    palette: {
+      backgrounds: {
+        canvas: "#f8fafc",
+        muted: "#e0f2fe",
+        inverse: "#111827",
+      },
+      surfaces: {
+        default: "#ffffff",
+        elevated: "#dbeafe",
+        subtle: "#dbeafe",
+      },
+      text: {
+        primary: "#111827",
+        secondary: "#334155",
+        inverse: "#f8fafc",
+        accent: "#1d4ed8",
+      },
+      accents: {
+        primary: "#1d4ed8",
+        secondary: "#0369a1",
+      },
+      borders: {
+        default: "#2563eb",
+        strong: "#1e40af",
+      },
+      charts: ["#1d4ed8", "#047857", "#b45309", "#be123c"],
+      states: {
+        success: { fill: "#dcfce7", text: "#166534" },
+        warning: { fill: "#fef3c7", text: "#92400e" },
+        danger: { fill: "#fee2e2", text: "#991b1b" },
+      },
+    },
+    typography: {
+      display: {
+        family: "jetbrains-mono",
+        sizePt: 40,
+        weight: 800,
+        lineHeight: 1.1,
+      },
+      heading: {
+        family: "Parity Sans",
+        fontAssetId: "parity-sans",
+        sizePt: 24,
+        weight: 700,
+        lineHeight: 1.2,
+      },
+      body: {
+        family: "Parity Sans",
+        fontAssetId: "parity-sans",
+        sizePt: 14,
+        weight: 400,
+        lineHeight: 1.45,
+      },
+      caption: {
+        family: "Parity Sans",
+        fontAssetId: "parity-sans",
+        sizePt: 10,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      mono: {
+        family: "jetbrains-mono",
+        sizePt: 11,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      data: {
+        family: "Parity Sans",
+        fontAssetId: "parity-sans",
+        sizePt: 34,
+        weight: 800,
+        lineHeight: 1.05,
+      },
+    },
+    assets: {
+      fonts: {
+        "parity-sans": {
+          id: "parity-sans",
+          family: "Parity Sans",
+          src: "/brand-assets/parity-user/parity-sans.woff2",
+          weight: [400, 700],
+          style: "normal",
+        },
+      },
+    },
+    decorations: {
+      background: "subtle",
+      chrome: "minimal",
+    },
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) throw new Error("Expected custom brand kit to compile");
+  return result.package;
+}
 
 function buildParityDeck(): DeckV7 {
   resetBuilderCounter();
@@ -320,6 +429,80 @@ test("PPTX parity fixture covers representative core node operations", () => {
     pptx.diagnostics.some((diagnostic) => diagnostic.code === "missing-asset"),
     false,
   );
+});
+
+test("custom brand-kit package preserves colors and fonts through render and PPTX export", () => {
+  resetBuilderCounter();
+  const pkg = buildCustomBrandKitPackage();
+  const deck = buildDeckV7(
+    [
+      buildSlideV7(
+        "content",
+        [
+          buildTextNode({
+            id: "custom-brand-title",
+            role: "title",
+            layout: { frame: { x: 8, y: 8, w: 84, h: 10 }, zIndex: 1 },
+            style: { ref: "text.title" },
+          }),
+          buildTextNode({
+            id: "custom-brand-body",
+            role: "body",
+            layout: { frame: { x: 8, y: 22, w: 44, h: 18 }, zIndex: 2 },
+            style: { ref: "text.body" },
+          }),
+          buildShapeNode({
+            id: "custom-brand-card",
+            layout: { frame: { x: 56, y: 22, w: 28, h: 18 }, zIndex: 3 },
+            style: { ref: "surface.card" },
+          }),
+        ],
+        { style: { ref: "slide.content" } },
+      ),
+    ],
+    {
+      title: "Custom brand parity",
+      theme: { packageId: pkg.id, packageVersion: pkg.version },
+    },
+  );
+
+  const renderTree = resolveDeckRenderTree(deck, pkg);
+  const title = renderTree.slides[0].nodes.find(
+    (node) => node.id === "custom-brand-title",
+  );
+  const body = renderTree.slides[0].nodes.find(
+    (node) => node.id === "custom-brand-body",
+  );
+  const card = renderTree.slides[0].nodes.find(
+    (node) => node.id === "custom-brand-card",
+  );
+  assert.equal(renderTree.theme.packageId, pkg.id);
+  assert.equal(
+    title?.style.text?.fontFamily,
+    "'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace",
+  );
+  assert.equal(title?.style.text?.color, "#111827");
+  assert.equal(body?.style.text?.fontFamily, "Parity Sans");
+  assert.equal(card?.style.fill?.type, "solid");
+  if (card?.style.fill?.type === "solid") {
+    assert.equal(card.style.fill.color, "#dbeafe");
+  }
+
+  const exportSpec = buildExportSpec(renderTree);
+  const pptx = buildVnextPptxSpec(exportSpec);
+  const titleOp = pptx.slides[0].ops.find(
+    (op) => op.id === "custom-brand-title",
+  );
+  const bodyOp = pptx.slides[0].ops.find((op) => op.id === "custom-brand-body");
+  const cardOp = pptx.slides[0].ops.find((op) => op.id === "custom-brand-card");
+  assert.equal(titleOp?.type, "text");
+  assert.equal(bodyOp?.type, "text");
+  assert.equal(cardOp?.type, "shape");
+  if (titleOp?.type === "text")
+    assert.equal(titleOp.textStyle.fontFace, "Consolas");
+  if (bodyOp?.type === "text")
+    assert.equal(bodyOp.textStyle.fontFace, "Parity Sans");
+  if (cardOp?.type === "shape") assert.equal(cardOp.fill, "DBEAFE");
 });
 
 test("PPTX fidelity parity fixture guards fallback-prone render-to-export behavior", () => {

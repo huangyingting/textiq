@@ -1203,7 +1203,7 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
     const textOp = pptx.slides[0].ops.find((op) => op.type === "text");
     assert.ok(textOp);
     assert.equal(textOp.rotation, 9);
-    assert.equal(textOp.textStyle.fontFace, "Inter");
+    assert.equal(textOp.textStyle.fontFace, "Aptos");
     assert.equal(textOp.textStyle.bold, true);
     assert.equal(textOp.textStyle.italic, true);
     assert.equal(textOp.textStyle.underline, true);
@@ -1433,7 +1433,7 @@ describe("buildVnextPptxSpec — direct operation conversion edge cases", () => 
       assert.deepEqual(textOp.textStyle, {
         color: "ABCDEF",
         fontSize: 22,
-        fontFace: "Inter",
+        fontFace: "Aptos",
         bold: true,
         italic: true,
         underline: true,
@@ -1469,7 +1469,7 @@ describe("buildVnextPptxSpec — direct operation conversion edge cases", () => 
     if (tableOp?.type === "tableShape") {
       assert.equal(tableOp.headerFill, "778899");
       assert.equal(tableOp.rowFill, "FFFFFF");
-      assert.deepEqual(tableOp.textStyle, { fontSize: 9, fontFace: "Inter" });
+      assert.deepEqual(tableOp.textStyle, { fontSize: 9, fontFace: "Aptos" });
     }
 
     assert.ok(

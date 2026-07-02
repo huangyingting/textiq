@@ -1,4 +1,8 @@
 import { isBuiltInThemePackageId } from "@/lib/presentation-shared/theme-package-ids";
+import {
+  isSlideFontId,
+  slideFontCssStack,
+} from "@/lib/presentation-shared/slide-fonts";
 
 import type { StyleObject } from "../style-schema";
 import { STYLE_REFS } from "../style-registry";
@@ -8,6 +12,7 @@ import type {
   BrandKitCompileResult,
   BrandKitDiagnostic,
   BrandKitDraftV1,
+  BrandKitFontAsset,
   BrandKitImageAsset,
   BrandKitTypographyRole,
 } from "./schema";
@@ -22,6 +27,9 @@ const IMAGE_MIME_TYPES = new Set([
   "image/webp",
   "image/svg+xml",
 ]);
+const FONT_STYLES = new Set(["normal", "italic"]);
+const WCAG_TEXT_CONTRAST_THRESHOLD = 4.5;
+const WCAG_NON_TEXT_CONTRAST_THRESHOLD = 3;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -69,6 +77,31 @@ function readOptionalString(
     "error",
     "invalid-string",
     `${path} must be a string`,
+    path,
+  );
+  return undefined;
+}
+
+function readOptionalStringArrayOrNumber(
+  input: Record<string, unknown>,
+  key: string,
+  path: string,
+  diagnostics: BrandKitDiagnostic[],
+): number | number[] | undefined {
+  const value = input[key];
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (
+    Array.isArray(value) &&
+    value.every((item) => typeof item === "number" && Number.isFinite(item))
+  ) {
+    return value;
+  }
+  addDiagnostic(
+    diagnostics,
+    "error",
+    "invalid-font-weight",
+    `${path} must be a finite number or number[]`,
     path,
   );
   return undefined;
@@ -147,6 +180,12 @@ function parseTypographyRole(
   const family =
     readString(input, "family", `${path}.family`, diagnostics) ??
     "Inter, system-ui, sans-serif";
+  const fontAssetId = readOptionalString(
+    input,
+    "fontAssetId",
+    `${path}.fontAssetId`,
+    diagnostics,
+  );
   const sizePt =
     readNumber(input, "sizePt", `${path}.sizePt`, diagnostics) ?? 12;
   const weight =
@@ -193,11 +232,315 @@ function parseTypographyRole(
 
   return {
     family,
+    ...(fontAssetId === undefined ? {} : { fontAssetId }),
     sizePt,
     weight,
     lineHeight,
     ...(letterSpacingEm === undefined ? {} : { letterSpacingEm }),
   };
+}
+
+function parseFontAsset(
+  input: Record<string, unknown>,
+  path: string,
+  diagnostics: BrandKitDiagnostic[],
+): BrandKitFontAsset {
+  const id = readString(input, "id", `${path}.id`, diagnostics) ?? "font";
+  const family =
+    readString(input, "family", `${path}.family`, diagnostics) ?? "";
+  const src = readString(input, "src", `${path}.src`, diagnostics) ?? "";
+  const weight = readOptionalStringArrayOrNumber(
+    input,
+    "weight",
+    `${path}.weight`,
+    diagnostics,
+  );
+  const style = readOptionalString(
+    input,
+    "style",
+    `${path}.style`,
+    diagnostics,
+  );
+  const contentHash = readOptionalString(
+    input,
+    "contentHash",
+    `${path}.contentHash`,
+    diagnostics,
+  );
+
+  if (style !== undefined && !FONT_STYLES.has(style)) {
+    addDiagnostic(
+      diagnostics,
+      "error",
+      "invalid-font-style",
+      `${path}.style must be normal or italic`,
+      `${path}.style`,
+    );
+  }
+
+  return {
+    id,
+    family,
+    src,
+    ...(weight === undefined ? {} : { weight }),
+    ...(style === undefined
+      ? {}
+      : { style: style as BrandKitFontAsset["style"] }),
+    ...(contentHash === undefined ? {} : { contentHash }),
+  };
+}
+
+function relativeLuminance(color: string): number {
+  const channels = [1, 3, 5].map((start) => {
+    const value = Number.parseInt(color.slice(start, start + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const a = relativeLuminance(foreground);
+  const b = relativeLuminance(background);
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function addContrastDiagnostic(
+  diagnostics: BrandKitDiagnostic[],
+  severity: BrandKitDiagnostic["severity"],
+  foreground: string,
+  background: string,
+  foregroundPath: string,
+  backgroundPath: string,
+  threshold: number,
+  label: string,
+): void {
+  if (!HEX_COLOR.test(foreground) || !HEX_COLOR.test(background)) return;
+  const ratio = contrastRatio(foreground, background);
+  if (ratio >= threshold) return;
+  addDiagnostic(
+    diagnostics,
+    severity,
+    "insufficient-contrast",
+    `${label} contrast is ${ratio.toFixed(2)}:1; expected at least ${threshold}:1. Adjust ${foregroundPath} or ${backgroundPath}.`,
+    foregroundPath,
+  );
+}
+
+function validateTypographyFontAssets(
+  draft: BrandKitDraftV1,
+  diagnostics: BrandKitDiagnostic[],
+): void {
+  const roles = Object.entries(draft.typography) as Array<
+    [keyof BrandKitDraftV1["typography"], BrandKitTypographyRole]
+  >;
+  for (const [roleName, role] of roles) {
+    if (!role.fontAssetId) continue;
+    if (draft.assets?.fonts?.[role.fontAssetId]) continue;
+    addDiagnostic(
+      diagnostics,
+      "error",
+      "missing-font-asset",
+      `typography.${roleName}.fontAssetId references missing font asset "${role.fontAssetId}"`,
+      `typography.${roleName}.fontAssetId`,
+    );
+  }
+}
+
+function solidFillColor(style: StyleObject | undefined): string | undefined {
+  const fill = style?.fill;
+  return fill?.type === "solid" && typeof fill.color === "string"
+    ? fill.color
+    : undefined;
+}
+
+function slideBackgroundColor(
+  style: StyleObject | undefined,
+): string | undefined {
+  const background = style?.slide?.background;
+  return background?.type === "solid" && typeof background.color === "string"
+    ? background.color
+    : undefined;
+}
+
+function textColor(style: StyleObject | undefined): string | undefined {
+  return typeof style?.text?.color === "string" ? style.text.color : undefined;
+}
+
+function strokeColor(style: StyleObject | undefined): string | undefined {
+  return typeof style?.stroke?.color === "string"
+    ? style.stroke.color
+    : undefined;
+}
+
+function isColorPair(
+  pair: unknown[],
+): pair is [string, string, string, string, string] {
+  return pair.length === 5 && pair.every((value) => typeof value === "string");
+}
+
+function validateCompiledPackageContrast(
+  themePackage: ThemePackageV1,
+  diagnostics: BrandKitDiagnostic[],
+): void {
+  const styles = themePackage.styles;
+  const canvas = slideBackgroundColor(styles["slide.content"]?.default);
+  const cover = slideBackgroundColor(styles["slide.cover"]?.default);
+  const cardFill = solidFillColor(styles["surface.card"]?.default);
+  const calloutFill = solidFillColor(styles["surface.callout"]?.default);
+  const warningFill = solidFillColor(styles["surface.callout"]?.warning);
+  const dangerFill = solidFillColor(styles["surface.callout"]?.danger);
+  const textPairs = [
+    [
+      textColor(styles["text.title"]?.default),
+      canvas,
+      "palette.text.primary",
+      "palette.backgrounds.canvas",
+      "primary text on canvas",
+    ],
+    [
+      textColor(styles["text.subtitle"]?.default),
+      canvas,
+      "palette.text.secondary",
+      "palette.backgrounds.canvas",
+      "secondary text on canvas",
+    ],
+    [
+      textColor(styles["text.body"]?.default),
+      cardFill,
+      "palette.text.primary",
+      "palette.surfaces.elevated",
+      "primary text on card surface",
+    ],
+    [
+      textColor(styles["text.body"]?.small),
+      cardFill,
+      "palette.text.secondary",
+      "palette.surfaces.elevated",
+      "secondary text on card surface",
+    ],
+    [
+      textColor(styles["text.body"]?.default),
+      calloutFill,
+      "palette.text.primary",
+      "palette.surfaces.subtle",
+      "primary text on callout surface",
+    ],
+    [
+      textColor(styles["text.title"]?.cover),
+      cover,
+      "palette.text.inverse",
+      "palette.backgrounds.inverse",
+      "inverse text on inverse background",
+    ],
+    [
+      themePackage.tokens.colors?.accent?.text,
+      themePackage.tokens.colors?.accent?.fill,
+      "palette.text.inverse",
+      "palette.accents.primary",
+      "accent text on primary accent",
+    ],
+    [
+      textColor(styles["text.kicker"]?.default),
+      canvas,
+      "palette.text.accent",
+      "palette.backgrounds.canvas",
+      "accent text on canvas",
+    ],
+    [
+      themePackage.tokens.colors?.status?.success?.text,
+      themePackage.tokens.colors?.status?.success?.fill,
+      "palette.states.success.text",
+      "palette.states.success.fill",
+      "success state text",
+    ],
+    [
+      textColor(styles["surface.callout"]?.warning),
+      warningFill,
+      "palette.states.warning.text",
+      "palette.states.warning.fill",
+      "warning state text",
+    ],
+    [
+      textColor(styles["surface.callout"]?.danger),
+      dangerFill,
+      "palette.states.danger.text",
+      "palette.states.danger.fill",
+      "danger state text",
+    ],
+  ].filter(isColorPair);
+
+  for (const [
+    foreground,
+    background,
+    foregroundPath,
+    backgroundPath,
+    label,
+  ] of textPairs) {
+    addContrastDiagnostic(
+      diagnostics,
+      "error",
+      foreground,
+      background,
+      foregroundPath,
+      backgroundPath,
+      WCAG_TEXT_CONTRAST_THRESHOLD,
+      label,
+    );
+  }
+
+  const channelColors = styles["chart.primary"]?.default?.visual?.channelColors;
+  const chartColors = isRecord(channelColors)
+    ? Object.values(channelColors).filter(
+        (color): color is string => typeof color === "string",
+      )
+    : [];
+  const nonTextPairs = [
+    [
+      strokeColor(styles["surface.card"]?.default),
+      cardFill,
+      "palette.borders.default",
+      "palette.surfaces.elevated",
+      "default border on surface",
+    ],
+    [
+      styles["connector.primary"]?.default?.connector?.stroke?.color,
+      canvas,
+      "palette.borders.strong",
+      "palette.backgrounds.canvas",
+      "strong border on surface",
+    ],
+    ...chartColors.map(
+      (color, index) =>
+        [
+          color,
+          canvas,
+          `palette.charts.${index}`,
+          "palette.backgrounds.canvas",
+          `chart series ${index + 1} on canvas`,
+        ] as [string, string | undefined, string, string, string],
+    ),
+  ].filter(isColorPair);
+
+  for (const [
+    foreground,
+    background,
+    foregroundPath,
+    backgroundPath,
+    label,
+  ] of nonTextPairs) {
+    addContrastDiagnostic(
+      diagnostics,
+      "warning",
+      foreground,
+      background,
+      foregroundPath,
+      backgroundPath,
+      WCAG_NON_TEXT_CONTRAST_THRESHOLD,
+      label,
+    );
+  }
 }
 
 function parseImageAsset(
@@ -441,6 +784,32 @@ function parseDraft(input: unknown): {
           "assets.logo",
           diagnostics,
         );
+  const fontAssetsInput =
+    assets?.fonts === undefined
+      ? undefined
+      : expectObject(assets.fonts, "assets.fonts", diagnostics);
+  const fonts =
+    fontAssetsInput === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(fontAssetsInput).map(([assetId, font]) => {
+            const parsed = parseFontAsset(
+              expectObject(font, `assets.fonts.${assetId}`, diagnostics) ?? {},
+              `assets.fonts.${assetId}`,
+              diagnostics,
+            );
+            if (parsed.id !== assetId) {
+              addDiagnostic(
+                diagnostics,
+                "error",
+                "font-id-mismatch",
+                `assets.fonts.${assetId}.id must match manifest key "${assetId}"`,
+                `assets.fonts.${assetId}.id`,
+              );
+            }
+            return [assetId, parsed];
+          }),
+        );
   const decorations =
     root.decorations === undefined
       ? undefined
@@ -480,145 +849,146 @@ function parseDraft(input: unknown): {
         }
       : { kind: "user" as const, ownerId };
 
-  return {
-    draft: {
-      schemaVersion: 1,
-      id,
-      name,
-      slug,
-      scope: scopeValue,
-      ...(sourcePresetId ? { sourcePresetId } : {}),
-      version,
-      revision: {
-        id: revisionId,
-        number: revisionNumber,
-        createdAt,
-        ...(updatedAt ? { updatedAt } : {}),
-      },
-      palette: {
-        backgrounds: {
-          canvas: readColor(
-            backgrounds,
-            "canvas",
-            "palette.backgrounds.canvas",
-            diagnostics,
-          ),
-          muted: readColor(
-            backgrounds,
-            "muted",
-            "palette.backgrounds.muted",
-            diagnostics,
-          ),
-          inverse: readColor(
-            backgrounds,
-            "inverse",
-            "palette.backgrounds.inverse",
-            diagnostics,
-          ),
-        },
-        surfaces: {
-          default: readColor(
-            surfaces,
-            "default",
-            "palette.surfaces.default",
-            diagnostics,
-          ),
-          elevated: readColor(
-            surfaces,
-            "elevated",
-            "palette.surfaces.elevated",
-            diagnostics,
-          ),
-          subtle: readColor(
-            surfaces,
-            "subtle",
-            "palette.surfaces.subtle",
-            diagnostics,
-          ),
-        },
-        text: {
-          primary: readColor(
-            text,
-            "primary",
-            "palette.text.primary",
-            diagnostics,
-          ),
-          secondary: readColor(
-            text,
-            "secondary",
-            "palette.text.secondary",
-            diagnostics,
-          ),
-          inverse: readColor(
-            text,
-            "inverse",
-            "palette.text.inverse",
-            diagnostics,
-          ),
-          accent: readColor(text, "accent", "palette.text.accent", diagnostics),
-        },
-        accents: {
-          primary: readColor(
-            accents,
-            "primary",
-            "palette.accents.primary",
-            diagnostics,
-          ),
-          secondary: readColor(
-            accents,
-            "secondary",
-            "palette.accents.secondary",
-            diagnostics,
-          ),
-        },
-        borders: {
-          default: readColor(
-            borders,
-            "default",
-            "palette.borders.default",
-            diagnostics,
-          ),
-          strong: readColor(
-            borders,
-            "strong",
-            "palette.borders.strong",
-            diagnostics,
-          ),
-        },
-        charts,
-        states: {
-          success: state("success"),
-          warning: state("warning"),
-          danger: state("danger"),
-          ...(states.info === undefined ? {} : { info: state("info") }),
-        },
-      },
-      typography: {
-        display: typo("display"),
-        heading: typo("heading"),
-        body: typo("body"),
-        caption: typo("caption"),
-        mono: typo("mono"),
-        data: typo("data"),
-      },
-      ...(logo ? { assets: { logo } } : {}),
-      ...(decorations
-        ? {
-            decorations: {
-              ...(background === undefined
-                ? {}
-                : {
-                    background: background as "none" | "subtle" | "expressive",
-                  }),
-              ...(chrome === undefined
-                ? {}
-                : { chrome: chrome as "default" | "minimal" }),
-            },
-          }
-        : {}),
+  const draft: BrandKitDraftV1 = {
+    schemaVersion: 1,
+    id,
+    name,
+    slug,
+    scope: scopeValue,
+    ...(sourcePresetId ? { sourcePresetId } : {}),
+    version,
+    revision: {
+      id: revisionId,
+      number: revisionNumber,
+      createdAt,
+      ...(updatedAt ? { updatedAt } : {}),
     },
-    diagnostics,
+    palette: {
+      backgrounds: {
+        canvas: readColor(
+          backgrounds,
+          "canvas",
+          "palette.backgrounds.canvas",
+          diagnostics,
+        ),
+        muted: readColor(
+          backgrounds,
+          "muted",
+          "palette.backgrounds.muted",
+          diagnostics,
+        ),
+        inverse: readColor(
+          backgrounds,
+          "inverse",
+          "palette.backgrounds.inverse",
+          diagnostics,
+        ),
+      },
+      surfaces: {
+        default: readColor(
+          surfaces,
+          "default",
+          "palette.surfaces.default",
+          diagnostics,
+        ),
+        elevated: readColor(
+          surfaces,
+          "elevated",
+          "palette.surfaces.elevated",
+          diagnostics,
+        ),
+        subtle: readColor(
+          surfaces,
+          "subtle",
+          "palette.surfaces.subtle",
+          diagnostics,
+        ),
+      },
+      text: {
+        primary: readColor(
+          text,
+          "primary",
+          "palette.text.primary",
+          diagnostics,
+        ),
+        secondary: readColor(
+          text,
+          "secondary",
+          "palette.text.secondary",
+          diagnostics,
+        ),
+        inverse: readColor(
+          text,
+          "inverse",
+          "palette.text.inverse",
+          diagnostics,
+        ),
+        accent: readColor(text, "accent", "palette.text.accent", diagnostics),
+      },
+      accents: {
+        primary: readColor(
+          accents,
+          "primary",
+          "palette.accents.primary",
+          diagnostics,
+        ),
+        secondary: readColor(
+          accents,
+          "secondary",
+          "palette.accents.secondary",
+          diagnostics,
+        ),
+      },
+      borders: {
+        default: readColor(
+          borders,
+          "default",
+          "palette.borders.default",
+          diagnostics,
+        ),
+        strong: readColor(
+          borders,
+          "strong",
+          "palette.borders.strong",
+          diagnostics,
+        ),
+      },
+      charts,
+      states: {
+        success: state("success"),
+        warning: state("warning"),
+        danger: state("danger"),
+        ...(states.info === undefined ? {} : { info: state("info") }),
+      },
+    },
+    typography: {
+      display: typo("display"),
+      heading: typo("heading"),
+      body: typo("body"),
+      caption: typo("caption"),
+      mono: typo("mono"),
+      data: typo("data"),
+    },
+    ...(logo || fonts
+      ? { assets: { ...(logo ? { logo } : {}), ...(fonts ? { fonts } : {}) } }
+      : {}),
+    ...(decorations
+      ? {
+          decorations: {
+            ...(background === undefined
+              ? {}
+              : {
+                  background: background as "none" | "subtle" | "expressive",
+                }),
+            ...(chrome === undefined
+              ? {}
+              : { chrome: chrome as "default" | "minimal" }),
+          },
+        }
+      : {}),
   };
+
+  return { draft, diagnostics };
 }
 
 function packageIdForDraft(draft: BrandKitDraftV1): string {
@@ -629,10 +999,29 @@ function packageIdForDraft(draft: BrandKitDraftV1): string {
   return `brand-kit:${scopePart}:${draft.slug}`;
 }
 
-function textStyle(role: BrandKitTypographyRole, color: string): StyleObject {
+function fontFamilyForRole(
+  role: BrandKitTypographyRole,
+  draft: BrandKitDraftV1,
+): string {
+  if (role.fontAssetId) {
+    return draft.assets?.fonts?.[role.fontAssetId]?.family ?? role.family;
+  }
+  if (draft.assets?.fonts?.[role.family]) {
+    return draft.assets.fonts[role.family].family;
+  }
+  return isSlideFontId(role.family)
+    ? (slideFontCssStack(role.family) ?? role.family)
+    : role.family;
+}
+
+function textStyle(
+  role: BrandKitTypographyRole,
+  color: string,
+  draft: BrandKitDraftV1,
+): StyleObject {
   return {
     text: {
-      fontFamily: role.family,
+      fontFamily: fontFamilyForRole(role, draft),
       fontSizePt: role.sizePt,
       weight: role.weight,
       color,
@@ -679,16 +1068,16 @@ function buildStyles(draft: BrandKitDraftV1): ThemePackageV1["styles"] {
       },
     },
     "text.title": {
-      default: textStyle(t.display, p.text.primary),
-      cover: textStyle(t.display, p.text.inverse),
+      default: textStyle(t.display, p.text.primary, draft),
+      cover: textStyle(t.display, p.text.inverse, draft),
     },
     "text.subtitle": {
-      default: textStyle(t.heading, p.text.secondary),
-      cover: textStyle(t.heading, p.text.inverse),
+      default: textStyle(t.heading, p.text.secondary, draft),
+      cover: textStyle(t.heading, p.text.inverse, draft),
     },
     "text.body": {
-      default: textStyle(t.body, p.text.primary),
-      small: textStyle(t.caption, p.text.secondary),
+      default: textStyle(t.body, p.text.primary, draft),
+      small: textStyle(t.caption, p.text.secondary, draft),
     },
     "text.kicker": {
       default: textStyle(
@@ -698,18 +1087,22 @@ function buildStyles(draft: BrandKitDraftV1): ThemePackageV1["styles"] {
           letterSpacingEm: t.caption.letterSpacingEm ?? 0.06,
         },
         p.text.accent,
+        draft,
       ),
     },
-    "text.caption": { default: textStyle(t.caption, p.text.secondary) },
+    "text.caption": { default: textStyle(t.caption, p.text.secondary, draft) },
     "text.quote": {
       default: {
-        ...textStyle(t.heading, p.text.primary),
-        text: { ...textStyle(t.heading, p.text.primary).text, italic: true },
+        ...textStyle(t.heading, p.text.primary, draft),
+        text: {
+          ...textStyle(t.heading, p.text.primary, draft).text,
+          italic: true,
+        },
       },
     },
     "text.metric": {
-      default: textStyle(t.data, p.text.primary),
-      accent: textStyle(t.data, p.accents.primary),
+      default: textStyle(t.data, p.text.primary, draft),
+      accent: textStyle(t.data, p.accents.primary, draft),
     },
     "surface.card": {
       default: {
@@ -753,7 +1146,7 @@ function buildStyles(draft: BrandKitDraftV1): ThemePackageV1["styles"] {
       default: {
         fill: { type: "solid", color: p.charts[0] ?? p.accents.primary },
         text: {
-          fontFamily: t.caption.family,
+          fontFamily: fontFamilyForRole(t.caption, draft),
           fontSizePt: t.caption.sizePt,
           color: p.text.secondary,
         },
@@ -789,6 +1182,7 @@ function buildStyles(draft: BrandKitDraftV1): ThemePackageV1["styles"] {
 function compilePackage(draft: BrandKitDraftV1): ThemePackageV1 {
   const packageId = packageIdForDraft(draft);
   const logo = draft.assets?.logo;
+  const fonts = draft.assets?.fonts;
   return {
     schemaVersion: 1,
     id: packageId,
@@ -821,9 +1215,9 @@ function compilePackage(draft: BrandKitDraftV1): ThemePackageV1 {
         },
       },
       fonts: {
-        heading: draft.typography.heading.family,
-        body: draft.typography.body.family,
-        mono: draft.typography.mono.family,
+        heading: fontFamilyForRole(draft.typography.heading, draft),
+        body: fontFamilyForRole(draft.typography.body, draft),
+        mono: fontFamilyForRole(draft.typography.mono, draft),
       },
       radii: { card: 8, callout: 6, media: 4 },
     },
@@ -846,12 +1240,11 @@ function compilePackage(draft: BrandKitDraftV1): ThemePackageV1 {
         placement: "bottom-right",
       },
     },
-    ...(logo
+    ...(logo || fonts
       ? {
           assets: {
-            images: {
-              [logo.id]: logo,
-            },
+            ...(logo ? { images: { [logo.id]: logo } } : {}),
+            ...(fonts ? { fonts } : {}),
           },
         }
       : {}),
@@ -860,6 +1253,9 @@ function compilePackage(draft: BrandKitDraftV1): ThemePackageV1 {
 
 export function compileBrandKitDraft(input: unknown): BrandKitCompileResult {
   const parsed = parseDraft(input);
+  if (parsed.draft) {
+    validateTypographyFontAssets(parsed.draft, parsed.diagnostics);
+  }
   if (
     !parsed.draft ||
     parsed.diagnostics.some((diagnostic) => diagnostic.severity === "error")
@@ -868,6 +1264,13 @@ export function compileBrandKitDraft(input: unknown): BrandKitCompileResult {
   }
 
   const themePackage = compilePackage(parsed.draft);
+  validateCompiledPackageContrast(themePackage, parsed.diagnostics);
+  if (
+    parsed.diagnostics.some((diagnostic) => diagnostic.severity === "error")
+  ) {
+    return { ok: false, diagnostics: parsed.diagnostics };
+  }
+
   if (isBuiltInThemePackageId(themePackage.id)) {
     addDiagnostic(
       parsed.diagnostics,

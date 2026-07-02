@@ -12,6 +12,7 @@ import type {
   VnextPptxEffect,
   VnextPptxTextStyle,
 } from "../pptx-export-types";
+import { slideFontExportFace } from "@/lib/presentation-shared/slide-fonts";
 
 export type PptxDimensions = {
   layout: VnextPptxLayout;
@@ -374,7 +375,7 @@ export function styleToTextOptions(style: StyleObject): VnextPptxTextStyle {
       : {}),
     ...(text.fontSizePt !== undefined ? { fontSize: text.fontSizePt } : {}),
     ...(typeof text.fontFamily === "string"
-      ? { fontFace: text.fontFamily }
+      ? { fontFace: slideFontExportFace(text.fontFamily) }
       : {}),
     ...(text.weight !== undefined && text.weight >= 700 ? { bold: true } : {}),
     ...(text.italic ? { italic: true } : {}),

@@ -7,8 +7,12 @@ import {
   buildThemeBinding,
   buildSlideV7,
 } from "@/test/builders/deck-v7";
+import { slideFontCssStack } from "@/lib/presentation-shared/slide-fonts";
 
+import { buildExportSpec } from "../export-spec";
+import { buildVnextPptxSpec } from "../pptx-export-adapter";
 import { resolveDeckRenderTree } from "../render-resolver";
+import { buildThemePackageFontFaceCss } from "../theme-package-fonts";
 import { validateThemePackage } from "../theme-package-schema";
 import { compileBrandKitDraft } from "./compiler";
 import type { BrandKitDraftV1 } from "./schema";
@@ -213,4 +217,157 @@ test("compiled custom package resolves through the render tree like a built-in p
   assert.equal(tree.theme.packageId, result.package.id);
   assert.equal(tree.theme.packageVersion, result.package.version);
   assert.equal(tree.slides[0]?.nodes[0]?.style.text?.fontSizePt, 42);
+});
+
+test("compileBrandKitDraft blocks critical WCAG text contrast failures", () => {
+  const draft = buildValidBrandKitDraft({
+    palette: {
+      ...buildValidBrandKitDraft().palette,
+      text: {
+        ...buildValidBrandKitDraft().palette.text,
+        primary: "#777777",
+      },
+    },
+  });
+
+  const result = compileBrandKitDraft(draft);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "insufficient-contrast" &&
+        diagnostic.severity === "error" &&
+        diagnostic.path === "palette.text.primary",
+    ),
+  );
+});
+
+test("compileBrandKitDraft keeps non-text contrast issues as warnings", () => {
+  const result = compileBrandKitDraft(buildValidBrandKitDraft());
+
+  assert.equal(result.ok, true);
+  assert.ok(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "insufficient-contrast" &&
+        diagnostic.severity === "warning",
+    ),
+  );
+  assert.equal(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "insufficient-contrast" &&
+        diagnostic.severity === "error",
+    ),
+    false,
+  );
+});
+
+test("custom and registry brand-kit fonts resolve for render, font CSS, and PPTX export", () => {
+  const sourceSerifStack = slideFontCssStack("source-serif-4");
+  assert.ok(sourceSerifStack);
+  const result = compileBrandKitDraft(
+    buildValidBrandKitDraft({
+      typography: {
+        ...buildValidBrandKitDraft().typography,
+        display: {
+          ...buildValidBrandKitDraft().typography.display,
+          family: "source-serif-4",
+        },
+        body: {
+          ...buildValidBrandKitDraft().typography.body,
+          family: "Acme Sans",
+          fontAssetId: "acme-sans",
+        },
+      },
+      assets: {
+        ...buildValidBrandKitDraft().assets,
+        fonts: {
+          "acme-sans": {
+            id: "acme-sans",
+            family: "Acme Sans",
+            src: "/brand-assets/user-1/acme-sans.woff2",
+            weight: [400, 700],
+            style: "normal",
+          },
+        },
+      },
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(
+    result.package.assets?.fonts?.["acme-sans"]?.family,
+    "Acme Sans",
+  );
+  assert.match(
+    buildThemePackageFontFaceCss(result.package),
+    /font-family: 'Acme Sans'; src: url\('\/brand-assets\/user-1\/acme-sans\.woff2'\)/,
+  );
+
+  const deck = buildDeckV7(
+    [
+      buildSlideV7("content", [
+        buildTextNode({
+          id: "custom-title",
+          role: "title",
+          style: { ref: "text.title" },
+        }),
+        buildTextNode({
+          id: "custom-body",
+          role: "body",
+          style: { ref: "text.body" },
+        }),
+      ]),
+    ],
+    {
+      theme: buildThemeBinding({
+        packageId: result.package.id,
+        packageVersion: result.package.version,
+      }),
+    },
+  );
+  const tree = resolveDeckRenderTree(deck, result.package);
+  const title = tree.slides[0]?.nodes.find(
+    (node) => node.id === "custom-title",
+  );
+  const body = tree.slides[0]?.nodes.find((node) => node.id === "custom-body");
+  assert.equal(title?.style.text?.fontFamily, sourceSerifStack);
+  assert.equal(body?.style.text?.fontFamily, "Acme Sans");
+
+  const pptx = buildVnextPptxSpec(buildExportSpec(tree));
+  const titleOp = pptx.slides[0]?.ops.find((op) => op.id === "custom-title");
+  const bodyOp = pptx.slides[0]?.ops.find((op) => op.id === "custom-body");
+  assert.equal(titleOp?.type, "text");
+  assert.equal(bodyOp?.type, "text");
+  if (titleOp?.type === "text")
+    assert.equal(titleOp.textStyle.fontFace, "Georgia");
+  if (bodyOp?.type === "text")
+    assert.equal(bodyOp.textStyle.fontFace, "Acme Sans");
+});
+
+test("compileBrandKitDraft rejects typography roles referencing missing custom fonts", () => {
+  const result = compileBrandKitDraft(
+    buildValidBrandKitDraft({
+      typography: {
+        ...buildValidBrandKitDraft().typography,
+        body: {
+          ...buildValidBrandKitDraft().typography.body,
+          family: "Missing Sans",
+          fontAssetId: "missing-font",
+        },
+      },
+    }),
+  );
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "missing-font-asset" &&
+        diagnostic.path === "typography.body.fontAssetId",
+    ),
+  );
 });
