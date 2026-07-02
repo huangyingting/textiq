@@ -24,6 +24,7 @@ import {
   DeckDiagnosticsReview,
   type DeckDiagnosticsReviewProps,
 } from "./deck-diagnostics-review";
+import { SlideEditorFooter } from "./slide-editor-footer";
 import { SlideEditorVNext } from "./slide-editor-vnext";
 import {
   SourceReviewPanel,
@@ -150,22 +151,14 @@ function diagnosticsReviewProps(root: ReactNode): DeckDiagnosticsReviewProps {
 }
 
 function clickDiagnosticsReview(root: ReactNode): void {
-  const button = findRequiredElement(
+  const footer = findRequiredElement(
     root,
-    (element) => {
-      if (element.type !== "button") return false;
-      const props = element.props as {
-        "aria-label"?: string;
-        onClick?: unknown;
-      };
-      return (
-        typeof props.onClick === "function" &&
-        props["aria-label"]?.startsWith("Open deck diagnostics review") === true
-      );
-    },
-    "Expected deck diagnostics review button.",
+    (element) => element.type === SlideEditorFooter,
+    "Expected editor footer.",
   );
-  (button.props as { onClick: () => void }).onClick();
+  (
+    footer.props as { onOpenDiagnosticsReview: () => void }
+  ).onOpenDiagnosticsReview();
 }
 
 function diagnosticByCode(

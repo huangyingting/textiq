@@ -27,10 +27,10 @@ import {
 import { createReactHookRenderer } from "@/test/react-server-renderer";
 import {
   SlideEditorCloseConfirmDialog,
-  SlideEditorInspectorRegion,
   SlideEditorVNext,
   type SlideEditorVNextProps,
 } from "./slide-editor-vnext";
+import { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 
 type ElementProps = Record<string, unknown>;
 
@@ -207,6 +207,13 @@ function maybeProps(
   return element ? propsOf(element) : undefined;
 }
 
+function footerProps(tree: ReactNode): ElementProps {
+  return findProps(
+    tree,
+    (_props, element) => typeName(element.type) === "SlideEditorFooter",
+  );
+}
+
 function clickByLabel(tree: ReactNode, label: string): unknown {
   const props = maybeProps(
     tree,
@@ -236,18 +243,6 @@ function clickPopoverTrigger(tree: ReactNode, popoverLabel: string): unknown {
   assert.ok(isValidElement(trigger));
   const onClick = (trigger.props as ElementProps).onClick;
   assert.equal(typeof onClick, "function", popoverLabel);
-  return (onClick as () => unknown)();
-}
-
-function clickByLabelPrefix(tree: ReactNode, prefix: string): unknown {
-  const props = findProps(
-    tree,
-    (candidate) =>
-      typeof candidate["aria-label"] === "string" &&
-      candidate["aria-label"].startsWith(prefix),
-  );
-  const onClick = props.onClick;
-  assert.equal(typeof onClick, "function", prefix);
   return (onClick as () => unknown)();
 }
 
@@ -737,16 +732,9 @@ test("SlideEditorVNext direct state coverage drives toolbar, source, diagnostics
     assert.ok((await invokeVisibleMenuClicks(tree)) >= 4);
     tree = harness.render();
 
-    clickPopoverTrigger(tree, "Zoom presets");
-    tree = harness.render();
-    assert.ok((await invokeVisibleMenuClicks(tree)) >= 1);
-    const zoomRange = findProps(
-      tree,
-      (props) => props["aria-label"] === "Slide zoom",
-    );
-    (zoomRange.onChange as (event: unknown) => void)({
-      currentTarget: { value: "150" },
-    });
+    const footer = footerProps(tree);
+    (footer.onSetZoomMenuOpen as (open: boolean) => void)(true);
+    (footer.onSetStageZoomPercent as (percent: number) => void)(150);
     tree = harness.render();
 
     const toolbar = contextToolbarProps(tree);
@@ -840,7 +828,7 @@ test("SlideEditorVNext direct state coverage drives toolbar, source, diagnostics
     (selectedToolbar.onMatchSize as (mode: string) => void)("both");
     tree = harness.render();
 
-    clickByLabelPrefix(tree, "Open deck diagnostics review");
+    (footerProps(tree).onOpenDiagnosticsReview as () => void)();
     tree = harness.render();
     const review = findProps(
       tree,
@@ -1191,7 +1179,7 @@ test("SlideEditorVNext direct state coverage drives desktop toolbar branches", a
     clickPopoverTrigger(tree, "Export slides");
     tree = harness.render();
     await clickByLabel(tree, "Export PPTX");
-    clickByLabelPrefix(tree, "Open deck diagnostics review");
+    (footerProps(tree).onOpenDiagnosticsReview as () => void)();
     tree = harness.render();
     const review = findProps(
       tree,

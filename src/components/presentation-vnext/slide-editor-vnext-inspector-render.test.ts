@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SlideEditorInspectorRegion } from "./slide-editor-vnext";
+import { SlideEditorInspectorRegion } from "./slide-editor-vnext-regions";
 import { buildSlideV7 } from "@/test/builders/deck-v7";
 
 type InspectorRegionProps = Parameters<typeof SlideEditorInspectorRegion>[0];

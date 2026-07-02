@@ -8,8 +8,8 @@ import {
   buildSlideV7,
   buildTextNode,
 } from "@/test/builders/deck-v7";
+import { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
 import {
-  deleteActiveSlideFromToolbar,
   SlideEditorCloseConfirmDialog,
   SlideEditorVNext,
 } from "./slide-editor-vnext";
