@@ -28,12 +28,17 @@ import {
   type DocumentTableBlock,
 } from "@/lib/content";
 import { buildPresentationBlocks } from "@/lib/presentation/present-blocks";
+import { ensureLexicalTableCaptionSupport } from "@/lib/lexical/table-caption-runtime";
 
 import {
+  $getSelectedDocumentTableCaption,
   $isSelectionInsideDocumentTable,
+  runDocumentTableCaptionControl,
   runDocumentTableControl,
   type DocumentTableControlAction,
 } from "./table-controls";
+
+ensureLexicalTableCaptionSupport();
 
 function makeEditor(): LexicalEditor {
   const editor = createHeadlessEditor({
@@ -255,4 +260,88 @@ test("mutated tables survive serialization round-trip and keep projections align
   assert.equal(lexicalStateToPlainText(json), expectedMarkdown);
   assert.equal(buildDeckSource(json, new Map()).outline, expectedMarkdown);
   assert.deepEqual(buildPresentationBlocks(json), collectDocumentBlocks(json));
+});
+
+test("document table captions can be set, updated, cleared, and extracted explicitly", () => {
+  const editor = makeEditor();
+  seedTable(editor, [
+    ["Region", "ARR"],
+    ["NA", "$12M"],
+  ]);
+
+  assert.equal(
+    runDocumentTableCaptionControl(editor, "  FY26 forecast  "),
+    true,
+  );
+  editor.update(() => {}, { discrete: true });
+  assert.equal(onlyTableBlock(editor).caption, "FY26 forecast");
+
+  assert.equal(runDocumentTableCaptionControl(editor, "FY26 actuals"), true);
+  editor.update(() => {}, { discrete: true });
+  assert.equal(onlyTableBlock(editor).caption, "FY26 actuals");
+
+  assert.equal(runDocumentTableCaptionControl(editor, ""), true);
+  editor.update(() => {}, { discrete: true });
+  assert.equal(onlyTableBlock(editor).caption, undefined);
+});
+
+test("document table captions survive autosave and reopen JSON round-trip", () => {
+  const editor = makeEditor();
+  seedTable(editor, [
+    ["Region", "ARR"],
+    ["NA", "$12M"],
+  ]);
+  assert.equal(
+    runDocumentTableCaptionControl(editor, "Bookings by region"),
+    true,
+  );
+  editor.update(() => {}, { discrete: true });
+
+  const json = serialized(editor);
+  assert.match(json, /"caption":"Bookings by region"/);
+
+  const roundTripEditor = makeEditor();
+  roundTripEditor.setEditorState(roundTripEditor.parseEditorState(json));
+  roundTripEditor.update(
+    () => {
+      cellAt(1, 0).selectStart();
+    },
+    { discrete: true },
+  );
+
+  assert.equal(
+    roundTripEditor
+      .getEditorState()
+      .read(() => $getSelectedDocumentTableCaption()),
+    "Bookings by region",
+  );
+  assert.deepEqual(collectDocumentBlocks(serialized(roundTripEditor)), [
+    onlyTableBlock(editor),
+  ]);
+});
+
+test("document table caption updates participate in undo and redo", () => {
+  const editor = makeEditor();
+  const history = createEmptyHistoryState();
+  const unregister = registerHistory(editor, history, 0);
+  try {
+    seedTable(editor, [
+      ["Region", "ARR"],
+      ["NA", "$12M"],
+    ]);
+
+    assert.equal(runDocumentTableCaptionControl(editor, "First caption"), true);
+    editor.update(() => {}, { discrete: true });
+    assert.equal(onlyTableBlock(editor).caption, "First caption");
+
+    editor.dispatchCommand(UNDO_COMMAND, undefined);
+    editor.update(() => {}, { discrete: true });
+    assert.equal(onlyTableBlock(editor).caption, undefined);
+
+    editor.dispatchCommand(REDO_COMMAND, undefined);
+    editor.update(() => {}, { discrete: true });
+    assert.equal(onlyTableBlock(editor).caption, "First caption");
+  } finally {
+    unregister();
+  }
 });

@@ -12,29 +12,46 @@ import { useCallback, useEffect, useState } from "react";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import {
   $isSelectionInsideDocumentTable,
+  $getSelectedDocumentTableCaption,
   runDocumentTableControl,
+  runDocumentTableCaptionControl,
   type DocumentTableControlAction,
 } from "@/lib/lexical/table-controls";
 
-function readTableSelectionState(editor: LexicalEditor): boolean {
-  return editor
-    .getEditorState()
-    .read(() => editor.isEditable() && $isSelectionInsideDocumentTable());
+type TableSelectionState = {
+  inTable: boolean;
+  caption: string;
+};
+
+function readTableSelectionState(editor: LexicalEditor): TableSelectionState {
+  return editor.getEditorState().read(() => {
+    const caption = $getSelectedDocumentTableCaption();
+    return {
+      inTable: editor.isEditable() && $isSelectionInsideDocumentTable(),
+      caption: caption ?? "",
+    };
+  });
 }
 
 export function TableControls({ editable }: { editable: boolean }) {
   const [editor] = useLexicalComposerContext();
-  const [inTable, setInTable] = useState(() => readTableSelectionState(editor));
+  const [selectionState, setSelectionState] = useState(() =>
+    readTableSelectionState(editor),
+  );
 
   const recompute = useCallback(() => {
-    setInTable(readTableSelectionState(editor));
+    setSelectionState(readTableSelectionState(editor));
   }, [editor]);
 
   useEffect(() => {
     return mergeRegister(
       editor.registerUpdateListener(({ editorState }) => {
         editorState.read(() => {
-          setInTable(editor.isEditable() && $isSelectionInsideDocumentTable());
+          const caption = $getSelectedDocumentTableCaption();
+          setSelectionState({
+            inTable: editor.isEditable() && $isSelectionInsideDocumentTable(),
+            caption: caption ?? "",
+          });
         });
       }),
       editor.registerEditableListener(recompute),
@@ -49,13 +66,34 @@ export function TableControls({ editable }: { editable: boolean }) {
     );
   }, [editor, recompute]);
 
-  const disabled = !editable || !inTable;
+  const disabled = !editable || !selectionState.inTable;
   const run = (action: DocumentTableControlAction) => {
     runDocumentTableControl(editor, action);
+  };
+  const setCaption = (caption: string) => {
+    setSelectionState((current) => ({ ...current, caption }));
+    runDocumentTableCaptionControl(editor, caption);
   };
 
   return (
     <>
+      <label className="flex h-8 min-w-40 items-center gap-1.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-raised px-2 text-xs font-medium text-ds-text-secondary shadow-ds-raised">
+        <span className="shrink-0">Caption</span>
+        <input
+          aria-label="Table caption"
+          className="min-w-0 flex-1 bg-transparent text-sm font-normal text-ds-text-primary placeholder:text-ds-text-muted focus:outline-none disabled:cursor-not-allowed"
+          disabled={disabled}
+          placeholder={selectionState.inTable ? "Add caption" : "Select table"}
+          value={selectionState.caption}
+          onChange={(event) => setCaption(event.target.value)}
+        />
+      </label>
+      <TableControlButton
+        label="Clear table caption"
+        shortLabel="Clear"
+        disabled={disabled || selectionState.caption.length === 0}
+        onRun={() => setCaption("")}
+      />
       <TableControlButton
         label="Add row below"
         shortLabel="Row +"

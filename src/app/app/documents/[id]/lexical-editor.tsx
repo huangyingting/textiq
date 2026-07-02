@@ -21,6 +21,7 @@ import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { createCoreEditorPlugins } from "@/lib/lexical/editor-plugins";
 import { shouldAutosaveUpdate } from "@/lib/content";
 import { ensureLexicalBlockIdSupport } from "@/lib/lexical/block-id-runtime";
+import { ensureLexicalTableCaptionSupport } from "@/lib/lexical/table-caption-runtime";
 import { useLexicalAutosave } from "@/lib/lexical/use-autosave";
 import { useCollaborationEditable } from "@/lib/lexical/use-collaboration-gate";
 import {
@@ -105,6 +106,7 @@ const NODES: Array<Klass<LexicalNode>> = [
 ];
 
 ensureLexicalBlockIdSupport();
+ensureLexicalTableCaptionSupport();
 
 function onError(error: Error) {
   console.error(error);
@@ -513,7 +515,7 @@ export function LexicalEditor({
                     {canEdit && (
                       <>
                         <EditorToolbarDivider />
-                        <EditorToolbarGroup label="Table rows and columns">
+                        <EditorToolbarGroup label="Table captions, rows, and columns">
                           <TableControls editable={editable} />
                         </EditorToolbarGroup>
                       </>
