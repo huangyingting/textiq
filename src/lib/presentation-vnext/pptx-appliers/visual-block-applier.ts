@@ -2,7 +2,7 @@ import type { VnextPptxVisualOp } from "../pptx-export-adapter";
 import { DEFAULT_VISUAL_CHANNEL_COLORS } from "../visual-channel-colors";
 import { applyVnextImageOp } from "./image-media-applier";
 import type { PptxSlide } from "./shared";
-import { stripHash } from "./shared";
+import { effectToPptxShadow, stripHash } from "./shared";
 
 export async function applyVnextVisualOp(
   slide: PptxSlide,
@@ -20,6 +20,7 @@ export async function applyVnextVisualOp(
       h,
       ...((alt ?? visualId) ? { alt: alt ?? visualId } : {}),
       ...(rotation !== undefined ? { rotation } : {}),
+      ...(op.effect !== undefined ? { effect: op.effect } : {}),
       zIndex: op.zIndex,
     });
     return;
@@ -27,6 +28,7 @@ export async function applyVnextVisualOp(
 
   const hasVisualPlaceholderStyling =
     op.channelColors !== undefined || op.transparentBackground !== undefined;
+  const shadow = effectToPptxShadow(op.effect);
   if (hasVisualPlaceholderStyling) {
     const colors = {
       ...DEFAULT_VISUAL_CHANNEL_COLORS,
@@ -43,6 +45,7 @@ export async function applyVnextVisualOp(
       ...(backgroundFill ? { fill: backgroundFill } : {}),
       line: { color: stripHash(colors.muted), transparency: 35 },
       ...(rotation !== undefined ? { rotate: rotation } : {}),
+      ...(shadow !== undefined ? { shadow } : {}),
     });
     const barW = w * 0.16;
     const baseY = y + h * 0.72;
@@ -60,6 +63,7 @@ export async function applyVnextVisualOp(
         fill: { color: stripHash(bar.color) },
         line: { color: stripHash(bar.color), transparency: 100 },
         ...(rotation !== undefined ? { rotate: rotation } : {}),
+        ...(shadow !== undefined ? { shadow } : {}),
       });
     }
     slide.addText(op.alt ?? op.visualId ?? "Visual", {

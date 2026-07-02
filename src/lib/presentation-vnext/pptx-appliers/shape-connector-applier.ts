@@ -4,7 +4,7 @@ import type {
   VnextPptxImageFill,
   VnextPptxShapeOp,
 } from "../pptx-export-adapter";
-import type { PptxSlide } from "./shared";
+import { effectToPptxShadow, type PptxShadow, type PptxSlide } from "./shared";
 
 function imageSource(assetId: string): { data: string } | { path: string } {
   return assetId.startsWith("data:") ? { data: assetId } : { path: assetId };
@@ -14,6 +14,7 @@ function addImageFill(
   slide: PptxSlide,
   fill: VnextPptxImageFill,
   op: Pick<VnextPptxShapeOp, "x" | "y" | "w" | "h" | "rotation">,
+  shadow?: PptxShadow,
 ): void {
   slide.addImage({
     ...imageSource(fill.assetId),
@@ -25,6 +26,7 @@ function addImageFill(
       ? { sizing: { type: fill.fit, w: op.w, h: op.h } }
       : {}),
     ...(op.rotation !== undefined ? { rotate: op.rotation } : {}),
+    ...(shadow !== undefined ? { shadow } : {}),
   });
 }
 
@@ -50,11 +52,12 @@ export function applyVnextShapeOp(
   op: VnextPptxShapeOp,
 ): void {
   const { x, y, w, h, shape, fill, stroke, rotation } = op;
+  const shadow = effectToPptxShadow(op.effect);
   const shapeName = vnextShapeToName(shape) as Parameters<
     PptxSlide["addShape"]
   >[0];
   if (fill !== undefined && typeof fill !== "string") {
-    addImageFill(slide, fill, op);
+    addImageFill(slide, fill, op, shadow);
     if (stroke !== undefined) {
       slide.addShape(shapeName, {
         x,
@@ -64,6 +67,7 @@ export function applyVnextShapeOp(
         fill: { transparency: 100 },
         line: { color: stroke.color, width: stroke.widthPt },
         ...(rotation !== undefined ? { rotate: rotation } : {}),
+        ...(shadow !== undefined ? { shadow } : {}),
       });
     }
     return;
@@ -78,6 +82,7 @@ export function applyVnextShapeOp(
       ? { line: { color: stroke.color, width: stroke.widthPt } }
       : {}),
     ...(rotation !== undefined ? { rotate: rotation } : {}),
+    ...(shadow !== undefined ? { shadow } : {}),
   });
 }
 
@@ -178,6 +183,18 @@ export function applyVnextConnectorOp(
     addConnectorSegment(slide, op, start, first, true, false);
     addConnectorSegment(slide, op, first, second, false, false);
     addConnectorSegment(slide, op, second, end, false, true);
+    return;
+  }
+
+  if (routing === "curved") {
+    const line = connectorLineOptions(op, true, true);
+    slide.addShape("arc" as Parameters<PptxSlide["addShape"]>[0], {
+      x: op.x,
+      y: op.y,
+      w: op.w,
+      h: op.h,
+      ...(line !== undefined ? { line } : {}),
+    });
     return;
   }
 

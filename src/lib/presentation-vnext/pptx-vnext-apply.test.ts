@@ -42,6 +42,7 @@ import {
   buildImageAsset,
   buildMinimalThemePackage,
 } from "@/test/builders/deck-v7";
+import { PPTX_FIDELITY_DATA_URI } from "@/test/fixtures/pptx-fidelity";
 
 // ---------------------------------------------------------------------------
 // Mock slide target
@@ -180,6 +181,7 @@ describe("resolveExportSpecAssetSources", () => {
         },
       },
     });
+
     const resolved = resolveExportSpecAssetSources(deck, {
       canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
       diagnostics: [],
@@ -207,6 +209,113 @@ describe("resolveExportSpecAssetSources", () => {
       assert.equal(op.assetId, "https://example.com/rendered-visual.png");
       assert.equal(op.visualId, "doc-visual-1");
       assert.equal(op.alt, "Rendered chart");
+    }
+  });
+
+  test("preflights visual-id-only ops through registered rendered assets", () => {
+    const deck = buildDeckV7([], {
+      assets: {
+        images: {},
+        visuals: {
+          "visual-registry-entry": {
+            id: "rendered-file",
+            visualId: "chart-from-registry",
+            alt: "Registry chart",
+          },
+        },
+        files: {
+          "rendered-file": {
+            id: "rendered-file",
+            src: PPTX_FIDELITY_DATA_URI,
+            mimeType: "image/png",
+          },
+        },
+      },
+    });
+    const resolved = resolveExportSpecAssetSources(deck, {
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "slide-1",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "visual",
+              id: "visual-1",
+              visualId: "chart-from-registry",
+              frame: { x: 0, y: 0, w: 100, h: 100 },
+              style: {},
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    const op = resolved.slides[0].operations[0];
+    assert.equal(op.type, "visual");
+    if (op.type === "visual") {
+      assert.equal(op.assetId, PPTX_FIDELITY_DATA_URI);
+      assert.deepEqual(op.pptxAssetPreflight, {
+        status: "ready",
+        assetId: PPTX_FIDELITY_DATA_URI,
+        source: "visual-registry",
+      });
+      assert.equal(op.alt, "Registry chart");
+    }
+  });
+
+  test("preflights unsupported visual rendered assets without embedding them", () => {
+    const deck = buildDeckV7([], {
+      assets: {
+        images: {},
+        visuals: {
+          "visual-pdf": {
+            id: "visual-pdf-file",
+            visualId: "pdf-chart",
+          },
+        },
+        files: {
+          "visual-pdf-file": {
+            id: "visual-pdf-file",
+            src: "data:application/pdf;base64,JVBERi0x",
+            mimeType: "application/pdf",
+          },
+        },
+      },
+    });
+    const resolved = resolveExportSpecAssetSources(deck, {
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "slide-1",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "visual",
+              id: "visual-1",
+              assetId: "visual-pdf",
+              frame: { x: 0, y: 0, w: 100, h: 100 },
+              style: {},
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    const op = resolved.slides[0].operations[0];
+    assert.equal(op.type, "visual");
+    if (op.type === "visual") {
+      assert.equal(op.assetId, undefined);
+      assert.deepEqual(op.pptxAssetPreflight, {
+        status: "unsupported",
+        requestedAssetId: "visual-pdf",
+        visualId: "pdf-chart",
+        mimeType: "application/pdf",
+      });
     }
   });
 
@@ -660,6 +769,25 @@ describe("applyVnextShapeOp", () => {
     assert.deepEqual(strokeOpts.fill, { transparency: 100 });
   });
 
+  test("native glow is forwarded as a zero-distance outer shadow", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextShapeOp(
+      slide as never,
+      makeShapeOp({
+        effect: { kind: "glow", color: "66CCFF", blurPt: 8, opacity: 0.5 },
+      }),
+    );
+    const opts = calls[0].args[1] as Record<string, unknown>;
+    assert.deepEqual(opts.shadow, {
+      type: "outer",
+      color: "66CCFF",
+      opacity: 0.5,
+      blur: 8,
+      angle: 0,
+      offset: 0,
+    });
+  });
+
   test("shape op only calls addShape", () => {
     const { slide, calls } = makeMockSlide();
     applyVnextShapeOp(slide as never, makeShapeOp());
@@ -906,6 +1034,35 @@ describe("applyVnextConnectorOp", () => {
     );
     const opts = calls[0].args[1] as Record<string, unknown>;
     assert.equal(opts.line, undefined);
+  });
+
+  test("curved connector uses native arc geometry", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextConnectorOp(
+      slide as never,
+      makeConnectorOp({
+        routing: "curved",
+        x: 1,
+        y: 2,
+        w: 4,
+        h: 2,
+        stroke: { color: "00AAFF", widthPt: 1.5, dash: "dashed" },
+        endArrow: "arrow",
+      }),
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].args[0], "arc");
+    const opts = calls[0].args[1] as Record<string, unknown>;
+    assert.equal(opts.x, 1);
+    assert.equal(opts.y, 2);
+    assert.equal(opts.w, 4);
+    assert.equal(opts.h, 2);
+    assert.deepEqual(opts.line, {
+      color: "00AAFF",
+      width: 1.5,
+      dashType: "dash",
+      endArrowType: "arrow",
+    });
   });
 });
 

@@ -1124,9 +1124,53 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
 
     assert.match(html, /contentEditable="true"/);
     assert.match(html, /data-table-cell="0:1"/);
-    assert.match(html, /aria-label="Table cell row 1, column 2"/);
+    assert.match(html, /aria-label="Table cell row 1, column 2, content Beta"/);
     assert.match(html, /Beta/);
     assert.match(html, /Table node editing cells/);
+  });
+
+  test("renders editable table cells with header context and content preview", () => {
+    const selection = setSelection(createSelectionState("normal"), ["table-1"]);
+    const html = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide: slide([
+          renderNode("table-1", {
+            type: "table",
+            content: {
+              caption: "Quarterly results",
+              header: true,
+              columns: [
+                { id: "region", label: "Region" },
+                { id: "revenue", label: "Revenue" },
+              ],
+              rows: [
+                {
+                  id: "row-1",
+                  cells: [{ text: "North" }, { text: "Up 42 percent" }],
+                },
+                {
+                  id: "row-2",
+                  cells: [{ text: "South" }, { text: "" }],
+                },
+              ],
+            },
+          }),
+        ]),
+        selection,
+        tableEditingNodeId: "table-1",
+        activeTableCell: { rowIndex: 0, colIndex: 1 },
+        onNodePointerDown: () => undefined,
+      }),
+    );
+
+    assert.match(
+      html,
+      /aria-label="Table cell row 1, column 2, table Quarterly results, column header Revenue, row header North, content Up 42 percent"/,
+    );
+    assert.match(
+      html,
+      /aria-label="Table cell row 2, column 2, table Quarterly results, column header Revenue, row header South, content empty"/,
+    );
   });
 
   test("keeps read-only table rendering free of edit metadata and stage overlays", () => {
@@ -1348,6 +1392,137 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /bg.png/);
     assert.match(deckHtml, /deck-canvas/);
     assert.equal(missingDeckHtml, "");
+  });
+
+  test("renders a semantic screen-reader deck outline near the stage", () => {
+    const selection = setSelection(createSelectionState("normal"), ["body-2"]);
+    const deck: ResolvedDeckRenderTree = {
+      canvas: {
+        format: "16:9",
+        width: 100,
+        height: 56.25,
+        unit: "percent",
+      },
+      theme: {
+        tokens: {
+          colors: {
+            canvas: { fill: "#fff", text: "#111", mutedText: "#666" },
+            surface: { fill: "#fff", text: "#111", mutedText: "#666" },
+            accent: { fill: "#2563eb", text: "#fff" },
+          },
+          fonts: { heading: "Inter", body: "Inter" },
+        },
+        packageId: "test",
+      },
+      diagnostics: [],
+      slides: [
+        {
+          ...slide([
+            textNode(
+              "intro-body",
+              { x: 20, y: 20, w: 40, h: 12 },
+              {
+                accessibility: { readingOrder: 2 },
+              },
+            ),
+            textNode(
+              "intro-title",
+              { x: 10, y: 10, w: 50, h: 10 },
+              {
+                role: "title",
+                content: {
+                  type: "text",
+                  content: {
+                    paragraphs: [{ id: "intro-title-p1", text: "Overview" }],
+                  },
+                },
+                accessibility: { readingOrder: 1 },
+              },
+            ),
+          ]),
+          id: "slide-overview",
+        },
+        {
+          ...slide([
+            textNode(
+              "title-2",
+              { x: 10, y: 10, w: 50, h: 10 },
+              {
+                role: "title",
+                content: {
+                  type: "text",
+                  content: {
+                    paragraphs: [{ id: "title-2-p1", text: "Roadmap" }],
+                  },
+                },
+                accessibility: { readingOrder: 1 },
+              },
+            ),
+            textNode(
+              "body-2",
+              { x: 20, y: 24, w: 44, h: 14 },
+              {
+                content: {
+                  type: "text",
+                  content: {
+                    paragraphs: [
+                      { id: "body-2-p1", text: "Ship accessible stage" },
+                    ],
+                  },
+                },
+                accessibility: { readingOrder: 2 },
+              },
+            ),
+            imageNode(
+              "image-2",
+              { x: 60, y: 24, w: 20, h: 20 },
+              {
+                content: {
+                  type: "image",
+                  content: { assetId: "image-2", alt: "Architecture diagram" },
+                },
+                accessibility: { readingOrder: 3 },
+              },
+            ),
+          ]),
+          id: "slide-roadmap",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(DeckCanvasVNext, {
+        deck,
+        activeSlideIndex: 1,
+        selection,
+        onNodePointerDown: () => undefined,
+      }),
+    );
+
+    assert.match(
+      html,
+      /data-deck-outline-region="true" role="region"[^>]*class="sr-only"/,
+    );
+    assert.match(html, /Deck outline/);
+    assert.match(
+      html,
+      /2 slides\. Current slide 2: Roadmap\. 2 texts, 1 image\./,
+    );
+    assert.match(html, /aria-label="Slides"/);
+    assert.match(html, /aria-current="page"/);
+    assert.match(
+      html,
+      /aria-current="true" aria-label="text: Body: Ship accessible stage"/,
+    );
+    assert.match(html, /aria-label="image: Image: Architecture diagram"/);
+    assert.ok(
+      html.indexOf("Title: Roadmap") <
+        html.indexOf("Body: Ship accessible stage"),
+    );
+    assert.ok(
+      html.indexOf("Body: Ship accessible stage") <
+        html.indexOf("Image: Architecture diagram"),
+    );
   });
 
   test("applies image background fill opacity on a dedicated layer", () => {

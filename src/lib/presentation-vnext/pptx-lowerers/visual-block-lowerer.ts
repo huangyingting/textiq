@@ -1,6 +1,12 @@
 import type { ExportVisualOperation } from "../export-spec-types";
 import type { VnextPptxVisualOp } from "../pptx-export-types";
-import { checkEffect, fillToHex, frameToInches, resolveColor } from "./shared";
+import {
+  checkEffect,
+  effectToNativeGlow,
+  fillToHex,
+  frameToInches,
+  resolveColor,
+} from "./shared";
 import type { PptxLowererContext } from "./shared";
 
 function checkVisualStyle(
@@ -31,12 +37,63 @@ function checkVisualStyle(
   }
 }
 
+function warnVisualPlaceholderFallback(
+  op: ExportVisualOperation,
+  ctx: PptxLowererContext,
+): void {
+  if (op.assetId) return;
+  const preflight = op.pptxAssetPreflight;
+  const visualId =
+    preflight?.status === "missing" || preflight?.status === "unsupported"
+      ? (preflight.visualId ?? op.visualId)
+      : op.visualId;
+  if (preflight?.status === "unsupported") {
+    ctx.dc.warning(
+      "unsupported-export-feature",
+      `Visual op "${op.id}" has a rendered asset${
+        preflight.mimeType ? ` (${preflight.mimeType})` : ""
+      }, but PPTX export cannot embed that asset type; using a labeled placeholder fallback`,
+      {
+        path: `op(visual:${op.id})`,
+        action: { type: "open-asset-panel" },
+        details: {
+          exportFeature: "pptx-visual-asset-preflight",
+          assetId: preflight.requestedAssetId,
+          ...(preflight.visualId ? { visualId: preflight.visualId } : {}),
+        },
+      },
+    );
+    return;
+  }
+
+  ctx.dc.warning(
+    "missing-asset",
+    `Visual op "${op.id}" asset preflight found no rendered asset for PPTX image-retry; regenerate the visual or attach a rendered asset from the asset panel before export. Using a labeled placeholder fallback`,
+    {
+      path: `op(visual:${op.id})`,
+      action: { type: "open-asset-panel" },
+      details: {
+        exportFeature: "pptx-visual-asset-preflight",
+        ...(preflight?.status === "missing" && preflight.requestedAssetId
+          ? { assetId: preflight.requestedAssetId }
+          : {}),
+        ...(visualId ? { visualId } : {}),
+      },
+    },
+  );
+}
+
 export function lowerVisualOpToPptx(
   op: ExportVisualOperation,
   ctx: PptxLowererContext,
 ): VnextPptxVisualOp {
   const frame = frameToInches(op.frame, ctx);
   checkEffect(op.style, ctx.dc, `op(visual:${op.id})`);
+  const effect = effectToNativeGlow(
+    op.style.effect,
+    ctx.dc,
+    `op(visual:${op.id})`,
+  );
   checkVisualStyle(op, ctx);
   const fill = fillToHex(op.style.fill, ctx.dc, `op(visual:${op.id}).fill`);
   const stroke = op.style.stroke
@@ -50,19 +107,7 @@ export function lowerVisualOpToPptx(
         widthPt: op.style.stroke.widthPt,
       }
     : undefined;
-  if (!op.assetId && !op.visualId) {
-    ctx.dc.warning(
-      "missing-asset",
-      `Visual op "${op.id}" has neither assetId nor visualId; PPTX export uses a labeled placeholder fallback`,
-      { path: `op(visual:${op.id})`, action: { type: "open-asset-panel" } },
-    );
-  } else if (!op.assetId && op.visualId) {
-    ctx.dc.warning(
-      "unsupported-export-feature",
-      `Visual op "${op.id}" has no rendered asset; PPTX export uses a labeled placeholder fallback`,
-      { path: `op(visual:${op.id})`, action: { type: "open-asset-panel" } },
-    );
-  }
+  warnVisualPlaceholderFallback(op, ctx);
   return {
     type: "visual",
     id: op.id,
@@ -76,6 +121,7 @@ export function lowerVisualOpToPptx(
       ? { transparentBackground: op.transparentBackground }
       : {}),
     ...(op.alt !== undefined ? { alt: op.alt } : {}),
+    ...(effect !== undefined ? { effect } : {}),
     ...(op.rotation !== undefined ? { rotation: op.rotation } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(stroke !== undefined ? { stroke } : {}),

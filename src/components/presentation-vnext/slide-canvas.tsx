@@ -16,7 +16,7 @@
  * space so the layout is resolution-independent.
  */
 
-import { memo, type JSX } from "react";
+import { memo, useId, type JSX } from "react";
 
 import type {
   ResolvedSlideRenderTree,
@@ -24,6 +24,7 @@ import type {
   ResolvedRenderNode,
 } from "@/lib/presentation-vnext/render-tree";
 import { getSlideRenderLists } from "@/lib/presentation-vnext/render-tree";
+import { buildDeckOutline, type DeckOutline } from "@/lib/presentation-vnext";
 import type { CanvasSpec } from "@/lib/presentation-vnext/types";
 import type {
   ConnectorEndpoint,
@@ -184,6 +185,12 @@ export interface SlideCanvasVNextProps {
   draggingStage?: boolean;
   /** Optional extra CSS class applied to the outer canvas container. */
   className?: string;
+  /** Optional accessible deck/slide outline rendered near the stage. */
+  deckOutline?: DeckOutline;
+  /** Active slide index for the accessible outline. */
+  outlineActiveSlideIndex?: number;
+  /** Current node id for the accessible outline. */
+  outlineCurrentNodeId?: string | null;
 }
 
 /**
@@ -230,6 +237,9 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
   preview = false,
   draggingStage = false,
   className,
+  deckOutline,
+  outlineActiveSlideIndex = 0,
+  outlineCurrentNodeId,
 }: SlideCanvasVNextProps): JSX.Element {
   const aspectRatio = canvas ? canvasAspectRatio(canvas) : 16 / 9;
   const backgroundFill = slide.background.fill;
@@ -275,7 +285,7 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
         }
       : undefined;
 
-  return (
+  const canvasElement = (
     <div
       data-slide-canvas-vnext="true"
       data-slide-hovered={slideHovered ? "true" : undefined}
@@ -411,6 +421,17 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
       </div>
     </div>
   );
+  if (preview || !deckOutline) return canvasElement;
+  return (
+    <>
+      <DeckOutlineRegion
+        outline={deckOutline}
+        activeSlideIndex={outlineActiveSlideIndex}
+        currentNodeId={outlineCurrentNodeId}
+      />
+      {canvasElement}
+    </>
+  );
 });
 
 function applyNodeGestureDraft(
@@ -497,6 +518,68 @@ export interface DeckCanvasVNextProps {
   className?: string;
 }
 
+export interface DeckOutlineRegionProps {
+  outline: DeckOutline;
+  activeSlideIndex?: number;
+  currentNodeId?: string | null;
+}
+
+export function DeckOutlineRegion({
+  outline,
+  activeSlideIndex = 0,
+  currentNodeId,
+}: DeckOutlineRegionProps): JSX.Element | null {
+  const headingId = useId();
+  if (outline.slides.length === 0) return null;
+  const activeSlide = outline.slides[activeSlideIndex] ?? outline.slides[0];
+
+  return (
+    <section
+      data-deck-outline-region="true"
+      role="region"
+      aria-labelledby={headingId}
+      className="sr-only"
+    >
+      <h2 id={headingId}>Deck outline</h2>
+      <p>
+        {outline.slides.length} slide{outline.slides.length === 1 ? "" : "s"}.
+        Current slide {activeSlide.position}: {activeSlide.title}.{" "}
+        {activeSlide.summary}.
+      </p>
+      <ol aria-label="Slides">
+        {outline.slides.map((slide) => (
+          <li
+            key={slide.id}
+            aria-current={
+              slide.index === activeSlide.index ? "page" : undefined
+            }
+          >
+            <article aria-label={`Slide ${slide.position}: ${slide.title}`}>
+              <h3>
+                Slide {slide.position} of {outline.slides.length}: {slide.title}
+              </h3>
+              <p>{slide.summary}</p>
+              <ol aria-label={`Slide ${slide.position} nodes`}>
+                {slide.nodes.map((node) => (
+                  <li
+                    key={node.id}
+                    aria-current={
+                      node.id === currentNodeId ? "true" : undefined
+                    }
+                    aria-label={`${node.role}: ${node.label}`}
+                  >
+                    <span>{node.role}</span>: <span>{node.label}</span>
+                  </li>
+                ))}
+              </ol>
+            </article>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /**
  * Renders the active slide from a `ResolvedDeckRenderTree`.
  *
@@ -519,6 +602,7 @@ export function DeckCanvasVNext({
 }: DeckCanvasVNextProps): JSX.Element | null {
   const slide = deck.slides[activeSlideIndex];
   if (!slide) return null;
+  const currentNodeId = selection?.nodeIds.values().next().value ?? null;
 
   return (
     <SlideCanvasVNext
@@ -533,6 +617,9 @@ export function DeckCanvasVNext({
       onMultiRotationHandlePointerDown={onMultiRotationHandlePointerDown}
       preview={preview}
       className={className}
+      deckOutline={preview ? undefined : buildDeckOutline(deck)}
+      outlineActiveSlideIndex={activeSlideIndex}
+      outlineCurrentNodeId={currentNodeId}
     />
   );
 }

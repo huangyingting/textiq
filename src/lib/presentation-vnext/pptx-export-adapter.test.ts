@@ -26,6 +26,11 @@ import {
 import type { ExportDeckSpec } from "@/lib/presentation-vnext/export-spec";
 import type { CanvasSpec } from "@/lib/presentation-vnext/types";
 import type { SlideChildNode } from "@/lib/presentation-vnext/schema";
+import { resolveExportSpecAssetSources } from "@/lib/presentation-vnext/pptx-vnext-apply";
+import {
+  buildPptxFidelityParityDeck,
+  PPTX_FIDELITY_DATA_URI,
+} from "@/test/fixtures/pptx-fidelity";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -333,14 +338,53 @@ describe("buildVnextPptxSpec — diagnostics", () => {
     );
   });
 
-  test("glass effect emits unsupported-export-feature diagnostic", () => {
+  test("glass effect on a simple shape uses image-retry fallback", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "effects",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "shape",
+              id: "glass-shape",
+              shape: "rect",
+              frame: { x: 96, y: 54, w: 192, h: 108 },
+              style: {
+                fill: { type: "solid", color: "#ffffff" },
+                effect: { kind: "glass", intensity: "medium" },
+              },
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
+    assert.ok(shapeOp);
+    assert.equal(typeof shapeOp.fill, "object");
+    assert.ok(
+      typeof shapeOp.fill === "object" &&
+        shapeOp.fill.assetId.startsWith("data:image/svg+xml;base64,"),
+    );
+    assert.ok(
+      pptx.diagnostics.some((d) =>
+        d.message.includes("uses image-retry fallback"),
+      ),
+      "Expected diagnostic naming image-retry fallback",
+    );
+  });
+
+  test("blur effect without node raster path emits deterministic diagnostic", () => {
     const pkgWithGlass = buildMinimalThemePackage("glass-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
         "text.title": {
           default: {
             text: { fontSizePt: 36, color: "#111111" },
-            effect: { kind: "glass" as const, intensity: "medium" as const },
+            effect: { kind: "blur" as const, radiusPt: 3 },
           },
         },
       },
@@ -350,13 +394,52 @@ describe("buildVnextPptxSpec — diagnostics", () => {
     const renderTree = resolveDeckRenderTree(deck, pkgWithGlass);
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
-    const glassDiags = pptx.diagnostics.filter(
+    const blurDiags = pptx.diagnostics.filter(
       (d) => d.code === "unsupported-export-feature",
     );
     assert.ok(
-      glassDiags.length > 0,
-      "Expected unsupported-export-feature diagnostic for glass effect",
+      blurDiags.some((d) => d.message.includes("no node raster asset")),
+      "Expected unsupported-export-feature diagnostic for blur fallback",
     );
+  });
+
+  test("simple glow maps to native PPTX effect metadata", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "effects",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "shape",
+              id: "glow-shape",
+              shape: "rect",
+              frame: { x: 96, y: 54, w: 192, h: 108 },
+              style: {
+                fill: { type: "solid", color: "#111111" },
+                effect: {
+                  kind: "glow",
+                  color: "#66ccff",
+                  blurPt: 8,
+                  opacity: 0.5,
+                },
+              },
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
+    assert.ok(shapeOp);
+    assert.deepEqual(shapeOp.effect, {
+      kind: "glow",
+      color: "66CCFF",
+      blurPt: 8,
+      opacity: 0.5,
+    });
   });
 
   test("carry-forward diagnostics from ExportDeckSpec are preserved", () => {
@@ -660,7 +743,7 @@ describe("buildVnextPptxSpec — connector operation fidelity", () => {
     assert.equal(connectorOp.endArrow, "arrow");
   });
 
-  test("curved connector routing emits unsupported-export-feature diagnostic", () => {
+  test("simple curved connector routing preserves native curved geometry", () => {
     resetBuilderCounter();
     const deck = buildDeckV7([
       buildSlideV7("process", [
@@ -683,6 +766,48 @@ describe("buildVnextPptxSpec — connector operation fidelity", () => {
     const renderTree = resolveDeckRenderTree(deck, pkg);
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
+    const connectorOp = pptx.slides[0].ops.find(
+      (op) => op.type === "connector",
+    );
+    assert.ok(connectorOp);
+    assert.equal(connectorOp.routing, "curved");
+    assert.ok(
+      !pptx.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "unsupported-export-feature" &&
+          diagnostic.path === "op(connector:connector-node).routing",
+      ),
+    );
+  });
+
+  test("unsupported curved connector falls back editable with diagnostic", () => {
+    resetBuilderCounter();
+    const deck = buildDeckV7([
+      buildSlideV7("process", [
+        buildConnectorNode({
+          content: {
+            from: { kind: "node", nodeId: "shape-a", anchor: "right" },
+            to: { kind: "point", point: { x: 100, y: 50 } },
+            routing: "curved",
+          },
+          localStyle: {
+            connector: {
+              stroke: { color: "#ff0000", widthPt: 2 },
+              routing: "curved",
+            },
+          },
+        }),
+      ]),
+    ]);
+    const pkg = buildMinimalThemePackage();
+    const renderTree = resolveDeckRenderTree(deck, pkg);
+    const exportSpec = buildExportSpec(renderTree);
+    const pptx = buildVnextPptxSpec(exportSpec);
+    const connectorOp = pptx.slides[0].ops.find(
+      (op) => op.type === "connector",
+    );
+    assert.ok(connectorOp);
+    assert.equal(connectorOp.routing, "straight");
     assert.ok(
       pptx.diagnostics.some(
         (diagnostic) =>
@@ -737,8 +862,178 @@ describe("buildVnextPptxSpec — visual fallback diagnostics", () => {
     assert.ok(
       pptx.diagnostics.some(
         (diagnostic) =>
-          diagnostic.code === "unsupported-export-feature" &&
+          diagnostic.code === "missing-asset" &&
           diagnostic.path === "op(visual:visual-node)",
+      ),
+    );
+  });
+
+  test("visual asset preflight resolves visual registry assets before placeholder fallback", () => {
+    const deck = buildDeckV7(
+      [
+        buildSlideV7("visual-focus", [
+          buildVisualNode({
+            content: { visualId: "preflight-chart", alt: "Preflight chart" },
+          }),
+        ]),
+      ],
+      {
+        assets: {
+          images: {},
+          visuals: {
+            "preflight-visual": {
+              id: "preflight-file",
+              visualId: "preflight-chart",
+              alt: "Preflight chart",
+            },
+          },
+          files: {
+            "preflight-file": {
+              id: "preflight-file",
+              src: PPTX_FIDELITY_DATA_URI,
+              mimeType: "image/png",
+            },
+          },
+        },
+      },
+    );
+    const renderTree = resolveDeckRenderTree(deck, buildMinimalThemePackage());
+    const exportSpec = resolveExportSpecAssetSources(
+      deck,
+      buildExportSpec(renderTree),
+    );
+    const pptx = buildVnextPptxSpec(exportSpec);
+    const visualOp = pptx.slides[0].ops.find((op) => op.type === "visual");
+
+    assert.equal(visualOp?.assetId, PPTX_FIDELITY_DATA_URI);
+    assert.equal(
+      pptx.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.path === "op(visual:visual-node)" &&
+          (diagnostic.code === "missing-asset" ||
+            diagnostic.code === "unsupported-export-feature"),
+      ),
+      false,
+    );
+  });
+
+  test("visual asset preflight distinguishes unsupported rendered assets", () => {
+    const deck = buildDeckV7(
+      [
+        buildSlideV7("visual-focus", [
+          buildVisualNode({
+            content: {
+              assetId: "unsupported-visual",
+              visualId: "pdf-chart",
+              alt: "PDF chart",
+            },
+          }),
+        ]),
+      ],
+      {
+        assets: {
+          images: {},
+          visuals: {
+            "unsupported-visual": {
+              id: "unsupported-file",
+              visualId: "pdf-chart",
+              alt: "PDF chart",
+            },
+          },
+          files: {
+            "unsupported-file": {
+              id: "unsupported-file",
+              src: "data:application/pdf;base64,JVBERi0x",
+              mimeType: "application/pdf",
+            },
+          },
+        },
+      },
+    );
+    const renderTree = resolveDeckRenderTree(deck, buildMinimalThemePackage());
+    const exportSpec = resolveExportSpecAssetSources(
+      deck,
+      buildExportSpec(renderTree),
+    );
+    const pptx = buildVnextPptxSpec(exportSpec);
+    const visualOp = pptx.slides[0].ops.find((op) => op.type === "visual");
+
+    assert.equal(visualOp?.assetId, undefined);
+    assert.ok(
+      pptx.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "unsupported-export-feature" &&
+          diagnostic.path === "op(visual:visual-node)" &&
+          diagnostic.message.includes("cannot embed that asset type"),
+      ),
+    );
+  });
+});
+
+describe("buildVnextPptxSpec — shared PPTX fidelity parity fixtures", () => {
+  test("fallback-prone fixtures choose native, image-retry, and diagnostic tiers", () => {
+    const deck = buildPptxFidelityParityDeck();
+    const renderTree = resolveDeckRenderTree(deck, buildMinimalThemePackage());
+    const exportSpec = resolveExportSpecAssetSources(
+      deck,
+      buildExportSpec(renderTree),
+    );
+    const pptx = buildVnextPptxSpec(exportSpec);
+    const opsById = new Map(pptx.slides[0].ops.map((op) => [op.id, op]));
+    const imageRetryShapeIds = [
+      "fidelity-linear-gradient",
+      "fidelity-radial-gradient",
+      "fidelity-conic-gradient",
+      "fidelity-repeating-gradient",
+      "fidelity-pattern-fill",
+      "fidelity-image-fill",
+      "fidelity-glass-effect",
+      "fidelity-blur-effect",
+    ];
+
+    for (const id of imageRetryShapeIds) {
+      const op = opsById.get(id);
+      assert.equal(op?.type, "shape");
+      if (op?.type === "shape") {
+        assert.equal(typeof op.fill, "object", `${id} uses image-retry fill`);
+      }
+    }
+
+    const glowOp = opsById.get("fidelity-glow-effect");
+    assert.equal(glowOp?.type, "shape");
+    if (glowOp?.type === "shape") {
+      assert.deepEqual(glowOp.effect, {
+        kind: "glow",
+        color: "38BDF8",
+        blurPt: 8,
+      });
+    }
+    for (const [id, routing] of [
+      ["fidelity-straight-connector", "straight"],
+      ["fidelity-elbow-connector", "elbow"],
+      ["fidelity-curved-connector", "curved"],
+    ] as const) {
+      const connectorOp = opsById.get(id);
+      assert.equal(connectorOp?.type, "connector");
+      if (connectorOp?.type === "connector") {
+        assert.equal(connectorOp.routing, routing);
+      }
+    }
+    const resolvedVisualOp = opsById.get("fidelity-resolved-visual");
+    assert.equal(resolvedVisualOp?.type, "visual");
+    if (resolvedVisualOp?.type === "visual") {
+      assert.equal(resolvedVisualOp.assetId, PPTX_FIDELITY_DATA_URI);
+    }
+    const unresolvedVisualOp = opsById.get("fidelity-unresolved-visual");
+    assert.equal(unresolvedVisualOp?.type, "visual");
+    if (unresolvedVisualOp?.type === "visual") {
+      assert.equal(unresolvedVisualOp.assetId, undefined);
+    }
+    assert.ok(
+      pptx.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "missing-asset" &&
+          diagnostic.path === "op(visual:fidelity-unresolved-visual)",
       ),
     );
   });

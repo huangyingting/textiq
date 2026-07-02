@@ -271,28 +271,6 @@ function clickByLabel(tree: ReactNode, label: string): unknown {
   return (props.onClick as () => unknown)();
 }
 
-function clickByLabelPrefix(tree: ReactNode, prefix: string): unknown {
-  const props = findProps(
-    tree,
-    (candidate) =>
-      typeof candidate["aria-label"] === "string" &&
-      candidate["aria-label"].startsWith(prefix),
-  );
-  assert.equal(typeof props.onClick, "function", prefix);
-  return (props.onClick as () => unknown)();
-}
-
-function clickButtonByText(tree: ReactNode, text: string): unknown {
-  const props = findProps(
-    tree,
-    (candidate, element) =>
-      typeof candidate.onClick === "function" &&
-      typeName(element.type) === "button" &&
-      textContent(element).trim() === text,
-  );
-  return (props.onClick as () => unknown)();
-}
-
 function clickPopoverTrigger(tree: ReactNode, popoverLabel: string): unknown {
   const popover = findProps(
     tree,
@@ -591,6 +569,13 @@ function inspectorProps(tree: ReactNode): ElementProps {
   );
 }
 
+function footerProps(tree: ReactNode): ElementProps {
+  return findProps(
+    tree,
+    (_props, element) => typeName(element.type) === "SlideEditorFooter",
+  );
+}
+
 function fileInputProps(tree: ReactNode, index: number): ElementProps {
   return collectElements(tree)
     .map(propsOf)
@@ -656,8 +641,9 @@ test("SlideEditorVNext final coverage drives mobile menus, notes, zoom, and pick
     const harness = createHarness({}, { runEffects: true });
     let tree = harness.render();
 
-    clickByLabel(tree, "Hide slide thumbnails");
-    clickButtonByText(tree, "Notes");
+    let footer = footerProps(tree);
+    (footer.onToggleFilmstripCollapsed as () => void)();
+    (footer.onNotesClick as () => void)();
     tree = harness.render();
     const region = findProps(
       tree,
@@ -672,21 +658,17 @@ test("SlideEditorVNext final coverage drives mobile menus, notes, zoom, and pick
 
     clickByLabel(tree, "Toggle snap to guides");
 
-    clickPopoverTrigger(tree, "Zoom presets");
-    tree = harness.render();
-    driveMenuKeyBranches(panelWithText(tree, "Fit"));
+    footer = footerProps(tree);
+    (footer.onSetZoomMenuOpen as (open: boolean) => void)(true);
+    (footer.onZoomMenuKeyDown as (event: unknown) => void)(keyEvent("Escape"));
 
-    clickPopoverTrigger(tree, "Footer status");
-    tree = harness.render();
-    driveMenuKeyBranches(panelWithText(tree, "Save needs attention"));
-
-    const zoomRange = findProps(
-      tree,
-      (props) => props["aria-label"] === "Slide zoom",
+    footer = footerProps(harness.render());
+    (footer.onSetFooterStatusMenuOpen as (open: boolean) => void)(true);
+    (footer.onFooterStatusMenuKeyDown as (event: unknown) => void)(
+      keyEvent("Escape"),
     );
-    (zoomRange.onChange as (event: unknown) => void)({
-      currentTarget: { value: "125" },
-    });
+
+    (footer.onSetStageZoomPercent as (percent: number) => void)(125);
 
     const toolbar = contextToolbarProps(harness.render());
     (toolbar.onInsertSlide as () => void)();
@@ -753,7 +735,7 @@ test("SlideEditorVNext final coverage drives selected source, diagnostics, file 
     );
     (sourceReview.onRefreshAll as () => void)();
 
-    clickByLabelPrefix(harness.render(), "Open deck diagnostics review");
+    (footerProps(harness.render()).onOpenDiagnosticsReview as () => void)();
     tree = harness.render();
     const review = findProps(
       tree,
