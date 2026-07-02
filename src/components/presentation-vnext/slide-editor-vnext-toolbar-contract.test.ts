@@ -18,6 +18,10 @@ const shellControllerSource = readFileSync(
   new URL("./use-slide-editor-shell-controller.tsx", import.meta.url),
   "utf8",
 );
+const stageGestureControllerSource = readFileSync(
+  new URL("./use-stage-gesture-controller.ts", import.meta.url),
+  "utf8",
+);
 
 describe("SlideEditorVNext toolbar command ownership", () => {
   test("exposes the top command row as a named deck toolbar landmark", () => {
@@ -110,11 +114,13 @@ describe("SlideEditorVNext toolbar command ownership", () => {
 
   test("gates move and resize guide snapping behind snap state", () => {
     assert.equal(
-      source.includes("snapToGuides: snapToGuides && !moveEvent.altKey"),
+      stageGestureControllerSource.includes(
+        "snapToGuides: snapToGuides && !moveEvent.altKey",
+      ),
       true,
     );
     assert.match(
-      source,
+      stageGestureControllerSource,
       /snapToGuides && !moveEvent\.altKey[\s\S]*snapFrameToStageGuides/,
     );
   });
