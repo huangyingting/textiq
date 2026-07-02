@@ -321,6 +321,58 @@ describe("textContentToPptxRuns", () => {
     assert.equal(runs[1].options?.bold, true);
   });
 
+  test("non-list text runs keep existing paragraph break behavior unchanged", () => {
+    const content: TextContent = {
+      paragraphs: [
+        { id: "p1", text: "First" },
+        { id: "p2", text: "Second" },
+      ],
+    };
+
+    assert.deepEqual(textContentToPptxRuns(content), [
+      { text: "First", options: { breakLine: true } },
+      { text: "Second", options: {} },
+    ]);
+  });
+
+  test("bulleted list paragraph maps marker and indent to the first run", () => {
+    const content: TextContent = {
+      paragraphs: [
+        {
+          id: "p1",
+          text: "Bullet item",
+          list: { kind: "bullet", indent: 2 },
+          runs: [{ text: "Bullet " }, { text: "item", bold: true }],
+        },
+      ],
+    };
+    const runs = textContentToPptxRuns(content);
+
+    assert.equal(runs[0].options?.bullet, true);
+    assert.equal(runs[0].options?.indentLevel, 2);
+    assert.equal(runs[1].options?.bullet, undefined);
+    assert.equal(runs[1].options?.indentLevel, undefined);
+  });
+
+  test("numbered list paragraph maps number style and clamps indent", () => {
+    const content: TextContent = {
+      paragraphs: [
+        {
+          id: "p1",
+          text: "Numbered item",
+          list: { kind: "number", numberStyle: "lower-alpha", indent: 12 },
+        },
+      ],
+    };
+    const [run] = textContentToPptxRuns(content);
+
+    assert.deepEqual(run.options?.bullet, {
+      type: "number",
+      style: "alphaLcPeriod",
+    });
+    assert.equal(run.options?.indentLevel, 8);
+  });
+
   test("bold, italic, underline, strikethrough flags are forwarded to run options", () => {
     const content: TextContent = {
       paragraphs: [
@@ -495,6 +547,23 @@ describe("applyVnextTextOp", () => {
     );
     const opts = calls[0].args[1] as Record<string, unknown>;
     assert.equal(opts.strike, true);
+  });
+
+  test("line height and paragraph spacing map to PptxGenJS text options", () => {
+    const { slide, calls } = makeMockSlide();
+    applyVnextTextOp(
+      slide as never,
+      makeTextOp({
+        textStyle: {
+          lineHeightMultiple: 1.3,
+          paragraphSpacePt: 9,
+        },
+      }),
+    );
+    const opts = calls[0].args[1] as Record<string, unknown>;
+
+    assert.equal(opts.lineSpacingMultiple, 1.3);
+    assert.equal(opts.paraSpaceAfter, 9);
   });
 
   test("multi-paragraph content uses run array form", () => {
