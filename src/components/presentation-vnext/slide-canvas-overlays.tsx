@@ -217,7 +217,7 @@ export function SlideCanvasInteractionOverlay({
           aria-hidden="true"
           data-multi-selection-bounds="true"
           data-node-id={selectedUserNodes.map((node) => node.id).join(" ")}
-          className="pointer-events-auto absolute border-2 border-dashed border-ds-accent-fill bg-ds-accent-surface/15 shadow-[0_0_0_1px_var(--ds-accent-border)]"
+          className="pointer-events-auto absolute border-2 border-dashed border-ds-accent-fill bg-ds-accent-surface/15 ring-1 ring-ds-accent-border ring-inset"
           style={{
             left: `${multiSelectionFrame.x}%`,
             top: `${multiSelectionFrame.y}%`,
