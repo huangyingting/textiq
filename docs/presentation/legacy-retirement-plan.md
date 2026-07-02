@@ -1,8 +1,8 @@
 ---
 type: "plan"
-status: "active — legacy surface deletion pending"
+status: "completed"
 last_updated: "2026-07-02"
-description: "Remaining P0 work to remove dynamic legacy presentation references and delete the legacy v6 presentation surface after the full-removal product decision."
+description: "Completed P0 work that removed dynamic legacy presentation references and deleted the legacy v6 presentation surface after the full-removal product decision."
 ---
 
 # Legacy Retirement Plan
@@ -11,38 +11,38 @@ description: "Remaining P0 work to remove dynamic legacy presentation references
 
 **Priority:** P0.
 
-Delete the legacy v6 presentation surface. Product fallback policy is resolved:
-no implicit v6 editor, presenter, public viewer, export, or deck route remains a
-supported mode.
+The legacy v6 presentation surface has been deleted. Product fallback policy is
+resolved: no implicit v6 editor, presenter, public viewer, export, or deck route
+remains a supported mode.
 
-## Remaining Work
+## Completed Work
 
-| Slice                       | Work                                                                                                                                                                  | Exit criteria                                                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| External dynamic references | Remove the remaining non-test references from outside the legacy tree, currently the dynamic v6 export imports in `src/components/editor/document-export-button.tsx`. | The legacy-reference search finds no non-test references outside retained legacy-internal files.                      |
-| Legacy component tree       | Delete or migrate `src/components/presentation/**` files that are not retained as shared non-legacy presentation APIs.                                                | No product route or editor entry point imports the legacy component surface.                                          |
-| Legacy library tree         | Delete or migrate v6-specific `src/lib/presentation/**` modules after any still-current helpers move to owned APIs.                                                   | Legacy deck, command, export, theme, presenter, public-viewer, and fallback contracts are gone or explicitly rehomed. |
-| Test/support cleanup        | Remove legacy-only tests, fixtures, builders, docs, and README references in the same deletion slices.                                                                | Focused presentation, public-render, visual/export, and document-generation checks pass without v6 helpers.           |
+| Slice                       | Work                                                                                                                                                              | Exit criteria                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| External dynamic references | Removed non-test dynamic v6 export imports from outside the legacy tree.                                                                                          | The legacy-reference search finds no non-test references outside current owned modules.                               |
+| Legacy component tree       | Deleted `src/components/presentation/**`; current UI lives under `src/components/presentation-vnext/**` and shared component modules.                             | No product route or editor entry point imports the legacy component surface.                                          |
+| Legacy library tree         | Deleted `src/lib/presentation/**`; current shared helpers were rehomed under document, command, visual, content, comments, presentation-shared, and vNext owners. | Legacy deck, command, export, theme, presenter, public-viewer, and fallback contracts are gone or explicitly rehomed. |
+| Test/support cleanup        | Removed legacy-only tests, fixtures, builders, docs, and README references in the same deletion slice.                                                            | Focused presentation, public-render, visual/export, and document-generation checks pass without v6 helpers.           |
 
 ## Current Counts
 
 - Static production imports from legacy presentation paths outside the legacy
   tree: 0.
-- Broad non-test references outside the legacy tree: 2 references in 1 file.
-- Legacy files still present: 69 under `src/components/presentation/**` and 206
+- Broad non-test references outside the legacy tree: 0.
+- Legacy files still present: 0 under `src/components/presentation/**` and 0
   under `src/lib/presentation/**`.
 
 ## Constraints
 
 - Keep the vNext production import boundary at zero legacy presentation imports.
-- Do not add v6-to-v7 compatibility layers while deleting residuals.
-- Move only current, data-agnostic behavior to explicit non-legacy owners;
-  delete fallback-only behavior with the v6 surface.
+- Do not add v6-to-v7 compatibility layers.
+- Keep current, data-agnostic behavior under explicit non-legacy owners; do not
+  recreate fallback-only behavior.
 
 ## Verification
 
 ```bash
-rg "@/(lib|components)/presentation" src --glob "*.{ts,tsx}" --glob "!**/*.test.*" --glob "!src/components/presentation/**" --glob "!src/lib/presentation/**"
+rg "@/(lib|components)/presentation" src --glob "*.{ts,tsx}" --glob "!**/*.test.*"
 npx prettier --write <touched files>
 npx eslint <touched lintable files>
 npm run test:presentation

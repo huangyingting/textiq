@@ -12,8 +12,8 @@
  * No DOM, no React — fully testable under `node --test`.
  */
 
-import type { Deck, Slide } from "../presentation/deck-core";
-import type { SlideElement } from "../presentation/deck-elements";
+import type { Deck, Slide } from "./deck-kernel/deck-core";
+import type { SlideElement } from "./deck-kernel/deck-elements";
 
 function visualElementId(element: SlideElement): string | undefined {
   return (element as any).content?.visualId;

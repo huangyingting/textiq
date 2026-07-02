@@ -73,6 +73,7 @@ test("source line coverage command excludes tests, generated code, and test supp
     "--test-coverage-exclude=src/**/*.test.tsx",
     "--test-coverage-exclude=src/generated/**",
     "--test-coverage-exclude=src/test/**",
+    "--test-coverage-exclude=src/lib/document/deck-kernel/**",
     "src/**/*.test.ts",
   ]);
 });

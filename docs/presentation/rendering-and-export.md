@@ -152,7 +152,7 @@ surface warnings separately.
 ## Slide Fonts
 
 Slide typography uses self-hosted fonts from the registry in
-[`src/lib/presentation/slide-fonts.ts`](../../src/lib/presentation/slide-fonts.ts),
+[`src/lib/presentation-shared/slide-fonts.ts`](../../src/lib/presentation-shared/slide-fonts.ts),
 served from `public/fonts/slides/` and loaded via
 [`src/app/slide-fonts.css`](../../src/app/slide-fonts.css). This keeps rendering
 deterministic across platforms.

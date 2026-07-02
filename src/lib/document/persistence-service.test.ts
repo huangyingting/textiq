@@ -31,9 +31,9 @@ import {
   sanitizeRestoredDeck,
   updateDocumentSharePolicyData,
 } from "./persistence-service";
-import { LEGACY_DECK_SCHEMA_VERSION } from "../presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
 import { prisma } from "@/lib/prisma";
-import type { DeckPatch } from "../presentation/slide-commands";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import * as persistenceService from "./persistence-service";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
 import { snapshotDocumentVersion } from "./persistence/helpers";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertViewModelSerializable } from "@/lib/view-models/serializable";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../document/deck-kernel/deck";
 
 import { buildDocumentEditorViewModel } from "./view-model";
 

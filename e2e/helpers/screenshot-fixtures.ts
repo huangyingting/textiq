@@ -1,4 +1,4 @@
-import type { Deck } from "@/lib/presentation/deck";
+import type { Deck } from "@/lib/document/deck-model";
 import {
   buildBulletsElement,
   buildConnectorElement,

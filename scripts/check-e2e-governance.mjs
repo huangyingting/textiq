@@ -10,20 +10,6 @@ const OVERSIZED_TEST_ALLOWLIST = new Set([
   // deck-schema.test.ts was split into focused per-concern files (#1147)
 ]);
 const FIXTURE_FACTORY_FILES = new Set([
-  // slide-commands.test.ts and slide-commands-advanced.test.ts were split into
-  // focused per-concern files (#1145); the new split files are tracked below.
-  "src/lib/presentation/slide-commands-commit.test.ts",
-  "src/lib/presentation/slide-commands.background.test.ts",
-  "src/lib/presentation/slide-commands.deck.test.ts",
-  "src/lib/presentation/slide-commands.element.test.ts",
-  "src/lib/presentation/slide-commands.infra.test.ts",
-  "src/lib/presentation/slide-commands.layout.test.ts",
-  "src/lib/presentation/slide-commands.slide.test.ts",
-  // deck-export.test.ts and rendering-regression.test.ts moved to export/ (#1145)
-  "src/lib/presentation/export/deck-export.test.ts",
-  "src/lib/presentation/export/rendering-regression.test.ts",
-  "src/lib/presentation/deck-merge.test.ts",
-  "src/lib/presentation/element-accessible-name.test.ts",
   "e2e/screenshot-regression.spec.ts",
   "e2e/helpers/screenshot-fixtures.ts",
 ]);

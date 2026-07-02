@@ -9,8 +9,7 @@
  *   → updateNodeContent(deck, slideId, nodeId, { paragraphs })
  *
  * The helpers here operate on the v7 schema types (`Paragraph`, `TextRun`,
- * `FramePct`) and are the headless counterpart to the legacy
- * `src/lib/presentation/rich-text-html.ts` DOM functions.
+ * `FramePct`) and are the headless counterpart to the inline editor DOM path.
  */
 
 import type { Paragraph, TextRun } from "./schema";

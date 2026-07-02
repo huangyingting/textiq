@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildDeckSource } from "@/lib/ai/deck-source";
-import { buildDeckFromBlocks } from "@/lib/presentation/deck";
-import { buildPresentationBlocks } from "@/lib/presentation/present-blocks";
+import { buildDeckFromBlocks } from "../document/deck-kernel/deck";
+import { buildPresentationBlocks } from "../document/deck-kernel/present-blocks";
 import type { Visual } from "@/lib/visual/schema";
 import {
   collectDocumentBlocks,

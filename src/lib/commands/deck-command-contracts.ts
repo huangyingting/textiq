@@ -7,26 +7,26 @@ import type {
   SlideMaster,
   MasterElement,
   SlideTemplate,
-} from "../presentation/deck-core";
+} from "../document/deck-kernel/deck-core";
 import type {
   ElementBox,
   SlideElement,
   TextRun,
-} from "../presentation/deck-elements";
-import type { SourceRef } from "../presentation/deck-source-refs";
+} from "../document/deck-kernel/deck-elements";
+import type { SourceRef } from "../document/deck-kernel/deck-source-refs";
 import type {
   DistributiveOmit,
   ElementPatch,
-} from "../presentation/deck-mutation-shared";
-import type { PresentationThemeOverridesPatch } from "../presentation/presentation-theme-overrides";
+} from "../document/deck-kernel/deck-mutation-shared";
+import type { PresentationThemeOverridesPatch } from "../document/deck-kernel/presentation-theme-overrides";
 import type {
   AlignMode,
   DistributeMode,
   MatchSizeMode,
-} from "../presentation/element-align";
-import type { ArrangeMode } from "../presentation/element-arrange";
+} from "../document/deck-kernel/element-align";
+import type { ArrangeMode } from "../document/deck-kernel/element-arrange";
 import type { SlideFormat } from "@/lib/presentation-shared/slide-format";
-import type { SlideTemplateKind } from "../presentation/slide-templates";
+import type { SlideTemplateKind } from "../document/deck-kernel/slide-templates";
 
 export interface AddSlideCommand {
   type: "ADD_SLIDE";

@@ -5,17 +5,17 @@
  * schema-area modules under `deck-validation/`.
  */
 
-import type { Deck } from "../presentation/deck-core";
-import { validateDeck } from "../presentation/deck-validation/core";
-import { DeckValidationError } from "../presentation/deck-validation/shared";
+import type { Deck } from "./deck-kernel/deck-core";
+import { validateDeck } from "./deck-kernel/deck-validation/core";
+import { DeckValidationError } from "./deck-kernel/deck-validation/shared";
 
-export { validateElement } from "../presentation/deck-validation/elements";
+export { validateElement } from "./deck-kernel/deck-validation/elements";
 export {
   validateImageCrop,
   validateImageFitMode,
   validateImageMaskShape,
-} from "../presentation/deck-validation/media";
-export { validateSourceRef } from "../presentation/deck-validation/source-refs";
+} from "./deck-kernel/deck-validation/media";
+export { validateSourceRef } from "./deck-kernel/deck-validation/source-refs";
 
 export type DeckParseResult =
   | { success: true; data: Deck }

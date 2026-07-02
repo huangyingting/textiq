@@ -11,7 +11,7 @@
  */
 
 import { hashDocumentBlock } from "./presentation-shared/document-block-hash";
-import type { SourceRef } from "./presentation/deck";
+import type { SourceRef } from "./document/deck-kernel/deck";
 import type {
   DeckV7,
   SlideChildNode,
@@ -20,7 +20,7 @@ import type {
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
-} from "./presentation/slide-comment-anchors";
+} from "./document/deck-kernel/slide-comment-anchors";
 import type { DocumentBlock } from "./content";
 
 export type AnchorTargetStatus =

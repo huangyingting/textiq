@@ -21,7 +21,7 @@ This document describes comment threads and their document/slide anchors.
 | Unread helpers                | [`src/lib/comments/read-state.ts`](../../src/lib/comments/read-state.ts)                                                 |
 | Inline comments UI            | [`src/app/app/documents/[id]/inline-comments-layer.tsx`](../../src/app/app/documents/%5Bid%5D/inline-comments-layer.tsx) |
 | Inline comment geometry       | [`src/app/app/documents/[id]/inline-comment-dom.ts`](../../src/app/app/documents/%5Bid%5D/inline-comment-dom.ts)         |
-| Slide anchor presentation API | [`src/lib/presentation/slide-comment-anchors.ts`](../../src/lib/presentation/slide-comment-anchors.ts)                   |
+| Slide anchor presentation API | [`src/lib/comments/slide-comment-anchors.ts`](../../src/lib/comments/slide-comment-anchors.ts)                           |
 
 ## Comment Thread Model
 
@@ -103,4 +103,4 @@ Unread helpers compute per-comment/thread read state for slide comment surfaces.
 - [`src/app/app/documents/[id]/slide-comment-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-permissions-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-permissions-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-unread.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-unread.test.ts)
-- [`src/lib/presentation/slide-comment-anchors.test.ts`](../../src/lib/presentation/slide-comment-anchors.test.ts)
+- [`src/lib/comments/anchors.test.ts`](../../src/lib/comments/anchors.test.ts)

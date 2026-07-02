@@ -152,7 +152,7 @@ traverse deterministically, and keep their place after every edit.
   (`src/lib/a11y/a11y-helpers.test.ts`, `element-accessible-name.test.ts`,
   `src/components/presentation-vnext/selection-traversal.test.ts`,
   `src/components/presentation-vnext/slide-canvas-render.test.ts`,
-  `src/lib/presentation/canvas-a11y.test.ts`,
+  `src/lib/presentation-shared/canvas-keyboard-rotate.test.ts`,
   `src/lib/presentation-shared/canvas-shortcut-help.test.ts`,
   `src/components/presentation-vnext/slide-editor-vnext-toolbar-command-surface.failures.test.ts`).
   Broader direct `SlideEditorVNext` keyboard interaction coverage for AC-5 is

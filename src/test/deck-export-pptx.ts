@@ -8,5 +8,5 @@ export {
   applyShapeOp,
   applyTextOp,
   exportDeckAsPPTX,
-} from "../lib/presentation/export/deck-export-pptx";
-export type { DeckSlideSpec } from "../lib/presentation/export/deck-export-pptx";
+} from "../lib/document/deck-kernel/export/deck-export-pptx";
+export type { DeckSlideSpec } from "../lib/document/deck-kernel/export/deck-export-pptx";

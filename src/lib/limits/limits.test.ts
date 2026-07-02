@@ -34,7 +34,7 @@ import {
   runExportPreflight,
 } from "@/lib/visual/export-preflight";
 import { MAX_UPLOAD_BYTES, maxBytesForMime } from "@/lib/import/validate";
-import type { Deck } from "@/lib/presentation/deck";
+import type { Deck } from "../document/deck-kernel/deck";
 
 describe("central limits boundary", () => {
   test("high-traffic validators import the same central hard caps", () => {

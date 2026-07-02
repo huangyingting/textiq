@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { LEGACY_DECK_SCHEMA_VERSION } from "../presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
 import { DECK_SCHEMA_VERSION_V7 } from "@/lib/presentation-vnext/schema";
 import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
