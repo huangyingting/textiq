@@ -29,7 +29,7 @@ import {
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
-} from "@/lib/presentation/slide-comment-anchors";
+} from "@/lib/comments/slide-comment-anchors";
 import type {
   DeckV7,
   SlideChildNode,

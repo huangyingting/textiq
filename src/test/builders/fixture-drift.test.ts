@@ -8,7 +8,7 @@ import {
   validateAnchorGeometry,
 } from "@/lib/comments/anchors";
 import { buildDeckSource } from "@/lib/ai/deck-source";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
+import { safeParseDeck } from "@/lib/document/deck-schema";
 import { openDeckFromJson } from "@/lib/presentation-vnext/open-deck";
 import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
 import { createBlankVisual } from "@/lib/visual/blank";

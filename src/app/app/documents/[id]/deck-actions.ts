@@ -12,7 +12,7 @@ import type {
   SaveDeckPatchResult,
   SaveDeckResult,
 } from "@/lib/document/persistence-types";
-import type { DeckPatch } from "@/lib/presentation/slide-commands";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 
 function fail(
   error: string,

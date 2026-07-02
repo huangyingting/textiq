@@ -39,7 +39,7 @@ import {
   resolveSlideRenderModel,
   type ResolvedElementFill,
 } from "@/lib/presentation/slide-render-model";
-import { slideFontExportFace } from "@/lib/presentation/slide-fonts";
+import { slideFontExportFace } from "@/lib/presentation-shared/slide-fonts";
 import {
   adaptShapeLabelForExport,
   adaptTextElementForExport,

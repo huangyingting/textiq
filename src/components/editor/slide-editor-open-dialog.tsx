@@ -35,7 +35,7 @@ import {
 } from "@/lib/ai/use-deck-generation";
 import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
-import type { ThemePackageId } from "@/lib/presentation/theme-packages";
+import type { ThemePackageId } from "@/lib/presentation-shared/theme-packages";
 
 type DeckLength = NonNullable<DeckGenerationOptions["length"]>;
 

@@ -1,4 +1,4 @@
-import type { SlideCommentAnchor } from "@/lib/presentation/slide-comment-anchors";
+import type { SlideCommentAnchor } from "@/lib/comments/slide-comment-anchors";
 
 export type CommentAnchorType = "text" | "visual" | "table";
 

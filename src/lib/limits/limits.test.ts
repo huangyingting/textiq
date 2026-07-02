@@ -24,7 +24,7 @@ import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
 import {
   MAX_IMAGE_UPLOAD_BYTES,
   TOTAL_IMAGE_BUDGET_BYTES as IMAGE_ELEMENT_BUDGET_BYTES,
-} from "@/lib/presentation/image-element";
+} from "@/lib/visual/image-element";
 import {
   ASSET_MAX_BYTES,
   ASSET_MAX_DIMENSION_PX,

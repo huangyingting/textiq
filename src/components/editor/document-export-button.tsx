@@ -27,7 +27,7 @@ import { ExportWorkflowMessage } from "@/components/visual/export-workflow-chrom
 import { useVisualSvgRegistry } from "@/components/editor/visual-svg-registry";
 import type { DeckFetchPort } from "@/lib/action-ports";
 import { collectDocumentBlocks } from "@/lib/content";
-import { loadSlideFonts } from "@/lib/presentation/slide-font-loading";
+import { loadSlideFonts } from "@/lib/presentation-shared/slide-font-loading";
 import {
   INFOGRAPHIC_WIDTH_PRESETS,
   DEFAULT_INFOGRAPHIC_CONFIG,

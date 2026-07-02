@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import { SlideCanvasVNext } from "@/components/presentation-vnext/slide-canvas";
-import { loadSlideFonts } from "@/lib/presentation/slide-font-loading";
+import { loadSlideFonts } from "@/lib/presentation-shared/slide-font-loading";
 
 import { resolveDeckAssetSource } from "./deck-asset-source";
 import { resolveDeckRenderTree } from "./render-resolver";

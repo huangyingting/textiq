@@ -6,7 +6,7 @@ import {
   duplicateDocumentForUser,
   remapDeckSourceRefs,
 } from "./duplicate";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION } from "../presentation/deck";
 
 const sourceRef = {
   documentId: "source-doc",

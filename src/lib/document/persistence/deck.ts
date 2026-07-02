@@ -9,7 +9,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeDeckWithCas } from "@/lib/document/deck-cas-writer";
 import { logError } from "@/lib/log";
-import type { DeckPatch } from "@/lib/presentation/slide-commands";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type {
   DeckV7,
   SlideChildNode,

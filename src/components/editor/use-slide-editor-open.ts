@@ -22,7 +22,7 @@ import { logInfo } from "@/lib/log";
 import {
   DEFAULT_THEME_PACKAGE_ID,
   type ThemePackageId,
-} from "@/lib/presentation/theme-packages";
+} from "@/lib/presentation-shared/theme-packages";
 import {
   SAVE_STATUS_LABEL,
   resolveSaveErrorMessage,

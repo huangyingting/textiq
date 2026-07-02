@@ -8,7 +8,7 @@ import {
 import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
-import type { ThemePackageId } from "@/lib/presentation/theme-packages";
+import type { ThemePackageId } from "@/lib/presentation-shared/theme-packages";
 import { logInfo } from "@/lib/log";
 
 import type { GenerateDeckPayload } from "./parser";

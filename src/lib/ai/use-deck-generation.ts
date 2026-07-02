@@ -23,7 +23,7 @@ import {
   type DeckGenerateResult,
   type DeckGenerationOptions,
 } from "@/lib/ai/deck-generation-request";
-import type { ThemePackageId } from "@/lib/presentation/theme-packages";
+import type { ThemePackageId } from "@/lib/presentation-shared/theme-packages";
 import { useGenerationStatus } from "@/lib/ai/use-generation-status";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import {

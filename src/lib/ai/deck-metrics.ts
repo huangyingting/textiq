@@ -26,9 +26,9 @@ import {
   normalizeTextParagraphs,
   type Deck,
   type Slide,
-} from "@/lib/presentation/deck";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
-import { diffDecks } from "@/lib/presentation/deck-diff";
+} from "@/lib/document/deck-model";
+import { safeParseDeck } from "@/lib/document/deck-schema";
+import { diffDecks } from "@/lib/document/deck-diff";
 
 /** Quality/shape signals distilled from a deck. Plain, content-free, loggable. */
 export interface DeckMetrics {

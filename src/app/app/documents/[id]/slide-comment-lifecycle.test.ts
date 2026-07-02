@@ -9,7 +9,7 @@ import { test } from "node:test";
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
-} from "@/lib/presentation/slide-comment-anchors";
+} from "@/lib/comments/slide-comment-anchors";
 
 import {
   applyElementDeleteToAnchors,

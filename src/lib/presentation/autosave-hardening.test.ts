@@ -26,9 +26,9 @@ import {
 import {
   generateRevisionToken,
   isRevisionConflict,
-} from "@/lib/presentation/deck-revision-token";
+} from "@/lib/document/deck-revision-token";
 
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
+import { safeParseDeck } from "@/lib/document/deck-schema";
 import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
 
 import {

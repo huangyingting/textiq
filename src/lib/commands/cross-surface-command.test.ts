@@ -31,9 +31,9 @@ import {
   executeCommand,
   type DeckPatch,
   type SlideCommand,
-} from "@/lib/presentation/slide-commands";
+} from "../presentation/slide-commands";
 import { createBlankVisual } from "@/lib/visual/blank";
-import type { Deck } from "@/lib/presentation/deck";
+import type { Deck } from "../presentation/deck";
 import type { Visual } from "@/lib/visual/schema";
 import { makeDeckFromIds } from "@/test/builders/deck";
 import { makeVisualCommand } from "@/test/builders/commands";

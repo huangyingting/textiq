@@ -4,7 +4,7 @@ import type {
   CommentAnchorType,
 } from "@/lib/comments/anchors";
 import type { CommentAuthor, CommentNode, CommentThread } from "@/lib/comments";
-import type { SlideCommentAnchor } from "@/lib/presentation/slide-comment-anchors";
+import type { SlideCommentAnchor } from "@/lib/comments/slide-comment-anchors";
 
 export function buildCommentAuthor(
   overrides: Partial<CommentAuthor> = {},

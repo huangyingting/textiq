@@ -11,8 +11,8 @@ import type {
   SaveDeckResult,
 } from "@/lib/document/persistence-types";
 import type { SearchResults } from "@/lib/document/list";
-import type { Deck } from "@/lib/presentation/deck";
-import type { DeckPatch } from "@/lib/presentation/slide-commands";
+import type { Deck } from "@/lib/document/deck-model";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type { GenerateOptions, GenerateResult } from "@/lib/visual/generate";
 import type { Visual } from "@/lib/visual/schema";
 

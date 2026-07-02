@@ -56,7 +56,7 @@ import type {
 import type { ElementPatch } from "@/lib/presentation/deck-mutations";
 import type { PresentationRole } from "@/lib/presentation/presentation-theme";
 import { detachConnectorEndpoint } from "@/lib/presentation/connector-lifecycle";
-import { isEmptyImageSrc } from "@/lib/presentation/image-element";
+import { isEmptyImageSrc } from "@/lib/visual/image-element";
 import { useImageUpload } from "@/lib/presentation/use-image-upload";
 import type { SlideAssetActionPort } from "@/lib/action-ports";
 import { serializeRichText } from "@/lib/presentation/rich-text-html";
@@ -66,7 +66,7 @@ import {
   FONT_STEP,
   stepFontSize,
 } from "@/lib/presentation/text-style";
-import { SLIDE_FONT_OPTIONS } from "@/lib/presentation/slide-fonts";
+import { SLIDE_FONT_OPTIONS } from "@/lib/presentation-shared/slide-fonts";
 import { ChoiceGroup } from "@/components/ui";
 import {
   connectorContent,
