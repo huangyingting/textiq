@@ -347,3 +347,200 @@ test("requestDeckGeneration rejects legacy deck responses", async () => {
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "other");
 });
+
+test("parseDeckResponse preserves every diagnostic target scope plus optional diagnostic fields", () => {
+  const diagnostics = [
+    {
+      code: "deck",
+      category: "validation",
+      severity: "info",
+      target: { scope: "deck", path: "deck", label: "Deck" },
+      message: "Deck message",
+      path: "$.deck",
+      nodeId: "node-top",
+      slideId: "slide-top",
+      action: { type: "fix" },
+      details: { count: 1 },
+    },
+    {
+      code: "node",
+      category: "validation",
+      severity: "error",
+      target: {
+        scope: "node",
+        nodeId: "node-1",
+        slideId: "slide-1",
+        path: "node",
+        label: "Node",
+      },
+      message: "Node message",
+    },
+    {
+      code: "asset",
+      category: "export",
+      severity: "warning",
+      target: {
+        scope: "asset",
+        assetId: "asset-1",
+        slideId: "slide-1",
+        nodeId: "node-1",
+        path: "asset",
+        label: "Asset",
+      },
+      message: "Asset message",
+    },
+    {
+      code: "source",
+      category: "source",
+      severity: "warning",
+      target: {
+        scope: "source",
+        documentId: "doc-1",
+        blockId: "block-1",
+        slideId: "slide-1",
+        nodeId: "node-1",
+      },
+      message: "Source message",
+    },
+    {
+      code: "style",
+      category: "theme",
+      severity: "warning",
+      target: {
+        scope: "style",
+        styleRef: "role.title",
+        slideId: "slide-1",
+        nodeId: "node-1",
+      },
+      message: "Style message",
+    },
+    {
+      code: "theme",
+      category: "theme",
+      severity: "warning",
+      target: { scope: "theme", themePackageId: "noir", slideId: "slide-1" },
+      message: "Theme message",
+    },
+    {
+      code: "export",
+      category: "export",
+      severity: "fatal",
+      target: {
+        scope: "export",
+        exportFeature: "pptx",
+        slideId: "slide-1",
+        nodeId: "node-1",
+      },
+      message: "Export message",
+    },
+    {
+      code: "bad-target",
+      category: "validation",
+      severity: "info",
+      target: [],
+      message: "Ignored",
+    },
+  ];
+
+  const parsed = parseDeckResponse({ deck: VALID_DECK_V7, diagnostics });
+  assert.ok(parsed);
+  assert.deepEqual(
+    parsed.diagnostics.map((diagnostic) => diagnostic.target.scope),
+    ["deck", "node", "asset", "source", "style", "theme", "export"],
+  );
+  assert.equal(parsed.diagnostics[0].path, "$.deck");
+  assert.equal(parsed.diagnostics[0].nodeId, "node-top");
+  assert.equal(parsed.diagnostics[0].slideId, "slide-top");
+  assert.deepEqual(parsed.diagnostics[0].action, { type: "fix" });
+  assert.deepEqual(parsed.diagnostics[0].details, { count: 1 });
+});
+
+test("parseDeckResponse rejects diagnostics missing required target identifiers", () => {
+  const parsed = parseDeckResponse({
+    deck: VALID_DECK_V7,
+    diagnostics: [
+      {
+        code: "missing-slide",
+        category: "validation",
+        severity: "warning",
+        target: { scope: "slide" },
+        message: "ignored",
+      },
+      {
+        code: "missing-node",
+        category: "validation",
+        severity: "warning",
+        target: { scope: "node" },
+        message: "ignored",
+      },
+      {
+        code: "bad-severity",
+        category: "validation",
+        severity: "loud",
+        target: { scope: "deck" },
+        message: "ignored",
+      },
+      null,
+    ],
+  });
+  assert.ok(parsed);
+  assert.deepEqual(parsed.diagnostics, []);
+});
+
+test("parseDeckResponse ignores non-object selected kind counts and metadata", () => {
+  assert.equal(
+    parseDeckResponse({
+      deck: VALID_DECK_V7,
+      metadata: { selectedKindCounts: [] },
+    })?.metadata,
+    undefined,
+  );
+  assert.equal(
+    parseDeckResponse({ deck: VALID_DECK_V7, metadata: null })?.metadata,
+    undefined,
+  );
+});
+
+test("requestDeckGeneration forwards signal and theme package request and handles JSON parse failures", async () => {
+  const controller = new AbortController();
+  let seenSignal: AbortSignal | undefined;
+  let seenBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    seenSignal = init?.signal ?? undefined;
+    seenBody = JSON.parse(String(init?.body));
+    return {
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("not json");
+      },
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+
+  const result = await requestDeckGeneration(
+    CONTENT_JSON,
+    { mode: "presentationRewrite" },
+    fetchImpl,
+    controller.signal,
+    { themePackageId: "noir" },
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorKind, "other");
+  assert.equal(seenSignal, controller.signal);
+  assert.deepEqual(seenBody, {
+    contentJson: CONTENT_JSON,
+    options: { mode: "presentationRewrite" },
+    themePackageId: "noir",
+  });
+});
+
+test("requestDeckGeneration classifies timeout-named fetch errors as timeout", async () => {
+  const fetchImpl = (async () => {
+    const err = new Error("timeout");
+    err.name = "TimeoutError";
+    throw err;
+  }) as unknown as typeof fetch;
+  const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorKind, "timeout");
+});
