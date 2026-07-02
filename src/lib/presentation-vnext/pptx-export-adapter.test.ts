@@ -772,19 +772,44 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
               style: {
                 table: {
                   headerFill: { type: "solid", color: "#0f172a" },
+                  alternateRowFill: { type: "solid", color: "#e2e8f0" },
                   rowFill: {
                     type: "pattern",
                     kind: "dots",
                     color: "#cbd5e1",
                     background: "#ffffff",
                   },
+                  border: { color: "#334455", widthPt: 1.25 },
+                  cellPaddingPt: {
+                    top: 7.2,
+                    right: 14.4,
+                    bottom: 21.6,
+                    left: 28.8,
+                  },
                   text: { fontFamily: "Arial", fontSizePt: 9 },
                 },
               },
               table: {
                 columns: [{ id: "metric", label: "Metric" }],
-                rows: [{ id: "value-row", cells: [{ text: "42" }] }],
+                rows: [
+                  {
+                    id: "value-row",
+                    cells: [
+                      {
+                        text: "42",
+                        runs: [
+                          {
+                            text: "42",
+                            bold: true,
+                            localStyle: { color: "#22c55e" },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
                 header: true,
+                caption: "Key metric",
               },
               zIndex: 5,
             },
@@ -840,6 +865,11 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
     assert.ok(tableOp);
     assert.equal(tableOp.headerFill, "0F172A");
     assert.equal(tableOp.rowFill, "FFFFFF");
+    assert.equal(tableOp.alternateRowFill, "E2E8F0");
+    assert.deepEqual(tableOp.border, { color: "334455", widthPt: 1.25 });
+    assert.deepEqual(tableOp.cellMargin, [0.1, 0.2, 0.3, 0.4]);
+    assert.equal(tableOp.table.caption, "Key metric");
+    assert.equal(tableOp.table.rows[0].cells[0].runs?.[0]?.bold, true);
     assert.equal(tableOp.textStyle?.fontFace, "Arial");
 
     assert.ok(

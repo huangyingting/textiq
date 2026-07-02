@@ -120,6 +120,13 @@ export type VnextPptxTableOp = {
   table: TableContent;
   headerFill?: string;
   rowFill?: string;
+  alternateRowFill?: string;
+  border?: {
+    color: string;
+    widthPt: number;
+    dash?: "solid" | "dashed" | "dotted";
+  };
+  cellMargin?: [number, number, number, number];
   textStyle?: VnextPptxTextStyle;
   zIndex: number;
 };
