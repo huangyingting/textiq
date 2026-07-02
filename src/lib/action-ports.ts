@@ -15,6 +15,11 @@ import type { Deck } from "@/lib/document/deck-model";
 import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type { GenerateOptions, GenerateResult } from "@/lib/visual/generate";
 import type { Visual } from "@/lib/visual/schema";
+import type {
+  BrandKitDiagnostic,
+  BrandKitDraftV1,
+} from "@/lib/presentation-vnext/brand-kit/schema";
+import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
 
 export interface DeckFetchPort {
   fetchDeckJson: (documentId: string) => Promise<FetchDeckResult>;
@@ -45,6 +50,24 @@ export interface BrandApplyPort {
 }
 
 export type BrandActionPort = BrandListPort & Partial<BrandApplyPort>;
+
+export type SaveBrandKitDraftResult =
+  | {
+      ok: true;
+      draftId: string;
+      packageId: string;
+      packageVersion: string;
+      package: ThemePackageV1;
+      diagnostics: BrandKitDiagnostic[];
+    }
+  | { ok: false; diagnostics: BrandKitDiagnostic[] };
+
+export interface BrandKitSavePort {
+  saveBrandKitDraft: (
+    draft: BrandKitDraftV1,
+    compiledPackage: ThemePackageV1,
+  ) => Promise<SaveBrandKitDraftResult>;
+}
 
 export interface VisualGenerationActionPort {
   requestVisualCandidates: (
