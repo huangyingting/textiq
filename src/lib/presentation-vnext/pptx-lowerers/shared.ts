@@ -168,6 +168,12 @@ export function styleToTextOptions(style: StyleObject): VnextPptxTextStyle {
     ...(text.strikethrough ? { strikethrough: true } : {}),
     ...(text.align ? { align: text.align } : {}),
     ...(text.verticalAlign ? { valign: text.verticalAlign } : {}),
+    ...(text.lineHeight !== undefined
+      ? { lineHeightMultiple: text.lineHeight }
+      : {}),
+    ...(text.paragraphSpacingPt !== undefined
+      ? { paragraphSpacePt: text.paragraphSpacingPt }
+      : {}),
   };
 }
 

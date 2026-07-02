@@ -4,6 +4,40 @@ import type { PptxSlide } from "./shared";
 
 export type PptxTextRun = { text: string; options?: Record<string, unknown> };
 
+const NUMBER_STYLE_TO_PPTX = {
+  decimal: "arabicPeriod",
+  "lower-alpha": "alphaLcPeriod",
+  "upper-alpha": "alphaUcPeriod",
+  "lower-roman": "romanLcPeriod",
+} as const;
+
+function clampIndentLevel(indent: number): number {
+  return Math.max(0, Math.min(8, Math.trunc(indent)));
+}
+
+function applyParagraphOptions(
+  para: Paragraph,
+  runOptions: Record<string, unknown>,
+): void {
+  const { list } = para;
+  if (!list) return;
+
+  if (list.kind === "bullet") {
+    runOptions.bullet = true;
+  } else {
+    runOptions.bullet = {
+      type: "number",
+      ...(list.numberStyle !== undefined
+        ? { style: NUMBER_STYLE_TO_PPTX[list.numberStyle] }
+        : {}),
+    };
+  }
+
+  if (list.indent !== undefined) {
+    runOptions.indentLevel = clampIndentLevel(list.indent);
+  }
+}
+
 /**
  * Converts a v7 `TextContent` into PptxGenJS text runs.
  * Each paragraph maps to one or more runs; paragraphs are separated by
@@ -22,6 +56,7 @@ export function textContentToPptxRuns(content: TextContent): PptxTextRun[] {
         const run = para.runs[j];
         const isLastRunInPara = j === para.runs.length - 1;
         const runOptions: Record<string, unknown> = {};
+        if (j === 0) applyParagraphOptions(para, runOptions);
         if (run.bold) runOptions.bold = true;
         if (run.italic) runOptions.italic = true;
         if (run.underline) runOptions.underline = { style: "sng" };
@@ -44,6 +79,7 @@ export function textContentToPptxRuns(content: TextContent): PptxTextRun[] {
       }
     } else {
       const runOptions: Record<string, unknown> = {};
+      applyParagraphOptions(para, runOptions);
       if (!isLastPara) runOptions.breakLine = true;
       runs.push({ text: para.text, options: runOptions });
     }
@@ -73,6 +109,12 @@ export function applyVnextTextOp(slide: PptxSlide, op: VnextPptxTextOp): void {
     ...(textStyle.strikethrough ? { strike: true } : {}),
     ...(textStyle.align ? { align: textStyle.align } : {}),
     ...(textStyle.valign ? { valign: textStyle.valign } : {}),
+    ...(textStyle.lineHeightMultiple !== undefined
+      ? { lineSpacingMultiple: textStyle.lineHeightMultiple }
+      : {}),
+    ...(textStyle.paragraphSpacePt !== undefined
+      ? { paraSpaceAfter: textStyle.paragraphSpacePt }
+      : {}),
     ...(rotation !== undefined ? { rotate: rotation } : {}),
   };
 

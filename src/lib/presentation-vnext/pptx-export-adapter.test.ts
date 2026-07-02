@@ -698,6 +698,8 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
                   strikethrough: true,
                   align: "center",
                   verticalAlign: "bottom",
+                  lineHeight: 1.35,
+                  paragraphSpacingPt: 8,
                 },
                 effect: { kind: "blur", radiusPt: 3 },
               },
@@ -808,6 +810,8 @@ describe("buildVnextPptxSpec — direct operation conversion", () => {
     assert.equal(textOp.textStyle.strikethrough, true);
     assert.equal(textOp.textStyle.align, "center");
     assert.equal(textOp.textStyle.valign, "bottom");
+    assert.equal(textOp.textStyle.lineHeightMultiple, 1.35);
+    assert.equal(textOp.textStyle.paragraphSpacePt, 8);
     assert.ok(Object.hasOwn(textOp.textStyle, "color"));
 
     const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
@@ -896,6 +900,8 @@ describe("buildVnextPptxSpec — direct operation conversion edge cases", () => 
                   underline: true,
                   align: "center",
                   verticalAlign: "bottom",
+                  lineHeight: 1.4,
+                  paragraphSpacingPt: 10,
                 },
                 effect: { kind: "blur", radiusPt: 4 },
               },
@@ -1021,6 +1027,8 @@ describe("buildVnextPptxSpec — direct operation conversion edge cases", () => 
         underline: true,
         align: "center",
         valign: "bottom",
+        lineHeightMultiple: 1.4,
+        paragraphSpacePt: 10,
       });
       assert.equal(textOp.rotation, 5);
     }

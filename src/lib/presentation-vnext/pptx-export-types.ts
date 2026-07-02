@@ -20,6 +20,8 @@ export type VnextPptxTextStyle = {
   strikethrough?: boolean;
   align?: "left" | "center" | "right";
   valign?: "top" | "middle" | "bottom";
+  lineHeightMultiple?: number;
+  paragraphSpacePt?: number;
 };
 
 export type VnextPptxBackgroundOp = {
