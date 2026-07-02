@@ -24,6 +24,13 @@ export type VnextPptxTextStyle = {
   paragraphSpacePt?: number;
 };
 
+export type VnextPptxEffect = {
+  kind: "glow";
+  color: string;
+  blurPt: number;
+  opacity?: number;
+};
+
 export type VnextPptxBackgroundOp = {
   type: "background";
   fill?: string;
@@ -45,6 +52,7 @@ export type VnextPptxTextOp = {
   h: number;
   content: TextContent;
   textStyle: VnextPptxTextStyle;
+  effect?: VnextPptxEffect;
   rotation?: number;
   zIndex: number;
 };
@@ -59,6 +67,7 @@ export type VnextPptxShapeOp = {
   h: number;
   fill?: string | VnextPptxImageFill;
   stroke?: { color: string; widthPt: number };
+  effect?: VnextPptxEffect;
   rotation?: number;
   zIndex: number;
 };
@@ -74,6 +83,7 @@ export type VnextPptxImageOp = {
   fit?: ImageFitMode;
   crop?: ImageCrop;
   alt?: string;
+  effect?: VnextPptxEffect;
   rotation?: number;
   zIndex: number;
 };
@@ -110,6 +120,7 @@ export type VnextPptxVisualOp = {
   channelColors?: ResolvedVisualChannelColors;
   transparentBackground?: boolean;
   alt?: string;
+  effect?: VnextPptxEffect;
   rotation?: number;
   fill?: string;
   stroke?: { color: string; widthPt: number };

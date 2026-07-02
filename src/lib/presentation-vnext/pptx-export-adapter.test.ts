@@ -333,14 +333,53 @@ describe("buildVnextPptxSpec — diagnostics", () => {
     );
   });
 
-  test("glass effect emits unsupported-export-feature diagnostic", () => {
+  test("glass effect on a simple shape uses image-retry fallback", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "effects",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "shape",
+              id: "glass-shape",
+              shape: "rect",
+              frame: { x: 96, y: 54, w: 192, h: 108 },
+              style: {
+                fill: { type: "solid", color: "#ffffff" },
+                effect: { kind: "glass", intensity: "medium" },
+              },
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
+    assert.ok(shapeOp);
+    assert.equal(typeof shapeOp.fill, "object");
+    assert.ok(
+      typeof shapeOp.fill === "object" &&
+        shapeOp.fill.assetId.startsWith("data:image/svg+xml;base64,"),
+    );
+    assert.ok(
+      pptx.diagnostics.some((d) =>
+        d.message.includes("uses image-retry fallback"),
+      ),
+      "Expected diagnostic naming image-retry fallback",
+    );
+  });
+
+  test("blur effect without node raster path emits deterministic diagnostic", () => {
     const pkgWithGlass = buildMinimalThemePackage("glass-pkg", {
       styles: {
         ...buildMinimalThemePackage().styles,
         "text.title": {
           default: {
             text: { fontSizePt: 36, color: "#111111" },
-            effect: { kind: "glass" as const, intensity: "medium" as const },
+            effect: { kind: "blur" as const, radiusPt: 3 },
           },
         },
       },
@@ -350,13 +389,52 @@ describe("buildVnextPptxSpec — diagnostics", () => {
     const renderTree = resolveDeckRenderTree(deck, pkgWithGlass);
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
-    const glassDiags = pptx.diagnostics.filter(
+    const blurDiags = pptx.diagnostics.filter(
       (d) => d.code === "unsupported-export-feature",
     );
     assert.ok(
-      glassDiags.length > 0,
-      "Expected unsupported-export-feature diagnostic for glass effect",
+      blurDiags.some((d) => d.message.includes("no node raster asset")),
+      "Expected unsupported-export-feature diagnostic for blur fallback",
     );
+  });
+
+  test("simple glow maps to native PPTX effect metadata", () => {
+    const pptx = buildVnextPptxSpec({
+      canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+      diagnostics: [],
+      slides: [
+        {
+          id: "effects",
+          background: { type: "background" },
+          operations: [
+            {
+              type: "shape",
+              id: "glow-shape",
+              shape: "rect",
+              frame: { x: 96, y: 54, w: 192, h: 108 },
+              style: {
+                fill: { type: "solid", color: "#111111" },
+                effect: {
+                  kind: "glow",
+                  color: "#66ccff",
+                  blurPt: 8,
+                  opacity: 0.5,
+                },
+              },
+              zIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const shapeOp = pptx.slides[0].ops.find((op) => op.type === "shape");
+    assert.ok(shapeOp);
+    assert.deepEqual(shapeOp.effect, {
+      kind: "glow",
+      color: "66CCFF",
+      blurPt: 8,
+      opacity: 0.5,
+    });
   });
 
   test("carry-forward diagnostics from ExportDeckSpec are preserved", () => {
@@ -660,7 +738,7 @@ describe("buildVnextPptxSpec — connector operation fidelity", () => {
     assert.equal(connectorOp.endArrow, "arrow");
   });
 
-  test("curved connector routing emits unsupported-export-feature diagnostic", () => {
+  test("simple curved connector routing preserves native curved geometry", () => {
     resetBuilderCounter();
     const deck = buildDeckV7([
       buildSlideV7("process", [
@@ -683,6 +761,48 @@ describe("buildVnextPptxSpec — connector operation fidelity", () => {
     const renderTree = resolveDeckRenderTree(deck, pkg);
     const exportSpec = buildExportSpec(renderTree);
     const pptx = buildVnextPptxSpec(exportSpec);
+    const connectorOp = pptx.slides[0].ops.find(
+      (op) => op.type === "connector",
+    );
+    assert.ok(connectorOp);
+    assert.equal(connectorOp.routing, "curved");
+    assert.ok(
+      !pptx.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "unsupported-export-feature" &&
+          diagnostic.path === "op(connector:connector-node).routing",
+      ),
+    );
+  });
+
+  test("unsupported curved connector falls back editable with diagnostic", () => {
+    resetBuilderCounter();
+    const deck = buildDeckV7([
+      buildSlideV7("process", [
+        buildConnectorNode({
+          content: {
+            from: { kind: "node", nodeId: "shape-a", anchor: "right" },
+            to: { kind: "point", point: { x: 100, y: 50 } },
+            routing: "curved",
+          },
+          localStyle: {
+            connector: {
+              stroke: { color: "#ff0000", widthPt: 2 },
+              routing: "curved",
+            },
+          },
+        }),
+      ]),
+    ]);
+    const pkg = buildMinimalThemePackage();
+    const renderTree = resolveDeckRenderTree(deck, pkg);
+    const exportSpec = buildExportSpec(renderTree);
+    const pptx = buildVnextPptxSpec(exportSpec);
+    const connectorOp = pptx.slides[0].ops.find(
+      (op) => op.type === "connector",
+    );
+    assert.ok(connectorOp);
+    assert.equal(connectorOp.routing, "straight");
     assert.ok(
       pptx.diagnostics.some(
         (diagnostic) =>

@@ -13,8 +13,8 @@
  *   to override.
  * - Gradient, pattern, and image fills use image-retry fallback metadata when
  *   PptxGenJS has no native fill representation.
- * - Effect styles (glass, blur, glow) emit unsupported-export-feature
- *   diagnostics; the shape still renders with a solid fill fallback.
+ * - Shape glass/blur effects use image-retry fallback when safe; simple glow
+ *   maps to native shadow metadata; unsupported effect placements diagnose.
  * - This module has no browser or PptxGenJS dependencies.
  */
 
@@ -38,6 +38,7 @@ export type {
   VnextPptxBackgroundOp,
   VnextPptxConnectorOp,
   VnextPptxDeckSpec,
+  VnextPptxEffect,
   VnextPptxImageFill,
   VnextPptxImageOp,
   VnextPptxLayout,
@@ -97,7 +98,8 @@ function convertSlide(
  *   PPTX inches derived from the canvas format.
  * - Gradient / pattern / image fills use image-retry fallback metadata when
  *   PptxGenJS has no native fill representation.
- * - Glass/blur/glow effects emit `unsupported-export-feature` diagnostics.
+ * - Glass/blur/glow effects use native or image-retry paths where faithful;
+ *   unsupported placements emit `unsupported-export-feature` diagnostics.
  * - Carry-forward diagnostics from the `ExportDeckSpec` are preserved.
  */
 export function buildVnextPptxSpec(

@@ -1,6 +1,12 @@
 import type { ExportVisualOperation } from "../export-spec-types";
 import type { VnextPptxVisualOp } from "../pptx-export-types";
-import { checkEffect, fillToHex, frameToInches, resolveColor } from "./shared";
+import {
+  checkEffect,
+  effectToNativeGlow,
+  fillToHex,
+  frameToInches,
+  resolveColor,
+} from "./shared";
 import type { PptxLowererContext } from "./shared";
 
 function checkVisualStyle(
@@ -37,6 +43,11 @@ export function lowerVisualOpToPptx(
 ): VnextPptxVisualOp {
   const frame = frameToInches(op.frame, ctx);
   checkEffect(op.style, ctx.dc, `op(visual:${op.id})`);
+  const effect = effectToNativeGlow(
+    op.style.effect,
+    ctx.dc,
+    `op(visual:${op.id})`,
+  );
   checkVisualStyle(op, ctx);
   const fill = fillToHex(op.style.fill, ctx.dc, `op(visual:${op.id}).fill`);
   const stroke = op.style.stroke
@@ -76,6 +87,7 @@ export function lowerVisualOpToPptx(
       ? { transparentBackground: op.transparentBackground }
       : {}),
     ...(op.alt !== undefined ? { alt: op.alt } : {}),
+    ...(effect !== undefined ? { effect } : {}),
     ...(op.rotation !== undefined ? { rotation: op.rotation } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(stroke !== undefined ? { stroke } : {}),

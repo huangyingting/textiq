@@ -1,6 +1,6 @@
 import type { Paragraph, TextContent } from "../schema";
 import type { VnextPptxTextOp } from "../pptx-export-adapter";
-import type { PptxSlide } from "./shared";
+import { effectToPptxShadow, type PptxSlide } from "./shared";
 
 export type PptxTextRun = { text: string; options?: Record<string, unknown> };
 
@@ -90,6 +90,7 @@ export function textContentToPptxRuns(content: TextContent): PptxTextRun[] {
 export function applyVnextTextOp(slide: PptxSlide, op: VnextPptxTextOp): void {
   const { x, y, w, h, content, textStyle, rotation } = op;
   const runs = textContentToPptxRuns(content);
+  const shadow = effectToPptxShadow(op.effect);
   const shared: Record<string, unknown> = {
     x,
     y,
@@ -116,6 +117,7 @@ export function applyVnextTextOp(slide: PptxSlide, op: VnextPptxTextOp): void {
       ? { paraSpaceAfter: textStyle.paragraphSpacePt }
       : {}),
     ...(rotation !== undefined ? { rotate: rotation } : {}),
+    ...(shadow !== undefined ? { shadow } : {}),
   };
 
   if (runs.length === 1 && Object.keys(runs[0].options ?? {}).length === 0) {
