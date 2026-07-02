@@ -74,6 +74,7 @@ progress.txt
 .squad/sessions/
 .squad/.scratch/
 .squad/.cache/
+.squad/*.log
 
 # Repo-local test scratch files
 .tmp/

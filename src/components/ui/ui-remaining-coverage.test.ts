@@ -263,6 +263,7 @@ function withFakeReact<T>(
     useMemo: React.useMemo,
     useRef: React.useRef,
     useState: React.useState,
+    useSyncExternalStore: React.useSyncExternalStore,
   };
   let stateIndex = 0;
   let refIndex = 0;
@@ -302,6 +303,10 @@ function withFakeReact<T>(
         setters.push(typeof next === "function" ? next(value) : next);
       return [value, setter];
     },
+    useSyncExternalStore: (
+      _subscribe: unknown,
+      getSnapshot: () => unknown,
+    ): unknown => getSnapshot(),
   });
   try {
     return callback(setters);
