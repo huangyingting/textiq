@@ -663,6 +663,19 @@ function EffectsPanel({
                 onUpdateLocalStyle({ effect: { ...effect, blurPt: value } })
               }
             />
+            <div className="col-span-2">
+              <RangeField
+                label="Glow opacity"
+                value={effect.opacity ?? 0.35}
+                min={0}
+                max={1}
+                step={0.05}
+                display={(value) => `${Math.round(value * 100)}%`}
+                onChange={(value) =>
+                  onUpdateLocalStyle({ effect: { ...effect, opacity: value } })
+                }
+              />
+            </div>
           </div>
         ) : null}
         <label className="flex items-center gap-2 text-xs text-ds-text-secondary">
@@ -772,6 +785,30 @@ function EffectsPanel({
                 className="h-8 rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface"
               />
             </label>
+            <div className="col-span-2">
+              <RangeField
+                label="Shadow opacity"
+                value={shadow?.opacity ?? 0.18}
+                min={0}
+                max={1}
+                step={0.05}
+                display={(value) => `${Math.round(value * 100)}%`}
+                onChange={(value) =>
+                  onUpdateLocalStyle({
+                    shadow: {
+                      xPt: shadow?.xPt ?? 0,
+                      yPt: shadow?.yPt ?? 8,
+                      blurPt: shadow?.blurPt ?? 18,
+                      color:
+                        typeof shadow?.color === "string"
+                          ? shadow.color
+                          : "#000000",
+                      opacity: value,
+                    },
+                  })
+                }
+              />
+            </div>
           </div>
         ) : null}
         <button

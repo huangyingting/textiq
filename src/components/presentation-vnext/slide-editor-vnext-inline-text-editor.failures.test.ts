@@ -9,6 +9,7 @@ import {
   buildSlideV7,
   buildTextNode,
 } from "@/test/builders/deck-v7";
+import { InlineTextEditorVNext } from "./inline-text-editor";
 import { SlideCanvasVNext } from "./slide-canvas";
 import { SlideEditorVNext } from "./slide-editor-vnext";
 import {
@@ -40,7 +41,6 @@ describe("SlideEditorVNext inline text editor failures", () => {
           { id: "slide-inline-hover", name: "Slide 1" },
         ),
       ]);
-
       const renderTree = () =>
         hookRenderer.run(() =>
           SlideEditorVNext({
@@ -497,6 +497,143 @@ describe("SlideEditorVNext inline text editor failures", () => {
         }
 
         assert.equal(blurCalls, 1);
+      }),
+    );
+  });
+
+  test("dragging the selected frame while inline editing moves the editor overlay with the frame", () => {
+    withMockHTMLElement((createElement) =>
+      withPointerWindow((listeners) => {
+        const hookRenderer = createHookRenderer();
+        const currentDeck = buildDeckV7([
+          buildSlideV7(
+            "content",
+            [
+              buildTextNode({
+                id: "edit-drag-frame",
+                layout: { frame: { x: 20, y: 20, w: 30, h: 12 }, zIndex: 1 },
+              }),
+            ],
+            { id: "slide-inline-frame-drag", name: "Slide 1" },
+          ),
+        ]);
+        const renderTree = () =>
+          hookRenderer.run(() =>
+            SlideEditorVNext({
+              documentId: "doc-inline-frame-drag",
+              deck: currentDeck,
+              onDeckChange: () => undefined,
+            }),
+          );
+        const stageCanvasFrom = (root: ReactNode) =>
+          findRequiredElement(
+            root,
+            (element) => element.type === SlideCanvasVNext,
+            "Expected stage canvas to render.",
+          );
+        const mountCanvasFrame = (root: ReactNode) => {
+          const slideCanvasElement = createElement({
+            rect: { left: 0, top: 0, width: 1000, height: 1000 },
+          });
+          const frameElement = createElement({
+            rect: { left: 0, top: 0, width: 1000, height: 1000 },
+            queryMap: {
+              '[data-slide-canvas-vnext="true"]': slideCanvasElement,
+            },
+          });
+          const frame = findRequiredElement(
+            root,
+            (element) =>
+              element.type === "div" &&
+              (element.props as { "data-slide-stage-frame"?: string })[
+                "data-slide-stage-frame"
+              ] === "true" &&
+              typeof (element.props as { ref?: unknown }).ref === "function",
+            "Expected mounted stage frame ref.",
+          );
+          (
+            frame.props as { ref: (element: HTMLDivElement | null) => void }
+          ).ref(frameElement as HTMLDivElement);
+        };
+        const pointerDownFrom = (root: ReactNode) =>
+          (
+            stageCanvasFrom(root).props as {
+              onNodePointerDown?: (
+                nodeId: string,
+                event: React.PointerEvent,
+              ) => void;
+            }
+          ).onNodePointerDown;
+        const inlineEditorFrameFrom = (root: ReactNode) =>
+          (
+            findRequiredElement(
+              root,
+              (element) => element.type === InlineTextEditorVNext,
+              "Expected inline editor to render.",
+            ).props as unknown as Parameters<typeof InlineTextEditorVNext>[0]
+          ).frame;
+        const pointerEvent = (clientX: number, clientY: number) => {
+          const canvasElement = createElement({
+            rect: { left: 0, top: 0, width: 1000, height: 1000 },
+          });
+          const currentTarget = createElement({
+            closestMap: {
+              '[data-slide-canvas-vnext="true"]': canvasElement,
+            },
+          });
+          return {
+            button: 0,
+            pointerId: 1,
+            clientX,
+            clientY,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          } as unknown as React.PointerEvent;
+        };
+
+        let tree = renderTree();
+        focusNode(tree, "edit-drag-frame");
+        tree = renderTree();
+        const enterEditPointerDown = pointerDownFrom(tree);
+        assert.ok(enterEditPointerDown);
+        enterEditPointerDown("edit-drag-frame", pointerEvent(220, 220));
+        listeners.get("pointerup")?.({
+          clientX: 220,
+          clientY: 220,
+        } as PointerEvent);
+
+        tree = renderTree();
+        mountCanvasFrame(tree);
+        tree = renderTree();
+        assert.deepEqual(inlineEditorFrameFrom(tree), {
+          x: 20,
+          y: 20,
+          w: 30,
+          h: 12,
+        });
+
+        const dragPointerDown = pointerDownFrom(tree);
+        assert.ok(dragPointerDown);
+        dragPointerDown("edit-drag-frame", pointerEvent(220, 220));
+        listeners.get("pointermove")?.({
+          clientX: 280,
+          clientY: 250,
+          shiftKey: false,
+          altKey: false,
+        } as PointerEvent);
+
+        tree = renderTree();
+        const dragFrame = inlineEditorFrameFrom(tree);
+        assert.ok(
+          dragFrame.x > 20 && dragFrame.y > 20,
+          "Expected inline editor frame to follow drag preview.",
+        );
       }),
     );
   });

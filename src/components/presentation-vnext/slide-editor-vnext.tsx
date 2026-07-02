@@ -194,6 +194,12 @@ import {
   buildZOrderSelectionOperations,
   collectSelectedLayoutEntries,
 } from "./arrangement-geometry";
+import {
+  multiSelectionBounds,
+  rotateMultiSelectionFrames,
+  scaleMultiSelectionFrames,
+  type MultiSelectionTransformEntry,
+} from "./multi-selection-transform";
 
 import {
   SlideCanvasVNext,
@@ -2867,6 +2873,7 @@ export function SlideEditorVNext({
         if (!preview) return;
         if (!dragThresholdPassed) {
           dragThresholdPassed = true;
+          setHoveredNodeId(null);
           setDraggingStage(true);
         }
         gesture.update(preview);
@@ -2904,6 +2911,7 @@ export function SlideEditorVNext({
             }),
           );
         }
+        setHoveredNodeId(null);
         setDraggingStage(false);
       },
     });
@@ -2968,6 +2976,179 @@ export function SlideEditorVNext({
         gesture.finish();
         setActiveResizeHandle(null);
         setStageGuides([]);
+      },
+    });
+  }
+
+  function selectedTransformEntries(): MultiSelectionTransformEntry[] {
+    if (!activeSlide) return [];
+    const selected = topLevelSelectedNodeIds(
+      activeSlide.children,
+      new Set(selectedIds),
+    );
+    return selected.flatMap((nodeId) => {
+      const node = findNodeById(activeSlide.children, nodeId);
+      if (!node?.layout || node.locked) return [];
+      return [
+        {
+          id: node.id,
+          frame: node.layout.frame,
+          rotation: node.layout.rotation,
+        },
+      ];
+    });
+  }
+
+  function handleMultiResizeHandlePointerDown(
+    handle: ResizeHandlePosition,
+    event: ReactPointerEvent,
+  ) {
+    if (!activeSlide || event.button !== 0) return;
+    const entries = selectedTransformEntries();
+    if (entries.length < 2) return;
+    const startBounds = multiSelectionBounds(entries);
+    const rect = canvasRectFromEvent(event);
+    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+    const selectedSet = new Set(entries.map((entry) => entry.id));
+    const alignmentGuides = alignmentGuidesForFrames(
+      layoutFramesExcluding(activeSlide.children, selectedSet),
+    );
+    const gesture = createSingleCommitGesture<NodeMovePreview>({
+      initialValue: { patches: new Map(), guides: [] },
+      equals: nodeMovePreviewsEqual,
+      onPreview: (preview) => {
+        setMoveGestureDraft(nodeMoveGestureDrafts(preview));
+        setStageGuides(preview?.guides ?? []);
+      },
+      onCommit: (preview) =>
+        onDeckChange(updateNodeLayouts(deck, activeSlide.id, preview.patches)),
+    });
+
+    startPointerDragLifecycle(event, {
+      onMove: (moveEvent) => {
+        if (
+          !dragging &&
+          pointerMovedBeyondThreshold({
+            startX,
+            startY,
+            nextX: moveEvent.clientX,
+            nextY: moveEvent.clientY,
+            thresholdPx: CLICK_MOVE_THRESHOLD_PX,
+          })
+        ) {
+          dragging = true;
+          setHoveredNodeId(null);
+          setDraggingStage(true);
+        }
+        if (!dragging) return;
+        const deltaX = ((moveEvent.clientX - startX) / rect.width) * 100;
+        const deltaY = ((moveEvent.clientY - startY) / rect.height) * 100;
+        const rawBounds = resizeFrame(startBounds, handle, deltaX, deltaY);
+        const nextBounds = moveEvent.shiftKey
+          ? applyAspectLock(startBounds, rawBounds)
+          : rawBounds;
+        const snapped =
+          snapToGuides && !moveEvent.altKey
+            ? snapFrameToStageGuides(nextBounds, 0.75, alignmentGuides)
+            : { frame: nextBounds, guides: [] as StageGuide[] };
+        gesture.update({
+          patches: scaleMultiSelectionFrames(
+            entries,
+            startBounds,
+            snapped.frame,
+          ),
+          guides: snapped.guides,
+        });
+      },
+      onEnd: () => {
+        gesture.finish();
+        setMoveGestureDraft(null);
+        setStageGuides([]);
+        setDraggingStage(false);
+      },
+    });
+  }
+
+  function handleMultiRotationHandlePointerDown(event: ReactPointerEvent) {
+    if (!activeSlide || event.button !== 0) return;
+    const entries = selectedTransformEntries();
+    if (entries.length < 2) return;
+    const startBounds = multiSelectionBounds(entries);
+    const rect = canvasRectFromEvent(event);
+    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
+    const centerPct = {
+      x: startBounds.x + startBounds.w / 2,
+      y: startBounds.y + startBounds.h / 2,
+    };
+    const center = {
+      x: rect.left + (centerPct.x / 100) * rect.width,
+      y: rect.top + (centerPct.y / 100) * rect.height,
+    };
+    const startAngle =
+      (Math.atan2(event.clientY - center.y, event.clientX - center.x) * 180) /
+      Math.PI;
+    let dragging = false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const gesture = createSingleCommitGesture<NodeMovePreview>({
+      initialValue: { patches: new Map(), guides: [] },
+      equals: nodeMovePreviewsEqual,
+      onPreview: (preview) =>
+        setMoveGestureDraft(nodeMoveGestureDrafts(preview)),
+      onCommit: (preview) =>
+        onDeckChange(updateNodeLayouts(deck, activeSlide.id, preview.patches)),
+    });
+
+    startPointerDragLifecycle(event, {
+      onMove: (moveEvent) => {
+        if (
+          !dragging &&
+          pointerMovedBeyondThreshold({
+            startX: event.clientX,
+            startY: event.clientY,
+            nextX: moveEvent.clientX,
+            nextY: moveEvent.clientY,
+            thresholdPx: CLICK_MOVE_THRESHOLD_PX,
+          })
+        ) {
+          dragging = true;
+          setHoveredNodeId(null);
+          setDraggingStage(true);
+        }
+        if (!dragging) return;
+        const angle =
+          (Math.atan2(
+            moveEvent.clientY - center.y,
+            moveEvent.clientX - center.x,
+          ) *
+            180) /
+          Math.PI;
+        const delta = snapRotationDegrees(
+          angle - startAngle,
+          !moveEvent.altKey,
+        );
+        gesture.update({
+          patches: rotateMultiSelectionFrames(
+            entries,
+            centerPct.x,
+            centerPct.y,
+            delta,
+          ),
+          guides: [],
+        });
+        setStageAnnouncement(`Rotated selection ${Math.round(delta)} degrees`);
+      },
+      onEnd: () => {
+        gesture.finish();
+        setMoveGestureDraft(null);
+        setDraggingStage(false);
       },
     });
   }
@@ -4776,6 +4957,12 @@ export function SlideEditorVNext({
                     onNodePointerDown={handleNodePointerDown}
                     onNodeFocus={handleNodeFocus}
                     onResizeHandlePointerDown={handleResizeHandlePointerDown}
+                    onMultiResizeHandlePointerDown={
+                      handleMultiResizeHandlePointerDown
+                    }
+                    onMultiRotationHandlePointerDown={
+                      handleMultiRotationHandlePointerDown
+                    }
                     onCropHandlePointerDown={handleCropHandlePointerDown}
                     onRotationHandlePointerDown={
                       handleRotationHandlePointerDown
@@ -4789,6 +4976,7 @@ export function SlideEditorVNext({
                     activeRotationNodeId={activeRotationNodeId}
                     activeConnectorEndpoint={activeConnectorEndpoint}
                     activeGroupId={activeGroupId}
+                    draggingStage={draggingStage}
                     tableEditingNodeId={tableEditingNodeId}
                     activeTableCell={activeTableCell}
                     onTableCellFocus={handleTableCellFocus}
@@ -4836,11 +5024,14 @@ export function SlideEditorVNext({
                       const resolvedEditNode = activeSlideTree.nodes.find(
                         (node) => node.id === inlineEditNodeId,
                       );
+                      const inlineEditFrame =
+                        stageNodeGestureDrafts?.get(inlineEditNodeId)?.frame ??
+                        editNode.layout.frame;
                       return (
                         <InlineTextEditorVNext
                           nodeId={inlineEditNodeId}
                           initialParagraphs={paragraphs}
-                          frame={editNode.layout.frame}
+                          frame={inlineEditFrame}
                           canvasRect={canvasRect}
                           textStyle={resolveNodeFontCss(
                             resolvedEditNode?.style,

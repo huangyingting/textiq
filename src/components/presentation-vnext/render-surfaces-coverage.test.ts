@@ -370,8 +370,14 @@ describe("presentation render element surfaces", () => {
   });
 
   test("renders slide canvas selection, image background, gesture drafts, and preview suppression", () => {
-    const selection = setSelection(createSelectionState("normal"), [
+    const multiSelection = setSelection(createSelectionState("normal"), [
       "image-node",
+      "connector-node",
+    ]);
+    const imageSelection = setSelection(createSelectionState("normal"), [
+      "image-node",
+    ]);
+    const connectorSelection = setSelection(createSelectionState("normal"), [
       "connector-node",
     ]);
     const draftMap = new Map([
@@ -426,7 +432,7 @@ describe("presentation render element surfaces", () => {
     const html = renderToStaticMarkup(
       createElement(SlideCanvasVNext, {
         slide,
-        selection,
+        selection: imageSelection,
         assetResolver: (assetId) => `https://assets.example/${assetId}.png`,
         nodeGestureDrafts: draftMap,
         focusedNodeId: "image-node",
@@ -440,10 +446,20 @@ describe("presentation render element surfaces", () => {
         activeConnectorEndpoint: { nodeId: "connector-node", endpoint: "from" },
       }),
     );
+    const connectorHtml = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide,
+        selection: connectorSelection,
+        assetResolver: (assetId) => `https://assets.example/${assetId}.png`,
+        nodeGestureDrafts: draftMap,
+        onConnectorEndpointPointerDown: () => undefined,
+        activeConnectorEndpoint: { nodeId: "connector-node", endpoint: "from" },
+      }),
+    );
     const previewHtml = renderToStaticMarkup(
       createElement(SlideCanvasVNext, {
         slide,
-        selection,
+        selection: multiSelection,
         preview: true,
         onResizeHandlePointerDown: () => undefined,
         onCropHandlePointerDown: () => undefined,
@@ -457,7 +473,7 @@ describe("presentation render element surfaces", () => {
     assert.match(html, /rotate\(45deg\)/);
     assert.match(html, /width:160%/);
     assert.match(html, /data-crop-handle="left"/);
-    assert.match(html, /data-connector-endpoint="from"/);
+    assert.match(connectorHtml, /data-connector-endpoint="from"/);
     assert.match(html, /data-node-hovered="true"/);
     assert.doesNotMatch(previewHtml, /data-crop-handle=/);
     assert.doesNotMatch(previewHtml, /data-node-chrome-frame=/);

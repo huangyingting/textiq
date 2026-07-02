@@ -66,6 +66,34 @@ describe("createNodeMovePreview", () => {
     assert.equal(Math.round(frame.y * 10), 899);
   });
 
+  test("snaps multi-node movement as a group without changing relative offsets", () => {
+    const originalFrames = new Map([
+      ["node-a", { x: 9.6, y: 20, w: 10, h: 10 }],
+      ["node-b", { x: 31, y: 24, w: 10, h: 10 }],
+    ]);
+    const preview = createNodeMovePreview({
+      startClientX: 100,
+      startClientY: 100,
+      nextClientX: 105,
+      nextClientY: 100,
+      rectWidth: 1000,
+      rectHeight: 1000,
+      originalFrames,
+      alignmentGuides: [],
+      snapToGuides: true,
+    });
+
+    assert.ok(preview);
+    const first = preview.patches.get("node-a")?.frame;
+    const second = preview.patches.get("node-b")?.frame;
+    assert.ok(first);
+    assert.ok(second);
+    assert.equal(first.x, 10);
+    assert.equal(second.x - first.x, 31 - 9.6);
+    assert.equal(second.y - first.y, 24 - 20);
+    assert.ok(preview.guides.some((guide) => guide.axis === "x"));
+  });
+
   test("locks movement to the horizontal axis under Shift when x dominates", () => {
     const originalFrame = { x: 20, y: 30, w: 20, h: 10 };
     const preview = createNodeMovePreview({

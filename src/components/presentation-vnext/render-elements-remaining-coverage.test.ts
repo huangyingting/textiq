@@ -333,14 +333,20 @@ test("table editing and canvas chrome invoke remaining safe handlers", () => {
     chrome: [],
     nodes: [group, image, connector, hiddenText],
   };
-  const selection = setSelection(createSelectionState("normal"), [
+  const multiSelection = setSelection(createSelectionState("normal"), [
     "group-a",
     "image-a",
     "connector-a",
   ]);
+  const imageSelection = setSelection(createSelectionState("normal"), [
+    "image-a",
+  ]);
+  const connectorSelection = setSelection(createSelectionState("normal"), [
+    "connector-a",
+  ]);
   const canvas = invokeMemoComponent(SlideCanvasVNext, {
     slide,
-    selection,
+    selection: multiSelection,
     activeGroupId: "group-a",
     slideHovered: true,
     slideSelected: true,
@@ -349,21 +355,34 @@ test("table editing and canvas chrome invoke remaining safe handlers", () => {
     onNodePointerDown: (nodeId: string) => calls.push(`pointer:${nodeId}`),
     onNodeDoubleClick: (nodeId: string) => calls.push(`double:${nodeId}`),
     onNodeFocus: (nodeId: string) => calls.push(`node-focus:${nodeId}`),
+    onMultiResizeHandlePointerDown: (handle: string) =>
+      calls.push(`multi-resize:${handle}`),
+    onMultiRotationHandlePointerDown: () => calls.push("multi-rotate"),
+  });
+  const imageCanvas = invokeMemoComponent(SlideCanvasVNext, {
+    slide,
+    selection: imageSelection,
     onResizeHandlePointerDown: (nodeId: string, handle: string) =>
       calls.push(`resize:${nodeId}:${handle}`),
     onRotationHandlePointerDown: (nodeId: string) =>
       calls.push(`rotate:${nodeId}`),
     onCropHandlePointerDown: (nodeId: string, handle: string) =>
       calls.push(`crop:${nodeId}:${handle}`),
-    onConnectorEndpointPointerDown: (nodeId: string, endpoint: string) =>
-      calls.push(`connector:${nodeId}:${endpoint}`),
     activeResizeHandle: { nodeId: "image-a", handle: "se" },
     activeRotationNodeId: "image-a",
     activeCropHandle: { nodeId: "image-a", handle: "bottom" },
+  });
+  const connectorCanvas = invokeMemoComponent(SlideCanvasVNext, {
+    slide,
+    selection: connectorSelection,
+    onConnectorEndpointPointerDown: (nodeId: string, endpoint: string) =>
+      calls.push(`connector:${nodeId}:${endpoint}`),
     activeConnectorEndpoint: { nodeId: "connector-a", endpoint: "to" },
   });
   const html = renderToStaticMarkup(canvas);
-  const canvasElements = collectElements(canvas).map(propsOf);
+  const canvasElements = [canvas, imageCanvas, connectorCanvas]
+    .flatMap((node) => collectElements(node))
+    .map(propsOf);
   const nodeProps = canvasElements.find(
     (props) => props["data-node-id"] === "image-a",
   );
@@ -371,26 +390,40 @@ test("table editing and canvas chrome invoke remaining safe handlers", () => {
   (nodeProps.onPointerDown as (event: unknown) => void)({});
   (nodeProps.onDoubleClick as (event: unknown) => void)({});
   (nodeProps.onFocus as (event: unknown) => void)({});
+  const pointerEvent = {
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+  };
+  const multiResizeHandle = canvasElements.find(
+    (props) => props["data-multi-resize-handle"] === "se",
+  );
+  assert.ok(multiResizeHandle);
+  (multiResizeHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
+  const multiRotationHandle = canvasElements.find(
+    (props) => props["data-multi-rotation-handle"] === "true",
+  );
+  assert.ok(multiRotationHandle);
+  (multiRotationHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
   const resizeHandle = canvasElements.find(
     (props) => props["data-resize-handle"] === "se",
   );
   assert.ok(resizeHandle);
-  (resizeHandle.onPointerDown as (event: unknown) => void)({});
+  (resizeHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
   const rotationHandle = canvasElements.find(
     (props) => props["data-rotation-handle"] === "true",
   );
   assert.ok(rotationHandle);
-  (rotationHandle.onPointerDown as (event: unknown) => void)({});
+  (rotationHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
   const cropHandle = canvasElements.find(
     (props) => props["data-crop-handle"] === "bottom",
   );
   assert.ok(cropHandle);
-  (cropHandle.onPointerDown as (event: unknown) => void)({});
+  (cropHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
   const connectorHandle = canvasElements.find(
     (props) => props["data-connector-endpoint"] === "to",
   );
   assert.ok(connectorHandle);
-  (connectorHandle.onPointerDown as (event: unknown) => void)({});
+  (connectorHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
 
   assert.match(html, /data-slide-hovered="true"/);
   assert.match(html, /data-slide-selected="true"/);

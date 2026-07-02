@@ -214,6 +214,21 @@ export function nodeLayoutTransformToCss(
   };
 }
 
+export function interactiveNodeCursor({
+  hasPointerHandler,
+  locked,
+  dragging,
+}: {
+  hasPointerHandler: boolean;
+  locked: boolean;
+  dragging: boolean;
+}): React.CSSProperties["cursor"] {
+  if (!hasPointerHandler) return "default";
+  if (dragging) return "grabbing";
+  if (locked) return "not-allowed";
+  return "default";
+}
+
 // ---------------------------------------------------------------------------
 // Text node content
 // ---------------------------------------------------------------------------
@@ -995,6 +1010,8 @@ export interface SlideNodeRendererProps {
    * overlays the node so the live render and the editor don't double-render).
    */
   hidden?: boolean;
+  /** When true, the stage is actively dragging nodes. */
+  dragging?: boolean;
 }
 
 /**
@@ -1025,6 +1042,7 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
   visualResolver,
   preview = false,
   hidden = false,
+  dragging = false,
 }: SlideNodeRendererProps): JSX.Element | null {
   const { layout, style, content } = node;
   const shouldIncludeShapePaint =
@@ -1039,7 +1057,11 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
       includeShapePaint: shouldIncludeShapePaint,
     }),
     boxSizing: "border-box",
-    cursor: onPointerDown ? (isLocked ? "not-allowed" : "move") : "default",
+    cursor: interactiveNodeCursor({
+      hasPointerHandler: onPointerDown !== undefined,
+      locked: isLocked,
+      dragging,
+    }),
     ...(node.source === "themeDecoration" || node.source === "deckChrome"
       ? { pointerEvents: "none" }
       : {}),

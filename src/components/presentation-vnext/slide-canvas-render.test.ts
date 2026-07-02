@@ -16,6 +16,7 @@ import {
   type SlideCanvasNodeGestureDraft,
 } from "./slide-canvas";
 import {
+  interactiveNodeCursor,
   SlideNodeRenderer,
   styleObjectToContainerCss,
 } from "./slide-node-renderer";
@@ -201,7 +202,60 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /tabindex="0"/);
     assert.match(html, /aria-label="Text: node-1"/);
     assert.match(html, /aria-pressed="true"/);
-    assert.match(html, /data-node-id="node-1"[^>]*style="[^"]*cursor:move/);
+    assert.match(html, /data-node-id="node-1"[^>]*style="[^"]*cursor:default/);
+  });
+
+  test("maps stage node cursors from interaction state", () => {
+    assert.equal(
+      interactiveNodeCursor({
+        hasPointerHandler: true,
+        locked: false,
+        dragging: false,
+      }),
+      "default",
+    );
+    assert.equal(
+      interactiveNodeCursor({
+        hasPointerHandler: true,
+        locked: false,
+        dragging: true,
+      }),
+      "grabbing",
+    );
+    assert.equal(
+      interactiveNodeCursor({
+        hasPointerHandler: true,
+        locked: true,
+        dragging: false,
+      }),
+      "not-allowed",
+    );
+    assert.equal(
+      interactiveNodeCursor({
+        hasPointerHandler: false,
+        locked: false,
+        dragging: false,
+      }),
+      "default",
+    );
+  });
+
+  test("renders grabbing cursor only during active stage drag", () => {
+    const selection = setSelection(createSelectionState("normal"), ["node-1"]);
+    const html = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide: slide([textNode("node-1", { x: 10, y: 10, w: 20, h: 10 })]),
+        selection,
+        draggingStage: true,
+        onNodePointerDown: () => undefined,
+      }),
+    );
+
+    assert.match(
+      html,
+      /data-slide-canvas-vnext="true"[^>]*style="[^"]*cursor:grabbing/,
+    );
+    assert.match(html, /data-node-id="node-1"[^>]*style="[^"]*cursor:grabbing/);
   });
 
   test("exposes selected and unselected state with aria-pressed", () => {
@@ -479,14 +533,23 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
         ]),
         selection,
         focusedNodeId: "a",
+        onResizeHandlePointerDown: () => undefined,
+        onMultiResizeHandlePointerDown: () => undefined,
+        onMultiRotationHandlePointerDown: () => undefined,
       }),
     );
 
-    assert.match(html, /border-dashed border-ds-accent-border/);
+    assert.match(html, /data-multi-selection-bounds="true"/);
+    assert.match(html, /border-2 border-dashed border-ds-accent-fill/);
+    assert.match(html, /pointer-events-auto/);
     assert.match(html, /left:10%/);
     assert.match(html, /top:10%/);
     assert.match(html, /width:50%/);
     assert.match(html, /height:30%/);
+    assert.match(html, /data-multi-resize-handle="nw"/);
+    assert.match(html, /data-multi-resize-handle="se"/);
+    assert.match(html, /data-multi-rotation-handle="true"/);
+    assert.doesNotMatch(html, /data-node-chrome-overlay="resize"/);
   });
 
   test("renders crop handles for a selected image", () => {
@@ -545,107 +608,125 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
   });
 
   test("renders rotation handle, connector endpoints, and active group chrome", () => {
-    const selection = setSelection(createSelectionState("normal"), [
+    const shapeSelection = setSelection(createSelectionState("normal"), [
       "shape-1",
+    ]);
+    const connectorSelection = setSelection(createSelectionState("normal"), [
       "connector-1",
     ]);
-    const html = renderToStaticMarkup(
+    const nodes = [
+      renderNode("group-1", { type: "group" }, {}, { type: "group" }),
+      renderNode("shape-1", {
+        type: "shape",
+        content: { shape: "rect" },
+      }),
+      renderNode("connector-1", {
+        type: "connector",
+        content: {
+          from: { kind: "point", point: { x: 0, y: 50 } },
+          to: { kind: "point", point: { x: 100, y: 50 } },
+        },
+      }),
+    ];
+    const shapeHtml = renderToStaticMarkup(
       createElement(SlideCanvasVNext, {
-        slide: slide([
-          renderNode("group-1", { type: "group" }, {}, { type: "group" }),
-          renderNode("shape-1", {
-            type: "shape",
-            content: { shape: "rect" },
-          }),
-          renderNode("connector-1", {
-            type: "connector",
-            content: {
-              from: { kind: "point", point: { x: 0, y: 50 } },
-              to: { kind: "point", point: { x: 100, y: 50 } },
-            },
-          }),
-        ]),
-        selection,
+        slide: slide(nodes),
+        selection: shapeSelection,
         activeGroupId: "group-1",
         onRotationHandlePointerDown: () => undefined,
+      }),
+    );
+    const connectorHtml = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide: slide(nodes),
+        selection: connectorSelection,
         onConnectorEndpointPointerDown: () => undefined,
       }),
     );
 
-    assert.match(html, /data-rotation-handle="true"/);
-    assert.match(html, /data-connector-endpoint="from"/);
-    assert.match(html, /data-connector-endpoint="to"/);
-    assert.match(html, /data-node-chrome-frame="activeGroup"/);
+    assert.match(shapeHtml, /data-rotation-handle="true"/);
+    assert.match(shapeHtml, /data-node-chrome-frame="activeGroup"/);
+    assert.match(connectorHtml, /data-connector-endpoint="from"/);
+    assert.match(connectorHtml, /data-connector-endpoint="to"/);
   });
 
   test("applies node transforms to selection and handle overlays", () => {
-    const selection = setSelection(createSelectionState("normal"), [
+    const imageSelection = setSelection(createSelectionState("normal"), [
       "rotated-image",
+    ]);
+    const connectorSelection = setSelection(createSelectionState("normal"), [
       "rotated-connector",
     ]);
-    const html = renderToStaticMarkup(
+    const nodes = [
+      imageNode(
+        "rotated-image",
+        { x: 10, y: 10, w: 20, h: 16 },
+        {
+          layout: {
+            frame: { x: 10, y: 10, w: 20, h: 16 },
+            zIndex: 2,
+            rotation: 30,
+            flipX: true,
+            flipY: true,
+          },
+        },
+      ),
+      renderNode(
+        "rotated-connector",
+        {
+          type: "connector",
+          content: {
+            from: { kind: "point", point: { x: 0, y: 50 } },
+            to: { kind: "point", point: { x: 100, y: 50 } },
+          },
+        },
+        {},
+        {
+          layout: {
+            frame: { x: 48, y: 20, w: 28, h: 12 },
+            zIndex: 3,
+            rotation: 30,
+            flipX: true,
+            flipY: true,
+          },
+        },
+      ),
+    ];
+    const imageHtml = renderToStaticMarkup(
       createElement(SlideCanvasVNext, {
-        slide: slide([
-          imageNode(
-            "rotated-image",
-            { x: 10, y: 10, w: 20, h: 16 },
-            {
-              layout: {
-                frame: { x: 10, y: 10, w: 20, h: 16 },
-                zIndex: 2,
-                rotation: 30,
-                flipX: true,
-                flipY: true,
-              },
-            },
-          ),
-          renderNode(
-            "rotated-connector",
-            {
-              type: "connector",
-              content: {
-                from: { kind: "point", point: { x: 0, y: 50 } },
-                to: { kind: "point", point: { x: 100, y: 50 } },
-              },
-            },
-            {},
-            {
-              layout: {
-                frame: { x: 48, y: 20, w: 28, h: 12 },
-                zIndex: 3,
-                rotation: 30,
-                flipX: true,
-                flipY: true,
-              },
-            },
-          ),
-        ]),
-        selection,
+        slide: slide(nodes),
+        selection: imageSelection,
         onResizeHandlePointerDown: () => undefined,
         onCropHandlePointerDown: () => undefined,
         onRotationHandlePointerDown: () => undefined,
+      }),
+    );
+    const connectorHtml = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide: slide(nodes),
+        selection: connectorSelection,
         onConnectorEndpointPointerDown: () => undefined,
       }),
     );
 
     assert.match(
-      html,
+      imageHtml,
       /data-node-chrome-frame="selected"[^>]*data-node-id="rotated-image"[^>]*transform:rotate\(30deg\) scaleX\(-1\) scaleY\(-1\);transform-origin:center/,
     );
     assert.match(
-      html,
+      imageHtml,
       /data-node-chrome-overlay="resize"[^>]*data-node-id="rotated-image"[^>]*transform:rotate\(30deg\) scaleX\(-1\) scaleY\(-1\);transform-origin:center/,
     );
     assert.match(
-      html,
+      imageHtml,
       /data-node-chrome-overlay="rotation"[^>]*data-node-id="rotated-image"[^>]*transform:rotate\(30deg\) scaleX\(-1\) scaleY\(-1\);transform-origin:center/,
     );
     assert.match(
-      html,
+      imageHtml,
       /data-node-chrome-overlay="crop"[^>]*data-node-id="rotated-image"[^>]*transform:rotate\(30deg\) scaleX\(-1\) scaleY\(-1\);transform-origin:center/,
     );
     assert.match(
-      html,
+      connectorHtml,
       /data-node-chrome-overlay="connector-endpoints"[^>]*data-node-id="rotated-connector"[^>]*transform:rotate\(30deg\) scaleX\(-1\) scaleY\(-1\);transform-origin:center/,
     );
   });
@@ -675,7 +756,7 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
       }),
     );
     const multiBoundsStyleMatch = html.match(
-      /border-dashed border-ds-accent-border[^>]*style="([^"]+)"/,
+      /border-dashed border-ds-accent-fill[^>]*style="([^"]+)"/,
     );
     assert.ok(multiBoundsStyleMatch);
     const multiBoundsStyle = multiBoundsStyleMatch[1];
@@ -753,6 +834,8 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
         hoveredNodeId: "overlap-text",
         focusedNodeId: "overlap-image",
         hiddenNodeIds: new Set(["inline-edit-source"]),
+        onMultiResizeHandlePointerDown: () => undefined,
+        onMultiRotationHandlePointerDown: () => undefined,
         onCropHandlePointerDown: () => undefined,
         onRotationHandlePointerDown: () => undefined,
         onConnectorEndpointPointerDown: () => undefined,
@@ -770,17 +853,18 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     );
     assert.match(html, /data-node-chrome-frame="preselected"/);
     assert.match(html, /data-node-chrome-frame="selected"/);
-    assert.match(html, /border-dashed border-ds-accent-border/);
-    assert.match(html, /data-crop-handle="top"/);
-    assert.match(html, /data-rotation-handle="true"/);
-    assert.match(html, /data-connector-endpoint="from"/);
+    assert.match(html, /border-2 border-dashed border-ds-accent-fill/);
+    assert.match(html, /data-multi-resize-handle="nw"/);
+    assert.match(html, /data-multi-rotation-handle="true"/);
+    assert.doesNotMatch(html, /data-crop-handle="top"/);
+    assert.doesNotMatch(html, /data-connector-endpoint="from"/);
     assert.match(
       html,
       /data-node-id="inline-edit-source"[^>]*visibility:hidden/,
     );
   });
 
-  test("suppresses stage chrome for hidden nodes during inline edit", () => {
+  test("keeps selected stage chrome for hidden nodes during inline edit", () => {
     const selection = setSelection(createSelectionState("normal"), [
       "visible-image",
       "hidden-image",
@@ -815,6 +899,9 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
           "hidden-connector",
           "hidden-hover",
         ]),
+        onNodePointerDown: () => undefined,
+        onMultiResizeHandlePointerDown: () => undefined,
+        onMultiRotationHandlePointerDown: () => undefined,
         onResizeHandlePointerDown: () => undefined,
         onCropHandlePointerDown: () => undefined,
         onRotationHandlePointerDown: () => undefined,
@@ -825,24 +912,29 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /data-node-id="hidden-image"[^>]*visibility:hidden/);
     assert.equal(
       (html.match(/data-node-chrome-frame="selected"/g) ?? []).length,
-      2,
+      4,
     );
-    assert.equal((html.match(/data-resize-handle="nw"/g) ?? []).length, 2);
-    assert.equal((html.match(/data-crop-handle="top"/g) ?? []).length, 1);
-    assert.equal((html.match(/data-rotation-handle="true"/g) ?? []).length, 1);
+    assert.equal((html.match(/data-resize-handle="nw"/g) ?? []).length, 0);
+    assert.equal((html.match(/data-crop-handle="top"/g) ?? []).length, 0);
+    assert.equal((html.match(/data-rotation-handle="true"/g) ?? []).length, 0);
     assert.equal(
       (html.match(/data-connector-endpoint="from"/g) ?? []).length,
+      0,
+    );
+    assert.equal(
+      (html.match(/data-multi-resize-handle="nw"/g) ?? []).length,
       1,
     );
+    assert.equal((html.match(/data-node-move-handle="top"/g) ?? []).length, 2);
     assert.match(
       html,
       /data-node-chrome-frame="selected"[^>]*data-node-id="visible-image"/,
     );
-    assert.doesNotMatch(
+    assert.match(
       html,
       /data-node-chrome-frame="selected"[^>]*data-node-id="hidden-image"/,
     );
-    assert.doesNotMatch(
+    assert.match(
       html,
       /data-node-chrome-frame="selected"[^>]*data-node-id="hidden-connector"/,
     );
@@ -916,7 +1008,6 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
 
   test("renders transient crop and connector drafts for live gesture feedback", () => {
     const selection = setSelection(createSelectionState("normal"), [
-      "image-draft",
       "connector-draft",
     ]);
     const html = renderToStaticMarkup(
@@ -2204,6 +2295,7 @@ describe("SlideCanvasVNext E01 rendering coverage", () => {
         onNodeDoubleClick: () => undefined,
         onNodePointerDown: () => undefined,
         onNodeFocus: () => undefined,
+        onMultiResizeHandlePointerDown: () => undefined,
         onResizeHandlePointerDown: () => undefined,
         onCropHandlePointerDown: () => undefined,
         activeResizeHandle: { nodeId: "resize-me", handle: "se" },
@@ -2241,8 +2333,9 @@ describe("SlideCanvasVNext E01 rendering coverage", () => {
     assert.match(backgroundsHtml, /conic-gradient/);
     assert.match(backgroundsHtml, /repeating-linear-gradient/);
     assert.match(backgroundsHtml, /bg.png/);
-    assert.match(handlesHtml, /data-resize-handle="se"/);
-    assert.match(handlesHtml, /data-crop-handle="right"/);
+    assert.match(handlesHtml, /data-multi-resize-handle="se"/);
+    assert.doesNotMatch(handlesHtml, /data-resize-handle="se"/);
+    assert.doesNotMatch(handlesHtml, /data-crop-handle="right"/);
     assert.match(handlesHtml, /visibility:hidden/);
     assert.match(handlesHtml, /aria-hidden="true"/);
     assert.doesNotMatch(previewHtml, /data-node-chrome-frame/);

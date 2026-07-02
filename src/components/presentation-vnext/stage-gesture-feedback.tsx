@@ -111,8 +111,12 @@ function nodeMovePatchFramesEqual(
   if (left.size !== right.size) return false;
   for (const [id, patch] of left) {
     const nextPatch = right.get(id);
-    if (!nextPatch?.frame || !patch.frame) return false;
-    if (!stageFramesEqual(patch.frame, nextPatch.frame)) return false;
+    if (!nextPatch) return false;
+    if (patch.frame || nextPatch.frame) {
+      if (!nextPatch.frame || !patch.frame) return false;
+      if (!stageFramesEqual(patch.frame, nextPatch.frame)) return false;
+    }
+    if (patch.rotation !== nextPatch.rotation) return false;
   }
   return true;
 }
@@ -130,8 +134,11 @@ export function nodeMoveGestureDrafts(
   if (!preview || preview.patches.size === 0) return null;
   const drafts = new Map<string, SlideCanvasNodeGestureDraft>();
   for (const [nodeId, patch] of preview.patches) {
-    if (!patch.frame) continue;
-    drafts.set(nodeId, { frame: patch.frame });
+    if (!patch.frame && patch.rotation === undefined) continue;
+    drafts.set(nodeId, {
+      ...(patch.frame ? { frame: patch.frame } : {}),
+      ...(patch.rotation !== undefined ? { rotation: patch.rotation } : {}),
+    });
   }
   return drafts.size > 0 ? drafts : null;
 }
@@ -192,6 +199,38 @@ export function createNodeMovePreview({
   const deltaY = (pointerDeltaY / rectHeight) * 100;
   const patches = new Map<string, Partial<LayoutBox>>();
   const guides: StageGuide[] = [];
+
+  if (originalFrames.size > 1) {
+    const originalBounds = frameBounds([...originalFrames.values()]);
+    if (!originalBounds) return null;
+    const nextBounds = clampStageFrame({
+      ...originalBounds,
+      x: originalBounds.x + deltaX,
+      y: originalBounds.y + deltaY,
+    });
+    const snapped = snapToGuides
+      ? snapFrameToStageGuides(nextBounds, 0.75, alignmentGuides)
+      : { frame: nextBounds, guides: [] as StageGuide[] };
+    const lockedBounds = {
+      ...snapped.frame,
+      ...(axisLockedY ? { x: originalBounds.x } : {}),
+      ...(axisLockedX ? { y: originalBounds.y } : {}),
+    };
+    const appliedDeltaX = lockedBounds.x - originalBounds.x;
+    const appliedDeltaY = lockedBounds.y - originalBounds.y;
+    for (const [id, frame] of originalFrames) {
+      patches.set(id, {
+        frame: {
+          ...frame,
+          x: frame.x + appliedDeltaX,
+          y: frame.y + appliedDeltaY,
+        },
+      });
+    }
+    guides.push(...snapped.guides);
+    return { patches, guides };
+  }
+
   for (const [id, frame] of originalFrames) {
     const nextFrame = clampStageFrame({
       ...frame,

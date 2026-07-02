@@ -106,6 +106,11 @@ export interface SlideCanvasVNextProps {
     handle: ResizeHandlePosition,
     event: React.PointerEvent,
   ) => void;
+  onMultiResizeHandlePointerDown?: (
+    handle: ResizeHandlePosition,
+    event: React.PointerEvent,
+  ) => void;
+  onMultiRotationHandlePointerDown?: (event: React.PointerEvent) => void;
   /** Called when the user starts cropping a selected image. */
   onCropHandlePointerDown?: (
     nodeId: string,
@@ -175,6 +180,8 @@ export interface SlideCanvasVNextProps {
   focusGeometryRegistry?: FocusGeometryRegistry;
   /** True when rendered at reduced size (thumbnail rail, next-slide preview). */
   preview?: boolean;
+  /** True while the stage is actively dragging nodes. */
+  draggingStage?: boolean;
   /** Optional extra CSS class applied to the outer canvas container. */
   className?: string;
 }
@@ -198,6 +205,8 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
   onNodePointerDown,
   onNodeFocus,
   onResizeHandlePointerDown,
+  onMultiResizeHandlePointerDown,
+  onMultiRotationHandlePointerDown,
   onCropHandlePointerDown,
   onRotationHandlePointerDown,
   onConnectorEndpointPointerDown,
@@ -219,6 +228,7 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
   focusedNodeId,
   focusGeometryRegistry,
   preview = false,
+  draggingStage = false,
   className,
 }: SlideCanvasVNextProps): JSX.Element {
   const aspectRatio = canvas ? canvasAspectRatio(canvas) : 16 / 9;
@@ -249,9 +259,6 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
         )
       : renderLists.userNodes;
   const isHiddenNode = (nodeId: string) => hiddenNodeIds?.has(nodeId) === true;
-  const stageChromeUserNodes = userNodes.filter(
-    (node) => !isHiddenNode(node.id),
-  );
 
   const handleNodeDoubleClick = onNodeDoubleClick
     ? (nodeId: string, event: React.MouseEvent) => {
@@ -277,6 +284,7 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
       style={{
         aspectRatio: `${aspectRatio}`,
         width: "100%",
+        cursor: draggingStage ? "grabbing" : undefined,
         ...(backgroundFillLayerStyle ? {} : backgroundFillStyle),
       }}
     >
@@ -358,6 +366,7 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
                 visualResolver={visualResolver}
                 preview={preview}
                 hidden={isHiddenNode(node.id)}
+                dragging={draggingStage}
               />
             );
           })(),
@@ -378,13 +387,17 @@ export const SlideCanvasVNext = memo(function SlideCanvasVNext({
 
         {!preview ? (
           <SlideCanvasInteractionOverlay
-            nodes={stageChromeUserNodes}
+            nodes={userNodes}
             selection={selection}
+            hiddenNodeIds={hiddenNodeIds}
             hoveredNodeId={hoveredNodeId}
             focusedNodeId={focusedNodeId}
             slideHovered={slideHovered}
             slideSelected={slideSelected}
             activeGroupId={activeGroupId}
+            onNodePointerDown={onNodePointerDown}
+            onMultiResizeHandlePointerDown={onMultiResizeHandlePointerDown}
+            onMultiRotationHandlePointerDown={onMultiRotationHandlePointerDown}
             onResizeHandlePointerDown={onResizeHandlePointerDown}
             onCropHandlePointerDown={onCropHandlePointerDown}
             onRotationHandlePointerDown={onRotationHandlePointerDown}
@@ -474,6 +487,8 @@ export interface DeckCanvasVNextProps {
   onNodePointerDown?: (nodeId: string, event: React.PointerEvent) => void;
   /** Called when the user starts resizing a selected node on the active slide. */
   onResizeHandlePointerDown?: SlideCanvasVNextProps["onResizeHandlePointerDown"];
+  onMultiResizeHandlePointerDown?: SlideCanvasVNextProps["onMultiResizeHandlePointerDown"];
+  onMultiRotationHandlePointerDown?: SlideCanvasVNextProps["onMultiRotationHandlePointerDown"];
   /** Called when the user clicks a slide in the thumbnail rail. */
   onSlideClick?: (slideIndex: number) => void;
   /** True when rendered at reduced size. */
@@ -497,6 +512,8 @@ export function DeckCanvasVNext({
   selection,
   onNodePointerDown,
   onResizeHandlePointerDown,
+  onMultiResizeHandlePointerDown,
+  onMultiRotationHandlePointerDown,
   preview = false,
   className,
 }: DeckCanvasVNextProps): JSX.Element | null {
@@ -512,6 +529,8 @@ export function DeckCanvasVNext({
       selection={selection}
       onNodePointerDown={onNodePointerDown}
       onResizeHandlePointerDown={onResizeHandlePointerDown}
+      onMultiResizeHandlePointerDown={onMultiResizeHandlePointerDown}
+      onMultiRotationHandlePointerDown={onMultiRotationHandlePointerDown}
       preview={preview}
       className={className}
     />

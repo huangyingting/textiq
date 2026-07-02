@@ -62,11 +62,18 @@ const CROP_HANDLE_CURSORS: Record<CropHandlePosition, string> = {
 export interface SlideCanvasInteractionOverlayProps {
   nodes: readonly ResolvedRenderNode[];
   selection?: SelectionState;
+  hiddenNodeIds?: ReadonlySet<string>;
   hoveredNodeId?: string | null;
   focusedNodeId?: string | null;
   slideHovered?: boolean;
   slideSelected?: boolean;
   activeGroupId?: string | null;
+  onNodePointerDown?: (nodeId: string, event: PointerEvent) => void;
+  onMultiResizeHandlePointerDown?: (
+    handle: ResizeHandlePosition,
+    event: PointerEvent,
+  ) => void;
+  onMultiRotationHandlePointerDown?: (event: PointerEvent) => void;
   onResizeHandlePointerDown?: (
     nodeId: string,
     handle: ResizeHandlePosition,
@@ -95,11 +102,15 @@ export interface SlideCanvasInteractionOverlayProps {
 export function SlideCanvasInteractionOverlay({
   nodes,
   selection,
+  hiddenNodeIds,
   hoveredNodeId,
   focusedNodeId,
   slideHovered = false,
   slideSelected = false,
   activeGroupId,
+  onNodePointerDown,
+  onMultiResizeHandlePointerDown,
+  onMultiRotationHandlePointerDown,
   onResizeHandlePointerDown,
   onCropHandlePointerDown,
   onRotationHandlePointerDown,
@@ -109,19 +120,24 @@ export function SlideCanvasInteractionOverlay({
   activeRotationNodeId,
   activeConnectorEndpoint,
 }: SlideCanvasInteractionOverlayProps): JSX.Element | null {
+  const isHiddenNode = (nodeId: string) => hiddenNodeIds?.has(nodeId) === true;
   const selectedUserNodes = selection
     ? nodes.filter((node) => isSelected(selection, node.id))
     : [];
+  const isMultiSelect = selectedUserNodes.length > 1;
   const selectedResizableNodes = selectedUserNodes.filter(
     (node) => node.locked !== true,
   );
-  const selectedCroppableNodes = selectedResizableNodes.filter(
+  const singleSelectedResizableNodes = isMultiSelect
+    ? []
+    : selectedResizableNodes;
+  const selectedCroppableNodes = singleSelectedResizableNodes.filter(
     (node) => node.type === "image" && node.content.type === "image",
   );
-  const selectedRotatableNodes = selectedResizableNodes.filter(
+  const selectedRotatableNodes = singleSelectedResizableNodes.filter(
     (node) => node.type !== "connector",
   );
-  const selectedConnectorNodes = selectedResizableNodes.filter(
+  const selectedConnectorNodes = singleSelectedResizableNodes.filter(
     (node) => node.type === "connector" && node.content.type === "connector",
   );
   const activeGroupNode = activeGroupId
@@ -129,8 +145,12 @@ export function SlideCanvasInteractionOverlay({
     : undefined;
   const preselectedUserNodes = nodes.filter(
     (node) =>
+      !isHiddenNode(node.id) &&
       !selectedUserNodes.some((selectedNode) => selectedNode.id === node.id) &&
       (hoveredNodeId === node.id || focusedNodeId === node.id),
+  );
+  const selectedMoveHandleNodes = selectedResizableNodes.filter((node) =>
+    isHiddenNode(node.id),
   );
   const multiSelectionFrame =
     selectedUserNodes.length > 1 ? boundsForNodes(selectedUserNodes) : null;
@@ -174,8 +194,19 @@ export function SlideCanvasInteractionOverlay({
           key={`${node.id}-selected-frame`}
           node={node}
           variant="selected"
+          elevated={isHiddenNode(node.id)}
         />
       ))}
+
+      {onNodePointerDown
+        ? selectedMoveHandleNodes.map((node) => (
+            <NodeMoveHandles
+              key={`${node.id}-move-handles`}
+              node={node}
+              onPointerDown={onNodePointerDown}
+            />
+          ))
+        : null}
 
       {activeGroupNode ? (
         <NodeChromeFrame node={activeGroupNode} variant="activeGroup" />
@@ -184,19 +215,65 @@ export function SlideCanvasInteractionOverlay({
       {multiSelectionFrame ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute border border-dashed border-ds-accent-border bg-ds-accent-surface/10"
+          data-multi-selection-bounds="true"
+          data-node-id={selectedUserNodes.map((node) => node.id).join(" ")}
+          className="pointer-events-auto absolute border-2 border-dashed border-ds-accent-fill bg-ds-accent-surface/15 shadow-[0_0_0_1px_var(--ds-accent-border)]"
           style={{
             left: `${multiSelectionFrame.x}%`,
             top: `${multiSelectionFrame.y}%`,
             width: `${multiSelectionFrame.w}%`,
             height: `${multiSelectionFrame.h}%`,
             zIndex: STAGE_CHROME_Z_INDEX.multiSelectionBounds,
+            cursor: "default",
           }}
-        />
+          onPointerDown={(event) => {
+            if (!onNodePointerDown) return;
+            const firstNodeId = selectedUserNodes[0]?.id;
+            if (!firstNodeId) return;
+            event.stopPropagation();
+            onNodePointerDown(firstNodeId, event);
+          }}
+        >
+          {onMultiResizeHandlePointerDown
+            ? RESIZE_HANDLES.map((handle) => (
+                <span
+                  key={handle}
+                  data-multi-resize-handle={handle}
+                  className="pointer-events-auto absolute h-2.5 w-2.5 rounded-full border border-ds-accent-border bg-ds-surface shadow-ds-sm"
+                  style={{
+                    ...resizeHandleStyle(handle),
+                    cursor: RESIZE_HANDLE_CURSORS[handle],
+                  }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onMultiResizeHandlePointerDown(handle, event);
+                  }}
+                />
+              ))
+            : null}
+          {onMultiRotationHandlePointerDown ? (
+            <span
+              data-multi-rotation-handle="true"
+              className="pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-ds-accent-border bg-ds-surface text-[10px] leading-none text-ds-text-secondary shadow-ds-sm"
+              style={{
+                left: "50%",
+                top: "calc(100% + 28px)",
+                transform: "translate(-50%, -50%)",
+                cursor: "grab",
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onMultiRotationHandlePointerDown(event);
+              }}
+            >
+              ↻
+            </span>
+          ) : null}
+        </div>
       ) : null}
 
       {onResizeHandlePointerDown
-        ? selectedResizableNodes.map((node) => (
+        ? singleSelectedResizableNodes.map((node) => (
             <div
               key={`${node.id}-resize-overlay`}
               aria-hidden="true"
@@ -205,7 +282,10 @@ export function SlideCanvasInteractionOverlay({
               className="pointer-events-none absolute"
               style={nodeChromeOverlayFrameStyle(
                 node,
-                STAGE_CHROME_Z_INDEX.selectedFrame,
+                chromeZIndexForNode(
+                  isHiddenNode(node.id),
+                  STAGE_CHROME_Z_INDEX.selectedFrame,
+                ),
               )}
             >
               {RESIZE_HANDLES.map((handle) => (
@@ -241,7 +321,10 @@ export function SlideCanvasInteractionOverlay({
               className="pointer-events-none absolute"
               style={nodeChromeOverlayFrameStyle(
                 node,
-                STAGE_CHROME_Z_INDEX.selectedFrame + 1,
+                chromeZIndexForNode(
+                  isHiddenNode(node.id),
+                  STAGE_CHROME_Z_INDEX.selectedFrame + 1,
+                ),
               )}
             >
               <span
@@ -281,7 +364,10 @@ export function SlideCanvasInteractionOverlay({
               className="pointer-events-none absolute"
               style={nodeChromeOverlayFrameStyle(
                 node,
-                STAGE_CHROME_Z_INDEX.cropHandle,
+                chromeZIndexForNode(
+                  isHiddenNode(node.id),
+                  STAGE_CHROME_Z_INDEX.cropHandle,
+                ),
               )}
             >
               {CROP_HANDLES.map((handle) => (
@@ -321,7 +407,10 @@ export function SlideCanvasInteractionOverlay({
                 className="pointer-events-none absolute"
                 style={nodeChromeOverlayFrameStyle(
                   node,
-                  STAGE_CHROME_Z_INDEX.selectedFrame + 2,
+                  chromeZIndexForNode(
+                    isHiddenNode(node.id),
+                    STAGE_CHROME_Z_INDEX.selectedFrame + 2,
+                  ),
                 )}
               >
                 {(
@@ -361,9 +450,11 @@ export function SlideCanvasInteractionOverlay({
 function NodeChromeFrame({
   node,
   variant,
+  elevated = false,
 }: {
   node: ResolvedRenderNode;
   variant: "selected" | "preselected" | "activeGroup";
+  elevated?: boolean;
 }) {
   const chrome = selectionFrameChrome(variant);
   const isLocked = node.locked === true;
@@ -378,12 +469,69 @@ function NodeChromeFrame({
       data-node-id={node.id}
       className="pointer-events-none absolute box-border"
       style={{
-        ...nodeChromeOverlayFrameStyle(node, chrome.zIndex),
+        ...nodeChromeOverlayFrameStyle(
+          node,
+          elevated
+            ? Math.max(chrome.zIndex, STAGE_CHROME_Z_INDEX.inlineEditor + 1)
+            : chrome.zIndex,
+        ),
         border: `${chrome.borderWidthPx}px ${isLocked ? "dashed" : "solid"} ${color}`,
         opacity: chrome.opacity,
       }}
     />
   );
+}
+
+function NodeMoveHandles({
+  node,
+  onPointerDown,
+}: {
+  node: ResolvedRenderNode;
+  onPointerDown: (nodeId: string, event: PointerEvent) => void;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      data-node-chrome-overlay="move"
+      data-node-id={node.id}
+      className="pointer-events-none absolute"
+      style={nodeChromeOverlayFrameStyle(
+        node,
+        STAGE_CHROME_Z_INDEX.inlineEditor + 2,
+      )}
+    >
+      {(["top", "right", "bottom", "left"] as const).map((edge) => (
+        <span
+          key={edge}
+          data-node-move-handle={edge}
+          data-node-id={node.id}
+          className="pointer-events-auto absolute"
+          style={{ ...moveHandleStyle(edge), cursor: "grab" }}
+          onPointerDown={(event) => onPointerDown(node.id, event)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function moveHandleStyle(edge: "top" | "right" | "bottom" | "left") {
+  const thickness = 8;
+  switch (edge) {
+    case "top":
+      return { left: 0, right: 0, top: -thickness / 2, height: thickness };
+    case "right":
+      return { top: 0, right: -thickness / 2, bottom: 0, width: thickness };
+    case "bottom":
+      return { left: 0, right: 0, bottom: -thickness / 2, height: thickness };
+    case "left":
+      return { top: 0, left: -thickness / 2, bottom: 0, width: thickness };
+  }
+}
+
+function chromeZIndexForNode(elevated: boolean, zIndex: number) {
+  return elevated
+    ? Math.max(zIndex, STAGE_CHROME_Z_INDEX.inlineEditor + 1)
+    : zIndex;
 }
 
 function SlideChromeFrame({

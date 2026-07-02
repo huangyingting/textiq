@@ -17,7 +17,7 @@ export function isStageHandleTarget(target: EventTarget | null): boolean {
   if (!isHTMLElementTarget(target)) return false;
   return Boolean(
     target.closest(
-      "[data-node-id],[data-resize-handle],[data-crop-handle],[data-rotation-handle],[data-connector-endpoint]",
+      "[data-node-id],[data-resize-handle],[data-crop-handle],[data-rotation-handle],[data-connector-endpoint],[data-multi-selection-bounds]",
     ),
   );
 }

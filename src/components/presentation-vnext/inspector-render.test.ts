@@ -722,6 +722,8 @@ describe("vNext inspector components", () => {
     assert.match(html, /Speaker Notes/);
     assert.match(html, /Image Adjust/);
     assert.match(html, /Arrange 3 nodes/);
+    assert.match(html, /Glow opacity/);
+    assert.match(html, /Shadow opacity/);
     assert.match(html, /Theme Decoration/);
     assert.match(html, /Gradient fallback required/);
   });
