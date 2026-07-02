@@ -23,6 +23,7 @@ import type {
   ResolvedDeckRenderTree,
   ResolvedRenderNode,
 } from "@/lib/presentation-vnext/render-tree";
+import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import { getSlideRenderLists } from "@/lib/presentation-vnext/render-tree";
 import { buildDeckOutline, type DeckOutline } from "@/lib/presentation-vnext";
 import type { CanvasSpec } from "@/lib/presentation-vnext/types";
@@ -47,6 +48,11 @@ import type {
 } from "./slide-canvas-overlays";
 import type { SelectionState } from "./selection-model";
 import { isSelected } from "./selection-model";
+
+const DECK_OUTLINE_FOCUS_VISIBLE_CHROME = cx(
+  "rounded-ds-sm motion-reduce:transition-none",
+  FOCUS_RING,
+);
 
 export type {
   ConnectorEndpointHandle,
@@ -538,7 +544,10 @@ export function DeckOutlineRegion({
       data-deck-outline-region="true"
       role="region"
       aria-labelledby={headingId}
-      className="sr-only"
+      className={cx(
+        "sr-only motion-reduce:transition-none",
+        "focus-within:not-sr-only focus-within:absolute focus-within:left-2 focus-within:top-2 focus-within:z-overlay focus-within:max-h-80 focus-within:w-80 focus-within:overflow-auto focus-within:rounded-ds-md focus-within:border focus-within:border-ds-border-subtle focus-within:bg-ds-surface-raised focus-within:p-3 focus-within:text-ds-text-primary focus-within:shadow-ds-overlay",
+      )}
     >
       <h2 id={headingId}>Deck outline</h2>
       <p>
@@ -563,6 +572,8 @@ export function DeckOutlineRegion({
                 {slide.nodes.map((node) => (
                   <li
                     key={node.id}
+                    tabIndex={0}
+                    className={DECK_OUTLINE_FOCUS_VISIBLE_CHROME}
                     aria-current={
                       node.id === currentNodeId ? "true" : undefined
                     }

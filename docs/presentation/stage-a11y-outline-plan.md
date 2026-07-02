@@ -1,6 +1,6 @@
 ---
 type: "plan"
-status: "active — implementation pending"
+status: "complete"
 last_updated: "2026-07-02"
 description: "Remaining P2 work for a content-first screen-reader deck outline and per-node narration on the vNext slide stage."
 ---
@@ -15,16 +15,16 @@ Expose a content-first deck outline and deterministic per-node narration for
 screen-reader users without replacing the existing canvas keyboard editing
 model.
 
-## Remaining Work
+## Completed Work
 
-| Slice                               | Work                                                                                                                                                                                   | Exit criteria                                                                                                                            |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolved outline adapter            | Convert `ResolvedSlideRenderTree` user nodes into a stable content outline with slide metadata, node roles, reading order, labels, and decorative/chrome filtering.                    | The outline model can be tested without scraping the canvas DOM.                                                                         |
-| Outline region DOM                  | Render semantic deck or active-slide outline DOM near the stage without disrupting the existing canvas interaction model.                                                              | Screen readers can discover slide position, slide title/summary, and ordered node content.                                               |
-| Per-node narration helper           | Derive deterministic labels/details for text, image, shape, table, visual, connector, group, and decorative nodes.                                                                     | Missing alt text, missing visual description, unbound connectors, and empty/decorative shapes have explicit fallback labels or warnings. |
-| Table cell names                    | Improve table edit-mode cell labels with header context and content preview while preserving current keyboard behavior.                                                                | Editable table cells announce more than row/column coordinates when header context exists.                                               |
-| Reduced-motion/focus-visible checks | Add focused checks for outline-current updates, selection changes, table edit mode, locked/grouped nodes, high contrast, and focus-visible states.                                     | Accessibility release gates cover motion alternatives and visible keyboard focus.                                                        |
-| Release-gate criteria               | Update accessibility acceptance criteria to require deck/slide outline, per-node content labels, missing-content warnings, reduced-motion conformance, and focus-visible verification. | Sign-off can point to focused component/a11y tests for the outline and narration behavior.                                               |
+| Slice                               | Work                                                                                                                                                                                    | Exit criteria                                                                                                                            |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolved outline adapter            | Convert `ResolvedSlideRenderTree` user nodes into a stable content outline with slide metadata, node roles, reading order, labels, and decorative/chrome filtering.                     | The outline model can be tested without scraping the canvas DOM.                                                                         |
+| Outline region DOM                  | Render semantic deck or active-slide outline DOM near the stage without disrupting the existing canvas interaction model.                                                               | Screen readers can discover slide position, slide title/summary, and ordered node content.                                               |
+| Per-node narration helper           | Derive deterministic labels/details for text, image, shape, table, visual, connector, group, and decorative nodes.                                                                      | Missing alt text, missing visual description, unbound connectors, and empty/decorative shapes have explicit fallback labels or warnings. |
+| Table cell names                    | Improve table edit-mode cell labels with header context and content preview while preserving current keyboard behavior.                                                                 | Editable table cells announce more than row/column coordinates when header context exists.                                               |
+| Reduced-motion/focus-visible checks | Added focused checks for outline-current updates, selection changes, table edit mode, locked/grouped nodes, high contrast review, and focus-visible states.                             | Accessibility release gates cover motion alternatives and visible keyboard focus.                                                        |
+| Release-gate criteria               | Updated accessibility acceptance criteria to require deck/slide outline, per-node content labels, missing-content warnings, reduced-motion conformance, and focus-visible verification. | Sign-off can point to focused component/a11y tests for the outline and narration behavior.                                               |
 
 ## Constraints
 

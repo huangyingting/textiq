@@ -12,6 +12,7 @@
 
 import { type JSX, memo } from "react";
 
+import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import { VisualRenderer } from "@/components/visual/visual-renderer";
 import type { Visual } from "@/lib/visual/schema";
 import type {
@@ -37,6 +38,15 @@ import type {
 import { tableCellEditableText } from "@/lib/presentation-vnext/table-cell-editing";
 import { truncateNarrationText } from "@/lib/presentation-vnext/a11y/node-narration";
 import { colorValueToCss, fillStyleToCss } from "./fill-style-css";
+
+const STAGE_NODE_FOCUS_VISIBLE_CHROME = cx(
+  FOCUS_RING,
+  "motion-reduce:transition-none",
+);
+const TABLE_CELL_FOCUS_VISIBLE_CHROME = cx(
+  FOCUS_RING,
+  "motion-reduce:transition-none",
+);
 
 // ---------------------------------------------------------------------------
 // CSS conversion helpers
@@ -680,13 +690,14 @@ function TableNodeContent({
             {row.cells.map((cell, colIdx) => (
               <td
                 key={content.columns[colIdx]?.id ?? colIdx}
-                className={`px-2 py-1 text-xs ${
+                className={cx(
+                  "px-2 py-1 text-xs",
+                  editable && TABLE_CELL_FOCUS_VISIBLE_CHROME,
                   editable &&
-                  activeCell?.rowIndex === rowIdx &&
-                  activeCell.colIndex === colIdx
-                    ? "outline outline-2 outline-ds-accent"
-                    : ""
-                }`}
+                    activeCell?.rowIndex === rowIdx &&
+                    activeCell.colIndex === colIdx &&
+                    "outline outline-2 outline-ds-accent",
+                )}
                 style={cellStyle}
                 data-table-cell={editable ? `${rowIdx}:${colIdx}` : undefined}
                 contentEditable={editable ? true : undefined}
@@ -1151,6 +1162,7 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
       data-node-selected={selected ? "true" : undefined}
       data-node-hovered={hovered ? "true" : undefined}
       data-node-focused={focused ? "true" : undefined}
+      className={interactive ? STAGE_NODE_FOCUS_VISIBLE_CHROME : undefined}
       style={{ ...containerStyle, ...textCss }}
       role={interactive ? (tableEditing ? "group" : "button") : undefined}
       tabIndex={interactive ? tabIndex : undefined}
