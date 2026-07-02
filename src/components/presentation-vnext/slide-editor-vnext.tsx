@@ -66,35 +66,16 @@ import type { SaveStatus } from "@/lib/presentation-shared/save-status";
 import type {
   ConnectorEndpoint,
   DeckV7,
-  DeckChromeConfig,
-  DeckChromeKind,
   ImageCrop,
   LayoutBox,
-  NodeSourceMetadata,
   SemanticTemplateKind,
   SlideNode,
   SlideChildNode,
 } from "@/lib/presentation-vnext/schema";
 import type { ThemePackageV1 } from "@/lib/presentation-vnext/theme-package-schema";
-import type {
-  StyleBinding,
-  StylePatch,
-} from "@/lib/presentation-vnext/style-schema";
-import type {
-  SlideControls,
-  SlideProps,
-} from "@/lib/presentation-vnext/schema";
-import type {
-  PresentationDiagnostic,
-  DiagnosticAction,
-} from "@/lib/presentation-vnext/diagnostics";
+import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import type { SourceBlockIndex } from "@/lib/presentation-vnext/block-index";
-import {
-  diagnosticTargetKey,
-  getDiagnosticNodeId,
-  getDiagnosticSlideId,
-} from "@/lib/presentation-vnext/diagnostics";
-import { applyDiagnosticRepairAction } from "@/lib/presentation-vnext/diagnostic-repairs";
+import { diagnosticTargetKey } from "@/lib/presentation-vnext/diagnostics";
 import type {
   SourceLinkHostRefreshArgs,
   SourceLinkHostRefreshResult,
@@ -109,13 +90,8 @@ import {
   MIN_DECK_SLIDES_MESSAGE,
   emptySlideSpecFromLayout,
   slideSpecFromSlide,
-  updateSlideControls,
-  updateSlideAttributes,
   updateSlideLocalStyle,
-  resetSlideLocalStyle,
-  updateSlideSourceMetadata,
   setThemePackage,
-  updateDeckChrome,
   insertTemplateSlide,
   duplicateSlide,
   deleteSlide,
@@ -125,22 +101,14 @@ import {
   cutNodes,
   updateNodeContent,
   resetImageCrop,
-  updateNodeStyleBinding,
-  updateLocalStyle,
-  resetLocalStyleOverride,
-  detachDecoration,
-  detachDeckChrome,
   updateNodeLayout,
   updateNodeRotation,
   updateNodeLayouts,
-  updateNodeAttributes,
-  updateNodeSourceMetadata,
   moveNodesBy,
   deleteNodes,
   duplicateNodes,
   groupNodes,
   ungroupNodes,
-  reorderZIndex,
   applyTemplate,
 } from "@/lib/presentation-vnext";
 
@@ -186,14 +154,7 @@ import {
   type V7VisualPickResult,
 } from "@/lib/presentation-vnext/node-asset-factories";
 import { nextLayeredZIndex } from "@/lib/presentation-vnext/layer-bands";
-import {
-  buildAlignSelectionPatches,
-  buildDistributeSelectionPatches,
-  buildLayerReorderPatches,
-  buildMatchSizeSelectionPatches,
-  buildZOrderSelectionOperations,
-  collectSelectedLayoutEntries,
-} from "./arrangement-geometry";
+import { collectSelectedLayoutEntries } from "./arrangement-geometry";
 import {
   multiSelectionBounds,
   rotateMultiSelectionFrames,
@@ -207,11 +168,6 @@ import {
   type CropHandlePosition,
   type ResizeHandlePosition,
 } from "./slide-canvas";
-import {
-  createFocusGeometryRegistry,
-  focusGeometryTargets,
-  type FocusGeometryRegistry,
-} from "./focus-geometry-registry";
 import { startPointerDragLifecycle } from "./pointer-drag-lifecycle";
 import { createSingleCommitGesture } from "./single-commit-gesture";
 import {
@@ -236,12 +192,7 @@ import {
   parentGroupIdForNode,
 } from "./selection-traversal";
 import { DeckChromePanel, InspectorShell } from "./inspector";
-import {
-  ContextToolbar,
-  type SelectionAlignMode,
-  type SelectionDistributeMode,
-  type SelectionMatchSizeMode,
-} from "./toolbar/context-toolbar";
+import { ContextToolbar } from "./toolbar/context-toolbar";
 import {
   DeckToolbar,
   DeckToolbarButton,
@@ -293,6 +244,10 @@ import {
   shouldEnterInlineNodeEditOnClick,
 } from "./stage-pointer-interactions";
 import { useStageInteractionController } from "./use-stage-interaction-controller";
+import {
+  useFocusFirstDescendantWhenOpen,
+  useStageFocusController,
+} from "./use-stage-focus-controller";
 import { pairDuplicatesAfterOriginals } from "./stage-duplicate";
 import {
   connectorEndpointsEqual,
@@ -315,6 +270,8 @@ import {
 } from "./use-slide-editor-shell-controller";
 import { useSourceReviewController } from "./use-source-review-controller";
 import { useTableCellEditing } from "./use-table-cell-editing";
+import { useInlineTextEditingController } from "./use-inline-text-editing-controller";
+import { useInspectorCommands } from "./inspector-command-descriptors";
 import { SourceReviewPanel } from "./source-review-panel";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
 import { clipboardShortcutActionFromKey } from "./clipboard-shortcuts";
@@ -351,15 +308,6 @@ export {
   setupBeforeUnloadGuard,
   SlideEditorCloseConfirmDialog,
 } from "./use-slide-editor-shell-controller";
-
-const DECK_CHROME_KINDS: DeckChromeKind[] = [
-  "logo",
-  "footer",
-  "pageNumber",
-  "watermark",
-  "border",
-  "safeArea",
-];
 
 const TEMPLATE_REGISTRY = createDefaultTemplateRegistry();
 const TEMPLATE_OPTIONS = TEMPLATE_REGISTRY.all();
@@ -625,25 +573,6 @@ function topLevelSelectedNodeIds(
   }
   return result;
 }
-function defaultStyleBindingForNode(node: SlideChildNode): StyleBinding {
-  if (node.type === "text") {
-    const role = node.role;
-    let ref: StyleBinding["ref"] = "text.body";
-    if (role === "title") ref = "text.title";
-    else if (role === "subtitle") ref = "text.subtitle";
-    else if (role === "kicker") ref = "text.kicker";
-    else if (role === "caption") ref = "text.caption";
-    else if (role === "quote") ref = "text.quote";
-    else if (role === "metric") ref = "text.metric";
-    return { ref };
-  }
-  if (node.type === "image") return { ref: "media.inline" };
-  if (node.type === "visual") return { ref: "chart.primary" };
-  if (node.type === "connector") return { ref: "connector.primary" };
-  if (node.type === "table") return { ref: "surface.table" };
-  return { ref: "surface.card" };
-}
-
 const STAGE_VIEWPORT_FALLBACK: StageFitSize = { width: 1120, height: 630 };
 const DESKTOP_INSPECTOR_OVERLAY_WIDTH = 352;
 const CLICK_MOVE_THRESHOLD_PX = 4;
@@ -688,30 +617,6 @@ function stageScrollContentStyle(stageFit: CanvasStageFit): CSSProperties {
     width: stageFit.scrollContentSize.width,
     height: stageFit.scrollContentSize.height,
   };
-}
-
-function focusStageNode(
-  focusGeometryRegistry: FocusGeometryRegistry,
-  nodeId: string,
-): void {
-  focusGeometryRegistry.focus(focusGeometryTargets.stageNode(nodeId));
-}
-
-/**
- * Finds the slide index that owns a node id (searching nested group children),
- * or, failing that, the index of a slide whose own id matches. Returns -1 when
- * the id is no longer present in the deck.
- */
-function findSlideIndexForFocus(deck: DeckV7, targetId: string): number {
-  const containsNode = (nodes: readonly SlideChildNode[]): boolean =>
-    nodes.some(
-      (node) =>
-        node.id === targetId ||
-        (node.type === "group" && containsNode(node.children)),
-    );
-  const byNode = deck.slides.findIndex((slide) => containsNode(slide.children));
-  if (byNode !== -1) return byNode;
-  return deck.slides.findIndex((slide) => slide.id === targetId);
 }
 
 function slideDisplayName(slide: SlideNode | undefined, index: number): string {
@@ -942,24 +847,6 @@ export function SlideEditorVNext({
 }: SlideEditorVNextProps): JSX.Element {
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const editorRootRef = useRef<HTMLDivElement | null>(null);
-  const focusGeometryRegistry = useMemo(
-    () => createFocusGeometryRegistry(),
-    [],
-  );
-  const [canvasElement, setCanvasElement] = useState<HTMLDivElement | null>(
-    null,
-  );
-  const handleCanvasRef = useCallback((el: HTMLDivElement | null) => {
-    setCanvasElement(el);
-  }, []);
-  const suppressStageClickRef = useRef(false);
-  function suppressNextStageClick() {
-    suppressStageClickRef.current = true;
-    window.setTimeout(() => {
-      suppressStageClickRef.current = false;
-    }, 0);
-  }
-  const lastUndoRedoFocusTokenRef = useRef<number | null>(null);
   const themePackages = useMemo(() => listThemePackagesV7(), []);
   const isMac = useMemo(() => {
     if (typeof navigator === "undefined") {
@@ -997,43 +884,13 @@ export function SlideEditorVNext({
   const replaceImageTargetIdRef = useRef<string | null>(null);
   const insertImagePendingRef = useRef(false);
 
-  // Inline text editing state
-  const [inlineEditNodeId, setInlineEditNodeId] = useState<string | null>(null);
-  const [inlineEditInitialCaret, setInlineEditInitialCaret] =
-    useState<InlineTextInitialCaret | null>(null);
-
-  function enterInlineEdit(
-    nodeId: string,
-    initialCaret: InlineTextInitialCaret | null = null,
-  ) {
-    setInlineEditInitialCaret(initialCaret);
-    setInlineEditNodeId(nodeId);
-  }
-
-  function exitInlineEdit() {
-    setInlineEditInitialCaret(null);
-    setInlineEditNodeId(null);
-  }
-
-  function requestInlineEditCommit() {
-    if (!inlineEditNodeId) return;
-    if (typeof document === "undefined") {
-      exitInlineEdit();
-      return;
-    }
-    const escapedNodeId = inlineEditNodeId
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"');
-    const editor = document.querySelector(
-      `[data-inline-editor-vnext="${escapedNodeId}"]`,
-    );
-    const blur = (editor as { blur?: unknown } | null)?.blur;
-    if (typeof blur === "function") {
-      blur.call(editor);
-      return;
-    }
-    exitInlineEdit();
-  }
+  const {
+    inlineEditNodeId,
+    inlineEditInitialCaret,
+    enterInlineEdit,
+    exitInlineEdit,
+    requestInlineEditCommit,
+  } = useInlineTextEditingController();
 
   function handleThemePackageChange(packageId: string) {
     const nextPackage = themePackages.find(
@@ -1094,8 +951,6 @@ export function SlideEditorVNext({
   const [clipboardNodes, setClipboardNodes] = useState<SlideChildNode[]>([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [stageZoomPercent, setStageZoomPercent] = useState(100);
-  const [stageViewportSize, setStageViewportSize] =
-    useState<StageFitSize | null>(null);
   const [filmstripCollapsed, setFilmstripCollapsed] = useState(() =>
     readFilmstripCollapsed(documentId),
   );
@@ -1130,7 +985,6 @@ export function SlideEditorVNext({
     candidateIds: string[];
   } | null>(null);
   const semanticCandidateStackRef = useRef<readonly string[]>([]);
-  const stageViewportRef = useRef<HTMLDivElement | null>(null);
   const {
     stageGuides,
     setStageGuides,
@@ -1167,7 +1021,29 @@ export function SlideEditorVNext({
     connectorGestureDraft,
     setConnectorGestureDraft,
     clearGestureDrafts,
+    suppressNextStageClick,
+    shouldSuppressStageClick,
   } = useStageInteractionController();
+  const {
+    focusGeometryRegistry,
+    canvasElement,
+    handleCanvasRef,
+    stageViewportRef,
+    stageViewportSize,
+    focusSelectedNodeSoon,
+    focusStageViewportSoon,
+    focusEditorRootSoon,
+    focusStageNodeSoon,
+  } = useStageFocusController({
+    editorRootRef,
+    deck,
+    undoRedoFocus,
+    setActiveSlideIndex,
+    setSelection,
+    setFocusedNodeId,
+    setHoveredNodeId,
+    exitInlineEdit,
+  });
   const {
     toolbarError,
     setToolbarError,
@@ -1191,15 +1067,10 @@ export function SlideEditorVNext({
   const isDesktopInspectorViewport = useDesktopInspectorViewport();
   const deckChromeToolbarPanelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!deckChromeToolbarOpen) return;
-    const panel = deckChromeToolbarPanelRef.current;
-    if (!panel) return;
-    const focusTarget = panel.querySelector<HTMLElement>(
-      "input, select, button, textarea, [tabindex]:not([tabindex='-1'])",
-    );
-    focusTarget?.focus();
-  }, [deckChromeToolbarOpen]);
+  useFocusFirstDescendantWhenOpen(
+    deckChromeToolbarOpen,
+    deckChromeToolbarPanelRef,
+  );
 
   useEffect(() => {
     if (!zoomMenuOpen) return;
@@ -1229,49 +1100,6 @@ export function SlideEditorVNext({
       clearGestureDrafts();
     });
   }, [activeSlide?.id, clearGestureDrafts]);
-
-  useEffect(() => {
-    if (!undoRedoFocus) return;
-    if (lastUndoRedoFocusTokenRef.current === undoRedoFocus.token) return;
-    lastUndoRedoFocusTokenRef.current = undoRedoFocus.token;
-    const nextSlideIndex = findSlideIndexForFocus(deck, undoRedoFocus.nodeId);
-    const targetSlide = deck.slides[nextSlideIndex];
-    const targetNode = targetSlide
-      ? findNodeById(targetSlide.children, undoRedoFocus.nodeId)
-      : undefined;
-    return scheduleEffectStateUpdate(() => {
-      if (nextSlideIndex < 0) {
-        setSelection((s) => clearSelection(s));
-        setFocusedNodeId(null);
-        exitInlineEdit();
-        window.setTimeout(() => editorRootRef.current?.focus(), 0);
-        return;
-      }
-
-      setActiveSlideIndex(nextSlideIndex);
-      exitInlineEdit();
-      setHoveredNodeId(null);
-      if (targetNode) {
-        setSelection((s) => setSelectedNodeIds(s, [targetNode.id]));
-        setFocusedNodeId(targetNode.id);
-        window.setTimeout(
-          () => focusStageNode(focusGeometryRegistry, targetNode.id),
-          0,
-        );
-        return;
-      }
-
-      setSelection((s) => clearSelection(s));
-      setFocusedNodeId(null);
-      window.setTimeout(() => editorRootRef.current?.focus(), 0);
-    });
-  }, [
-    deck,
-    focusGeometryRegistry,
-    setFocusedNodeId,
-    setHoveredNodeId,
-    undoRedoFocus,
-  ]);
 
   function requestInspectorPanel(panel: InspectorPanelId) {
     setInspectorPanelRequest((current) => ({
@@ -1303,45 +1131,6 @@ export function SlideEditorVNext({
       return;
     }
   }
-
-  useEffect(() => {
-    const node = stageViewportRef.current;
-    if (!node || typeof ResizeObserver === "undefined") return;
-    let frameId: number | null = null;
-    const measure = () => {
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
-      const paddingX =
-        Number.parseFloat(style.paddingLeft) +
-        Number.parseFloat(style.paddingRight);
-      const paddingY =
-        Number.parseFloat(style.paddingTop) +
-        Number.parseFloat(style.paddingBottom);
-      const next = {
-        width: Math.max(1, rect.width - paddingX),
-        height: Math.max(1, rect.height - paddingY),
-      };
-      setStageViewportSize((current) =>
-        current?.width === next.width && current.height === next.height
-          ? current
-          : next,
-      );
-    };
-    const scheduleMeasure = () => {
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        measure();
-      });
-    };
-    scheduleMeasure();
-    const observer = new ResizeObserver(scheduleMeasure);
-    observer.observe(node);
-    return () => {
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
-      observer.disconnect();
-    };
-  }, []);
 
   useEffect(() => {
     return scheduleEffectStateUpdate(() => {
@@ -1512,10 +1301,7 @@ export function SlideEditorVNext({
     onDeckChange(result.deck);
     setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
     setFocusedNodeId(result.nodeId);
-    window.setTimeout(
-      () => focusStageNode(focusGeometryRegistry, result.nodeId),
-      0,
-    );
+    focusStageNodeSoon(result.nodeId);
   }
 
   function handleInsertText() {
@@ -1731,23 +1517,6 @@ export function SlideEditorVNext({
     );
   }
 
-  function focusSelectedNodeSoon(nodeId: string | undefined) {
-    if (!nodeId) return;
-    setFocusedNodeId(nodeId);
-    window.setTimeout(() => focusStageNode(focusGeometryRegistry, nodeId), 0);
-  }
-
-  function focusStageViewportSoon() {
-    window.setTimeout(() => {
-      const stageViewport = stageViewportRef.current;
-      if (stageViewport) {
-        stageViewport.focus();
-        return;
-      }
-      editorRootRef.current?.focus();
-    }, 0);
-  }
-
   function handleContextToolbarEscape() {
     if (firstSelectedId) {
       focusSelectedNodeSoon(firstSelectedId);
@@ -1788,14 +1557,11 @@ export function SlideEditorVNext({
     if (replacementId) {
       setSelection((s) => setSelectedNodeIds(s, [replacementId]));
       setFocusedNodeId(replacementId);
-      window.setTimeout(
-        () => focusStageNode(focusGeometryRegistry, replacementId),
-        0,
-      );
+      focusStageNodeSoon(replacementId);
     } else {
       setSelection((s) => clearSelection(s));
       setFocusedNodeId(null);
-      window.setTimeout(() => editorRootRef.current?.focus(), 0);
+      focusEditorRootSoon();
     }
     setStageAnnouncement(
       `Deleted ${deletedCount} ${deletedCount === 1 ? "node" : "nodes"}, ${Math.max(
@@ -2275,7 +2041,7 @@ export function SlideEditorVNext({
   }
 
   function handleStageClick(e: MouseEvent) {
-    if (suppressStageClickRef.current) return;
+    if (shouldSuppressStageClick()) return;
     if (isEditableTarget(e.target)) return;
     if (e.target instanceof HTMLElement && e.target.closest("[data-node-id]")) {
       return;
@@ -3293,10 +3059,7 @@ export function SlideEditorVNext({
       if (nextId) {
         setSelection((s) => setSelectedNodeIds(s, [nextId]));
         setFocusedNodeId(nextId);
-        window.setTimeout(
-          () => focusStageNode(focusGeometryRegistry, nextId),
-          0,
-        );
+        focusStageNodeSoon(nextId);
         event.preventDefault();
       }
       return;
@@ -3406,10 +3169,7 @@ export function SlideEditorVNext({
         ];
         setSelection((s) => setSelectedNodeIds(s, orderedSelection));
         setFocusedNodeId(primaryId);
-        window.setTimeout(
-          () => focusStageNode(focusGeometryRegistry, primaryId),
-          0,
-        );
+        focusStageNodeSoon(primaryId);
       }
       return;
     }
@@ -3583,265 +3343,10 @@ export function SlideEditorVNext({
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Slide root controls
-  // ---------------------------------------------------------------------------
-
-  function handleUpdateControls(patch: Partial<SlideControls>) {
-    if (!activeSlide) return;
-    onDeckChange(updateSlideControls(deck, activeSlide.id, patch));
-  }
-
-  function handleUpdateProps(patch: Partial<SlideProps>) {
-    if (!activeSlide) return;
-    // SlideProps (decoration/chrome) updates are applied via updateSlideControls
-    // by merging into the slide props
-    const updated: DeckV7 = {
-      ...deck,
-      slides: deck.slides.map((s) => {
-        if (s.id !== activeSlide.id) return s;
-        const props = { ...s.props, ...patch };
-        const detachedNodeIds = new Set<string>();
-        if (Object.prototype.hasOwnProperty.call(patch, "deckChrome")) {
-          const nextDeckChrome = patch.deckChrome;
-          for (const kind of DECK_CHROME_KINDS) {
-            const previousOverride = s.props?.deckChrome?.[kind];
-            if (
-              previousOverride?.mode !== "detached" ||
-              !previousOverride.nodeId
-            ) {
-              continue;
-            }
-            const nextOverride = nextDeckChrome?.[kind];
-            if (
-              nextOverride?.mode !== "detached" ||
-              nextOverride.nodeId !== previousOverride.nodeId
-            ) {
-              detachedNodeIds.add(previousOverride.nodeId);
-            }
-          }
-        }
-        for (const key of Object.keys(props) as (keyof SlideProps)[]) {
-          if (props[key] === undefined) {
-            delete props[key];
-          }
-        }
-        return {
-          ...s,
-          props: Object.keys(props).length > 0 ? props : undefined,
-          children:
-            detachedNodeIds.size > 0
-              ? s.children.filter((child) => !detachedNodeIds.has(child.id))
-              : s.children,
-        };
-      }),
-    };
-    onDeckChange(updated);
-  }
-
-  function handleUpdateDeckChrome(patch: Partial<DeckChromeConfig>) {
-    onDeckChange(updateDeckChrome(deck, patch));
-  }
-
-  function handleUpdateSlideAttributes(patch: {
-    name?: string;
-    notes?: string;
-  }) {
-    if (!activeSlide) return;
-    onDeckChange(updateSlideAttributes(deck, activeSlide.id, patch));
-  }
-
-  function handleUpdateSlideLocalStyle(patch: StylePatch) {
-    if (!activeSlide) return;
-    onDeckChange(updateSlideLocalStyle(deck, activeSlide.id, patch));
-  }
-
-  function handleResetSlideLocalStyle() {
-    if (!activeSlide) return;
-    onDeckChange(resetSlideLocalStyle(deck, activeSlide.id));
-  }
-
-  function handleUpdateSlideSource(source: NodeSourceMetadata | undefined) {
-    if (!activeSlide) return;
-    onDeckChange(updateSlideSourceMetadata(deck, activeSlide.id, source));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Style binding
-  // ---------------------------------------------------------------------------
-
-  function handleChangeStyleBinding(binding: StyleBinding) {
-    if (!activeSlide || !firstSelectedId) return;
-    onDeckChange(
-      updateNodeStyleBinding(deck, activeSlide.id, firstSelectedId, binding),
-    );
-  }
-
-  function handleUpdateSelectedLayout(patch: Partial<LayoutBox>) {
-    if (!activeSlide || !firstSelectedId) return;
-    const frame =
-      patch.frame !== undefined ? clampFrame(patch.frame) : undefined;
-    const rotation =
-      patch.rotation !== undefined
-        ? normalizeRotationDegrees(patch.rotation)
-        : undefined;
-    const zIndex =
-      patch.zIndex !== undefined && Number.isFinite(patch.zIndex)
-        ? Math.trunc(patch.zIndex)
-        : undefined;
-    onDeckChange(
-      updateNodeLayout(deck, activeSlide.id, firstSelectedId, {
-        ...patch,
-        ...(frame !== undefined ? { frame } : {}),
-        ...(rotation !== undefined ? { rotation } : {}),
-        ...(zIndex !== undefined ? { zIndex } : {}),
-      }),
-    );
-  }
-
-  function handleUpdateSelectedAttributes(patch: {
-    locked?: boolean;
-    hidden?: boolean;
-  }) {
-    if (!activeSlide || !firstSelectedId) return;
-    let updated = deck;
-    for (const id of selectedIds.length > 0 ? selectedIds : [firstSelectedId]) {
-      updated = updateNodeAttributes(updated, activeSlide.id, id, patch);
-    }
-    onDeckChange(updated);
-    if (patch.locked !== undefined) {
-      setStageAnnouncement(
-        patch.locked ? "Selection locked" : "Selection unlocked",
-      );
-      focusSelectedNodeSoon(firstSelectedId);
-    }
-    if (patch.hidden === true) {
-      const affectedIds =
-        selectedIds.length > 0 ? selectedIds : [firstSelectedId];
-      const replacementId = replacementNodeAfterDelete(affectedIds);
-      if (replacementId) {
-        setSelection((s) => setSelectedNodeIds(s, [replacementId]));
-        focusSelectedNodeSoon(replacementId);
-      } else {
-        setSelection((s) => clearSelection(s));
-        setFocusedNodeId(null);
-        window.setTimeout(() => editorRootRef.current?.focus(), 0);
-      }
-    }
-  }
-
-  function handleUpdateSelectedContent(patch: Record<string, unknown>) {
-    if (!activeSlide || !firstSelectedId) return;
-    onDeckChange(
-      updateNodeContent(deck, activeSlide.id, firstSelectedId, patch),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Local override reset
-  // ---------------------------------------------------------------------------
-
-  function handleResetToTheme() {
-    if (!activeSlide || !firstSelectedId) return;
-    onDeckChange(
-      resetLocalStyleOverride(deck, activeSlide.id, firstSelectedId),
-    );
-  }
-
-  function handleUpdateSelectedLocalStyle(patch: StylePatch) {
-    if (!activeSlide || !firstSelectedId) return;
-    onDeckChange(
-      updateLocalStyle(deck, activeSlide.id, firstSelectedId, patch),
-    );
-  }
-
-  function handleUpdateSelectedSource(source: NodeSourceMetadata | undefined) {
-    if (!activeSlide || !firstSelectedId) return;
-    onDeckChange(
-      updateNodeSourceMetadata(deck, activeSlide.id, firstSelectedId, source),
-    );
-  }
-
-  function handleSelectLayer(nodeId: string) {
-    setSelection((s) => setSelectedNodeIds(s, [nodeId]));
-    if (activeSlide) {
-      setActiveGroupId(parentGroupIdForNode(activeSlide.children, nodeId));
-    }
-    focusSelectedNodeSoon(nodeId);
-  }
-
-  function handleUpdateLayer(
-    nodeId: string,
-    patch: { name?: string; locked?: boolean; hidden?: boolean },
-  ) {
-    if (!activeSlide) return;
-    onDeckChange(updateNodeAttributes(deck, activeSlide.id, nodeId, patch));
-  }
-
-  function handleReorderLayer(nodeId: string, targetIndex: number) {
-    if (!activeSlide) return;
-    const patches = buildLayerReorderPatches(
-      activeSlide.children,
-      nodeId,
-      targetIndex,
-    );
-    if (patches.size === 0) return;
-    onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-  }
-
-  function handleAlignSelection(mode: SelectionAlignMode) {
-    if (!activeSlide) return;
-    const entries = collectSelectedLayoutEntries(
-      activeSlide.children,
-      selectedIds,
-    );
-    const patches = buildAlignSelectionPatches(entries, mode);
-    if (patches.size === 0) return;
-    onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-  }
-
-  function handleDistributeSelection(mode: SelectionDistributeMode) {
-    if (!activeSlide) return;
-    const entries = collectSelectedLayoutEntries(
-      activeSlide.children,
-      selectedIds,
-    );
-    const patches = buildDistributeSelectionPatches(entries, mode);
-    if (patches.size === 0) return;
-    onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-  }
-
-  function handleMatchSize(mode: SelectionMatchSizeMode) {
-    if (!activeSlide) return;
-    const entries = collectSelectedLayoutEntries(
-      activeSlide.children,
-      selectedIds,
-    );
-    const patches = buildMatchSizeSelectionPatches(entries, mode);
-    if (patches.size === 0) return;
-    onDeckChange(updateNodeLayouts(deck, activeSlide.id, patches));
-  }
-
-  function handleReorderSelection(
-    kind: "forward" | "backward" | "front" | "back",
-  ) {
-    if (!activeSlide || selectedIds.length === 0) return;
-    const operations = buildZOrderSelectionOperations(
-      activeSlide.children,
-      selectedIds,
-      kind,
-    );
-    if (operations.length === 0) return;
-    let updated = deck;
-    operations.forEach((operation) => {
-      updated = reorderZIndex(
-        updated,
-        activeSlide.id,
-        operation.id,
-        operation.zIndex,
-      );
-    });
-    onDeckChange(updated);
+  function requestImageRepair(nodeId: string) {
+    replaceImageTargetIdRef.current = nodeId;
+    insertImagePendingRef.current = false;
+    replaceImageFileInputRef.current?.click();
   }
 
   function handleDuplicateActiveSlide() {
@@ -3865,206 +3370,57 @@ export function SlideEditorVNext({
     setSelection(createSelectionState(selection.mode));
   }
 
-  // ---------------------------------------------------------------------------
-  // Diagnostics actions
-  // ---------------------------------------------------------------------------
-
-  function focusDiagnosticTarget(
-    focus: { slideId: string; nodeId?: string },
-    sourceDeck: DeckV7 = deck,
-  ) {
-    const slideIndex = sourceDeck.slides.findIndex(
-      (slide) => slide.id === focus.slideId,
-    );
-    if (slideIndex < 0) return;
-    const targetSlide = sourceDeck.slides[slideIndex];
-    const node =
-      focus.nodeId && targetSlide
-        ? findNodeById(targetSlide.children, focus.nodeId)
-        : undefined;
-    setActiveSlideIndex(slideIndex);
-    exitInlineEdit();
-    setHoveredNodeId(null);
-    if (node) {
-      setSelection((s) => setSelectedNodeIds(s, [node.id]));
-      setFocusedNodeId(node.id);
-      focusSelectedNodeSoon(node.id);
-      return;
-    }
-    setSelection((s) => clearSelection(s));
-    setFocusedNodeId(null);
-  }
-
-  function handleDiagnosticNavigate(diagnostic: PresentationDiagnostic) {
-    const nodeId = getDiagnosticNodeId(diagnostic);
-    const slideId = getDiagnosticSlideId(diagnostic);
-    const slideIndex = slideId
-      ? deck.slides.findIndex((slide) => slide.id === slideId)
-      : nodeId
-        ? findSlideIndexForFocus(deck, nodeId)
-        : -1;
-    if (slideIndex < 0) {
-      setStageAnnouncement("Diagnostic target is no longer present.");
-      return;
-    }
-    const targetSlide = deck.slides[slideIndex];
-    const targetNode =
-      nodeId && targetSlide
-        ? findNodeById(targetSlide.children, nodeId)
-        : undefined;
-    focusDiagnosticTarget({
-      slideId: targetSlide.id,
-      ...(targetNode ? { nodeId: targetNode.id } : {}),
-    });
-    requestInspectorPanel("diagnostics");
-    if (isMobileInspectorViewport()) setInspectorSheetOpen(true);
-    setDeckDiagnosticsReviewOpen(false);
-    setStageAnnouncement(
-      targetNode
-        ? "Moved to diagnostic target node."
-        : "Moved to diagnostic target slide.",
-    );
-  }
-
-  function handleDiagnosticAction(
-    action: DiagnosticAction,
-    diagnostic: PresentationDiagnostic,
-  ) {
-    if (
-      action.type === "refresh-source" ||
-      action.type === "unlink-source" ||
-      action.type === "relink-source" ||
-      action.type === "open-source-review"
-    ) {
-      const targetedDiagnostic = action.target
-        ? { ...diagnostic, target: action.target }
-        : diagnostic;
-      const targetNodeId =
-        getDiagnosticNodeId(targetedDiagnostic) ?? firstSelectedId;
-      const targetSlideId =
-        getDiagnosticSlideId(targetedDiagnostic) ?? activeSlide?.id;
-
-      if (action.type === "open-source-review") {
-        if (targetSlideId && targetNodeId) {
-          handleSelectSourceItem(targetSlideId, targetNodeId);
-          requestInspectorPanel("source");
-          if (isMobileInspectorViewport()) setInspectorSheetOpen(true);
-        }
-        setDeckDiagnosticsReviewOpen(false);
-        setStageAnnouncement("Opened Source Review.");
-        return;
-      }
-
-      if (!targetSlideId || !targetNodeId) {
-        setStageAnnouncement("Source diagnostic target is no longer present.");
-        return;
-      }
-
-      if (action.type === "refresh-source") {
-        handleRefreshSourceAt(targetSlideId, targetNodeId);
-        setDeckDiagnosticsReviewOpen(false);
-        return;
-      }
-      if (action.type === "unlink-source") {
-        handleUnlinkSourceAt(targetSlideId, targetNodeId);
-        setDeckDiagnosticsReviewOpen(false);
-        return;
-      }
-
-      handleSelectSourceItem(targetSlideId, targetNodeId);
-      requestInspectorPanel("source");
-      if (isMobileInspectorViewport()) setInspectorSheetOpen(true);
-      setDeckDiagnosticsReviewOpen(false);
-      setStageAnnouncement("Choose a source block to relink this node.");
-      return;
-    }
-
-    const result = applyDiagnosticRepairAction(deck, action, diagnostic, {
-      activeSlideId: activeSlide?.id,
-      selectedNodeId: firstSelectedId,
-      defaultStyleBindingForNode,
-    });
-
-    if (result.status === "noop") {
-      setStageAnnouncement(result.reason);
-      return;
-    }
-
-    if (result.status === "applied") {
-      onDeckChange(result.deck);
-      focusDiagnosticTarget(result.focus, result.deck);
-      setStageAnnouncement(result.announcement);
-      return;
-    }
-
-    if (result.port === "asset-panel") {
-      focusDiagnosticTarget(result.focus);
-      const slide = deck.slides.find(
-        (candidate) => candidate.id === result.focus.slideId,
-      );
-      const node =
-        result.focus.nodeId && slide
-          ? findNodeById(slide.children, result.focus.nodeId)
-          : undefined;
-      if (node?.type === "image") {
-        replaceImageTargetIdRef.current = node.id;
-        insertImagePendingRef.current = false;
-        replaceImageFileInputRef.current?.click();
-      } else {
-        requestInspectorPanel("diagnostics");
-        setStageAnnouncement(
-          "Select the asset field in the inspector to repair this node.",
-        );
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Decoration detach
-  // ---------------------------------------------------------------------------
-
-  function handleDetachDecoration() {
-    if (!activeSlide || !selectedResolvedNode) return;
-    if (
-      selectedResolvedNode.source !== "themeDecoration" &&
-      selectedResolvedNode.source !== "deckChrome"
-    ) {
-      return;
-    }
-
-    if (selectedResolvedNode.source === "deckChrome") {
-      if (!selectedResolvedNode.chromeKind) return;
-      onDeckChange(
-        detachDeckChrome(
-          deck,
-          activeSlide.id,
-          selectedResolvedNode.chromeKind,
-          selectedResolvedNode,
-        ),
-      );
-      return;
-    }
-
-    const { layout, style } = selectedResolvedNode;
-    // Build a LayoutBox from the resolved layout (drop framePx)
-    const { framePx: _framePx, ...persistedLayout } = layout;
-    const decorationContent =
-      selectedResolvedNode.content.type === "text" ||
-      selectedResolvedNode.content.type === "image" ||
-      selectedResolvedNode.content.type === "shape"
-        ? selectedResolvedNode.content
-        : undefined;
-    onDeckChange(
-      detachDecoration(
-        deck,
-        activeSlide.id,
-        selectedResolvedNode.id,
-        persistedLayout,
-        style as StylePatch,
-        decorationContent,
-      ),
-    );
-  }
+  const {
+    handleUpdateControls,
+    handleUpdateProps,
+    handleUpdateDeckChrome,
+    handleUpdateSlideAttributes,
+    handleUpdateSlideLocalStyle,
+    handleResetSlideLocalStyle,
+    handleUpdateSlideSource,
+    handleChangeStyleBinding,
+    handleUpdateSelectedLayout,
+    handleUpdateSelectedAttributes,
+    handleUpdateSelectedContent,
+    handleResetToTheme,
+    handleUpdateSelectedLocalStyle,
+    handleUpdateSelectedSource,
+    handleSelectLayer,
+    handleUpdateLayer,
+    handleReorderLayer,
+    handleAlignSelection,
+    handleDistributeSelection,
+    handleMatchSize,
+    handleReorderSelection,
+    handleDiagnosticNavigate,
+    handleDiagnosticAction,
+    handleDetachDecoration,
+  } = useInspectorCommands({
+    deck,
+    activeSlide,
+    selectedResolvedNode,
+    firstSelectedId,
+    selectedIds,
+    onDeckChange,
+    setSelection,
+    setFocusedNodeId,
+    setHoveredNodeId,
+    setStageAnnouncement,
+    setActiveGroupId,
+    setActiveSlideIndex,
+    setDeckDiagnosticsReviewOpen,
+    setInspectorSheetOpen,
+    requestImageRepair,
+    exitInlineEdit,
+    focusSelectedNodeSoon,
+    focusEditorRootSoon,
+    requestInspectorPanel,
+    replacementNodeAfterDelete,
+    isMobileInspectorViewport,
+    handleSelectSourceItem,
+    handleRefreshSourceAt,
+    handleUnlinkSourceAt,
+  });
 
   const stageFit = canvasStageFit(
     deck,
