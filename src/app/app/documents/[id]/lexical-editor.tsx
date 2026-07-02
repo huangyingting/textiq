@@ -50,6 +50,7 @@ import { MobileEditingSheetHost } from "./mobile-editing-sheet";
 import { Presence } from "./presence";
 import { OverallAdjustmentsPanel } from "./overall-adjustments-panel";
 import { ShareButton } from "./share-button";
+import { SourceBlockJumpPlugin } from "./source-block-jump";
 import { TagControl } from "./tag-control";
 import { UndoRedoControls } from "./undo-redo-controls";
 import { VersionHistoryPanel } from "./version-history-panel";
@@ -397,6 +398,7 @@ export function LexicalEditor({
       createEditorPlugin("insert-menu", () => <InsertMenuPlugin />),
       createEditorPlugin("block-spark", () => <BlockSparkPlugin />),
       createEditorPlugin("insert-visual", () => <InsertVisualPlugin />),
+      createEditorPlugin("source-block-jump", () => <SourceBlockJumpPlugin />),
       createEditorPlugin("floating-text-toolbar", () => (
         <FloatingTextToolbar />
       )),

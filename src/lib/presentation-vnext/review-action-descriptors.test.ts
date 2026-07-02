@@ -32,6 +32,7 @@ describe("review action descriptors", () => {
     const missingRelink = sourceReviewActionDescriptor("relink-source", {
       sourceBlockCount: 0,
     });
+    const sourceNavigation = sourceReviewActionDescriptor("go-to-source");
     const refreshAll = sourceReviewActionDescriptor("refresh-all-safe-stale", {
       staleCount: 2,
     });
@@ -45,6 +46,8 @@ describe("review action descriptors", () => {
       missingRelink.disabledReason,
       "No source blocks are available to relink.",
     );
+    assert.equal(sourceNavigation.label, "Jump to source block");
+    assert.equal(sourceNavigation.repairEligibility, "navigation-only");
     assert.equal(refreshAll.label, "Refresh all safe stale (2)");
     assert.equal(refreshAll.safety, "safe");
   });

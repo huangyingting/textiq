@@ -89,6 +89,7 @@ export interface SourceReviewController {
     nodeId: string,
     block: SourceBlockIndexEntry,
   ) => void;
+  handleNavigateSourceBlock: (documentId: string, blockId: string) => void;
   handleDismissSourceAt: (slideId: string, nodeId: string) => void;
   handleRefreshAllSources: () => void;
   handleSyncFromDocument: () => void;
@@ -219,6 +220,15 @@ export function useSourceReviewController({
     );
   }
 
+  function handleNavigateSourceBlock(documentId: string, blockId: string) {
+    const params = new URLSearchParams({ sourceBlock: blockId });
+    window.open(
+      `/app/documents/${encodeURIComponent(documentId)}?${params.toString()}`,
+      "_blank",
+    );
+    setStageAnnouncement("Opened the source document block.");
+  }
+
   function handleDismissSourceAt(slideId: string, nodeId: string) {
     if (!documentSourceIndex) return;
     applySourceLinkOrchestration(
@@ -270,6 +280,7 @@ export function useSourceReviewController({
     handleRefreshSourceAt,
     handleUnlinkSourceAt,
     handleRelinkSourceAt,
+    handleNavigateSourceBlock,
     handleDismissSourceAt,
     handleRefreshAllSources,
     handleSyncFromDocument,

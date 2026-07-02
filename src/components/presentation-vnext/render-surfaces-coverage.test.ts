@@ -645,6 +645,8 @@ describe("source review and context menu render surfaces", () => {
       onRefresh: (_slideId, nodeId) => calls.push(`refresh:${nodeId}`),
       onUnlink: (_slideId, nodeId) => calls.push(`unlink:${nodeId}`),
       onRelink: (_slideId, nodeId) => calls.push(`relink:${nodeId}`),
+      onNavigateSource: (_documentId, blockId) =>
+        calls.push(`source:${blockId}`),
       onDismiss: (_slideId, nodeId) => calls.push(`dismiss:${nodeId}`),
       onRefreshAll: () => calls.push("refresh-all"),
     });
@@ -664,6 +666,7 @@ describe("source review and context menu render surfaces", () => {
     assert.match(html, /disabled=""/);
     assert.ok(calls.includes("refresh-all"));
     assert.ok(calls.includes("select:fresh-node"));
+    assert.ok(calls.includes("source:fresh-node"));
     assert.ok(calls.includes("dismiss:stale-node"));
   });
 
