@@ -498,7 +498,9 @@ describe("SlideEditorVNext render and interaction branches", () => {
       await clickByLabel(tree, "Save now");
       await clickByLabel(tree, "Present slides");
       await clickByLabel(tree, "Share slides");
-      await clickByLabel(tree, "Export as PPTX");
+      clickPopoverTrigger(tree, "Export slides");
+      tree = renderer.run(() => SlideEditorVNext(props));
+      await clickByLabel(tree, "Export PPTX");
       clickByLabel(tree, "Close slide editor");
       const rerendered = renderer.run(() => SlideEditorVNext(editorProps()));
 

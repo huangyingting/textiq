@@ -94,7 +94,9 @@ describe("SlideEditorVNext toolbar command ownership", () => {
       source.includes('label="Regenerate deck from document"'),
       true,
     );
-    assert.equal(source.includes('label="Export as PPTX"'), true);
+    assert.equal(source.includes('label="Export slides"'), true);
+    assert.equal(source.includes("Export PDF"), true);
+    assert.equal(source.includes("Export PNGs"), true);
     assert.equal(source.includes('label="Close slide editor"'), true);
     assert.equal(source.includes('aria-label="Save slide deck"'), false);
   });

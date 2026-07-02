@@ -24,7 +24,7 @@
  * `onDeckChange`.
  *
  * Close / present / share / export: pass `onClose` for close, `onPresent` /
- * `onShare` for public roundtrip routes, and `onExportPptx` for PPTX export.
+ * `onShare` for public roundtrip routes, and export callbacks for downloads.
  * Toolbar action errors are caught and surfaced inline.
  */
 
@@ -530,10 +530,13 @@ export interface SlideEditorVNextProps {
   /**
    * Called when the user requests a PPTX export. The callback is responsible
    * for invoking `exportDeckV7AsPPTX` and triggering the browser download.
-   * When provided, an "Export PPTX" button is rendered in the top toolbar.
    * Thrown errors are caught and displayed inline.
    */
   onExportPptx?: () => Promise<void>;
+  /** Called when the user requests a multi-page PDF export. */
+  onExportPdf?: () => Promise<void>;
+  /** Called when the user requests per-slide PNG exports. */
+  onExportPng?: () => Promise<void>;
   /**
    * Called when the user requests the public presentation route from the
    * editor chrome. The callback should route to/open the present target.
@@ -839,6 +842,8 @@ export function SlideEditorVNext({
   onRegenerate,
   onClose,
   onExportPptx,
+  onExportPdf,
+  onExportPng,
   onPresent,
   onShare,
   presenceAwareness = null,
@@ -955,10 +960,12 @@ export function SlideEditorVNext({
     readFilmstripCollapsed(documentId),
   );
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [footerStatusMenuOpen, setFooterStatusMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [compactToolbarMenuOpen, setCompactToolbarMenuOpen] = useState(false);
   const zoomMenuId = useId();
+  const exportMenuId = useId();
   const zoomMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const zoomMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const footerStatusMenuId = useId();
@@ -1049,6 +1056,8 @@ export function SlideEditorVNext({
     setToolbarError,
     closeConfirmOpen,
     handleExportPptx,
+    handleExportPdf,
+    handleExportPng,
     handleRegenerate,
     handleRoundtripAction,
     handleCloseRequest,
@@ -1058,6 +1067,8 @@ export function SlideEditorVNext({
     deck,
     hasUnsavedWork,
     onClose,
+    onExportPdf,
+    onExportPng,
     onExportPptx,
     onRegenerate,
     onSave,
@@ -3994,15 +4005,81 @@ export function SlideEditorVNext({
               <Share2 size={14} aria-hidden="true" />
             </DeckToolbarIconButton>
           ) : null}
-          {onExportPptx ? (
-            <DeckToolbarButton
-              label="Export as PPTX"
-              onClick={() => void handleExportPptx()}
-              className="font-semibold"
+          {onExportPptx || onExportPdf || onExportPng ? (
+            <Popover
+              open={exportMenuOpen}
+              onClose={() => setExportMenuOpen(false)}
+              role="menu"
+              aria-label="Export slides"
+              placement="bottom"
+              align="end"
+              className="w-44 p-1"
+              trigger={
+                <DeckToolbarButton
+                  label="Export slides"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  className="font-semibold"
+                >
+                  <FileDown size={14} aria-hidden="true" />
+                  Export
+                  <ChevronDown size={12} aria-hidden="true" />
+                </DeckToolbarButton>
+              }
             >
-              <FileDown size={14} aria-hidden="true" />
-              Export PPTX
-            </DeckToolbarButton>
+              <div id={exportMenuId} className="flex flex-col">
+                {onExportPptx ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PPTX"
+                    onClick={() => {
+                      setExportMenuOpen(false);
+                      void handleExportPptx();
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PPTX
+                  </button>
+                ) : null}
+                {onExportPdf ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PDF"
+                    onClick={() => {
+                      setExportMenuOpen(false);
+                      void handleExportPdf();
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PDF
+                  </button>
+                ) : null}
+                {onExportPng ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PNGs"
+                    onClick={() => {
+                      setExportMenuOpen(false);
+                      void handleExportPng();
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PNGs
+                  </button>
+                ) : null}
+              </div>
+            </Popover>
           ) : null}
           {onClose ? (
             <DeckToolbarIconButton

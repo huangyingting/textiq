@@ -39,6 +39,7 @@ import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostic
 import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
 import { decideDeckOpen } from "@/lib/presentation-vnext/open-deck";
 import { exportDeckV7AsPPTX } from "@/lib/presentation-vnext/pptx-vnext-apply";
+import { exportDeckV7RasterBrowser } from "@/lib/presentation-vnext/raster-browser-export";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import {
   SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE,
@@ -508,6 +509,34 @@ export function SlideEditorRouteClient({
     downloadBlob(blob, `${documentTitle || "presentation"}.pptx`);
   }
 
+  async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+    return fetch(dataUrl).then((response) => response.blob());
+  }
+
+  async function handleExportPdf() {
+    if (!deck) return;
+    const result = await exportDeckV7RasterBrowser(
+      deck,
+      themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
+    );
+    downloadBlob(result.pdfBlob, `${documentTitle || "presentation"}.pdf`);
+  }
+
+  async function handleExportPng() {
+    if (!deck) return;
+    const result = await exportDeckV7RasterBrowser(
+      deck,
+      themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
+    );
+    const baseName = documentTitle || "presentation";
+    for (const [index, png] of result.pngs.entries()) {
+      downloadBlob(
+        await dataUrlToBlob(png.dataUrl),
+        `${baseName}-slide-${String(index + 1).padStart(2, "0")}.png`,
+      );
+    }
+  }
+
   async function ensureShareState(): Promise<
     ActionResult<SlideEditorShareState>
   > {
@@ -695,6 +724,8 @@ export function SlideEditorRouteClient({
         sourceBlockIndex={sourceBlockIndex}
         onRefreshSource={handleRefreshSource}
         onExportPptx={handleExportPptx}
+        onExportPdf={handleExportPdf}
+        onExportPng={handleExportPng}
         onPresent={handlePresent}
         onShare={handleShare}
         presenceAwareness={null}
