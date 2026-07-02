@@ -120,6 +120,8 @@ export interface UseSlideEditorShellControllerArgs {
   hasUnsavedWork: boolean;
   onClose?: () => void;
   onExportPptx?: () => Promise<void>;
+  onExportPdf?: () => Promise<void>;
+  onExportPng?: () => Promise<void>;
   onRegenerate?: () => Promise<ActionResult>;
   onSave?: (deck: DeckV7) => Promise<ActionResult>;
   setStageAnnouncement: (announcement: string) => void;
@@ -130,6 +132,8 @@ export interface SlideEditorShellController {
   setToolbarError: Dispatch<SetStateAction<string | null>>;
   closeConfirmOpen: boolean;
   handleExportPptx: () => Promise<void>;
+  handleExportPdf: () => Promise<void>;
+  handleExportPng: () => Promise<void>;
   handleRegenerate: () => Promise<void>;
   handleRoundtripAction: (
     action: (() => Promise<ActionResult>) | undefined,
@@ -145,6 +149,8 @@ export function useSlideEditorShellController({
   hasUnsavedWork,
   onClose,
   onExportPptx,
+  onExportPdf,
+  onExportPng,
   onRegenerate,
   onSave,
   setStageAnnouncement,
@@ -159,6 +165,26 @@ export function useSlideEditorShellController({
       await onExportPptx();
     } catch {
       setToolbarError("PPTX export failed. Please try again.");
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!onExportPdf) return;
+    setToolbarError(null);
+    try {
+      await onExportPdf();
+    } catch {
+      setToolbarError("PDF export failed. Please try again.");
+    }
+  }
+
+  async function handleExportPng() {
+    if (!onExportPng) return;
+    setToolbarError(null);
+    try {
+      await onExportPng();
+    } catch {
+      setToolbarError("PNG export failed. Please try again.");
     }
   }
 
@@ -239,6 +265,8 @@ export function useSlideEditorShellController({
     setToolbarError,
     closeConfirmOpen,
     handleExportPptx,
+    handleExportPdf,
+    handleExportPng,
     handleRegenerate,
     handleRoundtripAction,
     handleCloseRequest,

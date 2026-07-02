@@ -1188,7 +1188,9 @@ test("SlideEditorVNext direct state coverage drives desktop toolbar branches", a
     clickPopoverTrigger(tree, "More deck commands");
     tree = harness.render();
     clickByLabel(tree, "Keyboard shortcuts");
-    await clickByLabel(tree, "Export as PPTX");
+    clickPopoverTrigger(tree, "Export slides");
+    tree = harness.render();
+    await clickByLabel(tree, "Export PPTX");
     clickByLabelPrefix(tree, "Open deck diagnostics review");
     tree = harness.render();
     const review = findProps(
