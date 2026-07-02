@@ -37,6 +37,52 @@ function checkVisualStyle(
   }
 }
 
+function warnVisualPlaceholderFallback(
+  op: ExportVisualOperation,
+  ctx: PptxLowererContext,
+): void {
+  if (op.assetId) return;
+  const preflight = op.pptxAssetPreflight;
+  const visualId =
+    preflight?.status === "missing" || preflight?.status === "unsupported"
+      ? (preflight.visualId ?? op.visualId)
+      : op.visualId;
+  if (preflight?.status === "unsupported") {
+    ctx.dc.warning(
+      "unsupported-export-feature",
+      `Visual op "${op.id}" has a rendered asset${
+        preflight.mimeType ? ` (${preflight.mimeType})` : ""
+      }, but PPTX export cannot embed that asset type; using a labeled placeholder fallback`,
+      {
+        path: `op(visual:${op.id})`,
+        action: { type: "open-asset-panel" },
+        details: {
+          exportFeature: "pptx-visual-asset-preflight",
+          assetId: preflight.requestedAssetId,
+          ...(preflight.visualId ? { visualId: preflight.visualId } : {}),
+        },
+      },
+    );
+    return;
+  }
+
+  ctx.dc.warning(
+    "missing-asset",
+    `Visual op "${op.id}" asset preflight found no rendered asset for PPTX image-retry; regenerate the visual or attach a rendered asset from the asset panel before export. Using a labeled placeholder fallback`,
+    {
+      path: `op(visual:${op.id})`,
+      action: { type: "open-asset-panel" },
+      details: {
+        exportFeature: "pptx-visual-asset-preflight",
+        ...(preflight?.status === "missing" && preflight.requestedAssetId
+          ? { assetId: preflight.requestedAssetId }
+          : {}),
+        ...(visualId ? { visualId } : {}),
+      },
+    },
+  );
+}
+
 export function lowerVisualOpToPptx(
   op: ExportVisualOperation,
   ctx: PptxLowererContext,
@@ -61,19 +107,7 @@ export function lowerVisualOpToPptx(
         widthPt: op.style.stroke.widthPt,
       }
     : undefined;
-  if (!op.assetId && !op.visualId) {
-    ctx.dc.warning(
-      "missing-asset",
-      `Visual op "${op.id}" has neither assetId nor visualId; PPTX export uses a labeled placeholder fallback`,
-      { path: `op(visual:${op.id})`, action: { type: "open-asset-panel" } },
-    );
-  } else if (!op.assetId && op.visualId) {
-    ctx.dc.warning(
-      "unsupported-export-feature",
-      `Visual op "${op.id}" has no rendered asset; PPTX export uses a labeled placeholder fallback`,
-      { path: `op(visual:${op.id})`, action: { type: "open-asset-panel" } },
-    );
-  }
+  warnVisualPlaceholderFallback(op, ctx);
   return {
     type: "visual",
     id: op.id,

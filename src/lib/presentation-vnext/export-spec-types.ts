@@ -63,6 +63,7 @@ export type ExportVisualOperation = {
   id: NodeId;
   assetId?: string;
   visualId?: string;
+  pptxAssetPreflight?: ExportVisualAssetPreflight;
   frame: { x: number; y: number; w: number; h: number };
   style: StyleObject;
   channelColors?: ResolvedVisualChannelColors;
@@ -71,6 +72,24 @@ export type ExportVisualOperation = {
   rotation?: number;
   zIndex: number;
 };
+
+export type ExportVisualAssetPreflight =
+  | {
+      status: "ready";
+      assetId: string;
+      source: "declared-asset" | "visual-registry";
+    }
+  | {
+      status: "missing";
+      requestedAssetId?: string;
+      visualId?: string;
+    }
+  | {
+      status: "unsupported";
+      requestedAssetId: string;
+      visualId?: string;
+      mimeType?: string;
+    };
 
 export type ExportTableShapeOperation = {
   type: "tableShape";
