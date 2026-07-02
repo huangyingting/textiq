@@ -52,6 +52,7 @@ import { OverallAdjustmentsPanel } from "./overall-adjustments-panel";
 import { ShareButton } from "./share-button";
 import { SourceBlockJumpPlugin } from "./source-block-jump";
 import { TagControl } from "./tag-control";
+import { TableControls } from "./table-controls";
 import { UndoRedoControls } from "./undo-redo-controls";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { VisualCard } from "./visual-card";
@@ -508,6 +509,15 @@ export function LexicalEditor({
                         onToggle={() => setShowPageBreaks((v) => !v)}
                       />
                     </EditorToolbarGroup>
+
+                    {canEdit && (
+                      <>
+                        <EditorToolbarDivider />
+                        <EditorToolbarGroup label="Table rows and columns">
+                          <TableControls editable={editable} />
+                        </EditorToolbarGroup>
+                      </>
+                    )}
 
                     <EditorToolbarDivider />
 
