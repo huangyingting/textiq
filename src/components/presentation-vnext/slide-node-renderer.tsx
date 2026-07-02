@@ -35,6 +35,7 @@ import type {
   LayoutBox,
 } from "@/lib/presentation-vnext/schema";
 import { tableCellEditableText } from "@/lib/presentation-vnext/table-cell-editing";
+import { truncateNarrationText } from "@/lib/presentation-vnext/a11y/node-narration";
 import { colorValueToCss, fillStyleToCss } from "./fill-style-css";
 
 // ---------------------------------------------------------------------------
@@ -694,7 +695,7 @@ function TableNodeContent({
                 role={editable ? "textbox" : undefined}
                 aria-label={
                   editable
-                    ? `Table cell row ${rowIdx + 1}, column ${colIdx + 1}`
+                    ? tableCellAccessibleName(content, rowIdx, colIdx)
                     : undefined
                 }
                 onFocus={
@@ -728,6 +729,42 @@ function TableNodeContent({
       </tbody>
     </table>
   );
+}
+
+function tableCellAccessibleName(
+  content: TableContent,
+  rowIdx: number,
+  colIdx: number,
+): string {
+  const row = content.rows[rowIdx];
+  const cell = row?.cells[colIdx];
+  const parts = [`Table cell row ${rowIdx + 1}, column ${colIdx + 1}`];
+  const caption = truncateNarrationText(content.caption ?? "", 80);
+  if (caption) {
+    parts.push(`table ${caption}`);
+  }
+  const columnHeader = content.header
+    ? truncateNarrationText(content.columns[colIdx]?.label ?? "", 80)
+    : "";
+  if (columnHeader) {
+    parts.push(`column header ${columnHeader}`);
+  }
+  const rowHeader =
+    content.header && colIdx > 0
+      ? truncateNarrationText(
+          tableCellEditableText(row?.cells[0] ?? { text: "" }),
+          80,
+        )
+      : "";
+  if (rowHeader) {
+    parts.push(`row header ${rowHeader}`);
+  }
+  const preview = truncateNarrationText(
+    cell ? tableCellEditableText(cell) : "",
+    80,
+  );
+  parts.push(`content ${preview || "empty"}`);
+  return parts.join(", ");
 }
 
 // ---------------------------------------------------------------------------
