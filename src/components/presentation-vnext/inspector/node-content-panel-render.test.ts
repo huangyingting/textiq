@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { NodeContentPanel } from "./node-content-panel";
 import type { SlideChildNode } from "@/lib/presentation-vnext/schema";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
 

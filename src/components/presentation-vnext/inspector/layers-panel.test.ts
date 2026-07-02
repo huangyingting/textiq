@@ -5,7 +5,7 @@ import * as React from "react";
 import { LayersPanel } from "./layers-panel";
 import type { ResolvedRenderNode } from "@/lib/presentation-vnext/render-tree";
 import type { SlideChildNode } from "@/lib/presentation-vnext/schema";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 
 type ElementWithProps = React.ReactElement<Record<string, unknown>>;
 

@@ -29,7 +29,7 @@ import {
   buildTableNode,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import type {
   NodeSourceMetadata,

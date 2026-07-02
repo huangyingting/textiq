@@ -7,7 +7,7 @@ import {
   buildSlideV7,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
 import {
   DeckGenerationDiagnosticsNotice,

@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { Filmstrip, type FilmstripProps } from "./filmstrip";
 import { FilmstripSlide } from "./filmstrip-slide";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 import { MIN_DECK_SLIDES_MESSAGE } from "@/lib/presentation-vnext";
 import type {
   ResolvedDeckRenderTree,

@@ -10,7 +10,7 @@ import {
   useSlidePresence,
   type SlidePresencePayload,
 } from "@/lib/presentation-shared/use-slide-presence";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 
 function withHookDispatcher<T>(
   overrides: Record<string, (...args: any[]) => any>,

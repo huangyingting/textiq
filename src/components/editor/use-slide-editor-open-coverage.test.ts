@@ -15,7 +15,7 @@ import {
   buildTextContent,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 
 import {
   resolveDeckSaveRejectionError,

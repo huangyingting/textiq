@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-internals";
+import { createReactHookRenderer } from "@/test/react-server-renderer";
 
 import { useSlideEditorShellController } from "./use-slide-editor-shell-controller";
 

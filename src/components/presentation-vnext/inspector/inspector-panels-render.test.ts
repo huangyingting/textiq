@@ -27,7 +27,7 @@ import type {
   StyleObject,
   StylePatch,
 } from "@/lib/presentation-vnext/style-schema";
-import { withReactTestDispatcher } from "@/test/react-internals";
+import { withReactTestDispatcher } from "@/test/react-server-renderer";
 import {
   SLIDE_FONT_OPTIONS,
   slideFontCssStack,
