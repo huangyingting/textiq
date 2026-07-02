@@ -28,6 +28,10 @@ import {
   buildMinimalThemePackage,
   resetBuilderCounter,
 } from "@/test/builders/deck-v7";
+import {
+  buildPptxFidelityParityDeck,
+  PPTX_FIDELITY_DATA_URI,
+} from "@/test/fixtures/pptx-fidelity";
 import { renderPrototypeSlideHtml } from "../../../prototypes/slide-themes/render-html";
 
 const DATA_URI =
@@ -315,6 +319,53 @@ test("PPTX parity fixture covers representative core node operations", () => {
   assert.equal(
     pptx.diagnostics.some((diagnostic) => diagnostic.code === "missing-asset"),
     false,
+  );
+});
+
+test("PPTX fidelity parity fixture guards fallback-prone render-to-export behavior", () => {
+  const deck = buildPptxFidelityParityDeck();
+  const renderTree = resolveDeckRenderTree(deck, NEUTRAL_THEME_PACKAGE);
+  const exportSpec = resolveExportSpecAssetSources(
+    deck,
+    buildExportSpec(renderTree),
+  );
+  const pptx = buildVnextPptxSpec(exportSpec);
+  const renderNodeIds = new Set(
+    renderTree.slides[0].nodes.map((node) => node.id),
+  );
+  const pptxOpsById = new Map(pptx.slides[0].ops.map((op) => [op.id, op]));
+
+  for (const id of [
+    "fidelity-linear-gradient",
+    "fidelity-radial-gradient",
+    "fidelity-conic-gradient",
+    "fidelity-repeating-gradient",
+    "fidelity-pattern-fill",
+    "fidelity-image-fill",
+    "fidelity-glass-effect",
+    "fidelity-blur-effect",
+    "fidelity-glow-effect",
+    "fidelity-straight-connector",
+    "fidelity-elbow-connector",
+    "fidelity-curved-connector",
+    "fidelity-resolved-visual",
+    "fidelity-unresolved-visual",
+  ]) {
+    assert.ok(renderNodeIds.has(id), `${id} is present in render tree`);
+    assert.ok(pptxOpsById.has(id), `${id} is present in PPTX export`);
+  }
+
+  const resolvedVisual = pptxOpsById.get("fidelity-resolved-visual");
+  assert.equal(resolvedVisual?.type, "visual");
+  if (resolvedVisual?.type === "visual") {
+    assert.equal(resolvedVisual.assetId, PPTX_FIDELITY_DATA_URI);
+  }
+  assert.ok(
+    pptx.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "missing-asset" &&
+        diagnostic.path === "op(visual:fidelity-unresolved-visual)",
+    ),
   );
 });
 
