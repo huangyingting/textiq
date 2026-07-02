@@ -13,8 +13,12 @@ import {
   type SourceBlockIndex,
   type SourceBlockIndexEntry,
 } from "./block-index";
-
-const SOURCE_REVIEW_DISMISSAL_KEY = "sourceReviewDismissal";
+import {
+  buildSourceReviewDismissalExtra,
+  readSourceReviewDismissalFromExtra,
+  withSourceReviewDismissalExtra,
+  type SourceReviewDismissalExtra,
+} from "./provenance-extra";
 
 export type SourceLinkClassification = {
   slideId: string;
@@ -62,15 +66,6 @@ type SourceBlockResolution =
   | { status: "found"; block: SourceBlockIndexEntry }
   | { status: "missing" }
   | { status: "ambiguous"; matches: SourceBlockIndexEntry[] };
-
-type SourceReviewDismissal = {
-  documentId?: string;
-  blockId?: string;
-  currentHash?: string;
-  state?: SourceRefreshState;
-  dismissedAt?: string;
-  reason?: string;
-};
 
 const EMPTY_SOURCE_REVIEW_DERIVATIONS: SourceReviewDerivations = {
   classifications: [],
@@ -184,32 +179,8 @@ function resolveSourceBlock(
 
 function sourceReviewDismissal(
   source: NodeSourceMetadata,
-): SourceReviewDismissal | undefined {
-  const dismissal = source.extra?.[SOURCE_REVIEW_DISMISSAL_KEY];
-  if (
-    typeof dismissal !== "object" ||
-    dismissal === null ||
-    Array.isArray(dismissal)
-  ) {
-    return undefined;
-  }
-  const record = dismissal as Record<string, unknown>;
-  return {
-    ...(typeof record.documentId === "string"
-      ? { documentId: record.documentId }
-      : {}),
-    ...(typeof record.blockId === "string" ? { blockId: record.blockId } : {}),
-    ...(typeof record.currentHash === "string"
-      ? { currentHash: record.currentHash }
-      : {}),
-    ...(typeof record.state === "string"
-      ? { state: record.state as SourceRefreshState }
-      : {}),
-    ...(typeof record.dismissedAt === "string"
-      ? { dismissedAt: record.dismissedAt }
-      : {}),
-    ...(typeof record.reason === "string" ? { reason: record.reason } : {}),
-  };
+): SourceReviewDismissalExtra | undefined {
+  return readSourceReviewDismissalFromExtra(source.extra);
 }
 
 function dismissalMatchesSource(
@@ -843,9 +814,9 @@ export function dismissNodeSourceIssue(
                   : {}),
                 reason: "Source review item was dismissed by the user.",
               },
-              extra: {
-                ...(target.source.extra ?? {}),
-                [SOURCE_REVIEW_DISMISSAL_KEY]: {
+              extra: withSourceReviewDismissalExtra(
+                target.source.extra,
+                buildSourceReviewDismissalExtra({
                   ...(target.source.documentId
                     ? { documentId: target.source.documentId }
                     : {}),
@@ -860,8 +831,8 @@ export function dismissNodeSourceIssue(
                   dismissedAt: now,
                   reason:
                     classification?.reason ?? "Source review item dismissed.",
-                },
-              },
+                }),
+              ),
             },
           } as SlideChildNode;
         }),
