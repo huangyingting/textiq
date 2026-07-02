@@ -57,6 +57,7 @@ import {
   saveDeckPatch,
   toggleDocumentSharing,
 } from "../actions";
+import { saveBrandKitDraft } from "../brand-kit-actions";
 import { uploadSlideAsset } from "../slide-asset-actions";
 import { persistDeckV7WithRecovery } from "@/components/editor/use-slide-editor-open";
 
@@ -721,6 +722,8 @@ export function SlideEditorRouteClient({
         undoRedoFocus={undoRedoFocus}
         onDeckChange={handleDeckChange}
         onSave={handleSave}
+        saveBrandKitDraft={saveBrandKitDraft}
+        brandKitOwnerId={userId}
         onRegenerate={handleRegenerate}
         onClose={goBackToDocument}
         onUploadImage={handleUploadImage}

@@ -5,7 +5,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import { INLINE_TEXT_COMMAND_EVENT_V7 } from "@/lib/presentation-vnext/inline-text-commands";
 import type { Paragraph } from "@/lib/presentation-vnext/schema";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import {
   inlineTextAlignForCommand,
   InlineTextEditorVNext,
@@ -20,7 +20,7 @@ function createHookRenderer({
   runEffects = false,
   firstRefCurrent,
 }: HookRendererOptions = {}) {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     firstRefCurrent,
     idPrefix: "inline-remaining-id",
     runEffects,

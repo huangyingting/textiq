@@ -5,22 +5,10 @@ import {
   FocusTrapTestElement,
   installFocusTrapDom,
 } from "@/test/focus-trap-dom";
-import { withReactTestDispatcher } from "@/test/react-server-renderer";
-import { useFocusTrap } from "./use-focus-trap";
+import { installFocusTrap } from "./use-focus-trap";
 
-function runHook(render: () => void): () => void {
-  let cleanup: (() => void) | undefined;
-  withReactTestDispatcher(
-    {
-      useRef: <T>(initial: T) => ({ current: initial }),
-      useEffect: (effect?: () => void | (() => void)) => {
-        const result = effect?.();
-        if (typeof result === "function") cleanup = result;
-      },
-    },
-    render,
-  );
-  return () => cleanup?.();
+function runFocusTrap(trap: HTMLElement): () => void {
+  return installFocusTrap(trap, () => document.activeElement);
 }
 
 function tabEvent(shiftKey = false) {
@@ -46,11 +34,7 @@ test("useFocusTrap focuses, wraps tab order, ignores hidden descendants, and res
   const trap = new FocusTrapTestElement([first, hidden, last]);
   const restoreDom = installFocusTrapDom(previous);
   try {
-    const cleanup = runHook(() =>
-      useFocusTrap({
-        current: trap as unknown as HTMLElement,
-      }),
-    );
+    const cleanup = runFocusTrap(trap as unknown as HTMLElement);
 
     assert.equal(first.focusCount, 1);
     assert.equal(typeof trap.listener, "function");
@@ -85,11 +69,7 @@ test("useFocusTrap falls back to the container when it has no focusable descenda
   const trap = new FocusTrapTestElement();
   const restoreDom = installFocusTrapDom(previous);
   try {
-    const cleanup = runHook(() =>
-      useFocusTrap({
-        current: trap as unknown as HTMLElement,
-      }),
-    );
+    const cleanup = runFocusTrap(trap as unknown as HTMLElement);
     assert.equal(trap.focusCount, 1);
 
     const event = tabEvent();

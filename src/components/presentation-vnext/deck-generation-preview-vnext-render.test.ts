@@ -7,7 +7,7 @@ import {
   buildSlideV7,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
 import {
   DeckGenerationDiagnosticsNotice,
@@ -15,7 +15,7 @@ import {
 } from "./deck-generation-preview-vnext";
 
 function createHookRenderer() {
-  return createReactHookRenderer({ idPrefix: "preview-test-id" });
+  return createServerRenderHarness({ idPrefix: "preview-test-id" });
 }
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {

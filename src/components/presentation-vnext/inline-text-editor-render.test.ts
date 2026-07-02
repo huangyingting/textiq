@@ -4,11 +4,11 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import { INLINE_TEXT_COMMAND_EVENT_V7 } from "@/lib/presentation-vnext/inline-text-commands";
 import type { Paragraph } from "@/lib/presentation-vnext/schema";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { InlineTextEditorVNext } from "./inline-text-editor";
 
 function createHookRenderer({ runEffects = false } = {}) {
-  return createReactHookRenderer({ idPrefix: "inline-test-id", runEffects });
+  return createServerRenderHarness({ idPrefix: "inline-test-id", runEffects });
 }
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {

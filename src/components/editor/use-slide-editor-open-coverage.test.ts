@@ -15,7 +15,7 @@ import {
   buildTextContent,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { withReactTestDispatcher } from "@/test/react-server-renderer";
+import { renderWithReact } from "@/test/react-server-renderer";
 
 import {
   resolveDeckSaveRejectionError,
@@ -49,7 +49,7 @@ function createHookRenderer(editorJson: unknown) {
   return {
     run<T>(render: () => T): T {
       let hookIndex = 0;
-      return withReactTestDispatcher(
+      return renderWithReact(
         {
           useState: <S>(initial: S | (() => S)) => {
             const slot = hookIndex++;

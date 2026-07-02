@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 
 import type { ActionResult } from "@/lib/action-result";
+import type { BrandKitSavePort } from "@/lib/action-ports";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import type { SaveStatus } from "@/lib/presentation-shared/save-status";
 import type {
@@ -192,6 +193,7 @@ import {
   AddSlideTemplatePicker,
   type AddSlideTemplateChoice,
 } from "./add-slide-template-picker";
+import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
 import {
   InlineTextEditorVNext,
   type InlineTextInitialCaret,
@@ -390,6 +392,10 @@ export interface SlideEditorVNextProps {
    * chrome. The callback should route to/open/copy the share target.
    */
   onShare?: () => Promise<ActionResult>;
+  /** Saves a compiled brand-kit draft snapshot from the authoring dialog. */
+  saveBrandKitDraft?: BrandKitSavePort["saveBrandKitDraft"];
+  /** Current user id used to seed new user-scoped brand-kit drafts. */
+  brandKitOwnerId?: string;
   presenceAwareness?: SlidePresenceAwareness | null;
   presenceUserId?: string;
   presenceUserName?: string;
@@ -463,6 +469,8 @@ export function SlideEditorVNext({
   onExportPng,
   onPresent,
   onShare,
+  saveBrandKitDraft,
+  brandKitOwnerId = documentId,
   presenceAwareness = null,
   presenceUserId = "",
   presenceUserName = "Anonymous",
@@ -499,6 +507,7 @@ export function SlideEditorVNext({
   );
 
   const [addSlidePickerOpen, setAddSlidePickerOpen] = useState(false);
+  const [brandKitAuthoringOpen, setBrandKitAuthoringOpen] = useState(false);
   const replaceImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceSlideBackgroundFileInputRef = useRef<HTMLInputElement | null>(
     null,
@@ -900,6 +909,22 @@ export function SlideEditorVNext({
 
   function handleInsertSlide() {
     setAddSlidePickerOpen(true);
+  }
+
+  function handleOpenBrandKitAuthoring() {
+    setAddSlidePickerOpen(false);
+    setBrandKitAuthoringOpen(true);
+  }
+
+  function handleSavedBrandKit(result: {
+    packageId: string;
+    packageVersion: string;
+  }) {
+    onDeckChange(
+      setThemePackage(deck, result.packageId, result.packageVersion),
+    );
+    setBrandKitAuthoringOpen(false);
+    setStageAnnouncement("Brand kit saved and applied to this deck.");
   }
 
   function handleInsertTemplateSlide(choice: AddSlideTemplateChoice) {
@@ -2125,6 +2150,40 @@ export function SlideEditorVNext({
                 templates={TEMPLATE_OPTIONS}
                 onChoose={handleInsertTemplateSlide}
                 onClose={() => setAddSlidePickerOpen(false)}
+                onAuthorBrandKit={handleOpenBrandKitAuthoring}
+              />
+            </div>
+          </FocusTrapped>
+        </>
+      ) : null}
+
+      {brandKitAuthoringOpen ? (
+        <>
+          <div
+            data-floating-panel="true"
+            aria-hidden="true"
+            onClick={() => setBrandKitAuthoringOpen(false)}
+            className="fixed inset-0 z-modal bg-ds-backdrop"
+          />
+          <FocusTrapped>
+            <div
+              data-floating-panel="true"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Author brand kit"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  setBrandKitAuthoringOpen(false);
+                }
+              }}
+              className="fixed inset-x-4 top-8 z-modal mx-auto flex max-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay shadow-ds-overlay"
+            >
+              <BrandKitAuthoringPanel
+                ownerId={brandKitOwnerId}
+                saveBrandKitDraft={saveBrandKitDraft}
+                onSaved={handleSavedBrandKit}
+                onClose={() => setBrandKitAuthoringOpen(false)}
               />
             </div>
           </FocusTrapped>
@@ -2157,6 +2216,15 @@ export function SlideEditorVNext({
                 </option>
               ))}
             </select>
+            <DeckToolbarButton
+              label="Author brand kit"
+              hasPopup="dialog"
+              expanded={brandKitAuthoringOpen}
+              active={brandKitAuthoringOpen}
+              onClick={handleOpenBrandKitAuthoring}
+            >
+              Brand kit
+            </DeckToolbarButton>
             <select
               aria-label="Slide ratio"
               value={currentCanvasFormat}

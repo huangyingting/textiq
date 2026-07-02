@@ -122,4 +122,19 @@ describe("AddSlideTemplatePicker", () => {
     closeButton.props.onClick();
     assert.deepEqual(calls, ["close"]);
   });
+
+  test("routes the brand-kit authoring affordance when provided", () => {
+    const registry = createDefaultTemplateRegistry();
+    const calls: string[] = [];
+    const tree = AddSlideTemplatePicker({
+      templates: [registry.get("content")!],
+      onChoose: () => undefined,
+      onClose: () => undefined,
+      onAuthorBrandKit: () => calls.push("author"),
+    });
+    const authorButton = findButtonByText(tree, "Author brand kit");
+    assert.ok(authorButton);
+    authorButton.props.onClick();
+    assert.deepEqual(calls, ["author"]);
+  });
 });
