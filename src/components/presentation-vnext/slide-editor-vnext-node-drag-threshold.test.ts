@@ -3,8 +3,12 @@ import { describe, test } from "node:test";
 
 import { createSingleCommitGesture } from "./single-commit-gesture";
 import {
+  buildStageGestureBadge,
+  buildStageNodeGestureDrafts,
   createNodeMovePreview,
+  nodeMoveGestureDrafts,
   nodeMovePreviewsEqual,
+  renderStageGestureBadge,
   type NodeMovePreview,
 } from "./stage-gesture-feedback";
 
@@ -210,5 +214,157 @@ describe("createNodeMovePreview", () => {
       finalPreview.patches.get("node-a"),
     );
     assert.equal(previews.at(-1), null);
+  });
+
+  test("returns null for invalid move inputs and empty gesture drafts", () => {
+    assert.equal(
+      createNodeMovePreview({
+        startClientX: 0,
+        startClientY: 0,
+        nextClientX: 20,
+        nextClientY: 20,
+        rectWidth: 0,
+        rectHeight: 100,
+        originalFrames: new Map([["node-a", { x: 0, y: 0, w: 10, h: 10 }]]),
+        alignmentGuides: [],
+      }),
+      null,
+    );
+    assert.equal(
+      createNodeMovePreview({
+        startClientX: 0,
+        startClientY: 0,
+        nextClientX: 20,
+        nextClientY: 20,
+        rectWidth: 100,
+        rectHeight: 100,
+        originalFrames: new Map(),
+        alignmentGuides: [],
+      }),
+      null,
+    );
+    assert.equal(nodeMoveGestureDrafts(null), null);
+    assert.equal(
+      nodeMoveGestureDrafts({ patches: new Map(), guides: [] }),
+      null,
+    );
+    assert.equal(
+      nodeMoveGestureDrafts({
+        patches: new Map([["node-a", { name: "ignored" }]]),
+        guides: [],
+      } as unknown as NodeMovePreview),
+      null,
+    );
+  });
+
+  test("compares and converts move preview patches including rotation", () => {
+    const left: NodeMovePreview = {
+      patches: new Map([
+        ["node-a", { frame: { x: 1, y: 2, w: 3, h: 4 } }],
+        ["node-b", { rotation: 45 }],
+      ]),
+      guides: [],
+    };
+    const right: NodeMovePreview = {
+      patches: new Map([
+        ["node-a", { frame: { x: 1, y: 2, w: 3, h: 4 } }],
+        ["node-b", { rotation: 45 }],
+      ]),
+      guides: [],
+    };
+    const changed: NodeMovePreview = {
+      patches: new Map([
+        ["node-a", { frame: { x: 1, y: 2, w: 3, h: 5 } }],
+        ["node-b", { rotation: 90 }],
+      ]),
+      guides: [],
+    };
+
+    assert.equal(nodeMovePreviewsEqual(left, right), true);
+    assert.equal(nodeMovePreviewsEqual(left, changed), false);
+    const drafts = nodeMoveGestureDrafts(left);
+    assert.deepEqual(drafts?.get("node-a")?.frame, { x: 1, y: 2, w: 3, h: 4 });
+    assert.equal(drafts?.get("node-b")?.rotation, 45);
+  });
+
+  test("merges move, resize, crop, rotation, and connector gesture drafts", () => {
+    const drafts = buildStageNodeGestureDrafts({
+      moveGestureDraft: new Map([
+        ["node-a", { frame: { x: 1, y: 2, w: 3, h: 4 } }],
+      ]),
+      resizeGestureDraft: {
+        nodeId: "node-b",
+        frame: { x: 5, y: 6, w: 7, h: 8 },
+      },
+      cropGestureDraft: {
+        nodeId: "node-a",
+        crop: { top: 1, right: 2, bottom: 3, left: 4 },
+      },
+      rotationGestureDraft: { nodeId: "node-a", rotation: 30 },
+      connectorGestureDraft: {
+        nodeId: "node-c",
+        endpoint: "from",
+        value: { kind: "point", point: { x: 10, y: 20 } },
+      },
+    });
+
+    assert.deepEqual(drafts?.get("node-a"), {
+      frame: { x: 1, y: 2, w: 3, h: 4 },
+      crop: { top: 1, right: 2, bottom: 3, left: 4 },
+      rotation: 30,
+    });
+    assert.deepEqual(drafts?.get("node-b")?.frame, { x: 5, y: 6, w: 7, h: 8 });
+    assert.deepEqual(drafts?.get("node-c")?.connectorEndpoints?.from, {
+      kind: "point",
+      point: { x: 10, y: 20 },
+    });
+    assert.equal(
+      buildStageNodeGestureDrafts({
+        moveGestureDraft: null,
+        resizeGestureDraft: null,
+        cropGestureDraft: null,
+        rotationGestureDraft: null,
+        connectorGestureDraft: null,
+      }),
+      undefined,
+    );
+  });
+
+  test("builds and renders gesture badges for resize and move previews", () => {
+    const resizeBadge = buildStageGestureBadge({
+      moveGestureDraft: null,
+      resizeGestureDraft: {
+        nodeId: "node-a",
+        frame: { x: 10, y: 20, w: 31.4, h: 9.6 },
+      },
+    });
+    assert.equal(resizeBadge?.label, "31 × 10");
+
+    const moveBadge = buildStageGestureBadge({
+      moveGestureDraft: new Map([
+        ["node-a", { frame: { x: 10.2, y: 20.4, w: 5, h: 5 } }],
+        ["node-b", { frame: { x: 30, y: 40, w: 10, h: 10 } }],
+      ]),
+      resizeGestureDraft: null,
+    });
+    assert.equal(moveBadge?.label, "10, 20");
+    assert.equal(
+      buildStageGestureBadge({
+        moveGestureDraft: new Map([["node-a", { rotation: 5 }]]),
+        resizeGestureDraft: null,
+      }),
+      null,
+    );
+    assert.equal(
+      buildStageGestureBadge({
+        moveGestureDraft: null,
+        resizeGestureDraft: null,
+      }),
+      null,
+    );
+    assert.equal(renderStageGestureBadge(null), null);
+    const rendered = renderStageGestureBadge(moveBadge);
+    assert.equal(rendered?.props["data-stage-gesture-badge"], "true");
+    assert.equal(rendered?.props.children, "10, 20");
   });
 });

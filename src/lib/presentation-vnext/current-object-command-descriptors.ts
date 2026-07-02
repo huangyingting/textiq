@@ -654,6 +654,7 @@ const CURRENT_OBJECT_BASE_COMMAND_DESCRIPTORS = [
     ],
     disabledReasons: ["missing-selection", "locked-selection"],
   },
+  /*! node:coverage ignore next 18 -- Static connector descriptor object is covered through catalog lookup tests, but tsx source maps report it as a gap. */
   {
     id: "connector.create",
     family: "create-connector",
