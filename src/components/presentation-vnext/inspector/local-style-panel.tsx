@@ -9,6 +9,11 @@ import type {
 } from "@/lib/presentation-vnext/style-schema";
 import { FOCUS_RING } from "@/components/ui/tokens";
 import {
+  matchSlideFont,
+  SLIDE_FONT_OPTIONS,
+  slideFontCssStack,
+} from "@/lib/presentation/slide-fonts";
+import {
   clampToRange,
   parseFiniteNumberInput,
   sanitizeBoundedNumber,
@@ -79,6 +84,15 @@ export function textLineHeight(
   );
 }
 
+export function textFontFamily(
+  localStyle: StylePatch | undefined,
+  resolvedStyle?: StyleObject,
+): string | undefined {
+  const fontFamily =
+    resolvedStyle?.text?.fontFamily ?? localStyle?.text?.fontFamily;
+  return typeof fontFamily === "string" ? fontFamily : undefined;
+}
+
 export function textColorValue(
   localStyle: StylePatch | undefined,
   resolvedStyle?: StyleObject,
@@ -136,6 +150,11 @@ export function LocalStylePanel({
   const textColor = textColorValue(node.localStyle, resolvedStyle);
   const fontSize = textFontSize(node.localStyle, resolvedStyle);
   const lineHeight = textLineHeight(node.localStyle, resolvedStyle);
+  const currentFontFamily = textFontFamily(node.localStyle, resolvedStyle);
+  const selectedFont = currentFontFamily
+    ? matchSlideFont(currentFontFamily)
+    : undefined;
+  const selectedFontId = selectedFont?.id ?? "";
   const opacity = resolvedStyle?.opacity ?? node.localStyle?.opacity ?? 1;
   const shapeStrokeWidth = resolvedStrokeWidth(node.localStyle, resolvedStyle);
   const currentStrokeColor = strokeColor(node.localStyle, resolvedStyle);
@@ -225,6 +244,38 @@ export function LocalStylePanel({
                 }}
                 className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
               />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+              Font family
+              <select
+                value={selectedFontId}
+                onChange={(event) => {
+                  const cssStack = slideFontCssStack(event.currentTarget.value);
+                  if (!cssStack) return;
+                  onUpdateLocalStyle({
+                    text: { fontFamily: cssStack },
+                  });
+                }}
+                className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
+                style={
+                  selectedFont
+                    ? { fontFamily: selectedFont.cssStack }
+                    : undefined
+                }
+              >
+                <option value="" disabled>
+                  Theme default
+                </option>
+                {SLIDE_FONT_OPTIONS.map((font) => (
+                  <option
+                    key={font.id}
+                    value={font.id}
+                    style={{ fontFamily: font.value }}
+                  >
+                    {font.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Weight

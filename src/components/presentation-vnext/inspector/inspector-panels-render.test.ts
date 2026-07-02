@@ -28,6 +28,10 @@ import type {
   StylePatch,
 } from "@/lib/presentation-vnext/style-schema";
 import { withReactTestDispatcher } from "@/test/react-internals";
+import {
+  SLIDE_FONT_OPTIONS,
+  slideFontCssStack,
+} from "@/lib/presentation/slide-fonts";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
 
@@ -130,6 +134,48 @@ function withFakeHooks<T>(renderComponent: () => T): T {
 }
 
 describe("inspector panels render and wire controls", () => {
+  test("LocalStylePanel renders and writes registry-backed text font families", () => {
+    const updates: StylePatch[] = [];
+    const currentFontFamily = slideFontCssStack("source-serif-4");
+    const nextFontFamily = slideFontCssStack("jetbrains-mono");
+    assert.ok(currentFontFamily);
+    assert.ok(nextFontFamily);
+
+    const element = LocalStylePanel({
+      node: childNode({
+        localStyle: { text: { fontFamily: currentFontFamily } },
+      }),
+      onUpdateLocalStyle: (patch) => updates.push(patch),
+    });
+
+    const html = render(element);
+    assert.match(html, /Font family/);
+    assert.match(html, /Theme default/);
+    for (const font of SLIDE_FONT_OPTIONS) {
+      assert.match(
+        html,
+        new RegExp(font.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      );
+    }
+
+    const fontSelect = findElement(
+      element,
+      (candidate) =>
+        candidate.type === "select" &&
+        candidate.props.value === "source-serif-4",
+    );
+    assert.ok(fontSelect);
+    const onChange = fontSelect.props.onChange as
+      | ((event: { currentTarget: { value: string } }) => void)
+      | undefined;
+    assert.ok(onChange);
+    onChange?.({ currentTarget: { value: "jetbrains-mono" } });
+
+    assert.deepEqual(updates.at(-1), {
+      text: { fontFamily: nextFontFamily },
+    });
+  });
+
   test("LocalStylePanel exposes fill, stroke, and opacity controls for shapes", () => {
     const updates: unknown[] = [];
     const element = LocalStylePanel({
