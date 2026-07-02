@@ -68,6 +68,7 @@ export type BrandKitDraftV1 = {
   };
   assets?: {
     logo?: BrandKitImageAsset;
+    fonts?: Record<string, BrandKitFontAsset>;
   };
   decorations?: {
     background?: "none" | "subtle" | "expressive";
@@ -77,10 +78,20 @@ export type BrandKitDraftV1 = {
 
 export type BrandKitTypographyRole = {
   family: string;
+  fontAssetId?: string;
   sizePt: number;
   weight: number;
   lineHeight: number;
   letterSpacingEm?: number;
+};
+
+export type BrandKitFontAsset = {
+  id: string;
+  family: string;
+  src: string;
+  weight?: number | number[];
+  style?: "normal" | "italic";
+  contentHash?: string;
 };
 
 export type BrandKitImageAsset = {

@@ -105,6 +105,7 @@ import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation-vnext/neutral-theme-pa
 import { createDefaultTemplateRegistry } from "@/lib/presentation-vnext/theme-packages";
 import { listThemePackagesV7 } from "@/lib/presentation-vnext/theme-package-registry";
 import { resolveNodeFontCss } from "@/lib/presentation-vnext/node-font-css";
+import { injectThemePackageFontFaces } from "@/lib/presentation-vnext/theme-package-fonts";
 import { resolveDeckAssetSource } from "@/lib/presentation-vnext/deck-asset-source";
 import { STAGE_CHROME_Z_INDEX } from "@/lib/presentation-vnext/stage-chrome";
 import {} from "@/lib/presentation-vnext/stage-fit";
@@ -566,6 +567,10 @@ export function SlideEditorVNext({
   useEffect(() => {
     editorRootRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    injectThemePackageFontFaces(pkg);
+  }, [pkg]);
 
   // ---------------------------------------------------------------------------
   // Slide navigation
