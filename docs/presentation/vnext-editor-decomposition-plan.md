@@ -1,105 +1,42 @@
 ---
 type: "plan"
-status: "active — core slices implemented"
+status: "active — shell collapse pending"
 last_updated: "2026-07-02"
-description: "P0 plan to shrink SlideEditorVNext into a thin shell with explicit controllers while preserving vNext editor behavior, output parity, and export/present compatibility."
+description: "Remaining P0 plan to finish shrinking SlideEditorVNext. Controller, descriptor, overlay, focus registry, and inline text slices are implemented; table direct-edit ownership and final shell collapse remain pending."
 ---
 
 # vNext Editor Decomposition Plan
 
-## Priority and goal
+## Priority And Goal
 
 **Priority:** P0.
 
-Shrink `SlideEditorVNext` from a god component into a thin editor shell that
-wires explicit controllers, render surfaces, overlays, and command descriptors.
-Behavior must remain unchanged unless a phase explicitly calls out a product
-decision.
+Finish shrinking `SlideEditorVNext` into a composition shell that wires owned
+controllers and descriptors without owning stage edit state. Behavior must
+remain unchanged unless a slice explicitly records a product decision.
 
-## Current behavior
+The major extraction slices are implemented: current-object descriptors,
+`useStageInteractionController`, overlay extraction, focus/geometry registry,
+inline text adapter, and source/diagnostic review descriptors. The production
+shell is still about 5.5k lines, so the plan remains active.
 
-`src/components/presentation-vnext/slide-editor-vnext.tsx` is the production
-editor shell and currently owns too many reasons to change:
+## Remaining Work
 
-- deck open/save state, conflict handling, diagnostics, source review, and
-  export affordances;
-- slide selection, stage pointer state, drag/resize/rotate, table edit, inline
-  text edit, and connector gestures;
-- toolbar, context toolbar, inspector panel coordination, filmstrip state, and
-  deck chrome affordances;
-- focus restoration, live messages, keyboard shortcuts, presence, and dialog
-  plumbing.
+| Slice                   | Work                                                                                                                               | Exit criteria                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Table direct edit owner | Move remaining table direct-edit state and handlers out of the canvas render surface into an owned controller or overlay boundary. | `SlideCanvasVNext` can stay render-focused; table editing dispatches command payloads through an owner. |
+| Final shell collapse    | Delete obsolete editor-local state and inline handlers after the equivalent controller/component tests exist.                      | `SlideEditorVNext` is primarily composition, callback wiring, and region layout.                        |
+| Coverage handoff        | Replace any remaining shell-only assertions for moved behavior with focused controller, overlay, adapter, or component tests.      | Refactors can validate the touched owner without mounting the full editor shell.                        |
 
-The vNext contracts around schema, commands, rendering, export, and diagnostics
-are comparatively clean, but the shell does not yet respect that boundary.
+## Current Boundary Requirements
 
-## Evidence
-
-| Evidence                  | Source                                                                                          | What it shows                                                               |
-| ------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Oversized editor shell    | `src/components/presentation-vnext/slide-editor-vnext.tsx`                                      | About 5.9k lines; component shape still exceeds the thin-shell invariant.   |
-| Stage helpers already     | `src/components/presentation-vnext/stage-pointer-interactions.ts`                               | Pointer and gesture logic is already separable from the React shell.        |
-| Targeting helpers already | `src/components/presentation-vnext/stage-targeting.ts`                                          | Hit/target behavior can be tested outside the full editor.                  |
-| Drag lifecycle helpers    | `src/components/presentation-vnext/pointer-drag-lifecycle.ts`                                   | Drag state can move behind an interaction controller.                       |
-| Inspector shell exists    | `src/components/presentation-vnext/inspector/inspector-shell.tsx`                               | Inspector rendering already has a shell boundary that can consume actions.  |
-| Inspector UI helpers      | `src/lib/presentation-vnext/inspector-panel-ui.ts`                                              | Panel decisions can be described without mounting the full editor.          |
-| Split failure tests       | `src/components/presentation-vnext/slide-editor-vnext-*.failures.test.ts`                       | Region-focused failure coverage still shares React-internals test helpers.  |
-| Command contract          | `src/lib/presentation-vnext/editor-commands.ts`                                                 | Mutations are already mostly pure and should remain the command boundary.   |
-| Render/export contracts   | `src/lib/presentation-vnext/render-tree.ts`, `src/lib/presentation-vnext/export-spec.ts`        | Output code can stay read-only while editor controllers dispatch mutations. |
-| Diagnostics/recovery      | `src/lib/presentation-vnext/diagnostics.ts`, `src/lib/presentation-vnext/diagnostic-repairs.ts` | Review/repair actions should not be embedded in the editor component.       |
-
-## Target boundaries
-
-| Boundary                   | Target owner                                                | Notes                                                                                       |
-| -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Editor session shell       | `SlideEditorVNext` plus a small session controller          | Opens deck state, wires save status, routes callbacks, and renders layout regions only.     |
-| Stage interaction state    | `useStageInteractionController`                             | Explicit state machine for idle, preselect, drag, resize, rotate, text edit, and connector. |
-| Stage render surface       | `SlideCanvasVNext` render-only surface                      | Renders slide nodes and percent geometry without owning selection chrome or edit adapters.  |
-| Stage overlays             | overlay components/controllers                              | Selection chrome, handles, guides, marquee, comments, and gesture feedback.                 |
-| Inline text editing        | tested inline text adapter                                  | Keeps double-click text behavior and IME-safe commit/cancel behavior outside the shell.     |
-| Focus and geometry         | focus/geometry registry                                     | Replaces brittle `querySelector`/`setTimeout` ownership with registered elements.           |
-| Toolbar/current object     | action descriptor model                                     | Toolbar, popovers, and inspector consume the same current-object command descriptors.       |
-| Inspector                  | inspector shell + shared field primitives                   | Inspector stays panel-oriented and maps descriptors to fields/actions.                      |
-| Deck chrome                | deck-chrome controller                                      | Separates deck-level chrome defaults from slide-level overrides.                            |
-| Diagnostics/source review  | action model shared by source review and diagnostics review | Keeps source/repair decisions out of the main editor component.                             |
-| Export/present entrypoints | existing export/present modules                             | Editor invokes them; it does not own their internal behavior.                               |
-
-## Phases
-
-| Phase | Slice                                  | Actions                                                                                                                                    | Exit criteria                                                                                          |
-| ----- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| 0     | Behavior map and safety harness        | Inventory editor-owned behaviors, current-object actions, focus paths, and tests before moving code.                                       | No behavior change; each behavior has a current test owner or planned acceptance check.                |
-| 1     | Extract session and action selectors   | Move current slide/current node/current object/action derivation into pure selectors or hooks consumed by shell, toolbar, and inspector.   | Toolbar and inspector render from shared descriptors; no duplicated current-object logic.              |
-| 2     | Introduce stage interaction controller | Move pointer/keyboard/connector state into `useStageInteractionController`; reuse existing stage helper modules.                           | Stage gestures still dispatch `editor-commands.ts`; full editor no longer owns gesture state directly. |
-| 3     | Split canvas render surface/overlays   | Keep `SlideCanvasVNext` focused on rendering and move selection chrome, handles, table edit, guides, and comments into overlay components. | Canvas can render read-only output without editor-only overlays.                                       |
-| 4     | Replace focus/geometry ad hoc paths    | Add a registry for stage nodes, toolbar actions, inline editors, and inspector controls.                                                   | Focus restoration and live messages do not rely on DOM queries or delayed timers as truth.             |
-| 5     | Extract inline text adapter            | Wrap existing double-click, commit, cancel, style handoff, and IME paths behind a small adapter with focused tests.                        | Text editing behavior survives extraction and has IME/CJK coverage.                                    |
-| 6     | Move diagnostics/source review actions | Represent source review and diagnostic repair affordances with the same action descriptor shape used by toolbar/inspector actions.         | Review panels can be tested without mounting the god shell.                                            |
-| 7     | Collapse the shell                     | Delete dead local state and inline handlers from `SlideEditorVNext` after every region has an owner.                                       | Shell is primarily composition and callback wiring.                                                    |
-
-Implementation update — 2026-07-02: current-object descriptors, the stage
-interaction controller, focus/geometry registry, inline text DOM adapter,
-review-action descriptors, and overlay extraction have landed. The remaining
-P0 work is the final shell collapse and moving table direct-edit ownership out
-of the render surface.
-
-## Action items
-
-- [x] Define the editor behavior inventory for selection, drag, resize, rotate,
-      text edit, connector, table edit, diagnostics, source review, filmstrip,
-      deck chrome, export, focus, and keyboard shortcuts.
-- [x] Introduce current-object action descriptors before moving toolbar or
-      inspector UI.
-- [x] Extract `useStageInteractionController` without changing command payloads.
-- [x] Split selection, resize, crop, rotation, and connector overlays out of
-      canvas rendering.
-- [ ] Move remaining table direct-edit state out of the canvas render surface.
-- [x] Add a focus/geometry registry and migrate focus paths to registered stage
-      nodes and filmstrip buttons.
-- [x] Wrap inline text edit behavior in an adapter and add IME acceptance tests.
-- [x] Move diagnostics/source-review repair actions behind descriptors.
-- [ ] Delete obsolete editor-local state only after equivalent controller tests
-      pass; `SlideEditorVNext` still needs a final shell-collapse slice.
+- Stage gestures still dispatch through `editor-commands.ts`.
+- Toolbar, popover, inspector, source review, and diagnostics actions continue
+  to derive from shared descriptors.
+- Present/export output remains read-only and independent of editor-only overlay
+  state.
+- Focus restoration and live messages continue to use registered stage and UI
+  elements rather than ad hoc DOM queries as the source of truth.
 
 ## Out of scope
 

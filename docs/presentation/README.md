@@ -18,10 +18,10 @@ persisted deck contract and the React components that render/edit slides.
 | [theme-packages.md](theme-packages.md)                                           | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                   |
 | [assets.md](assets.md)                                                           | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                      |
 | [rendering-and-export.md](rendering-and-export.md)                               | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.           |
-| [vnext-editor-decomposition-plan.md](vnext-editor-decomposition-plan.md)         | Plan         | P0 plan to shrink the vNext editor shell into explicit controllers while preserving behavior.      |
-| [legacy-retirement-plan.md](legacy-retirement-plan.md)                           | Plan         | P0 plan to extract shared presentation kernel code and retire the orphaned v6 stack.               |
-| [vnext-test-strategy-plan.md](vnext-test-strategy-plan.md)                       | Plan         | P1 plan to replace oversized/internals-coupled tests with refactor-safe presentation coverage.     |
-| [vnext-render-source-boundaries-plan.md](vnext-render-source-boundaries-plan.md) | Plan         | P1/P2 plan for render, export, source, diagnostic, present/public, and provenance boundaries.      |
+| [vnext-editor-decomposition-plan.md](vnext-editor-decomposition-plan.md)         | Plan         | Remaining P0 work for table direct-edit ownership and final editor shell collapse.                 |
+| [legacy-retirement-plan.md](legacy-retirement-plan.md)                           | Plan         | Product-gated retirement plan for residual legacy v6 presentation imports and surface deletion.    |
+| [vnext-test-strategy-plan.md](vnext-test-strategy-plan.md)                       | Plan         | Remaining P1 work for React-internals retirement in presentation tests.                            |
+| [vnext-render-source-boundaries-plan.md](vnext-render-source-boundaries-plan.md) | Plan         | Remaining P2 provenance typing after completed vNext boundary splits.                              |
 
 Future presentation work should live in this directory as `*-plan.md` and must
 separate current behavior from target behavior, phases, and acceptance checks.
