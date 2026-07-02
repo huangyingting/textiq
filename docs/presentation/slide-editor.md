@@ -214,17 +214,21 @@ Current stage capabilities:
 - select one or many nodes;
 - marquee select;
 - move, resize, and rotate nodes;
+- resize and rotate multi-selections through the combined selection bounds;
 - drag connector endpoints and snap them to node anchors;
 - snap boxes to guides/grid;
-- inline-edit text elements, including paragraph/list text;
-- create a text node by double-clicking empty canvas;
+- inline-edit text elements, including paragraph/list text and list markers;
+- create a text node by double-clicking true empty canvas;
+- finalize double-clicks deterministically: node targets collapse to that node,
+  editable text/table/group targets enter their edit context, locked nodes remain
+  selected but do not enter edit, and multi-selection bounds/handles are inert;
 - copy/cut/paste/duplicate/delete selected nodes;
 - group and ungroup elements;
 - enter a group for member editing;
 - hide advanced controls in simple mode.
 
-Geometry is percentage-based (`LayoutBox.frame`) so the same deck renders consistently
-at thumbnail, editor, present, and export sizes.
+Geometry is percentage-based (`LayoutBox.frame`) so the same deck renders
+consistently at thumbnail, editor, present, and export sizes.
 
 ## Keyboard Accessibility
 
@@ -235,10 +239,18 @@ selection, geometry, stage-fit, and stage-guide helpers live under
 `src/lib/presentation-vnext/` and `src/components/presentation-vnext/`; the
 editor shell keeps thin wiring around those helpers.
 
-- **Move:** Arrow nudges the selection by `1%`, Shift+Arrow by `5%`.
+- **Move:** Arrow nudges the selection by `1%`, Shift+Arrow by `5%`. Locked
+  selected nodes are skipped by the mutation helpers, so mixed selections move
+  only their unlocked members.
 - **Resize:** Alt+Arrow resizes by `1%`, Alt+Shift+Arrow by `5%` — Right/Down
   grow the right/bottom edge, Left/Up shrink them (`resizeBoxByStep`, applied via
-  `updateNodeLayouts`).
+  `updateNodeLayouts`). Locked nodes are excluded from keyboard resize entries.
+- **Enter:** a single selected node uses the keyboard equivalent of double-click:
+  text enters inline edit, table enters table-cell edit, and group enters group
+  editing. Locked nodes consume Enter but do not enter edit/group/table modes.
+- **Escape:** active editors and nested contexts unwind before selection clears:
+  inline editors own their own Escape handling, then table edit, group edit,
+  selection, and finally the editor close request.
 - **Traversal:** Tab / Shift+Tab select the next / previous element in a
   deterministic reading order (`orderedElementIds` + `nextElementId`) while a
   canvas element has focus (helpers in `selection-traversal.ts`), backed by a
@@ -304,6 +316,11 @@ permanent `Name` input — element naming lives in `Layers`.
 - hide/lock/rename layer-list operations;
 - slide `localStyle.slide.background` and accent updates;
 - image upload through the slide asset action when `documentId` is available.
+
+The `Effects` panel edits opacity, blend mode, blur/glow/glass effects, and
+shadow settings. Glow and shadow both expose opacity controls in addition to
+their color and blur/offset controls; renderers consume those
+`localStyle.effect.opacity` and `localStyle.shadow.opacity` values.
 
 Deck-level chrome is not edited in the right inspector. The top toolbar
 `Deck chrome` popover owns global logo, footer, page number, watermark, border,

@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-02"
 description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit DeckV7 nodes when many nodes overlap. It is the interaction contract for the vNext slide editor stage, not the persisted deck schema."
 ---
 
@@ -20,23 +20,28 @@ flat element arrays and `groupId`, while vNext uses DeckV7 node trees,
 `GroupNode.children`, and vNext command helpers. Verified parity includes
 align/distribute/match-size, Shift+nudge, select-all, group/ungroup,
 undo/redo, rotation snapping, keyboard connector flow, clipboard,
-duplicate/delete, and connector endpoint editing. The remaining difference is a
-UX affordance only: vNext creates connectors by insert-then-endpoint-drag rather
-than a single drag-from-source gesture.
+duplicate/delete, connector endpoint editing, group-bounds multi-selection
+resize/rotate, and deterministic double-click finalization. The remaining
+difference is a UX affordance only: vNext creates connectors by
+insert-then-endpoint-drag rather than a single drag-from-source gesture.
 
 ## Source Files
 
-| Area                  | Source                                                                                                                                 |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage UI/controller   | [`src/components/presentation-vnext/slide-editor-vnext.tsx`](../../src/components/presentation-vnext/slide-editor-vnext.tsx)           |
-| Read-only canvas      | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                       |
-| Node renderer         | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)         |
-| Selection model       | [`src/components/presentation-vnext/selection-model.ts`](../../src/components/presentation-vnext/selection-model.ts)                   |
-| Selection geometry    | [`src/lib/presentation-vnext/selection-geometry.ts`](../../src/lib/presentation-vnext/selection-geometry.ts)                           |
-| Stage chrome layering | [`src/lib/presentation-vnext/stage-chrome.ts`](../../src/lib/presentation-vnext/stage-chrome.ts)                                       |
-| Stage fit             | [`src/lib/presentation-vnext/stage-fit.ts`](../../src/lib/presentation-vnext/stage-fit.ts)                                             |
-| Stage guides          | [`src/lib/presentation-vnext/stage-guides.ts`](../../src/lib/presentation-vnext/stage-guides.ts)                                       |
-| Context toolbar       | [`src/components/presentation-vnext/toolbar/context-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/context-toolbar.tsx) |
+| Area                  | Source                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stage UI/controller   | [`src/components/presentation-vnext/slide-editor-vnext.tsx`](../../src/components/presentation-vnext/slide-editor-vnext.tsx)               |
+| Read-only canvas      | [`src/components/presentation-vnext/slide-canvas.tsx`](../../src/components/presentation-vnext/slide-canvas.tsx)                           |
+| Node renderer         | [`src/components/presentation-vnext/slide-node-renderer.tsx`](../../src/components/presentation-vnext/slide-node-renderer.tsx)             |
+| Selection model       | [`src/components/presentation-vnext/selection-model.ts`](../../src/components/presentation-vnext/selection-model.ts)                       |
+| Selection geometry    | [`src/lib/presentation-vnext/selection-geometry.ts`](../../src/lib/presentation-vnext/selection-geometry.ts)                               |
+| Stage pointer helpers | [`src/components/presentation-vnext/stage-pointer-interactions.ts`](../../src/components/presentation-vnext/stage-pointer-interactions.ts) |
+| Stage gesture drafts  | [`src/components/presentation-vnext/stage-gesture-feedback.tsx`](../../src/components/presentation-vnext/stage-gesture-feedback.tsx)       |
+| Multi-select geometry | [`src/components/presentation-vnext/multi-selection-transform.ts`](../../src/components/presentation-vnext/multi-selection-transform.ts)   |
+| Table editing         | [`src/components/presentation-vnext/use-table-cell-editing.ts`](../../src/components/presentation-vnext/use-table-cell-editing.ts)         |
+| Stage chrome layering | [`src/lib/presentation-vnext/stage-chrome.ts`](../../src/lib/presentation-vnext/stage-chrome.ts)                                           |
+| Stage fit             | [`src/lib/presentation-vnext/stage-fit.ts`](../../src/lib/presentation-vnext/stage-fit.ts)                                                 |
+| Stage guides          | [`src/lib/presentation-vnext/stage-guides.ts`](../../src/lib/presentation-vnext/stage-guides.ts)                                           |
+| Context toolbar       | [`src/components/presentation-vnext/toolbar/context-toolbar.tsx`](../../src/components/presentation-vnext/toolbar/context-toolbar.tsx)     |
 
 ## Goals
 
@@ -54,7 +59,7 @@ than a single drag-from-source gesture.
 ## Interaction State Machine
 
 The stage should be treated as a small state machine, even though some state is
-currently represented by refs and React state in `SlideStageEditor`.
+currently represented by refs and React state in `SlideEditorVNext`.
 
 | State           | Meaning                                                                | Hover preselect? | Main transitions                                                                                  |
 | --------------- | ---------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
@@ -64,7 +69,7 @@ currently represented by refs and React state in `SlideStageEditor`.
 | `moving`        | Element(s) are actively moving                                         | No               | pointermove -> update boxes; pointerup -> commit gesture                                          |
 | `resizing`      | Element(s) or multi-selection bounds are actively resizing             | No               | pointermove -> update boxes/font/connector endpoint; pointerup -> commit gesture                  |
 | `marquee`       | Stage background drag is drawing a selection band                      | No               | pointerup -> select intersecting boxes or clear selection                                         |
-| `editing`       | Inline text editor is mounted                                          | No               | input -> text patch; click stage background -> commit/exit and clear selection                    |
+| `editing`       | Inline text editor or table-cell editor is mounted                     | No               | input -> content patch; click/double-click another target -> commit/exit before switching         |
 
 Important distinction: **selected is not moving**. A selected element may remain
 selected while pointer movement over other elements continues to preselect those
@@ -81,7 +86,7 @@ hover phase.
 | Mouse/trackpad | Full hover preselection, click selection, drag threshold, double-click edit, context menu.                                 |
 | Pen/stylus     | Treat like pointer input; hover preselection is available only on devices/browsers that emit hover-style pointer movement. |
 | Touch          | No reliable hover. Tap should select, second tap edits editable text, drag threshold starts movement.                      |
-| Keyboard       | Uses roving tabindex and keyboard canvas helpers; `Alt+]` cycles select-under candidates at the focused element center.    |
+| Keyboard       | Uses roving tabindex and keyboard canvas helpers; `Enter` enters the current target, arrows nudge, `Alt+]` selects under.  |
 | Screen readers | Use focus, selection announcements, and the layer list. Preselection itself is advisory visual chrome.                     |
 
 Touch and keyboard users must always have deterministic alternatives through
@@ -234,8 +239,11 @@ Selection/preselection frames are visual chrome, not hit targets.
 - Multi-selection and group bounding boxes should also remain visually above
   slide elements. Multi-selection and group frames use the same named top-layer
   chrome scale as the single-element selection frame.
-- Resize/rotate handles are shown only for the primary selected element and keep
-  their pointer hit areas.
+- Single-node resize/rotate/crop/connector handles are suppressed while multiple
+  nodes are selected. In multi-selection, resize and rotation handles belong to
+  the combined selection bounds.
+- Multi-selection bounds and handles are stage chrome. They are not content
+  targets and must not trigger empty-canvas text insertion or node editing.
 
 Resize and rotation handles are editing affordances, not hover preselection. The
 handles belong to the selected primary element and should stay reachable even
@@ -248,17 +256,18 @@ strategy as frames.
 Pointer-down, double-click, and context-menu actions should ask the same semantic
 hit-test for the target. This keeps hover feedback and click behavior aligned.
 
-| Gesture                 | Target source                        | Result                                                                |
-| ----------------------- | ------------------------------------ | --------------------------------------------------------------------- |
-| Pointer move            | top semantic hit candidate           | update `preselectedElementId` while idle/selected-idle                |
-| Pointer down on element | top semantic hit candidate           | select target immediately, enter `press-pending`                      |
-| Pointer move threshold  | existing drag ref                    | enter moving/resizing/rotating and suppress hover preselection        |
-| Pointer up no movement  | press-pending target                 | select only, or enter inline edit if it was the selected text element |
-| Double click            | top semantic hit candidate           | enter group or inline text edit for that target                       |
-| Context menu            | top semantic hit candidate           | select target and open menu for that target                           |
-| Select-under cycle      | current ranked candidate stack       | `Alt`-click or `Alt+]` selects the next candidate in stack order      |
-| Stage empty click       | no semantic hit, no marquee movement | clear selection                                                       |
-| Editing stage click     | primary stage click while editing    | commit/exit inline edit and clear selection                           |
+| Gesture                  | Target source                        | Result                                                                                         |
+| ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Pointer move             | top semantic hit candidate           | update preselection while idle/selected-idle                                                   |
+| Pointer down on element  | top semantic hit candidate           | select target immediately, enter `press-pending`                                               |
+| Pointer move threshold   | existing drag ref                    | enter moving/resizing/rotating and suppress hover preselection                                 |
+| Pointer up no movement   | press-pending target                 | select only, or enter inline edit if it was the already selected editable text element         |
+| Double click             | top semantic hit candidate           | collapse to the target, then enter text edit, table edit, or group when allowed                |
+| Context menu             | top semantic hit candidate           | select target and open menu for that target                                                    |
+| Select-under cycle       | current ranked candidate stack       | `Alt`-click or `Alt+]` selects the next candidate in stack order                               |
+| Stage empty click        | no semantic hit, no marquee movement | commit/exit current edit, clear selection, and exit group/table context                        |
+| Stage empty double click | true canvas background               | commit/exit current edit, insert a text node at the point, select it, and enter inline editing |
+| Multi-selection bounds   | stage chrome                         | retain current selection; do not insert text, clear selection, or enter editing                |
 
 Pointer-down target resolution and hover preselection use the same ranked
 candidate list without selected-node stickiness, so the object shown as
@@ -283,6 +292,29 @@ hover, pointer-down, double-click, context-menu selection, and future
 select-under cycling while preserving the raw candidate stack for precision
 fallback menus.
 
+### Double-Click Finalizer
+
+Double-click is the final action after the browser has already delivered two
+pointer/click sequences. The finalizer must override temporary selection effects
+from those clicks and re-establish the intended editing context:
+
+- true blank-canvas double-click inserts a new text node and enters inline edit;
+- double-clicking multi-selection bounds or transform handles is inert and keeps
+  the selection intact;
+- double-clicking a node collapses selection to that node and focuses it;
+- editable text enters inline edit with a caret based on the click position; an
+  empty text node falls back to the start caret;
+- tables enter table-cell edit with the first cell focused as the stable
+  fallback;
+- groups enter group-editing mode and select the first child;
+- image, visual, shape, and connector nodes only collapse to single selection;
+- locked nodes only collapse selection and never enter text/table/group editing;
+- modifier keys do not add double-click selection semantics and do not trigger
+  duplicate behavior.
+
+If another inline text editor or table editor is active, double-click first
+commits/exits the current editor and then performs the new target action.
+
 ## Groups And Multi-Selection
 
 Groups add another semantic layer over hit testing.
@@ -295,7 +327,13 @@ Groups add another semantic layer over hit testing.
 - Group bounding boxes are visual chrome and should not become hit-test
   blockers.
 - Multi-selection transforms use the combined transform box, not the individual
-  hit-test candidate under the pointer.
+  hit-test candidate under the pointer. Group snapping is computed once from the
+  combined bounds and then applied as a shared delta so relative offsets remain
+  stable during drag preview.
+- Multi-selection resize and rotation are computed from the combined bounds via
+  `multi-selection-transform.ts`. Locked or layoutless selected nodes are
+  excluded from the transform entries; unlocked nodes keep their relative
+  placement within the transformed bounds.
 - Modifier-click selection toggles membership in the selection set and should
   not start drag tracking.
 
@@ -315,6 +353,35 @@ resolve to member-level selection.
 | Multiple arbitrary fully covered objects           | Semantic scoring can improve the common case, but layer list/context menu remains the fallback.                              |
 | Line/connector over any element                    | Stroke-distance hit wins near the line; box interior alone should not.                                                       |
 | Locked object over editable object                 | Locked object is excluded by default, so lower editable objects can be targeted.                                             |
+
+Locked nodes can still be selected through layer/focus flows for inspection, but
+they are excluded from mutation helpers and do not enter edit modes through
+double-click or `Enter`.
+
+## Keyboard Interaction Matrix
+
+Keyboard behavior mirrors pointer semantics without relying on pointer
+coordinates:
+
+| Key / chord           | Behavior                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter`               | Coordinate-less double-click for a single selected node: text edit, table edit, or group entry; locked nodes do nothing.                             |
+| `Escape`              | Unwinds the deepest active state first: table edit, group, selection, then editor close request. Inline text edit consumes Escape inside the editor. |
+| Arrow keys            | Nudge selected nodes by `1%`; `Shift+Arrow` nudges by `5%`. Locked selected nodes are ignored by mutation helpers.                                   |
+| `Alt+Arrow`           | Resize selected unlocked layout entries by the same step size; aspect-locked nodes preserve aspect ratio.                                            |
+| `Tab` / `Shift+Tab`   | Traverse the stage roving-tabindex order. Arrow keys do not perform focus traversal on the stage.                                                    |
+| Space / `Shift+Space` | Select the focused node or toggle it into/out of the selection.                                                                                      |
+| `Ctrl/Cmd+A`          | Select all selectable nodes for the current selection mode.                                                                                          |
+| `Ctrl/Cmd+G`          | Group selection; `Ctrl/Cmd+Shift+G` ungroups.                                                                                                        |
+| Delete / Backspace    | Delete selected nodes.                                                                                                                               |
+| `Ctrl/Cmd+D`          | Duplicate selected nodes and select the duplicates.                                                                                                  |
+| `Alt+]`               | Select-under cycle at the focused element center.                                                                                                    |
+| `C` / `Shift+C`       | Keyboard connector flow when connector preconditions are met.                                                                                        |
+
+Inline text editing and table-cell editing own their editing keys while active;
+the stage must not intercept arrows, typing, or editing shortcuts from those
+surfaces. `Alt` retains two pointer meanings: `Alt`-click cycles select-under,
+and `Alt`-drag duplicates moved nodes while disabling snap during that drag.
 
 ## Precision Fallbacks
 
@@ -371,11 +438,18 @@ Implementation guidance:
 4. Hit testing is pure and covered by DOM-free tests.
 5. Visual frames render above slide elements but never intercept pointer events.
 6. Connector/line hit testing is distance based, not bounding-box based.
-7. `SlideCanvasVNext` remains read-only; all interaction logic lives in the stage.
+7. Locked nodes can be selected for inspection but must not be mutated or enter
+   edit modes through pointer, transform, or keyboard shortcuts.
+8. `SlideCanvasVNext` remains read-only; all interaction logic lives in the stage.
 
 ## Primary Tests
 
 - [`src/components/presentation-vnext/selection-model.test.ts`](../../src/components/presentation-vnext/selection-model.test.ts)
+- [`src/components/presentation-vnext/stage-pointer-interactions.test.ts`](../../src/components/presentation-vnext/stage-pointer-interactions.test.ts)
+- [`src/components/presentation-vnext/slide-editor-vnext-node-drag-threshold.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-node-drag-threshold.test.ts)
+- [`src/components/presentation-vnext/slide-editor-vnext-inline-text-editor.failures.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-inline-text-editor.failures.test.ts)
+- [`src/components/presentation-vnext/slide-editor-vnext-stage-selection.failures.test.ts`](../../src/components/presentation-vnext/slide-editor-vnext-stage-selection.failures.test.ts)
+- [`src/components/presentation-vnext/multi-selection-transform.test.ts`](../../src/components/presentation-vnext/multi-selection-transform.test.ts)
 - [`src/lib/presentation-vnext/selection-geometry.test.ts`](../../src/lib/presentation-vnext/selection-geometry.test.ts)
 - [`src/lib/presentation-vnext/stage-chrome.test.ts`](../../src/lib/presentation-vnext/stage-chrome.test.ts)
 - [`src/lib/presentation-vnext/stage-fit.test.ts`](../../src/lib/presentation-vnext/stage-fit.test.ts)
