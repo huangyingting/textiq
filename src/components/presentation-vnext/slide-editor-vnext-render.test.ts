@@ -18,10 +18,10 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 
 function createHookRenderer() {
-  return createReactHookRenderer({ idPrefix: "fake-id" });
+  return createServerRenderHarness({ idPrefix: "fake-id" });
 }
 
 type FakeEventTarget = {

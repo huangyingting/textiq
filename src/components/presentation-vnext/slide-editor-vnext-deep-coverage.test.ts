@@ -19,7 +19,7 @@ import {
   makeDOMRect,
   TestHTMLElement,
 } from "@/test/fake-dom";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import {
   handleCloseConfirmAction,
   routeCloseRequest,
@@ -133,7 +133,7 @@ function installBrowserGlobals({ desktop = false } = {}) {
 }
 
 function createHookRenderer({ runEffects = false } = {}) {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     idPrefix: "deep-coverage-id",
     runEffects,
     runLayoutEffects: runEffects,

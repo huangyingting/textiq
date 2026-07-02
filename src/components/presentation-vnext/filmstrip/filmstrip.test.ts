@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { Filmstrip, type FilmstripProps } from "./filmstrip";
 import { FilmstripSlide } from "./filmstrip-slide";
-import { withReactTestDispatcher } from "@/test/react-server-renderer";
+import { renderWithReact } from "@/test/react-server-renderer";
 import { MIN_DECK_SLIDES_MESSAGE } from "@/lib/presentation-vnext";
 import type {
   ResolvedDeckRenderTree,
@@ -129,7 +129,7 @@ function withMockHooks<T>(
   const layoutEffects: MockLayoutEffect[] = [];
   let stateIndex = 0;
 
-  return withReactTestDispatcher(
+  return renderWithReact(
     {
       useState: (initial: unknown) => {
         const index = stateIndex;
@@ -173,7 +173,6 @@ function withMockHooks<T>(
       useDeferredValue: <T>(value: T) => value,
     },
     () => ({ value: callback(), refs, updates, layoutEffects }),
-    { message: "React internals are required for filmstrip hook tests" },
   );
 }
 

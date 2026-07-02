@@ -5,13 +5,13 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE } from "@/lib/presentation-vnext/conflict-recovery-reload-v7";
 import type { DeckV7 } from "@/lib/presentation-vnext/schema";
 import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { ConflictRecoveryDialogV7 } from "./conflict-recovery-dialog-v7";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
 function createHookRenderer() {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     idPrefix: "fake-react-id",
     preferServerSnapshot: true,
   });

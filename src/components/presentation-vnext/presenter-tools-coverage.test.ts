@@ -18,7 +18,7 @@ import {
   buildTextContent,
   buildTextNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import {
   DeckGenerationDiagnosticsNotice,
   DeckGenerationPreviewVNext,
@@ -39,7 +39,7 @@ type PortalLike = {
 };
 
 function createHookRenderer({ runEffects = false } = {}) {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     idPrefix: "presenter-coverage-id",
     runEffects,
     runLayoutEffects: runEffects,

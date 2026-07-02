@@ -8,7 +8,7 @@ import {
   buildImageNode,
   buildSlideV7,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { SlideCanvasVNext } from "./slide-canvas";
 
 export type ElementLike = ReactElement<Record<string, unknown>>;
@@ -41,7 +41,7 @@ export function flattenText(node: ReactNode): string {
 }
 
 export function createHookRenderer() {
-  return createReactHookRenderer({ preferServerSnapshot: true });
+  return createServerRenderHarness({ preferServerSnapshot: true });
 }
 
 export function findRequiredElement(

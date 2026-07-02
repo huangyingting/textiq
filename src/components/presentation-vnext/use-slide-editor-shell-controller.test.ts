@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { buildMinimalDeckV7 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 
 import { useSlideEditorShellController } from "./use-slide-editor-shell-controller";
 
 describe("useSlideEditorShellController", () => {
   test("surfaces PPTX export failures in the toolbar error banner", async () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const deck = buildMinimalDeckV7();
     const renderController = () =>
       hookRenderer.run(() =>
@@ -33,7 +33,7 @@ describe("useSlideEditorShellController", () => {
   });
 
   test("saves before roundtrip actions and blocks routes on save failure", async () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const deck = buildMinimalDeckV7();
     const calls: string[] = [];
     const renderController = () =>
@@ -62,7 +62,7 @@ describe("useSlideEditorShellController", () => {
   });
 
   test("announces successful regeneration after clearing prior errors", async () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const deck = buildMinimalDeckV7();
     let announcement = "";
     const renderController = () =>
@@ -93,7 +93,7 @@ describe("useSlideEditorShellController", () => {
   });
 
   test("routes unsaved close requests through confirm actions", () => {
-    const hookRenderer = createReactHookRenderer();
+    const hookRenderer = createServerRenderHarness();
     const deck = buildMinimalDeckV7();
     let closeCount = 0;
     const renderController = () =>

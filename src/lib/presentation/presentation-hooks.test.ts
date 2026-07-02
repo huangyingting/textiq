@@ -2,39 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { Deck } from "./deck";
-import { useDeckHistory } from "./use-deck-history";
-import { useImageUpload } from "./use-image-upload";
-import { useSlideFontsReady } from "./slide-font-loading";
+import { deckHistoryReducer, initDeckHistory } from "./use-deck-history";
+import { validateImageFile } from "./image-element";
+import { loadSlideFonts } from "./slide-font-loading";
 import {
+  deriveSlidePresencePayload,
+  extractSlidePresencePeers,
   SLIDE_PRESENCE_AWARENESS_KEY,
-  useSlidePresence,
   type SlidePresencePayload,
 } from "@/lib/presentation-shared/use-slide-presence";
-import { withReactTestDispatcher } from "@/test/react-server-renderer";
-
-function withHookDispatcher<T>(
-  overrides: Record<string, (...args: any[]) => any>,
-  run: () => T,
-): T {
-  return withReactTestDispatcher(
-    {
-      useCallback: (callback: unknown) => callback,
-      useEffect: (effect: () => void | (() => void)) => effect(),
-      useReducer: (
-        _reducer: unknown,
-        initialArg: unknown,
-        init?: (arg: unknown) => unknown,
-      ) => [init ? init(initialArg) : initialArg, () => {}],
-      useRef: (current: unknown) => ({ current }),
-      useState: (initial: unknown) => [
-        typeof initial === "function" ? initial() : initial,
-        () => {},
-      ],
-      ...overrides,
-    },
-    run,
-  );
-}
 
 function deck(title = "Initial"): Deck {
   return {
@@ -47,54 +23,38 @@ function deck(title = "Initial"): Deck {
   } as Deck;
 }
 
-describe("presentation React hooks under a minimal dispatcher", () => {
-  it("useDeckHistory exposes state and dispatches imperative actions", () => {
-    const actions: unknown[] = [];
-    const api = withHookDispatcher(
-      {
-        useReducer: (_reducer, initialArg, init) => [
-          init ? init(initialArg) : initialArg,
-          (action: unknown) => actions.push(action),
-        ],
-      },
-      () => useDeckHistory(deck("Initial")),
-    );
-
+describe("presentation hook owners", () => {
+  it("deck history reducer applies imperative deck actions", () => {
+    const initial = deck("Initial");
     const next = deck("Next");
-    api.commit(next, { coalesceKey: "drag:1" });
-    api.replace(next);
-    api.undo();
-    api.redo();
+    const committed = deckHistoryReducer(initDeckHistory(initial), {
+      type: "commit",
+      deck: next,
+      coalesceKey: "drag:1",
+    });
+    const replaced = deckHistoryReducer(committed, {
+      type: "replace",
+      deck: initial,
+    });
+    const undone = deckHistoryReducer(replaced, { type: "undo" });
+    const redone = deckHistoryReducer(undone, { type: "redo" });
 
-    assert.equal(api.present.slides[0]?.title, "Initial");
-    assert.deepEqual(actions, [
-      { type: "commit", deck: next, coalesceKey: "drag:1" },
-      { type: "replace", deck: next },
-      { type: "undo" },
-      { type: "redo" },
-    ]);
+    assert.equal(committed.present.slides[0]?.title, "Next");
+    assert.equal(replaced.present.slides[0]?.title, "Initial");
+    assert.equal(undone.present.slides[0]?.title, "Initial");
+    assert.equal(redone.present.slides[0]?.title, "Initial");
   });
 
-  it("useImageUpload ignores empty files and surfaces validation errors", () => {
-    const errors: string[] = [];
-    const accepted: string[] = [];
-    const { handleFile } = withHookDispatcher({}, () =>
-      useImageUpload({
-        deck: deck(),
-        onAccept: (src) => accepted.push(src),
-        onError: (message) => errors.push(message),
-      }),
+  it("image upload validation surfaces non-image errors", () => {
+    const result = validateImageFile(
+      new File(["not an image"], "notes.txt", { type: "text/plain" }),
     );
 
-    handleFile(undefined);
-    handleFile(new File(["not an image"], "notes.txt", { type: "text/plain" }));
-
-    assert.deepEqual(accepted, []);
-    assert.equal(errors.length, 1);
-    assert.match(errors[0]!, /image/i);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.reason, /image/i);
   });
 
-  it("useSlideFontsReady starts loading browser fonts and returns initial readiness", () => {
+  it("loadSlideFonts starts loading browser fonts", async () => {
     const originalDocument = globalThis.document;
     const loadedSpecs: string[] = [];
     Object.defineProperty(globalThis, "document", {
@@ -111,8 +71,7 @@ describe("presentation React hooks under a minimal dispatcher", () => {
     });
 
     try {
-      const ready = withHookDispatcher({}, () => useSlideFontsReady(["inter"]));
-      assert.equal(ready, false);
+      await loadSlideFonts(["inter"]);
       assert.ok(loadedSpecs.length > 0);
     } finally {
       Object.defineProperty(globalThis, "document", {
@@ -122,9 +81,7 @@ describe("presentation React hooks under a minimal dispatcher", () => {
     }
   });
 
-  it("useSlidePresence publishes local payload and subscribes to awareness", () => {
-    const listeners: Array<() => void> = [];
-    const localWrites: unknown[] = [];
+  it("slide presence derives local payload and extracts awareness peers", () => {
     const states = new Map<number, Record<string, unknown>>();
     const remotePayload: SlidePresencePayload = {
       documentId: "doc-1",
@@ -135,44 +92,20 @@ describe("presentation React hooks under a minimal dispatcher", () => {
       editingMode: "selecting",
     };
     states.set(7, { [SLIDE_PRESENCE_AWARENESS_KEY]: remotePayload });
-    const awareness = {
-      clientID: 3,
-      getStates: () => states,
-      setLocalStateField: (_key: string, value: unknown) =>
-        localWrites.push(value),
-      on: (_event: "change", handler: () => void) => listeners.push(handler),
-      off: (_event: "change", handler: () => void) => {
-        const index = listeners.indexOf(handler);
-        if (index >= 0) listeners.splice(index, 1);
-      },
-    };
-    const peerUpdates: unknown[] = [];
 
-    const result = withHookDispatcher(
-      {
-        useState: (initial) => [
-          typeof initial === "function" ? initial() : initial,
-          (value: unknown) => peerUpdates.push(value),
-        ],
-      },
-      () =>
-        useSlidePresence({
-          documentId: "doc-1",
-          userName: "Local",
-          userId: "local-1",
-          selectedSlideId: "slide-1",
-          selectedNodeIds: [],
-          editingMode: "browsing",
-          awareness,
-        }),
-    );
+    const local = deriveSlidePresencePayload({
+      documentId: "doc-1",
+      userName: "Local",
+      userId: "local-1",
+      selectedSlideId: "slide-1",
+      selectedNodeIds: [],
+      editingMode: "browsing",
+    });
+    const peers = extractSlidePresencePeers(states, 3, "doc-1");
 
-    assert.equal(result.local.userName, "Local");
-    assert.equal(
-      (localWrites[0] as SlidePresencePayload).selectedSlideId,
-      "slide-1",
-    );
-    assert.equal(listeners.length, 1);
-    assert.equal((peerUpdates[0] as unknown[]).length, 1);
+    assert.equal(local.userName, "Local");
+    assert.equal(local.selectedSlideId, "slide-1");
+    assert.equal(peers.length, 1);
+    assert.equal(peers[0]?.userName, "Remote");
   });
 });

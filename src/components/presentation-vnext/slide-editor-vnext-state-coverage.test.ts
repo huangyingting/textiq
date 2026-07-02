@@ -24,7 +24,7 @@ import {
   makeDOMRect,
   TestHTMLElement,
 } from "@/test/fake-dom";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import {
   SlideEditorCloseConfirmDialog,
   SlideEditorVNext,
@@ -154,7 +154,7 @@ function installBrowserGlobals({
 function createHookRenderer({
   runEffects = false,
 }: { runEffects?: boolean } = {}) {
-  return createReactHookRenderer({
+  return createServerRenderHarness({
     idPrefix: "fake-id",
     runEffects,
     runInsertionEffects: runEffects,

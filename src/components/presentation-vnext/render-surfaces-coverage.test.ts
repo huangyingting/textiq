@@ -33,7 +33,7 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/deck-v7";
-import { createReactHookRenderer } from "@/test/react-server-renderer";
+import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { PresentModeVNext } from "./present-mode-vnext";
 import {
   PresenterPanelVNext,
@@ -54,7 +54,7 @@ type PortalLike = {
 };
 
 function createHookRenderer() {
-  return createReactHookRenderer({ idPrefix: "render-surface-id" });
+  return createServerRenderHarness({ idPrefix: "render-surface-id" });
 }
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {
