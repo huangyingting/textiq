@@ -354,6 +354,22 @@ export type {
 export type { ResolveDeckOptions } from "./render-resolver";
 export { resolveDeckRenderTree } from "./render-resolver";
 
+// Accessibility outline and narration
+export type {
+  DeckOutlineNodeRole,
+  NodeNarrationWarning,
+  NodeNarration,
+  NodeNarrationOptions,
+} from "./a11y/node-narration";
+export { narrateNode, truncateNarrationText } from "./a11y/node-narration";
+export type {
+  DeckOutlineNode,
+  SlideOutline,
+  DeckOutline,
+  BuildDeckOutlineOptions,
+} from "./a11y/deck-outline";
+export { buildDeckOutline } from "./a11y/deck-outline";
+
 // Export spec
 export type {
   ExportBackgroundOperation,
