@@ -1,4 +1,10 @@
-import { useMemo, useReducer, type Dispatch, type SetStateAction } from "react";
+import {
+  useMemo,
+  useReducer,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 import type { StageGuide } from "@/lib/presentation-vnext/stage-guides";
 import type { SelectionFrame } from "@/lib/presentation-vnext/selection-geometry";
@@ -80,11 +86,15 @@ export interface StageInteractionController extends StageInteractionState {
   setActiveConnectorEndpoint: StageInteractionSetter<"activeConnectorEndpoint">;
   setConnectorGestureDraft: StageInteractionSetter<"connectorGestureDraft">;
   clearGestureDrafts: () => void;
+  suppressNextStageClick: () => void;
+  shouldSuppressStageClick: () => boolean;
 }
 
 type StageInteractionActions = Omit<
   StageInteractionController,
-  keyof StageInteractionState
+  | keyof StageInteractionState
+  | "suppressNextStageClick"
+  | "shouldSuppressStageClick"
 >;
 
 export const initialStageInteractionState: StageInteractionState = {
@@ -279,6 +289,7 @@ function buildStageInteractionActions(
 }
 
 export function useStageInteractionController(): StageInteractionController {
+  const suppressStageClickRef = useRef(false);
   const [state, dispatch] = useReducer(
     stageInteractionReducer,
     initialStageInteractionState,
@@ -288,5 +299,21 @@ export function useStageInteractionController(): StageInteractionController {
     [dispatch],
   );
 
-  return useMemo(() => ({ ...state, ...actions }), [actions, state]);
+  const clickSuppressionActions = useMemo(
+    () => ({
+      suppressNextStageClick: () => {
+        suppressStageClickRef.current = true;
+        window.setTimeout(() => {
+          suppressStageClickRef.current = false;
+        }, 0);
+      },
+      shouldSuppressStageClick: () => suppressStageClickRef.current,
+    }),
+    [],
+  );
+
+  return useMemo(
+    () => ({ ...state, ...actions, ...clickSuppressionActions }),
+    [actions, clickSuppressionActions, state],
+  );
 }
