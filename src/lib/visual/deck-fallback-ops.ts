@@ -1,6 +1,6 @@
-import type { ImageElement, VisualElement } from "@/lib/presentation/deck";
-import { isEmptyImageSrc } from "@/lib/presentation/image-element";
-import type { PresentationTheme } from "@/lib/presentation/presentation-theme";
+import type { ImageElement, VisualElement } from "@/lib/document/deck-model";
+import { isEmptyImageSrc } from "@/lib/visual/image-element";
+import type { PresentationTheme } from "@/lib/visual/presentation-theme";
 import type { Visual } from "@/lib/visual/schema";
 import { resolveVisualThemeBridge } from "@/lib/visual/presentation-visual-theme-bridge";
 import { applyTheme } from "@/lib/visual/transforms";

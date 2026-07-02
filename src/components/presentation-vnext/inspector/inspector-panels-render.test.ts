@@ -31,7 +31,7 @@ import { withReactTestDispatcher } from "@/test/react-internals";
 import {
   SLIDE_FONT_OPTIONS,
   slideFontCssStack,
-} from "@/lib/presentation/slide-fonts";
+} from "@/lib/presentation-shared/slide-fonts";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
 

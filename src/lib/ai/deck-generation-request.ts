@@ -14,7 +14,7 @@ import { apiErrorMessageFromPayload } from "@/lib/api/error-message";
 import {
   isThemePackageId,
   type ThemePackageId,
-} from "@/lib/presentation/theme-packages";
+} from "@/lib/presentation-shared/theme-packages";
 import {
   DIAGNOSTIC_CATEGORIES,
   DIAGNOSTIC_TARGET_SCOPES,

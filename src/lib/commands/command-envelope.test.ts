@@ -14,8 +14,8 @@ import {
   validateCommandEnvelope,
   type CommandEnvelope,
 } from "@/lib/commands/command-envelope";
-import type { SlideCommand } from "@/lib/presentation/slide-commands";
-import { executeCommand } from "@/lib/presentation/slide-commands";
+import type { SlideCommand } from "../presentation/slide-commands";
+import { executeCommand } from "../presentation/slide-commands";
 import { makeDeckFromIds } from "@/test/builders/deck";
 
 const ACTOR = { id: "user-1", sessionId: "session-1" };

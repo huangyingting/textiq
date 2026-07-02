@@ -11,7 +11,7 @@ import {
 } from "@/lib/commands/command-validation";
 import type { CommandEnvelope } from "@/lib/commands/command-envelope";
 import type { VisualCommand } from "@/lib/commands/visual-commands";
-import type { SlideCommand } from "@/lib/presentation/slide-commands";
+import type { SlideCommand } from "../presentation/slide-commands";
 
 const ACTOR = { id: "user-1", sessionId: "session-1" };
 

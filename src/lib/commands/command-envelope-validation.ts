@@ -1,4 +1,4 @@
-import { validateDeckCommandPayload } from "@/lib/presentation/slide-command-metadata";
+import { validateDeckCommandPayload } from "@/lib/commands/deck-command-metadata";
 import { validateVisualCommandPayload } from "./visual-command-metadata";
 import {
   validateCommandEnvelopeStructure,

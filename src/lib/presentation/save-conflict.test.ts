@@ -51,7 +51,7 @@ import { test, describe } from "node:test";
 import {
   generateRevisionToken,
   isRevisionConflict,
-} from "@/lib/presentation/deck-revision-token";
+} from "@/lib/document/deck-revision-token";
 import { shouldSnapshot } from "@/lib/document-versions";
 import { applyPatch, type DeckPatch } from "@/lib/presentation/slide-commands";
 import { executeCommand } from "@/lib/presentation/slide-commands";
@@ -59,7 +59,7 @@ import { acceptDeckCommandEnvelope } from "@/lib/commands/command-envelope";
 import { CURRENT_COMMAND_SCHEMA_VERSION } from "@/lib/commands/command-envelope";
 import type { CommandEnvelope } from "@/lib/commands/command-envelope";
 import type { SlideCommand } from "@/lib/presentation/slide-commands";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
+import { safeParseDeck } from "@/lib/document/deck-schema";
 import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/presentation/deck";
 import type { Deck, Slide } from "@/lib/presentation/deck";
 import { makeMinimalDeck, makeMinimalSlide } from "@/test/builders/deck";

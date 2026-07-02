@@ -16,19 +16,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Deck, Slide, TextElement } from "@/lib/presentation/deck";
-import { PRESENTATION_THEME_IDS } from "@/lib/presentation/deck";
-import { resolveSlideThemeColors } from "@/lib/presentation/style-cascade";
+import type { Deck, Slide, TextElement } from "../presentation/deck";
+import { PRESENTATION_THEME_IDS } from "../presentation/deck";
+import { resolveSlideThemeColors } from "../presentation/style-cascade";
 import {
   resolveRoleToken,
   resolveThemeTokens,
   type PresentationTheme,
-} from "@/lib/presentation/presentation-theme";
+} from "../presentation/presentation-theme";
 import {
   buildDeckSpecs,
   type DeckBulletsOp,
   type DeckTextOp,
-} from "@/lib/presentation/export/deck-export";
+} from "../presentation/export/deck-export";
 import { buildDeck } from "@/test/builders/deck";
 import { STYLE_THEMES } from "@/lib/visual/themes";
 

@@ -27,7 +27,7 @@ import {
   createSlideAutosaveScheduler,
   type SlideAutosaveScheduler,
 } from "@/lib/presentation-shared/slide-autosave-scheduler";
-import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation/theme-packages";
+import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation-shared/theme-packages";
 import { buildSourceBlockIndex } from "@/lib/presentation-vnext/block-index";
 import {
   CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE,

@@ -37,8 +37,8 @@ import {
   type TextLikeElement,
 } from "@/lib/presentation/text-element-fit";
 import { SLIDE_TEXT_FONT_SIZE } from "@/lib/presentation/text-defaults";
-import { useSlideFontsReady } from "@/lib/presentation/slide-font-loading";
-import { resolveElementFontCss } from "@/lib/presentation/slide-fonts";
+import { useSlideFontsReady } from "@/lib/presentation-shared/slide-font-loading";
+import { resolveElementFontCss } from "@/lib/presentation-shared/slide-fonts";
 import {
   elementDesignOverrides,
   shapeContent,

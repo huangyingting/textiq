@@ -22,7 +22,7 @@ import {
   DEFAULT_THEME_PACKAGE_ID,
   isThemePackageId,
   type ThemePackageId,
-} from "@/lib/presentation/theme-packages";
+} from "@/lib/presentation-shared/theme-packages";
 import type { Visual } from "@/lib/visual/schema";
 
 const DECK_LENGTHS: readonly NonNullable<DeckGenerationOptions["length"]>[] = [

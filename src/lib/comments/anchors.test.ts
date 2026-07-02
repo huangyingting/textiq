@@ -15,7 +15,7 @@ import {
   validateElementId,
   validateSlideId,
 } from "./anchors";
-import type { SlideCommentAnchor } from "@/lib/presentation/slide-comment-anchors";
+import type { SlideCommentAnchor } from "@/lib/comments/slide-comment-anchors";
 import {
   buildCommentAnchor,
   buildCommentAnchorRecord,

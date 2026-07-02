@@ -1,7 +1,7 @@
 /** Visual command payload/result contracts with no executor imports. */
 
 import type { CommandEnvelope, CommandTarget } from "./envelope-core";
-import type { DeckPatch } from "@/lib/presentation/slide-command-contracts";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type {
   ArrowStyle,
   AspectRatioPreset,

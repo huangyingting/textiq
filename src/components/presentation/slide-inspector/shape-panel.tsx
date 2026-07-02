@@ -41,7 +41,7 @@ import type {
 import type { ElementPatch } from "@/lib/presentation/deck-mutations";
 import { resolveRoleToken } from "@/lib/presentation/presentation-theme";
 import { runsToHtml, shouldStoreRuns } from "@/lib/presentation/rich-text-html";
-import { matchSlideFont } from "@/lib/presentation/slide-fonts";
+import { matchSlideFont } from "@/lib/presentation-shared/slide-fonts";
 import { resolveSlideTokenSet } from "@/lib/presentation/style-cascade";
 
 const SHAPE_OPTIONS: ShapeKind[] = [

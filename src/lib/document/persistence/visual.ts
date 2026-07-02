@@ -9,7 +9,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 import { prisma } from "@/lib/prisma";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
+import { safeParseDeck } from "@/lib/document/deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import { VISUAL_KIND_TO_PRISMA, safeParseVisual } from "@/lib/visual/schema";

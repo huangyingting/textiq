@@ -6,7 +6,7 @@ import {
   buildGenerateDeckSuccessLogFields,
   buildGenerateDeckSuccessResponse,
 } from "./route-logic";
-import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation/theme-packages";
+import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation-shared/theme-packages";
 import { makeDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import { buildContentSlide, buildDeckV7 } from "@/test/builders/deck-v7";
 

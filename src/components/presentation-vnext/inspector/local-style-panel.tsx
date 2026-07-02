@@ -12,7 +12,7 @@ import {
   matchSlideFont,
   SLIDE_FONT_OPTIONS,
   slideFontCssStack,
-} from "@/lib/presentation/slide-fonts";
+} from "@/lib/presentation-shared/slide-fonts";
 import {
   clampToRange,
   parseFiniteNumberInput,

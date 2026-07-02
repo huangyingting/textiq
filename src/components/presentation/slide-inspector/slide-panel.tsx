@@ -30,7 +30,7 @@ import {
   type Slide,
   type SlideDesignOriginLayer,
 } from "@/lib/presentation/deck";
-import { canAddImage, dataUrlByteSize } from "@/lib/presentation/image-element";
+import { canAddImage, dataUrlByteSize } from "@/lib/visual/image-element";
 import { allThemeTokenSets } from "@/lib/presentation/presentation-theme";
 import { useImageUpload } from "@/lib/presentation/use-image-upload";
 import { resolveSlideThemeColors } from "@/lib/presentation/style-cascade";

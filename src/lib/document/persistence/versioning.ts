@@ -8,7 +8,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
+import { safeParseDeck } from "@/lib/document/deck-schema";
 import {
   DECK_SCHEMA_VERSION_V7,
   type DeckV7,
@@ -17,7 +17,7 @@ import {
 import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
-import { generateRevisionToken } from "@/lib/presentation/deck-revision-token";
+import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import type { RestoredDocumentVersion } from "@/lib/document/persistence-types";
 import { snapshotDocumentVersion } from "./helpers";
 import { mirrorVisualNodesInTx, reconcileDeckAfterMirror } from "./visual";

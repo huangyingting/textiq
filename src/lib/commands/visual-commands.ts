@@ -7,7 +7,7 @@ import type {
   CommandEnvelope,
   CommandTarget,
 } from "@/lib/commands/envelope-core";
-import type { DeckPatch } from "@/lib/presentation/slide-command-contracts";
+import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type {
   ArrowStyle,
   AspectRatioPreset,

@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { regenerateBlockIds } from "@/lib/lexical/block-id";
-import { safeParseDeck } from "@/lib/presentation/deck-schema";
-import type { Deck, SlideElement, SourceRef } from "@/lib/presentation/deck";
+import { safeParseDeck } from "@/lib/document/deck-schema";
+import type { Deck, SlideElement, SourceRef } from "@/lib/document/deck-model";
 import { prisma } from "@/lib/prisma";
 
 const duplicateDocumentSourceSelect = {

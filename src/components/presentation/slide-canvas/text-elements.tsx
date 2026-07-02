@@ -13,7 +13,7 @@ import {
   resolvedFillToCss,
   type ResolvedElementDesign,
 } from "@/lib/presentation/slide-render-model";
-import { useSlideFontsReady } from "@/lib/presentation/slide-font-loading";
+import { useSlideFontsReady } from "@/lib/presentation-shared/slide-font-loading";
 import type { SlideThemeColors } from "@/lib/presentation/style-cascade";
 
 import { boxStyle, renderRuns } from "./primitives";

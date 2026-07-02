@@ -17,7 +17,7 @@ import {
   applyShapeOp,
   applyTextOp,
   SHADOW_OPTS,
-} from "@/lib/presentation/export/deck-export-pptx";
+} from "@/test/deck-export-pptx";
 
 export const deckExportTestHelpers = {
   applyDeckOp,

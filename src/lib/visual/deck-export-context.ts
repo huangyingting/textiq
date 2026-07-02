@@ -1,5 +1,5 @@
-import { buildDeckFromBlocks, type Deck } from "@/lib/presentation/deck";
-import { pickFreshestDeck } from "@/lib/presentation/fresh-deck";
+import { buildDeckFromBlocks, type Deck } from "@/lib/document/deck-model";
+import { pickFreshestDeck } from "@/lib/visual/fresh-deck";
 import {
   looksLikeDeckV7,
   openDeckFromJson,

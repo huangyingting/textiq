@@ -4,7 +4,7 @@ import type { SaveDeckResult } from "@/lib/document/persistence-types";
 import { MAX_DECK_JSON_BYTES, formatDeckTooLargeError } from "@/lib/limits";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
-import { generateRevisionToken } from "@/lib/presentation/deck-revision-token";
+import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import { safeParseDeckV7 } from "@/lib/presentation-vnext/validation";
 
 export type DeckCasDb = {

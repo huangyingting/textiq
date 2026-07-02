@@ -2,7 +2,7 @@
  * Pure document block collection utilities for serialized Lexical editor state.
  */
 
-import type { TextRun } from "@/lib/presentation/deck-elements";
+import type { TextRun } from "@/lib/content/text-run";
 import type { Visual } from "@/lib/visual/schema";
 
 // ---------------------------------------------------------------------------

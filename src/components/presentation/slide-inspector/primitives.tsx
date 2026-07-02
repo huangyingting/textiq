@@ -13,7 +13,7 @@ import type {
 } from "@/lib/presentation/deck";
 import { normalizeTextParagraphs } from "@/lib/presentation/deck";
 import { useCoalesceSession } from "@/lib/presentation/gesture-primitives";
-import { SLIDE_FONT_OPTIONS } from "@/lib/presentation/slide-fonts";
+import { SLIDE_FONT_OPTIONS } from "@/lib/presentation-shared/slide-fonts";
 
 const FIELD_CLASS =
   "w-full rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-[13px] text-ds-text-primary outline-none";

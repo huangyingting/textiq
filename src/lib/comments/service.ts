@@ -25,7 +25,7 @@ import type {
   CreateCommentInput,
   ListCommentsOptions,
 } from "./types";
-import { resolveAnchorState } from "@/lib/presentation/slide-comment-anchors";
+import { resolveAnchorState } from "@/lib/comments/slide-comment-anchors";
 
 type CommentDb = Pick<typeof prisma, "comment" | "commentRead">;
 

@@ -22,8 +22,8 @@ import {
   type ImageElement,
   type ShapeElement,
   type SlideElement,
-} from "@/lib/presentation/deck";
-import { isPrimarilyCjk } from "@/lib/presentation/slide-fonts";
+} from "@/lib/document/deck-model";
+import { isPrimarilyCjk } from "@/lib/presentation-shared/slide-fonts";
 import type { ExportPolicy } from "@/lib/visual/export-policy";
 import { getFidelity } from "@/lib/visual/export-fidelity";
 import {

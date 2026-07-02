@@ -28,7 +28,7 @@ import {
   AI_GENERATION_INPUT_MAX_CHARS as MAX_INPUT_CHARS,
   AI_VISUAL_INVENTORY_MAX_ITEMS,
 } from "@/lib/limits";
-import type { TextRun } from "@/lib/presentation/deck";
+import type { TextRun } from "@/lib/content/text-run";
 import {
   collectDocumentBlocks,
   documentTableBlockToMarkdown,

@@ -18,7 +18,7 @@ import {
   textDesign,
   visualContent,
 } from "@/components/presentation/slide-canvas/v6-model";
-import { DEFAULT_TOKEN_SET } from "@/lib/presentation/presentation-theme";
+import { DEFAULT_TOKEN_SET } from "../presentation/presentation-theme";
 import type {
   ConnectorElement,
   ImageElement,
@@ -27,7 +27,7 @@ import type {
   SlideElement,
   TextElement,
   VisualElement,
-} from "@/lib/presentation/deck";
+} from "../presentation/deck";
 
 function element<T extends SlideElement>(
   kind: T["kind"],

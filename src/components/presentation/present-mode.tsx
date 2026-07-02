@@ -50,7 +50,7 @@ import {
   type PresentationShortcutAction,
 } from "@/components/presentation/runtime/navigation";
 import { slideAspectRatio } from "@/lib/presentation-shared/slide-format";
-import { loadSlideFonts } from "@/lib/presentation/slide-font-loading";
+import { loadSlideFonts } from "@/lib/presentation-shared/slide-font-loading";
 import { fitAspectRatio } from "@/lib/presentation/stage-fit";
 import type { Visual } from "@/lib/visual/schema";
 import { deckCanvasFormat } from "@/components/presentation/v6-deck-ui";

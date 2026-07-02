@@ -48,7 +48,7 @@ import {
   shouldStoreRuns,
   splitRunsIntoLines,
 } from "@/lib/presentation/rich-text-html";
-import { matchSlideFont } from "@/lib/presentation/slide-fonts";
+import { matchSlideFont } from "@/lib/presentation-shared/slide-fonts";
 import { resolveSlideTokenSet } from "@/lib/presentation/style-cascade";
 import { SLIDE_TEXT_FONT_SIZE } from "@/lib/presentation/text-defaults";
 

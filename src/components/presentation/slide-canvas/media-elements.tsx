@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import type * as React from "react";
 
 import type { ImageElement } from "@/lib/presentation/deck";
-import { isEmptyImageSrc } from "@/lib/presentation/image-element";
+import { isEmptyImageSrc } from "@/lib/visual/image-element";
 import type { ResolvedElementDesign } from "@/lib/presentation/slide-render-model";
 
 import { boxStyle } from "./primitives";

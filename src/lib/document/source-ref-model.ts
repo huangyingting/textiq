@@ -23,9 +23,9 @@
  * tests, and the browser without adaptation.
  */
 
-import type { Deck, SlideElement, SourceRef } from "@/lib/presentation/deck";
+import type { Deck, SlideElement, SourceRef } from "@/lib/document/deck-model";
 import type { DocumentBlock } from "@/lib/content";
-import { stripOrphanedVisuals } from "@/lib/presentation/strip-orphans";
+import { stripOrphanedVisuals } from "@/lib/document/strip-orphans";
 import { resolveVisualRef, resolveSourceRef } from "@/lib/anchor-resolver";
 import type { AnchorResolution } from "@/lib/anchor-resolver";
 

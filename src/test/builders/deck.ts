@@ -16,7 +16,7 @@ import {
   type ImageFitMode,
   type ImageMaskShape,
   type ShapeKind,
-} from "@/lib/presentation/deck";
+} from "@/lib/document/deck-model";
 
 type LayoutPlaceholder = {
   id: string;

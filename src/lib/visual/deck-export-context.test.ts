@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { DocumentBlock } from "@/lib/content";
 import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
-import { LEGACY_DECK_SCHEMA_VERSION, type Deck } from "@/lib/presentation/deck";
+import { LEGACY_DECK_SCHEMA_VERSION, type Deck } from "../presentation/deck";
 import type { Visual } from "@/lib/visual/schema";
 
 import { resolveDeckExportContext } from "./deck-export-context";
