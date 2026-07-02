@@ -304,6 +304,34 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /data-node-focused="true"/);
   });
 
+  test("applies focus-visible and reduced-motion guards to focusable stage nodes", () => {
+    const selection = setSelection(createSelectionState("normal"), [
+      "locked",
+      "group-1",
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(SlideCanvasVNext, {
+        slide: slide([
+          textNode("locked", { x: 10, y: 10, w: 20, h: 10 }, { locked: true }),
+          renderNode("group-1", { type: "group" }, {}, { type: "group" }),
+        ]),
+        selection,
+        focusedNodeId: "locked",
+        onNodePointerDown: () => undefined,
+      }),
+    );
+
+    assert.match(
+      html,
+      /data-node-id="locked"[^>]*class="[^"]*focus-visible:ring-ds-focus-ring[^"]*motion-reduce:transition-none/,
+    );
+    assert.match(
+      html,
+      /data-node-id="group-1"[^>]*class="[^"]*focus-visible:ring-ds-focus-ring[^"]*motion-reduce:transition-none/,
+    );
+    assert.match(html, /data-node-id="locked"[^>]*aria-disabled="true"/);
+  });
+
   test("registers stage node elements with the focus geometry registry", () => {
     const registry = createFocusGeometryRegistry();
     const focusCalls: Array<FocusOptions | undefined> = [];
@@ -1127,6 +1155,10 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /aria-label="Table cell row 1, column 2, content Beta"/);
     assert.match(html, /Beta/);
     assert.match(html, /Table node editing cells/);
+    assert.match(
+      html,
+      /class="[^"]*focus-visible:ring-ds-focus-ring[^"]*motion-reduce:transition-none[^"]*"[^>]*data-table-cell="0:1"/,
+    );
   });
 
   test("renders editable table cells with header context and content preview", () => {
@@ -1499,9 +1531,10 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
       }),
     );
 
+    assert.match(html, /data-deck-outline-region="true" role="region"/);
     assert.match(
       html,
-      /data-deck-outline-region="true" role="region"[^>]*class="sr-only"/,
+      /class="[^"]*sr-only motion-reduce:transition-none[^"]*focus-within:not-sr-only/,
     );
     assert.match(html, /Deck outline/);
     assert.match(
@@ -1512,7 +1545,7 @@ describe("SlideCanvasVNext stage editing render affordances", () => {
     assert.match(html, /aria-current="page"/);
     assert.match(
       html,
-      /aria-current="true" aria-label="text: Body: Ship accessible stage"/,
+      /tabindex="0" class="[^"]*motion-reduce:transition-none[^"]*focus-visible:ring-ds-focus-ring[^"]*" aria-current="true" aria-label="text: Body: Ship accessible stage"/,
     );
     assert.match(html, /aria-label="image: Image: Architecture diagram"/);
     assert.ok(
