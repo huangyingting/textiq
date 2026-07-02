@@ -12,6 +12,8 @@ export {
   LEGACY_DECK_SCHEMA_VERSION,
   PRESENTATION_THEME_IDS,
 } from "./deck-kernel/deck-core";
+/* node:coverage ignore next 8 */
+/* Type-only deck facade exports are erased by TypeScript; facade runtime exports are asserted in deck-model tests. */
 export type {
   Deck,
   MasterChromeKind,
@@ -28,6 +30,8 @@ export {
   buildVisualElement,
   normalizeTextParagraphs,
 } from "./deck-kernel/deck-elements";
+/* node:coverage ignore next 44 */
+/* Type-only element facade exports are erased by TypeScript; facade runtime exports are asserted in deck-model tests. */
 export type {
   BaseElement,
   BlurEffect,
@@ -72,6 +76,8 @@ export type {
   TextRun,
   VisualElement,
 } from "./deck-kernel/deck-elements";
+/* node:coverage ignore next 7 */
+/* Source-ref facade re-exports are asserted in deck-model tests; tsx maps wrapped re-export rows as residual. */
 export {
   activeSourceRef,
   isSourceLinked,
@@ -93,6 +99,8 @@ export {
   getSlideVisualIds,
   summarizeSlideContent,
 } from "./deck-kernel/slide-helpers";
+/* node:coverage ignore next 5 */
+/* Deck derivation facade re-exports are asserted in deck-model tests; tsx maps wrapped re-export rows as residual. */
 export {
   MAX_BULLETS,
   buildDeckFromBlocks,
