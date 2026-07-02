@@ -8,7 +8,10 @@ import { loadSlideFonts } from "@/lib/presentation-shared/slide-font-loading";
 
 import { resolveDeckAssetSource } from "./deck-asset-source";
 import { resolveDeckRenderTree } from "./render-resolver";
-import type { ResolvedSlideRenderTree } from "./render-tree";
+import type {
+  ResolvedRenderNode,
+  ResolvedSlideRenderTree,
+} from "./render-tree";
 import type { DeckV7 } from "./schema";
 import type { ThemePackageV1 } from "./theme-package-schema";
 import { resolveThemePackageForDeck } from "./theme-package-registry";
@@ -52,6 +55,65 @@ function inlineComputedStyles(source: Element, clone: Element): void {
     const cloneChild = clone.children.item(index);
     if (cloneChild) inlineComputedStyles(child, cloneChild);
   });
+}
+
+function selectedNodeBounds(
+  nodes: readonly ResolvedRenderNode[],
+  selectedIds: ReadonlySet<string>,
+): { x: number; y: number; w: number; h: number } | null {
+  const frames: { x: number; y: number; w: number; h: number }[] = [];
+  const visit = (node: ResolvedRenderNode): void => {
+    if (selectedIds.has(node.id)) frames.push(node.layout.frame);
+    node.children?.forEach(visit);
+  };
+  nodes.forEach(visit);
+  if (frames.length === 0) return null;
+  const left = Math.max(0, Math.min(...frames.map((frame) => frame.x)));
+  const top = Math.max(0, Math.min(...frames.map((frame) => frame.y)));
+  const right = Math.min(
+    100,
+    Math.max(...frames.map((frame) => frame.x + frame.w)),
+  );
+  const bottom = Math.min(
+    100,
+    Math.max(...frames.map((frame) => frame.y + frame.h)),
+  );
+  return {
+    x: left,
+    y: top,
+    w: Math.max(1, right - left),
+    h: Math.max(1, bottom - top),
+  };
+}
+
+function removeUnselectedNodes(
+  clone: Element,
+  selectedIds: ReadonlySet<string>,
+) {
+  clone.querySelectorAll("[data-node-id]").forEach((element) => {
+    const id = element.getAttribute("data-node-id");
+    if (!id || !selectedIds.has(id)) return;
+    let current: Element | null = element;
+    while (current && current !== clone.parentElement) {
+      current.setAttribute("data-copy-keep", "true");
+      if (current === clone) break;
+      current = current.parentElement;
+    }
+  });
+  clone.querySelectorAll("[data-node-id]").forEach((element) => {
+    if (element.getAttribute("data-copy-keep") !== "true") element.remove();
+  });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [metadata, base64] = dataUrl.split(",", 2);
+  const type = metadata.match(/^data:([^;]+)/)?.[1] ?? "image/png";
+  const binary = atob(base64 ?? "");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type });
 }
 
 function drawSvgToPngDataUrl(
@@ -123,6 +185,68 @@ export async function renderSlideV7ToPng(
     const html = new XMLSerializer().serializeToString(clone);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dimensions.widthPx}" height="${dimensions.heightPx}" viewBox="0 0 ${dimensions.widthPx} ${dimensions.heightPx}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
     return await drawSvgToPngDataUrl(svg, dimensions);
+  } finally {
+    root.unmount();
+    host.remove();
+  }
+}
+
+export async function renderSelectedNodesV7ToPngBlob(
+  deck: DeckV7,
+  slide: ResolvedSlideRenderTree,
+  selectedNodeIds: readonly string[],
+  dimensions: RasterSlideDimensions,
+): Promise<Blob | null> {
+  const selectedIds = new Set(selectedNodeIds);
+  if (selectedIds.size === 0) return null;
+  const bounds = selectedNodeBounds(slide.nodes, selectedIds);
+  if (!bounds) return null;
+
+  await loadSlideFonts();
+
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-10000px";
+  host.style.top = "0";
+  host.style.width = `${dimensions.widthPx}px`;
+  host.style.height = `${dimensions.heightPx}px`;
+  host.style.pointerEvents = "none";
+  document.body.appendChild(host);
+
+  const root = createRoot(host);
+  try {
+    root.render(
+      createElement(SlideCanvasVNext, {
+        slide,
+        canvas: deck.canvas,
+        assetResolver: (assetId: string) =>
+          resolveDeckAssetSource(deck, assetId),
+        preview: true,
+      }),
+    );
+    await nextFrame();
+    await nextFrame();
+    await waitForImages(host);
+
+    const rendered = host.firstElementChild;
+    if (!rendered) throw new Error("Slide render produced no DOM");
+    const clone = rendered.cloneNode(true) as Element;
+    inlineComputedStyles(rendered, clone);
+    removeUnselectedNodes(clone, selectedIds);
+
+    const cropX = Math.floor((bounds.x / 100) * dimensions.widthPx);
+    const cropY = Math.floor((bounds.y / 100) * dimensions.heightPx);
+    const cropWidth = Math.ceil((bounds.w / 100) * dimensions.widthPx);
+    const cropHeight = Math.ceil((bounds.h / 100) * dimensions.heightPx);
+    const html = new XMLSerializer().serializeToString(clone);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cropWidth}" height="${cropHeight}" viewBox="0 0 ${cropWidth} ${cropHeight}"><foreignObject x="${-cropX}" y="${-cropY}" width="${dimensions.widthPx}" height="${dimensions.heightPx}">${html}</foreignObject></svg>`;
+    return dataUrlToBlob(
+      await drawSvgToPngDataUrl(svg, {
+        ...dimensions,
+        widthPx: cropWidth,
+        heightPx: cropHeight,
+      }),
+    );
   } finally {
     root.unmount();
     host.remove();

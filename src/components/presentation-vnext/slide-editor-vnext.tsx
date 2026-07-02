@@ -129,6 +129,8 @@ import {
   type V7VisualPickResult,
 } from "@/lib/presentation-vnext/node-asset-factories";
 import { nextLayeredZIndex } from "@/lib/presentation-vnext/layer-bands";
+import { resolveRasterSlideDimensions } from "@/lib/presentation-vnext/raster-export";
+import { renderSelectedNodesV7ToPngBlob } from "@/lib/presentation-vnext/raster-browser-export";
 
 import { SlideCanvasVNext } from "./slide-canvas";
 import {
@@ -227,6 +229,7 @@ import {
   clipboardImageBlobToFile,
   readTextIqNodeClipboard,
   writeTextIqNodesToClipboard,
+  type TextIqNodeClipboardWriteResult,
 } from "./node-clipboard";
 import {
   canvasAspectRatio,
@@ -1178,6 +1181,41 @@ export function SlideEditorVNext({
     focusStageViewportSoon();
   }
 
+  function clipboardWriteAnnouncement(
+    action: "Copied" | "Cut",
+    count: number,
+    result: TextIqNodeClipboardWriteResult,
+  ): string {
+    const label = `${action} ${count} ${count === 1 ? "node" : "nodes"}`;
+    if (result.ok) {
+      return result.imageIncluded
+        ? `${label} to clipboard with PNG, HTML, and text fallbacks.`
+        : `${label} to clipboard with HTML and text fallbacks.`;
+    }
+    if (result.state === "permission-denied") {
+      return `${label} for in-editor paste. Clipboard permission was denied.`;
+    }
+    if (result.state === "unsupported") {
+      return `${label} for in-editor paste. System clipboard is unavailable.`;
+    }
+    if (result.plainTextFallbackWritten) {
+      return `${label} for in-editor paste. System clipboard kept a text fallback only.`;
+    }
+    return `${label} for in-editor paste. System clipboard copy failed.`;
+  }
+
+  function selectedNodesPngRenderer(ids: readonly string[]) {
+    return async () => {
+      if (!activeSlideTree) return null;
+      return await renderSelectedNodesV7ToPngBlob(
+        deck,
+        activeSlideTree,
+        ids,
+        resolveRasterSlideDimensions(deck),
+      );
+    };
+  }
+
   async function handleCopyNodes() {
     if (!activeSlide || selectedIds.length === 0) return;
     const copied = selectedIds
@@ -1185,11 +1223,11 @@ export function SlideEditorVNext({
       .filter((node): node is SlideChildNode => node !== undefined);
     if (copied.length === 0) return;
     setClipboardNodes(copied);
-    const wroteClipboard = await writeTextIqNodesToClipboard(copied);
+    const writeResult = await writeTextIqNodesToClipboard(copied, {
+      renderPng: selectedNodesPngRenderer(selectedIds),
+    });
     setStageAnnouncement(
-      wroteClipboard
-        ? `Copied ${copied.length} ${copied.length === 1 ? "node" : "nodes"} to clipboard.`
-        : `Copied ${copied.length} ${copied.length === 1 ? "node" : "nodes"}.`,
+      clipboardWriteAnnouncement("Copied", copied.length, writeResult),
     );
   }
 
@@ -1205,6 +1243,14 @@ export function SlideEditorVNext({
     });
     if (resolved.source === "invalid") {
       setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
+      return;
+    }
+    if (resolved.source === "none" && clipboard.state !== "available") {
+      setStageAnnouncement(
+        clipboard.state === "permission-denied"
+          ? "Clipboard permission was denied. Copy inside TextIQ and try paste again."
+          : "Clipboard paste failed. Copy inside TextIQ and try paste again.",
+      );
       return;
     }
     if (resolved.source === "image") {
@@ -1268,7 +1314,13 @@ export function SlideEditorVNext({
       setStageAnnouncement(
         `Pasted ${result.nodeIds.length} ${
           result.nodeIds.length === 1 ? "node" : "nodes"
-        }${resolved.source === "os" ? " from clipboard" : ""}.`,
+        }${
+          resolved.source === "os"
+            ? " from clipboard"
+            : clipboard.state === "available"
+              ? ""
+              : " from the in-editor clipboard"
+        }.`,
       );
     }
   }
@@ -1306,12 +1358,12 @@ export function SlideEditorVNext({
     const result = cutNodes(deck, activeSlide.id, selectedIds);
     if (result.nodes.length === 0) return;
     setClipboardNodes(result.nodes);
-    const wroteClipboard = await writeTextIqNodesToClipboard(result.nodes);
+    const writeResult = await writeTextIqNodesToClipboard(result.nodes, {
+      renderPng: selectedNodesPngRenderer(selectedIds),
+    });
     applySelectionDeletion(selectedIds, result.deck);
     setStageAnnouncement(
-      wroteClipboard
-        ? `Cut ${result.nodes.length} ${result.nodes.length === 1 ? "node" : "nodes"} to clipboard.`
-        : `Cut ${result.nodes.length} ${result.nodes.length === 1 ? "node" : "nodes"}.`,
+      clipboardWriteAnnouncement("Cut", result.nodes.length, writeResult),
     );
   }
 

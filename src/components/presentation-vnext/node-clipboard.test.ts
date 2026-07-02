@@ -7,6 +7,7 @@ import {
   TEXTIQ_NODE_CLIPBOARD_MIME,
 } from "@/lib/presentation-vnext/clipboard/node-payload";
 import {
+  buildTextIqNodeClipboardItemData,
   canReadTextIqNodeClipboard,
   clipboardImageBlobToFile,
   readTextIqNodeClipboard,
@@ -69,13 +70,26 @@ describe("TextIQ browser node clipboard helpers", () => {
     globalThis.ClipboardItem =
       TestClipboardItem as unknown as typeof ClipboardItem;
 
-    assert.equal(await writeTextIqNodesToClipboard([node]), true);
+    const png = new Blob(["png"], { type: "image/png" });
+    const result = await writeTextIqNodesToClipboard([node], {
+      renderPng: async () => png,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.imageIncluded, true);
+    assert.equal(result.htmlIncluded, true);
+    assert.equal(result.plainTextIncluded, true);
+    assert.equal(result.textIqPayloadIncluded, true);
     assert.equal(written.length, 1);
 
     const item = written[0];
     assert.deepEqual(
       item.types.sort(),
-      [TEXTIQ_NODE_CLIPBOARD_MIME, "text/plain"].sort(),
+      [
+        TEXTIQ_NODE_CLIPBOARD_MIME,
+        "image/png",
+        "text/html",
+        "text/plain",
+      ].sort(),
     );
     const payload = await item
       .getType(TEXTIQ_NODE_CLIPBOARD_MIME)
@@ -87,13 +101,63 @@ describe("TextIQ browser node clipboard helpers", () => {
       await item.getType("text/plain").then((blob) => blob.text()),
       "1 TextIQ node\nCopied text",
     );
+    assert.match(
+      await item.getType("text/html").then((blob) => blob.text()),
+      /Copied text/,
+    );
+    assert.equal(
+      await item.getType("image/png").then((blob) => blob.text()),
+      "png",
+    );
   });
 
-  test("returns false when clipboard writes are unsupported or fail", async () => {
+  test("assembles copy-out clipboard data with PNG, HTML, text, and TextIQ payload", async () => {
+    const png = new Blob(["png"], { type: "image/png" });
+    const data = buildTextIqNodeClipboardItemData([node], png);
+
+    assert.deepEqual(
+      Object.keys(data).sort(),
+      [
+        TEXTIQ_NODE_CLIPBOARD_MIME,
+        "image/png",
+        "text/html",
+        "text/plain",
+      ].sort(),
+    );
+    assert.equal(await data["image/png"]?.text(), "png");
+    assert.match(await data["text/html"]?.text(), /Copied text/);
+    assert.equal(
+      await data["text/plain"]?.text(),
+      "1 TextIQ node\nCopied text",
+    );
+  });
+
+  test("returns failure states when clipboard writes are unsupported, denied, or fail", async () => {
     setNavigator({ clipboard: {} });
     globalThis.ClipboardItem =
       TestClipboardItem as unknown as typeof ClipboardItem;
-    assert.equal(await writeTextIqNodesToClipboard([node]), false);
+    assert.deepEqual(await writeTextIqNodesToClipboard([node]), {
+      ok: false,
+      state: "unsupported",
+      imageIncluded: false,
+      htmlIncluded: false,
+      plainTextIncluded: false,
+      textIqPayloadIncluded: false,
+      plainTextFallbackWritten: false,
+    });
+
+    setNavigator({
+      clipboard: {
+        write: async () => undefined,
+      },
+      permissions: {
+        query: async () => ({ state: "denied" }),
+      },
+    });
+    assert.equal(
+      (await writeTextIqNodesToClipboard([node])).state,
+      "permission-denied",
+    );
 
     setNavigator({
       clipboard: {
@@ -102,7 +166,50 @@ describe("TextIQ browser node clipboard helpers", () => {
         },
       },
     });
-    assert.equal(await writeTextIqNodesToClipboard([node]), false);
+    assert.equal(
+      (await writeTextIqNodesToClipboard([node])).state,
+      "copy-failed",
+    );
+  });
+
+  test("falls back to non-image formats and then plain text when rich writes fail", async () => {
+    let writeCalls = 0;
+    let fallbackText = "";
+    setNavigator({
+      clipboard: {
+        write: async (items: TestClipboardItem[]) => {
+          writeCalls += 1;
+          if (items[0]?.types.includes("image/png")) throw new Error("image");
+        },
+        writeText: async (text: string) => {
+          fallbackText = text;
+        },
+      },
+    });
+    globalThis.ClipboardItem =
+      TestClipboardItem as unknown as typeof ClipboardItem;
+
+    const retry = await writeTextIqNodesToClipboard([node], {
+      renderPng: async () => new Blob(["png"], { type: "image/png" }),
+    });
+    assert.equal(retry.ok, true);
+    assert.equal(retry.imageIncluded, false);
+    assert.equal(writeCalls, 2);
+
+    setNavigator({
+      clipboard: {
+        write: async () => {
+          throw new Error("rich");
+        },
+        writeText: async (text: string) => {
+          fallbackText = text;
+        },
+      },
+    });
+    const plainTextOnly = await writeTextIqNodesToClipboard([node]);
+    assert.equal(plainTextOnly.state, "copy-failed");
+    assert.equal(plainTextOnly.plainTextFallbackWritten, true);
+    assert.equal(fallbackText, "1 TextIQ node\nCopied text");
   });
 
   test("reads the first TextIQ payload from clipboard items", async () => {
@@ -160,6 +267,15 @@ describe("TextIQ browser node clipboard helpers", () => {
     setNavigator({ clipboard: {} });
     assert.equal(canReadTextIqNodeClipboard(), false);
     assert.equal(await readTextIqNodeClipboardPayload(), null);
+    assert.equal((await readTextIqNodeClipboard()).state, "unsupported");
+
+    setNavigator({
+      clipboard: { read: async () => [] },
+      permissions: {
+        query: async () => ({ state: "denied" }),
+      },
+    });
+    assert.equal((await readTextIqNodeClipboard()).state, "permission-denied");
 
     setNavigator({
       clipboard: {
@@ -178,5 +294,6 @@ describe("TextIQ browser node clipboard helpers", () => {
       },
     });
     assert.equal(await readTextIqNodeClipboardPayload(), null);
+    assert.equal((await readTextIqNodeClipboard()).state, "paste-failed");
   });
 });

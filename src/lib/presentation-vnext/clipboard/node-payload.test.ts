@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import type { SlideChildNode } from "../schema";
 import {
+  buildTextIqNodeCopyOutPayload,
   clipboardImageNodeFromUpload,
   clipboardTextNode,
   parseTextIqNodePayload,
@@ -10,6 +11,7 @@ import {
   resolveTextIqNodePaste,
   sanitizedClipboardHtmlToText,
   serializeTextIqNodePayload,
+  textIqNodeHtmlFallback,
   textIqNodePlainTextFallback,
   TEXTIQ_NODE_CLIPBOARD_KIND,
   TEXTIQ_NODE_CLIPBOARD_MAX_BYTES,
@@ -355,7 +357,28 @@ describe("TextIQ node clipboard payload", () => {
     );
     assert.equal(
       textIqNodePlainTextFallback([nodes[1], nodes[2]]),
-      "2 TextIQ nodes",
+      "2 TextIQ nodes\nImage alt",
     );
+  });
+
+  test("builds sanitized HTML and aggregate copy-out payloads", () => {
+    const html = textIqNodeHtmlFallback([
+      {
+        ...textNode,
+        content: {
+          paragraphs: [{ id: "xss", text: '<script>alert("x")</script>' }],
+        },
+      },
+      nodes[1],
+    ]);
+
+    assert.match(html, /data-textiq-copy="nodes"/);
+    assert.match(html, /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /asset-image-1/);
+
+    const payload = buildTextIqNodeCopyOutPayload([textNode]);
+    assert.equal(parseTextIqNodePayload(payload.textIqPayload).ok, true);
+    assert.match(payload.html, /Hello TextIQ/);
+    assert.equal(payload.plainText, "1 TextIQ node\nHello TextIQ");
   });
 });

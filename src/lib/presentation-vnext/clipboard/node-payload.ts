@@ -19,6 +19,12 @@ export type TextIqNodeClipboardPayloadV1 = {
   nodes: SlideChildNode[];
 };
 
+export type TextIqNodeCopyOutPayload = {
+  textIqPayload: string;
+  html: string;
+  plainText: string;
+};
+
 export type TextIqNodePayloadParseResult =
   | { ok: true; nodes: SlideChildNode[] }
   | { ok: false; error: string };
@@ -603,6 +609,75 @@ function truncateClipboardText(value: string): string {
     : value;
 }
 
+function escapeClipboardHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return "&#39;";
+    }
+  });
+}
+
+function textNodePlainText(node: SlideChildNode): string {
+  if (node.type !== "text") return "";
+  return node.content.paragraphs
+    .map((paragraph) => paragraph.text)
+    .join("\n")
+    .trim();
+}
+
+function tableNodePlainText(node: SlideChildNode): string {
+  if (node.type !== "table") return "";
+  return node.content.rows
+    .map((row) => row.cells.map((cell) => cell.text).join("\t"))
+    .join("\n")
+    .trim();
+}
+
+function nodeAccessibleLabel(node: SlideChildNode): string {
+  if (node.accessibility?.label) return node.accessibility.label;
+  if (node.name) return node.name;
+  if (node.type === "image" || node.type === "visual")
+    return node.content.alt ?? "";
+  return "";
+}
+
+function nodeCopyOutText(node: SlideChildNode): string {
+  const text = textNodePlainText(node) || tableNodePlainText(node);
+  if (text) return text;
+  if (node.type === "group") {
+    return node.children.map(nodeCopyOutText).filter(Boolean).join("\n").trim();
+  }
+  return nodeAccessibleLabel(node);
+}
+
+export function textIqNodeHtmlFallback(
+  nodes: readonly SlideChildNode[],
+): string {
+  const body = nodes
+    .map((node) => {
+      const text = nodeCopyOutText(node);
+      const label = nodeAccessibleLabel(node) || `${node.type} node`;
+      const content = text
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => `<p>${escapeClipboardHtml(line)}</p>`)
+        .join("");
+      return `<section data-textiq-node-type="${escapeClipboardHtml(node.type)}" aria-label="${escapeClipboardHtml(label)}">${content || `<p>${escapeClipboardHtml(label)}</p>`}</section>`;
+    })
+    .join("");
+  return `<div data-textiq-copy="nodes">${body}</div>`;
+}
+
 function decodeHtmlEntities(value: string): string {
   const named: Record<string, string> = {
     amp: "&",
@@ -696,10 +771,16 @@ export function textIqNodePlainTextFallback(
 ): string {
   const label =
     nodes.length === 1 ? "1 TextIQ node" : `${nodes.length} TextIQ nodes`;
-  const text = nodes
-    .flatMap((node) => (node.type === "text" ? node.content.paragraphs : []))
-    .map((paragraph) => paragraph.text)
-    .join("\n")
-    .trim();
+  const text = nodes.map(nodeCopyOutText).filter(Boolean).join("\n").trim();
   return text ? `${label}\n${text}` : label;
+}
+
+export function buildTextIqNodeCopyOutPayload(
+  nodes: readonly SlideChildNode[],
+): TextIqNodeCopyOutPayload {
+  return {
+    textIqPayload: serializeTextIqNodePayload(nodes),
+    html: textIqNodeHtmlFallback(nodes),
+    plainText: textIqNodePlainTextFallback(nodes),
+  };
 }
