@@ -3,10 +3,12 @@ import { describe, test } from "node:test";
 import * as React from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
+import type { GroupNode } from "@/lib/presentation-vnext/schema";
 import {
   buildDeckV7,
   buildShapeNode,
   buildSlideV7,
+  buildTableNode,
   buildTextNode,
 } from "@/test/builders/deck-v7";
 import { SlideCanvasVNext } from "./slide-canvas";
@@ -21,6 +23,22 @@ import {
   withPointerWindow,
   withWindow,
 } from "./slide-editor-vnext-failure-test-utils";
+
+function buildGroupNode(id: string, locked = false): GroupNode {
+  return {
+    id,
+    type: "group",
+    component: "custom",
+    locked,
+    layout: { frame: { x: 40, y: 20, w: 30, h: 25 }, zIndex: 3 },
+    children: [
+      buildTextNode({
+        id: `${id}-child`,
+        layout: { frame: { x: 45, y: 25, w: 15, h: 8 }, zIndex: 4 },
+      }),
+    ],
+  };
+}
 
 describe("SlideEditorVNext stage selection failures", () => {
   test("shift-marquee adds framed nodes to the existing selection", () => {
@@ -292,6 +310,110 @@ describe("SlideEditorVNext stage selection failures", () => {
         }
       ).selection;
       assert.equal(selection?.nodeIds?.has("space-target"), false);
+    });
+  });
+
+  test("Enter does not enter edit, table, or group modes for locked nodes", async () => {
+    await withWindow(() => {
+      const hookRenderer = createHookRenderer();
+      const currentDeck = buildDeckV7([
+        buildSlideV7(
+          "content",
+          [
+            buildTextNode({
+              id: "locked-enter-text",
+              locked: true,
+              layout: { frame: { x: 10, y: 10, w: 20, h: 10 }, zIndex: 1 },
+            }),
+            buildTableNode({
+              id: "locked-enter-table",
+              locked: true,
+              layout: { frame: { x: 35, y: 10, w: 25, h: 20 }, zIndex: 2 },
+            }),
+            buildGroupNode("locked-enter-group", true),
+          ],
+          { id: "slide-locked-enter", name: "Slide 1" },
+        ),
+      ]);
+
+      const renderTree = () =>
+        hookRenderer.run(() =>
+          SlideEditorVNext({
+            documentId: "doc-locked-enter",
+            deck: currentDeck,
+            onDeckChange: () => undefined,
+          }),
+        );
+      const stageCanvasFrom = (root: ReactNode) =>
+        findRequiredElement(
+          root,
+          (element) => element.type === SlideCanvasVNext,
+          "Expected stage canvas to render.",
+        );
+      const keyDownFrom = (root: ReactNode) =>
+        (
+          findRequiredElement(
+            root,
+            (element) =>
+              element.type === "div" &&
+              (element.props as { "data-slide-editor-vnext"?: string })[
+                "data-slide-editor-vnext"
+              ] === "true" &&
+              typeof (element.props as { onKeyDown?: unknown }).onKeyDown ===
+                "function",
+            "Expected editor root with keydown handler.",
+          ).props as {
+            onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
+          }
+        ).onKeyDown;
+
+      for (const nodeId of [
+        "locked-enter-text",
+        "locked-enter-table",
+        "locked-enter-group",
+      ]) {
+        let tree = renderTree();
+        focusNode(tree, nodeId);
+        tree = renderTree();
+        let prevented = false;
+        keyDownFrom(tree)?.({
+          key: "Enter",
+          target: null,
+          preventDefault: () => {
+            prevented = true;
+          },
+        } as unknown as KeyboardEvent<HTMLDivElement>);
+
+        tree = renderTree();
+        const stageCanvas = stageCanvasFrom(tree);
+        assert.equal(prevented, true);
+        assert.deepEqual(
+          [
+            ...((
+              stageCanvas.props as {
+                selection?: { nodeIds?: ReadonlySet<string> };
+              }
+            ).selection?.nodeIds ?? new Set<string>()),
+          ],
+          [nodeId],
+        );
+        assert.notEqual(
+          (
+            stageCanvas.props as { hiddenNodeIds?: ReadonlySet<string> }
+          ).hiddenNodeIds?.has(nodeId),
+          true,
+        );
+        assert.notEqual(
+          (stageCanvas.props as { tableEditingNodeId?: string | null })
+            .tableEditingNodeId,
+          nodeId,
+        );
+        assert.notEqual(
+          (stageCanvas.props as { activeGroupId?: string | null })
+            .activeGroupId,
+          nodeId,
+        );
+      }
     });
   });
 

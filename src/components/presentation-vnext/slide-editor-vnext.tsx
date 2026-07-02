@@ -2202,6 +2202,29 @@ export function SlideEditorVNext({
     if (!target) return;
     const targetNodeId = target.nodeId;
     const node = target.node;
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
+      requestInlineEditCommit();
+    }
+    if (tableEditingNodeId && tableEditingNodeId !== targetNodeId) {
+      clearTableEditing();
+    }
+
+    setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
+    setFocusedNodeId(targetNodeId);
+
+    if (target.parentGroupId && activeGroupId !== target.parentGroupId) {
+      setActiveGroupId(target.parentGroupId);
+      setStageAnnouncement("Entered group. Press Escape to exit group.");
+      return;
+    }
+
+    applyStageTargetContext(target);
+
+    if (node.locked) return;
+
     if (node.type === "group") {
       setActiveGroupId(node.id);
       const firstChildId = childIdsForGroup(activeSlide.children, node.id)[0];
@@ -2216,6 +2239,10 @@ export function SlideEditorVNext({
       handleEnterTableEdit(targetNodeId, {
         announcement: "Editing table cells",
       });
+      return;
+    }
+    if (node.type === "text") {
+      enterInlineEdit(targetNodeId, initialCaretFromNodeClick(node, event));
       return;
     }
   }
@@ -2270,12 +2297,7 @@ export function SlideEditorVNext({
   }
 
   function handleStageDoubleClick(event: MouseEvent<HTMLDivElement>) {
-    if (
-      !activeSlide ||
-      inlineEditNodeId ||
-      tableEditingNodeId ||
-      isEditableTarget(event.target)
-    ) {
+    if (!activeSlide || isEditableTarget(event.target)) {
       return;
     }
     if (isStageHandleTarget(event.target)) return;
@@ -2283,6 +2305,8 @@ export function SlideEditorVNext({
     if (!canvasElement) return;
     const rect = canvasElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
+    if (inlineEditNodeId) requestInlineEditCommit();
+    if (tableEditingNodeId) clearTableEditing();
     const point = pointPctFromEvent(event, rect);
     const result = insertNode(
       deck,
@@ -3330,6 +3354,10 @@ export function SlideEditorVNext({
     }
     // Enter key enters inline edit mode on the selected text/shape node
     if (event.key === "Enter" && selectedIds.length === 1 && selectedNode) {
+      if (selectedNode.locked) {
+        event.preventDefault();
+        return;
+      }
       if (selectedNode.type === "group") {
         setActiveGroupId(selectedNode.id);
         const firstChildId = childIdsForGroup(

@@ -3,10 +3,13 @@ import { describe, test } from "node:test";
 import * as React from "react";
 import type { MouseEvent, ReactNode } from "react";
 
+import type { GroupNode } from "@/lib/presentation-vnext/schema";
 import {
   buildDeckV7,
+  buildImageNode,
   buildShapeNode,
   buildSlideV7,
+  buildTableNode,
   buildTextNode,
 } from "@/test/builders/deck-v7";
 import { InlineTextEditorVNext } from "./inline-text-editor";
@@ -20,6 +23,100 @@ import {
   withMockHTMLElement,
   withPointerWindow,
 } from "./slide-editor-vnext-failure-test-utils";
+
+const preventableMouseEvent = (event: Partial<MouseEvent> = {}) =>
+  ({
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+    ...event,
+  }) as MouseEvent;
+
+function stageCanvasFromRoot(root: ReactNode) {
+  return findRequiredElement(
+    root,
+    (element) => element.type === SlideCanvasVNext,
+    "Expected stage canvas to render.",
+  );
+}
+
+function selectedNodeIdsFrom(root: ReactNode): string[] {
+  const selection = (
+    stageCanvasFromRoot(root).props as {
+      selection?: { nodeIds?: ReadonlySet<string> };
+    }
+  ).selection;
+  return [...(selection?.nodeIds ?? new Set<string>())];
+}
+
+function hiddenNodeIdsFrom(root: ReactNode): ReadonlySet<string> | undefined {
+  return (
+    stageCanvasFromRoot(root).props as {
+      hiddenNodeIds?: ReadonlySet<string>;
+    }
+  ).hiddenNodeIds;
+}
+
+function nodeDoubleClickFrom(root: ReactNode) {
+  const onNodeDoubleClick = (
+    stageCanvasFromRoot(root).props as {
+      onNodeDoubleClick?: (nodeId: string, event: MouseEvent) => void;
+    }
+  ).onNodeDoubleClick;
+  assert.ok(onNodeDoubleClick);
+  return onNodeDoubleClick;
+}
+
+function activeGroupIdFrom(root: ReactNode): string | null | undefined {
+  return (stageCanvasFromRoot(root).props as { activeGroupId?: string | null })
+    .activeGroupId;
+}
+
+function buildGroupNode(
+  id: string,
+  children = [buildTextNode({ id: `${id}-child` })],
+  locked = false,
+): GroupNode {
+  return {
+    id,
+    type: "group",
+    component: "custom",
+    locked,
+    layout: { frame: { x: 45, y: 10, w: 35, h: 30 }, zIndex: 2 },
+    children,
+  };
+}
+
+function mountStageFrame(
+  root: ReactNode,
+  createElement: (args?: {
+    closestMap?: Record<string, unknown>;
+    queryMap?: Record<string, unknown>;
+    rect?: { left: number; top: number; width: number; height: number };
+  }) => HTMLElement,
+) {
+  const slideCanvasElement = createElement({
+    rect: { left: 0, top: 0, width: 1000, height: 1000 },
+  });
+  const frameElement = createElement({
+    rect: { left: 0, top: 0, width: 1000, height: 1000 },
+    queryMap: {
+      '[data-slide-canvas-vnext="true"]': slideCanvasElement,
+    },
+  });
+  const frame = findRequiredElement(
+    root,
+    (element) =>
+      element.type === "div" &&
+      (element.props as { "data-slide-stage-frame"?: string })[
+        "data-slide-stage-frame"
+      ] === "true" &&
+      typeof (element.props as { ref?: unknown }).ref === "function",
+    "Expected mounted stage frame ref.",
+  );
+  (frame.props as { ref: (element: HTMLDivElement | null) => void }).ref(
+    frameElement as HTMLDivElement,
+  );
+}
 
 describe("SlideEditorVNext inline text editor failures", () => {
   test("inline edit keeps stage hover preselection for other nodes", () => {
@@ -249,11 +346,14 @@ describe("SlideEditorVNext inline text editor failures", () => {
             }
           : null,
     };
-    onNodeDoubleClick("preselected-over-edit", {
-      clientX: 250,
-      clientY: 250,
-      target,
-    } as unknown as MouseEvent);
+    onNodeDoubleClick(
+      "preselected-over-edit",
+      preventableMouseEvent({
+        clientX: 250,
+        clientY: 250,
+        target: target as unknown as EventTarget,
+      }),
+    );
 
     tree = renderTree();
     const updatedStageCanvas = findRequiredElement(
@@ -265,7 +365,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
       updatedStageCanvas.props as { hiddenNodeIds?: ReadonlySet<string> }
     ).hiddenNodeIds;
     assert.notEqual(hiddenNodeIds?.has("selected-under-edit"), true);
-    assert.notEqual(hiddenNodeIds?.has("preselected-over-edit"), true);
+    assert.ok(hiddenNodeIds?.has("preselected-over-edit"));
   });
 
   test("pressing another node exits the first node's inline edit", () => {
@@ -730,7 +830,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
       });
     });
 
-    test("double-clicking an existing text node does not insert or force inline edit", () => {
+    test("double-clicking an existing text node enters inline edit without inserting", () => {
       const hookRenderer = createHookRenderer();
       let deckChangeCount = 0;
       let currentDeck = buildDeckV7([
@@ -776,7 +876,7 @@ describe("SlideEditorVNext inline text editor failures", () => {
         }
       ).onNodeDoubleClick;
       assert.ok(onNodeDoubleClick);
-      onNodeDoubleClick?.("existing-text", {} as MouseEvent);
+      onNodeDoubleClick?.("existing-text", preventableMouseEvent());
 
       tree = renderTree();
       assert.equal(
@@ -800,7 +900,538 @@ describe("SlideEditorVNext inline text editor failures", () => {
           hiddenNodeIds?: ReadonlySet<string>;
         }
       ).hiddenNodeIds;
-      assert.notEqual(hiddenNodeIds?.has("existing-text"), true);
+      assert.ok(hiddenNodeIds?.has("existing-text"));
+    });
+
+    test("multi-selection double-click finalizes to the clicked text edit target", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "multi-text-target",
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                  content: {
+                    paragraphs: [{ id: "multi-text-p1", text: "Edit here" }],
+                  },
+                }),
+                buildImageNode("img-1", {
+                  id: "multi-image-other",
+                  layout: { frame: { x: 50, y: 10, w: 25, h: 12 }, zIndex: 2 },
+                }),
+              ],
+              { id: "slide-multi-text-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-multi-text-double-click",
+                deck: currentDeck,
+                onDeckChange: () => undefined,
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "multi-text-target");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "multi-image-other", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 160,
+          });
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree).sort(), [
+            "multi-image-other",
+            "multi-text-target",
+          ]);
+          nodeDoubleClickFrom(tree)(
+            "multi-text-target",
+            preventableMouseEvent({ clientX: 130, clientY: 130 }),
+          );
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree), ["multi-text-target"]);
+          assert.ok(hiddenNodeIdsFrom(tree)?.has("multi-text-target"));
+          mountStageFrame(tree, createElement);
+          tree = renderTree();
+          const inlineEditor = findRequiredElement(
+            tree,
+            (element) => element.type === InlineTextEditorVNext,
+            "Expected inline editor after text double-click.",
+          );
+          assert.deepEqual(
+            (inlineEditor.props as { initialCaret?: unknown }).initialCaret,
+            { kind: "client", x: 130, y: 130 },
+          );
+        }),
+      );
+    });
+
+    test("multi-selection double-click on locked text selects it without editing", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "locked-text-target",
+                  locked: true,
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                }),
+                buildImageNode("img-1", {
+                  id: "locked-image-other",
+                  layout: { frame: { x: 50, y: 10, w: 25, h: 12 }, zIndex: 2 },
+                }),
+              ],
+              { id: "slide-locked-text-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-locked-text-double-click",
+                deck: currentDeck,
+                onDeckChange: () => undefined,
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "locked-text-target");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "locked-image-other", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 160,
+          });
+
+          tree = renderTree();
+          nodeDoubleClickFrom(tree)(
+            "locked-text-target",
+            preventableMouseEvent({ clientX: 130, clientY: 130 }),
+          );
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree), ["locked-text-target"]);
+          assert.notEqual(
+            hiddenNodeIdsFrom(tree)?.has("locked-text-target"),
+            true,
+          );
+        }),
+      );
+    });
+
+    test("multi-selection double-click on an image only switches selection", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "image-double-text-other",
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                }),
+                buildImageNode("img-1", {
+                  id: "image-double-target",
+                  layout: { frame: { x: 50, y: 10, w: 25, h: 12 }, zIndex: 2 },
+                }),
+              ],
+              { id: "slide-image-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-image-double-click",
+                deck: currentDeck,
+                onDeckChange: () => undefined,
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "image-double-text-other");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "image-double-target", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 160,
+          });
+
+          tree = renderTree();
+          nodeDoubleClickFrom(tree)(
+            "image-double-target",
+            preventableMouseEvent({ clientX: 620, clientY: 160 }),
+          );
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree), ["image-double-target"]);
+          assert.notEqual(
+            hiddenNodeIdsFrom(tree)?.has("image-double-target"),
+            true,
+          );
+        }),
+      );
+    });
+
+    test("multi-selection double-click on a table enters table edit", async () => {
+      await withMockHTMLElement((createElement) =>
+        withPointerWindow(async (listeners) => {
+          const hookRenderer = createHookRenderer();
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "table-double-text-other",
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                }),
+                buildTableNode({
+                  id: "table-double-target",
+                  layout: { frame: { x: 50, y: 10, w: 30, h: 30 }, zIndex: 2 },
+                }),
+              ],
+              { id: "slide-table-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-table-double-click",
+                deck: currentDeck,
+                onDeckChange: () => undefined,
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "table-double-text-other");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "table-double-target", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 160,
+          });
+
+          tree = renderTree();
+          const previousDocument = globalThis.document;
+          globalThis.document = {
+            querySelector: () => null,
+          } as unknown as Document;
+          try {
+            nodeDoubleClickFrom(tree)(
+              "table-double-target",
+              preventableMouseEvent({ clientX: 620, clientY: 160 }),
+            );
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          } finally {
+            if (previousDocument === undefined) {
+              Reflect.deleteProperty(globalThis, "document");
+            } else {
+              globalThis.document = previousDocument;
+            }
+          }
+
+          tree = renderTree();
+          const stageCanvas = stageCanvasFromRoot(tree);
+          assert.deepEqual(selectedNodeIdsFrom(tree), ["table-double-target"]);
+          assert.equal(
+            (stageCanvas.props as { tableEditingNodeId?: string | null })
+              .tableEditingNodeId,
+            "table-double-target",
+          );
+          assert.deepEqual(
+            (
+              stageCanvas.props as {
+                activeTableCell?: { rowIndex: number; colIndex: number } | null;
+              }
+            ).activeTableCell,
+            { rowIndex: 0, colIndex: 0 },
+          );
+        }),
+      );
+    });
+
+    test("multi-selection double-click on a group enters the group and selects its child", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "group-double-other",
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                }),
+                buildGroupNode("group-double-target", [
+                  buildTextNode({
+                    id: "group-double-child",
+                    layout: {
+                      frame: { x: 50, y: 15, w: 20, h: 10 },
+                      zIndex: 3,
+                    },
+                  }),
+                ]),
+              ],
+              { id: "slide-group-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-group-double-click",
+                deck: currentDeck,
+                onDeckChange: () => undefined,
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "group-double-other");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "group-double-target", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 250,
+          });
+
+          tree = renderTree();
+          nodeDoubleClickFrom(tree)(
+            "group-double-target",
+            preventableMouseEvent({ clientX: 620, clientY: 250 }),
+          );
+
+          tree = renderTree();
+          assert.equal(activeGroupIdFrom(tree), "group-double-target");
+          assert.deepEqual(selectedNodeIdsFrom(tree), ["group-double-child"]);
+        }),
+      );
+    });
+
+    test("double-clicking a locked group selects it without entering the group", () => {
+      const hookRenderer = createHookRenderer();
+      const currentDeck = buildDeckV7([
+        buildSlideV7(
+          "content",
+          [
+            buildGroupNode(
+              "locked-group-double-target",
+              [buildTextNode({ id: "locked-group-child" })],
+              true,
+            ),
+          ],
+          { id: "slide-locked-group-double-click", name: "Slide 1" },
+        ),
+      ]);
+      const renderTree = () =>
+        hookRenderer.run(() =>
+          SlideEditorVNext({
+            documentId: "doc-locked-group-double-click",
+            deck: currentDeck,
+            onDeckChange: () => undefined,
+          }),
+        );
+
+      let tree = renderTree();
+      nodeDoubleClickFrom(tree)(
+        "locked-group-double-target",
+        preventableMouseEvent({ clientX: 620, clientY: 250 }),
+      );
+
+      tree = renderTree();
+      assert.equal(activeGroupIdFrom(tree), null);
+      assert.deepEqual(selectedNodeIdsFrom(tree), [
+        "locked-group-double-target",
+      ]);
+    });
+
+    test("double-clicking multi-selection bounds does not insert or clear selection", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          let deckChangeCount = 0;
+          const currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({ id: "bounds-text-a" }),
+                buildImageNode("img-1", { id: "bounds-image-b" }),
+              ],
+              { id: "slide-bounds-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-bounds-double-click",
+                deck: currentDeck,
+                onDeckChange: () => {
+                  deckChangeCount += 1;
+                },
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "bounds-text-a");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "bounds-image-b", {
+            shiftKey: true,
+            clientX: 620,
+            clientY: 300,
+          });
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree).sort(), [
+            "bounds-image-b",
+            "bounds-text-a",
+          ]);
+          const stageShell = findRequiredElement(
+            tree,
+            (element) =>
+              element.type === "div" &&
+              (element.props as { "data-slide-stage-shell"?: string })[
+                "data-slide-stage-shell"
+              ] === "true" &&
+              typeof (element.props as { onDoubleClick?: unknown })
+                .onDoubleClick === "function",
+            "Expected stage shell with double-click handler.",
+          );
+          const onStageDoubleClick = (
+            stageShell.props as {
+              onDoubleClick?: (event: MouseEvent<HTMLDivElement>) => void;
+            }
+          ).onDoubleClick;
+          assert.ok(onStageDoubleClick);
+          const boundsElement = createElement();
+          const target = createElement({
+            closestMap: {
+              "[data-node-id],[data-resize-handle],[data-crop-handle],[data-rotation-handle],[data-connector-endpoint],[data-multi-selection-bounds]":
+                boundsElement,
+            },
+          });
+          onStageDoubleClick({
+            clientX: 300,
+            clientY: 200,
+            target,
+          } as unknown as MouseEvent<HTMLDivElement>);
+
+          tree = renderTree();
+          assert.equal(deckChangeCount, 0);
+          assert.deepEqual(selectedNodeIdsFrom(tree).sort(), [
+            "bounds-image-b",
+            "bounds-text-a",
+          ]);
+        }),
+      );
+    });
+
+    test("blank canvas double-click commits current inline edit before inserting text", () => {
+      withMockHTMLElement((createElement) =>
+        withPointerWindow((listeners) => {
+          const hookRenderer = createHookRenderer();
+          let currentDeck = buildDeckV7([
+            buildSlideV7(
+              "content",
+              [
+                buildTextNode({
+                  id: "blank-commit-source",
+                  layout: { frame: { x: 10, y: 10, w: 25, h: 12 }, zIndex: 1 },
+                }),
+              ],
+              { id: "slide-blank-commit-double-click", name: "Slide 1" },
+            ),
+          ]);
+          const renderTree = () =>
+            hookRenderer.run(() =>
+              SlideEditorVNext({
+                documentId: "doc-blank-commit-double-click",
+                deck: currentDeck,
+                onDeckChange: (nextDeck) => {
+                  currentDeck = nextDeck;
+                },
+              }),
+            );
+
+          let tree = renderTree();
+          focusNode(tree, "blank-commit-source");
+          tree = renderTree();
+          clickNode(tree, listeners, createElement, "blank-commit-source", {
+            clientX: 130,
+            clientY: 130,
+          });
+
+          tree = renderTree();
+          assert.ok(hiddenNodeIdsFrom(tree)?.has("blank-commit-source"));
+
+          const previousDocument = globalThis.document;
+          let blurCalls = 0;
+          globalThis.document = {
+            querySelector(selector: string) {
+              assert.equal(
+                selector,
+                '[data-inline-editor-vnext="blank-commit-source"]',
+              );
+              return {
+                blur() {
+                  blurCalls += 1;
+                },
+              } as unknown as Element;
+            },
+          } as Document;
+
+          try {
+            const stageShell = findRequiredElement(
+              tree,
+              (element) =>
+                element.type === "div" &&
+                (element.props as { "data-slide-stage-shell"?: string })[
+                  "data-slide-stage-shell"
+                ] === "true" &&
+                typeof (element.props as { onDoubleClick?: unknown })
+                  .onDoubleClick === "function",
+              "Expected stage shell with double-click handler.",
+            );
+            const canvasElement = createElement({
+              rect: { left: 0, top: 0, width: 1000, height: 500 },
+            });
+            const target = createElement({
+              closestMap: {
+                '[data-slide-canvas-vnext="true"]': canvasElement,
+              },
+            });
+            (
+              stageShell.props as {
+                onDoubleClick?: (event: MouseEvent<HTMLDivElement>) => void;
+              }
+            ).onDoubleClick?.({
+              clientX: 500,
+              clientY: 250,
+              target,
+            } as unknown as MouseEvent<HTMLDivElement>);
+          } finally {
+            if (previousDocument === undefined) {
+              Reflect.deleteProperty(globalThis, "document");
+            } else {
+              globalThis.document = previousDocument;
+            }
+          }
+
+          assert.equal(blurCalls, 1);
+          assert.equal(currentDeck.slides[0]?.children.length, 2);
+          const inserted = currentDeck.slides[0]?.children.at(-1);
+          assert.ok(inserted?.type === "text");
+
+          tree = renderTree();
+          assert.deepEqual(selectedNodeIdsFrom(tree), [inserted.id]);
+          assert.ok(hiddenNodeIdsFrom(tree)?.has(inserted.id));
+        }),
+      );
     });
 
     test("clicking the already-selected text node enters edit mode at the click point", () => {
