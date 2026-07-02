@@ -57,6 +57,36 @@ test("resolveSaveStatus: error wins over an in-flight save", () => {
   );
 });
 
+test("resolveSaveStatus: queued-save states map to specific UX states", () => {
+  assert.equal(
+    resolveSaveStatus({
+      isDirty: true,
+      isSaving: false,
+      hasError: false,
+      queueStatus: "queued",
+    }),
+    "queued",
+  );
+  assert.equal(
+    resolveSaveStatus({
+      isDirty: true,
+      isSaving: false,
+      hasError: false,
+      queueStatus: "offline",
+    }),
+    "offline",
+  );
+  assert.equal(
+    resolveSaveStatus({
+      isDirty: true,
+      isSaving: false,
+      hasError: true,
+      queueStatus: "conflict",
+    }),
+    "conflict",
+  );
+});
+
 test("resolveSaveStatus: saving wins over pending", () => {
   // A retry after an error clears hasError before the request starts.
   assert.equal(
@@ -66,7 +96,16 @@ test("resolveSaveStatus: saving wins over pending", () => {
 });
 
 test("SAVE_STATUS_LABEL covers every status with the mirrored copy", () => {
-  const statuses: SaveStatus[] = ["saved", "pending", "saving", "error"];
+  const statuses: SaveStatus[] = [
+    "saved",
+    "pending",
+    "queued",
+    "offline",
+    "saving",
+    "retrying",
+    "conflict",
+    "error",
+  ];
   for (const status of statuses) {
     assert.equal(typeof SAVE_STATUS_LABEL[status], "string");
     assert.ok(SAVE_STATUS_LABEL[status].length > 0);

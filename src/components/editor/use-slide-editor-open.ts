@@ -30,9 +30,12 @@ import {
   type SaveStatus,
 } from "@/lib/presentation-shared/save-status";
 import {
-  createSlideAutosaveScheduler,
-  type SlideAutosaveScheduler,
-} from "@/lib/presentation-shared/slide-autosave-scheduler";
+  createBrowserLocalStorageSaveQueueStorage,
+  createResilientLatestSnapshotQueue,
+  type ResilientLatestSnapshotQueue,
+  type SaveQueueSaveResult,
+  type SaveQueueStatus,
+} from "@/lib/presentation-shared/resilient-autosave-queue";
 import { bucketCount, emitProductTelemetry } from "@/lib/telemetry/product";
 import type { PresentationDiagnostic } from "@/lib/presentation-vnext/diagnostics";
 import { createBlankDeckV7 } from "@/lib/presentation-vnext/empty-deck";
@@ -346,6 +349,7 @@ export function useSlideEditorOpen({
   const [v7Dirty, setV7Dirty] = useState(false);
   const [v7Saving, setV7Saving] = useState(false);
   const [v7SaveError, setV7SaveError] = useState<string | null>(null);
+  const [v7QueueStatus, setV7QueueStatus] = useState<SaveQueueStatus>("idle");
   const [undoStackV7, setUndoStackV7] = useState<DeckV7[]>([]);
   const [redoStackV7, setRedoStackV7] = useState<DeckV7[]>([]);
   const [conflictStateV7, setConflictStateV7] =
@@ -360,7 +364,7 @@ export function useSlideEditorOpen({
   const revisionTokenRef = useRef<string | null>(null);
   const aiAppliedDeckRef = useRef<DeckV7 | null>(null);
   const focusTokenRef = useRef(0);
-  const autosaveSchedulerRef = useRef<SlideAutosaveScheduler<DeckV7> | null>(
+  const autosaveQueueRef = useRef<ResilientLatestSnapshotQueue<DeckV7> | null>(
     null,
   );
   const inFlightPersistV7Ref = useRef<Promise<ActionResult> | null>(null);
@@ -395,6 +399,12 @@ export function useSlideEditorOpen({
   );
   const persistDeckV7 = useCallback(
     (updatedDeck: DeckV7): Promise<ActionResult> => {
+      const queue = autosaveQueueRef.current;
+      if (queue) {
+        return queue.enqueue(updatedDeck, revisionTokenRef.current, {
+          flush: true,
+        });
+      }
       latestPersistRequestIdRef.current += 1;
       const requestId = latestPersistRequestIdRef.current;
       latestPersistDeckV7Ref.current = { deck: updatedDeck, requestId };
@@ -438,24 +448,96 @@ export function useSlideEditorOpen({
   );
 
   useEffect(() => {
-    const onDue = createDeckAutosaveOnDue({
-      persistDeckV7,
-      log: logInfo,
+    const queue = createResilientLatestSnapshotQueue<DeckV7>({
+      documentId,
+      storage: createBrowserLocalStorageSaveQueueStorage<DeckV7>({
+        documentId,
+      }),
+      isOnline: () =>
+        typeof navigator === "undefined" ? true : navigator.onLine !== false,
+      onStatusChange: setV7QueueStatus,
+      onSaved: (savedDeck, revisionToken) => {
+        lastSavedRef.current = savedDeck;
+        revisionTokenRef.current = revisionToken;
+        setV7Dirty(false);
+        setV7SaveError(null);
+        setConflictStateV7(null);
+        if (aiAppliedDeckRef.current) {
+          aiAppliedDeckRef.current = null;
+          emitProductTelemetry("product.ai.deck.saved", {
+            editDistanceBucket: bucketCount(savedDeck.slides.length),
+            slideCount: savedDeck.slides.length,
+          });
+        }
+      },
+      save: async (
+        queuedDeck,
+        baseRevisionToken,
+      ): Promise<SaveQueueSaveResult> => {
+        setV7Saving(true);
+        setV7SaveError(null);
+        try {
+          const saveResult = await deckPort.saveDeckJson(
+            documentId,
+            queuedDeck,
+            baseRevisionToken,
+          );
+          if (saveResult.ok === true) {
+            return {
+              ok: true,
+              revisionToken: saveResult.revisionToken,
+            };
+          }
+          if (saveResult.ok === "conflict") {
+            setV7SaveError(SAVE_CONFLICT_ERROR_MESSAGE);
+            setConflictStateV7({
+              localDeck: queuedDeck,
+              serverRevisionToken: saveResult.serverRevisionToken,
+            });
+            return saveResult;
+          }
+          setV7SaveError(saveResult.error);
+          return {
+            ok: false,
+            error: saveResult.error,
+            retryable: saveResult.failure.retryable,
+          };
+        } catch (error) {
+          const rejectionError = resolveDeckSaveRejectionError(error);
+          setV7SaveError(rejectionError);
+          return { ok: false, error: rejectionError, retryable: true };
+        } finally {
+          setV7Saving(false);
+        }
+      },
     });
-    const scheduler = createSlideAutosaveScheduler<DeckV7>({
-      onDue,
-    });
-    autosaveSchedulerRef.current = scheduler;
+    autosaveQueueRef.current = queue;
+
+    const retryQueuedSave = () => {
+      void queue.flushNow();
+    };
+    /* node:coverage ignore next 11 */
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", retryQueuedSave);
+      window.addEventListener("focus", retryQueuedSave);
+      document.addEventListener("visibilitychange", retryQueuedSave);
+    }
     return () => {
-      scheduler.cancel();
-      if (autosaveSchedulerRef.current === scheduler) {
-        autosaveSchedulerRef.current = null;
+      queue.destroy();
+      if (autosaveQueueRef.current === queue) {
+        autosaveQueueRef.current = null;
+      }
+      /* node:coverage ignore next 6 */
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", retryQueuedSave);
+        window.removeEventListener("focus", retryQueuedSave);
+        document.removeEventListener("visibilitychange", retryQueuedSave);
       }
     };
-  }, [persistDeckV7]);
+  }, [deckPort, documentId]);
 
   const cancelAutosaveV7 = useCallback(() => {
-    autosaveSchedulerRef.current?.cancel();
+    autosaveQueueRef.current?.cancelScheduledFlush();
   }, []);
 
   const fallbackDeck = useCallback(
@@ -540,6 +622,13 @@ export function useSlideEditorOpen({
       if (prepared.ok) {
         revisionTokenRef.current = prepared.revisionToken;
         finishOpenV7(prepared.deck, prepared.diagnostics);
+        const recovered = await autosaveQueueRef.current?.recover();
+        if (recovered) {
+          setDeckV7(recovered.snapshot);
+          setV7Dirty(true);
+          setV7SaveError(null);
+          void autosaveQueueRef.current?.flushNow();
+        }
         return;
       }
       enterRecoveryV7({
@@ -686,7 +775,21 @@ export function useSlideEditorOpen({
   );
 
   const scheduleAutosaveV7 = useCallback((updatedDeck: DeckV7) => {
-    autosaveSchedulerRef.current?.schedule(updatedDeck);
+    const queue = autosaveQueueRef.current;
+    if (queue) {
+      void queue
+        .enqueue(updatedDeck, revisionTokenRef.current, {
+          flush: queue.isFlushing(),
+        })
+        .then((result) => {
+          if (!result.ok) {
+            logInfo("editor.slide-editor", "v7-autosave-error", {
+              error: result.error,
+            });
+          }
+        });
+      return;
+    }
   }, []);
 
   const focusAfterHistoryV7 = useCallback(
@@ -839,6 +942,7 @@ export function useSlideEditorOpen({
         serverToken,
       );
       if (res.ok === true) {
+        await autosaveQueueRef.current?.clear();
         lastSavedRef.current = localDeck;
         revisionTokenRef.current = res.revisionToken;
         setConflictStateV7(null);
@@ -882,6 +986,7 @@ export function useSlideEditorOpen({
     setRedoStackV7([]);
     setUndoRedoFocusV7(null);
     setConflictStateV7(null);
+    await autosaveQueueRef.current?.clear();
   }, [deckPort, documentId]);
 
   const handleConflictDismissV7 = useCallback(() => {
@@ -892,7 +997,14 @@ export function useSlideEditorOpen({
     isDirty: v7Dirty,
     isSaving: v7Saving,
     hasError: v7SaveError !== null,
+    queueStatus: v7QueueStatus,
   });
+  const hasDurableQueuedWork =
+    v7QueueStatus === "queued" ||
+    v7QueueStatus === "offline" ||
+    v7QueueStatus === "retrying" ||
+    v7QueueStatus === "saving" ||
+    v7QueueStatus === "conflict";
 
   return {
     open,
@@ -902,7 +1014,12 @@ export function useSlideEditorOpen({
     saveStatus,
     saveStatusLabel: SAVE_STATUS_LABEL[saveStatus],
     saveErrorMessage: resolveSaveErrorMessage(v7SaveError),
-    hasUnsavedWork: v7Dirty || v7Saving || v7SaveError !== null,
+    hasUnsavedWork:
+      !hasDurableQueuedWork &&
+      (v7Dirty ||
+        v7Saving ||
+        v7SaveError !== null ||
+        v7QueueStatus === "failed"),
     setDeckV7,
     handleDeckV7Change,
     handleSaveV7,
