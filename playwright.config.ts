@@ -9,7 +9,7 @@ import { defineConfig, devices } from "@playwright/test";
  * server.
  *
  * The base URL is configurable from the environment (`E2E_BASE_URL`, falling
- * back to `BASE_URL`) and defaults to http://localhost:3000.
+ * back to `BASE_URL`) and defaults to http://localhost:4000.
  *
  * No mandatory `webServer` is configured: in CI the required unit gate must not
  * spin up a server. To have Playwright start the dev server for you locally,
@@ -27,7 +27,7 @@ const deterministicProfileSpecs = [
   "present-export.spec.ts",
   "slide-asset-upload.spec.ts",
   "slides-layout-screenshots.spec.ts",
-  "ui-matrix/*.spec.ts",
+  "ui-matrix/catalog.spec.ts",
 ];
 
 export default defineConfig({

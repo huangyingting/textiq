@@ -48,7 +48,9 @@ This directory contains a 500-case UI test catalog plus representative Playwrigh
 
 ## Execution
 
-Use the deterministic SQLite profile:
+The default deterministic profile validates only `catalog.spec.ts` so the CI
+profile stays bounded while still guarding the 500-case catalog. Run the browser
+matrix explicitly when validating representative UI surfaces:
 
 ```bash
 DB_PROVIDER=sqlite DATABASE_URL="file:./prisma/dev.db" AUTH_SECRET=browser-qa-placeholder-secret npm run db:push

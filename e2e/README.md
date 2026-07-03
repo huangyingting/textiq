@@ -21,7 +21,8 @@ them locally or in a dedicated E2E job.
 | `import-roundtrip.spec.ts`          | Markdown import → editor render → edit/save/reload; unsupported-type error (profile-gated, #519)       |
 | `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)                  |
 | `slide-asset-upload.spec.ts`        | Inspector image upload + protected slide-asset access control (profile-gated, #521)                    |
-| `e2e/ui-matrix/*.spec.ts`           | 500-case subsystem UI matrix catalog + representative presentation/public/auth/editor/workspace checks |
+| `e2e/ui-matrix/catalog.spec.ts`     | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                |
+| `e2e/ui-matrix/*-ui.spec.ts`        | Representative presentation/public/auth/editor/workspace checks (explicit opt-in, not default profile) |
 
 ## Prerequisites
 
