@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { E2E_PROFILE_FIXTURE } from "./helpers/profile";
+
 /**
  * Share / presentation fallback coverage (issue #107, building on #98).
  *
@@ -20,7 +22,40 @@ const SLUG_PREFIXED_SHARE_ID = "some-doc-slug-playwright-nonexistent-share-id";
 /** Malformed share id with characters that cannot match any stored share. */
 const MALFORMED_SHARE_ID = "!!!invalid-share-id!!!";
 
+const DENIED_PUBLIC_ROUTES = [
+  "/share",
+  `/share/${UNKNOWN_SHARE_ID}`,
+  `/share/${encodeURIComponent(MALFORMED_SHARE_ID)}`,
+  `/present/${UNKNOWN_SHARE_ID}`,
+  `/embed/${UNKNOWN_SHARE_ID}`,
+  `/present/${UNKNOWN_SHARE_ID}/embed`,
+] as const;
+
+const FIXTURE_CONTENT_MARKERS = [
+  E2E_PROFILE_FIXTURE.documentTitle,
+  E2E_PROFILE_FIXTURE.documentBodyText,
+  E2E_PROFILE_FIXTURE.slideTitleText,
+  E2E_PROFILE_FIXTURE.slideBodyText,
+] as const;
+
 test.describe("share/present fallback", () => {
+  test("unknown and malformed public routes return 404 without leaking fixture content", async ({
+    request,
+  }) => {
+    test.setTimeout(90_000);
+
+    for (const route of DENIED_PUBLIC_ROUTES) {
+      const response = await request.get(route);
+      const body = await response.text();
+
+      expect(response.status(), route).toBe(404);
+      expect(body, route).toMatch(/not found|404/i);
+      for (const marker of FIXTURE_CONTENT_MARKERS) {
+        expect(body, `${route} leaked ${marker}`).not.toContain(marker);
+      }
+    }
+  });
+
   test("unknown /share link renders the not-found fallback", async ({
     page,
   }) => {
