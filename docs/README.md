@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-03"
 description: "This folder documents the current runtime architecture, persisted contracts, product behavior, operational runbooks, and forward plans for TextIQ. Source code, tests, and schemas remain authoritative; docs explain the current system and name where future work belongs."
 ---
 
@@ -48,7 +48,7 @@ contracts must not depend on plan documents for behavior.
 | [data-model/](data-model/README.md)       | Persisted JSON contracts and database projections.       | Contract, Architecture               |
 | [presentation/](presentation/README.md)   | Slide editor runtime, Deck rendering, present/export.    | Architecture, Design, Contract, Plan |
 | [editor/](editor/README.md)               | Lexical document editor and editor-owned comment UX.     | Architecture, Design                 |
-| [documents/](documents/README.md)         | Document creation, listing, tags, search, trash.         | Architecture, Plan                   |
+| [documents/](documents/README.md)         | Document creation, listing, tags, search, trash.         | Architecture                         |
 | [visual/](visual/README.md)               | Visual schemas, registry, rendering, transform/export.   | Contract, Architecture               |
 | [ai/](ai/README.md)                       | AI-assisted document/deck generation and quota flow.     | Architecture, Contract               |
 | [commands/](commands/README.md)           | Command envelopes, mutation routing, mutation inventory. | Contract, Reference                  |
