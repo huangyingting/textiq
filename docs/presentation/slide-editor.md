@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -25,8 +25,13 @@ and pointer state rules, see
 | Read-only canvas    | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                                           |
 | Node renderer       | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)                             |
 | Inspector           | [`src/components/presentation/inspector/inspector-shell.tsx`](../../src/components/presentation/inspector/inspector-shell.tsx)                 |
+| Inspector panels    | [`src/components/presentation/inspector/`](../../src/components/presentation/inspector/)                                                       |
 | Context toolbar     | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)                     |
 | Filmstrip           | [`src/components/presentation/filmstrip/filmstrip.tsx`](../../src/components/presentation/filmstrip/filmstrip.tsx)                             |
+| Stage state         | [`src/components/presentation/use-stage-interaction-controller.ts`](../../src/components/presentation/use-stage-interaction-controller.ts)     |
+| Stage targeting     | [`src/components/presentation/stage-targeting.ts`](../../src/components/presentation/stage-targeting.ts)                                       |
+| Stage pointer       | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts)                 |
+| Stage keyboard      | [`src/components/presentation/stage-keyboard-interactions.ts`](../../src/components/presentation/stage-keyboard-interactions.ts)               |
 | Stage fit           | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                                 |
 | Stage chrome        | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                                           |
 | Stage guides        | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                                           |
@@ -148,6 +153,17 @@ inspector and are labeled as overrides. Present, public render, and export all
 resolve the same deck defaults plus slide overrides through the read-only
 render path.
 
+## Inspector Organization
+
+The inspector is a panel shell plus focused panels under
+`src/components/presentation/inspector/`. `inspector-shell.tsx` owns panel
+selection, focus handoff, and continuity; panel modules own one editing concern
+such as slide settings, deck chrome overrides, node content, node geometry,
+style binding, local overrides, diagnostics, source metadata, or layers. Panel
+handlers route changes back through the same Deck command/update path as the
+toolbar and canvas popover, so the inspector never writes persisted state
+directly.
+
 ## Top Toolbar
 
 The top toolbar is a compact deck-level command surface. It does not own deck
@@ -211,6 +227,11 @@ current object.
 stage is responsible for pointer/keyboard interaction only; deck mutations are
 routed through `onDeckChange` callbacks and pure helpers in
 `editor-commands.ts` / `source-links.ts` / `document-source-commands.ts`.
+Stage interaction state is split out of the shell: `use-stage-interaction-controller.ts`
+owns gesture drafts, focus/hover ids, keyboard connector mode, and live
+announcements; `stage-pointer-interactions.ts`, `stage-targeting.ts`, and
+`stage-keyboard-interactions.ts` own the focused pointer, semantic targeting,
+and keyboard connector helpers that feed the command path.
 
 Current stage capabilities:
 

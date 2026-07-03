@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "Repository layout, entry points, module boundaries, and organization rules for TextIQ."
 ---
 
@@ -35,18 +35,18 @@ description: "Repository layout, entry points, module boundaries, and organizati
 
 ## 3) Module Boundaries
 
-| Boundary                                           | What belongs here                                                                                                          | What must not be here                                                                        |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `src/app/`                                         | Route composition, pages, route handlers, server action wiring, Next metadata/layout surfaces.                             | Shared domain rules that should be tested outside React/Next route code.                     |
-| `src/components/ui/`                               | Shared app chrome primitives and reusable UI class-token composition.                                                      | Feature-specific business rules or raw ad hoc design tokens.                                 |
-| `src/components/presentation/`                     | Presentation editor UI, stage interaction owners, inspector/toolbar/filmstrip components.                                  | Persisted Deck validation or database writes; those live under `src/lib/` and route actions. |
-| `src/lib/presentation/`                            | Current Deck schema/runtime, render/export, theme packages, editor commands, diagnostics, autosave, clipboard, PPTX specs. | Legacy/superseded deck compatibility readers at runtime.                                     |
-| `src/lib/document/` and `src/lib/document-editor/` | Document persistence, dashboard/document management, editor view models, deck CAS persistence.                             | Presentation UI components.                                                                  |
-| `src/lib/visual/`                                  | Visual schemas, registry, renderer/export metadata, transforms, prompt constraints.                                        | React component rendering except through explicit component modules.                         |
-| `src/lib/collab/` plus `scripts/collab-*.mjs`      | Collaboration room policy, websocket URL resolution, Yjs server/runtime scripts.                                           | Document authorization rules outside shared access helpers.                                  |
-| `src/lib/import/` and `src/app/api/import/`        | Server-side parsing, validation, normalization, upload handling.                                                           | Client-bundle parser dependencies.                                                           |
-| `src/lib/env.ts` and `src/lib/client-config.ts`    | Server and public-client environment accessors.                                                                            | Scattered computed `process.env.NEXT_PUBLIC_*` client reads.                                 |
-| `scripts/`                                         | Repo governance, quality gates, operational scripts.                                                                       | Product runtime code imported by browser bundles unless explicitly safe.                     |
+| Boundary                                           | What belongs here                                                                                                            | What must not be here                                                                        |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/app/`                                         | Route composition, pages, route handlers, server action wiring, Next metadata/layout surfaces.                               | Shared domain rules that should be tested outside React/Next route code.                     |
+| `src/components/ui/`                               | Shared app chrome primitives and reusable UI class-token composition.                                                        | Feature-specific business rules or raw ad hoc design tokens.                                 |
+| `src/components/presentation/`                     | Presentation editor UI, modular stage interaction owners, inspector panels, toolbar, filmstrip, and present-mode components. | Persisted Deck validation or database writes; those live under `src/lib/` and route actions. |
+| `src/lib/presentation/`                            | Current Deck schema/runtime, render/export, theme packages, editor commands, diagnostics, autosave, clipboard, PPTX specs.   | Legacy/superseded deck compatibility readers at runtime.                                     |
+| `src/lib/document/` and `src/lib/document-editor/` | Document persistence, dashboard/document management, editor view models, deck CAS persistence.                               | Presentation UI components.                                                                  |
+| `src/lib/visual/`                                  | Visual schemas, registry, renderer/export metadata, transforms, prompt constraints.                                          | React component rendering except through explicit component modules.                         |
+| `src/lib/collab/` plus `scripts/collab-*.mjs`      | Collaboration room policy, websocket URL resolution, Yjs server/runtime scripts.                                             | Document authorization rules outside shared access helpers.                                  |
+| `src/lib/import/` and `src/app/api/import/`        | Server-side parsing, validation, normalization, upload handling.                                                             | Client-bundle parser dependencies.                                                           |
+| `src/lib/env.ts` and `src/lib/client-config.ts`    | Server and public-client environment accessors.                                                                              | Scattered computed `process.env.NEXT_PUBLIC_*` client reads.                                 |
+| `scripts/`                                         | Repo governance, quality gates, operational scripts.                                                                         | Product runtime code imported by browser bundles unless explicitly safe.                     |
 
 ## 4) Naming And Organization Rules
 
@@ -65,9 +65,15 @@ description: "Repository layout, entry points, module boundaries, and organizati
 - `src/app/layout.tsx`
 - `src/app/app/documents/[id]/page.tsx`
 - `src/app/app/documents/[id]/slides/page.tsx`
+- `src/app/app/documents/[id]/actions.ts`
 - `src/lib/document-editor/loader.ts`
 - `src/lib/presentation/open-deck.ts`
 - `src/lib/presentation/render-resolver.ts`
+- `src/components/presentation/use-stage-interaction-controller.ts`
+- `src/components/presentation/stage-pointer-interactions.ts`
+- `src/components/presentation/stage-keyboard-interactions.ts`
+- `src/components/presentation/stage-targeting.ts`
+- `src/components/presentation/inspector/inspector-shell.tsx`
 - `scripts/test-subsystem.mjs`
 - `eslint.config.mjs`
 - `.prettierignore`

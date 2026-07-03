@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "Test framework, commands, layout, isolation strategy, coverage gates, and known testing gaps for TextIQ."
 ---
 
@@ -29,18 +29,18 @@ npm run test:coverage-map
 
 - Test file placement pattern: unit tests are colocated under `src/` as `*.test.ts` / `*.test.tsx`; script tests live under `scripts/*.test.mjs`; browser tests live under `e2e/*.spec.ts`.
 - Naming convention: `scripts/test-subsystem.mjs` enforces lowercase names with `-` or `.` separators and `.test`/`.spec` suffixes.
-- Setup/config files: `playwright.config.ts` owns E2E test directory/match/project/server behavior; `scripts/test-subsystem.mjs` owns subsystem bucket routing and governance; `scripts/check-line-coverage.mjs` builds Node coverage commands.
+- Setup/config files: `playwright.config.ts` owns E2E test directory/match/project/server behavior; `scripts/test-subsystem.mjs` owns subsystem bucket routing, test-file naming, bucket coverage, and weak-title governance; `scripts/check-line-coverage.mjs` builds Node coverage commands.
 - Shared builders/helpers: `src/test/builders/`, `e2e/helpers/`, and domain-specific fixture builders such as `src/test/builders/presentation-deck.ts`.
 
 ## 3) Test Scope Matrix
 
-| Scope                     | Covered?             | Typical target                                                                                                        | Notes                                                                                  |
-| ------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Unit                      | Yes                  | `src/lib/**`, component controllers/helpers, schema validation, route logic helpers.                                  | Run with Node test + `tsx`; examples include `src/lib/presentation/open-deck.test.ts`. |
-| Script/governance         | Yes                  | `scripts/*.mjs` guardrails and CLI behavior.                                                                          | Run with Node test; mapped into coverage and subsystem checks.                         |
-| Integration               | Yes                  | API route parsers, persistence helpers, Prisma-adjacent logic through fakes or test DB paths.                         | Import/security/public-render docs list route/helper tests.                            |
-| E2E                       | Yes, opt-in/separate | Public pages, auth redirects, workspace flows, imports, present/export, slide asset upload, slide layout screenshots. | `e2e/README.md` says E2E specs are not part of the required fast unit gate.            |
-| Deterministic E2E profile | Yes, advisory in CI  | Seeded profile specs for document editor, import, present/export, asset upload, layout screenshots.                   | `.github/workflows/e2e-deterministic.yml` currently uses `continue-on-error: true`.    |
+| Scope                     | Covered?             | Typical target                                                                                                        | Notes                                                                                                                                                               |
+| ------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | Yes                  | `src/lib/**`, component controllers/helpers, schema validation, route logic helpers.                                  | Run with Node test + `tsx`; examples include `src/lib/presentation/open-deck.test.ts`.                                                                              |
+| Script/governance         | Yes                  | `scripts/*.mjs` guardrails and CLI behavior.                                                                          | Run with Node test; mapped into coverage and subsystem checks.                                                                                                      |
+| Integration               | Yes                  | API route parsers, persistence helpers, Prisma-adjacent logic through fakes or test DB paths.                         | Import/security/public-render docs list route/helper tests.                                                                                                         |
+| E2E                       | Yes, opt-in/separate | Public pages, auth redirects, workspace flows, imports, present/export, slide asset upload, slide layout screenshots. | `e2e/README.md` says E2E specs are not part of the required fast unit gate.                                                                                         |
+| Deterministic E2E profile | Yes, advisory in CI  | Seeded profile specs for document editor, import, present/export, asset upload, layout screenshots.                   | `.github/workflows/e2e-deterministic.yml` runs on PR/push but uses `continue-on-error: true`, so failures are visible in Actions logs without failing the workflow. |
 
 ## 4) Mocking And Isolation Strategy
 
@@ -52,7 +52,8 @@ npm run test:coverage-map
 
 ## 5) Coverage And Quality Signals
 
-- Coverage tool + threshold: Node built-in `--experimental-test-coverage`; default source line floor is 95%, script line floor is 99%, both overrideable by env vars.
+- Coverage tool + threshold: Node built-in `--experimental-test-coverage`; default source line floor is 95%, script line floor is 99%, both overrideable by env vars. The script comments mark these as temporary reductions from 97% source and 100% script targets.
+- Coverage exclusions: source coverage excludes `src/**/*.test.ts`, `src/**/*.test.tsx`, `src/generated/**`, `src/test/**`, and `src/lib/document/deck-kernel/**`; script coverage excludes `scripts/**/*.test.mjs`.
 - Coverage-map gate: `npm test` runs line coverage and then `scripts/test-subsystem.mjs --check` to enforce subsystem assignment, bucket coverage, test filename shape, and weak-title checks.
 - Current reported coverage: `[TODO]` this run did not execute `npm test`, so current numeric coverage output is not recorded here.
 - Known gaps/flaky areas:

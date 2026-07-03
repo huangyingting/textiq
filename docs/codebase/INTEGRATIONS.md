@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "External systems, data stores, credentials, reliability behavior, and observability surfaces used by TextIQ."
 ---
 
@@ -31,6 +31,8 @@ description: "External systems, data stores, credentials, reliability behavior, 
 | Yjs room memory           | Low-latency collaborative document state.                              | `server.mjs`, `scripts/collab-core.mjs`.                       | In-memory room state is not the durable source; database remains canonical and recovery snapshot is best-effort.           | `server.mjs`, `docs/collaboration/README.md`                        |
 | Rate limit rows           | Persistent fixed-window abuse budgets.                                 | Prisma-backed `RateLimitHit` store.                            | Requires `AUTH_SECRET` for HMAC subject hashing in public routes.                                                          | `src/lib/rate-limit.ts`, `src/lib/abuse-budget.ts`                  |
 
+Database provider selection is centralized in `src/lib/db-provider.ts`: only `DB_PROVIDER=postgres` selects PostgreSQL, and all other values select SQLite. `resolveUrl()` keeps the zero-setup SQLite fallback at `file:./prisma/dev.db`; Postgres callers must provide `DATABASE_URL`. Provider-specific case-insensitive search is isolated in `caseInsensitiveContains`, which adds Prisma `mode: "insensitive"` only for Postgres and relies on SQLite's default ASCII-insensitive `LIKE` behavior otherwise.
+
 ## 3) Secrets And Credentials Handling
 
 - Credential sources: environment variables documented in `.env.example`, `src/lib/env.ts`, and `docs/operations/runtime-config.md`.
@@ -43,7 +45,7 @@ description: "External systems, data stores, credentials, reliability behavior, 
 
 - Retry/backoff behavior: resilient deck autosave has queue/retry behavior in presentation runtime docs; external API retry behavior for Azure/Stripe is `[TODO]` unless implemented inside specific providers not read here.
 - Timeout policy: Azure generation route uses an abort deadline through `createGenerationRouteHandler`; import parsing uses `processImportUpload` with parser timeout; collaboration authorization has timeout envs in runtime config.
-- Circuit-breaker/fallback behavior: billing fails closed in production when Stripe is required but unavailable, and falls back to mock only in non-production; collaboration degrades the editor to local-only when the socket is unavailable; public import and asset routes fail closed on missing secrets or denied access.
+- Circuit-breaker/fallback behavior: billing fails closed in production when Stripe is required but unavailable, and falls back to mock only in non-production; collaboration degrades the editor to local-only when the socket is unavailable; collaboration eviction flush is best-effort recovery and does not replace the database source of truth; public import and asset routes fail closed on missing secrets or denied access.
 - Rate limiting: abuse budgets cover auth, account export, public share/assets, collab, import, and AI generation namespaces.
 
 ## 5) Observability For Integrations
@@ -51,6 +53,7 @@ description: "External systems, data stores, credentials, reliability behavior, 
 - Structured logging uses JSON records with redaction via `src/lib/log.ts` and `src/lib/log-redaction-core.cjs`.
 - Import route emits product telemetry for start/success/failure with file type, size bucket, duration bucket, status, and stable failure reason.
 - API abuse diagnostics log route denials for public expensive endpoints.
+- Collaboration health endpoints expose safe room and flush observability, including flush failure counters and recent safe failure ids.
 - Missing visibility gaps: `[TODO]` no OpenTelemetry/APM/Prometheus config was found, and the scan reported no performance testing configs.
 
 ## 6) Evidence

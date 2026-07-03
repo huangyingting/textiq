@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "Architecture style, request/data flows, module responsibilities, repeated patterns, and risks for TextIQ."
 ---
 
@@ -26,8 +26,9 @@ Next route/page -> view-model/domain loader -> Prisma/domain helpers -> client e
 2. The document view-model loader queries accessible documents with Prisma, loads comments/tags/custom theme packages, and returns UI-ready data.
 3. Slide editing begins in `src/app/app/documents/[id]/slides/page.tsx`, which reuses the document view-model boundary and only renders the slide editor when the caller can edit.
 4. Full deck saves call `persistDeck`, validate current Deck JSON, write through CAS, snapshot document versions, and reconcile slide comment anchors.
-5. Render/export paths call `openDeckFromJson`/`resolveDeckRenderTree` to validate current schema and resolve theme/style/assets before React rendering or PPTX/export adapters consume the render tree.
-6. Public share/embed/present requests call `resolvePublicRender`, which projects a read-only model from Prisma and share policy, then uses presentation/public-render helpers without mutating source state.
+5. Slide-stage editing keeps gesture state in presentation controllers and routes mutations through Deck command helpers; pointer targeting, keyboard connector flow, and inspector panels are split into focused modules under `src/components/presentation/`.
+6. Render/export paths call `openDeckFromJson`/`resolveDeckRenderTree` to validate current schema and resolve theme/style/assets before React rendering or PPTX/export adapters consume the render tree.
+7. Public share/embed/present requests call `resolvePublicRender`, which projects a read-only model from Prisma and share policy, then uses presentation/public-render helpers without mutating source state.
 
 ## 3) Layer/Module Responsibilities
 
@@ -47,20 +48,21 @@ Next route/page -> view-model/domain loader -> Prisma/domain helpers -> client e
 
 ## 4) Reused Patterns
 
-| Pattern                      | Where found                                                                                 | Why it exists                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| View-model loaders           | `src/lib/document-editor/loader.ts`, `src/lib/public-render/resolver.ts`                    | Keep route/page components thin and pass UI-ready state into React surfaces.                                     |
-| Discriminated action results | `src/lib/action-result.ts`                                                                  | Server actions can return user-visible errors without relying on thrown errors masked by Next.js.                |
-| Central env accessors        | `src/lib/env.ts`, `src/lib/client-config.ts`                                                | Keeps server env validation and client `NEXT_PUBLIC_*` static reads explicit.                                    |
-| Prisma singleton             | `src/lib/prisma.ts`                                                                         | Reuses Prisma client in non-production and selects SQLite/Postgres adapters by provider.                         |
-| Adapter/factory boundaries   | `src/lib/slides/asset-storage.ts`, `src/lib/billing/provider.ts`                            | Allows local/mock defaults and future/deployed adapters while keeping callers stable.                            |
-| Validation/open boundary     | `src/lib/presentation/open-deck.ts`, `src/lib/presentation/validation.ts`                   | Rejects malformed or superseded Deck payloads before editor/render/export runtime.                               |
-| CAS persistence              | `src/lib/document/persistence/deck.ts`, `src/lib/document/deck-cas-writer.ts`               | Protects Deck saves with revision-token conflict behavior.                                                       |
-| Governance ratchets          | `scripts/check-import-graph.mjs`, `scripts/client-boundary.mjs`, `scripts/perf-budgets.mjs` | Prevents import cycles/export-star barrels, server/client boundary leaks, and payload/static-import regressions. |
+| Pattern                      | Where found                                                                                                                                                | Why it exists                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| View-model loaders           | `src/lib/document-editor/loader.ts`, `src/lib/public-render/resolver.ts`                                                                                   | Keep route/page components thin and pass UI-ready state into React surfaces.                                                                       |
+| Discriminated action results | `src/lib/action-result.ts`                                                                                                                                 | Server actions can return user-visible errors without relying on thrown errors masked by Next.js.                                                  |
+| Central env accessors        | `src/lib/env.ts`, `src/lib/client-config.ts`                                                                                                               | Keeps server env validation and client `NEXT_PUBLIC_*` static reads explicit.                                                                      |
+| Prisma singleton             | `src/lib/prisma.ts`                                                                                                                                        | Reuses Prisma client in non-production and selects SQLite/Postgres adapters by provider.                                                           |
+| Adapter/factory boundaries   | `src/lib/slides/asset-storage.ts`, `src/lib/billing/provider.ts`                                                                                           | Allows local/mock defaults and future/deployed adapters while keeping callers stable.                                                              |
+| Validation/open boundary     | `src/lib/presentation/open-deck.ts`, `src/lib/presentation/validation.ts`                                                                                  | Rejects malformed or superseded Deck payloads before editor/render/export runtime.                                                                 |
+| CAS persistence              | `src/lib/document/persistence/deck.ts`, `src/lib/document/deck-cas-writer.ts`                                                                              | Protects Deck saves with revision-token conflict behavior.                                                                                         |
+| Modular stage controllers    | `src/components/presentation/use-stage-interaction-controller.ts`, `stage-pointer-interactions.ts`, `stage-keyboard-interactions.ts`, `stage-targeting.ts` | Keeps direct-manipulation state, hit targeting, keyboard connector behavior, and gesture drafts out of the monolithic editor shell where possible. |
+| Governance ratchets          | `scripts/check-import-graph.mjs`, `scripts/client-boundary.mjs`, `scripts/perf-budgets.mjs`                                                                | Prevents import cycles/export-star barrels, server/client boundary leaks, and payload/static-import regressions.                                   |
 
 ## 5) Known Architectural Risks
 
-- The presentation editor remains a large/high-churn area. Current `src/components/presentation/slide-editor.tsx` is 3,270 lines, and the scan reports it as the highest-churn file in the last 90 days.
+- The presentation editor remains a large/high-churn area. Current `src/components/presentation/slide-editor.tsx` is 3,270 lines, and the scan reports it as the highest-churn file in the last 90 days. Some scan high-churn entries are deleted or relocated historical paths; current stage and inspector code is split across `stage-*`, `use-stage-*`, and `inspector/` modules.
 - Browser E2E deterministic profile is currently advisory in CI: `.github/workflows/e2e-deterministic.yml` runs it with `continue-on-error: true` and comments that cold-start readiness must be stabilized before making it a hard gate.
 - Exact local Node version policy is not encoded in `.nvmrc` or `package.json.engines`; CI uses Node 22.
 

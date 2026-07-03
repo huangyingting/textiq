@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "Coding, naming, formatting, import, error, logging, and testing conventions observed in TextIQ."
 ---
 
@@ -20,7 +20,7 @@ description: "Coding, naming, formatting, import, error, logging, and testing co
 
 - Formatter: Prettier with semicolons, double quotes, trailing commas, print width 80, tab width 2.
 - Linter: ESLint flat config with Next core web vitals, Next TypeScript rules, Prettier compatibility, `_`-prefixed unused-var exceptions, and `no-explicit-any` disabled.
-- Most relevant enforced checks: design-system guardrails, action-port guard, Next build constraints, client boundary, import graph, E2E governance, perf budgets, ESLint.
+- `npm run lint` runs design-system guardrails, action-port guard, Next build constraints, client boundary, import graph, E2E governance, perf budgets, and ESLint. Prettier is a separate formatting gate through `npm run format` / `npm run format:check`, and docs Markdown formatting is checked by `npm run docs:check`.
 - Run commands: `npm run lint`, `npm run format`, `npm run format:check`.
 
 ## 3) Import And Module Conventions
@@ -45,7 +45,7 @@ description: "Coding, naming, formatting, import, error, logging, and testing co
 - Test file names are governed by `scripts/test-subsystem.mjs`: lowercase segments separated by `-` or `.`, ending in `.test.*` or `.spec.*`.
 - Focused subsystem tests run through `npm run test:subsystem -- <subsystem>`; direct focused unit-file runs use `node --import tsx --test <file>` when avoiding the `test:unit` glob.
 - Shared builders live under `src/test/`, for example `src/test/builders/presentation-deck.ts`.
-- Coverage expectation: `scripts/check-line-coverage.mjs` defaults to 95% source line coverage and 99% script line coverage, with env overrides.
+- Coverage expectation: `scripts/check-line-coverage.mjs` currently defaults to 95% source line coverage and 99% script line coverage, with env overrides. Inline comments mark both floors as temporary reductions from the intended 97% source and 100% script targets.
 
 ## 6) Evidence
 

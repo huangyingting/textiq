@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "This document is the inventory for local and CI quality gates. It explains what each command protects and where ownership lives. Release sign-off sequence lives in release-gate.md; local setup and troubleshooting live in developer-bootstrap.md."
 ---
 
@@ -86,14 +86,18 @@ changed behavior needs browser coverage.
 | `perf-budgets:check`           | Runtime payload, static import, and slide-editor composition budgets. |
 | `eslint`                       | TypeScript/React lint rules after repository-specific checks pass.    |
 
+Prettier is not part of `npm run lint`. Repository formatting is checked by the
+separate `npm run format:check` gate, while Markdown formatting for docs is also
+checked inside `npm run docs:check`.
+
 ## Docs Gate
 
 `npm run docs:check` verifies:
 
-1. API route security matrix contracts.
-2. Runtime config and API route inventory drift.
-3. Local docs links and docs index reachability.
-4. Markdown Prettier formatting.
+1. API route security matrix contracts via `src/app/api/api-route-security-matrix.test.ts`.
+2. Runtime config and API route inventory drift via `scripts/check-docs-source-inventory.mjs`.
+3. Local docs links and docs index reachability via `scripts/check-docs-links.mjs`.
+4. Markdown Prettier formatting for `docs/**/*.md`.
 
 Docs are still source-backed: when source files, route files, env reads, or
 schema gates change, update the owning subsystem docs in the same change.

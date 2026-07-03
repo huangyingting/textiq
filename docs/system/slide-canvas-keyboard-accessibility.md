@@ -1,7 +1,7 @@
 ---
 type: "adr"
 status: "accepted with release-gate caveat"
-last_updated: "2026-07-02"
+last_updated: "2026-07-04"
 description: "Architecture decision record for slide canvas keyboard accessibility, roving focus, selection shortcuts, keyboard manipulation, and release-gate evidence boundaries."
 ---
 
@@ -36,48 +36,61 @@ plan rather than an open-ended "deferred" marker.
 The canvas already supports a non-trivial keyboard model:
 
 - **Focus.** Every element renders as `role="button"`, `tabIndex={0}`,
-  `aria-pressed={selected}` with an accessible name derived from content
-  (`elementAccessibleName`). Native **Tab** moves focus across elements.
-  - `slide-stage-editor.tsx:1965-1970`
+  `aria-pressed={selected}` with an accessible name derived from node content
+  and type. Native **Tab** moves focus across elements.
+  - Current source anchors: `src/components/presentation/slide-canvas.tsx`,
+    `src/components/presentation/use-stage-focus-controller.ts`,
+    `src/components/presentation/slide-canvas-render.test.ts`.
 - **Select.** **Space** selects the focused element; **Shift+Space** toggles it
   into the multi-selection; **Enter** activates it (enters a group, else inline
   edit).
-  - `slide-stage-editor.tsx:2017-2036`
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/components/presentation/selection-model.ts`,
+    `src/components/presentation/selection-traversal.ts`.
 - **Move.** With an element selected, **Arrow** keys nudge it by `1%`;
   **Shift+Arrow** nudges by `5%`.
-  - `slide-editor.tsx:1287-1332`
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/lib/presentation/editor-commands.ts`,
+    `src/lib/presentation/selection-geometry.ts`.
 - **Rotate.** With an element selected, **Shift+[ / ]** rotates it by `1°`
   (`{`/`}` keys in `event.key`), with a live announcement.
-  - `slide-editor.tsx` keyboard handler (`keyboardRotationDelta` +
-    `updateNodeLayouts`) and
-    `slide-editor-toolbar-command-surface.failures.test.ts` keyboard
-    rotation smoke.
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/lib/presentation/canvas-keyboard-rotate.ts`,
+    `src/components/presentation/slide-editor-toolbar-command-surface.failures.test.ts`.
 - **Delete.** **Delete** / **Backspace** removes the selected element(s).
-  - `slide-editor.tsx:1304-1313`
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/components/presentation/slide-editor-toolbar-delete.test.ts`.
 - **Slide navigation.** **Arrow Left/Right** pages between slides when no
   selected element consumes the arrow.
-  - `slide-editor.tsx:1335-1343`
+  - Current source anchor: `src/components/presentation/slide-editor.tsx`.
 - **Editor shortcuts.** Escape, undo/redo, duplicate, new slide, select-all,
   copy/cut/paste, group/ungroup are all keyboard-driven.
-  - `slide-editor.tsx:1034-1285`
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/lib/shortcuts/catalog-canvas.ts`.
 - **Bullets.** **Tab** / **Shift+Tab** changes bullet indent while editing text.
-  - `slide-stage-editor.tsx:2936-2945`
+  - Current source anchors: `src/components/presentation/inline-text-editor.tsx`,
+    `src/lib/presentation/rich-text.ts`.
 
-### Current keyboard gaps (verified in code)
+### Remaining keyboard caveats (verified in code)
 
-- **No keyboard resize.** Resizing is pointer-only via eight drag handles; there
-  is no keyboard equivalent (e.g. a modifier+Arrow to change the element box).
-  - `slide-stage-editor.tsx:9-10` (doc comment), pointer resize at
-    `slide-stage-editor.tsx:1467-1496`
-- **No keyboard connector authoring.** Connectors are created and reattached by
-  dragging endpoints onto anchors; there is no keyboard path to draw a connector
-  or rebind an endpoint to an anchor.
-  - `slide-stage-editor.tsx:730-736`, `1471-1497`
-- **Traversal is raw Tab order, with no focus restoration contract.** Selection
-  traversal relies on DOM/z-index Tab order rather than a spatial or
-  "next/previous element" model, and focus is not guaranteed to be restored to a
-  sensible element after a mutation (move/delete/duplicate/group). There is no
-  `aria-live` announcement of selection or move/resize results.
+- **Keyboard resize is now implemented.** The original gap was closed by the
+  R1 work below; current resize behavior lives in the slide editor keyboard
+  handler and Deck mutation helpers rather than a standalone legacy stage file.
+  - Current source anchors: `src/components/presentation/slide-editor.tsx`,
+    `src/lib/presentation/editor-commands.ts`,
+    `src/lib/presentation/selection-geometry.ts`.
+- **Free-draw keyboard connector authoring remains deferred.** Keyboard users can
+  create a connector between two selected connectable elements and cycle
+  endpoint anchors, but arbitrary free-draw connector routing remains pointer
+  only and is tracked by A1.
+  - Current source anchors: `src/components/presentation/stage-keyboard-interactions.ts`,
+    `src/lib/presentation/connector-geometry.ts`.
+- **Traversal and announcement gaps are now narrowed.** R2/R3 added reading-order
+  traversal, focus restoration, and stage announcements; direct end-to-end
+  `SlideEditor` keyboard interaction coverage remains the release-gate caveat.
+  - Current source anchors: `src/components/presentation/selection-traversal.ts`,
+    `src/components/presentation/use-stage-focus-controller.ts`,
+    `src/components/presentation/use-stage-interaction-controller.ts`.
 
 ## Decision
 

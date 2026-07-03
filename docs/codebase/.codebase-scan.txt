@@ -71,24 +71,24 @@
 .squad/agents/Rai
 .squad/agents/Rai/charter.md
 .squad/agents/Rai/history.md
-.squad/agents/fact-checker
-.squad/agents/fact-checker/charter.md
-.squad/agents/fact-checker/history.md
+.squad/agents/dozer
+.squad/agents/dozer/charter.md
+.squad/agents/dozer/history.md
 .squad/agents/morpheus
 .squad/agents/morpheus/charter.md
 .squad/agents/morpheus/history.md
 .squad/agents/mouse
 .squad/agents/mouse/charter.md
 .squad/agents/mouse/history.md
+.squad/agents/neo
+.squad/agents/neo/charter.md
+.squad/agents/neo/history.md
 .squad/agents/ralph
 .squad/agents/ralph/charter.md
 .squad/agents/ralph/history.md
 .squad/agents/scribe
 .squad/agents/scribe/charter.md
 .squad/agents/scribe/history.md
-.squad/agents/switch
-.squad/agents/switch/charter.md
-.squad/agents/switch/history.md
 .squad/agents/tank
 .squad/agents/tank/charter.md
 .squad/agents/tank/history.md
@@ -104,9 +104,6 @@
 .squad/decisions
 .squad/decisions/inbox
 .squad/decisions.md
-.squad/fact-checker
-.squad/fact-checker/audit-trail.md
-.squad/fact-checker/policy.md
 .squad/identity
 .squad/identity/now.md
 .squad/identity/wisdom.md
@@ -141,8 +138,6 @@
 .squad/templates/cooperative-rate-limiting.md
 .squad/templates/copilot-agent.md
 .squad/templates/copilot-instructions.md
-.squad/templates/fact-checker-charter.md
-.squad/templates/fact-checker-policy.md
 .squad/templates/history.md
 .squad/templates/identity
 .squad/templates/identity/now.md
@@ -180,12 +175,8 @@
 .squad/templates/skills/ci-validation-gates
 .squad/templates/skills/cli-wiring
 .squad/templates/skills/client-compatibility
-.squad/templates/skills/coordinator-init-mode
-.squad/templates/skills/coordinator-response-mode
-.squad/templates/skills/coordinator-source-of-truth
 .squad/templates/skills/cross-machine-coordination
 .squad/templates/skills/cross-squad
-.squad/templates/skills/cross-squad-communication
 .squad/templates/skills/distributed-mesh
 .squad/templates/skills/docs-standards
 .squad/templates/skills/e2e-template-testing
@@ -200,6 +191,15 @@
 .squad/templates/skills/humanizer
 .squad/templates/skills/init-mode
 .squad/templates/skills/iterative-retrieval
+.squad/templates/skills/model-selection
+.squad/templates/skills/nap
+.squad/templates/skills/notification-routing
+.squad/templates/skills/personal-squad
+.squad/templates/skills/pr-review-response
+.squad/templates/skills/pr-screenshots
+.squad/templates/skills/project-conventions
+.squad/templates/skills/ralph-two-pass-scan
+.squad/templates/skills/reflect
 
 === STACK DETECTION (manifest files) ===
 
@@ -480,6 +480,13 @@ e2e/block-id-preservation.spec.ts:55: // TODO(issue #435): seed a stable inserti
 e2e/block-id-preservation.spec.ts:71: // TODO(issue #435): exercise the duplicate action against a seeded document
 
 === GIT RECENT COMMITS (last 20) ===
+8acd531e Update Squad team configuration
+de70f721 Refactor presentation and deck helpers
+d2312689 feat: update table editing documentation and remove obsolete plan file
+a21feebd feat: Implement table editing surfaces and inline captions in the Lexical editor
+db9b46d9 feat: enhance undo/redo functionality with baseline comparison and add tests
+1a698aa7 feat: implement floating table toolbar and enhance document template handling
+7f34c03e Add comprehensive documentation for codebase concerns, conventions, integrations, structure, stack, and testing patterns
 0a242b26 refactor: update slide-format exports for clarity and structure
 a047144f Merge pull request #1714 from huangyingting/squad/presentation-boundary-refactor-20260703
 8e81065c Refactor presentation deck boundaries
@@ -493,13 +500,6 @@ acb4d17d Merge pull request #1713 from huangyingting/refactor/presentation-singl
 b59ebe38 feat(toolbar): add 'kicker' and 'metric' roles with corresponding font sizes to context toolbar feat(node-font-css): enhance resolveNodeFontCss with additional text style properties
 748988b1 test(presentation): raise component coverage to >=98% (descriptors/footer/regions/panels) (#1711)
 d871c471 test(presentation): add coverage tests for vnext logic (compiler/validation/planner/etc.) (#1710)
-409bceff feat(presentation): add support for live document visuals in presentation components
-d5287bb9 feat(presentation): integrate useSyncExternalStore for mounted state management in FloatingSurface
-381e007c test: raise coverage for deck command/model/schema/visual data logic to >=98% (#1709)
-cb0a9493 test(presentation): raise coverage for raster/clipboard/autosave/stage controllers to >=98% (#1708)
-b2a9a8da refactor(legacy): delete the legacy v6 presentation surface (#1707)
-a950b213 feat(presentation): brand-kit custom fonts, contrast validation, regression coverage (#1706)
-f9d896a6 feat(presentation): clipboard copy-out fallbacks and permission/failure UX (#1705)
 
 === HIGH-CHURN FILES (last 90 days, top 20) ===
  145 src/components/presentation/slide-editor.tsx
@@ -507,14 +507,14 @@ f9d896a6 feat(presentation): clipboard copy-out fallbacks and permission/failure
   91 src/components/presentation/slide-stage-editor.tsx
   90 src/components/presentation-vnext/slide-editor-vnext.tsx
   86 src/components/presentation/slide-inspector.tsx
-  74 src/app/app/documents/[id]/lexical-editor.tsx
+  76 src/app/app/documents/[id]/lexical-editor.tsx
   59 src/lib/presentation/deck.ts
   50 src/components/editor/slide-editor-button.tsx
   47 src/components/presentation/slide-editor/shell-components.tsx
   45 src/app/app/documents/[id]/actions.ts
   42 src/components/presentation/slide-canvas.tsx
+  40 src/app/app/documents/[id]/visual-context-popover.tsx
   39 src/lib/presentation/deck-schema.ts
-  39 src/app/app/documents/[id]/visual-context-popover.tsx
   38 src/lib/presentation/deck-mutations.ts
   38 src/lib/presentation/deck-schema.test.ts
   38 package.json
@@ -527,12 +527,12 @@ f9d896a6 feat(presentation): clipboard copy-out fallbacks and permission/failure
 No monorepo signals detected.
 
 === CODE METRICS ===
-Total files scanned: 1752
-Total lines of code: 435281
+Total files scanned: 1750
+Total lines of code: 435616
 
 Files by language:
-  TypeScript: 1116
-  Other: 439
+  TypeScript: 1118
+  Other: 435
   TypeScript/React: 195
   Python: 1
   JavaScript: 1
@@ -541,8 +541,8 @@ Top 10 largest files:
 public/fonts/slides/noto-sans-sc/noto-sans-sc-chinese-simplified-700-normal.woff2: 1144.8KB
 public/fonts/slides/noto-sans-sc/noto-sans-sc-chinese-simplified-600-normal.woff2: 1135.1KB
 public/fonts/slides/noto-sans-sc/noto-sans-sc-chinese-simplified-400-normal.woff2: 1115.8KB
-tsconfig.tsbuildinfo: 562.3KB
-prisma/dev.db: 544.0KB
+prisma/dev.db: 568.0KB
+tsconfig.tsbuildinfo: 561.1KB
 src/lib/document/deck-kernel/theme-package-sources/pulse.package.json: 371.5KB
 package-lock.json: 357.3KB
 src/lib/document/deck-kernel/theme-package-sources/clarity.package.json: 324.2KB

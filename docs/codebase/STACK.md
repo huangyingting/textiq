@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "Technology stack, runtime, dependencies, commands, and configuration evidence for the TextIQ repository."
 ---
 
@@ -11,7 +11,7 @@ description: "Technology stack, runtime, dependencies, commands, and configurati
 
 | Area                | Value                                                                                                                                    | Evidence                                                                              |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Primary language    | TypeScript and TSX. The scan counted 1,116 TypeScript files and 195 TypeScript/React files.                                              | `tsconfig.json`, `docs/codebase/.codebase-scan.txt`                                   |
+| Primary language    | TypeScript and TSX. The scan counted 1,118 TypeScript files and 195 TypeScript/React files.                                              | `tsconfig.json`, `docs/codebase/.codebase-scan.txt`                                   |
 | Runtime + version   | Node.js. CI uses Node 22; no `.nvmrc` or `package.json.engines` pin was found, so the local required version is `[TODO]`.                | `.github/workflows/ci.yml`, `.github/workflows/e2e-deterministic.yml`, `package.json` |
 | Package manager     | npm with `package-lock.json` lockfile.                                                                                                   | `package.json`, `package-lock.json`                                                   |
 | Module/build system | Next.js App Router with a custom Node server; TypeScript uses `moduleResolution: "bundler"`, `module: "esnext"`, and `jsx: "react-jsx"`. | `server.mjs`, `package.json`, `tsconfig.json`, `next.config.ts`                       |
@@ -80,7 +80,7 @@ npm run db:push
 ## 5) Environment And Config
 
 - Config sources: `.env.example`, `src/lib/env.ts`, `src/lib/client-config.ts`, `src/lib/db-provider.ts`, `prisma.config.ts`, `playwright.config.ts`, `server.mjs`, `docs/operations/runtime-config.md`.
-- Required env vars: `AUTH_SECRET` is required for auth/session and several signed/rate-limited paths. `DATABASE_URL` is required when `DB_PROVIDER=postgres`; SQLite defaults to `file:./prisma/dev.db`. Azure generation requires `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` when used. Google OAuth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` together. Stripe billing requires Stripe env vars when real Stripe billing is enabled.
+- Required env vars: `AUTH_SECRET` is required for auth/session and several signed/rate-limited paths. `DATABASE_URL` is required when `DB_PROVIDER=postgres`; SQLite defaults to `file:./prisma/dev.db`. Azure generation requires `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` when used. Google OAuth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` together. Stripe billing requires Stripe env vars when real Stripe billing is enabled. Collaboration eviction flush requires `COLLAB_INTERNAL_SECRET`; without it, the flusher is a no-op and the internal flush route returns `503`.
 - Deployment/runtime constraints: the app can run with the inline `/collab` Yjs websocket via `server.mjs`; standalone collaboration uses `npm run collab`. No Dockerfile, Compose file, `.nvmrc`, `SECURITY.md`, or Dependabot config was found by file search; exact local Node version policy is `[TODO]`.
 
 ## 6) Evidence
