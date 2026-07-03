@@ -44,6 +44,7 @@ contracts must not depend on plan documents for behavior.
 
 | Section                                   | Owns                                                     | Common doc types                     |
 | ----------------------------------------- | -------------------------------------------------------- | ------------------------------------ |
+| [codebase/](codebase/README.md)           | Whole-repo onboarding map, stack, structure, concerns.   | Reference, Architecture              |
 | [system/](system/README.md)               | Cross-subsystem architecture, invariants, ADRs, naming.  | Architecture, Reference, ADR         |
 | [data-model/](data-model/README.md)       | Persisted JSON contracts and database projections.       | Contract, Architecture               |
 | [presentation/](presentation/README.md)   | Slide editor runtime, Deck rendering, present/export.    | Architecture, Design, Contract, Plan |

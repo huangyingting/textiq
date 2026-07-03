@@ -1,0 +1,79 @@
+---
+type: "reference"
+status: "current"
+last_updated: "2026-07-03"
+description: "Evidence-backed risks, debt, security concerns, performance concerns, high-churn areas, and open questions for TextIQ."
+---
+
+# Codebase Concerns
+
+## 1) Top Risks (Prioritized)
+
+| Severity | Concern                                                              | Evidence                                                                                                                                 | Impact                                                                                                 | Suggested action                                                                                                                              |
+| -------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| High     | Presentation editor remains a large, high-churn area.                | `docs/codebase/.codebase-scan.txt` reports 145 changes for `src/components/presentation/slide-editor.tsx`; `wc -l` reported 3,270 lines. | Review risk and regression surface are high for slide editor changes.                                  | Keep extracting controller/descriptor tests per `docs/presentation/test-strategy-plan.md`; run focused presentation tests before broad gates. |
+| Medium   | Deterministic E2E profile is advisory in CI.                         | `.github/workflows/e2e-deterministic.yml` sets `continue-on-error: true` and comments that cold-start readiness needs hardening.         | Browser regressions can appear in logs without failing the PR/push workflow.                           | Stabilize cold-start profile or prebuild server, then make the profile a hard gate if that matches team intent.                               |
+| Medium   | Exact local Node runtime version is not encoded in repo metadata.    | CI workflows use Node 22; file search found no `.nvmrc`, and `package.json` has no `engines`.                                            | Developers can run unsupported Node versions locally without an early warning.                         | [ASK USER] Decide whether to add `.nvmrc` or `package.json.engines` for Node 22.                                                              |
+| Medium   | No repository security policy/dependency-update config was detected. | File search found no `SECURITY.md` or `.github/dependabot.yml`; scan reported no security configs detected.                              | Vulnerability intake and dependency update cadence are not documented in machine-readable repo config. | [ASK USER] Decide whether this repo should add security policy and dependency update automation.                                              |
+
+## 2) Technical Debt
+
+| Debt item                                      | Why it exists                                                                                                | Where                                                                                  | Risk if ignored                                                                            | Suggested fix                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Hook-harness retirement                        | Some presentation tests still patch React hook exports instead of testing public controllers/components.     | `docs/presentation/test-strategy-plan.md`, `src/test/react-server-renderer.ts`         | Refactors can preserve private hook behavior while missing public interaction regressions. | Continue migrating tests to pure controller, descriptor, component, or browser coverage.           |
+| Native PPTX gradient/pattern fills are blocked | PptxGenJS 4.0.1 public `ShapeFillProps` exposes only `none`/`solid`; current code uses image-retry fallback. | `docs/presentation/pptx-fidelity-plan.md`, `docs/presentation/rendering-and-export.md` | Editable PPTX fidelity remains lower for gradient/pattern fills.                           | Wait for supported PPTX writer API or add controlled OpenXML postprocess with archive-level tests. |
+| Slide editor file size                         | Presentation editor has many responsibilities and 3,270 lines in the surviving high-churn file.              | `src/components/presentation/slide-editor.tsx`, terminal `wc -l` output                | Higher conflict and review cost.                                                           | Keep behavior-preserving extraction scoped to owned controllers/regions.                           |
+| Runtime Node version policy not codified       | CI uses Node 22 but local version pin is absent.                                                             | `.github/workflows/ci.yml`, `package.json`, file search for `.nvmrc`                   | Local/CI drift can appear late.                                                            | Add runtime version metadata if team wants it enforced.                                            |
+
+## 3) Security Concerns
+
+| Risk                                                                             | OWASP category | Evidence                                                                                                | Current mitigation                                                                                                  | Gap                                                                                                           |
+| -------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Public expensive endpoints can be abused if rate-limit secrets/config are wrong. | A04 / A05      | `src/app/api/import/route.ts`, `src/lib/abuse-budget.ts`, `src/lib/rate-limit.ts`                       | Import route fails closed on missing `AUTH_SECRET`; abuse budgets use HMAC-hashed subjects and persistent counters. | Operational monitoring for repeated abuse-budget failures is `[TODO]` beyond structured logs/diagnostics.     |
+| Protected slide asset URLs must not leak private files.                          | A01            | `src/app/api/slide-assets/[documentId]/[...path]/route.ts`, `src/lib/slides/asset-storage.ts`           | Assets are stored under non-public `storage/slide-assets/` and served through document/share access decisions.      | Cloud storage adapter policy is future-facing; current default is local filesystem.                           |
+| Missing security policy/dependency automation config.                            | N/A            | File search found no `SECURITY.md` or `.github/dependabot.yml`; scan says no security configs detected. | Security-sensitive route matrix and access policy docs/tests exist.                                                 | [ASK USER] Decide whether repository-level security disclosure and dependency update automation are required. |
+| Logs may leak content if callers pass raw data under unrecognized keys.          | A09            | `src/lib/log.ts`, `src/lib/log-redaction-core.cjs`                                                      | Redaction covers sensitive substrings, exact keys, content keys, unsafe strings, and telemetry scalar filtering.    | New logging call sites still require review discipline.                                                       |
+
+## 4) Performance And Scaling Concerns
+
+| Concern                                                      | Evidence                                                                                                               | Current symptom                                                                           | Scaling risk                                                                           | Suggested improvement                                                                                    |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Large editor/client surfaces                                 | `wc -l` reported `slide-editor.tsx` at 3,270 lines; `scripts/perf-budgets.mjs` has slide-editor/payload budgets.       | High churn and large file size.                                                           | Larger client bundles and slower review/test cycles if ownership drifts.               | Keep perf budgets green; continue component/controller extraction.                                       |
+| Heavy export/import dependencies must stay lazy/server-bound | `scripts/perf-budgets.mjs`, `next.config.ts`, `src/app/api/import/route.ts`                                            | Guard exists for static heavy export imports; PDF parser is externalized.                 | Accidental static import can bloat client/server bundles or break parser worker paths. | Keep `perf-budgets:check` and `next-build-constraints:check` in lint gate.                               |
+| Collaboration scaling requires deployment discipline         | `server.mjs`, `docs/operations/runtime-config.md`, `docs/collaboration/README.md`                                      | Inline collab is default; runtime config requires sticky routing when instance count > 1. | Multi-instance deployments can misroute websocket rooms without sticky routing.        | Follow collaboration deployment config checks before scaling beyond one instance.                        |
+| Large generated/static assets appear in scan                 | `docs/codebase/.codebase-scan.txt` lists Noto Sans SC font files and generated theme package JSON among largest files. | Scan output is dominated by legitimate static/generated assets.                           | Repository checkout/build size and scan noise.                                         | Keep generated/artifact boundaries documented; avoid treating generated theme JSON as source convention. |
+
+## 5) Fragile/High-Churn Areas
+
+| Area                                            | Why fragile                                              | Churn signal                                                   | Safe change strategy                                                                    |
+| ----------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `src/components/presentation/slide-editor.tsx`  | Large central editor shell with many interactions.       | 145 changes in scan high-churn output; 3,270 lines by `wc -l`. | Prefer adjacent controller extraction and focused presentation tests.                   |
+| `src/app/app/documents/[id]/lexical-editor.tsx` | Core document editor route client.                       | 74 changes in scan high-churn output; 641 lines by `wc -l`.    | Use editor subsystem tests and avoid mixing presentation concerns into document editor. |
+| `src/components/presentation/slide-canvas.tsx`  | Shared editor/present/public rendering primitive.        | 42 changes in scan high-churn output; 636 lines by `wc -l`.    | Validate render/export/public paths when changing canvas behavior.                      |
+| `src/app/app/documents/[id]/visual-card.tsx`    | Visual card UI touches editor/visual/export/share flows. | 37 changes in scan high-churn output; 715 lines by `wc -l`.    | Use visual/editor focused tests and preserve action-port boundaries.                    |
+
+## 6) `[ASK USER]` Questions
+
+1. [ASK USER] Should Node 22 be codified in `.nvmrc` and/or `package.json.engines`, since CI uses Node 22 but the repo does not declare a local runtime version?
+2. [ASK USER] Should the deterministic E2E profile become a hard CI gate once cold-start readiness is stable, or should it remain advisory?
+3. [ASK USER] Should the repository add `SECURITY.md` and dependency-update automation such as Dependabot, or is that handled outside the repo?
+4. [ASK USER] Should future production slide-asset storage use a cloud adapter such as S3/Azure Blob, or is local filesystem storage acceptable for current deployments?
+
+## 7) Evidence
+
+- `docs/codebase/.codebase-scan.txt`
+- `src/components/presentation/slide-editor.tsx`
+- `docs/presentation/test-strategy-plan.md`
+- `docs/presentation/pptx-fidelity-plan.md`
+- `.github/workflows/e2e-deterministic.yml`
+- `.github/workflows/ci.yml`
+- `package.json`
+- `scripts/perf-budgets.mjs`
+- `scripts/check-import-graph.mjs`
+- `src/app/api/import/route.ts`
+- `src/lib/abuse-budget.ts`
+- `src/lib/rate-limit.ts`
+- `src/app/api/slide-assets/[documentId]/[...path]/route.ts`
+- `src/lib/slides/asset-storage.ts`
+- `src/lib/log.ts`
+- `src/lib/log-redaction-core.cjs`
