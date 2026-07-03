@@ -114,7 +114,8 @@ deterministic**:
 - Document editor: `/app/documents/e2efixturedocument0000001`
 - Layout screenshot editor: `/app/documents/e2efixturelayoutdoc000001`
 - Public present: `/present/e2e-fixture-deck-e2efixtureshare01`
-- Public embed: `/embed/e2e-fixture-deck-e2efixtureshare01`
+- Public document embed: `/embed/e2e-fixture-deck-e2efixtureshare01`
+- Public presentation embed: `/present/e2e-fixture-deck-e2efixtureshare01/embed`
 
 ### Enabling the profile
 
