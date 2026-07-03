@@ -16,7 +16,7 @@ import { defineConfig, devices } from "@playwright/test";
  * set `E2E_WEB_SERVER=1` (see `e2e/README.md`).
  */
 const baseURL =
-  process.env.E2E_BASE_URL ?? process.env.BASE_URL ?? "http://localhost:3000";
+  process.env.E2E_BASE_URL ?? process.env.BASE_URL ?? "http://localhost:4000";
 
 const startWebServer = process.env.E2E_WEB_SERVER === "1";
 const deterministicProfile = process.env.E2E_PROFILE === "1";
@@ -27,6 +27,7 @@ const deterministicProfileSpecs = [
   "present-export.spec.ts",
   "slide-asset-upload.spec.ts",
   "slides-layout-screenshots.spec.ts",
+  "ui-matrix/*.spec.ts",
 ];
 
 export default defineConfig({

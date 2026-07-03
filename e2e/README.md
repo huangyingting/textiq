@@ -7,20 +7,21 @@ them locally or in a dedicated E2E job.
 
 ## What's covered
 
-| Spec                                | Coverage                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `public-pages.spec.ts`              | Home / login / signup render (smoke)                                                             |
-| `auth-redirect.spec.ts`             | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                    |
-| `oauth-disabled.spec.ts`            | Google CTA hidden when the provider is unconfigured                                              |
-| `workspace.spec.ts`                 | Create / import, empty state, viewer restriction (auth-gated)                                    |
-| `share-fallback.spec.ts`            | Unknown share/present/embed links → not-found fallback                                           |
-| `billing-brand.spec.ts`             | Billing unlimited-credit UI + Brand Studio font persistence                                      |
-| `slides-smoke.spec.ts`              | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                  |
-| `slides-layout-screenshots.spec.ts` | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)    |
-| `screenshot-regression.spec.ts`     | Slide screenshot regression with deterministic fixtures (opt-in via env var)                     |
-| `import-roundtrip.spec.ts`          | Markdown import → editor render → edit/save/reload; unsupported-type error (profile-gated, #519) |
-| `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)            |
-| `slide-asset-upload.spec.ts`        | Inspector image upload + protected slide-asset access control (profile-gated, #521)              |
+| Spec                                | Coverage                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `public-pages.spec.ts`              | Home / login / signup render (smoke)                                                                   |
+| `auth-redirect.spec.ts`             | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                          |
+| `oauth-disabled.spec.ts`            | Google CTA hidden when the provider is unconfigured                                                    |
+| `workspace.spec.ts`                 | Create / import, empty state, viewer restriction (auth-gated)                                          |
+| `share-fallback.spec.ts`            | Unknown share/present/embed links → not-found fallback                                                 |
+| `billing-brand.spec.ts`             | Billing unlimited-credit UI + Brand Studio font persistence                                            |
+| `slides-smoke.spec.ts`              | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                        |
+| `slides-layout-screenshots.spec.ts` | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)          |
+| `screenshot-regression.spec.ts`     | Slide screenshot regression with deterministic fixtures (opt-in via env var)                           |
+| `import-roundtrip.spec.ts`          | Markdown import → editor render → edit/save/reload; unsupported-type error (profile-gated, #519)       |
+| `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)                  |
+| `slide-asset-upload.spec.ts`        | Inspector image upload + protected slide-asset access control (profile-gated, #521)                    |
+| `e2e/ui-matrix/*.spec.ts`           | 500-case subsystem UI matrix catalog + representative presentation/public/auth/editor/workspace checks |
 
 ## Prerequisites
 
@@ -49,7 +50,7 @@ them locally or in a dedicated E2E job.
 npm run test:e2e
 ```
 
-By default the specs target `http://localhost:3000`. Override with
+By default the specs target `http://localhost:4000`. Override with
 `E2E_BASE_URL` (or `BASE_URL`). To have Playwright start the dev server for you,
 set `E2E_WEB_SERVER=1`:
 
@@ -65,7 +66,7 @@ credentials:
 
 | Variable                        | Used by                            | Purpose                                                                      |
 | ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `E2E_BASE_URL` / `BASE_URL`     | all                                | App base URL (default `http://localhost:3000`)                               |
+| `E2E_BASE_URL` / `BASE_URL`     | all                                | App base URL (default `http://localhost:4000`)                               |
 | `E2E_WEB_SERVER`                | config                             | `1` to let Playwright run `npm run dev`                                      |
 | `E2E_USER_EMAIL/PASSWORD`       | workspace, billing, brand, slides  | A seeded owner/editor login                                                  |
 | `E2E_VIEWER_EMAIL/PASSWORD`     | workspace                          | A seeded viewer-only login                                                   |
