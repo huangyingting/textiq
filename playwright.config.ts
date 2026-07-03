@@ -21,6 +21,7 @@ const baseURL =
 const startWebServer = process.env.E2E_WEB_SERVER === "1";
 const deterministicProfile = process.env.E2E_PROFILE === "1";
 const deterministicProfileSpecs = [
+  "authenticated-nested-routes.spec.ts",
   "document-editor-profile.spec.ts",
   "import-roundtrip.spec.ts",
   "present-export.spec.ts",
