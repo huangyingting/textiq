@@ -1,11 +1,15 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "TextIQ uses layered diagnostics:"
 ---
 
 # Diagnostics and Logging
+
+| Document                   | Type     | Scope                                                                          |
+| -------------------------- | -------- | ------------------------------------------------------------------------------ |
+| [taxonomy.md](taxonomy.md) | Contract | Stable error codes, domain telemetry, schema telemetry, and abuse diagnostics. |
 
 TextIQ uses layered diagnostics:
 

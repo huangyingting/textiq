@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-04"
 description: "These documents describe the runtime presentation layer: the slide editor UI, stage interactions, present mode, and export pipeline. They sit between the persisted deck contract and the React components that render/edit slides."
 ---
 
@@ -14,6 +14,7 @@ persisted deck contract and the React components that render/edit slides.
 | Document                                                   | Type         | Scope                                                                                                                         |
 | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | [slide-editor.md](slide-editor.md)                         | Architecture | Slide editor runtime, stage/inspector boundaries, autosave, source links, and presence.                                       |
+| [autosave-and-commands.md](autosave-and-commands.md)       | Architecture | Slide editor autosave, durable queued snapshots, optimistic save conflicts, and deck command execution.                       |
 | [slide-stage-interactions.md](slide-stage-interactions.md) | Design       | Stage hit-testing, preselection, selection, drag, edit, keyboard, connector, and overlap behavior.                            |
 | [theme-packages.md](theme-packages.md)                     | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                                              |
 | [assets.md](assets.md)                                     | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                                                 |

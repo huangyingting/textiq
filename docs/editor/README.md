@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "These documents describe the Lexical document editor and editor-owned comment UX. Presentation theme, slide editor, rendering, and export behavior belong to the presentation subsystem."
 ---
 
@@ -11,10 +11,11 @@ These documents describe the Lexical document editor and editor-owned comment
 UX. Presentation theme, slide editor, rendering, and export behavior belong to
 the presentation subsystem.
 
-| Document                                           | Type         | Scope                                                                          |
-| -------------------------------------------------- | ------------ | ------------------------------------------------------------------------------ |
-| [document-editor.md](document-editor.md)           | Architecture | Lexical editor selection model, tool registry, visual lifecycle, and autosave. |
-| [comments-and-anchors.md](comments-and-anchors.md) | Design       | Comment threads, text/visual anchors, slide anchors, and lifecycle behavior.   |
+| Document                                           | Type         | Scope                                                                                     |
+| -------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| [document-editor.md](document-editor.md)           | Architecture | Lexical editor selection model, tool registry, visual lifecycle, and autosave.            |
+| [lexical-runtime.md](lexical-runtime.md)           | Architecture | Durable block ids, VisualNode serialization, plugin registration, and editor write paths. |
+| [comments-and-anchors.md](comments-and-anchors.md) | Design       | Comment threads, text/visual anchors, slide anchors, and lifecycle behavior.              |
 
 ## Related Contracts
 

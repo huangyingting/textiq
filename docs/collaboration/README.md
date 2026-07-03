@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "This subsystem covers the application-level collaboration contract: Yjs room identity, client readiness, degraded local-only mode, title sync, presence, and room authorization. Deployment and scaling procedures live in ../operations/collaboration-deployment.md."
 ---
 
@@ -23,6 +23,7 @@ room authorization. Deployment and scaling procedures live in
 | Collab authorize route       | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)                                     |
 | Eviction flush route         | [`src/app/api/collab/flush/route.ts`](../../src/app/api/collab/flush/route.ts)                                             |
 | Standalone server            | [`scripts/collab-server.mjs`](../../scripts/collab-server.mjs), [`scripts/collab-core.mjs`](../../scripts/collab-core.mjs) |
+| Flood controls and config    | [`scripts/collab-config.mjs`](../../scripts/collab-config.mjs), [`scripts/collab-core.mjs`](../../scripts/collab-core.mjs) |
 
 ## Room Model
 
@@ -84,6 +85,35 @@ Room access maps document capabilities to websocket behavior:
 The shared access-decision taxonomy is used so collab denials align with API
 and page denial semantics.
 
+Long-lived websocket sessions are revalidated by the server when a reauthorize
+callback is available. `scripts/collab-core.mjs` calls the same authorization
+decision on an interval controlled by `COLLAB_ACCESS_REVALIDATE_MS` (default 60
+seconds). If a user loses access, the document is deleted, or the authorization
+check fails, the connection is closed. If the recheck still allows view but no
+longer edit, the connection remains open but is downgraded to read-only for
+subsequent sync updates.
+
+## Flood Controls And Eviction
+
+The collaboration server enforces per-upgrade, per-room, total-connection,
+message-size, message-rate, and awareness-payload budgets. When a connection
+exceeds message or awareness limits, the server logs `collab.core.flood` with a
+safe reason and closes that connection. View-only connections still receive Yjs
+sync and awareness updates, but sync-step-2 and update messages are ignored so
+viewers cannot mutate the shared doc.
+
+An empty room is not destroyed immediately. After the last connection closes,
+the room is evicted after `ROOM_IDLE_TTL_MS` (60 seconds) unless a new
+connection arrives first. When eviction finds pending updates newer than the
+last confirmed durable save, it calls the optional eviction flusher with the
+room name and a full Yjs update. That flush is best-effort recovery only: errors
+are logged, eviction still completes, and the saved-state vector is cleared so
+the database remains the durable source of truth.
+
+Flush observability is kept in memory as counters and a capped ring of recent
+safe failure ids. Health surfaces can expose `flushAttempts`, `flushFailures`,
+and recent failures without including document content.
+
 ## Websocket URL Resolution
 
 The browser websocket base URL resolves in this order:
@@ -102,7 +132,11 @@ path segment.
 3. Initial readiness is sync-or-degrade, never an indefinite blocked editor.
 4. Viewers may connect read-only for live viewing but cannot mutate the room.
 5. The title can reseed from the database when the shared title is empty.
-6. Provider and `Y.Doc` are destroyed on unmount.
+6. Long-lived sessions are periodically reauthorized when server support is
+   available.
+7. Empty rooms evict after the idle TTL; eviction flush is best-effort recovery,
+   not canonical persistence.
+8. Provider and `Y.Doc` are destroyed on unmount.
 
 ## Primary Tests
 
@@ -112,3 +146,6 @@ path segment.
 - [`scripts/collab-auth.test.mjs`](../../scripts/collab-auth.test.mjs)
 - [`scripts/collab-runtime.test.mjs`](../../scripts/collab-runtime.test.mjs)
 - [`scripts/collab-durability.test.mjs`](../../scripts/collab-durability.test.mjs)
+- [`scripts/collab-flood-controls.test.mjs`](../../scripts/collab-flood-controls.test.mjs)
+- [`scripts/collab-eviction.test.mjs`](../../scripts/collab-eviction.test.mjs)
+- [`scripts/collab-flush.test.mjs`](../../scripts/collab-flush.test.mjs)
