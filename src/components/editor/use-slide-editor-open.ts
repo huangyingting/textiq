@@ -795,6 +795,17 @@ export function useSlideEditorOpen({
     }
   }, []);
 
+  const persistOrScheduleDeckChange = useCallback(
+    (updatedDeck: Deck) => {
+      if (inFlightPersistRef.current) {
+        void persistDeck(updatedDeck);
+        return;
+      }
+      scheduleAutosave(updatedDeck);
+    },
+    [persistDeck, scheduleAutosave],
+  );
+
   const handleDeckChange = useCallback(
     (updatedDeck: Deck) => {
       if (hasUnresolvedDeckSaveConflict(conflictState)) {
@@ -809,13 +820,9 @@ export function useSlideEditorOpen({
       setDeck(updatedDeck);
       setDirty(true);
       setSaveError(null);
-      if (inFlightPersistRef.current) {
-        void persistDeck(updatedDeck);
-      } else {
-        scheduleAutosave(updatedDeck);
-      }
+      persistOrScheduleDeckChange(updatedDeck);
     },
-    [conflictState, deck, persistDeck, scheduleAutosave],
+    [conflictState, deck, persistOrScheduleDeckChange],
   );
 
   const handleUndo = useCallback(() => {
@@ -828,14 +835,10 @@ export function useSlideEditorOpen({
       setDeck(previous);
       setDirty(true);
       setSaveError(null);
-      if (inFlightPersistRef.current) {
-        void persistDeck(previous);
-      } else {
-        scheduleAutosave(previous);
-      }
+      persistOrScheduleDeckChange(previous);
       return stack.slice(0, -1);
     });
-  }, [conflictState, deck, focusAfterHistory, persistDeck, scheduleAutosave]);
+  }, [conflictState, deck, focusAfterHistory, persistOrScheduleDeckChange]);
 
   const handleRedo = useCallback(() => {
     if (hasUnresolvedDeckSaveConflict(conflictState)) return;
@@ -847,14 +850,10 @@ export function useSlideEditorOpen({
       setDeck(next);
       setDirty(true);
       setSaveError(null);
-      if (inFlightPersistRef.current) {
-        void persistDeck(next);
-      } else {
-        scheduleAutosave(next);
-      }
+      persistOrScheduleDeckChange(next);
       return stack.slice(0, -1);
     });
-  }, [conflictState, deck, focusAfterHistory, persistDeck, scheduleAutosave]);
+  }, [conflictState, deck, focusAfterHistory, persistOrScheduleDeckChange]);
 
   const handleOpenDialogApply = useCallback(
     ({

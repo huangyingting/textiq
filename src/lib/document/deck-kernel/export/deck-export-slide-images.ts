@@ -879,7 +879,7 @@ export async function exportDeckAsSlideImages(
     ]);
     const format = options.format ?? "svg";
     const specs = buildDeckSpecs(deck, visuals);
-    const geometry = slideImageGeometry((deck as any).canvas?.format);
+    const geometry = slideImageGeometry(deck.canvas?.format);
     const zip = new JSZip();
 
     for (const slideSpec of specs) {

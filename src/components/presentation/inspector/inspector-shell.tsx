@@ -24,6 +24,9 @@ import type {
 } from "@/lib/presentation/schema";
 import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
 import type {
+  BlendMode,
+  EffectStyle,
+  ShadowStyle,
   StyleBinding,
   StyleObject,
   StylePatch,
@@ -73,6 +76,17 @@ const INSPECTOR_REORDER_MODES = [
   "forward",
   "backward",
 ] as const satisfies readonly CurrentObjectReorderMode[];
+
+const DEFAULT_GLOW_COLOR = "#4f46e5";
+const DEFAULT_SHADOW_COLOR = "#000000";
+const DEFAULT_SHADOW_OPACITY = 0.18;
+const DEFAULT_SHADOW: ShadowStyle = {
+  xPt: 0,
+  yPt: 8,
+  blurPt: 18,
+  color: DEFAULT_SHADOW_COLOR,
+  opacity: DEFAULT_SHADOW_OPACITY,
+};
 
 // ---------------------------------------------------------------------------
 // Sub-panel wrappers
@@ -536,20 +550,258 @@ function AdjustPanel({
   );
 }
 
+type LocalStyleUpdater = (patch: StylePatch) => void;
+type LocalEffectStyle = NonNullable<StylePatch["effect"]>;
+type LocalShadowStyle = StylePatch["shadow"];
+
+function resolveEffectForKind(kind: string): EffectStyle {
+  if (kind === "blur") {
+    return { kind: "blur", radiusPt: 12 };
+  }
+
+  if (kind === "glow") {
+    return {
+      kind: "glow",
+      color: DEFAULT_GLOW_COLOR,
+      blurPt: 14,
+      opacity: 0.35,
+    };
+  }
+
+  if (kind === "glass") {
+    return { kind: "glass", intensity: "medium" };
+  }
+
+  return { kind: "none" };
+}
+
+function shadowPatch(
+  shadow: LocalShadowStyle,
+  patch: Partial<ShadowStyle>,
+): ShadowStyle {
+  return {
+    xPt: patch.xPt ?? shadow?.xPt ?? DEFAULT_SHADOW.xPt,
+    yPt: patch.yPt ?? shadow?.yPt ?? DEFAULT_SHADOW.yPt,
+    blurPt: patch.blurPt ?? shadow?.blurPt ?? DEFAULT_SHADOW.blurPt,
+    color:
+      patch.color ??
+      (typeof shadow?.color === "string" ? shadow.color : DEFAULT_SHADOW.color),
+    opacity: patch.opacity ?? shadow?.opacity ?? DEFAULT_SHADOW_OPACITY,
+  };
+}
+
+function renderEffectControls({
+  effect,
+  onUpdateLocalStyle,
+}: {
+  effect: LocalEffectStyle;
+  onUpdateLocalStyle: LocalStyleUpdater;
+}) {
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        Effect
+        <select
+          value={effect.kind}
+          onChange={(event) =>
+            onUpdateLocalStyle({
+              effect: resolveEffectForKind(event.currentTarget.value),
+            })
+          }
+          className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
+        >
+          <option value="none">None</option>
+          <option value="blur">Blur</option>
+          <option value="glow">Glow</option>
+          <option value="glass">Glass</option>
+        </select>
+      </label>
+      {effect.kind === "blur" ? (
+        <RangeField
+          label="Blur radius"
+          value={effect.radiusPt ?? 12}
+          min={0}
+          max={48}
+          step={1}
+          display={(value) => `${value} pt`}
+          onChange={(value) =>
+            onUpdateLocalStyle({ effect: { kind: "blur", radiusPt: value } })
+          }
+        />
+      ) : null}
+      {effect.kind === "glow" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            Glow color
+            <input
+              type="color"
+              value={
+                typeof effect.color === "string"
+                  ? effect.color
+                  : DEFAULT_GLOW_COLOR
+              }
+              onChange={(event) =>
+                onUpdateLocalStyle({
+                  effect: { ...effect, color: event.currentTarget.value },
+                })
+              }
+              className="h-8 rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface"
+            />
+          </label>
+          <NumberField
+            label="Glow blur"
+            value={effect.blurPt ?? 14}
+            min={0}
+            max={64}
+            onChange={(value) =>
+              onUpdateLocalStyle({ effect: { ...effect, blurPt: value } })
+            }
+          />
+          <div className="col-span-2">
+            <RangeField
+              label="Glow opacity"
+              value={effect.opacity ?? 0.35}
+              min={0}
+              max={1}
+              step={0.05}
+              display={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) =>
+                onUpdateLocalStyle({ effect: { ...effect, opacity: value } })
+              }
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function renderBlendModeSelect({
+  blendMode,
+  onUpdateLocalStyle,
+}: {
+  blendMode: BlendMode;
+  onUpdateLocalStyle: LocalStyleUpdater;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+      Blend mode
+      <select
+        value={blendMode}
+        onChange={(event) =>
+          onUpdateLocalStyle({
+            blendMode: event.currentTarget.value as BlendMode,
+          })
+        }
+        className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
+      >
+        <option value="normal">Normal</option>
+        <option value="multiply">Multiply</option>
+        <option value="screen">Screen</option>
+        <option value="overlay">Overlay</option>
+        <option value="darken">Darken</option>
+        <option value="lighten">Lighten</option>
+      </select>
+    </label>
+  );
+}
+
+function renderShadowControls({
+  shadow,
+  onUpdateLocalStyle,
+}: {
+  shadow: LocalShadowStyle;
+  onUpdateLocalStyle: LocalStyleUpdater;
+}) {
+  const shadowEnabled = shadow === undefined || shadow.opacity !== 0;
+  const updateShadow = (patch: Partial<ShadowStyle>) =>
+    onUpdateLocalStyle({ shadow: shadowPatch(shadow, patch) });
+
+  return (
+    <>
+      <label className="flex items-center gap-2 text-xs text-ds-text-secondary">
+        <input
+          type="checkbox"
+          checked={shadowEnabled}
+          onChange={(event) =>
+            onUpdateLocalStyle({
+              shadow: event.currentTarget.checked
+                ? shadowPatch(shadow, {})
+                : {
+                    xPt: 0,
+                    yPt: 0,
+                    blurPt: 0,
+                    color: DEFAULT_SHADOW_COLOR,
+                    opacity: 0,
+                  },
+            })
+          }
+        />
+        Shadow
+      </label>
+      {shadowEnabled ? (
+        <div className="grid grid-cols-2 gap-2">
+          <NumberField
+            label="X offset"
+            value={shadow?.xPt ?? DEFAULT_SHADOW.xPt}
+            onChange={(value) => updateShadow({ xPt: value })}
+          />
+          <NumberField
+            label="Y offset"
+            value={shadow?.yPt ?? DEFAULT_SHADOW.yPt}
+            onChange={(value) => updateShadow({ yPt: value })}
+          />
+          <NumberField
+            label="Blur"
+            value={shadow?.blurPt ?? DEFAULT_SHADOW.blurPt}
+            min={0}
+            onChange={(value) => updateShadow({ blurPt: value })}
+          />
+          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            Color
+            <input
+              type="color"
+              value={
+                typeof shadow?.color === "string"
+                  ? shadow.color
+                  : DEFAULT_SHADOW_COLOR
+              }
+              onChange={(event) =>
+                updateShadow({ color: event.currentTarget.value })
+              }
+              className="h-8 rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface"
+            />
+          </label>
+          <div className="col-span-2">
+            <RangeField
+              label="Shadow opacity"
+              value={shadow?.opacity ?? DEFAULT_SHADOW_OPACITY}
+              min={0}
+              max={1}
+              step={0.05}
+              display={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => updateShadow({ opacity: value })}
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function EffectsPanel({
   node,
   onUpdateLocalStyle,
   onResetToTheme,
 }: {
   node: SlideChildNode | undefined;
-  onUpdateLocalStyle: (patch: StylePatch) => void;
+  onUpdateLocalStyle: LocalStyleUpdater;
   onResetToTheme: () => void;
 }) {
   const opacity = node?.localStyle?.opacity ?? 1;
   const shadow = node?.localStyle?.shadow;
   const effect = node?.localStyle?.effect ?? { kind: "none" as const };
   const blendMode = node?.localStyle?.blendMode ?? "normal";
-  const shadowEnabled = shadow === undefined || shadow.opacity !== 0;
 
   return (
     <PanelSection>
@@ -566,251 +818,9 @@ function EffectsPanel({
           display={(value) => `${Math.round(value * 100)}%`}
           onChange={(value) => onUpdateLocalStyle({ opacity: value })}
         />
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-          Effect
-          <select
-            value={effect.kind}
-            onChange={(event) => {
-              const kind = event.currentTarget.value;
-              if (kind === "blur") {
-                onUpdateLocalStyle({ effect: { kind: "blur", radiusPt: 12 } });
-              } else if (kind === "glow") {
-                onUpdateLocalStyle({
-                  effect: {
-                    kind: "glow",
-                    color: "#4f46e5",
-                    blurPt: 14,
-                    opacity: 0.35,
-                  },
-                });
-              } else if (kind === "glass") {
-                onUpdateLocalStyle({
-                  effect: { kind: "glass", intensity: "medium" },
-                });
-              } else {
-                onUpdateLocalStyle({ effect: { kind: "none" } });
-              }
-            }}
-            className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-          >
-            <option value="none">None</option>
-            <option value="blur">Blur</option>
-            <option value="glow">Glow</option>
-            <option value="glass">Glass</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-          Blend mode
-          <select
-            value={blendMode}
-            onChange={(event) =>
-              onUpdateLocalStyle({
-                blendMode: event.currentTarget.value as
-                  | "normal"
-                  | "multiply"
-                  | "screen"
-                  | "overlay"
-                  | "darken"
-                  | "lighten",
-              })
-            }
-            className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-          >
-            <option value="normal">Normal</option>
-            <option value="multiply">Multiply</option>
-            <option value="screen">Screen</option>
-            <option value="overlay">Overlay</option>
-            <option value="darken">Darken</option>
-            <option value="lighten">Lighten</option>
-          </select>
-        </label>
-        {effect.kind === "blur" ? (
-          <RangeField
-            label="Blur radius"
-            value={effect.radiusPt ?? 12}
-            min={0}
-            max={48}
-            step={1}
-            display={(value) => `${value} pt`}
-            onChange={(value) =>
-              onUpdateLocalStyle({ effect: { kind: "blur", radiusPt: value } })
-            }
-          />
-        ) : null}
-        {effect.kind === "glow" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-              Glow color
-              <input
-                type="color"
-                value={
-                  typeof effect.color === "string" ? effect.color : "#4f46e5"
-                }
-                onChange={(event) =>
-                  onUpdateLocalStyle({
-                    effect: { ...effect, color: event.currentTarget.value },
-                  })
-                }
-                className="h-8 rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface"
-              />
-            </label>
-            <NumberField
-              label="Glow blur"
-              value={effect.blurPt ?? 14}
-              min={0}
-              max={64}
-              onChange={(value) =>
-                onUpdateLocalStyle({ effect: { ...effect, blurPt: value } })
-              }
-            />
-            <div className="col-span-2">
-              <RangeField
-                label="Glow opacity"
-                value={effect.opacity ?? 0.35}
-                min={0}
-                max={1}
-                step={0.05}
-                display={(value) => `${Math.round(value * 100)}%`}
-                onChange={(value) =>
-                  onUpdateLocalStyle({ effect: { ...effect, opacity: value } })
-                }
-              />
-            </div>
-          </div>
-        ) : null}
-        <label className="flex items-center gap-2 text-xs text-ds-text-secondary">
-          <input
-            type="checkbox"
-            checked={shadowEnabled}
-            onChange={(event) =>
-              onUpdateLocalStyle({
-                shadow: event.currentTarget.checked
-                  ? {
-                      xPt: shadow?.xPt ?? 0,
-                      yPt: shadow?.yPt ?? 8,
-                      blurPt: shadow?.blurPt ?? 18,
-                      color:
-                        typeof shadow?.color === "string"
-                          ? shadow.color
-                          : "#000000",
-                      opacity: shadow?.opacity ?? 0.18,
-                    }
-                  : {
-                      xPt: 0,
-                      yPt: 0,
-                      blurPt: 0,
-                      color: "#000000",
-                      opacity: 0,
-                    },
-              })
-            }
-          />
-          Shadow
-        </label>
-        {shadowEnabled ? (
-          <div className="grid grid-cols-2 gap-2">
-            <NumberField
-              label="X offset"
-              value={shadow?.xPt ?? 0}
-              onChange={(value) =>
-                onUpdateLocalStyle({
-                  shadow: {
-                    xPt: value,
-                    yPt: shadow?.yPt ?? 8,
-                    blurPt: shadow?.blurPt ?? 18,
-                    color:
-                      typeof shadow?.color === "string"
-                        ? shadow.color
-                        : "#000000",
-                    opacity: shadow?.opacity ?? 0.18,
-                  },
-                })
-              }
-            />
-            <NumberField
-              label="Y offset"
-              value={shadow?.yPt ?? 8}
-              onChange={(value) =>
-                onUpdateLocalStyle({
-                  shadow: {
-                    xPt: shadow?.xPt ?? 0,
-                    yPt: value,
-                    blurPt: shadow?.blurPt ?? 18,
-                    color:
-                      typeof shadow?.color === "string"
-                        ? shadow.color
-                        : "#000000",
-                    opacity: shadow?.opacity ?? 0.18,
-                  },
-                })
-              }
-            />
-            <NumberField
-              label="Blur"
-              value={shadow?.blurPt ?? 18}
-              min={0}
-              onChange={(value) =>
-                onUpdateLocalStyle({
-                  shadow: {
-                    xPt: shadow?.xPt ?? 0,
-                    yPt: shadow?.yPt ?? 8,
-                    blurPt: value,
-                    color:
-                      typeof shadow?.color === "string"
-                        ? shadow.color
-                        : "#000000",
-                    opacity: shadow?.opacity ?? 0.18,
-                  },
-                })
-              }
-            />
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-              Color
-              <input
-                type="color"
-                value={
-                  typeof shadow?.color === "string" ? shadow.color : "#000000"
-                }
-                onChange={(event) =>
-                  onUpdateLocalStyle({
-                    shadow: {
-                      xPt: shadow?.xPt ?? 0,
-                      yPt: shadow?.yPt ?? 8,
-                      blurPt: shadow?.blurPt ?? 18,
-                      color: event.currentTarget.value,
-                      opacity: shadow?.opacity ?? 0.18,
-                    },
-                  })
-                }
-                className="h-8 rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface"
-              />
-            </label>
-            <div className="col-span-2">
-              <RangeField
-                label="Shadow opacity"
-                value={shadow?.opacity ?? 0.18}
-                min={0}
-                max={1}
-                step={0.05}
-                display={(value) => `${Math.round(value * 100)}%`}
-                onChange={(value) =>
-                  onUpdateLocalStyle({
-                    shadow: {
-                      xPt: shadow?.xPt ?? 0,
-                      yPt: shadow?.yPt ?? 8,
-                      blurPt: shadow?.blurPt ?? 18,
-                      color:
-                        typeof shadow?.color === "string"
-                          ? shadow.color
-                          : "#000000",
-                      opacity: value,
-                    },
-                  })
-                }
-              />
-            </div>
-          </div>
-        ) : null}
+        {renderEffectControls({ effect, onUpdateLocalStyle })}
+        {renderBlendModeSelect({ blendMode, onUpdateLocalStyle })}
+        {renderShadowControls({ shadow, onUpdateLocalStyle })}
         <button
           type="button"
           onClick={onResetToTheme}

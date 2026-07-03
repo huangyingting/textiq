@@ -588,6 +588,40 @@ function BrandChip({
   );
 }
 
+function ToolbarMenuItemButton({
+  item,
+  active,
+  showSourceChangedIndicator = false,
+  onToggle,
+}: {
+  item: MenuItemConfig;
+  active: boolean;
+  showSourceChangedIndicator?: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = item.icon;
+  return (
+    <Tooltip label={item.label}>
+      <span className="relative inline-flex">
+        <IconButton
+          aria-label={`${active ? "Hide" : "Show"} ${item.label}`}
+          size="sm"
+          active={active}
+          onClick={onToggle}
+        >
+          <Icon aria-hidden="true" className="h-4 w-4" />
+        </IconButton>
+        {showSourceChangedIndicator ? (
+          <span
+            aria-label="Source changed"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-ds-warning"
+          />
+        ) : null}
+      </span>
+    </Tooltip>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // PopoverShell — float vs panel wrapper
 // ---------------------------------------------------------------------------
@@ -1733,23 +1767,14 @@ export function VisualContextPopover({
               className="flex w-max flex-col items-center gap-0.5"
             >
               {visibleMenuItems.map((item) => {
-                const Icon = item.icon;
                 const active = effectiveActiveSection === item.id;
                 return (
-                  <Tooltip key={item.id} label={item.label}>
-                    <span className="relative inline-flex">
-                      <IconButton
-                        aria-label={`${active ? "Hide" : "Show"} ${item.label}`}
-                        size="sm"
-                        active={active}
-                        onClick={() =>
-                          setActiveSection(active ? null : item.id)
-                        }
-                      >
-                        <Icon aria-hidden="true" className="h-4 w-4" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  <ToolbarMenuItemButton
+                    key={item.id}
+                    item={item}
+                    active={active}
+                    onToggle={() => setActiveSection(active ? null : item.id)}
+                  />
                 );
               })}
               <Divider orientation="horizontal" className="my-0.5 w-6" />
@@ -1820,29 +1845,15 @@ export function VisualContextPopover({
               className="flex items-center gap-0.5"
             >
               {visibleMenuItems.map((item) => {
-                const Icon = item.icon;
                 const active = effectiveActiveSection === item.id;
                 return (
-                  <Tooltip key={item.id} label={item.label}>
-                    <span className="relative inline-flex">
-                      <IconButton
-                        aria-label={`${active ? "Hide" : "Show"} ${item.label}`}
-                        size="sm"
-                        active={active}
-                        onClick={() =>
-                          setActiveSection(active ? null : item.id)
-                        }
-                      >
-                        <Icon aria-hidden="true" className="h-4 w-4" />
-                      </IconButton>
-                      {item.id === "sync" && stale ? (
-                        <span
-                          aria-label="Source changed"
-                          className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-ds-warning"
-                        />
-                      ) : null}
-                    </span>
-                  </Tooltip>
+                  <ToolbarMenuItemButton
+                    key={item.id}
+                    item={item}
+                    active={active}
+                    showSourceChangedIndicator={item.id === "sync" && stale}
+                    onToggle={() => setActiveSection(active ? null : item.id)}
+                  />
                 );
               })}
 

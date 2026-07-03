@@ -138,6 +138,12 @@ import {
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
+function hasUsableCanvasArea(
+  rect: Pick<DOMRect, "width" | "height"> | null | undefined,
+): rect is DOMRect {
+  return Boolean(rect && rect.width > 0 && rect.height > 0);
+}
+
 /* node:coverage ignore next 28 */
 type SetSelection = Dispatch<SetStateAction<SelectionState>>;
 
@@ -584,7 +590,7 @@ export function useStageGestureController(
     const canvasElement = canvasElementFromTarget(event.target);
     if (!canvasElement) return;
     const rect = canvasElement.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
+    if (!hasUsableCanvasArea(rect)) return;
 
     if (inlineEditNodeId) requestInlineEditCommit();
 
@@ -720,7 +726,7 @@ export function useStageGestureController(
       fallbackNodeId: nodeId,
     });
     const rect = canvasRectFromEvent(event);
-    if (!target || !rect || rect.width <= 0 || rect.height <= 0) {
+    if (!target || !hasUsableCanvasArea(rect)) {
       selectUnderFromHits(hits);
       return;
     }
@@ -875,7 +881,7 @@ export function useStageGestureController(
     event.stopPropagation();
 
     const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!hasUsableCanvasArea(rect)) return;
 
     const originalFrames = new Map<string, LayoutBox["frame"]>();
     for (const id of dragIds) {
@@ -988,7 +994,7 @@ export function useStageGestureController(
     const node = findNodeById(activeSlide.children, nodeId);
     if (!node?.layout || node.locked) return;
     const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!hasUsableCanvasArea(rect)) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -1068,7 +1074,7 @@ export function useStageGestureController(
     if (entries.length < 2) return;
     const startBounds = multiSelectionBounds(entries);
     const rect = canvasRectFromEvent(event);
-    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!startBounds || !hasUsableCanvasArea(rect)) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -1147,7 +1153,7 @@ export function useStageGestureController(
     if (entries.length < 2) return;
     const startBounds = multiSelectionBounds(entries);
     const rect = canvasRectFromEvent(event);
-    if (!startBounds || !rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!startBounds || !hasUsableCanvasArea(rect)) return;
     const centerPct = {
       x: startBounds.x + startBounds.w / 2,
       y: startBounds.y + startBounds.h / 2,
@@ -1222,7 +1228,7 @@ export function useStageGestureController(
     const node = findNodeById(activeSlide.children, nodeId);
     if (!node?.layout || node.locked || node.type === "connector") return;
     const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!hasUsableCanvasArea(rect)) return;
     const center = frameCenterClientPoint(node.layout.frame, rect);
     const startAngle = clientAngleDegrees(
       { x: event.clientX, y: event.clientY },
@@ -1275,7 +1281,7 @@ export function useStageGestureController(
     const node = findNodeById(activeSlide.children, nodeId);
     if (!node?.layout || node.type !== "connector" || node.locked) return;
     const rect = canvasRectFromEvent(event);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    if (!hasUsableCanvasArea(rect)) return;
 
     event.preventDefault();
     event.stopPropagation();

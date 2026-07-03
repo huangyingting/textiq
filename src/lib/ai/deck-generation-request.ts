@@ -215,6 +215,18 @@ function getStringField(
   return typeof record[key] === "string" ? (record[key] as string) : undefined;
 }
 
+function parseDiagnosticTargetBase(
+  raw: Record<string, unknown>,
+): Pick<DiagnosticTarget, "path" | "label"> {
+  const path = getStringField(raw, "path");
+  const label = getStringField(raw, "label");
+
+  return {
+    ...(path ? { path } : {}),
+    ...(label ? { label } : {}),
+  };
+}
+
 function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
   const raw = getRecord(value);
   if (!raw) return undefined;
@@ -225,15 +237,13 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
   )
     return undefined;
 
-  const path = getStringField(raw, "path");
-  const label = getStringField(raw, "label");
+  const targetBase = parseDiagnosticTargetBase(raw);
 
   switch (scope) {
     case "deck":
       return {
         scope,
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     case "slide": {
       const slideId = getStringField(raw, "slideId");
@@ -241,8 +251,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
       return {
         scope,
         slideId,
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "node": {
@@ -253,8 +262,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         scope,
         nodeId,
         ...(slideId ? { slideId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "asset": {
@@ -266,8 +274,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         ...(assetId ? { assetId } : {}),
         ...(slideId ? { slideId } : {}),
         ...(nodeId ? { nodeId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "source": {
@@ -281,8 +288,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         ...(blockId ? { blockId } : {}),
         ...(slideId ? { slideId } : {}),
         ...(nodeId ? { nodeId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "style": {
@@ -294,8 +300,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         ...(styleRef ? { styleRef } : {}),
         ...(slideId ? { slideId } : {}),
         ...(nodeId ? { nodeId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "theme": {
@@ -305,8 +310,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         scope,
         ...(themePackageId ? { themePackageId } : {}),
         ...(slideId ? { slideId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
     case "export": {
@@ -318,8 +322,7 @@ function parseDiagnosticTarget(value: unknown): DiagnosticTarget | undefined {
         ...(exportFeature ? { exportFeature } : {}),
         ...(slideId ? { slideId } : {}),
         ...(nodeId ? { nodeId } : {}),
-        ...(path ? { path } : {}),
-        ...(label ? { label } : {}),
+        ...targetBase,
       };
     }
   }

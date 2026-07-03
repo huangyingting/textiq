@@ -332,6 +332,32 @@ function TBtn({
   );
 }
 
+function InlineTextCommandButton({
+  label,
+  command,
+  isInlineEditing,
+  children,
+}: {
+  label: string;
+  command: InlineTextCommandName;
+  isInlineEditing: boolean;
+  children: ReactNode;
+}) {
+  const enabled = isContextToolbarInlineTextCommandEnabled(
+    command,
+    isInlineEditing,
+  );
+  return (
+    <TBtn
+      label={label}
+      disabled={!enabled}
+      onClick={() => dispatchInlineTextCommand({ command })}
+    >
+      {children}
+    </TBtn>
+  );
+}
+
 function Divider() {
   return <div aria-hidden className="mx-1 h-4 w-px bg-ds-border-subtle" />;
 }
@@ -1388,62 +1414,34 @@ export function ContextToolbar({
               <option value="kicker">Kicker</option>
               <option value="metric">Metric</option>
             </ToolbarSelect>
-            <TBtn
+            <InlineTextCommandButton
               label="Bullet list"
-              disabled={
-                !isContextToolbarInlineTextCommandEnabled(
-                  "bullet-list",
-                  isInlineEditing,
-                )
-              }
-              onClick={() =>
-                dispatchInlineTextCommand({ command: "bullet-list" })
-              }
+              command="bullet-list"
+              isInlineEditing={isInlineEditing}
             >
               <List size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </InlineTextCommandButton>
+            <InlineTextCommandButton
               label="Numbered list"
-              disabled={
-                !isContextToolbarInlineTextCommandEnabled(
-                  "numbered-list",
-                  isInlineEditing,
-                )
-              }
-              onClick={() =>
-                dispatchInlineTextCommand({ command: "numbered-list" })
-              }
+              command="numbered-list"
+              isInlineEditing={isInlineEditing}
             >
               <ListOrdered size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </InlineTextCommandButton>
+            <InlineTextCommandButton
               label="Outdent list"
-              disabled={
-                !isContextToolbarInlineTextCommandEnabled(
-                  "outdent-list",
-                  isInlineEditing,
-                )
-              }
-              onClick={() =>
-                dispatchInlineTextCommand({ command: "outdent-list" })
-              }
+              command="outdent-list"
+              isInlineEditing={isInlineEditing}
             >
               <IndentDecrease size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </InlineTextCommandButton>
+            <InlineTextCommandButton
               label="Indent list"
-              disabled={
-                !isContextToolbarInlineTextCommandEnabled(
-                  "indent-list",
-                  isInlineEditing,
-                )
-              }
-              onClick={() =>
-                dispatchInlineTextCommand({ command: "indent-list" })
-              }
+              command="indent-list"
+              isInlineEditing={isInlineEditing}
             >
               <IndentIncrease size={13} aria-hidden />
-            </TBtn>
+            </InlineTextCommandButton>
             <Divider />
             <TBtn label="Align left" onClick={() => updateTextAlign("left")}>
               <AlignLeft size={13} aria-hidden />
