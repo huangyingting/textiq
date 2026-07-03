@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Provider-disabled OAuth UI coverage (issue #107, building on #91/#98).
+ * Provider-disabled OAuth UI coverage (issues #107 and #1721, building on
+ * #91/#98).
  *
  * The Google "Continue with Google" CTA is only rendered when Google OAuth is
  * configured (`isGoogleAuthConfigured()` — i.e. GOOGLE_CLIENT_ID /
@@ -29,13 +30,15 @@ for (const path of ["/login", "/signup"] as const) {
       const googleCta = page.getByRole("button", {
         name: /continue with google/i,
       });
+      const orDivider = page.getByText(/^or$/i);
 
       if (googleConfigured()) {
         await expect(googleCta).toBeVisible();
+        await expect(orDivider).toBeVisible();
       } else {
         await expect(googleCta).toHaveCount(0);
         // The "or" divider only accompanies the OAuth button.
-        await expect(page.getByText(/^or$/i)).toHaveCount(0);
+        await expect(orDivider).toHaveCount(0);
       }
 
       // Either way the credentials form must remain available.

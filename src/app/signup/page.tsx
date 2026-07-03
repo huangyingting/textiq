@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import {
-  GoogleSignInButton,
-  OrDivider,
-} from "@/components/google-sign-in-button";
+import { GoogleSignInSection } from "@/components/google-sign-in-button";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
-import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
 import { routeProtectionPolicy } from "@/lib/auth/route-protection-policy";
 import { getCurrentUser } from "@/lib/session";
 
@@ -30,7 +26,6 @@ export default async function SignupPage({
     Array.isArray(rawCallbackUrl) ? rawCallbackUrl[0] : rawCallbackUrl,
   );
   const hasAuthError = typeof error === "string" && error.length > 0;
-  const googleAvailable = isGoogleAuthConfigured();
 
   return (
     <main className="flex flex-1 items-center justify-center bg-ds-surface-sunken px-6 py-16">
@@ -50,15 +45,10 @@ export default async function SignupPage({
             </p>
           ) : null}
           <SignupForm callbackUrl={callbackUrl} />
-          {googleAvailable ? (
-            <>
-              <OrDivider />
-              <GoogleSignInButton
-                callbackUrl={callbackUrl}
-                errorRedirectPath="/signup"
-              />
-            </>
-          ) : null}
+          <GoogleSignInSection
+            callbackUrl={callbackUrl}
+            errorRedirectPath="/signup"
+          />
         </div>
       </div>
     </main>

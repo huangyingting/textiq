@@ -2,6 +2,32 @@ import { redirect } from "next/navigation";
 
 import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
+import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
+
+export function GoogleSignInSection({
+  label,
+  callbackUrl,
+  errorRedirectPath = "/login",
+}: {
+  label?: string;
+  callbackUrl?: string;
+  errorRedirectPath?: string;
+}) {
+  if (!isGoogleAuthConfigured()) {
+    return null;
+  }
+
+  return (
+    <>
+      <OrDivider />
+      <GoogleSignInButton
+        label={label}
+        callbackUrl={callbackUrl}
+        errorRedirectPath={errorRedirectPath}
+      />
+    </>
+  );
+}
 
 export function GoogleSignInButton({
   label = "Continue with Google",
