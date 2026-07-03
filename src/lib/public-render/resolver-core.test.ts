@@ -207,6 +207,38 @@ test("resolvePublicRenderWithSource enforces independent present/embed policy fo
   assert.equal(presentDenied.decision.concealResource, true);
 });
 
+test("resolvePublicRenderWithSource accepts raw share IDs for presentation embed routes", async () => {
+  const result = await resolvePublicRenderWithSource(source(document()), {
+    params: { shareId: "share123" },
+    mode: "embed",
+    projection: "presentation",
+    now: NOW,
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok || result.projection !== "presentation") {
+    throw new Error("Expected presentation projection.");
+  }
+  assert.equal(result.shareId, "share123");
+  assert.equal(result.mode, "embed");
+});
+
+test("resolvePublicRenderWithSource keeps document embeds on the document projection", async () => {
+  const result = await resolvePublicRenderWithSource(source(document()), {
+    params: { shareId: "share123" },
+    mode: "embed",
+    projection: "document",
+    now: NOW,
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok || result.projection !== "document") {
+    throw new Error("Expected document projection.");
+  }
+  assert.equal(result.document.title, "Shared Doc");
+  assert.equal(result.mode, "embed");
+});
+
 test("resolvePublicRenderWithSource returns a concealed miss for absent shares", async () => {
   const result = await resolvePublicRenderWithSource(source(null), {
     params: { shareId: "missing-share" },

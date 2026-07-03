@@ -65,7 +65,7 @@ export function profilePresentPath(): string {
 
 /** Public embeddable present-mode path for the seeded deck. */
 export function profilePresentEmbedPath(): string {
-  return `/embed/${profileShareSegment()}`;
+  return `/present/${profileShareSegment()}/embed`;
 }
 
 /** Protected slide-asset URL for the seeded image asset (public/shared doc). */

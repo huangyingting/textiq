@@ -253,7 +253,8 @@ export async function resolvePublicRenderWithSource(
     };
   }
 
-  const shareId = shareIdFromParam(input.params.shareId ?? "");
+  const rawShareId = input.params.shareId ?? "";
+  const shareId = shareIdFromParam(rawShareId) || rawShareId;
   const document = shareId ? await source.findByShareId(shareId) : null;
   const mode = input.mode;
   const projection = input.projection;
