@@ -1,17 +1,17 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-02"
-description: "The document editor pairs a Lexical rich-text surface with visual blocks (flowcharts, mind maps, charts, …) and a set of context-aware surfaces (a floating text toolbar, a mobile bottom sheet, a +// insert menu, and a per-visual editing popover). This document explains how those pieces fit together and how to extend them safely."
+last_updated: "2026-07-03"
+description: "The document editor pairs a Lexical rich-text surface with visual blocks and document table editing, plus context-aware surfaces such as floating toolbars, a mobile bottom sheet, insert menus, and per-visual editing popovers. This document explains how those pieces fit together and how to extend them safely."
 ---
 
 # Document Editor Architecture
 
 The document editor pairs a Lexical rich-text surface with **visual blocks**
-(flowcharts, mind maps, charts, …) and a set of **context-aware surfaces**
-(a floating text toolbar, a mobile bottom sheet, a `+`/`/` insert menu, and a
-per-visual editing popover). This document explains how those pieces fit
-together and how to extend them safely.
+(flowcharts, mind maps, charts, …), document **table editing**, and a set of
+**context-aware surfaces** (floating text/table toolbars, a mobile bottom
+sheet, a `+`/`/` insert menu, and a per-visual editing popover). This document
+explains how those pieces fit together and how to extend them safely.
 
 ## Overview & goals
 
@@ -45,7 +45,8 @@ flowchart TD
   ctx -->|"useEditorContext() snapshot"| resolver["useEditingSurface()<br/>resolveEditingSurface()<br/>→ { mode, group }"]
   inputs["pointer · selection"] -->|runtime inputs| resolver
 
-  resolver -->|"mode=float"| toolbar["FloatingTextToolbar"]
+  resolver -->|"mode=float · text"| toolbar["FloatingTextToolbar"]
+  resolver -->|"mode=float · table"| tableToolbar["FloatingTableToolbar"]
   resolver -->|"mode=sheet"| sheet["MobileEditingSheet"]
 
   ctx -->|snapshot| menu["Insert menu (+ / /)"]
@@ -57,12 +58,14 @@ flowchart TD
   registry --> menu
 
   toolbar -->|"tool.run(editor, ctx)"| cmds["Lexical commands / editor.update()"]
+  tableToolbar -->|"runDocumentTableControl(editor, action)"| cmds
   sheet -->|"tool.run(editor, ctx)"| cmds
   menu -->|"tool.run(editor, ctx)"| cmds
   vpop -->|"transform(visual) → node.setVisual()"| cmds
   cmds --> state
 
   ui["src/components/ui/ primitives<br/>(Surface, Button, FloatingSurface, …)"] -.renders.-> toolbar
+  ui -.renders.-> tableToolbar
   ui -.renders.-> sheet
   ui -.renders.-> menu
   ui -.renders.-> vpop
@@ -90,27 +93,28 @@ owns all selection derivation.
 Key `EditorContextSnapshot` fields (authoritative type:
 [`selection-snapshot.ts`](../../src/lib/lexical/selection-snapshot.ts)):
 
-| Field                   | Meaning                                                       |
-| ----------------------- | ------------------------------------------------------------- |
-| `kind`                  | `range` \| `collapsed` \| `empty-block` \| `visual` \| `none` |
-| `editable`              | mirrors `editor.isEditable()`                                 |
-| `isCollapsed`           | whether the active range selection is collapsed               |
-| `blockType`             | `paragraph`/`h1`/`h2`/`h3`/`quote`/`bullet`/`number`          |
-| `activeFormats`         | `Set` of active inline formats (bold/italic/…/code)           |
-| `elementFormat`         | block alignment (`""` = inherited/left)                       |
-| `textColor`             | inline text color style (`""` when unset)                     |
-| `highlightColor`        | inline highlight color style (`""` when unset)                |
-| `isLink`                | selection sits within a link                                  |
-| `blockKey`              | **live, transient** key of the active block                   |
-| `blockBid`              | **stable** durable `bid` of the active block                  |
-| `blockText`             | text content of the active block                              |
-| `selectionText`         | text content of the active selection                          |
-| `selectionEndBlockKey`  | **live, transient** key of the range end block                |
-| `selectionEndBlockBid`  | **stable** durable `bid` of the range end block               |
-| `isEmptyBlock`          | active block has no text/content                              |
-| `selectedVisualId`      | **stable** id of a selected `VisualNode` (safe to persist)    |
-| `selectedVisualNodeKey` | **live, transient** key of that node                          |
-| `rects`                 | `selection` + `block` `DOMRect` snapshots for positioning     |
+| Field                   | Meaning                                                                  |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `kind`                  | `range` \| `collapsed` \| `empty-block` \| `visual` \| `table` \| `none` |
+| `editable`              | mirrors `editor.isEditable()`                                            |
+| `isCollapsed`           | whether the active range selection is collapsed                          |
+| `blockType`             | `paragraph`/`h1`/`h2`/`h3`/`quote`/`bullet`/`number`                     |
+| `activeFormats`         | `Set` of active inline formats (bold/italic/…/code)                      |
+| `elementFormat`         | block alignment (`""` = inherited/left)                                  |
+| `textColor`             | inline text color style (`""` when unset)                                |
+| `highlightColor`        | inline highlight color style (`""` when unset)                           |
+| `isLink`                | selection sits within a link                                             |
+| `blockKey`              | **live, transient** key of the active block                              |
+| `blockBid`              | **stable** durable `bid` of the active block                             |
+| `blockText`             | text content of the active block                                         |
+| `selectionText`         | text content of the active selection                                     |
+| `selectionEndBlockKey`  | **live, transient** key of the range end block                           |
+| `selectionEndBlockBid`  | **stable** durable `bid` of the range end block                          |
+| `isEmptyBlock`          | active block has no text/content                                         |
+| `selectedVisualId`      | **stable** id of a selected `VisualNode` (safe to persist)               |
+| `selectedVisualNodeKey` | **live, transient** key of that node                                     |
+| `selectedTableNodeKey`  | **live, transient** key of the active `TableNode`                        |
+| `rects`                 | `selection` + `block` `DOMRect` snapshots for positioning                |
 
 The provider is read-only: it never calls `editor.update()`, never touches Yjs,
 and the only NodeKeys it exposes (`blockKey`, `selectedVisualNodeKey`) are
@@ -141,8 +145,8 @@ separate from `EditingSurfaceGroup` in
 `overall` for document-level adjustments when no contextual selection owns the
 surface.
 
-Surfaces consume the registry through `toolsFor(group, ctx)`, which returns the
-visible tools in registration order:
+Most text/insert/visual surfaces consume the registry through
+`toolsFor(group, ctx)`, which returns the visible tools in registration order:
 
 - [`floating-text-toolbar.tsx`](../../src/app/app/documents/%5Bid%5D/floating-text-toolbar.tsx)
   renders `toolsFor("text-format", ctx)` as icon buttons above a non-collapsed
@@ -153,6 +157,13 @@ visible tools in registration order:
 
 Both surfaces are dumb renderers: they own positioning and keyboard handling but
 delegate all behavior to `tool.run(...)` / `tool.apply(...)`.
+
+Document table editing is not registry-driven because table controls need richer
+table-local state (row/column counts, final-row/final-column guards, and header
+row state) from [`table-controls.ts`](../../src/lib/lexical/table-controls.ts).
+The desktop and mobile table surfaces still follow the same selection and
+mutation rule: selection is derived once, and mutations flow back through
+Lexical updates.
 
 ### Unified EditingSurface resolver
 
@@ -167,10 +178,10 @@ per-surface ad-hoc visibility checks that previously lived in
 The resolver takes two inputs — both gathered by the React bridge
 [`useEditingSurface()`](../../src/app/app/documents/%5Bid%5D/use-editing-surface.ts):
 
-| Input           | Source                                                 | Values                              |
-| --------------- | ------------------------------------------------------ | ----------------------------------- |
-| `pointerFine`   | `useIsPointerFine()` — `matchMedia("(pointer: fine)")` | `true` \| `false`                   |
-| `selectionKind` | `selectionKindFromContext(useEditorContext().kind)`    | `"range"` \| `"visual"` \| `"none"` |
+| Input           | Source                                                 | Values                                           |
+| --------------- | ------------------------------------------------------ | ------------------------------------------------ |
+| `pointerFine`   | `useIsPointerFine()` — `matchMedia("(pointer: fine)")` | `true` \| `false`                                |
+| `selectionKind` | `selectionKindFromContext(useEditorContext().kind)`    | `"range"` \| `"visual"` \| `"table"` \| `"none"` |
 
 `useIsPointerFine` defaults to `true` on the server (SSR) so the initial render
 is fully populated; it resolves the real value on the first client render
@@ -185,42 +196,93 @@ group** via `groupForSelectionKind()`:
 | --------------- | --------------- | ------------------------------------------------------ |
 | `"range"`       | `"text-format"` | Text formatting tools (`toolsFor("text-format", ctx)`) |
 | `"visual"`      | `"visual-edit"` | Visual restyle controls (`VisualContextSection`)       |
+| `"table"`       | `"table-edit"`  | Document table controls (`TableEditingSection`)        |
 | `"none"`        | `"overall"`     | Document-level adjustments (`OverallAdjustmentsPanel`) |
 
 The `group` is always returned even when `mode === "none"`, so callers know
 what _would_ render.
 
 `selectionKindFromContext()` maps the full `EditorContextKind` to the coarser
-three-way split: `"range"` → `"range"`, `"visual"` → `"visual"`, and
-everything else (`"none"`, `"empty-block"`, `"collapsed"`) → `"none"`.
+split: `"range"` → `"range"`, `"visual"` → `"visual"`, `"table"` → `"table"`,
+and everything else (`"none"`, `"empty-block"`, `"collapsed"`) → `"none"`.
+Text range selections inside table cells keep `"range"` priority; collapsed
+carets or table selections inside a table become `"table"`.
 
 #### Modes
 
 `resolveEditingSurface()` returns one of three modes:
 
-| Mode      | Where it renders                                                      |
-| --------- | --------------------------------------------------------------------- |
-| `"float"` | Anchored popover for text selections or selected visuals              |
-| `"sheet"` | Slide-up bottom sheet for text selections or selected visuals         |
-| `"none"`  | No contextual surface; document-level controls live in the top chrome |
+| Mode      | Where it renders                                                              |
+| --------- | ----------------------------------------------------------------------------- |
+| `"float"` | Anchored popover for text selections, selected visuals, or active tables      |
+| `"sheet"` | Slide-up bottom sheet for text selections, selected visuals, or active tables |
+| `"none"`  | No contextual surface; document-level controls live in the top chrome         |
 
 #### Precedence rules (R1 → R3)
 
 The resolver applies three rules in strict order, short-circuiting on the first
 match:
 
-| Rule   | Condition                            | Result    |
-| ------ | ------------------------------------ | --------- |
-| **R1** | `selectionKind === "none"`           | `"none"`  |
-| **R2** | text/visual context + fine pointer   | `"float"` |
-| **R3** | text/visual context + coarse pointer | `"sheet"` |
+| Rule   | Condition                                  | Result    |
+| ------ | ------------------------------------------ | --------- |
+| **R1** | `selectionKind === "none"`                 | `"none"`  |
+| **R2** | text/visual/table context + fine pointer   | `"float"` |
+| **R3** | text/visual/table context + coarse pointer | `"sheet"` |
 
 Document-level adjustments are intentionally excluded from contextual surfaces;
 they are opened from the top toolbar.
 
-The function is total over its 2 × 3 = 6 input combinations and is
+The function is total over its 2 × 4 = 8 input combinations and is
 exhaustively covered by
 [`editing-surface.test.ts`](../../src/lib/lexical/editing-surface.test.ts).
+
+### Document table editing
+
+Tables are document-authoring structures, not spreadsheet surfaces. The editor
+does not provide formulas, sorting, filtering, fill handles, or a spreadsheet
+selection model. Cell text remains ordinary Lexical rich text; table structure
+is edited through contextual table controls.
+
+Selection and surfaces:
+
+- A collapsed caret or table selection inside a table derives `kind: "table"`
+  and resolves to `group: "table-edit"`.
+- A non-collapsed text range inside a table remains `kind: "range"`, so the
+  text-format toolbar wins when the user selects cell text.
+- Fine pointers render
+  [`FloatingTableToolbar`](../../src/app/app/documents/%5Bid%5D/table-controls.tsx)
+  anchored to the full table.
+- Coarse pointers render the same table control content inside
+  [`MobileEditingSheet`](../../src/app/app/documents/%5Bid%5D/mobile-editing-sheet.tsx).
+- Focus inside the inline caption also counts as table context via
+  [`use-active-table-caption.ts`](../../src/app/app/documents/%5Bid%5D/use-active-table-caption.ts).
+
+The table controls expose:
+
+- a read-only size indicator (`rows × columns`),
+- first-row header toggle,
+- add row below / delete row,
+- add column right / delete column,
+- a More menu containing confirmed Delete table.
+
+Deleting the final row or final column is disabled. Deleting the whole table is
+an explicit destructive action; it is not triggered by deleting the last row or
+column. Table-specific keyboard shortcuts are intentionally absent in this pass.
+The toolbar follows the standard toolbar accessibility pattern with roving
+tabindex, arrow-key movement, Home/End, and Escape returning focus to the
+editor.
+
+Captions are semantic table state stored on `TableNode` by
+[`table-caption-runtime.ts`](../../src/lib/lexical/table-caption-runtime.ts).
+They serialize through `contentJson` as the table node's `caption` field, so
+autosave, undo/redo, slide derivation, public render, and export all use the
+same Lexical JSON path. In the editor DOM, caption editing is rendered as a
+`figcaption` outside the actual `<table>` subtree so Lexical's internal
+`TableObserver` continues to observe only rows/cells. Non-empty captions are
+always visible; empty caption placeholders appear only while the table is active
+or the caption input is focused. Captions are single-line values: pasted
+newlines are normalized to spaces, and Enter/Escape blur the caption and return
+focus to the editor.
 
 ### Shared UI primitives
 

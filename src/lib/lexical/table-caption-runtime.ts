@@ -24,6 +24,7 @@ type PatchableTableNodeClass = {
 };
 
 const PATCH_FLAG = Symbol.for("textiq.table-caption.patch");
+const TABLE_WRAPPER_SELECTOR = "[data-document-table-wrapper]";
 const CAPTION_SELECTOR = "[data-document-table-caption]";
 const CAPTION_INPUT_SELECTOR = "[data-document-table-caption-input]";
 let supportInstalled = false;
@@ -75,8 +76,9 @@ function patchTableNodeClass(klass: PatchableTableNodeClass): void {
     editor?: LexicalEditor,
   ): HTMLElement {
     const dom = originalCreateDOM.call(this, config, editor);
-    syncCaptionDOM(this, dom, editor);
-    return dom;
+    const wrapper = ensureTableWrapper(dom);
+    syncCaptionDOM(this, wrapper, editor);
+    return wrapper;
   };
 
   proto.updateDOM = function updateDOMWithCaption(
@@ -85,7 +87,10 @@ function patchTableNodeClass(klass: PatchableTableNodeClass): void {
     dom: HTMLElement,
     config: unknown,
   ): boolean {
-    const shouldReplace = originalUpdateDOM.call(this, prevNode, dom, config);
+    const originalDOM = originalTableDOM(dom);
+    const shouldReplace = originalDOM
+      ? originalUpdateDOM.call(this, prevNode, originalDOM, config)
+      : true;
     if (!shouldReplace) {
       syncCaptionDOM(this, dom);
     }
@@ -114,23 +119,44 @@ function findTableElement(dom: HTMLElement): HTMLTableElement | null {
   return dom instanceof HTMLTableElement ? dom : dom.querySelector("table");
 }
 
-function findCaptionElement(
-  tableElement: HTMLTableElement,
-): HTMLTableCaptionElement | null {
-  for (const child of Array.from(tableElement.children)) {
-    if (
-      child instanceof HTMLTableCaptionElement &&
-      child.matches(CAPTION_SELECTOR)
-    ) {
+function isTableWrapper(value: HTMLElement): boolean {
+  return value.matches(TABLE_WRAPPER_SELECTOR);
+}
+
+function ensureTableWrapper(dom: HTMLElement): HTMLElement {
+  if (isTableWrapper(dom)) return dom;
+  const wrapper = document.createElement("figure");
+  wrapper.dataset.documentTableWrapper = "true";
+  wrapper.className = "my-4";
+  wrapper.appendChild(dom);
+  return wrapper;
+}
+
+function tableWrapperForDOM(dom: HTMLElement): HTMLElement {
+  const wrapper = dom.closest<HTMLElement>(TABLE_WRAPPER_SELECTOR);
+  return wrapper ?? dom;
+}
+
+function originalTableDOM(dom: HTMLElement): HTMLElement | null {
+  if (!isTableWrapper(dom)) return dom;
+  for (const child of Array.from(dom.children)) {
+    if (child instanceof HTMLElement && !child.matches(CAPTION_SELECTOR)) {
       return child;
     }
   }
   return null;
 }
 
-function captionInput(
-  captionElement: HTMLTableCaptionElement,
-): HTMLInputElement | null {
+function findCaptionElement(wrapper: HTMLElement): HTMLElement | null {
+  for (const child of Array.from(wrapper.children)) {
+    if (child instanceof HTMLElement && child.matches(CAPTION_SELECTOR)) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function captionInput(captionElement: HTMLElement): HTMLInputElement | null {
   return captionElement.querySelector<HTMLInputElement>(CAPTION_INPUT_SELECTOR);
 }
 
@@ -140,7 +166,7 @@ function sanitizeCaptionInput(value: string): string {
 
 function refreshCaptionVisibility(
   tableElement: HTMLTableElement,
-  captionElement: HTMLTableCaptionElement,
+  captionElement: HTMLElement,
   input: HTMLInputElement,
 ): void {
   const hasCaption = input.value.trim().length > 0;
@@ -150,15 +176,13 @@ function refreshCaptionVisibility(
   captionElement.hidden = !hasCaption && !active;
 }
 
-function ensureCaptionElement(
-  tableElement: HTMLTableElement,
-): HTMLTableCaptionElement {
-  const existing = findCaptionElement(tableElement);
+function ensureCaptionElement(wrapper: HTMLElement): HTMLElement {
+  const existing = findCaptionElement(wrapper);
   if (existing) return existing;
-  const captionElement = document.createElement("caption");
+  const captionElement = document.createElement("figcaption");
   captionElement.dataset.documentTableCaption = "true";
   captionElement.className =
-    "caption-top px-0 pb-2 text-left text-sm font-medium text-ds-text-secondary";
+    "px-0 pb-2 text-left text-sm font-medium text-ds-text-secondary";
   const input = document.createElement("input");
   input.type = "text";
   input.dataset.documentTableCaptionInput = "true";
@@ -167,14 +191,14 @@ function ensureCaptionElement(
   input.className =
     "w-full rounded-ds-sm bg-transparent px-1 py-0.5 text-sm font-medium text-ds-text-secondary placeholder:text-ds-text-muted focus:bg-ds-surface-raised focus:outline-none focus:ring-2 focus:ring-ds-focus-ring";
   captionElement.appendChild(input);
-  tableElement.insertBefore(captionElement, tableElement.firstChild);
+  wrapper.insertBefore(captionElement, wrapper.firstChild);
   return captionElement;
 }
 
 function bindCaptionInput(
   tableKey: string,
   tableElement: HTMLTableElement,
-  captionElement: HTMLTableCaptionElement,
+  captionElement: HTMLElement,
   input: HTMLInputElement,
   editor?: LexicalEditor,
 ): void {
@@ -223,9 +247,10 @@ function syncCaptionDOM(
   dom: HTMLElement,
   editor?: LexicalEditor,
 ): void {
+  const wrapper = tableWrapperForDOM(dom);
   const tableElement = findTableElement(dom);
   if (!tableElement) return;
-  const captionElement = ensureCaptionElement(tableElement);
+  const captionElement = ensureCaptionElement(wrapper);
   const input = captionInput(captionElement);
   if (!input) return;
   const caption = normalizeDocumentTableCaption(tableNode.__caption ?? "");
@@ -246,9 +271,10 @@ export function refreshDocumentTableCaptionDOM(
   dom: HTMLElement | null | undefined,
 ): void {
   if (!dom) return;
+  const wrapper = tableWrapperForDOM(dom);
   const tableElement = findTableElement(dom);
   if (!tableElement) return;
-  const captionElement = findCaptionElement(tableElement);
+  const captionElement = findCaptionElement(wrapper);
   if (!captionElement) return;
   const input = captionInput(captionElement);
   if (!input) return;

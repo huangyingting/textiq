@@ -11,11 +11,10 @@ These documents describe the Lexical document editor and editor-owned comment
 UX. Presentation theme, slide editor, rendering, and export behavior belong to
 the presentation subsystem.
 
-| Document                                           | Type         | Scope                                                                              |
-| -------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| [document-editor.md](document-editor.md)           | Architecture | Lexical editor selection model, tool registry, visual lifecycle, and autosave.     |
-| [comments-and-anchors.md](comments-and-anchors.md) | Design       | Comment threads, text/visual anchors, slide anchors, and lifecycle behavior.       |
-| [table-editing-plan.md](table-editing-plan.md)     | Plan         | Document table editing surfaces, controls, inline captions, and acceptance checks. |
+| Document                                           | Type         | Scope                                                                          |
+| -------------------------------------------------- | ------------ | ------------------------------------------------------------------------------ |
+| [document-editor.md](document-editor.md)           | Architecture | Lexical editor selection model, tool registry, visual lifecycle, and autosave. |
+| [comments-and-anchors.md](comments-and-anchors.md) | Design       | Comment threads, text/visual anchors, slide anchors, and lifecycle behavior.   |
 
 ## Related Contracts
 
