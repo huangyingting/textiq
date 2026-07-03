@@ -5,7 +5,7 @@ import { MAX_DECK_JSON_BYTES, formatDeckTooLargeError } from "@/lib/limits";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
-import { safeParseDeck } from "@/lib/presentation/validation";
+import { safeParseDeck } from "@/lib/document/persistence/current-deck-schema";
 
 export type DeckCasDb = {
   document: {

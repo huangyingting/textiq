@@ -10,12 +10,12 @@ import { prisma } from "@/lib/prisma";
 import { writeDeckWithCas } from "@/lib/document/deck-cas-writer";
 import { logError } from "@/lib/log";
 import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
-import type {
-  Deck,
-  SlideChildNode,
-  SlideNode,
-} from "@/lib/presentation/schema";
-import { safeParseDeck } from "@/lib/presentation/validation";
+import {
+  safeParseDeck,
+  type Deck,
+  type SlideChildNode,
+  type SlideNode,
+} from "@/lib/document/persistence/current-deck-schema";
 import type {
   SaveDeckFailureResult,
   SaveDeckPatchResult,

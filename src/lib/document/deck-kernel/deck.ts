@@ -14,8 +14,8 @@ export {
   resolveSlideFormat,
   slideAspectRatio,
   slideFormatConfig,
-} from "@/lib/presentation/slide-format";
-export type { SlideFormat } from "@/lib/presentation/slide-format";
+} from "@/lib/document/deck-kernel/slide-format";
+export type { SlideFormat } from "@/lib/document/deck-kernel/slide-format";
 
 export {
   LEGACY_DECK_SCHEMA_VERSION,

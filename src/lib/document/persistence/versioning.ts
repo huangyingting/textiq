@@ -11,10 +11,10 @@ import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
 import {
   DECK_SCHEMA_VERSION,
+  safeParseDeck,
   type Deck,
   type SlideChildNode,
-} from "@/lib/presentation/schema";
-import { safeParseDeck } from "@/lib/presentation/validation";
+} from "@/lib/document/persistence/current-deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";

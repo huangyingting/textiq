@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
-import { DECK_SCHEMA_VERSION } from "@/lib/presentation/schema";
+import { DECK_SCHEMA_VERSION } from "@/lib/document/persistence/current-deck-schema";
 import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
 

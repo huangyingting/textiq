@@ -32,6 +32,7 @@ import type {
   AlignElementsCommand,
   ArrangeElementsCommand,
   BringElementToFrontCommand,
+  CommandResult,
   DistributeElementsCommand,
   DuplicateElementCommand,
   DuplicateElementsCommand,
@@ -59,6 +60,74 @@ import {
   makePatch,
   success,
 } from "./slide-command-executor-helpers";
+
+const MIN_REQUIRED_ELEMENT_ID_COUNT = 1;
+const MIN_GROUPABLE_ELEMENT_COUNT = 2;
+const MIN_DISTRIBUTABLE_ELEMENT_COUNT = 3;
+
+type SlideLookup =
+  | { ok: true; index: number }
+  | { ok: false; result: CommandResult };
+
+function requireSlide(deck: Deck, slideId: string): SlideLookup {
+  const index = findSlideIndex(deck, slideId);
+  if (index === -1) {
+    return { ok: false, result: failure(deck, `Slide not found: ${slideId}`) };
+  }
+  return { ok: true, index };
+}
+
+function slideElementIds(deck: Deck, slideIndex: number): Set<string> {
+  return new Set((deck.slides[slideIndex]?.elements ?? []).map((e) => e.id));
+}
+
+function hasSlideElement(
+  deck: Deck,
+  slideIndex: number,
+  elementId: string,
+): boolean {
+  return slideElementIds(deck, slideIndex).has(elementId);
+}
+
+function requireSlideElement(
+  deck: Deck,
+  slideId: string,
+  elementId: string,
+): SlideLookup {
+  const slide = requireSlide(deck, slideId);
+  if (!slide.ok) return slide;
+  if (!hasSlideElement(deck, slide.index, elementId)) {
+    return {
+      ok: false,
+      result: failure(deck, `Element not found: ${elementId}`),
+    };
+  }
+  return slide;
+}
+
+function requireElementIdCount(
+  deck: Deck,
+  count: number,
+  minCount: number,
+  message: string,
+): CommandResult | undefined {
+  if (count < minCount) return failure(deck, message);
+  return undefined;
+}
+
+function requireSlideWithElementIdCount(
+  deck: Deck,
+  slideId: string,
+  count: number,
+  minCount: number,
+  message: string,
+): SlideLookup {
+  const slide = requireSlide(deck, slideId);
+  if (!slide.ok) return slide;
+  const countError = requireElementIdCount(deck, count, minCount, message);
+  if (countError) return { ok: false, result: countError };
+  return slide;
+}
 
 export type ElementFamilyCommand =
   | AddElementCommand
@@ -89,11 +158,12 @@ export type ElementFamilyCommand =
 export function executeElementFamilyCommand(
   deck: Deck,
   cmd: ElementFamilyCommand,
-) {
+): CommandResult {
   switch (cmd.type) {
     case "ADD_ELEMENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
+      const slide = requireSlide(deck, cmd.slideId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const next = addElement(deck, index, cmd.element);
       const elements = next.slides[index]?.elements;
       const newId = elements?.[elements.length - 1]?.id;
@@ -104,11 +174,9 @@ export function executeElementFamilyCommand(
       ]);
     }
     case "UPDATE_ELEMENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      const slide = deck.slides[index]!;
-      if (!slide.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         updateElement(deck, index, cmd.elementId, cmd.patch),
         [cmd.slideId],
@@ -122,11 +190,9 @@ export function executeElementFamilyCommand(
       );
     }
     case "UPDATE_ELEMENT_CONTENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      const slide = deck.slides[index]!;
-      if (!slide.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const patch = {
         ...(cmd.content !== undefined ? { content: cmd.content } : {}),
         ...(cmd.role !== undefined ? { role: cmd.role } : {}),
@@ -144,11 +210,9 @@ export function executeElementFamilyCommand(
       );
     }
     case "UPDATE_ELEMENT_DESIGN_OVERRIDES": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      const slide = deck.slides[index]!;
-      if (!slide.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const patch = {
         designOverrides: cmd.designOverrides,
       } as never;
@@ -170,11 +234,9 @@ export function executeElementFamilyCommand(
       );
     }
     case "REMOVE_ELEMENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      const slide = deck.slides[index]!;
-      if (!slide.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         removeElement(deck, index, cmd.elementId),
         [cmd.slideId],
@@ -188,13 +250,16 @@ export function executeElementFamilyCommand(
       );
     }
     case "REMOVE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length === 0)
-        return failure(deck, "elementIds must not be empty");
-      const existingIds = new Set(
-        (deck.slides[index]!.elements ?? []).map((e) => e.id),
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "elementIds must not be empty",
       );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
+      const existingIds = slideElementIds(deck, index);
       const validIds = cmd.elementIds.filter((id) => existingIds.has(id));
       if (validIds.length === 0)
         return failure(deck, "None of the element ids were found");
@@ -213,10 +278,9 @@ export function executeElementFamilyCommand(
       );
     }
     case "DUPLICATE_ELEMENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (!deck.slides[index]!.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const { deck: next, newElementId } = duplicateElement(
         deck,
         index,
@@ -241,10 +305,15 @@ export function executeElementFamilyCommand(
       );
     }
     case "DUPLICATE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length === 0)
-        return failure(deck, "elementIds must not be empty");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "elementIds must not be empty",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const { deck: next, newElementIds } = duplicateElements(
         deck,
         index,
@@ -260,10 +329,15 @@ export function executeElementFamilyCommand(
       ]);
     }
     case "NUDGE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length === 0)
-        return failure(deck, "elementIds must not be empty");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "elementIds must not be empty",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         nudgeElements(deck, index, cmd.elementIds, cmd.dx, cmd.dy),
         [cmd.slideId],
@@ -273,20 +347,26 @@ export function executeElementFamilyCommand(
       );
     }
     case "GROUP_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length < 2)
-        return failure(deck, "GROUP_ELEMENTS requires at least 2 element ids");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_GROUPABLE_ELEMENT_COUNT,
+        "GROUP_ELEMENTS requires at least 2 element ids",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       const { deck: next } = groupElements(deck, index, cmd.elementIds);
       return success(next, [cmd.slideId], cmd.elementIds, undefined, [
         makePatch("element.group", [cmd.slideId], cmd.elementIds),
       ]);
     }
     case "UNGROUP_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      const memberIds = (deck.slides[index]!.elements ?? [])
-        .filter((e) => (e as { groupId?: string }).groupId === cmd.groupId)
+      const slide = requireSlide(deck, cmd.slideId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
+      const memberIds = (deck.slides[index]?.elements ?? [])
+        .filter((e) => e.groupId === cmd.groupId)
         .map((e) => e.id);
       if (memberIds.length === 0)
         return failure(deck, `Group not found: ${cmd.groupId}`);
@@ -299,10 +379,15 @@ export function executeElementFamilyCommand(
       );
     }
     case "ALIGN_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length < 2)
-        return failure(deck, "ALIGN_ELEMENTS requires at least 2 element ids");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_GROUPABLE_ELEMENT_COUNT,
+        "ALIGN_ELEMENTS requires at least 2 element ids",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         alignElements(deck, index, cmd.elementIds, cmd.mode),
         [cmd.slideId],
@@ -312,13 +397,15 @@ export function executeElementFamilyCommand(
       );
     }
     case "DISTRIBUTE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length < 3)
-        return failure(
-          deck,
-          "DISTRIBUTE_ELEMENTS requires at least 3 element ids",
-        );
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_DISTRIBUTABLE_ELEMENT_COUNT,
+        "DISTRIBUTE_ELEMENTS requires at least 3 element ids",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         distributeElements(deck, index, cmd.elementIds, cmd.mode),
         [cmd.slideId],
@@ -328,13 +415,15 @@ export function executeElementFamilyCommand(
       );
     }
     case "MATCH_SIZE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length < 2)
-        return failure(
-          deck,
-          "MATCH_SIZE_ELEMENTS requires at least 2 element ids",
-        );
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_GROUPABLE_ELEMENT_COUNT,
+        "MATCH_SIZE_ELEMENTS requires at least 2 element ids",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         matchSizeElements(deck, index, cmd.elementIds, cmd.mode),
         [cmd.slideId],
@@ -344,10 +433,15 @@ export function executeElementFamilyCommand(
       );
     }
     case "ARRANGE_ELEMENTS": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (cmd.elementIds.length === 0)
-        return failure(deck, "elementIds must not be empty");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        cmd.elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "elementIds must not be empty",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         arrangeSelectedElements(deck, index, cmd.elementIds, cmd.mode),
         [cmd.slideId],
@@ -363,10 +457,9 @@ export function executeElementFamilyCommand(
     case "MOVE_ELEMENT_ZORDER":
     case "RENAME_ELEMENT":
     case "REORDER_ELEMENT": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
-      if (!deck.slides[index]!.elements?.some((e) => e.id === cmd.elementId))
-        return failure(deck, `Element not found: ${cmd.elementId}`);
+      const slide = requireSlideElement(deck, cmd.slideId, cmd.elementId);
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       if (cmd.type === "BRING_ELEMENT_TO_FRONT") {
         return success(
           bringElementToFront(deck, index, cmd.elementId),
@@ -430,11 +523,16 @@ export function executeElementFamilyCommand(
       );
     }
     case "SET_ELEMENT_BOXES": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const elementIds = Object.keys(cmd.boxesById);
-      if (elementIds.length === 0)
-        return failure(deck, "boxesById must not be empty");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "boxesById must not be empty",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         setElementBoxes(deck, index, cmd.boxesById),
         [cmd.slideId],
@@ -444,11 +542,16 @@ export function executeElementFamilyCommand(
       );
     }
     case "SET_ELEMENT_PATCHES": {
-      const index = findSlideIndex(deck, cmd.slideId);
-      if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const elementIds = Object.keys(cmd.patchesById);
-      if (elementIds.length === 0)
-        return failure(deck, "patchesById must not be empty");
+      const slide = requireSlideWithElementIdCount(
+        deck,
+        cmd.slideId,
+        elementIds.length,
+        MIN_REQUIRED_ELEMENT_ID_COUNT,
+        "patchesById must not be empty",
+      );
+      if (!slide.ok) return slide.result;
+      const { index } = slide;
       return success(
         setElementPatches(deck, index, cmd.patchesById),
         [cmd.slideId],
