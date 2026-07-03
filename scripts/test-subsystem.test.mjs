@@ -70,6 +70,20 @@ test("test subsystem map classifies files by owning subsystem", () => {
   assert.ok(
     classifyTestFile("e2e/present-export.spec.ts").includes("presentation"),
   );
+  assert.deepEqual(
+    classifyTestFile("e2e/ui-matrix/document-editor-ui.spec.ts"),
+    ["editor"],
+  );
+  assert.ok(
+    classifyTestFile("e2e/ui-matrix/public-render-ui.spec.ts").includes(
+      "public-render",
+    ),
+  );
+  assert.ok(
+    classifyTestFile(
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+    ).includes("billing"),
+  );
 });
 
 test("test subsystem plan routes source and script files without e2e by default", () => {
@@ -234,14 +248,17 @@ test("test subsystem file lister finds unit, script, and e2e tests", () => {
   mkdirSync(join(root, "src", "lib", "auth"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "e2e"), { recursive: true });
+  mkdirSync(join(root, "e2e", "ui-matrix"), { recursive: true });
   mkdirSync(join(root, "node_modules", "ignored"), { recursive: true });
   writeFileSync(join(root, "src", "lib", "auth", "password.test.ts"), "");
   writeFileSync(join(root, "scripts", "collab-auth.test.mjs"), "");
   writeFileSync(join(root, "e2e", "present-export.spec.ts"), "");
+  writeFileSync(join(root, "e2e", "ui-matrix", "catalog.spec.ts"), "");
   writeFileSync(join(root, "node_modules", "ignored", "fake.test.ts"), "");
 
   assert.deepEqual(listTestFiles(root), [
     "e2e/present-export.spec.ts",
+    "e2e/ui-matrix/catalog.spec.ts",
     "scripts/collab-auth.test.mjs",
     "src/lib/auth/password.test.ts",
   ]);
