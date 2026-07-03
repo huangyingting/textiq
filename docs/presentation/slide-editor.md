@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-03"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -37,6 +37,8 @@ and pointer state rules, see
 | Presence state      | [`src/lib/presentation/slide-editor-collaboration-state.ts`](../../src/lib/presentation/slide-editor-collaboration-state.ts)                   |
 | Open/save state     | [`src/components/editor/use-slide-editor-open.ts`](../../src/components/editor/use-slide-editor-open.ts)                                       |
 | Autosave scheduler  | [`src/lib/presentation/slide-autosave-scheduler.ts`](../../src/lib/presentation/slide-autosave-scheduler.ts)                                   |
+| Autosave queue      | [`src/lib/presentation/resilient-autosave-queue.ts`](../../src/lib/presentation/resilient-autosave-queue.ts)                                   |
+| Clipboard payloads  | [`src/lib/presentation/clipboard/node-payload.ts`](../../src/lib/presentation/clipboard/node-payload.ts)                                       |
 
 ## Ownership Model
 
@@ -49,6 +51,7 @@ not the primary editor lifecycle. Together the route controller and editor own:
 - selected slide and selected node ids;
 - undo/redo deck snapshots and focus restoration targets;
 - debounced full-deck autosave state (`dirty/saving/error`);
+- durable latest-snapshot autosave recovery state (`offline/retrying/failed/conflict`);
 - source-link staleness and review actions;
 - mobile vs desktop placement of the inspector.
 
@@ -271,6 +274,13 @@ editor shell keeps thin wiring around those helpers.
 - **Help:** `?` (or View > Keyboard shortcuts) opens the shortcut help dialog
   (`canvasShortcutHelp` in `src/lib/presentation/canvas-shortcut-help.ts`).
 
+The stage also exposes a content-first screen-reader outline alongside the
+canvas. The outline is derived from the resolved render tree rather than the DOM
+overlay and provides slide position, slide title/summary, deterministic reading
+order, per-node narration, decorative filtering, and missing-content warnings.
+It is an orientation surface only; editing remains in the canvas, inspector, and
+toolbar controls.
+
 ## Canvas Contract
 
 `SlideCanvas` is read-only. It renders the current
@@ -344,6 +354,27 @@ crop bridge, and visual replace/restyle. Multi-select popovers expose alignment,
 distribution, match-size, z-order, group/ungroup, duplicate, delete, and the
 panel bridge.
 
+## Clipboard Interoperability
+
+Stage copy and cut serialize selected nodes to the versioned
+`application/x-textiq-nodes+json` payload and write it through the async
+Clipboard API when the browser allows it. The editor also keeps an in-memory
+buffer so same-instance paste keeps working when clipboard permission is denied
+or the API is unavailable.
+
+Paste prefers a validated TextIQ payload, remaps ids, and inserts through the
+same presentation commands as local editing. If no TextIQ payload is available,
+the stage accepts supported image blobs via the slide asset upload flow, then
+falls back to sanitized HTML or normalized plain text as text nodes. Paste does
+not intercept inspector inputs, table cells, modals, or other focused text
+fields unless that owner explicitly delegates paste to the stage.
+
+Copy-out includes plain text, safe HTML, and PNG fallbacks where supported so
+external applications receive useful content instead of raw JSON. Recoverable
+status messages cover denied permission, unsupported browser APIs, oversized or
+invalid payloads, failed uploads, and other copy/paste failures without breaking
+the in-editor fallback.
+
 ## Mutation Flow
 
 Most user actions flow through pure presentation helpers:
@@ -370,15 +401,21 @@ optional per-slide overrides under `slide.props.deckChrome`.
 ## Autosave And Conflict Handling
 
 `useSlideEditorOpen` uses debounced full-deck saves (`saveDeckJson`) with
-revision tokens:
+revision tokens and a durable latest-snapshot queue:
 
 1. Any deck edit calls `handleDeckChange`, marks dirty, and schedules autosave
    via `createSlideAutosaveScheduler`.
-2. Autosave (or explicit Save) calls `persistDeck`, which writes the full deck
+2. The latest unsaved deck snapshot is persisted locally before network save,
+   coalescing newer edits over older queued snapshots.
+3. Autosave (or explicit Save) calls `persistDeck`, which writes the full deck
    through `deckPort.saveDeckJson`.
-3. If save succeeds, the editor stores the returned revision token and clears
-   dirty/error state.
-4. If save conflicts, the editor surfaces `ConflictRecoveryDialog` with keep
+4. If save succeeds, the editor stores the returned revision token, removes the
+   queued snapshot, and clears dirty/error state.
+5. Offline or transient failures keep the latest snapshot durable, retry with
+   backoff, and recover on reconnect, visibility regain, route focus, editor
+   mount, or explicit retry.
+6. If save conflicts, the editor pauses retrying and surfaces
+   `ConflictRecoveryDialog` with keep
    mine / use theirs / dismiss choices.
 
 Conflict recovery has three user outcomes:
@@ -391,6 +428,10 @@ Conflict recovery has three user outcomes:
 
 Presence is advisory only. It shows who has the deck open and which slide they
 are viewing, but optimistic revision tokens are the conflict authority.
+
+Save status distinguishes idle, queued, saving, offline, retrying, persistent
+failure, and conflict states. The bottom dock exposes retry and unload-warning
+copy when local changes are durable but not yet synced.
 
 `saveDeckPatch` remains available only as a compatibility endpoint and currently
 returns `{ ok: "fallback" }`; presentation runtime autosave does not enqueue or persist

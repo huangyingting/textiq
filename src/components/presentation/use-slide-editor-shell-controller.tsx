@@ -144,7 +144,14 @@ export interface SlideEditorShellController {
   handleCloseConfirmDiscard: () => void;
 }
 
-export function useSlideEditorShellController({
+interface CreateSlideEditorShellControllerArgs extends UseSlideEditorShellControllerArgs {
+  toolbarError: string | null;
+  setToolbarError: Dispatch<SetStateAction<string | null>>;
+  closeConfirmOpen: boolean;
+  setCloseConfirmOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+export function createSlideEditorShellController({
   deck,
   hasUnsavedWork,
   onClose,
@@ -154,10 +161,11 @@ export function useSlideEditorShellController({
   onRegenerate,
   onSave,
   setStageAnnouncement,
-}: UseSlideEditorShellControllerArgs): SlideEditorShellController {
-  const [toolbarError, setToolbarError] = useState<string | null>(null);
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
-
+  toolbarError,
+  setToolbarError,
+  closeConfirmOpen,
+  setCloseConfirmOpen,
+}: CreateSlideEditorShellControllerArgs): SlideEditorShellController {
   async function handleExportPptx() {
     if (!onExportPptx) return;
     setToolbarError(null);
@@ -249,17 +257,6 @@ export function useSlideEditorShellController({
     });
   }
 
-  useEffect(
-    () =>
-      setupBeforeUnloadGuard(hasUnsavedWork, {
-        addBeforeUnloadListener: (listener) =>
-          window.addEventListener("beforeunload", listener),
-        removeBeforeUnloadListener: (listener) =>
-          window.removeEventListener("beforeunload", listener),
-      }),
-    [hasUnsavedWork],
-  );
-
   return {
     toolbarError,
     setToolbarError,
@@ -273,4 +270,48 @@ export function useSlideEditorShellController({
     handleCloseConfirmCancel,
     handleCloseConfirmDiscard,
   };
+}
+
+export function useSlideEditorShellController({
+  deck,
+  hasUnsavedWork,
+  onClose,
+  onExportPptx,
+  onExportPdf,
+  onExportPng,
+  onRegenerate,
+  onSave,
+  setStageAnnouncement,
+}: UseSlideEditorShellControllerArgs): SlideEditorShellController {
+  const [toolbarError, setToolbarError] = useState<string | null>(null);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+
+  const controller = createSlideEditorShellController({
+    deck,
+    hasUnsavedWork,
+    onClose,
+    onExportPptx,
+    onExportPdf,
+    onExportPng,
+    onRegenerate,
+    onSave,
+    setStageAnnouncement,
+    toolbarError,
+    setToolbarError,
+    closeConfirmOpen,
+    setCloseConfirmOpen,
+  });
+
+  useEffect(
+    () =>
+      setupBeforeUnloadGuard(hasUnsavedWork, {
+        addBeforeUnloadListener: (listener) =>
+          window.addEventListener("beforeunload", listener),
+        removeBeforeUnloadListener: (listener) =>
+          window.removeEventListener("beforeunload", listener),
+      }),
+    [hasUnsavedWork],
+  );
+
+  return controller;
 }

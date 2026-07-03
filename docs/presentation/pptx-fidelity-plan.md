@@ -1,8 +1,8 @@
 ---
 type: "plan"
-status: "active — implementation pending"
-last_updated: "2026-07-02"
-description: "Remaining P2 PPTX fidelity work for gradients, pattern/image fills, effects, curved connectors, visual placeholders, and parity fixtures."
+status: "active — native fill support blocked"
+last_updated: "2026-07-03"
+description: "Remaining P2 PPTX fidelity work for native gradient/pattern fills once the PPTX writer exposes representable fill metadata. Image-retry, effects, curved connectors, visual preflight, and parity fixtures are implemented."
 ---
 
 # PPTX Fidelity Plan
@@ -16,15 +16,27 @@ for features that still require fallback behavior.
 
 ## Remaining Work
 
-| Rank | Slice                        | Work                                                                                                                                                                                 | Exit criteria                                                                                    |
-| ---: | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-|    1 | Native gradient mapping      | Map simple linear and radial gradient fills to native PPTX where stops, angle, and transparency can be represented faithfully.                                                       | Unsupported variants still emit clear diagnostics and parity fixtures cover native metadata.     |
-|    2 | Image-retry fallback         | Rasterize nodes with image fills, conic gradients, repeating gradients, or other unsupported fill variants through the existing image-retry tier when native mapping is unavailable. | Crop, fit, opacity, and overlays match product render for affected nodes.                        |
-|    3 | Pattern fill fidelity        | Map simple hatch/dot/stripe patterns to native PPTX and rasterize complex authored patterns when needed.                                                                             | Single-color fallback remains only when neither native nor raster representation is safe.        |
-|    4 | Effect fidelity              | Rasterize glass and blur nodes, evaluate constrained native glow mapping, and group diagnostics for remaining effect fallbacks.                                                      | Effect fallback warnings are actionable and no longer repeat low-level noise per affected style. |
-|    5 | Curved connector export      | Map simple curved routing to native PPTX connector/curve primitives while preserving endpoints, stroke, dash, and arrowheads.                                                        | Unsupported geometry falls back clearly without losing editable connectors by default.           |
-|    6 | Visual placeholder preflight | Attempt to resolve or generate missing rendered visual assets before PPTX export; keep labeled placeholders only as final fallback.                                                  | Diagnostics explain how to regenerate or attach missing visual assets.                           |
-|    7 | Fidelity parity fixtures     | Add shared parity decks covering gradients, pattern fills, image fills, effects, curved connectors, and unresolved visuals.                                                          | Each implementation slice updates focused parity tests and verifies remaining diagnostics.       |
+| Rank | Slice                                | Work                                                                                                                                                                 | Exit criteria                                                                                |
+| ---: | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+|    1 | Native gradient/pattern fill mapping | Map simple linear, radial, hatch, dot, and stripe fills to native PPTX once the PPTX writer exposes gradient/pattern fill props or a supported postprocess boundary. | Unsupported variants still emit clear diagnostics and parity fixtures cover native metadata. |
+
+## Completed Work
+
+| Slice                        | Implemented behavior                                                                                                                                                                                 | Evidence                                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Image-retry fallback         | Gradient, pattern, image-fill, glass, and blur fallback-prone nodes lower to deterministic image-retry metadata instead of single-color fallbacks when native mapping is unavailable.                | `src/lib/presentation/pptx-lowerers/shared.ts`; `src/lib/presentation/pptx-export-adapter.test.ts`.                               |
+| Effect fidelity              | Glass/blur nodes use image-retry diagnostics, and representable glow maps to native zero-distance outer shadow metadata.                                                                             | `src/lib/presentation/pptx-lowerers/shared.ts`; `src/lib/presentation/pptx-appliers/shared.ts`.                                   |
+| Curved connector export      | Simple point-to-point curved routing lowers to editable native arc geometry while preserving stroke, dash, and arrowheads; unsupported endpoint geometry falls back to editable straight connectors. | `src/lib/presentation/pptx-lowerers/shape-connector-lowerer.ts`; `src/lib/presentation/pptx-appliers/shape-connector-applier.ts`. |
+| Visual placeholder preflight | Export resolves declared visual assets and visual-registry rendered assets before placeholder fallback; missing/unsupported visuals emit actionable diagnostics.                                     | `src/lib/presentation/pptx-appliers/asset-sources.ts`; `src/lib/presentation/pptx-lowerers/visual-block-lowerer.ts`.              |
+| Fidelity parity fixtures     | Shared parity deck covers linear/radial/conic/repeating gradients, pattern and image fills, effects, curved connectors, resolved visuals, and unresolved visuals.                                    | `src/test/fixtures/pptx-fidelity.ts`; `src/lib/presentation/pptx-export-adapter.test.ts`.                                         |
+
+## Current Blocker
+
+PptxGenJS 4.0.1 `ShapeFillProps` only exposes `type: "none" | "solid"`,
+`color`, and transparency, and its fill XML generator only emits solid fills.
+Native gradient or pattern fills should not be wired through untyped options
+until the PPTX writer exposes a stable public API or this codebase adds a
+controlled OpenXML postprocess boundary with focused archive-level tests.
 
 ## Constraints
 
@@ -34,5 +46,6 @@ for features that still require fallback behavior.
 
 ## Verification
 
-Each implementation follow-up must run `npm run test:presentation` and add or
-update focused PPTX parity tests for the affected feature.
+Each implementation follow-up must run focused PPTX adapter/applier tests and
+add or update parity fixtures for the affected feature. Use `npm run
+test:presentation` when the change crosses render/export boundaries.

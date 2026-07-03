@@ -96,10 +96,44 @@ export interface SourceReviewController {
   handleReviewSourceLinks: () => void;
 }
 
-export function useSourceReviewController({
+export interface SourceReviewControllerDerivations {
+  documentSourceIndex: SourceBlockIndex | undefined;
+  sourceDerivations: SourceReviewDerivations;
+  documentInsertBlocks: readonly DocumentSourceInsertBlock[];
+}
+
+export function deriveSourceReviewControllerInputs({
   documentId,
   documentBlocks,
   sourceBlockIndex,
+  deck,
+}: Pick<
+  UseSourceReviewControllerArgs,
+  "documentId" | "documentBlocks" | "sourceBlockIndex" | "deck"
+>): SourceReviewControllerDerivations {
+  const documentSourceIndex =
+    sourceBlockIndex ??
+    (documentBlocks.length === 0
+      ? undefined
+      : buildSourceBlockIndex(documentId, documentBlocks));
+  const sourceDerivations = deriveSourceReviewDerivations(
+    deck,
+    documentSourceIndex,
+  );
+  return {
+    documentSourceIndex,
+    sourceDerivations,
+    documentInsertBlocks: documentSourceInsertBlocks(documentSourceIndex),
+  };
+}
+
+interface CreateSourceReviewControllerArgs
+  extends UseSourceReviewControllerArgs, SourceReviewControllerDerivations {
+  sourceReviewStatus: string;
+  setSourceReviewStatus: Dispatch<SetStateAction<string>>;
+}
+
+export function createSourceReviewController({
   deck,
   activeSlide,
   selectedNode,
@@ -111,23 +145,14 @@ export function useSourceReviewController({
   openInspectorPanel,
   setSourceMenuOpen,
   setStageAnnouncement,
-}: UseSourceReviewControllerArgs): SourceReviewController {
-  const documentSourceIndex = useMemo(() => {
-    if (sourceBlockIndex) return sourceBlockIndex;
-    if (documentBlocks.length === 0) return undefined;
-    return buildSourceBlockIndex(documentId, documentBlocks);
-  }, [documentBlocks, documentId, sourceBlockIndex]);
-
-  const sourceDerivations = useMemo(
-    () => deriveSourceReviewDerivations(deck, documentSourceIndex),
-    [deck, documentSourceIndex],
-  );
+  documentSourceIndex,
+  sourceDerivations,
+  documentInsertBlocks,
+  sourceReviewStatus,
+  setSourceReviewStatus,
+}: CreateSourceReviewControllerArgs): SourceReviewController {
   const sourceClassifications = sourceDerivations.classifications;
   const sourceReview = sourceDerivations.reviewItems;
-  const documentInsertBlocks = useMemo(
-    () => documentSourceInsertBlocks(documentSourceIndex),
-    [documentSourceIndex],
-  );
   const sourceStatusLabel = sourceStatusLabelForReview(
     documentSourceIndex,
     sourceReview.length,
@@ -139,7 +164,6 @@ export function useSourceReviewController({
             item.slideId === activeSlide.id && item.nodeId === selectedNode.id,
         )
       : undefined;
-  const [sourceReviewStatus, setSourceReviewStatus] = useState("");
 
   function handleSelectSourceItem(slideId: string, nodeId: string) {
     const slideIndex = deck.slides.findIndex((slide) => slide.id === slideId);
@@ -286,4 +310,53 @@ export function useSourceReviewController({
     handleSyncFromDocument,
     handleReviewSourceLinks,
   };
+}
+
+export function useSourceReviewController({
+  documentId,
+  documentBlocks,
+  sourceBlockIndex,
+  deck,
+  activeSlide,
+  selectedNode,
+  onRefreshSource,
+  onDeckChange,
+  setActiveSlideIndex,
+  setSelection,
+  focusSelectedNodeSoon,
+  openInspectorPanel,
+  setSourceMenuOpen,
+  setStageAnnouncement,
+}: UseSourceReviewControllerArgs): SourceReviewController {
+  const derivations = useMemo(
+    () =>
+      deriveSourceReviewControllerInputs({
+        documentId,
+        documentBlocks,
+        sourceBlockIndex,
+        deck,
+      }),
+    [deck, documentBlocks, documentId, sourceBlockIndex],
+  );
+  const [sourceReviewStatus, setSourceReviewStatus] = useState("");
+
+  return createSourceReviewController({
+    documentId,
+    documentBlocks,
+    sourceBlockIndex,
+    deck,
+    activeSlide,
+    selectedNode,
+    onRefreshSource,
+    onDeckChange,
+    setActiveSlideIndex,
+    setSelection,
+    focusSelectedNodeSoon,
+    openInspectorPanel,
+    setSourceMenuOpen,
+    setStageAnnouncement,
+    ...derivations,
+    sourceReviewStatus,
+    setSourceReviewStatus,
+  });
 }

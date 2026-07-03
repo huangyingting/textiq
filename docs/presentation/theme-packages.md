@@ -1,16 +1,16 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-06-29"
-description: "Theme packages are the presentation editor's bundled visual-style units. A package owns theme tokens, named style refs, optional decorations, and package assets. Semantic templates are global presentation registry entries, not package-local templates."
+last_updated: "2026-07-03"
+description: "Theme packages are the presentation editor's bundled and custom visual-style units. A package owns theme tokens, named style refs, optional decorations, and package assets. Semantic templates are global presentation registry entries, not package-local templates."
 ---
 
 # Presentation Theme Packages
 
-Theme packages are the presentation editor's bundled visual-style units. A
-package owns theme tokens, named style refs, optional decorations, and package
-assets. Semantic templates are global presentation registry entries, not package-local
-templates.
+Theme packages are the presentation editor's bundled and custom visual-style
+units. A package owns theme tokens, named style refs, optional decorations, and
+package assets. Semantic templates are global presentation registry entries,
+not package-local templates.
 
 Theme packages do not reintroduce v6 deck fields. Applying a package writes the
 presentation theme binding on the deck:
@@ -74,6 +74,32 @@ Applying a package is deterministic:
 
 Node-level `localStyle` patches are explicit user edits and are resolved above
 package styles until the user clears them.
+
+## Custom Brand Kits
+
+Users can author custom brand kits without editing raw package JSON. The
+authoring flow stores mutable `BrandKitDraftV1` drafts separately from immutable
+compiled `ThemePackageV1` snapshots. Publishing compiles the draft through
+`compileBrandKitDraft`, validates the resulting package with
+`validateThemePackage`, and saves the compiled package id/version that decks
+reference at render and export boundaries.
+
+Custom packages resolve through the same package registry surface as bundled
+packages. Editor, present, public render, and export callers receive validated
+`ThemePackageV1` values; unresolved custom ids fall back neutrally with
+diagnostics rather than teaching renderers brand-kit draft concepts.
+
+Brand-kit drafts cover identity, palette roles, typography roles, image/font
+assets, and decoration preferences. Publish validation maps diagnostics back to
+authoring fields, blocks critical WCAG text-contrast failures, keeps non-text
+contrast issues as warnings, and validates referenced style/font assets before
+the package can be applied.
+
+Custom font assets reuse the durable brand-font pipeline. Runtime rendering
+injects escaped `@font-face` CSS through `buildFontFaceCss`, while editable PPTX
+export lowers custom typography tokens to PPTX `fontFace` names. Font injection
+is keyed by package revision so repeated renders avoid duplicate stylesheet
+rules.
 
 ## Template Identity
 

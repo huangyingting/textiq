@@ -15,7 +15,6 @@ import {
   buildTextNode,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
-import { createServerRenderHarness } from "@/test/react-server-renderer";
 
 import {
   createSelectionState,
@@ -23,8 +22,11 @@ import {
   type SelectionState,
 } from "./selection-model";
 import {
+  createSourceReviewController,
+  deriveSourceReviewControllerInputs,
   sourceStatusLabelForReview,
-  useSourceReviewController,
+  type SourceReviewController,
+  type UseSourceReviewControllerArgs,
 } from "./use-source-review-controller";
 
 const STALE_BLOCK: SourceBlockIndexEntry = {
@@ -105,6 +107,26 @@ function applySelectionUpdate(
     : next;
 }
 
+function createControllerHarness(
+  getArgs: () => UseSourceReviewControllerArgs,
+): () => SourceReviewController {
+  let sourceReviewStatus = "";
+  const setSourceReviewStatus: Dispatch<SetStateAction<string>> = (next) => {
+    sourceReviewStatus =
+      typeof next === "function" ? next(sourceReviewStatus) : next;
+  };
+
+  return () => {
+    const args = getArgs();
+    return createSourceReviewController({
+      ...args,
+      ...deriveSourceReviewControllerInputs(args),
+      sourceReviewStatus,
+      setSourceReviewStatus,
+    });
+  };
+}
+
 describe("useSourceReviewController", () => {
   test("labels source status from document availability and review count", () => {
     assert.equal(
@@ -122,7 +144,6 @@ describe("useSourceReviewController", () => {
   });
 
   test("refreshes source review items and preserves controller status", () => {
-    const hookRenderer = createServerRenderHarness();
     const sourceBlockIndex = buildSourceBlockIndex();
     let currentDeck = buildSourceLinkedDeck();
     let activeSlideIndex = 0;
@@ -132,30 +153,27 @@ describe("useSourceReviewController", () => {
     const setSelection: Dispatch<SetStateAction<SelectionState>> = (next) => {
       selection = applySelectionUpdate(selection, next);
     };
-    const renderController = () =>
-      hookRenderer.run(() =>
-        useSourceReviewController({
-          documentId: "doc-1",
-          documentBlocks: [],
-          sourceBlockIndex,
-          deck: currentDeck,
-          activeSlide: currentDeck.slides[activeSlideIndex],
-          selectedNode: undefined,
-          onDeckChange: (deck) => {
-            currentDeck = deck;
-          },
-          setActiveSlideIndex: (index) => {
-            activeSlideIndex = index;
-          },
-          setSelection,
-          focusSelectedNodeSoon: () => undefined,
-          openInspectorPanel: () => undefined,
-          setSourceMenuOpen: () => undefined,
-          setStageAnnouncement: (message) => {
-            announcement = message;
-          },
-        }),
-      );
+    const renderController = createControllerHarness(() => ({
+      documentId: "doc-1",
+      documentBlocks: [],
+      sourceBlockIndex,
+      deck: currentDeck,
+      activeSlide: currentDeck.slides[activeSlideIndex],
+      selectedNode: undefined,
+      onDeckChange: (deck) => {
+        currentDeck = deck;
+      },
+      setActiveSlideIndex: (index) => {
+        activeSlideIndex = index;
+      },
+      setSelection,
+      focusSelectedNodeSoon: () => undefined,
+      openInspectorPanel: () => undefined,
+      setSourceMenuOpen: () => undefined,
+      setStageAnnouncement: (message) => {
+        announcement = message;
+      },
+    }));
 
     let controller = renderController();
     assert.deepEqual(
@@ -185,7 +203,6 @@ describe("useSourceReviewController", () => {
   });
 
   test("review source links selects the first issue and opens the source inspector", () => {
-    const hookRenderer = createServerRenderHarness();
     const sourceBlockIndex = buildSourceBlockIndex();
     let currentDeck = buildSourceLinkedDeck();
     let activeSlideIndex = 0;
@@ -197,34 +214,31 @@ describe("useSourceReviewController", () => {
     const setSelection: Dispatch<SetStateAction<SelectionState>> = (next) => {
       selection = applySelectionUpdate(selection, next);
     };
-    const renderController = () =>
-      hookRenderer.run(() =>
-        useSourceReviewController({
-          documentId: "doc-1",
-          documentBlocks: [],
-          sourceBlockIndex,
-          deck: currentDeck,
-          activeSlide: currentDeck.slides[activeSlideIndex],
-          selectedNode: undefined,
-          onDeckChange: (deck) => {
-            currentDeck = deck;
-          },
-          setActiveSlideIndex: (index) => {
-            activeSlideIndex = index;
-          },
-          setSelection,
-          focusSelectedNodeSoon: (nodeId) => {
-            focusedNodeId = nodeId;
-          },
-          openInspectorPanel: (panel) => {
-            openedPanel = panel;
-          },
-          setSourceMenuOpen: (open) => {
-            sourceMenuOpen = open;
-          },
-          setStageAnnouncement: () => undefined,
-        }),
-      );
+    const renderController = createControllerHarness(() => ({
+      documentId: "doc-1",
+      documentBlocks: [],
+      sourceBlockIndex,
+      deck: currentDeck,
+      activeSlide: currentDeck.slides[activeSlideIndex],
+      selectedNode: undefined,
+      onDeckChange: (deck) => {
+        currentDeck = deck;
+      },
+      setActiveSlideIndex: (index) => {
+        activeSlideIndex = index;
+      },
+      setSelection,
+      focusSelectedNodeSoon: (nodeId) => {
+        focusedNodeId = nodeId;
+      },
+      openInspectorPanel: (panel) => {
+        openedPanel = panel;
+      },
+      setSourceMenuOpen: (open) => {
+        sourceMenuOpen = open;
+      },
+      setStageAnnouncement: () => undefined,
+    }));
 
     renderController().handleReviewSourceLinks();
 
