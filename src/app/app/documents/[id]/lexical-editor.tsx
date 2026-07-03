@@ -515,7 +515,10 @@ export function LexicalEditor({
                     {canEdit && (
                       <EditorToolbarGroup label="Edit document">
                         <ImportPlugin />
-                        <UndoRedoControls editable={editable} />
+                        <UndoRedoControls
+                          editable={editable}
+                          initialStateJson={initialStateJson}
+                        />
                       </EditorToolbarGroup>
                     )}
 
