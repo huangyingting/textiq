@@ -52,7 +52,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/auth\//,
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
-      /^e2e\/(?:auth-redirect|oauth-disabled|auth-forms|settings-account)\.spec\.ts$/,
+      /^e2e\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled|auth-forms|settings-account)\.spec\.ts$/,
     ],
   },
   billing: {
@@ -148,7 +148,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/document-editor\//,
       /^src\/lib\/lexical\//,
       /^src\/app\/app\/documents\//,
-      /^e2e\/(?:block-id-preservation|document-editor-profile)\.spec\.ts$/,
+      /^e2e\/(?:authenticated-nested-routes|block-id-preservation|document-editor-profile)\.spec\.ts$/,
     ],
   },
   import: {

@@ -16,7 +16,6 @@
  * inline collab socket (e.g. when running the standalone server instead).
  */
 import { createServer } from "node:http";
-import { parse } from "node:url";
 
 import "dotenv/config";
 import next from "next";
@@ -78,8 +77,9 @@ const server = createServer((req, res) => {
     collabHealthHandler(req, res);
     return;
   }
-  const parsedUrl = parse(req.url || "/", true);
-  handle(req, res, parsedUrl);
+  // Let Next parse the raw request URL itself. Supplying a pre-parsed legacy
+  // url.parse object can bypass App Router dynamic route resolution in dev.
+  handle(req, res);
 });
 
 if (inlineCollab) {
@@ -111,7 +111,7 @@ if (inlineCollab) {
   const handleNextUpgrade = app.getUpgradeHandler();
 
   server.on("upgrade", (req, socket, head) => {
-    const { pathname } = parse(req.url || "/");
+    const { pathname } = new URL(req.url || "/", "http://localhost");
     if (pathname === COLLAB_PATH || pathname?.startsWith(`${COLLAB_PATH}/`)) {
       handleCollabUpgrade(req, socket, head);
       return;
