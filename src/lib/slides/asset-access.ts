@@ -25,10 +25,7 @@ import {
   documentCapabilities,
   type DocumentRoleInput,
 } from "@/lib/auth/document-permissions";
-import {
-  resolvePublicAssetAccessForDocument,
-  type PublicAssetAccessDecision,
-} from "@/lib/public-render/resolver-core";
+import { type PublicAssetAccessDecision } from "@/lib/public-render/resolver-core";
 import { type ShareAccessFields } from "@/lib/share-access";
 import {
   allowAccess,
@@ -108,30 +105,14 @@ export function decideSlideAssetAccess(
     }
   }
 
-  // Anonymous (or no-capability): allow only via a valid public render resolver
-  // asset decision (present first, then embed), preserving the route semantics.
-  const publicAccess = (() => {
-    if (input.publicAssetAccess) {
-      return input.publicAssetAccess;
-    }
-
-    const requestedShareId = doc.shareId ?? "";
-    const present = resolvePublicAssetAccessForDocument(
-      doc,
-      requestedShareId,
-      "present",
-      input.now,
-    );
-    if (present.allow) {
-      return present;
-    }
-    return resolvePublicAssetAccessForDocument(
-      doc,
-      requestedShareId,
-      "embed",
-      input.now,
-    );
-  })();
+  // Anonymous (or no-capability): allow only via an explicit, share-bound public
+  // asset decision. Do not synthesize access from the stored shareId alone; the
+  // request must carry current shareId + shareMode proof.
+  const publicAccess = input.publicAssetAccess ?? {
+    allow: false,
+    status: 403,
+    reason: "forbidden",
+  };
   if (publicAccess.allow) {
     return { allow: true, via: publicAccess.via };
   }

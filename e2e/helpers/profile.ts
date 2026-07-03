@@ -73,6 +73,13 @@ export function profileAssetPath(): string {
   return `/api/slide-assets/${E2E_PROFILE_FIXTURE.documentId}/${fixtureAssetChecksum()}.png`;
 }
 
+/** Share-bound protected slide-asset URL for the seeded public/shared document. */
+export function profileAssetSharePath(
+  mode: "present" | "embed" = "present",
+): string {
+  return `${profileAssetPath()}?shareId=${E2E_PROFILE_FIXTURE.shareId}&shareMode=${mode}`;
+}
+
 /** Protected slide-asset URL for the seeded asset on the PRIVATE document. */
 export function profilePrivateAssetPath(): string {
   return `/api/slide-assets/${E2E_PROFILE_FIXTURE.privateDocumentId}/${fixtureAssetChecksum()}.png`;

@@ -77,6 +77,17 @@ test("#510: owner is served their own private asset", () => {
   assert.deepEqual(decision, { allow: true, via: "capability" });
 });
 
+test("#1717: owner access does not require share-bound public asset proof", () => {
+  const decision = decideSlideAssetAccess({
+    asset: ASSET,
+    document: sharedDoc({ ownerId: "owner-1" }),
+    userId: "owner-1",
+    publicAssetAccess: { allow: false, status: 403, reason: "forbidden" },
+    now: NOW,
+  });
+  assert.deepEqual(decision, { allow: true, via: "capability" });
+});
+
 test("#510: workspace editor is served the asset", () => {
   const decision = decideSlideAssetAccess({
     asset: ASSET,
@@ -138,6 +149,7 @@ test("#510: anonymous request is served when present link is enabled", () => {
     asset: ASSET,
     document: sharedDoc(),
     userId: null,
+    publicAssetAccess: { allow: true, via: "share-present" },
     now: NOW,
   });
   assert.deepEqual(decision, { allow: true, via: "share-present" });
@@ -151,6 +163,7 @@ test("#510: anonymous request falls back to embed link when present is disabled"
       shareEmbedEnabled: true,
     }),
     userId: null,
+    publicAssetAccess: { allow: true, via: "share-embed" },
     now: NOW,
   });
   assert.deepEqual(decision, { allow: true, via: "share-embed" });
@@ -173,6 +186,20 @@ test("#721/#747: anonymous public asset access can be supplied by the public ren
 // ---------------------------------------------------------------------------
 // Anonymous share access (disabled / unauthorized — private never served)
 // ---------------------------------------------------------------------------
+
+test("#1717: anonymous shared asset requires explicit share-bound proof", () => {
+  const decision = decideSlideAssetAccess({
+    asset: ASSET,
+    document: sharedDoc(),
+    userId: null,
+    now: NOW,
+  });
+  assert.deepEqual(decision, {
+    allow: false,
+    status: 403,
+    reason: "forbidden",
+  });
+});
 
 test("#510: anonymous request to a private (unshared) document is forbidden", () => {
   const decision = decideSlideAssetAccess({

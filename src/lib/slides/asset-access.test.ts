@@ -212,6 +212,41 @@ test("#1254: slide asset access allows protected public present/embed decisions"
   );
 });
 
+test("#1717: slide asset capability access does not depend on share proof", () => {
+  const document: SlideAssetDocument = {
+    ...makeDoc({ ownerId: "owner-1" }),
+    ...sharedDoc(),
+    deletedAt: null,
+  };
+
+  assert.deepEqual(
+    decideSlideAssetAccess({
+      asset: { id: "asset-1" },
+      document,
+      userId: "owner-1",
+      publicAssetAccess: { allow: false, status: 403, reason: "forbidden" },
+    }),
+    { allow: true, via: "capability" },
+  );
+});
+
+test("#1717: slide asset anonymous access requires share-bound proof", () => {
+  const document: SlideAssetDocument = {
+    ...makeDoc({ ownerId: "owner-1" }),
+    ...sharedDoc(),
+    deletedAt: null,
+  };
+
+  assert.deepEqual(
+    decideSlideAssetAccess({
+      asset: { id: "asset-1" },
+      document,
+      userId: null,
+    }),
+    { allow: false, status: 403, reason: "forbidden" },
+  );
+});
+
 test("#1254: slide asset access diagnoses denied public asset requests", () => {
   const document: SlideAssetDocument = {
     ...makeDoc({ ownerId: "owner-1" }),

@@ -30,11 +30,13 @@ import { accessDecisionToPlainTextApiResponse } from "@/lib/access-policy/adapte
 import { notFound, tooManyRequests } from "@/lib/api/errors";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { resolvePublicAssetAccessForDocument } from "@/lib/public-render/resolver-core";
 import {
   decideSlideAssetAccess,
   slideAssetAccessDecisionToAccessDecision,
 } from "@/lib/slides/asset-access";
+import { SHARE_ACCESS_SELECT } from "@/lib/share-access";
+import { shareIdFromParam } from "@/lib/slug";
 import { logError } from "@/lib/log";
 import { getDefaultStorageAdapter } from "@/lib/slides/asset-storage";
 import { serveStoredAsset } from "@/lib/assets/serve";
@@ -60,42 +62,59 @@ export async function GET(
     ? pathSegments.join("/")
     : pathSegments;
   const requestedShareId = request.nextUrl.searchParams.get("shareId");
-  const requestedShareMode = request.nextUrl.searchParams.get("shareMode");
+  const requestedShareModeParam = request.nextUrl.searchParams.get("shareMode");
 
   // Reconstruct the storage key: `${documentId}/${filename}`.
   const storageKey = `${documentId}/${filenamePart}`;
 
+  const requestedShareMode =
+    requestedShareModeParam === "present" || requestedShareModeParam === "embed"
+      ? requestedShareModeParam
+      : null;
+
   // -------------------------------------------------------------------
-  // 1. Look up the asset and the owning document (no access decision yet).
+  // 1. Look up the asset and its owning document (no access decision yet).
   // -------------------------------------------------------------------
   const asset = await prisma.asset.findFirst({
     where: { storageKey, documentId, deletedAt: null },
-    select: { id: true, mimeType: true, storageKey: true },
-  });
-
-  const publicAssetResolution = await resolvePublicRender({
-    params: {
-      documentId,
-      ...(requestedShareId ? { shareId: requestedShareId } : {}),
-      ...(requestedShareMode ? { shareMode: requestedShareMode } : {}),
+    select: {
+      id: true,
+      mimeType: true,
+      storageKey: true,
+      document: {
+        select: {
+          ownerId: true,
+          workspaceId: true,
+          ...SHARE_ACCESS_SELECT,
+          workspace: {
+            select: {
+              ownerId: true,
+              members: { select: { userId: true, role: true } },
+            },
+          },
+        },
+      },
     },
-    mode: "asset",
-    projection: "assetAccess",
   });
-  if (publicAssetResolution.projection !== "assetAccess") {
-    throw new Error("Unexpected public asset resolver projection.");
-  }
 
   const user = await getCurrentUser();
+  const document = asset?.document ?? null;
+  const publicAssetAccess = resolvePublicAssetAccessForDocument(
+    document,
+    requestedShareId
+      ? shareIdFromParam(requestedShareId) || requestedShareId
+      : "",
+    requestedShareMode,
+  );
 
   // -------------------------------------------------------------------
   // 2. Access control — single composed, route-shared decision.
   // -------------------------------------------------------------------
   const decision = decideSlideAssetAccess({
     asset: asset ? { id: asset.id } : null,
-    document: publicAssetResolution.document,
+    document,
     userId: user?.id ?? null,
-    publicAssetAccess: publicAssetResolution.publicAccess,
+    publicAssetAccess,
   });
 
   if (!decision.allow) {
