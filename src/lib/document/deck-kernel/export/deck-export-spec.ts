@@ -33,13 +33,13 @@ import { normalizeTextParagraphs } from "../deck-elements";
 import {
   slideFormatConfig,
   type SlideFormat,
-} from "@/lib/presentation/slide-format";
+} from "@/lib/document/deck-kernel/slide-format";
 import {
   resolvedFillRepresentativeColor,
   resolveSlideRenderModel,
   type ResolvedElementFill,
 } from "../slide-render-model";
-import { slideFontExportFace } from "@/lib/presentation/slide-fonts";
+import { slideFontExportFace } from "../slide-fonts";
 import {
   adaptShapeLabelForExport,
   adaptTextElementForExport,

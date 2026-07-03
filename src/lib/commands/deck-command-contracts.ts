@@ -25,7 +25,7 @@ import type {
   MatchSizeMode,
 } from "../document/deck-kernel/element-align";
 import type { ArrangeMode } from "../document/deck-kernel/element-arrange";
-import type { SlideFormat } from "@/lib/presentation/slide-format";
+import type { SlideFormat } from "@/lib/document/deck-kernel/slide-format";
 import type { SlideTemplateKind } from "../document/deck-kernel/slide-templates";
 
 export interface AddSlideCommand {

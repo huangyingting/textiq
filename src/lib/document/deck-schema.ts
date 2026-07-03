@@ -1,14 +1,26 @@
 /**
- * Validation facade for persisted deck JSON.
+ * Document-owned deck schema facade.
  *
- * `safeParseDeck` remains the public parse boundary while validators live in
- * schema-area modules under `deck-validation/`.
+ * `safeParseDeck` remains the legacy v6 parse boundary while validators live in
+ * schema-area modules under `deck-validation/`. Current persisted deck parsing
+ * is exposed under `safeParseCurrentDeck` so document persistence does not reach
+ * directly into presentation runtime paths.
  */
 
 import type { Deck } from "./deck-kernel/deck-core";
 import { validateDeck } from "./deck-kernel/deck-validation/core";
 import { DeckValidationError } from "./deck-kernel/deck-validation/shared";
 
+export {
+  DECK_SCHEMA_VERSION as CURRENT_DECK_SCHEMA_VERSION,
+  safeParseDeck as safeParseCurrentDeck,
+} from "@/lib/deck/current-deck-schema";
+export type {
+  Deck as CurrentDeck,
+  DeckParseResult as CurrentDeckParseResult,
+  SlideChildNode as CurrentSlideChildNode,
+  SlideNode as CurrentSlideNode,
+} from "@/lib/deck/current-deck-schema";
 export { validateElement } from "./deck-kernel/deck-validation/elements";
 export {
   validateImageCrop,

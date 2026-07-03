@@ -13,7 +13,7 @@ import type {
 import {
   slideFormatConfig,
   type SlideFormat,
-} from "@/lib/presentation/slide-format";
+} from "@/lib/document/deck-kernel/slide-format";
 import {
   resolveShapeLabelStyle,
   resolveTextElementStyle,
