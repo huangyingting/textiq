@@ -67,6 +67,25 @@ function mapNodeById(
   return node;
 }
 
+type ContentNode = Extract<SlideChildNode, { content: unknown }>;
+
+function hasContent(node: SlideChildNode): node is ContentNode {
+  return "content" in node;
+}
+
+function mergeNodeContent<TNode extends ContentNode>(
+  node: TNode,
+  contentPatch: Record<string, unknown>,
+): TNode {
+  return {
+    ...node,
+    content: {
+      ...node.content,
+      ...contentPatch,
+    },
+  };
+}
+
 function removeNodesById(
   nodes: SlideChildNode[],
   ids: Set<string>,
@@ -922,22 +941,12 @@ export function updateNodeContent(
   deck: Deck,
   slideId: string,
   nodeId: string,
-  contentPatch: Record<string, any>,
+  contentPatch: Record<string, unknown>,
 ): Deck {
   return mapSlides(deck, (slide) => {
     if (slide.id !== slideId) return slide;
-    return mapChildren(
-      slide,
-      nodeId,
-      (node) =>
-        ({
-          ...node,
-          content: {
-            ...(node as unknown as { content: Record<string, unknown> })
-              .content,
-            ...contentPatch,
-          },
-        }) as SlideChildNode,
+    return mapChildren(slide, nodeId, (node) =>
+      hasContent(node) ? mergeNodeContent(node, contentPatch) : node,
     );
   });
 }

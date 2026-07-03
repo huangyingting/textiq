@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  buildAccountExport,
-  type AccountExport,
-  type ExportDocumentInput,
-} from "@/lib/account/export";
+import { buildAccountExport, type AccountExport } from "@/lib/account/export";
 import { prisma } from "@/lib/prisma";
 
 export async function loadAccountExport(
@@ -79,7 +75,7 @@ export async function loadAccountExport(
           },
         },
       },
-    } as never),
+    }),
     prisma.workspace.findMany({
       where: { ownerId: userId },
       orderBy: { createdAt: "asc" },
@@ -193,17 +189,7 @@ export async function loadAccountExport(
 
   return buildAccountExport({
     user,
-    documents: (
-      documents as unknown as Array<
-        Omit<ExportDocumentInput, "sharePolicy"> & {
-          shareExpiresAt?: Date | null;
-          shareEmbedEnabled?: boolean;
-          sharePresentEnabled?: boolean;
-          shareMetadataMode?: string;
-          shareDiscoverable?: boolean;
-        }
-      >
-    ).map((doc) => ({
+    documents: documents.map((doc) => ({
       ...doc,
       sharePolicy: {
         expiresAt: doc.shareExpiresAt ?? null,

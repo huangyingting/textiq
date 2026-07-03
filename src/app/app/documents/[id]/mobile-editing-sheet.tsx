@@ -11,6 +11,51 @@ import { TableEditingSection } from "./table-controls";
 import { VisualContextSection } from "./mobile-visual-context-section";
 import { useEditingSurface } from "./use-editing-surface";
 
+const SHEET_LABELS = {
+  "text-format": {
+    fabLabel: "Open text formatting",
+    panelTitle: "Text format",
+  },
+  "table-edit": {
+    fabLabel: "Open table editing",
+    panelTitle: "Table",
+  },
+  "visual-edit": {
+    fabLabel: "Open visual editing",
+    panelTitle: "Visual",
+  },
+} as const;
+
+function sheetLabelsFor(group: string) {
+  return group in SHEET_LABELS
+    ? SHEET_LABELS[group as keyof typeof SHEET_LABELS]
+    : SHEET_LABELS["visual-edit"];
+}
+
+function renderSheetContent(group: string) {
+  switch (group) {
+    case "text-format":
+      return (
+        <Surface elevation="flat" radius="sm" bordered={false}>
+          <GenerateVisualSection />
+          <TextFormatSection />
+        </Surface>
+      );
+    case "table-edit":
+      return (
+        <Surface elevation="flat" radius="sm" bordered={false}>
+          <TableEditingSection />
+        </Surface>
+      );
+    default:
+      return (
+        <Surface elevation="flat" radius="sm" bordered={false}>
+          <VisualContextSection />
+        </Surface>
+      );
+  }
+}
+
 /**
  * Renders a floating action button for coarse-pointer viewports that opens a
  * bottom sheet containing contextual text/visual editing sections.
@@ -23,18 +68,7 @@ function MobileEditingSheet() {
 
   if (surface.mode !== "sheet") return null;
 
-  const fabLabel =
-    group === "text-format"
-      ? "Open text formatting"
-      : group === "table-edit"
-        ? "Open table editing"
-        : "Open visual editing";
-  const panelTitle =
-    group === "text-format"
-      ? "Text format"
-      : group === "table-edit"
-        ? "Table"
-        : "Visual";
+  const { fabLabel, panelTitle } = sheetLabelsFor(group);
 
   return (
     <>
@@ -80,22 +114,7 @@ function MobileEditingSheet() {
         </div>
 
         <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto pb-3">
-          {group === "text-format" && (
-            <Surface elevation="flat" radius="sm" bordered={false}>
-              <GenerateVisualSection />
-              <TextFormatSection />
-            </Surface>
-          )}
-          {group === "visual-edit" && (
-            <Surface elevation="flat" radius="sm" bordered={false}>
-              <VisualContextSection />
-            </Surface>
-          )}
-          {group === "table-edit" && (
-            <Surface elevation="flat" radius="sm" bordered={false}>
-              <TableEditingSection />
-            </Surface>
-          )}
+          {renderSheetContent(group)}
         </div>
       </BottomSheetSurface>
     </>

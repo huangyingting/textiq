@@ -94,6 +94,14 @@ function validateUnknownObject(
   return { ...input };
 }
 
+function validatedSlide(slide: unknown): Slide {
+  return slide as unknown as Slide;
+}
+
+function validatedDeck(deck: unknown): Deck {
+  return deck as unknown as Deck;
+}
+
 function validateCanvas(input: unknown): Record<string, unknown> {
   if (!isPlainObject(input)) {
     throw new DeckValidationError("Deck.canvas must be an object");
@@ -175,7 +183,7 @@ function validateSlide(input: unknown, index: number): Slide {
     validateElement(element, `${context}.elements[${elementIndex}]`),
   );
 
-  return {
+  return validatedSlide({
     id,
     index: input.index,
     title: input.title,
@@ -198,7 +206,7 @@ function validateSlide(input: unknown, index: number): Slide {
     ...(input.source !== undefined
       ? { source: validateUnknownObject(input.source, `${context}.source`) }
       : {}),
-  } as unknown as Slide;
+  });
 }
 
 function validateSlideMaster(
@@ -493,5 +501,5 @@ export function validateDeck(input: unknown): Deck {
     }
   }
 
-  return deck as unknown as Deck;
+  return validatedDeck(deck);
 }

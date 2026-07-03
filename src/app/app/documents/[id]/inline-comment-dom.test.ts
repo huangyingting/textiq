@@ -73,16 +73,20 @@ class FakeElement {
   }
 }
 
+function asHTMLElement(element: FakeElement): HTMLElement {
+  return element as unknown as HTMLElement;
+}
+
 function withFakeHTMLElement(run: () => void): void {
   const original = globalThis.HTMLElement;
   const originalWindow = globalThis.window;
-  (globalThis as unknown as { HTMLElement: unknown }).HTMLElement = FakeElement;
-  (globalThis as unknown as { window: unknown }).window = { innerWidth: 1024 };
+  Reflect.set(globalThis, "HTMLElement", FakeElement);
+  Reflect.set(globalThis, "window", { innerWidth: 1024 });
   try {
     run();
   } finally {
-    (globalThis as unknown as { HTMLElement: unknown }).HTMLElement = original;
-    (globalThis as unknown as { window: unknown }).window = originalWindow;
+    Reflect.set(globalThis, "HTMLElement", original);
+    Reflect.set(globalThis, "window", originalWindow);
   }
 }
 
@@ -119,29 +123,17 @@ test("text and visual block detection use normalized text and visual markers", (
       children: [new FakeElement({ visual: true })],
     });
 
-    assert.equal(
-      isVisualCommentBlock(textBlock as unknown as HTMLElement),
-      false,
-    );
-    assert.equal(
-      isVisualCommentBlock(wrapperBlock as unknown as HTMLElement),
-      true,
-    );
-    assert.equal(isTextCommentBlock(textBlock as unknown as HTMLElement), true);
+    assert.equal(isVisualCommentBlock(asHTMLElement(textBlock)), false);
+    assert.equal(isVisualCommentBlock(asHTMLElement(wrapperBlock)), true);
+    assert.equal(isTextCommentBlock(asHTMLElement(textBlock)), true);
     assert.equal(
       isTextCommentBlock(
-        new FakeElement({ text: null as never }) as unknown as HTMLElement,
+        asHTMLElement(new FakeElement({ text: null as never })),
       ),
       false,
     );
-    assert.equal(
-      isTextCommentBlock(emptyBlock as unknown as HTMLElement),
-      false,
-    );
-    assert.equal(
-      isTextCommentBlock(visualBlock as unknown as HTMLElement),
-      false,
-    );
+    assert.equal(isTextCommentBlock(asHTMLElement(emptyBlock)), false);
+    assert.equal(isTextCommentBlock(asHTMLElement(visualBlock)), false);
   });
 });
 
@@ -152,10 +144,7 @@ test("isTextCommentBlock rejects wrapper blocks that contain visual chrome", () 
       children: [new FakeElement({ visual: true })],
     });
 
-    assert.equal(
-      isTextCommentBlock(wrapperBlock as unknown as HTMLElement),
-      false,
-    );
+    assert.equal(isTextCommentBlock(asHTMLElement(wrapperBlock)), false);
   });
 });
 
@@ -176,10 +165,11 @@ test("commentBlockAtY returns direct hits, nearby text blocks, and skips visual 
     });
     const root = new FakeElement({ children: [first, visual, second] });
 
-    assert.equal(commentBlockAtY(root as unknown as HTMLElement, 20), first);
-    assert.equal(commentBlockAtY(root as unknown as HTMLElement, 60), null);
-    assert.equal(commentBlockAtY(root as unknown as HTMLElement, 95), second);
-    assert.equal(commentBlockAtY(root as unknown as HTMLElement, 300), null);
+    const rootElement = asHTMLElement(root);
+    assert.equal(commentBlockAtY(rootElement, 20), first);
+    assert.equal(commentBlockAtY(rootElement, 60), null);
+    assert.equal(commentBlockAtY(rootElement, 95), second);
+    assert.equal(commentBlockAtY(rootElement, 300), null);
   });
 });
 
@@ -193,15 +183,9 @@ test("gutter and anchor helpers return null when there is no right gutter room",
       rect: { top: 20, bottom: 60, left: 10, right: 100, height: 40 },
     });
 
+    assert.equal(isInRightCommentGutter(asHTMLElement(root), 130), false);
     assert.equal(
-      isInRightCommentGutter(root as unknown as HTMLElement, 130),
-      false,
-    );
-    assert.equal(
-      anchorPositionForBlock(
-        block as unknown as HTMLElement,
-        root as unknown as HTMLElement,
-      ),
+      anchorPositionForBlock(asHTMLElement(block), asHTMLElement(root)),
       null,
     );
   });
@@ -217,15 +201,9 @@ test("anchorPositionForBlock and gutter hit testing use right-side button geomet
       rect: { top: 20, bottom: 60, left: 120, right: 280, height: 40 },
     });
 
-    assert.equal(
-      isInRightCommentGutter(root as unknown as HTMLElement, 320),
-      true,
-    );
+    assert.equal(isInRightCommentGutter(asHTMLElement(root), 320), true);
     assert.deepEqual(
-      anchorPositionForBlock(
-        block as unknown as HTMLElement,
-        root as unknown as HTMLElement,
-      ),
+      anchorPositionForBlock(asHTMLElement(block), asHTMLElement(root)),
       {
         text: "Paragraph anchor",
         top: 40,

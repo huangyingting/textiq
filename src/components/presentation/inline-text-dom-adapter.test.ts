@@ -12,6 +12,10 @@ import {
   type InlineTextAdapterExit,
 } from "./inline-text-dom-adapter";
 
+function domNode(value: unknown): Node {
+  return value as unknown as Node;
+}
+
 function withHappyDom<T>(run: (window: Window) => T): T {
   const window = new Window({ url: "https://textiq.test/slides" });
   const previous = new Map<PropertyKey, PropertyDescriptor | undefined>(
@@ -181,9 +185,7 @@ test("inline text DOM adapter defers blur commit during IME composition and pres
 test("inline text DOM adapter serializes list, style, and text-node DOM branches", () => {
   withHappyDom((window) => {
     const container = createContainer(window);
-    container.append(
-      window.document.createTextNode("loose text") as unknown as Node,
-    );
+    container.append(domNode(window.document.createTextNode("loose text")));
     container.insertAdjacentHTML(
       "beforeend",
       '<ol><li data-list-indent="2"><b>Bold</b><i> Italic</i><u> Under</u><s> Strike</s><a href="https://example.com"> Link</a><span style="font-weight:600;font-style:italic;text-decoration-line:underline line-through;color:#ff0000;font-size:16px"> Styled</span><span aria-hidden="true"> hidden</span><span contenteditable="false"> locked</span><br></li></ol><p data-list-kind="number" data-list-indent="1">dataset list</p>',

@@ -25,6 +25,10 @@ const sourcePlan: DocumentSourcePlanV1 = {
   visualInventory: [],
 };
 
+function documentVisualBlock(value: unknown): DocumentVisualBlock {
+  return value as unknown as DocumentVisualBlock;
+}
+
 function text(
   blockId: string,
   blockType: DocumentTextBlock["blockType"],
@@ -51,7 +55,7 @@ function table(blockId: string, caption?: string): DocumentTableBlock {
 }
 
 function visual(blockId: string, visualTitle?: string): DocumentVisualBlock {
-  return {
+  return documentVisualBlock({
     kind: "visual",
     blockId,
     visualId: `visual-${blockId}`,
@@ -61,7 +65,7 @@ function visual(blockId: string, visualTitle?: string): DocumentVisualBlock {
       title: visualTitle,
       spec: {},
     },
-  } as unknown as DocumentVisualBlock;
+  });
 }
 
 function derive(blocks: DocumentBlock[]) {

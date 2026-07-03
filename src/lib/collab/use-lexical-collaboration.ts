@@ -22,6 +22,10 @@ const TITLE_SEED_ORIGIN = Symbol("textiq-lexical-title-seed");
 
 type Awareness = WebsocketProvider["awareness"];
 
+function lexicalProvider(provider: WebsocketProvider): Provider {
+  return provider as unknown as Provider;
+}
+
 /**
  * Lexical's `@lexical/yjs` binding stores presence at the top level of each
  * awareness state (`{ name, color, ... }`), unlike our textarea binding which
@@ -150,7 +154,7 @@ export function useLexicalCollaboration(opts: {
       if (!yjsDocMap.has(id)) {
         yjsDocMap.set(id, doc);
       }
-      return provider as unknown as Provider;
+      return lexicalProvider(provider);
     },
     [doc, provider],
   );

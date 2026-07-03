@@ -12,6 +12,15 @@ export interface FormDataRequest {
   headers?: Headers;
 }
 
+interface BodySizeOptions {
+  maxBytes?: number;
+  tooLargeMessage?: string;
+}
+
+type BodyReadResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; response: NextResponse };
+
 export function isPlainObject(
   value: unknown,
 ): value is Record<string, unknown> {
@@ -37,13 +46,12 @@ export function rejectOversizedBody(
   return null;
 }
 
-export async function readJsonObject(
-  request: JsonObjectRequest,
-  options: { maxBytes?: number; tooLargeMessage?: string } = {},
-): Promise<
-  | { ok: true; body: Record<string, unknown> }
-  | { ok: false; response: NextResponse }
-> {
+async function readBody<T>(
+  request: { headers?: Headers },
+  options: BodySizeOptions,
+  parse: () => Promise<T>,
+  createInvalidResponse: () => NextResponse,
+): Promise<BodyReadResult<T>> {
   if (options.maxBytes !== undefined) {
     const tooLarge = rejectOversizedBody(
       request,
@@ -52,15 +60,28 @@ export async function readJsonObject(
     );
     if (tooLarge) return { ok: false, response: tooLarge };
   }
-  let body: unknown;
   try {
-    body = await request.json();
+    return { ok: true, value: await parse() };
   } catch {
-    return {
-      ok: false,
-      response: validationError("Request body must be valid JSON."),
-    };
+    return { ok: false, response: createInvalidResponse() };
   }
+}
+
+export async function readJsonObject(
+  request: JsonObjectRequest,
+  options: BodySizeOptions = {},
+): Promise<
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; response: NextResponse }
+> {
+  const parsed = await readBody(
+    request,
+    options,
+    () => request.json(),
+    () => validationError("Request body must be valid JSON."),
+  );
+  if (!parsed.ok) return parsed;
+  const body = parsed.value;
   if (!isPlainObject(body)) {
     return {
       ok: false,
@@ -73,50 +94,36 @@ export async function readJsonObject(
 export async function readJsonValue(
   request: JsonObjectRequest,
   invalidMessage = "Request body must be valid JSON.",
-  options: { maxBytes?: number; tooLargeMessage?: string } = {},
+  options: BodySizeOptions = {},
 ): Promise<
   { ok: true; body: unknown } | { ok: false; response: NextResponse }
 > {
-  if (options.maxBytes !== undefined) {
-    const tooLarge = rejectOversizedBody(
-      request,
-      options.maxBytes,
-      options.tooLargeMessage,
-    );
-    if (tooLarge) return { ok: false, response: tooLarge };
-  }
-  try {
-    return { ok: true, body: await request.json() };
-  } catch {
-    return { ok: false, response: validationError(invalidMessage) };
-  }
+  const parsed = await readBody(
+    request,
+    options,
+    () => request.json(),
+    () => validationError(invalidMessage),
+  );
+  return parsed.ok ? { ok: true, body: parsed.value } : parsed;
 }
 
-/*! node:coverage ignore next 12 -- readFormData success/failure/oversize paths are asserted; tsx maps this signature as uncovered. */
 export async function readFormData(
   request: FormDataRequest,
   invalidMessage = "Request must be multipart/form-data.",
   createErrorResponse: (message: string) => NextResponse = (message) =>
     validationError(message),
-  options: { maxBytes?: number; tooLargeMessage?: string } = {},
+  options: BodySizeOptions = {},
 ): Promise<
   /* node:coverage ignore next -- Return union is a type-only signature artifact; form-data outcomes are asserted. */
   { ok: true; formData: FormData } | { ok: false; response: NextResponse }
 > {
-  if (options.maxBytes !== undefined) {
-    /*! node:coverage ignore next 3 -- Oversized form requests are asserted; tsx maps the shared adapter call as uncovered. */
-    const tooLarge = rejectOversizedBody(
-      request,
-      options.maxBytes,
-      options.tooLargeMessage,
-    );
-    if (tooLarge) return { ok: false, response: tooLarge };
-  }
-  try {
-    return { ok: true, formData: await request.formData() };
-  } catch {
-    return { ok: false, response: createErrorResponse(invalidMessage) };
-  }
+  const parsed = await readBody(
+    request,
+    options,
+    () => request.formData(),
+    () => createErrorResponse(invalidMessage),
+  );
+  return parsed.ok ? { ok: true, formData: parsed.value } : parsed;
 }
 
 export function requiredSearchParam(

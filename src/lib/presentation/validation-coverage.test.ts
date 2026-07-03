@@ -19,6 +19,14 @@ function assertHasError(errors: readonly string[], pattern: RegExp): void {
   );
 }
 
+function invalidDeckRecord(deck: unknown): Record<string, unknown> {
+  return deck as unknown as Record<string, unknown>;
+}
+
+function invalidSlideChildNode(node: unknown): SlideChildNode {
+  return node as unknown as SlideChildNode;
+}
+
 describe("safeParseDeck coverage branches", () => {
   test("accepts a rich presentation deck using current asset, chrome, source, and content contracts", () => {
     const textNode = buildTextNode({
@@ -350,7 +358,7 @@ describe("safeParseDeck coverage branches", () => {
   });
 
   test("reports edge-case diagnostics for invalid assets, styles, nodes, sources, and metadata", () => {
-    const deck = buildMinimalDeck() as unknown as Record<string, unknown>;
+    const deck = invalidDeckRecord(buildMinimalDeck());
     deck.extraTopLevel = true;
     deck.elements = [];
     deck.canvas = {
@@ -477,7 +485,7 @@ describe("safeParseDeck coverage branches", () => {
       extra: { badNumber: Number.POSITIVE_INFINITY, badValue: () => "nope" },
     };
 
-    const invalidText: SlideChildNode = {
+    const invalidText = invalidSlideChildNode({
       id: "dup",
       type: "text",
       role: "unknown-role",
@@ -527,11 +535,11 @@ describe("safeParseDeck coverage branches", () => {
         language: 1,
         extra: true,
       },
-    } as unknown as SlideChildNode;
+    });
     const invalidChildren: SlideChildNode[] = [
       invalidText,
       { ...invalidText, id: "dup" },
-      {
+      invalidSlideChildNode({
         id: "image-invalid",
         type: "image",
         content: {
@@ -542,18 +550,18 @@ describe("safeParseDeck coverage branches", () => {
           alt: 3,
           extra: true,
         },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "shape-invalid",
         type: "shape",
         content: { shape: "blob", text: "bad", extra: true },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "shape-path-invalid",
         type: "shape",
         content: { shape: "path" },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "connector-invalid",
         type: "connector",
         content: {
@@ -562,8 +570,8 @@ describe("safeParseDeck coverage branches", () => {
           routing: "around",
           extra: true,
         },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "table-invalid",
         type: "table",
         content: {
@@ -575,24 +583,24 @@ describe("safeParseDeck coverage branches", () => {
           header: "yes",
           extra: true,
         },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "visual-invalid",
         type: "visual",
         content: { transparentBackground: true, extra: true },
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "group-invalid",
         type: "group",
         component: "stack",
         children: [],
         content: {},
-      } as unknown as SlideChildNode,
-      {
+      }),
+      invalidSlideChildNode({
         id: "unknown-invalid",
         type: "video",
         content: {},
-      } as unknown as SlideChildNode,
+      }),
     ];
     deck.slides = [
       {

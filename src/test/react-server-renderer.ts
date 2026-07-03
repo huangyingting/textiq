@@ -3,10 +3,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 type TestDispatcher = Record<string, unknown>;
 
+function reactDispatcher(): TestDispatcher {
+  return React as unknown as TestDispatcher;
+}
+
+function reducerInitialState<S>(initialArg: unknown): S {
+  return initialArg as unknown as S;
+}
+
 function runWithOverrides<T>(dispatcher: TestDispatcher, render: () => T): T {
   const original: TestDispatcher = {};
+  const reactOverrides = reactDispatcher();
   for (const key of Object.keys(dispatcher)) {
-    original[key] = (React as unknown as TestDispatcher)[key];
+    original[key] = reactOverrides[key];
   }
   Object.assign(React, dispatcher);
   try {
@@ -97,7 +106,7 @@ export function createServerRenderHarness(
             if (!(slotIndex in slots)) {
               slots[slotIndex] = init
                 ? init(initialArg)
-                : (initialArg as unknown as S);
+                : reducerInitialState<S>(initialArg);
             }
             const dispatch = (action: A) => {
               slots[slotIndex] = reducer(slots[slotIndex] as S, action);

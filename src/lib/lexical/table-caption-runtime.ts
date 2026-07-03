@@ -281,10 +281,14 @@ export function refreshDocumentTableCaptionDOM(
   refreshCaptionVisibility(tableElement, captionElement, input);
 }
 
+function patchableTableNodeClass(nodeClass: unknown): PatchableTableNodeClass {
+  return nodeClass as unknown as PatchableTableNodeClass;
+}
+
 export function ensureLexicalTableCaptionSupport(): void {
   if (supportInstalled) return;
   supportInstalled = true;
-  patchTableNodeClass(TableNode as unknown as PatchableTableNodeClass);
+  patchTableNodeClass(patchableTableNodeClass(TableNode));
 }
 
 export function $getDocumentTableCaption(table: TableNode): string {

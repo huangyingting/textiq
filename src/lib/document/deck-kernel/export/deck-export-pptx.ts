@@ -253,6 +253,14 @@ function shapeFillCss(
   )}, ${hashColor(fill.outer)})`;
 }
 
+function svgRootElement(root: Element): SVGSVGElement | null {
+  return root.tagName === "svg" ? parsedSvgRoot(root) : null;
+}
+
+function parsedSvgRoot(root: Element): SVGSVGElement {
+  return root as unknown as SVGSVGElement;
+}
+
 function renderStyledShapeSvg(
   op: DeckShapeOp,
   pxPerIn = 192,
@@ -303,8 +311,7 @@ function renderStyledShapeSvg(
   </foreignObject>
 </svg>`;
   const parsed = new DOMParser().parseFromString(svgString, "image/svg+xml");
-  const root = parsed.documentElement;
-  return root.tagName === "svg" ? (root as unknown as SVGSVGElement) : null;
+  return svgRootElement(parsed.documentElement);
 }
 
 /* node:coverage ignore next 4 */
@@ -353,8 +360,7 @@ function renderStyledImageSvg(
   </foreignObject>
 </svg>`;
   const parsed = new DOMParser().parseFromString(svgString, "image/svg+xml");
-  const root = parsed.documentElement;
-  return root.tagName === "svg" ? (root as unknown as SVGSVGElement) : null;
+  return svgRootElement(parsed.documentElement);
 }
 
 /** Per-run PptxGenJS text options derived from a {@link TextRun}'s formatting. */
@@ -829,7 +835,7 @@ export async function exportDeckAsPPTX(
   try {
     const { default: PptxGenJS } = await import("pptxgenjs");
     const specs = buildDeckSpecs(deck, visuals);
-    const geometry = deckGeometry((deck as any).canvas?.format);
+    const geometry = deckGeometry(deck.canvas?.format);
 
     const pptx = new PptxGenJS();
     pptx.layout = geometry.pptxLayout;

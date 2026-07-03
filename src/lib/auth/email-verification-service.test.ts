@@ -12,6 +12,12 @@ import {
 } from "@/lib/auth/verification-token";
 import type { prisma } from "@/lib/prisma";
 
+type PrismaClient = typeof prisma;
+
+function asPrismaClient<T extends object>(client: T): T & PrismaClient {
+  return client as T & PrismaClient;
+}
+
 function makeVerificationClient(rawToken: string) {
   const token = {
     id: "evt_1",
@@ -21,7 +27,7 @@ function makeVerificationClient(rawToken: string) {
     usedAt: null as Date | null,
   };
   const verifiedAt: Date[] = [];
-  const client = {
+  const client = asPrismaClient({
     user: {
       update({
         where,
@@ -70,8 +76,8 @@ function makeVerificationClient(rawToken: string) {
       return fn(client);
     },
     _verifiedAt: verifiedAt,
-  };
-  return client as unknown as typeof prisma & { _verifiedAt: Date[] };
+  });
+  return client;
 }
 
 test("consumeEmailVerificationToken allows exactly one concurrent consumer", async () => {
@@ -125,7 +131,7 @@ test("consumeEmailVerificationToken verifies a valid token and revokes sibling t
 
 test("consumeEmailVerificationToken rejects when the atomic consume loses the race", async () => {
   const rawToken = "race-loser-token";
-  const client = {
+  const client = asPrismaClient({
     emailVerificationToken: {
       findUnique: async () => ({
         id: "evt_1",
@@ -135,7 +141,7 @@ test("consumeEmailVerificationToken rejects when the atomic consume loses the ra
       }),
     },
     $transaction: async () => false,
-  } as unknown as typeof prisma;
+  });
   const originalInfo = console.info;
   console.info = () => {};
 
@@ -153,11 +159,11 @@ test("requestEmailVerificationForUser handles missing and already-verified users
   const originalInfo = console.info;
   console.info = () => {};
   try {
-    const missingClient = {
+    const missingClient = asPrismaClient({
       user: {
         findUnique: async () => null,
       },
-    } as unknown as typeof prisma;
+    });
     assert.deepEqual(
       await requestEmailVerificationForUser("missing-user", missingClient),
       {
@@ -166,14 +172,14 @@ test("requestEmailVerificationForUser handles missing and already-verified users
       },
     );
 
-    const verifiedClient = {
+    const verifiedClient = asPrismaClient({
       user: {
         findUnique: async () => ({
           email: "verified@example.com",
           emailVerified: new Date("2026-01-01T00:00:00Z"),
         }),
       },
-    } as unknown as typeof prisma;
+    });
     const result = await requestEmailVerificationForUser(
       "verified-user",
       verifiedClient,
@@ -186,7 +192,7 @@ test("requestEmailVerificationForUser handles missing and already-verified users
 });
 
 test("requestEmailVerificationForUser returns a generic error when storage fails", async () => {
-  const client = {
+  const client = asPrismaClient({
     user: {
       findUnique: async () => ({
         email: "person@example.com",
@@ -200,7 +206,7 @@ test("requestEmailVerificationForUser returns a generic error when storage fails
     $transaction: async () => {
       throw new Error("database unavailable");
     },
-  } as unknown as typeof prisma;
+  });
   const originalError = console.error;
   console.error = () => {};
 
@@ -222,7 +228,7 @@ test("requestEmailVerificationForUser revokes old tokens, creates a new token, a
       sentMessages.push(message);
     },
   });
-  const client = {
+  const client = asPrismaClient({
     user: {
       findUnique: async () => ({
         email: "person@example.com",
@@ -240,7 +246,7 @@ test("requestEmailVerificationForUser revokes old tokens, creates a new token, a
       },
     },
     $transaction: async (ops: Array<Promise<unknown>>) => Promise.all(ops),
-  } as unknown as typeof prisma;
+  });
 
   const originalInfo = console.info;
   console.info = () => {};
@@ -259,7 +265,7 @@ test("requestEmailVerificationForUser revokes old tokens, creates a new token, a
 
 test("consumeEmailVerificationToken rejects empty, missing, expired, and used tokens", async () => {
   assert.deepEqual(
-    await consumeEmailVerificationToken("", {} as typeof prisma),
+    await consumeEmailVerificationToken("", asPrismaClient({})),
     {
       status: "error",
       message: VERIFICATION_TOKEN_REJECTION_MESSAGE.not_found,
@@ -275,11 +281,11 @@ test("consumeEmailVerificationToken rejects empty, missing, expired, and used to
       usedAt: Date | null;
     } | null,
   ) =>
-    ({
+    asPrismaClient({
       emailVerificationToken: {
         findUnique: async () => record,
       },
-    }) as unknown as typeof prisma;
+    });
 
   assert.deepEqual(
     await consumeEmailVerificationToken(rawToken, clientForRecord(null)),
@@ -323,13 +329,13 @@ test("consumeEmailVerificationToken rejects empty, missing, expired, and used to
 test("consumeEmailVerificationToken returns a retryable error when storage throws", async () => {
   const originalError = console.error;
   console.error = () => {};
-  const client = {
+  const client = asPrismaClient({
     emailVerificationToken: {
       findUnique: async () => {
         throw new Error("database unavailable");
       },
     },
-  } as unknown as typeof prisma;
+  });
 
   try {
     assert.deepEqual(await consumeEmailVerificationToken("raw-token", client), {

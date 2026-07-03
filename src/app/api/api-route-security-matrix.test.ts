@@ -67,6 +67,10 @@ const RESPONSE_EXCEPTIONS = new Set([
 type MatrixHeader = (typeof MATRIX_HEADERS)[number];
 type MatrixRow = Record<MatrixHeader, string>;
 
+function direntParentPath(entry: unknown): string {
+  return (entry as unknown as { parentPath: string }).parentPath;
+}
+
 /** Recursively collect every `route.ts` file under `src/app/api`. */
 function collectRouteKeys(): string[] {
   const keys: string[] = [];
@@ -78,8 +82,7 @@ function collectRouteKeys(): string[] {
       continue;
     }
     // entry.parentPath is the directory holding route.ts.
-    const parent: string = (entry as unknown as { parentPath: string })
-      .parentPath;
+    const parent = direntParentPath(entry);
     const rel = parent.slice(API_DIR.length).split(sep).filter(Boolean);
     keys.push(rel.join("/"));
   }

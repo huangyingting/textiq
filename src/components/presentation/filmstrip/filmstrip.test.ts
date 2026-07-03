@@ -24,6 +24,21 @@ type ElementWithProps = ReactElement<Record<string, unknown>>;
 
 type MockStateUpdate = { index: number; value: unknown };
 type MockLayoutEffect = () => void | (() => void);
+type MutableGlobalHTMLElement = Omit<typeof globalThis, "HTMLElement"> & {
+  HTMLElement: unknown;
+};
+
+function reactKeyboardEvent<T = Element>(event: object): KeyboardEvent<T> {
+  return event as KeyboardEvent<T>;
+}
+
+function htmlButtonElement(element: object): HTMLButtonElement {
+  return element as unknown as HTMLButtonElement;
+}
+
+function setGlobalHTMLElement(value: unknown): void {
+  (globalThis as MutableGlobalHTMLElement).HTMLElement = value;
+}
 
 function textNode(
   id: string,
@@ -193,14 +208,12 @@ function withFilmstripHTMLElement(
 ) {
   const originalHTMLElement = globalThis.HTMLElement;
 
-  (globalThis as unknown as { HTMLElement: unknown }).HTMLElement =
-    FakeElement as unknown as typeof HTMLElement;
+  setGlobalHTMLElement(FakeElement);
 
   try {
     run((index) => new FakeElement(String(index)));
   } finally {
-    (globalThis as unknown as { HTMLElement: unknown }).HTMLElement =
-      originalHTMLElement;
+    setGlobalHTMLElement(originalHTMLElement);
   }
 }
 
@@ -222,21 +235,23 @@ function registerSlideButtonRefs(
     if (typeof slideButtonRef !== "function") {
       assert.fail("expected slide button registry ref");
     }
-    slideButtonRef({
-      focus: () => onFocus(index),
-      getBoundingClientRect: () =>
-        ({
-          bottom: index + 1,
-          height: 1,
-          left: index,
-          right: index + 1,
-          top: index,
-          width: 1,
-          x: index,
-          y: index,
-          toJSON: () => ({}),
-        }) as DOMRectReadOnly,
-    } as unknown as HTMLButtonElement);
+    slideButtonRef(
+      htmlButtonElement({
+        focus: () => onFocus(index),
+        getBoundingClientRect: () =>
+          ({
+            bottom: index + 1,
+            height: 1,
+            left: index,
+            right: index + 1,
+            top: index,
+            width: 1,
+            x: index,
+            y: index,
+            toJSON: () => ({}),
+          }) as DOMRectReadOnly,
+      }),
+    );
   }
 }
 
@@ -295,12 +310,12 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
         key: string,
         options: { altKey?: boolean; slideIndex?: number } = {},
       ) =>
-        ({
+        reactKeyboardEvent<HTMLOListElement>({
           key,
           altKey: options.altKey ?? false,
           target: targetForIndex(options.slideIndex ?? props.activeSlideIndex),
           preventDefault: () => undefined,
-        }) as unknown as KeyboardEvent<HTMLOListElement>;
+        });
 
       const dispatch = (
         key: string,
@@ -358,11 +373,13 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     assert.equal(typeof onKeyDown, "function");
 
     withFilmstripHTMLElement((targetForIndex) => {
-      onKeyDown!({
-        key: "Delete",
-        target: targetForIndex(0),
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLOListElement>);
+      onKeyDown!(
+        reactKeyboardEvent<HTMLOListElement>({
+          key: "Delete",
+          target: targetForIndex(0),
+          preventDefault: () => undefined,
+        }),
+      );
     });
 
     assert.deepEqual(deleted, []);
@@ -393,11 +410,13 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     assert.equal(typeof onKeyDown, "function");
 
     withFilmstripHTMLElement((targetForIndex) => {
-      onKeyDown!({
-        key: "ArrowRight",
-        target: targetForIndex(1),
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLOListElement>);
+      onKeyDown!(
+        reactKeyboardEvent<HTMLOListElement>({
+          key: "ArrowRight",
+          target: targetForIndex(1),
+          preventDefault: () => undefined,
+        }),
+      );
     });
 
     for (const effect of layoutEffects) {

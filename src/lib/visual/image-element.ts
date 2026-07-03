@@ -89,7 +89,7 @@ export function dataUrlByteSize(src: string | null | undefined): number {
 function slideBackgroundImageUrl(
   slide: Deck["slides"][number],
 ): string | undefined {
-  const background = (slide as any).designOverrides?.background;
+  const background = slide.designOverrides?.background;
   if (background?.type === "image" && typeof background.url === "string") {
     return background.url;
   }

@@ -11,6 +11,10 @@ import {
   validateDeckCommandPayload,
 } from "./deck-command-metadata";
 
+function slideCommandFixture(value: unknown): SlideCommand {
+  return value as unknown as SlideCommand;
+}
+
 const deckTarget: CommandTarget = { surface: "deck" };
 const sourceRef = {
   documentId: "doc-1",
@@ -777,18 +781,22 @@ test("affected id metadata extracts slide ids and string element ids", () => {
     { slideIds: ["slide-1"], elementIds: [] },
   );
   assert.deepEqual(
-    SLIDE_COMMAND_METADATA.REMOVE_ELEMENTS.affectedIds({
-      type: "REMOVE_ELEMENTS",
-      slideId: "slide-1",
-      elementIds: ["el-1", 2, "el-2"],
-    } as unknown as SlideCommand),
+    SLIDE_COMMAND_METADATA.REMOVE_ELEMENTS.affectedIds(
+      slideCommandFixture({
+        type: "REMOVE_ELEMENTS",
+        slideId: "slide-1",
+        elementIds: ["el-1", 2, "el-2"],
+      }),
+    ),
     { slideIds: ["slide-1"], elementIds: ["el-1", "el-2"] },
   );
   assert.deepEqual(
-    SLIDE_COMMAND_METADATA.SET_PRESENTATION_THEME.affectedIds({
-      type: "SET_PRESENTATION_THEME",
-      themeId: "forest",
-    } as unknown as SlideCommand),
+    SLIDE_COMMAND_METADATA.SET_PRESENTATION_THEME.affectedIds(
+      slideCommandFixture({
+        type: "SET_PRESENTATION_THEME",
+        themeId: "forest",
+      }),
+    ),
     { slideIds: [], elementIds: [] },
   );
 });

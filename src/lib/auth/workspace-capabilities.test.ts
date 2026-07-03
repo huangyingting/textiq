@@ -237,7 +237,7 @@ test("workspaceCapabilities combines role derivation with capability flags", () 
   const caps = workspaceCapabilities(
     {
       ownerId: OWNER,
-      members: [{ userId: "user-admin", role: "OWNER" as any }],
+      members: [{ userId: "user-admin", role: "OWNER" as never }],
     },
     "user-admin",
   );

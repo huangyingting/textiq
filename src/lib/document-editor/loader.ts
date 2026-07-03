@@ -11,7 +11,6 @@ import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation/brand-kit
 
 import {
   buildDocumentEditorViewModel,
-  type DocumentEditorRow,
   type DocumentEditorViewModel,
 } from "./view-model";
 
@@ -46,7 +45,7 @@ const documentEditorSelect = (userId: string) =>
         },
       },
     },
-  }) as Prisma.DocumentSelect;
+  }) satisfies Prisma.DocumentSelect;
 
 const userTagSelect = { id: true, name: true, slug: true } as const;
 
@@ -86,7 +85,7 @@ export async function loadDocumentEditorViewModel({
   ]);
 
   return buildDocumentEditorViewModel({
-    document: document as unknown as DocumentEditorRow,
+    document,
     userId,
     userName,
     initialComments,

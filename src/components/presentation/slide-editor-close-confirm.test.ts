@@ -14,6 +14,10 @@ interface TestElement {
   props: Record<string, unknown>;
 }
 
+function beforeUnloadEventFixture(value: unknown): BeforeUnloadEvent {
+  return value as unknown as BeforeUnloadEvent;
+}
+
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (node == null || typeof node === "boolean") return "";
@@ -143,8 +147,8 @@ describe("slide editor presentation close confirm flow", () => {
     const event = {
       preventDefault: () => calls.push("preventDefault"),
       returnValue: undefined as unknown,
-    } as unknown as BeforeUnloadEvent;
-    addedListeners[0](event);
+    };
+    addedListeners[0](beforeUnloadEventFixture(event));
 
     assert.deepEqual(calls, ["preventDefault"]);
     assert.equal(event.returnValue, "");

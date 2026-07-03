@@ -97,7 +97,7 @@ function resolveTokenInValue(
   if (!isPlainObject(value)) return { resolved: true };
   if (typeof value.token === "string") {
     const parts = (value.token as string).split(".");
-    let cursor: any = tokens;
+    let cursor: unknown = tokens;
     for (const part of parts) {
       if (!isPlainObject(cursor))
         return {

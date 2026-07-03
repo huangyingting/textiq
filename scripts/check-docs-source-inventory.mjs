@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
 import process from "node:process";
+import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_ROOTS = ["src", "scripts", "prisma", "e2e"];
 const SOURCE_FILES = ["server.mjs", "playwright.config.ts"];
@@ -14,10 +15,6 @@ const IGNORED_DIRS = new Set([
   "coverage",
   "src/generated",
 ]);
-
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
 
 function walkFiles(root) {
   const files = [];

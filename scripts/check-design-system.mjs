@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
 import process from "node:process";
+import {
+  extensionOf,
+  scanRepositoryRoots,
+  toPosix,
+} from "./source-scan-utils.mjs";
 
 const SCAN_ROOTS = ["src/app", "src/components"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".css"]);
@@ -14,15 +17,6 @@ const RAW_RADIUS_ARBITRARY_CLASS =
 const RAW_SHADOW_ARBITRARY_CLASS = /\bshadow-\[(?!var\()[^\]]+\]/g;
 const NON_DS_NEUTRAL_CLASS =
   /\b(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral|stone)-\d{2,3}(?:\/\d{1,3})?\b/g;
-
-function extensionOf(filePath) {
-  const index = filePath.lastIndexOf(".");
-  return index === -1 ? "" : filePath.slice(index);
-}
-
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
 
 function shouldScanFile(filePath) {
   const normalized = toPosix(filePath);
@@ -142,39 +136,14 @@ export function scanText(filePath, text) {
   return findings;
 }
 
-function walkFiles(root) {
-  const files = [];
-  const entries = readdirSync(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-    } else if (entry.isFile()) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
 export function scanDesignSystem(repoRoot = process.cwd()) {
-  const findings = [];
-
-  for (const root of SCAN_ROOTS) {
-    const absoluteRoot = join(repoRoot, root);
-    if (!statSync(absoluteRoot, { throwIfNoEntry: false })?.isDirectory()) {
-      continue;
-    }
-
-    for (const absolutePath of walkFiles(absoluteRoot)) {
-      const filePath = toPosix(relative(repoRoot, absolutePath));
-      if (!shouldScanFile(filePath)) {
-        continue;
-      }
-      findings.push(...scanText(filePath, readFileSync(absolutePath, "utf8")));
-    }
-  }
-
-  return findings;
+  return scanRepositoryRoots({
+    repoRoot,
+    roots: SCAN_ROOTS,
+    sourceExtensions: SOURCE_EXTENSIONS,
+    scanText,
+    shouldScanFile,
+  });
 }
 
 function main() {

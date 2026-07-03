@@ -183,8 +183,16 @@ test("detachDeckChrome handles image and unsupported resolved content", () => {
   const unsupported = {
     ...imageNode,
     content: { type: "unknown", content: {} },
-  } as unknown as ResolvedRenderNode;
-  assert.equal(detachDeckChrome(deck, slideId, "logo", unsupported), deck);
+  };
+  assert.equal(
+    detachDeckChrome(
+      deck,
+      slideId,
+      "logo",
+      resolvedRenderNodeFixture(unsupported),
+    ),
+    deck,
+  );
 });
 
 test("editor commands preserve compatible non-text slot content and duplicate suffixes", () => {
@@ -268,3 +276,6 @@ test("editor commands preserve compatible non-text slot content and duplicate su
     "1.0.0",
   );
 });
+function resolvedRenderNodeFixture(value: unknown): ResolvedRenderNode {
+  return value as unknown as ResolvedRenderNode;
+}

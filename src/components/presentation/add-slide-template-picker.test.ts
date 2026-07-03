@@ -1,14 +1,28 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createElement, isValidElement } from "react";
+import {
+  createElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { AddSlideTemplatePicker } from "./add-slide-template-picker";
 import { createDefaultTemplateRegistry } from "@/lib/presentation/theme-packages";
 
-function findButtonByText(node: unknown, text: string): any {
+type TestElementProps = {
+  children?: ReactNode;
+  onClick?: () => void;
+  "aria-label"?: string;
+};
+
+function findButtonByText(
+  node: unknown,
+  text: string,
+): ReactElement<TestElementProps> | undefined {
   if (!isValidElement(node)) return undefined;
-  const element = node as any;
+  const element = node as ReactElement<{ children?: ReactNode }>;
   const children = element.props.children;
   const childText = Array.isArray(children)
     ? children.filter((child) => typeof child === "string").join("")
@@ -24,10 +38,14 @@ function findButtonByText(node: unknown, text: string): any {
   return undefined;
 }
 
-function collectButtons(node: unknown, result: any[] = []): any[] {
+function collectButtons(
+  node: unknown,
+  result: ReactElement<TestElementProps>[] = [],
+): ReactElement<TestElementProps>[] {
   if (!isValidElement(node)) return result;
-  const element = node as any;
-  if (element.type === "button") result.push(element);
+  const element = node as ReactElement<{ children?: ReactNode }>;
+  if (element.type === "button")
+    result.push(element as ReactElement<TestElementProps>);
   const children = element.props.children;
   const childNodes = Array.isArray(children) ? children : [children];
   for (const child of childNodes) {
@@ -69,7 +87,9 @@ describe("AddSlideTemplatePicker", () => {
     const airyButton = findButtonByText(tree, "airy · balanced");
 
     assert.ok(airyButton);
-    airyButton.props.onClick();
+    const chooseAiry = airyButton.props.onClick;
+    if (typeof chooseAiry !== "function") throw new Error("Missing handler");
+    chooseAiry();
     assert.deepEqual(choices, [{ kind: "content", layoutId: "content-airy" }]);
   });
 
@@ -92,7 +112,7 @@ describe("AddSlideTemplatePicker", () => {
       const accessibleName = button.props["aria-label"];
       assert.equal(typeof accessibleName, "string");
       const labels = labelsByVisibleText.get(visibleText) ?? [];
-      labels.push(accessibleName);
+      labels.push(accessibleName as string);
       labelsByVisibleText.set(visibleText, labels);
     }
 
@@ -119,7 +139,9 @@ describe("AddSlideTemplatePicker", () => {
     });
     const closeButton = findButtonByText(tree, "Close");
     assert.ok(closeButton);
-    closeButton.props.onClick();
+    const close = closeButton.props.onClick;
+    if (typeof close !== "function") throw new Error("Missing handler");
+    close();
     assert.deepEqual(calls, ["close"]);
   });
 
@@ -134,7 +156,9 @@ describe("AddSlideTemplatePicker", () => {
     });
     const authorButton = findButtonByText(tree, "Author brand kit");
     assert.ok(authorButton);
-    authorButton.props.onClick();
+    const author = authorButton.props.onClick;
+    if (typeof author !== "function") throw new Error("Missing handler");
+    author();
     assert.deepEqual(calls, ["author"]);
   });
 });

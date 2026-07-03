@@ -266,7 +266,7 @@ export function applyPatch(deck: Deck, patch: DeckPatch): Deck | null {
       }
       let next = {
         ...deck,
-        design: { ...((deck as any).design ?? {}), ...design },
+        design: { ...(deck.design ?? {}), ...design } as Deck["design"],
         masters,
         defaultMasterId,
         customTemplates,
@@ -288,7 +288,7 @@ export function applyPatch(deck: Deck, patch: DeckPatch): Deck | null {
       if (!themeOverrides) return null;
       return {
         ...deck,
-        design: { ...((deck as any).design ?? {}), themeOverrides },
+        design: { ...(deck.design ?? {}), themeOverrides } as Deck["design"],
       } as Deck;
     }
     case "canvas.set_format": {

@@ -34,6 +34,14 @@ function setNavigator(value: unknown): void {
   });
 }
 
+function clipboardItemConstructor(value: unknown): typeof ClipboardItem {
+  return value as unknown as typeof ClipboardItem;
+}
+
+function installTestClipboardItem(): void {
+  globalThis.ClipboardItem = clipboardItemConstructor(TestClipboardItem);
+}
+
 class TestClipboardItem {
   readonly data: Record<string, Blob>;
   readonly types: string[];
@@ -67,8 +75,7 @@ describe("TextIQ browser node clipboard helpers", () => {
         },
       },
     });
-    globalThis.ClipboardItem =
-      TestClipboardItem as unknown as typeof ClipboardItem;
+    installTestClipboardItem();
 
     const png = new Blob(["png"], { type: "image/png" });
     const result = await writeTextIqNodesToClipboard([node], {
@@ -134,8 +141,7 @@ describe("TextIQ browser node clipboard helpers", () => {
 
   test("returns failure states when clipboard writes are unsupported, denied, or fail", async () => {
     setNavigator({ clipboard: {} });
-    globalThis.ClipboardItem =
-      TestClipboardItem as unknown as typeof ClipboardItem;
+    installTestClipboardItem();
     assert.deepEqual(await writeTextIqNodesToClipboard([node]), {
       ok: false,
       state: "unsupported",
@@ -186,8 +192,7 @@ describe("TextIQ browser node clipboard helpers", () => {
         },
       },
     });
-    globalThis.ClipboardItem =
-      TestClipboardItem as unknown as typeof ClipboardItem;
+    installTestClipboardItem();
 
     const retry = await writeTextIqNodesToClipboard([node], {
       renderPng: async () => new Blob(["png"], { type: "image/png" }),

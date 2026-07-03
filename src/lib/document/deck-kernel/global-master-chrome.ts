@@ -429,10 +429,11 @@ function mergeTextStyle(
   existing: MasterElement | undefined,
   patch: { align: ElementAlign },
 ): Record<string, unknown> & { align: ElementAlign } {
+  const textStyle =
+    existing?.kind === "text" ? existing.designOverrides?.textStyle : undefined;
   const existingTextStyle =
-    existing?.kind === "text"
-      ? ((existing as unknown as { designOverrides?: { textStyle?: unknown } })
-          .designOverrides?.textStyle as Record<string, unknown> | undefined)
+    textStyle && typeof textStyle === "object"
+      ? (textStyle as Record<string, unknown>)
       : undefined;
   return { ...(existingTextStyle ?? {}), ...patch };
 }

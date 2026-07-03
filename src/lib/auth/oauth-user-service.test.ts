@@ -15,6 +15,10 @@ type UserMutation = {
   data: { email?: string; name?: string | null; image?: string | null };
 };
 
+function oauthClientFixture(value: unknown): OAuthClient {
+  return value as unknown as OAuthClient;
+}
+
 function oauthClient(input: {
   existing: OAuthLocalUser | null;
   createdId?: string;
@@ -24,7 +28,7 @@ function oauthClient(input: {
   const mutations = input.mutations ?? [];
   const observedEmails = input.observedEmails ?? [];
 
-  return {
+  return oauthClientFixture({
     user: {
       findUnique: async ({ where }: { where: { email: string } }) => {
         observedEmails.push(where.email);
@@ -55,7 +59,7 @@ function oauthClient(input: {
         };
       },
     },
-  } as unknown as OAuthClient;
+  });
 }
 
 test("linkOAuthLocalUser updates an existing email-linked user without seeding", async () => {

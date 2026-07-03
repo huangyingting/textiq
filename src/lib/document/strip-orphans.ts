@@ -16,7 +16,7 @@ import type { Deck, Slide } from "./deck-kernel/deck-core";
 import type { SlideElement } from "./deck-kernel/deck-elements";
 
 function visualElementId(element: SlideElement): string | undefined {
-  return (element as any).content?.visualId;
+  return element.kind === "visual" ? element.content.visualId : undefined;
 }
 
 /**

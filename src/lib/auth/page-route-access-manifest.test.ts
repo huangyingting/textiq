@@ -25,6 +25,10 @@ const REPO_ROOT = join(
 );
 const APP_DIR = join(REPO_ROOT, "src", "app");
 
+function direntParentPath(entry: unknown): string {
+  return (entry as unknown as { parentPath: string }).parentPath;
+}
+
 function routeFromAppFile(filePath: string): string | null {
   const rel = relative(APP_DIR, filePath).split(sep).join("/");
   if (rel === "page.tsx") return "/";
@@ -40,8 +44,7 @@ function collectPageRoutes(): string[] {
     withFileTypes: true,
   })) {
     if (!entry.isFile()) continue;
-    const parent: string = (entry as unknown as { parentPath: string })
-      .parentPath;
+    const parent = direntParentPath(entry);
     const route = routeFromAppFile(join(parent, entry.name));
     if (route && !route.startsWith("/api/")) {
       routes.push(route);

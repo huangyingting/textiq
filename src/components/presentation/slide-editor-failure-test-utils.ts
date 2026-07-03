@@ -105,6 +105,18 @@ export type MockElementFactory = (args?: {
   rect?: { left: number; top: number; width: number; height: number };
 }) => HTMLElement;
 
+function mockHTMLElementConstructor(value: unknown): typeof HTMLElement {
+  return value as unknown as typeof HTMLElement;
+}
+
+function mockHTMLElement(value: unknown): HTMLElement {
+  return value as unknown as HTMLElement;
+}
+
+function reactPointerEvent(value: unknown): React.PointerEvent {
+  return value as unknown as React.PointerEvent;
+}
+
 export function withPointerWindow<T>(
   run: (
     listeners: Map<PointerListenerType, (event: PointerEvent) => void>,
@@ -207,9 +219,9 @@ export function withMockHTMLElement<T>(
   }
 
   globalWithHTMLElement.HTMLElement =
-    MockHTMLElement as unknown as typeof HTMLElement;
+    mockHTMLElementConstructor(MockHTMLElement);
   try {
-    return run((args) => new MockHTMLElement(args) as unknown as HTMLElement);
+    return run((args) => mockHTMLElement(new MockHTMLElement(args)));
   } finally {
     if (previousHTMLElement === undefined) {
       Reflect.deleteProperty(globalWithHTMLElement, "HTMLElement");
@@ -276,20 +288,23 @@ export function clickNode(
   });
   const clientX = options.clientX ?? 100;
   const clientY = options.clientY ?? 100;
-  nodePointerDownFrom(root)(nodeId, {
-    button: 0,
-    pointerId: 1,
-    clientX,
-    clientY,
-    shiftKey: options.shiftKey ?? false,
-    metaKey: options.metaKey ?? false,
-    ctrlKey: options.ctrlKey ?? false,
-    altKey: options.altKey ?? false,
-    target: currentTarget,
-    currentTarget,
-    preventDefault: () => undefined,
-    stopPropagation: () => undefined,
-  } as unknown as React.PointerEvent);
+  nodePointerDownFrom(root)(
+    nodeId,
+    reactPointerEvent({
+      button: 0,
+      pointerId: 1,
+      clientX,
+      clientY,
+      shiftKey: options.shiftKey ?? false,
+      metaKey: options.metaKey ?? false,
+      ctrlKey: options.ctrlKey ?? false,
+      altKey: options.altKey ?? false,
+      target: currentTarget,
+      currentTarget,
+      preventDefault: () => undefined,
+      stopPropagation: () => undefined,
+    }),
+  );
   listeners.get("pointerup")?.({
     clientX,
     clientY,

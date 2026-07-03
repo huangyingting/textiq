@@ -62,7 +62,7 @@ function stubObjectMethod<T extends object, K extends keyof T>(
   t: TestContext,
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -228,7 +228,8 @@ describe("upload brand asset ownership checks", () => {
       id: "brand-owned",
     }));
     stubObjectMethod(t, prisma.asset, "findUnique", async () => null);
-    stubObjectMethod(t, prisma.asset, "create", async ({ data }: any) => {
+    stubObjectMethod(t, prisma.asset, "create", async (args) => {
+      const { data } = args as { data: { brandId?: string | null } };
       createdCount += 1;
       createdBrandIds.push(data.brandId);
       return { id: `asset-${createdCount}` };
@@ -271,9 +272,10 @@ describe("upload brand asset ownership checks", () => {
     });
     t.after(resetBrandStorageAdapter);
 
-    stubObjectMethod(t, prisma.brand, "findFirst", async ({ where }: any) =>
-      where?.id === "brand-owned" ? { id: "brand-owned" } : null,
-    );
+    stubObjectMethod(t, prisma.brand, "findFirst", async (args) => {
+      const { where } = args as { where?: { id?: string } };
+      return where?.id === "brand-owned" ? { id: "brand-owned" } : null;
+    });
     stubObjectMethod(t, prisma.asset, "findUnique", async () => ({
       id: "asset-existing",
       storageKey: "owner-1/existing.woff2",
@@ -287,7 +289,8 @@ describe("upload brand asset ownership checks", () => {
       t,
       prisma.asset,
       "update",
-      async ({ data }: any) => {
+      async (args) => {
+        const { data } = args as { data: { brandId?: string | null } };
         updateBrandIds.push(data.brandId);
         return {};
       },

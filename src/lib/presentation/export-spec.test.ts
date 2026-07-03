@@ -18,6 +18,11 @@ import {
   buildMinimalThemePackage,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
+import type { SlideChildNode } from "@/lib/presentation/schema";
+
+function slideChildFixture(value: unknown): SlideChildNode {
+  return value as unknown as SlideChildNode;
+}
 
 describe("buildExportSpec", () => {
   test("produces one slide spec per deck slide", () => {
@@ -298,12 +303,12 @@ describe("buildExportSpec — additional operation types", () => {
     // Build a deck with an image node referencing a missing asset to trigger
     // a render diagnostic.
     const slide = buildCoverSlide();
-    const imgNode = {
+    const imgNode = slideChildFixture({
       ...slide.children[0],
       id: "img-missing",
       type: "image" as const,
       content: { assetId: "ghost-asset" },
-    } as unknown as import("@/lib/presentation/schema").SlideChildNode;
+    });
     const badSlide = { ...slide, children: [imgNode] };
     const deck = buildDeck([badSlide]);
     const pkg = buildMinimalThemePackage();

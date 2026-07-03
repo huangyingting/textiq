@@ -389,11 +389,12 @@ test("comment service creates slide root comments with geometry", async () => {
     buildDeck([{ id: "slide-1", elementIds: ["element-1"] }]),
   );
 
+  const anchorGeometry = { x: 1, y: 2, width: 3, height: 4 };
   await service.createComment("doc-1", {
     body: "Slide anchor",
     slideId: "slide-1",
     elementId: "element-1",
-    anchorGeometry: { x: 1, y: 2, width: 3, height: 4 } as any,
+    anchorGeometry,
   });
 
   assert.equal(db.comments[0].slideId, "slide-1");

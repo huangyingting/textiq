@@ -176,16 +176,15 @@ test("parseDeckResponse rejects invalid, missing, and legacy decks", () => {
   assert.equal(parseDeckResponse("nope"), null);
 });
 
-function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
+function jsonResponse(body: unknown, _ok = true, status = 200): Response {
+  return new Response(JSON.stringify(body), {
     status,
-    json: async () => body,
-  } as unknown as Response;
+    headers: { "content-type": "application/json" },
+  });
 }
 
 test("requestDeckGeneration returns the parsed Deck on success", async () => {
-  const fetchImpl = (async () =>
+  const fetchImpl: typeof fetch = async () =>
     jsonResponse({
       deck: VALID_DECK,
       truncated: true,
@@ -198,7 +197,7 @@ test("requestDeckGeneration returns the parsed Deck on success", async () => {
           message: "Used fallback content",
         },
       ],
-    })) as unknown as typeof fetch;
+    });
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, true);
   if (result.ok) {
@@ -212,11 +211,11 @@ test("requestDeckGeneration returns the parsed Deck on success", async () => {
 test("requestDeckGeneration POSTs to /api/generate-deck with the built body", async () => {
   let seenUrl = "";
   let seenBody: unknown = null;
-  const fetchImpl = (async (url: string, init?: RequestInit) => {
-    seenUrl = url;
+  const fetchImpl: typeof fetch = async (url, init) => {
+    seenUrl = String(url);
     seenBody = JSON.parse(String(init?.body));
     return jsonResponse({ deck: VALID_DECK, truncated: false });
-  }) as unknown as typeof fetch;
+  };
   await requestDeckGeneration(
     CONTENT_JSON,
     { length: "medium", audience: "students" },
@@ -230,24 +229,16 @@ test("requestDeckGeneration POSTs to /api/generate-deck with the built body", as
 });
 
 test("requestDeckGeneration classifies a 404 as unavailable", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Not found." },
-      false,
-      404,
-    )) as unknown as typeof fetch;
+  const fetchImpl: typeof fetch = async () =>
+    jsonResponse({ error: "Not found." }, false, 404);
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "unavailable");
 });
 
 test("requestDeckGeneration classifies a 402 as credit", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Insufficient credits." },
-      false,
-      402,
-    )) as unknown as typeof fetch;
+  const fetchImpl: typeof fetch = async () =>
+    jsonResponse({ error: "Insufficient credits." }, false, 402);
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -257,24 +248,20 @@ test("requestDeckGeneration classifies a 402 as credit", async () => {
 });
 
 test("requestDeckGeneration classifies a 504 as timeout", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Too slow." },
-      false,
-      504,
-    )) as unknown as typeof fetch;
+  const fetchImpl: typeof fetch = async () =>
+    jsonResponse({ error: "Too slow." }, false, 504);
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "timeout");
 });
 
 test("requestDeckGeneration classifies an empty-outline 400 as empty", async () => {
-  const fetchImpl = (async () =>
+  const fetchImpl: typeof fetch = async () =>
     jsonResponse(
       { error: "`contentJson` does not contain any usable outline content." },
       false,
       400,
-    )) as unknown as typeof fetch;
+    );
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -284,20 +271,16 @@ test("requestDeckGeneration classifies an empty-outline 400 as empty", async () 
 });
 
 test("requestDeckGeneration classifies a non-empty 400 as other", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "`contentJson` is required." },
-      false,
-      400,
-    )) as unknown as typeof fetch;
+  const fetchImpl: typeof fetch = async () =>
+    jsonResponse({ error: "`contentJson` is required." }, false, 400);
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "other");
 });
 
 test("requestDeckGeneration classifies other non-OK statuses as other", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse({ error: "boom" }, false, 500)) as unknown as typeof fetch;
+  const fetchImpl: typeof fetch = async () =>
+    jsonResponse({ error: "boom" }, false, 500);
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -307,42 +290,42 @@ test("requestDeckGeneration classifies other non-OK statuses as other", async ()
 });
 
 test("requestDeckGeneration returns a network error when fetch throws", async () => {
-  const fetchImpl = (async () => {
+  const fetchImpl: typeof fetch = async () => {
     throw new Error("offline");
-  }) as unknown as typeof fetch;
+  };
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "network");
 });
 
 test("requestDeckGeneration classifies an aborted fetch as timeout", async () => {
-  const fetchImpl = (async () => {
+  const fetchImpl: typeof fetch = async () => {
     const err = new Error("aborted");
     err.name = "AbortError";
     throw err;
-  }) as unknown as typeof fetch;
+  };
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "timeout");
 });
 
 test("requestDeckGeneration classifies an unparseable success payload as other", async () => {
-  const fetchImpl = (async () =>
+  const fetchImpl: typeof fetch = async () =>
     jsonResponse({
       deck: { bogus: true },
       truncated: false,
-    })) as unknown as typeof fetch;
+    });
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "other");
 });
 
 test("requestDeckGeneration rejects legacy deck responses", async () => {
-  const fetchImpl = (async () =>
+  const fetchImpl: typeof fetch = async () =>
     jsonResponse({
       deck: LEGACY_DECK,
       truncated: false,
-    })) as unknown as typeof fetch;
+    });
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "other");
@@ -505,17 +488,11 @@ test("requestDeckGeneration forwards signal and theme package request and handle
   const controller = new AbortController();
   let seenSignal: AbortSignal | undefined;
   let seenBody: unknown;
-  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+  const fetchImpl: typeof fetch = async (_url, init) => {
     seenSignal = init?.signal ?? undefined;
     seenBody = JSON.parse(String(init?.body));
-    return {
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error("not json");
-      },
-    } as unknown as Response;
-  }) as unknown as typeof fetch;
+    return new Response("not json", { status: 500 });
+  };
 
   const result = await requestDeckGeneration(
     CONTENT_JSON,
@@ -535,11 +512,11 @@ test("requestDeckGeneration forwards signal and theme package request and handle
 });
 
 test("requestDeckGeneration classifies timeout-named fetch errors as timeout", async () => {
-  const fetchImpl = (async () => {
+  const fetchImpl: typeof fetch = async () => {
     const err = new Error("timeout");
     err.name = "TimeoutError";
     throw err;
-  }) as unknown as typeof fetch;
+  };
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.errorKind, "timeout");

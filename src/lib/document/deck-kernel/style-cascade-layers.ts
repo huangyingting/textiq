@@ -47,10 +47,9 @@ export interface ResolvedSlideStyle {
 
 /** Resolves the presentation theme token set for a v6 deck. */
 export function resolveDeckTokenSet(deck: Deck): PresentationTheme {
-  const raw = deck as any;
   /* node:coverage disable */
   /* Deck token resolution is exercised through cascade tests; tsx maps the wrapper rows as residual. */
-  return resolvePresentationThemeTokens({ design: raw.design });
+  return resolvePresentationThemeTokens({ design: deck.design });
 }
 /* node:coverage enable */
 
@@ -143,10 +142,9 @@ export function resolveMaster(
   deck: Deck,
   _slide: Slide,
 ): SlideMaster | undefined {
-  const rawDeck = deck as any;
-  const masters = rawDeck.masters as SlideMaster[] | undefined;
+  const masters = deck.masters;
   if (!masters || masters.length === 0) return undefined;
-  return masters.find((m) => m.id === rawDeck.defaultMasterId) ?? masters[0];
+  return masters.find((m) => m.id === deck.defaultMasterId) ?? masters[0];
 }
 
 /**
@@ -161,11 +159,10 @@ export function resolveSlideStyle(
 ): ResolvedSlideStyle {
   const tokenSet = resolveDeckTokenSet(deck);
   const master = resolveMaster(deck, slide);
-  const rawSlide = slide as any;
 
   const masterBackground = backgroundFromDesign(master?.background, tokenSet);
   const slideBackground = backgroundFromDesign(
-    rawSlide.designOverrides?.background,
+    slide.designOverrides?.background,
     tokenSet,
   );
 
@@ -173,7 +170,7 @@ export function resolveSlideStyle(
     slideBackground ?? masterBackground ?? tokenSet.defaultBackground;
 
   const accent =
-    colorRefValue(rawSlide.designOverrides?.accent, tokenSet) ??
+    colorRefValue(slide.designOverrides?.accent, tokenSet) ??
     tokenSet.colors.accent;
   const titleColor = tokenSet.colors.onBg;
   const bodyColor = tokenSet.colors.onBg;

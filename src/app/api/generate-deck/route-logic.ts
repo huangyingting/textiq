@@ -76,17 +76,6 @@ export async function generateDeckForRoute(
   };
 }
 
-function countTableSlides(deck: Deck): number {
-  let count = 0;
-  for (const slide of deck.slides) {
-    const children = Array.isArray(slide.children) ? slide.children : [];
-    if (children.some((child) => child.type === "table")) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
 // ---------------------------------------------------------------------------
 // Minimal presentation route metrics (content-free, safe to log)
 // ---------------------------------------------------------------------------
@@ -95,6 +84,7 @@ interface RouteMetrics {
   slideCount: number;
   wordsPerSlide: number;
   percentSlidesWithVisual: number;
+  tableSlideCount: number;
   schemaValid: boolean;
   sourceWordCount?: number;
 }
@@ -106,10 +96,12 @@ function computeRouteMetrics(
   const slideCount = deck.slides.length;
   let totalWords = 0;
   let slidesWithVisual = 0;
+  let tableSlideCount = 0;
 
   for (const slide of deck.slides) {
     const children = Array.isArray(slide.children) ? slide.children : [];
     let slideHasVisual = false;
+    let slideHasTable = false;
     for (const child of children) {
       if (child.type === "text") {
         for (const para of child.content?.paragraphs ?? []) {
@@ -119,9 +111,15 @@ function computeRouteMetrics(
       if (child.type === "image" || child.type === "visual") {
         slideHasVisual = true;
       }
+      if (child.type === "table") {
+        slideHasTable = true;
+      }
     }
     if (slideHasVisual) {
       slidesWithVisual += 1;
+    }
+    if (slideHasTable) {
+      tableSlideCount += 1;
     }
   }
 
@@ -134,6 +132,7 @@ function computeRouteMetrics(
     slideCount,
     wordsPerSlide,
     percentSlidesWithVisual,
+    tableSlideCount,
     schemaValid,
   };
 
@@ -149,13 +148,13 @@ function computeRouteMetrics(
 
 function buildGenerateDeckResponseMetadata(
   result: GenerateDeckRouteResult,
-  schemaValid: boolean,
+  metrics: RouteMetrics,
 ): GenerateDeckResponseMetadata {
   return {
     planner: result.planner,
     mode: result.mode,
-    tableSlideCount: countTableSlides(result.deck),
-    schemaValid,
+    tableSlideCount: metrics.tableSlideCount,
+    schemaValid: metrics.schemaValid,
     ...(result.themePackageId ? { themePackageId: result.themePackageId } : {}),
     ...(result.selectedKindCounts
       ? { selectedKindCounts: result.selectedKindCounts }
@@ -176,7 +175,7 @@ export function buildGenerateDeckSuccessResponse(
     deck: result.deck,
     truncated: result.truncated,
     diagnostics: result.diagnostics,
-    metadata: buildGenerateDeckResponseMetadata(result, metrics.schemaValid),
+    metadata: buildGenerateDeckResponseMetadata(result, metrics),
   };
 }
 
@@ -203,7 +202,7 @@ export function buildGenerateDeckSuccessLogFields(
     truncated: result.truncated,
     planner: result.planner,
     mode: result.mode,
-    tableSlideCount: countTableSlides(result.deck),
+    tableSlideCount: metrics.tableSlideCount,
     ...(result.themePackageId ? { packageId: result.themePackageId } : {}),
     ...(result.selectedKindCounts
       ? { selectedKindCounts: result.selectedKindCounts }

@@ -5,19 +5,26 @@ type RoutePattern = {
 };
 /* node:coverage ignore stop */
 
+const PROTECTED_ROUTES = [{ path: "/app", match: "prefix" }] as const;
+const AUTH_PAGE_ROUTES = [
+  { path: "/login", match: "exact" },
+  { path: "/signup", match: "exact" },
+] as const;
+const PUBLIC_ROUTES = [{ path: "/", match: "exact" }] as const;
+const PROXY_MATCHER = ["/((?!api|_next/static|_next/image|favicon.ico).*)"];
+const PROXY_EXCLUDED_PREFIXES = ["/api", "/_next/static", "/_next/image"];
+const PROXY_EXCLUDED_PATHS = ["/favicon.ico"];
+
 export const routeProtectionPolicy = {
   authenticatedHome: "/app",
   signIn: "/login",
-  protectedRoutes: [{ path: "/app", match: "prefix" }],
-  authPageRoutes: [
-    { path: "/login", match: "exact" },
-    { path: "/signup", match: "exact" },
-  ],
-  publicRoutes: [{ path: "/", match: "exact" }],
+  protectedRoutes: PROTECTED_ROUTES,
+  authPageRoutes: AUTH_PAGE_ROUTES,
+  publicRoutes: PUBLIC_ROUTES,
   proxy: {
-    matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
-    excludedPrefixes: ["/api", "/_next/static", "/_next/image"],
-    excludedPaths: ["/favicon.ico"],
+    matcher: PROXY_MATCHER,
+    excludedPrefixes: PROXY_EXCLUDED_PREFIXES,
+    excludedPaths: PROXY_EXCLUDED_PATHS,
   },
 } as const;
 
@@ -34,6 +41,10 @@ function matchesAny(
   patterns: readonly RoutePattern[],
 ): boolean {
   return patterns.some((pattern) => matchesPattern(pathname, pattern));
+}
+
+function includesString(values: readonly string[], value: string): boolean {
+  return values.includes(value);
 }
 
 export function isProtectedRoute(pathname: string): boolean {
@@ -68,11 +79,7 @@ export function authorizeRouteAccess(input: {
 }
 
 export function isProxyRouteMatched(pathname: string): boolean {
-  if (
-    (routeProtectionPolicy.proxy.excludedPaths as readonly string[]).includes(
-      pathname,
-    )
-  ) {
+  if (includesString(routeProtectionPolicy.proxy.excludedPaths, pathname)) {
     return false;
   }
 

@@ -294,6 +294,7 @@ export interface TableElementStyle {
 }
 
 export interface ElementDesignOverrides {
+  styleThemeId?: string;
   textStyle?: Partial<TextElementStyle>;
   fill?: ElementFill;
   stroke?: { color: string; width: number };
@@ -502,5 +503,5 @@ export function buildVisualElement(
       ...(options.styleThemeId ? { styleThemeId: options.styleThemeId } : {}),
     },
     ...(options.source !== undefined ? { source: options.source } : {}),
-  } as unknown as Omit<VisualElement, "zIndex"> & { id: string };
+  };
 }

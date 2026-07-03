@@ -10,7 +10,22 @@ import {
   groupNodes,
   updateNodeContent,
 } from "@/lib/presentation/editor-commands";
+import type {
+  GroupNode,
+  SlideChildNode,
+  TextNode,
+} from "@/lib/presentation/schema";
 import { makeTestDeck } from "./editor-commands.test-utils";
+
+function textNode(node: SlideChildNode | undefined): TextNode {
+  assert.equal(node?.type, "text");
+  return node;
+}
+
+function expectGroupNode(node: SlideChildNode | undefined): GroupNode {
+  assert.equal(node?.type, "group");
+  return node;
+}
 
 describe("updateLocalStyle", () => {
   test("adds local style override to node", () => {
@@ -88,7 +103,7 @@ describe("updateNodeContent", () => {
       paragraphs: [{ id: "p1", text: "Updated" }],
     });
     const node = updated.slides[0].children.find((n) => n.id === nodeId);
-    assert.deepEqual((node as any).content.paragraphs, [
+    assert.deepEqual(textNode(node).content.paragraphs, [
       { id: "p1", text: "Updated" },
     ]);
   });
@@ -113,15 +128,15 @@ describe("updateLocalStyle inside group child", () => {
     const groupNode = grouped.slides[0].children.find(
       (n) => n.id === "grp-001",
     )!;
-    const innerNodeId = (groupNode as any).children[0].id;
+    const innerNodeId = expectGroupNode(groupNode).children[0]!.id;
     const updated = updateLocalStyle(grouped, slide.id, innerNodeId, {
       text: { fontSizePt: 44 },
     });
     const updatedGroup = updated.slides[0].children.find(
       (n) => n.id === "grp-001",
-    ) as any;
-    const innerNode = updatedGroup.children.find(
-      (n: any) => n.id === innerNodeId,
+    );
+    const innerNode = expectGroupNode(updatedGroup).children.find(
+      (n) => n.id === innerNodeId,
     );
     assert.equal(innerNode?.localStyle?.text?.fontSizePt, 44);
   });
@@ -201,10 +216,8 @@ describe("updateNodeContent — inline text editor commit", () => {
     const updated = updateNodeContent(deck, slide.id, textNodeId, {
       paragraphs,
     });
-    const node = updated.slides[0].children.find(
-      (n) => n.id === textNodeId,
-    ) as any;
-    assert.deepEqual(node.content.paragraphs, paragraphs);
+    const node = updated.slides[0].children.find((n) => n.id === textNodeId);
+    assert.deepEqual(textNode(node).content.paragraphs, paragraphs);
   });
 
   test("preserves other content fields when patching paragraphs", () => {
@@ -219,24 +232,22 @@ describe("updateNodeContent — inline text editor commit", () => {
     const committed = updateNodeContent(withFit, slide.id, textNodeId, {
       paragraphs: [{ id: "p1", text: "New text" }],
     });
-    const node = committed.slides[0].children.find(
-      (n) => n.id === textNodeId,
-    ) as any;
-    assert.equal(node.content.fit, "shrink-to-fit");
-    assert.equal(node.content.paragraphs[0].text, "New text");
+    const node = committed.slides[0].children.find((n) => n.id === textNodeId);
+    assert.equal(textNode(node).content.fit, "shrink-to-fit");
+    assert.equal(textNode(node).content.paragraphs?.[0]?.text, "New text");
   });
 
   test("does not mutate original deck on commit", () => {
     const deck = makeTestDeck();
     const slide = deck.slides[0];
     const nodeId = slide.children[0].id;
-    const originalContent = (slide.children[0] as any).content;
+    const originalContent = textNode(slide.children[0]).content;
     updateNodeContent(deck, slide.id, nodeId, {
       paragraphs: [{ id: "p-new", text: "mutate check" }],
     });
     // Original content must be unchanged
     assert.deepEqual(
-      (deck.slides[0].children[0] as any).content,
+      textNode(deck.slides[0].children[0]).content,
       originalContent,
     );
   });
@@ -273,7 +284,9 @@ describe("updateLocalStyle — toolbar-driven style patches", () => {
       fill: { type: "solid", color: "#abcdef" },
     });
     const node = updated.slides[0].children.find((n) => n.id === nodeId);
-    assert.equal((node?.localStyle?.fill as any)?.color, "#abcdef");
+    const fill = node?.localStyle?.fill;
+    assert.equal(fill?.type, "solid");
+    assert.equal(fill?.color, "#abcdef");
   });
 
   test("replaces local style keys when patch value is primitive or undefined", () => {

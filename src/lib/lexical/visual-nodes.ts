@@ -15,6 +15,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function lexicalVisualPayload(visual: unknown): Visual {
+  return visual as unknown as Visual;
+}
+
 function walk(
   node: unknown,
   out: CollectedVisualNode[],
@@ -34,7 +38,7 @@ function walk(
     seen.add(node.visualId);
     out.push({
       visualId: node.visualId,
-      visual: node.visual as unknown as Visual,
+      visual: lexicalVisualPayload(node.visual),
     });
   }
 

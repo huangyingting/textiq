@@ -1,11 +1,15 @@
-import type { Deck, Slide, SlideMaster } from "./deck-core";
+import type { Deck, MasterElement, Slide, SlideMaster } from "./deck-core";
 import type {
   ElementEffect,
   ElementRadius,
   SlideElement,
   TableElementStyle,
 } from "./deck-elements";
-import type { ImageFitMode, ImageMaskShape } from "./deck-element-primitives";
+import {
+  GLASS_EFFECT_INTENSITIES,
+  type ImageFitMode,
+  type ImageMaskShape,
+} from "./deck-element-primitives";
 import type {
   BackgroundTreatment,
   PresentationTheme,
@@ -109,7 +113,7 @@ export type ResolvedElementDesign =
       role?: string;
       fitMode?: ImageFitMode;
       maskShape?: ImageMaskShape;
-      radius?: number;
+      radius?: ElementRadius;
     }
   | {
       kind: "shape";
@@ -239,18 +243,25 @@ function resolveGradientStops(
 function resolveElementEffect(input: unknown): ElementEffect | undefined {
   if (!input || typeof input !== "object") return undefined;
   const effect = input as Record<string, unknown>;
-  if (effect.kind === "glass" && typeof effect.intensity === "string") {
-    return effect as unknown as ElementEffect;
+  const glassIntensity = effect.intensity as
+    | (typeof GLASS_EFFECT_INTENSITIES)[number]
+    | undefined;
+  if (
+    effect.kind === "glass" &&
+    glassIntensity !== undefined &&
+    GLASS_EFFECT_INTENSITIES.includes(glassIntensity)
+  ) {
+    return { kind: "glass", intensity: glassIntensity };
   }
   if (effect.kind === "blur" && typeof effect.radius === "number") {
-    return effect as unknown as ElementEffect;
+    return { kind: "blur", radius: effect.radius };
   }
   if (
     effect.kind === "glow" &&
     typeof effect.color === "string" &&
     typeof effect.blur === "number"
   ) {
-    return effect as unknown as ElementEffect;
+    return { kind: "glow", color: effect.color, blur: effect.blur };
   }
   return undefined;
 }
@@ -281,7 +292,7 @@ function resolveTableStyle(
 /* node:coverage ignore next 3 */
 /* Private role helper is exercised through each rendered element kind; tsx maps its wrapper rows as residual. */
 function elementRole(element: SlideElement): string | undefined {
-  return (element as { role?: string }).role;
+  return element.role;
 }
 
 function resolveElementDesign(
@@ -290,8 +301,7 @@ function resolveElementDesign(
   element: SlideElement,
 ): ResolvedElementDesign {
   const role = elementRole(element);
-  const design = (element as { designOverrides?: Record<string, any> })
-    .designOverrides;
+  const design = element.designOverrides;
   switch (element.kind) {
     case "text":
       return {
@@ -406,11 +416,11 @@ function masterElements(
   deck: Deck,
   slide: Slide,
 ): SlideElement[] {
-  const elements = ((master as any)?.elements ?? []) as SlideElement[];
+  const elements: readonly MasterElement[] = master?.elements ?? [];
   const slideIndex = deck.slides.findIndex((entry) => entry.id === slide.id);
   const resolvedSlideIndex = slideIndex >= 0 ? slideIndex : slide.index;
   return elements
-    .filter((element) => (element as any).layer === layer)
+    .filter((element) => element.layer === layer)
     .map((element) =>
       materializeMasterChromePlaceholders(
         element,

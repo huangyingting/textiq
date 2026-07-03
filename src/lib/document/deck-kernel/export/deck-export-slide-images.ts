@@ -852,8 +852,12 @@ function parseSvg(svgString: string): SVGSVGElement | null {
   const parsed = new DOMParser().parseFromString(svgString, "image/svg+xml");
   const root = parsed.documentElement;
   return root instanceof SVGSVGElement || root.tagName === "svg"
-    ? (root as unknown as SVGSVGElement)
+    ? parsedSvgRoot(root)
     : null;
+}
+
+function parsedSvgRoot(root: Element): SVGSVGElement {
+  return root as unknown as SVGSVGElement;
 }
 
 // ---------------------------------------------------------------------------

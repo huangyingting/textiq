@@ -94,7 +94,12 @@ function getPriceId(plan: Plan): string {
 }
 
 // Dynamic Stripe import (SDK is optional — ignore at bundle time, load at runtime)
-async function loadStripe() {
+type StripeConstructor = new (
+  apiKey: string,
+  options: { apiVersion: string },
+) => StripeClientLike;
+
+async function loadStripe(): Promise<StripeClientLike> {
   if (stripeLoaderForTesting) {
     return stripeLoaderForTesting();
   }
@@ -106,7 +111,7 @@ async function loadStripe() {
       "stripe" as string
     );
     const StripeClass = (mod as { default?: unknown }).default ?? mod;
-    return new (StripeClass as any)(getStripeKey(), {
+    return new (StripeClass as StripeConstructor)(getStripeKey(), {
       apiVersion: "2024-06-20",
     });
   } catch {
@@ -162,10 +167,11 @@ export class StripeBillingProvider implements BillingProvider {
         email: user.email,
         metadata: { userId },
       });
-      customerId = customer.id;
-      if (!customerId) {
+      const createdCustomerId = customer.id;
+      if (!createdCustomerId) {
         throw new Error("Stripe customer creation did not return an id.");
       }
+      customerId = createdCustomerId;
 
       await recordStripeCustomer(userId, customerId, {
         fallbackPlan: isPlan(sub?.plan) ? sub.plan : "free",

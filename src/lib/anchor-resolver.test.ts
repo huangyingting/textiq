@@ -135,7 +135,7 @@ test("resolveSourceRef returns found, stale, and missing for text and visual sou
         documentId: "doc-1",
         blockId: "blk-1",
         linkedAt: "2026-06-23T00:00:00.000Z",
-        blockKind: "legacy" as any,
+        blockKind: "legacy" as never,
       },
       blocks,
     ),

@@ -23,6 +23,12 @@ import {
 
 const NOW = new Date("2026-06-25T00:00:00Z");
 
+function partialPublicRenderRow(
+  row: unknown,
+): Partial<PublicRenderDocumentRow> {
+  return row as unknown as Partial<PublicRenderDocumentRow>;
+}
+
 function document(
   overrides: Partial<PublicRenderDocumentRow> = {},
 ): PublicRenderDocumentRow {
@@ -239,11 +245,13 @@ test("resolvePublicRenderWithSource denies document projection when content is m
 test("resolvePublicRenderWithSource returns metadata defaults for older shared rows", async () => {
   const result = await resolvePublicRenderWithSource(
     source(
-      document({
-        shareMetadataMode: null,
-        shareDiscoverable: null,
-        slug: null,
-      } as any),
+      document(
+        partialPublicRenderRow({
+          shareMetadataMode: null,
+          shareDiscoverable: null,
+          slug: null,
+        }),
+      ),
     ),
     {
       params: { shareId: "shared-doc-share123" },

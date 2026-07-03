@@ -27,12 +27,16 @@ import {
 
 const NOW = new Date("2026-06-25T00:00:00Z");
 
+function mutablePrisma(): Record<string, unknown> {
+  return prisma as unknown as Record<string, unknown>;
+}
+
 function replacePrismaProperty(
   t: { after(callback: () => void): void },
   key: string,
   value: unknown,
 ) {
-  const target = prisma as unknown as Record<string, unknown>;
+  const target = mutablePrisma();
   const original = target[key];
   target[key] = value;
   t.after(() => {

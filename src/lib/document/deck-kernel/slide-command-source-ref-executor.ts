@@ -43,25 +43,24 @@ export function executeSourceRefFamilyCommand(
       const source: SourceRef = cmd.unlink
         ? (unlinkSource({ source: currentSource }).source ?? currentSource)
         : activeSourceRef(cmd.source ?? currentSource);
-      const patch: ElementPatch = {
-        source,
-        ...(element.kind === "text" && cmd.text !== undefined
-          ? {
-              content: {
-                ...((element as any).content ?? {}),
-                kind: "text",
+      let patch: ElementPatch = { source };
+      if (element.kind === "text" && cmd.text !== undefined) {
+        patch = {
+          ...patch,
+          content: {
+            ...element.content,
+            kind: "text",
+            text: cmd.text,
+            ...(cmd.runs !== undefined ? { runs: cmd.runs } : {}),
+            paragraphs: [
+              {
                 text: cmd.text,
                 ...(cmd.runs !== undefined ? { runs: cmd.runs } : {}),
-                paragraphs: [
-                  {
-                    text: cmd.text,
-                    ...(cmd.runs !== undefined ? { runs: cmd.runs } : {}),
-                  },
-                ],
               },
-            }
-          : {}),
-      } as unknown as ElementPatch;
+            ],
+          },
+        };
+      }
       return success(
         updateElement(deck, index, cmd.elementId, patch),
         [cmd.slideId],

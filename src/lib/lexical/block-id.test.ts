@@ -31,6 +31,12 @@ import {
 } from "./block-id-runtime";
 import { markdownToLexicalStateObject } from "@/lib/content";
 
+type BlockIdTransformEditor = Parameters<typeof registerBlockIdTransforms>[0];
+
+function blockIdTransformEditor(value: unknown): BlockIdTransformEditor {
+  return value as unknown as BlockIdTransformEditor;
+}
+
 function bidlessState(): {
   root: {
     type: "root";
@@ -388,12 +394,14 @@ test("block id runtime install is idempotent and serialize delegates to editor s
 test("block id runtime registers and unregisters every durable node transform", () => {
   const registered: string[] = [];
   const unregistered: string[] = [];
-  const unregister = registerBlockIdTransforms({
-    registerNodeTransform(klass: { name: string }) {
-      registered.push(klass.name);
-      return () => unregistered.push(klass.name);
-    },
-  } as unknown as Parameters<typeof registerBlockIdTransforms>[0]);
+  const unregister = registerBlockIdTransforms(
+    blockIdTransformEditor({
+      registerNodeTransform(klass: { name: string }) {
+        registered.push(klass.name);
+        return () => unregistered.push(klass.name);
+      },
+    }),
+  );
 
   unregister();
 
@@ -413,15 +421,17 @@ test("block id runtime transform stamps bidless horizontal rules", () => {
     klassName: string;
     transform: (node: unknown) => void;
   }> = [];
-  const unregister = registerBlockIdTransforms({
-    registerNodeTransform(
-      klass: { name: string },
-      transform: (node: unknown) => void,
-    ) {
-      transforms.push({ klassName: klass.name, transform });
-      return () => undefined;
-    },
-  } as unknown as Parameters<typeof registerBlockIdTransforms>[0]);
+  const unregister = registerBlockIdTransforms(
+    blockIdTransformEditor({
+      registerNodeTransform(
+        klass: { name: string },
+        transform: (node: unknown) => void,
+      ) {
+        transforms.push({ klassName: klass.name, transform });
+        return () => undefined;
+      },
+    }),
+  );
 
   const quoteTransform = transforms.find(
     ({ klassName }) => klassName === "QuoteNode",

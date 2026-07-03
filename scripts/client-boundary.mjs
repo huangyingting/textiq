@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs"];
 const SOURCE_ROOTS = ["src"];
@@ -52,10 +53,6 @@ const NODE_BUILTINS = new Set([
   "worker_threads",
   "zlib",
 ]);
-
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
 
 function normalizeRelative(rootDir, filePath) {
   return toPosix(path.relative(rootDir, filePath));

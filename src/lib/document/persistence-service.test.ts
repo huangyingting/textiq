@@ -34,6 +34,7 @@ import {
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
 import { prisma } from "@/lib/prisma";
 import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
+import type { CurrentDeck, CurrentSlideChildNode } from "./deck-schema";
 import * as persistenceService from "./persistence-service";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
 import { snapshotDocumentVersion } from "./persistence/helpers";
@@ -47,6 +48,89 @@ import { snapshotDocumentVersion } from "./persistence/helpers";
  * used by `mirrorVisualNodesInTx`.  We record every call so tests can assert
  * that the function ran against this specific tx and NOT a fresh prisma client.
  */
+type StubTx = Prisma.TransactionClient & {
+  _calls: string[];
+  _payloads: Array<{ method: string; args: unknown }>;
+};
+
+type TransactionWithCalls = Prisma.TransactionClient & Pick<StubTx, "_calls">;
+
+type PrismaStubArgs = {
+  select?: Partial<Record<string, boolean>>;
+  data?: Record<string, unknown> & {
+    deckJson?: unknown;
+    deckRevisionToken?: string;
+    isShared?: boolean;
+    shareId?: string | null;
+    slug?: string | null;
+  };
+  where?: Record<string, unknown> & {
+    deckRevisionToken?: string;
+  };
+};
+
+type LegacyVisualElement = {
+  kind: "visual";
+  content?: {
+    visualId?: string;
+  };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isLegacyVisualElement(value: unknown): value is LegacyVisualElement {
+  if (!isRecord(value) || value.kind !== "visual") {
+    return false;
+  }
+  return value.content === undefined || isRecord(value.content);
+}
+
+function payloadArgs<T>(tx: StubTx, method: string): T {
+  const payload = tx._payloads.find((entry) => entry.method === method);
+  assert.ok(payload, `${method} payload should be recorded`);
+  return payload.args as T;
+}
+
+function firstCallArg<T>(stub: { calls: unknown[][] }): T {
+  const arg = stub.calls[0]?.[0];
+  assert.ok(arg, "expected stub to record at least one call");
+  return arg as T;
+}
+
+function runTransactionCallback<TTx extends Prisma.TransactionClient>(
+  callback: unknown,
+  tx: TTx,
+): unknown {
+  return (callback as (tx: TTx) => unknown)(tx);
+}
+
+function stubTransaction(value: unknown): StubTx {
+  return value as unknown as StubTx;
+}
+
+function prismaTransaction<T extends Prisma.TransactionClient>(
+  value: unknown,
+): T {
+  return value as unknown as T;
+}
+
+function prismaJson(value: unknown): Prisma.JsonValue {
+  return value as unknown as Prisma.JsonValue;
+}
+
+function deckPatch(value: unknown): DeckPatch {
+  return value as unknown as DeckPatch;
+}
+
+function requireStringField(value: unknown, fieldName: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} should be a string`);
+  }
+  return value;
+}
+
 function makeStubTx(
   existingRows: Array<{
     id: string;
@@ -62,7 +146,7 @@ function makeStubTx(
   const calls: string[] = [];
   const payloads: Array<{ method: string; args: unknown }> = [];
 
-  const tx = {
+  const tx = stubTransaction({
     visual: {
       findMany: async () => {
         calls.push("visual.findMany");
@@ -102,10 +186,7 @@ function makeStubTx(
     },
     _calls: calls,
     _payloads: payloads,
-  } as unknown as Prisma.TransactionClient & {
-    _calls: string[];
-    _payloads: Array<{ method: string; args: unknown }>;
-  };
+  });
 
   return tx;
 }
@@ -114,7 +195,7 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -174,13 +255,13 @@ describe("mirrorVisualNodesInTx: uses the caller-supplied tx", () => {
 
 describe("mirrorVisualNodesInTx: rollback simulation", () => {
   test("mirror failure on a throwing tx propagates the error (atomicity)", async () => {
-    const throwingTx = {
+    const throwingTx = stubTransaction({
       visual: {
         findMany: async () => {
           throw new Error("Simulated DB failure");
         },
       },
-    } as unknown as Prisma.TransactionClient;
+    });
 
     await assert.rejects(
       () => mirrorVisualNodesInTx(throwingTx, "doc-fail", EMPTY_LEXICAL_STATE),
@@ -226,7 +307,11 @@ function lexicalStateWithVisuals(
 describe("mirrorVisualNodesInTx: visual mirror diff writes", () => {
   test("creates new rows and counts blank visual ids as invalid", async () => {
     const tx = makeStubTx();
-    const base = lexicalStateWithVisuals([" vis-create "]) as any;
+    const base = lexicalStateWithVisuals([" vis-create "]) as {
+      root: {
+        children: unknown[];
+      };
+    };
     const outcome = await mirrorVisualNodesInTx(tx, "doc-create", {
       root: {
         ...base.root,
@@ -251,11 +336,11 @@ describe("mirrorVisualNodesInTx: visual mirror diff writes", () => {
     assert.equal(outcome.created, 1);
     assert.equal(outcome.invalid, 1);
     assert.ok(tx._calls.includes("visual.upsert"));
-    assert.equal(
-      (tx._payloads.find((p) => p.method === "visual.upsert")?.args as any)
-        .create.anchorBlockId,
-      "vis-create",
+    const upsertArgs = payloadArgs<{ create: { anchorBlockId: string } }>(
+      tx,
+      "visual.upsert",
     );
+    assert.equal(upsertArgs.create.anchorBlockId, "vis-create");
   });
 
   test("snapshots payload changes, prunes stale revisions, and deletes missing rows", async () => {
@@ -303,11 +388,11 @@ describe("mirrorVisualNodesInTx: visual mirror diff writes", () => {
     assert.ok(tx._calls.includes("visualRevision.create"));
     assert.ok(tx._calls.includes("visualRevision.deleteMany"));
     assert.ok(tx._calls.includes("visual.deleteMany"));
-    assert.equal(
-      (tx._payloads.find((p) => p.method === "visual.deleteMany")?.args as any)
-        .where.id.in[0],
-      "row-delete",
+    const deleteArgs = payloadArgs<{ where: { id: { in: string[] } } }>(
+      tx,
+      "visual.deleteMany",
     );
+    assert.equal(deleteArgs.where.id.in[0], "row-delete");
   });
 
   test("updates only order when payload data is unchanged", async () => {
@@ -340,11 +425,11 @@ describe("mirrorVisualNodesInTx: visual mirror diff writes", () => {
 
     assert.equal(outcome.updated, 1);
     assert.equal(tx._calls.includes("visualRevision.create"), false);
-    assert.deepEqual(
-      (tx._payloads.find((p) => p.method === "visual.update")?.args as any)
-        .data,
-      { orderIndex: 0 },
+    const updateArgs = payloadArgs<{ data: { orderIndex: number } }>(
+      tx,
+      "visual.update",
     );
+    assert.deepEqual(updateArgs.data, { orderIndex: 0 });
   });
 });
 
@@ -494,12 +579,12 @@ function lexicalStateWithVisual(visualId: string): unknown {
   };
 }
 
-function collectDeckVisualIds(deck: any): string[] {
+function collectDeckVisualIds(deck: CurrentDeck): string[] {
   const visualIds: string[] = [];
-  const visit = (nodes: any[]) => {
+  const visit = (nodes: CurrentSlideChildNode[]) => {
     for (const node of nodes) {
       if (node.type === "group") {
-        visit(node.children ?? []);
+        visit(node.children);
         continue;
       }
       if (
@@ -510,8 +595,8 @@ function collectDeckVisualIds(deck: any): string[] {
       }
     }
   };
-  for (const slide of deck.slides ?? []) {
-    visit(slide.children ?? []);
+  for (const slide of deck.slides) {
+    visit(slide.children);
   }
   return visualIds;
 }
@@ -526,7 +611,7 @@ describe("sanitizeRestoredDeck", () => {
     // Restored content only has vis-keep; vis-drop is orphaned.
     const restoredContent = lexicalStateWithVisual("vis-keep");
     const result = sanitizeRestoredDeck(
-      VALID_LEGACY_DECK as unknown as Prisma.JsonValue,
+      prismaJson(VALID_LEGACY_DECK),
       restoredContent,
     );
     // The result should be a Prisma.InputJsonValue (not DbNull)
@@ -534,8 +619,8 @@ describe("sanitizeRestoredDeck", () => {
     const deck = result as typeof VALID_LEGACY_DECK;
     const elements = deck.slides[0].elements ?? [];
     const visIds = elements
-      .filter((e) => e.kind === "visual")
-      .map((e) => (e as any).content?.visualId);
+      .filter(isLegacyVisualElement)
+      .map((element) => element.content?.visualId);
     assert.ok(visIds.includes("vis-keep"), "vis-keep should remain");
     assert.ok(!visIds.includes("vis-drop"), "vis-drop should be stripped");
   });
@@ -578,7 +663,7 @@ describe("sanitizeRestoredDeck", () => {
       },
     };
     const result = sanitizeRestoredDeck(
-      VALID_LEGACY_DECK as unknown as Prisma.JsonValue,
+      prismaJson(VALID_LEGACY_DECK),
       restoredContent,
     );
     assert.notEqual(result, Prisma.DbNull);
@@ -596,23 +681,29 @@ describe("sanitizeRestoredDeck", () => {
   test("reconciles Deck child visual references during restore", () => {
     const restoredContent = lexicalStateWithVisual("vis-keep");
     const result = sanitizeRestoredDeck(
-      VALID_RESTORE_DECK as unknown as Prisma.JsonValue,
+      prismaJson(VALID_RESTORE_DECK),
       restoredContent,
     );
 
     assert.notEqual(result, Prisma.DbNull);
-    const deck = result as any;
+    const deck = result as CurrentDeck;
     const visualIds = collectDeckVisualIds(deck);
     assert.deepEqual(visualIds, ["vis-keep"]);
 
-    const group = deck.slides[0].children.find(
-      (node: any) => node.id === "group-1",
-    );
+    const group = deck.slides[0].children.find((node) => node.id === "group-1");
     assert.ok(group, "group should remain");
+    assert.equal(group.type, "group");
+    if (group.type !== "group") {
+      throw new Error("Expected restored node to be a group");
+    }
     const assetNode = group.children.find(
-      (node: any) => node.id === "group-visual-asset",
+      (node) => node.id === "group-visual-asset",
     );
     assert.ok(assetNode, "asset-backed visual node should remain");
+    assert.equal(assetNode.type, "visual");
+    if (assetNode.type !== "visual") {
+      throw new Error("Expected asset-backed node to be visual");
+    }
     assert.equal(
       assetNode.content.visualId,
       undefined,
@@ -621,7 +712,7 @@ describe("sanitizeRestoredDeck", () => {
   });
 
   test("falls back to raw value when deckJson cannot be parsed", () => {
-    const malformed = { not: "a valid deck" } as unknown as Prisma.JsonValue;
+    const malformed = prismaJson({ not: "a valid deck" });
     const result = sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE);
     // Falls back to the raw value since safeParseDeck fails.
     assert.deepEqual(result, malformed);
@@ -655,7 +746,7 @@ async function captureErrorLines(
 
 describe("schema parse-failure telemetry", () => {
   test("sanitizeRestoredDeck emits a deck-parse-failed diagnostic and does not throw", async () => {
-    const malformed = { not: "a valid deck" } as unknown as Prisma.JsonValue;
+    const malformed = prismaJson({ not: "a valid deck" });
     let result: unknown;
     const records = await captureErrorLines(() => {
       result = sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE);
@@ -743,11 +834,11 @@ describe("deck persistence operations", () => {
       deckRevisionToken: "deck-token",
     }));
 
-    const unsupportedPatch = {
+    const unsupportedPatch = deckPatch({
       schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
       op: "slide.add",
       slideIds: ["s2"],
-    } as unknown as DeckPatch;
+    });
 
     const result = await patchDeck(
       "doc-fallback",
@@ -769,12 +860,12 @@ describe("deck persistence operations", () => {
       async () => ({ count: 1 }),
     );
 
-    const titlePatch = {
+    const titlePatch = deckPatch({
       schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
       op: "slide.update_title",
       slideIds: ["s1"],
       slideFields: { s1: { title: "Stale token still falls back" } },
-    } as unknown as DeckPatch;
+    });
 
     const result = await patchDeck(
       "doc-fallback",
@@ -808,12 +899,12 @@ describe("deck persistence operations", () => {
       async () => ({}),
     );
 
-    const titlePatch = {
+    const titlePatch = deckPatch({
       schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
       op: "slide.update_title",
       slideIds: ["s1"],
       slideFields: { s1: { title: "Quarterly Readout" } },
-    } as unknown as DeckPatch;
+    });
 
     const result = await patchDeck("doc-patch", [titlePatch], "deck-token", {
       userId: "user-editor",
@@ -889,8 +980,9 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 1,
     }));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.contentJson) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.contentJson) {
         return { contentJson: EMPTY_LEXICAL_STATE, deckJson: nextDeck };
       }
       return { deckJson: beforeDeck };
@@ -913,11 +1005,12 @@ describe("deck persistence operations", () => {
 
     assert.equal(result.ok, true);
     assert.equal(commentUpdateMany.calls.length, 1);
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).where, {
+    const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
+    assert.deepEqual(commentUpdateArgs.where, {
       documentId: "doc-slide-delete",
       slideId: "slide-delete",
     });
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).data, {
+    assert.deepEqual(commentUpdateArgs.data, {
       slideId: null,
       elementId: null,
       anchorGeometry: Prisma.DbNull,
@@ -967,8 +1060,9 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 1,
     }));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.contentJson) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.contentJson) {
         return { contentJson: EMPTY_LEXICAL_STATE, deckJson: nextDeck };
       }
       return { deckJson: beforeDeck };
@@ -991,12 +1085,13 @@ describe("deck persistence operations", () => {
 
     assert.equal(result.ok, true);
     assert.equal(commentUpdateMany.calls.length, 1);
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).where, {
+    const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
+    assert.deepEqual(commentUpdateArgs.where, {
       documentId: "doc-node-delete",
       slideId: "slide-keep",
       elementId: { in: ["node-delete"] },
     });
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).data, {
+    assert.deepEqual(commentUpdateArgs.data, {
       elementId: null,
     });
   });
@@ -1024,8 +1119,9 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 1,
     }));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.deckJson && !args.select?.contentJson) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.deckJson && !prismaArgs.select?.contentJson) {
         throw new Error("previous deck unavailable");
       }
       return { contentJson: EMPTY_LEXICAL_STATE, deckJson: nextDeck };
@@ -1057,10 +1153,11 @@ describe("deck persistence operations", () => {
 
     assert.equal(result.ok, true);
     assert.equal(commentUpdateMany.calls.length, 1);
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).where, {
+    const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
+    assert.deepEqual(commentUpdateArgs.where, {
       id: { in: ["missing-slide", "missing-node"] },
     });
-    assert.deepEqual((commentUpdateMany.calls[0]![0] as any).data, {
+    assert.deepEqual(commentUpdateArgs.data, {
       slideId: null,
       elementId: null,
       anchorGeometry: Prisma.DbNull,
@@ -1073,8 +1170,9 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 0,
     }));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.deckRevisionToken) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.deckRevisionToken) {
         return { deckRevisionToken: "server-token" };
       }
       return { deckJson: nextDeck };
@@ -1147,23 +1245,26 @@ describe("sharing persistence operations", () => {
 
     assert.equal(result.isShared, false);
     assert.equal(result.shareUrl, null);
-    assert.equal((update.calls[0]![0] as any).data.shareId, null);
+    assert.equal(firstCallArg<PrismaStubArgs>(update).data?.shareId, null);
   });
 
   test("setDocumentSharing enables a share with a slugged public URL", async (t) => {
     stubPrismaMethod(t, prisma.document, "findFirst", async () => ({
       title: "Team Readout",
     }));
-    stubPrismaMethod(t, prisma.document, "update", async (args: any) => ({
-      isShared: true,
-      shareId: args.data.shareId,
-      slug: args.data.slug,
-      shareExpiresAt: new Date("2026-07-01T00:00:00.000Z"),
-      shareEmbedEnabled: true,
-      sharePresentEnabled: true,
-      shareMetadataMode: "title-excerpt",
-      shareDiscoverable: true,
-    }));
+    stubPrismaMethod(t, prisma.document, "update", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      return {
+        isShared: true,
+        shareId: prismaArgs.data?.shareId,
+        slug: prismaArgs.data?.slug,
+        shareExpiresAt: new Date("2026-07-01T00:00:00.000Z"),
+        shareEmbedEnabled: true,
+        sharePresentEnabled: true,
+        shareMetadataMode: "title-excerpt",
+        shareDiscoverable: true,
+      };
+    });
 
     const result = await setDocumentSharing("doc-share", true);
 
@@ -1177,16 +1278,19 @@ describe("sharing persistence operations", () => {
 
   test("setDocumentSharing handles shared documents without a stored title", async (t) => {
     stubPrismaMethod(t, prisma.document, "findFirst", async () => null);
-    stubPrismaMethod(t, prisma.document, "update", async (args: any) => ({
-      isShared: true,
-      shareId: args.data.shareId,
-      slug: args.data.slug,
-      shareExpiresAt: null,
-      shareEmbedEnabled: false,
-      sharePresentEnabled: false,
-      shareMetadataMode: "generic",
-      shareDiscoverable: false,
-    }));
+    stubPrismaMethod(t, prisma.document, "update", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      return {
+        isShared: true,
+        shareId: prismaArgs.data?.shareId,
+        slug: prismaArgs.data?.slug,
+        shareExpiresAt: null,
+        shareEmbedEnabled: false,
+        sharePresentEnabled: false,
+        shareMetadataMode: "generic",
+        shareDiscoverable: false,
+      };
+    });
 
     const result = await setDocumentSharing("doc-untitled", true);
 
@@ -1205,7 +1309,8 @@ describe("sharing persistence operations", () => {
       t,
       prisma.document,
       "update",
-      async (args: any) => {
+      async (args) => {
+        const prismaArgs = args as PrismaStubArgs;
         attempts += 1;
         if (attempts === 1) {
           throw new Prisma.PrismaClientKnownRequestError("slug collision", {
@@ -1215,8 +1320,8 @@ describe("sharing persistence operations", () => {
         }
         return {
           isShared: true,
-          shareId: args.data.shareId,
-          slug: args.data.slug,
+          shareId: prismaArgs.data?.shareId,
+          slug: prismaArgs.data?.slug,
           shareExpiresAt: null,
           shareEmbedEnabled: false,
           sharePresentEnabled: false,
@@ -1282,23 +1387,26 @@ describe("sharing persistence operations", () => {
       t,
       prisma.document,
       "update",
-      async (args: any) => ({
-        isShared: true,
-        shareId: args.data.shareId,
-        slug: args.data.slug,
-        shareExpiresAt: null,
-        shareEmbedEnabled: true,
-        sharePresentEnabled: false,
-        shareMetadataMode: "title",
-        shareDiscoverable: false,
-      }),
+      async (args) => {
+        const prismaArgs = args as PrismaStubArgs;
+        return {
+          isShared: true,
+          shareId: prismaArgs.data?.shareId,
+          slug: prismaArgs.data?.slug,
+          shareExpiresAt: null,
+          shareEmbedEnabled: true,
+          sharePresentEnabled: false,
+          shareMetadataMode: "title",
+          shareDiscoverable: false,
+        };
+      },
     );
 
     const result = await regenerateDocumentShareLink("doc-shared");
 
     assert.ok(result?.shareId);
     assert.match(result?.slug ?? "", /^shared-roadmap-/);
-    assert.equal((update.calls[0]![0] as any).data.isShared, true);
+    assert.equal(firstCallArg<PrismaStubArgs>(update).data?.isShared, true);
   });
 
   test("revalidateSharePaths swallows lookup failures", async (t) => {
@@ -1439,9 +1547,10 @@ describe("document snapshot and restore operations", () => {
     });
 
     assert.equal(create.calls.length, 1);
-    assert.ok(
-      ((deleteMany.calls[0]![0] as any).where.id.in as string[]).length > 0,
+    const deleteManyArgs = firstCallArg<{ where: { id: { in: string[] } } }>(
+      deleteMany,
     );
+    assert.ok(deleteManyArgs.where.id.in.length > 0);
   });
 
   test("snapshotDocumentVersion swallows persistence failures", async (t) => {
@@ -1487,22 +1596,25 @@ describe("document snapshot and restore operations", () => {
     stubPrismaMethod(t, prisma.documentVersion, "create", async () => ({}));
     stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
     stubPrismaMethod(t, prisma.documentVersion, "deleteMany", async () => ({}));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.contentJson) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.contentJson) {
         return { contentJson: EMPTY_LEXICAL_STATE, deckJson: VALID_DECK };
       }
-      if (args.select?.deckJson) {
+      if (prismaArgs.select?.deckJson) {
         return { deckJson: null };
       }
       return { shareId: null, slug: null, isShared: false };
     });
-    const tx = {
+    const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
         updateMany: async () => ({ count: 1 }),
       },
-    } as unknown as Prisma.TransactionClient;
-    stubPrismaMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(fn, tx),
+    );
 
     const result = await restoreVersion(
       "doc-restore",
@@ -1532,25 +1644,32 @@ describe("document snapshot and restore operations", () => {
     stubPrismaMethod(t, prisma.documentVersion, "create", async () => ({}));
     stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
     stubPrismaMethod(t, prisma.documentVersion, "deleteMany", async () => ({}));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args: any) => {
-      if (args.select?.contentJson) {
+    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+      const prismaArgs = args as PrismaStubArgs;
+      if (prismaArgs.select?.contentJson) {
         return { contentJson: EMPTY_LEXICAL_STATE, deckJson: VALID_DECK };
       }
-      if (args.select?.deckJson) {
+      if (prismaArgs.select?.deckJson) {
         return { deckJson: null };
       }
       return { shareId: null, slug: null, isShared: false };
     });
-    const tx = {
+    const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
-        updateMany: async (args: any) => {
-          currentRevisionToken = args.data.deckRevisionToken;
+        updateMany: async (args: unknown) => {
+          const prismaArgs = args as PrismaStubArgs;
+          currentRevisionToken = requireStringField(
+            prismaArgs.data?.deckRevisionToken,
+            "deckRevisionToken",
+          );
           return { count: 1 };
         },
       },
-    } as unknown as Prisma.TransactionClient;
-    stubPrismaMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(fn, tx),
+    );
 
     await restoreVersion("doc-restore", "version-restore", "user-editor");
 
@@ -1558,12 +1677,19 @@ describe("document snapshot and restore operations", () => {
 
     const casDb = {
       document: {
-        updateMany: async (args: any) => {
-          const whereToken = args.where.deckRevisionToken;
+        updateMany: async (
+          args: Parameters<DeckCasDb["document"]["updateMany"]>[0],
+        ) => {
+          const where = args.where as Record<string, unknown>;
+          const whereToken = where.deckRevisionToken;
           if (whereToken !== currentRevisionToken) {
             return { count: 0 };
           }
-          currentRevisionToken = args.data.deckRevisionToken;
+          const data = args.data as Record<string, unknown>;
+          currentRevisionToken = requireStringField(
+            data.deckRevisionToken,
+            "deckRevisionToken",
+          );
           return { count: 1 };
         },
         findUnique: async () => ({ deckRevisionToken: currentRevisionToken }),
@@ -1592,7 +1718,7 @@ describe("document snapshot and restore operations", () => {
 describe("visual persistence exported flows", () => {
   test("atomicSaveDocumentLexical snapshots, writes content, mirrors visuals, and logs outcome", async (t) => {
     const txBase = makeStubTx();
-    const tx = {
+    const tx = prismaTransaction<TransactionWithCalls>({
       ...txBase,
       documentVersion: {
         findFirst: async () => null,
@@ -1610,10 +1736,10 @@ describe("visual persistence exported flows", () => {
         }),
         updateMany: async () => ({ count: 1 }),
       },
-    } as unknown as Prisma.TransactionClient & {
-      _calls: string[];
-    };
-    stubPrismaMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(fn, tx),
+    );
 
     const outcome = await atomicSaveDocumentLexical(
       "doc-atomic",
@@ -1630,13 +1756,13 @@ describe("visual persistence exported flows", () => {
     const attempts = { created: 0, deleted: 0 };
     const committed = { created: 0, deleted: 0 };
 
-    stubPrismaMethod(t, prisma, "$transaction", async (fn: any) => {
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) => {
       const pending = { created: 0, deleted: 0 };
       const txBase = makeStubTx();
-      const tx = {
+      const tx = prismaTransaction<Prisma.TransactionClient>({
         ...txBase,
         visual: {
-          ...(txBase as any).visual,
+          ...txBase.visual,
           findMany: async () => {
             txBase._calls.push("visual.findMany");
             throw new Error("mirror rebuild failed");
@@ -1666,10 +1792,10 @@ describe("visual persistence exported flows", () => {
           }),
           updateMany: async () => ({ count: 1 }),
         },
-      } as unknown as Prisma.TransactionClient;
+      });
 
       try {
-        const result = await fn(tx);
+        const result = await runTransactionCallback(fn, tx);
         committed.created += pending.created;
         committed.deleted += pending.deleted;
         return result;
@@ -1691,7 +1817,9 @@ describe("visual persistence exported flows", () => {
 
   test("rebuildMirror wraps mirror rebuilds in a transaction", async (t) => {
     const tx = makeStubTx();
-    stubPrismaMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(fn, tx),
+    );
 
     const outcome = await rebuildMirror("doc-rebuild", EMPTY_LEXICAL_STATE);
 
@@ -1716,10 +1844,11 @@ describe("visual persistence exported flows", () => {
     await reconcileDeckAfterMirror("doc-reconcile");
 
     assert.equal(updateMany.calls.length, 1);
-    const deckJson = (updateMany.calls[0]![0] as any).data.deckJson;
+    const deckJson = firstCallArg<PrismaStubArgs>(updateMany).data
+      ?.deckJson as typeof VALID_LEGACY_DECK;
     const visualIds = deckJson.slides[0].elements
-      .filter((element: any) => element.kind === "visual")
-      .map((element: any) => element.content.visualId);
+      .filter(isLegacyVisualElement)
+      .map((element) => element.content?.visualId);
     assert.deepEqual(visualIds, ["vis-keep"]);
   });
 

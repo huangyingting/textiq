@@ -274,6 +274,14 @@ function cloneContentDefaults(
   };
 }
 
+function materializedVisualElement(element: unknown): VisualElement {
+  return element as unknown as VisualElement;
+}
+
+function materializedSlideElement(element: unknown): SlideElement {
+  return element as unknown as SlideElement;
+}
+
 function materializeTemplateElement(
   element: SlideTemplateElement,
   zIndex: number,
@@ -291,7 +299,7 @@ function materializeTemplateElement(
   };
 
   if (element.id === "visual-media" && ctx.visualId) {
-    return {
+    return materializedVisualElement({
       id: makeElementId(),
       kind: "visual",
       role: "visual",
@@ -302,10 +310,10 @@ function materializeTemplateElement(
       ...(element.designOverrides
         ? { designOverrides: element.designOverrides }
         : {}),
-    } as unknown as VisualElement;
+    });
   }
 
-  return {
+  return materializedSlideElement({
     id: makeElementId(),
     kind: element.kind,
     ...(element.role ? { role: element.role } : {}),
@@ -325,7 +333,7 @@ function materializeTemplateElement(
     ...(element.designOverrides
       ? { designOverrides: element.designOverrides }
       : {}),
-  } as unknown as SlideElement;
+  });
 }
 
 function blankSlide(): Slide {
@@ -335,7 +343,7 @@ function blankSlide(): Slide {
     title: "",
     notes: "",
     elements: [],
-  } as unknown as Slide;
+  };
 }
 
 /**
@@ -363,5 +371,5 @@ export function buildTemplateSlide(
     elements: template.elements
       .filter((element) => !isMasterChromeTemplateElement(element))
       .map((element, index) => materializeTemplateElement(element, index, ctx)),
-  } as unknown as Slide;
+  };
 }

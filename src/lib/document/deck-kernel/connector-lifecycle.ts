@@ -48,7 +48,7 @@ function connectorContent(element: ConnectorElement): {
   end: ConnectorPoint;
   routing?: string;
 } {
-  return (element as any).content;
+  return element.content;
 }
 
 function connectorStart(element: ConnectorElement): ConnectorPoint {
@@ -66,7 +66,7 @@ function withConnectorEndpoints(
 ): ConnectorElement {
   const content = connectorContent(element);
   return {
-    ...(element as any),
+    ...element,
     content: {
       ...content,
       start,
@@ -159,20 +159,18 @@ function patchConnectorOnDelete(
 ): ConnectorElement {
   const start = connectorStart(el);
   const end = connectorEnd(el);
-  const startNeedsDetach = isBound(start) && deletedIds.has(start.elementId);
-  const endNeedsDetach = isBound(end) && deletedIds.has(end.elementId);
+  const nextStart =
+    isBound(start) && deletedIds.has(start.elementId)
+      ? detachConnectorEndpoint(start, elements)
+      : start;
+  const nextEnd =
+    isBound(end) && deletedIds.has(end.elementId)
+      ? detachConnectorEndpoint(end, elements)
+      : end;
 
-  if (!startNeedsDetach && !endNeedsDetach) return el;
+  if (nextStart === start && nextEnd === end) return el;
 
-  return withConnectorEndpoints(
-    el,
-    startNeedsDetach
-      ? detachConnectorEndpoint(start as ConnectorEndpoint, elements)
-      : start,
-    endNeedsDetach
-      ? detachConnectorEndpoint(end as ConnectorEndpoint, elements)
-      : end,
-  );
+  return withConnectorEndpoints(el, nextStart, nextEnd);
 }
 
 // ---------------------------------------------------------------------------

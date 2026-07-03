@@ -21,6 +21,10 @@ import {
   withWindow,
 } from "./slide-editor-failure-test-utils";
 
+function reactKeyboardEvent<T = Element>(event: object): KeyboardEvent<T> {
+  return event as KeyboardEvent<T>;
+}
+
 describe("SlideEditor toolbar command surface failures", () => {
   test("bare c connects exactly two selected nodes", async () => {
     await withWindow(() =>
@@ -84,17 +88,19 @@ describe("SlideEditor toolbar command surface failures", () => {
           ).onKeyDown;
           assert.ok(onKeyDown);
           let prevented = false;
-          onKeyDown({
-            key: "c",
-            ctrlKey: false,
-            metaKey: false,
-            altKey: false,
-            shiftKey: false,
-            target: null,
-            preventDefault: () => {
-              prevented = true;
-            },
-          } as unknown as KeyboardEvent<HTMLDivElement>);
+          onKeyDown(
+            reactKeyboardEvent<HTMLDivElement>({
+              key: "c",
+              ctrlKey: false,
+              metaKey: false,
+              altKey: false,
+              shiftKey: false,
+              target: null,
+              preventDefault: () => {
+                prevented = true;
+              },
+            }),
+          );
 
           assert.equal(prevented, true);
           const connector = currentDeck.slides[0]?.children.find(
@@ -171,15 +177,17 @@ describe("SlideEditor toolbar command surface failures", () => {
       focusNode(tree, "connect-source");
 
       tree = renderTree();
-      keyDownFrom(tree)?.({
-        key: "c",
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        target: null,
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      keyDownFrom(tree)?.(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: "c",
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          target: null,
+          preventDefault: () => undefined,
+        }),
+      );
 
       tree = renderTree();
       const selection = (
@@ -190,15 +198,17 @@ describe("SlideEditor toolbar command surface failures", () => {
       assert.ok(selection?.nodeIds?.has("connect-source"));
       assert.ok(selection?.nodeIds?.has("connect-target"));
 
-      keyDownFrom(tree)?.({
-        key: "Enter",
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        target: null,
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      keyDownFrom(tree)?.(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: "Enter",
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          target: null,
+          preventDefault: () => undefined,
+        }),
+      );
 
       const connector = currentDeck.slides[0]?.children.find(
         (node) => node.type === "connector",
@@ -280,15 +290,17 @@ describe("SlideEditor toolbar command surface failures", () => {
         }
       ).onKeyDown;
       assert.ok(onKeyDown);
-      onKeyDown({
-        key: "c",
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        target: null,
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      onKeyDown(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: "c",
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          target: null,
+          preventDefault: () => undefined,
+        }),
+      );
 
       const connector = currentDeck.slides[0]?.children.find(
         (node) => node.id === "anchor-connector" && node.type === "connector",
@@ -354,17 +366,19 @@ describe("SlideEditor toolbar command surface failures", () => {
       ).onKeyDown;
       assert.ok(onKeyDown);
       let prevented = false;
-      onKeyDown?.({
-        key: "{",
-        shiftKey: true,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        target: null,
-        preventDefault: () => {
-          prevented = true;
-        },
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      onKeyDown?.(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: "{",
+          shiftKey: true,
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          target: null,
+          preventDefault: () => {
+            prevented = true;
+          },
+        }),
+      );
 
       assert.equal(prevented, true);
       const rotatedNode = currentDeck.slides[0]?.children[0];

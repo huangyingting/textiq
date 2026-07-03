@@ -25,12 +25,42 @@ import {
   withPointerWindow,
 } from "./slide-editor-failure-test-utils";
 
+type InlineTextEditorPresentationProps = Parameters<
+  typeof InlineTextEditorPresentation
+>[0];
+
 const preventableMouseEvent = (event: Partial<MouseEvent> = {}) =>
   ({
     preventDefault: () => undefined,
     stopPropagation: () => undefined,
     ...event,
   }) as MouseEvent;
+
+const reactPointerEvent = <T = Element>(
+  event: Partial<React.PointerEvent<T>>,
+): React.PointerEvent<T> => event as React.PointerEvent<T>;
+
+const divMouseEvent = (
+  event: Partial<MouseEvent<HTMLDivElement>>,
+): MouseEvent<HTMLDivElement> => event as MouseEvent<HTMLDivElement>;
+
+function eventTarget(target: unknown): EventTarget {
+  return target as unknown as EventTarget;
+}
+
+function domElement(element: unknown): Element {
+  return element as unknown as Element;
+}
+
+function domDocument(document: unknown): Document {
+  return document as unknown as Document;
+}
+
+function inlineTextEditorProps(
+  props: unknown,
+): InlineTextEditorPresentationProps {
+  return props as unknown as InlineTextEditorPresentationProps;
+}
 
 function stageCanvasFromRoot(root: ReactNode) {
   return findRequiredElement(
@@ -189,11 +219,13 @@ describe("SlideEditor inline text editor failures", () => {
         },
       });
 
-      onPointerMove({
-        clientX: 550,
-        clientY: 150,
-        target,
-      } as unknown as React.PointerEvent<HTMLDivElement>);
+      onPointerMove(
+        reactPointerEvent<HTMLDivElement>({
+          clientX: 550,
+          clientY: 150,
+          target,
+        }),
+      );
 
       tree = renderTree();
       const stageCanvas = stageCanvasFrom(tree);
@@ -258,20 +290,23 @@ describe("SlideEditor inline text editor failures", () => {
             '[data-slide-canvas="true"]': canvasElement,
           },
         });
-        selectedNodePointerDown("drag-selected-text", {
-          button: 0,
-          pointerId: 1,
-          clientX: 200,
-          clientY: 200,
-          shiftKey: false,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: false,
-          target: currentTarget,
-          currentTarget,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as React.PointerEvent);
+        selectedNodePointerDown(
+          "drag-selected-text",
+          reactPointerEvent({
+            button: 0,
+            pointerId: 1,
+            clientX: 200,
+            clientY: 200,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
         listeners.get("pointermove")?.({
           clientX: 250,
           clientY: 220,
@@ -352,7 +387,7 @@ describe("SlideEditor inline text editor failures", () => {
       preventableMouseEvent({
         clientX: 250,
         clientY: 250,
-        target: target as unknown as EventTarget,
+        target: eventTarget(target),
       }),
     );
 
@@ -433,20 +468,23 @@ describe("SlideEditor inline text editor failures", () => {
           nodeId: string,
           clientX: number,
         ) => {
-          pointerDown(nodeId, {
-            button: 0,
-            pointerId: 1,
-            clientX,
-            clientY: 120,
-            shiftKey: false,
-            metaKey: false,
-            ctrlKey: false,
-            altKey: false,
-            target: currentTarget,
-            currentTarget,
-            preventDefault: () => undefined,
-            stopPropagation: () => undefined,
-          } as unknown as React.PointerEvent);
+          pointerDown(
+            nodeId,
+            reactPointerEvent({
+              button: 0,
+              pointerId: 1,
+              clientX,
+              clientY: 120,
+              shiftKey: false,
+              metaKey: false,
+              ctrlKey: false,
+              altKey: false,
+              target: currentTarget,
+              currentTarget,
+              preventDefault: () => undefined,
+              stopPropagation: () => undefined,
+            }),
+          );
           listeners.get("pointerup")?.({
             clientX,
             clientY: 120,
@@ -541,20 +579,23 @@ describe("SlideEditor inline text editor failures", () => {
               '[data-slide-canvas="true"]': canvasElement,
             },
           });
-          pointerDown(nodeId, {
-            button: 0,
-            pointerId: 1,
-            clientX,
-            clientY: 120,
-            shiftKey: false,
-            metaKey: false,
-            ctrlKey: false,
-            altKey: false,
-            target: currentTarget,
-            currentTarget,
-            preventDefault: () => undefined,
-            stopPropagation: () => undefined,
-          } as unknown as React.PointerEvent);
+          pointerDown(
+            nodeId,
+            reactPointerEvent({
+              button: 0,
+              pointerId: 1,
+              clientX,
+              clientY: 120,
+              shiftKey: false,
+              metaKey: false,
+              ctrlKey: false,
+              altKey: false,
+              target: currentTarget,
+              currentTarget,
+              preventDefault: () => undefined,
+              stopPropagation: () => undefined,
+            }),
+          );
           listeners.get("pointerup")?.({
             clientX,
             clientY: 120,
@@ -577,11 +618,11 @@ describe("SlideEditor inline text editor failures", () => {
               selector,
               '[data-inline-editor-presentation="edit-before-switch"]',
             );
-            return {
+            return domElement({
               blur() {
                 blurCalls += 1;
               },
-            } as unknown as Element;
+            });
           },
         } as Document;
 
@@ -666,14 +707,12 @@ describe("SlideEditor inline text editor failures", () => {
             }
           ).onNodePointerDown;
         const inlineEditorFrameFrom = (root: ReactNode) =>
-          (
+          inlineTextEditorProps(
             findRequiredElement(
               root,
               (element) => element.type === InlineTextEditorPresentation,
               "Expected inline editor to render.",
-            ).props as unknown as Parameters<
-              typeof InlineTextEditorPresentation
-            >[0]
+            ).props,
           ).frame;
         const pointerEvent = (clientX: number, clientY: number) => {
           const canvasElement = createElement({
@@ -684,7 +723,7 @@ describe("SlideEditor inline text editor failures", () => {
               '[data-slide-canvas="true"]': canvasElement,
             },
           });
-          return {
+          return reactPointerEvent({
             button: 0,
             pointerId: 1,
             clientX,
@@ -697,7 +736,7 @@ describe("SlideEditor inline text editor failures", () => {
             currentTarget,
             preventDefault: () => undefined,
             stopPropagation: () => undefined,
-          } as unknown as React.PointerEvent;
+          });
         };
 
         let tree = renderTree();
@@ -791,11 +830,13 @@ describe("SlideEditor inline text editor failures", () => {
           },
         });
 
-        onStageDoubleClick?.({
-          clientX: 850,
-          clientY: 450,
-          target,
-        } as unknown as MouseEvent<HTMLDivElement>);
+        onStageDoubleClick?.(
+          divMouseEvent({
+            clientX: 850,
+            clientY: 450,
+            target,
+          }),
+        );
 
         assert.equal(deckChangeCount, 1, "Expected one deck update.");
         const inserted = currentDeck.slides[0]?.children.at(-1);
@@ -1124,9 +1165,9 @@ describe("SlideEditor inline text editor failures", () => {
 
           tree = renderTree();
           const previousDocument = globalThis.document;
-          globalThis.document = {
+          globalThis.document = domDocument({
             querySelector: () => null,
-          } as unknown as Document;
+          });
           try {
             nodeDoubleClickFrom(tree)(
               "table-double-target",
@@ -1318,11 +1359,13 @@ describe("SlideEditor inline text editor failures", () => {
                 boundsElement,
             },
           });
-          onStageDoubleClick({
-            clientX: 300,
-            clientY: 200,
-            target,
-          } as unknown as MouseEvent<HTMLDivElement>);
+          onStageDoubleClick(
+            divMouseEvent({
+              clientX: 300,
+              clientY: 200,
+              target,
+            }),
+          );
 
           tree = renderTree();
           assert.equal(deckChangeCount, 0);
@@ -1380,11 +1423,11 @@ describe("SlideEditor inline text editor failures", () => {
                 selector,
                 '[data-inline-editor-presentation="blank-commit-source"]',
               );
-              return {
+              return domElement({
                 blur() {
                   blurCalls += 1;
                 },
-              } as unknown as Element;
+              });
             },
           } as Document;
 
@@ -1412,11 +1455,13 @@ describe("SlideEditor inline text editor failures", () => {
               stageShell.props as {
                 onDoubleClick?: (event: MouseEvent<HTMLDivElement>) => void;
               }
-            ).onDoubleClick?.({
-              clientX: 500,
-              clientY: 250,
-              target,
-            } as unknown as MouseEvent<HTMLDivElement>);
+            ).onDoubleClick?.(
+              divMouseEvent({
+                clientX: 500,
+                clientY: 250,
+                target,
+              }),
+            );
           } finally {
             if (previousDocument === undefined) {
               Reflect.deleteProperty(globalThis, "document");
@@ -1502,20 +1547,23 @@ describe("SlideEditor inline text editor failures", () => {
               '[data-slide-canvas="true"]': canvasElement,
             },
           });
-          onNodePointerDown("selected-text", {
-            button: 0,
-            pointerId: 1,
-            clientX: 372,
-            clientY: 246,
-            shiftKey: false,
-            metaKey: false,
-            ctrlKey: false,
-            altKey: false,
-            target: currentTarget,
-            currentTarget,
-            preventDefault: () => undefined,
-            stopPropagation: () => undefined,
-          } as unknown as React.PointerEvent);
+          onNodePointerDown(
+            "selected-text",
+            reactPointerEvent({
+              button: 0,
+              pointerId: 1,
+              clientX: 372,
+              clientY: 246,
+              shiftKey: false,
+              metaKey: false,
+              ctrlKey: false,
+              altKey: false,
+              target: currentTarget,
+              currentTarget,
+              preventDefault: () => undefined,
+              stopPropagation: () => undefined,
+            }),
+          );
           listeners.get("pointerup")?.({
             clientX: 372,
             clientY: 246,
@@ -1594,20 +1642,23 @@ describe("SlideEditor inline text editor failures", () => {
               '[data-slide-canvas="true"]': canvasElement,
             },
           });
-          onNodePointerDown("empty-shape", {
-            button: 0,
-            pointerId: 1,
-            clientX: 372,
-            clientY: 246,
-            shiftKey: false,
-            metaKey: false,
-            ctrlKey: false,
-            altKey: false,
-            target: currentTarget,
-            currentTarget,
-            preventDefault: () => undefined,
-            stopPropagation: () => undefined,
-          } as unknown as React.PointerEvent);
+          onNodePointerDown(
+            "empty-shape",
+            reactPointerEvent({
+              button: 0,
+              pointerId: 1,
+              clientX: 372,
+              clientY: 246,
+              shiftKey: false,
+              metaKey: false,
+              ctrlKey: false,
+              altKey: false,
+              target: currentTarget,
+              currentTarget,
+              preventDefault: () => undefined,
+              stopPropagation: () => undefined,
+            }),
+          );
           listeners.get("pointerup")?.({
             clientX: 372,
             clientY: 246,

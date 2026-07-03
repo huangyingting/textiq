@@ -13,15 +13,19 @@ import {
   type DocumentBlock,
 } from "./index";
 
+function visualFixture(value: unknown): Visual {
+  return value as unknown as Visual;
+}
+
 function visual(id: string): Visual {
-  return {
+  return visualFixture({
     version: 1,
     type: "flowchart",
     title: "Launch flow",
     nodes: [{ id: `${id}-n1`, label: "Start" }],
     edges: [],
     style: {},
-  } as unknown as Visual;
+  });
 }
 
 function text(value: string) {

@@ -40,6 +40,10 @@ type FakeRect = {
   height: number;
 };
 
+type TrackedKeyboardEvent = React.KeyboardEvent<HTMLElement> & {
+  calls: { prevented: number; stopped: number };
+};
+
 function createHookRenderer(options: ServerRenderHarnessOptions = {}) {
   return createServerRenderHarness({
     idPrefix: "interaction-hooks-id",
@@ -160,7 +164,7 @@ function pointerEvent(
   clientY: number,
   options: Partial<PointerLike> = {},
 ) {
-  return {
+  return reactPointerEvent({
     pointerId: 7,
     button: 0,
     clientX,
@@ -168,7 +172,11 @@ function pointerEvent(
     currentTarget,
     preventDefault: () => undefined,
     ...options,
-  } as unknown as React.PointerEvent<HTMLLIElement>;
+  });
+}
+
+function reactPointerEvent(event: unknown): React.PointerEvent<HTMLLIElement> {
+  return event as unknown as React.PointerEvent<HTMLLIElement>;
 }
 
 function findNodeById(
@@ -205,7 +213,7 @@ function keyEvent(
   }> = {},
 ) {
   const calls = { prevented: 0, stopped: 0 };
-  return {
+  return trackedKeyboardEvent({
     key,
     shiftKey: false,
     metaKey: false,
@@ -219,7 +227,17 @@ function keyEvent(
     },
     calls,
     ...extras,
-  } as unknown as React.KeyboardEvent<HTMLElement> & { calls: typeof calls };
+  });
+}
+
+function trackedKeyboardEvent(event: unknown): TrackedKeyboardEvent {
+  return event as unknown as TrackedKeyboardEvent;
+}
+
+function filmstripContainerRefCurrent(
+  container: unknown,
+): React.RefObject<HTMLOListElement>["current"] {
+  return container as unknown as React.RefObject<HTMLOListElement>["current"];
 }
 
 describe("useFilmstripDrag", () => {
@@ -241,8 +259,7 @@ describe("useFilmstripDrag", () => {
         new FakeFilmstripCell(2, rect(140, 0, 60, 60)),
       ];
       const container = new FakeFilmstripContainer(cells);
-      result.containerRef.current =
-        container as unknown as React.RefObject<HTMLOListElement>["current"];
+      result.containerRef.current = filmstripContainerRefCurrent(container);
 
       result.onCellPointerDown(
         pointerEvent(cells[1], 92, 16, { button: 2 }),

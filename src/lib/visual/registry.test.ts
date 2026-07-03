@@ -38,6 +38,16 @@ import {
   isShapeAllowed,
 } from "@/lib/visual/registry";
 
+function invalidRegistry(registry: unknown): VisualRegistry {
+  return registry as unknown as VisualRegistry;
+}
+
+function invalidRuntimeChecklist(
+  checklist: unknown,
+): typeof VISUAL_KIND_REGISTRY.chart.runtime.checklist {
+  return checklist as unknown as typeof VISUAL_KIND_REGISTRY.chart.runtime.checklist;
+}
+
 // ---------------------------------------------------------------------------
 // Exhaustiveness
 // ---------------------------------------------------------------------------
@@ -83,10 +93,12 @@ test("assertRegistryCompletenessFor reports missing or malformed entries", () =>
   );
   assert.throws(
     () =>
-      assertRegistryCompletenessFor({
-        ...VISUAL_KIND_REGISTRY,
-        notAKind: VISUAL_KIND_REGISTRY.chart,
-      } as unknown as VisualRegistry),
+      assertRegistryCompletenessFor(
+        invalidRegistry({
+          ...VISUAL_KIND_REGISTRY,
+          notAKind: VISUAL_KIND_REGISTRY.chart,
+        }),
+      ),
     /Unexpected registry entry kind: notAKind/,
   );
 });
@@ -135,13 +147,15 @@ test("assertRegistryCompletenessFor validates labels, shapes, and runtime consis
   );
   assert.throws(
     () =>
-      assertRegistryCompletenessFor({
-        ...VISUAL_KIND_REGISTRY,
-        chart: {
-          ...VISUAL_KIND_REGISTRY.chart,
-          runtime: undefined,
-        },
-      } as unknown as VisualRegistry),
+      assertRegistryCompletenessFor(
+        invalidRegistry({
+          ...VISUAL_KIND_REGISTRY,
+          chart: {
+            ...VISUAL_KIND_REGISTRY.chart,
+            runtime: undefined,
+          },
+        }),
+      ),
     /missing runtime descriptor/,
   );
 });
@@ -208,10 +222,10 @@ test("assertRegistryCompletenessFor validates transform, validation, and checkli
           ...VISUAL_KIND_REGISTRY.chart,
           runtime: {
             ...VISUAL_KIND_REGISTRY.chart.runtime,
-            checklist: {
+            checklist: invalidRuntimeChecklist({
               ...VISUAL_KIND_REGISTRY.chart.runtime.checklist,
               export: false,
-            } as unknown as typeof VISUAL_KIND_REGISTRY.chart.runtime.checklist,
+            }),
           },
         },
       } as VisualRegistry),

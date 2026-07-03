@@ -7,11 +7,18 @@ import assert from "node:assert/strict";
 import { isStyleRef, STYLE_REFS } from "@/lib/presentation/style-registry";
 import { validateThemePackage } from "@/lib/presentation/theme-package-schema";
 import { resolveNodeStyle } from "@/lib/presentation/style-resolver";
+import type { SemanticTemplateKind } from "@/lib/presentation/schema";
 import {
   buildMinimalThemePackage,
   buildThemeBinding,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
+
+type ThemePackageOverrides = Parameters<typeof buildMinimalThemePackage>[1];
+
+function invalidFixtureValue<T>(value: unknown): T {
+  return value as unknown as T;
+}
 
 describe("style registry", () => {
   test("STYLE_REFS contains all documented refs", () => {
@@ -159,15 +166,18 @@ describe("validateThemePackage", () => {
   });
 
   test("rejects invalid package deck chrome defaults", () => {
-    const pkg = buildMinimalThemePackage("bad-chrome-package", {
-      chrome: {
-        footer: {
-          enabled: true,
-          text: "Footer",
-          layout: { zIndex: 900 },
+    const pkg = buildMinimalThemePackage(
+      "bad-chrome-package",
+      invalidFixtureValue<ThemePackageOverrides>({
+        chrome: {
+          footer: {
+            enabled: true,
+            text: "Footer",
+            layout: { zIndex: 900 },
+          },
         },
-      },
-    } as unknown as Parameters<typeof buildMinimalThemePackage>[1]);
+      }),
+    );
     const result = validateThemePackage(pkg);
     assert.ok(!result.valid);
     if (!result.valid) {
@@ -180,14 +190,17 @@ describe("validateThemePackage", () => {
   });
 
   test("rejects invalid package safe-area chrome insets", () => {
-    const pkg = buildMinimalThemePackage("bad-safe-area-package", {
-      chrome: {
-        safeArea: {
-          enabled: true,
-          insets: { top: "bad", right: 5, bottom: 5, left: 5 },
+    const pkg = buildMinimalThemePackage(
+      "bad-safe-area-package",
+      invalidFixtureValue<ThemePackageOverrides>({
+        chrome: {
+          safeArea: {
+            enabled: true,
+            insets: { top: "bad", right: 5, bottom: 5, left: 5 },
+          },
         },
-      },
-    } as unknown as Parameters<typeof buildMinimalThemePackage>[1]);
+      }),
+    );
     const result = validateThemePackage(pkg);
     assert.ok(!result.valid);
     if (!result.valid) {
@@ -200,30 +213,34 @@ describe("validateThemePackage", () => {
   });
 
   test("rejects malformed decoration recipe fields and enums", () => {
-    const pkg = buildMinimalThemePackage("bad-decoration-package", {
-      decorations: {
-        invalidDecoration: {
-          id: "wrong-id",
-          component: "shape",
-          role: "themeDecoration",
-          layout: {
-            frame: { x: 0, y: 0, w: -1, h: 25 },
-            zIndex: "top" as unknown as number,
-          },
-          style: {
-            blendMode: "invalid-mode",
-          },
-          content: { type: "image", assetId: "missing-image" },
-          visibility: "loud" as unknown as "subtle",
-          chrome: "full" as unknown as "default",
-          appliesTo: {
-            templateKinds: ["cover", "unknown-template"] as unknown as Array<
-              import("@/lib/presentation/schema").SemanticTemplateKind
-            >,
+    const pkg = buildMinimalThemePackage(
+      "bad-decoration-package",
+      invalidFixtureValue<ThemePackageOverrides>({
+        decorations: {
+          invalidDecoration: {
+            id: "wrong-id",
+            component: "shape",
+            role: "themeDecoration",
+            layout: {
+              frame: { x: 0, y: 0, w: -1, h: 25 },
+              zIndex: invalidFixtureValue<number>("top"),
+            },
+            style: {
+              blendMode: "invalid-mode",
+            },
+            content: { type: "image", assetId: "missing-image" },
+            visibility: invalidFixtureValue<"subtle">("loud"),
+            chrome: invalidFixtureValue<"default">("full"),
+            appliesTo: {
+              templateKinds: invalidFixtureValue<SemanticTemplateKind[]>([
+                "cover",
+                "unknown-template",
+              ]),
+            },
           },
         },
-      },
-    } as unknown as Parameters<typeof buildMinimalThemePackage>[1]);
+      }),
+    );
 
     const result = validateThemePackage(pkg);
     assert.ok(!result.valid);
@@ -288,27 +305,30 @@ describe("validateThemePackage", () => {
   });
 
   test("rejects malformed theme asset manifests", () => {
-    const pkg = buildMinimalThemePackage("bad-assets-package", {
-      assets: {
-        images: {
-          "theme-image": {
-            id: "mismatch-image-id",
-            src: "",
-            widthPx: "wide" as unknown as number,
-            mimeType: "image/tiff" as unknown as "image/png",
+    const pkg = buildMinimalThemePackage(
+      "bad-assets-package",
+      invalidFixtureValue<ThemePackageOverrides>({
+        assets: {
+          images: {
+            "theme-image": {
+              id: "mismatch-image-id",
+              src: "",
+              widthPx: invalidFixtureValue<number>("wide"),
+              mimeType: invalidFixtureValue<"image/png">("image/tiff"),
+            },
+          },
+          fonts: {
+            "brand-font": {
+              id: "brand-font",
+              family: "",
+              src: invalidFixtureValue<string>(123),
+              weight: invalidFixtureValue<number[]>(["bold"]),
+              style: invalidFixtureValue<"normal">("oblique"),
+            },
           },
         },
-        fonts: {
-          "brand-font": {
-            id: "brand-font",
-            family: "",
-            src: 123 as unknown as string,
-            weight: ["bold"] as unknown as number[],
-            style: "oblique" as unknown as "normal",
-          },
-        },
-      },
-    } as unknown as Parameters<typeof buildMinimalThemePackage>[1]);
+      }),
+    );
 
     const result = validateThemePackage(pkg);
     assert.ok(!result.valid);

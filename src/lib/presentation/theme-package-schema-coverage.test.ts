@@ -22,6 +22,18 @@ function assertDiagnostic(
   );
 }
 
+function invalidAssets(value: unknown): ThemePackageV1["assets"] {
+  return value as unknown as ThemePackageV1["assets"];
+}
+
+function invalidDecorations(value: unknown): ThemePackageV1["decorations"] {
+  return value as unknown as ThemePackageV1["decorations"];
+}
+
+function invalidChrome(value: unknown): ThemePackageV1["chrome"] {
+  return value as unknown as ThemePackageV1["chrome"];
+}
+
 describe("validateThemePackage coverage branches", () => {
   test("accepts decorations, chrome, and asset manifests that exercise optional schema branches", () => {
     const pkg = buildMinimalThemePackage("coverage-theme", {
@@ -333,9 +345,9 @@ describe("validateThemePackage coverage branches", () => {
 
   test("diagnoses whole-manifest shape failures", () => {
     const pkg = buildMinimalThemePackage("manifest-shapes", {
-      assets: "not an object" as unknown as ThemePackageV1["assets"],
-      decorations: [] as unknown as ThemePackageV1["decorations"],
-      chrome: "not an object" as unknown as ThemePackageV1["chrome"],
+      assets: invalidAssets("not an object"),
+      decorations: invalidDecorations([]),
+      chrome: invalidChrome("not an object"),
     });
 
     const result = validateThemePackage(pkg);

@@ -1,4 +1,5 @@
 import type { Deck, MasterElement } from "./deck-core";
+import type { ElementBox, SlideElement } from "./deck-elements";
 import { validateMasterElement } from "./deck-validation/elements";
 import { makeElementId, makeSlideId } from "./deck-ids";
 import { insertSlide, updateSlide } from "./deck-mutation-slides";
@@ -61,8 +62,24 @@ const BUILT_IN_TEMPLATE_IDS = new Set<SlideTemplateKind>([
   "blank",
 ]);
 
+const DEFAULT_TEMPLATE_ELEMENT_BOX: ElementBox = { x: 10, y: 10, w: 80, h: 20 };
+
 function deckFormat(deck: Deck) {
-  return (deck as any).canvas?.format;
+  return deck.canvas?.format;
+}
+
+function templateElementBox(box: unknown): ElementBox {
+  if (
+    box &&
+    typeof box === "object" &&
+    typeof (box as { x?: unknown }).x === "number" &&
+    typeof (box as { y?: unknown }).y === "number" &&
+    typeof (box as { w?: unknown }).w === "number" &&
+    typeof (box as { h?: unknown }).h === "number"
+  ) {
+    return box as ElementBox;
+  }
+  return DEFAULT_TEMPLATE_ELEMENT_BOX;
 }
 
 function uniqueSlideId(deck: Deck): string {
@@ -81,6 +98,10 @@ function ensureUniqueInsertedSlideId(
   return deck.slides.some((entry) => entry.id === slide.id)
     ? ({ ...slide, id: uniqueSlideId(deck) } as Deck["slides"][number])
     : slide;
+}
+
+function materializedTemplateElement(element: unknown): SlideElement {
+  return element as unknown as SlideElement;
 }
 
 function materializeTemplate(
@@ -110,25 +131,28 @@ function materializeTemplate(
       : {}),
     elements: template.elements
       .filter((element) => !isMasterChromeTemplateElement(element))
-      .map((element, index) => ({
-        id: makeElementId(),
-        kind: element.kind,
-        role: element.role,
-        box: (element as any).box ?? { x: 10, y: 10, w: 80, h: 20 },
-        zIndex: index,
-        content: element.contentDefaults ?? { kind: element.kind },
-        designOverrides: element.designOverrides ?? {},
-        ...(typeof element.opacity === "number"
-          ? { opacity: element.opacity }
-          : {}),
-        ...(typeof element.rotation === "number"
-          ? { rotation: element.rotation }
-          : {}),
-        ...(typeof element.locked === "boolean"
-          ? { locked: element.locked }
-          : {}),
-        ...(typeof element.name === "string" ? { name: element.name } : {}),
-      })) as any,
+      .map(
+        (element, index): SlideElement =>
+          materializedTemplateElement({
+            id: makeElementId(),
+            kind: element.kind,
+            role: element.role,
+            box: templateElementBox(element.box),
+            zIndex: index,
+            content: element.contentDefaults ?? { kind: element.kind },
+            designOverrides: element.designOverrides ?? {},
+            ...(typeof element.opacity === "number"
+              ? { opacity: element.opacity }
+              : {}),
+            ...(typeof element.rotation === "number"
+              ? { rotation: element.rotation }
+              : {}),
+            ...(typeof element.locked === "boolean"
+              ? { locked: element.locked }
+              : {}),
+            ...(typeof element.name === "string" ? { name: element.name } : {}),
+          }),
+      ),
   } as Deck["slides"][number];
 }
 
@@ -137,9 +161,9 @@ function elementMatchKey(element: { kind?: string; role?: string }): string {
 }
 
 function preserveExistingContent(
-  nextElements: readonly any[],
-  existingElements: readonly any[],
-): any[] {
+  nextElements: readonly SlideElement[],
+  existingElements: readonly SlideElement[],
+): SlideElement[] {
   const used = new Set<number>();
   return nextElements.map((element) => {
     const matchIndex = existingElements.findIndex((candidate, index) => {
@@ -151,10 +175,10 @@ function preserveExistingContent(
     });
     if (matchIndex === -1) return element;
     used.add(matchIndex);
-    return {
+    return materializedTemplateElement({
       ...element,
       content: existingElements[matchIndex].content,
-    };
+    });
   });
 }
 
@@ -201,8 +225,8 @@ export function executePresentationThemeFamilyCommand(
         makePatch("presentation.apply_theme_package", affectedSlideIds, [], {
           deckFields: {
             design: {
-              themeId: (next as any).design?.themeId,
-              themeOverrides: (next as any).design?.themeOverrides,
+              themeId: next.design?.themeId,
+              themeOverrides: next.design?.themeOverrides,
             },
             masters: next.masters,
             defaultMasterId: next.defaultMasterId,
@@ -211,7 +235,7 @@ export function executePresentationThemeFamilyCommand(
           slideFields: Object.fromEntries(
             next.slides.map((slide) => [
               slide.id,
-              { masterId: slide.masterId } as Partial<typeof slide>,
+              { masterId: slide.masterId },
             ]),
           ),
         }),
@@ -248,7 +272,7 @@ export function executePresentationThemeFamilyCommand(
             {
               deckFields: {
                 design: {
-                  themeOverrides: (next as any).design?.themeOverrides,
+                  themeOverrides: next.design?.themeOverrides,
                 },
               },
             },
@@ -359,7 +383,7 @@ export function executePresentationThemeFamilyCommand(
       const next = { ...deck, slides } as Deck;
       return success(next, [cmd.slideId], [], undefined, [
         makePatch("slide.set_master", [cmd.slideId], [], {
-          slideFields: { [cmd.slideId]: { masterId: cmd.masterId } as any },
+          slideFields: { [cmd.slideId]: { masterId: cmd.masterId } },
         }),
       ]);
     }
@@ -449,7 +473,7 @@ export function executePresentationThemeFamilyCommand(
       const next = updateSlide(deck, index, nextSlide as never);
       return success(next, [cmd.slideId], [], undefined, [
         makePatch("slide.apply_template", [cmd.slideId], [], {
-          slideFields: { [cmd.slideId]: { templateId: cmd.templateId } as any },
+          slideFields: { [cmd.slideId]: { templateId: cmd.templateId } },
         }),
       ]);
     }

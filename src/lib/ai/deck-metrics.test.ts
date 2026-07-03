@@ -27,8 +27,20 @@ const TEXT_STYLE: TextElementStyle = {
 
 const BOX = { x: 0, y: 0, w: 100, h: 100 } as const;
 
+function fixtureElement(element: unknown): SlideElement {
+  return element as unknown as SlideElement;
+}
+
+function fixtureSlide(slide: unknown): Slide {
+  return slide as unknown as Slide;
+}
+
+function fixtureDeck(deck: unknown): Deck {
+  return deck as unknown as Deck;
+}
+
 function textElement(id: string, text: string): SlideElement {
-  return {
+  return fixtureElement({
     id,
     box: { ...BOX },
     zIndex: 0,
@@ -36,11 +48,11 @@ function textElement(id: string, text: string): SlideElement {
     role: "body",
     content: { kind: "text", text, paragraphs: [{ text }] },
     designOverrides: { textStyle: { ...TEXT_STYLE } },
-  } as unknown as SlideElement;
+  });
 }
 
 function bulletsElement(id: string, bullets: string[]): SlideElement {
-  return {
+  return fixtureElement({
     id,
     box: { ...BOX },
     zIndex: 1,
@@ -55,50 +67,50 @@ function bulletsElement(id: string, bullets: string[]): SlideElement {
       })),
     },
     designOverrides: { textStyle: { ...TEXT_STYLE } },
-  } as unknown as SlideElement;
+  });
 }
 
 function visualElement(id: string, visualId: string): SlideElement {
-  return {
+  return fixtureElement({
     id,
     box: { ...BOX },
     zIndex: 2,
     kind: "visual",
     role: "visual",
     content: { kind: "visual", visualId },
-  } as unknown as SlideElement;
+  });
 }
 
 function imageElement(id: string): SlideElement {
-  return {
+  return fixtureElement({
     id,
     box: { ...BOX },
     zIndex: 3,
     kind: "image",
     role: "media",
     content: { kind: "image", src: "asset-1" },
-  } as unknown as SlideElement;
+  });
 }
 
 function slide(index: number, title: string, elements: SlideElement[]): Slide {
-  return {
+  return fixtureSlide({
     id: "test-id",
     index,
     title,
     notes: "",
     elements,
-  } as unknown as Slide;
+  });
 }
 
 function deck(slides: Slide[]): Deck {
-  return {
+  return fixtureDeck({
     schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
     canvas: { format: "16:9" },
     design: { themeId: "indigo" },
     masters: [{ id: "master-default", name: "Default", elements: [] }],
     defaultMasterId: "master-default",
     slides,
-  } as unknown as Deck;
+  });
 }
 
 // An empty deck: no slides.
@@ -234,7 +246,7 @@ test("computeDeckMetrics: ignores non-positive sourceWordCount", () => {
 });
 
 test("computeDeckMetrics: schemaValid is false for a malformed deck", () => {
-  const bad = { themeId: "indigo", slides: [{ index: 0 }] } as unknown as Deck;
+  const bad = fixtureDeck({ themeId: "indigo", slides: [{ index: 0 }] });
   const metrics = computeDeckMetrics(bad);
   assert.equal(metrics.schemaValid, false);
 });
@@ -309,8 +321,8 @@ test("deckEditDistance: an edited slide (same element count) is changed", () => 
   const el = after.slides[1].elements?.[0];
   assert.ok(el && el.kind === "text");
   if (el && el.kind === "text") {
-    (el as any).content = {
-      ...(el as any).content,
+    el.content = {
+      ...el.content,
       kind: "text",
       text: "A completely different idea",
       paragraphs: [{ text: "A completely different idea" }],

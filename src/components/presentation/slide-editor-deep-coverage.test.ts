@@ -30,6 +30,10 @@ import {
 } from "./slide-editor";
 import { SlideEditorInspectorRegion } from "./slide-editor-regions";
 
+function beforeUnloadEventFixture(value: unknown): BeforeUnloadEvent {
+  return value as unknown as BeforeUnloadEvent;
+}
+
 type ElementProps = Record<string, unknown>;
 
 type FakeListener = (event: Record<string, unknown>) => void;
@@ -352,8 +356,8 @@ describe("SlideEditor exported branch helpers", () => {
     const event = {
       preventDefault: () => calls.push("prevent-beforeunload"),
       returnValue: undefined,
-    } as unknown as BeforeUnloadEvent;
-    listener?.(event);
+    };
+    listener?.(beforeUnloadEventFixture(event));
     cleanup?.();
 
     assert.deepEqual(calls, [

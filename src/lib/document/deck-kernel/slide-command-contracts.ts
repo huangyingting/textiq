@@ -718,11 +718,14 @@ export interface DeckPatch {
         Slide,
         | "title"
         | "notes"
+        | "masterId"
+        | "templateId"
         | "background"
         | "backgroundGradient"
         | "backgroundImage"
         | "backgroundAssetId"
         | "accent"
+        | "designOverrides"
       >
     >
   >;

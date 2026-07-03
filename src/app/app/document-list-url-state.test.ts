@@ -13,6 +13,13 @@ import {
 } from "./document-list-url-state";
 
 type TestDocument = Parameters<typeof applyDocumentListViewState>[0][number];
+type MutableGlobalWindow = Omit<typeof globalThis, "window"> & {
+  window: unknown;
+};
+
+function setTestWindow(window: unknown): void {
+  (globalThis as MutableGlobalWindow).window = window;
+}
 
 function doc(id: string, overrides: Partial<TestDocument> = {}): TestDocument {
   return {
@@ -106,11 +113,11 @@ test("applyDocumentListViewState sorts title view state without changing input",
 test("replaceDocumentListQueryState replaces the URL with mutated query params", () => {
   const originalWindow = globalThis.window;
   const calls: Array<[unknown, string, string]> = [];
-  (globalThis as unknown as { window: unknown }).window = {
+  setTestWindow({
     history: {
       replaceState: (...args: [unknown, string, string]) => calls.push(args),
     },
-  };
+  });
 
   try {
     replaceDocumentListQueryState(
@@ -132,7 +139,7 @@ test("replaceDocumentListQueryState replaces the URL with mutated query params",
 
     assert.deepEqual(calls[1], [null, "", "/app"]);
   } finally {
-    (globalThis as unknown as { window: unknown }).window = originalWindow;
+    setTestWindow(originalWindow);
   }
 });
 
@@ -150,11 +157,11 @@ test("replaceDocumentListQueryState accepts search param facades from client hoo
       ]).entries();
     },
   };
-  (globalThis as unknown as { window: unknown }).window = {
+  setTestWindow({
     history: {
       replaceState: (...args: [unknown, string, string]) => calls.push(args),
     },
-  };
+  });
 
   try {
     assert.equal(searchParams.get("sort"), "created");
@@ -164,7 +171,7 @@ test("replaceDocumentListQueryState accepts search param facades from client hoo
 
     assert.deepEqual(calls, [[null, "", "/app?sort=created"]]);
   } finally {
-    (globalThis as unknown as { window: unknown }).window = originalWindow;
+    setTestWindow(originalWindow);
   }
 });
 

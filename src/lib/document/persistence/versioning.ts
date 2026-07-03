@@ -30,6 +30,10 @@ export type { RestoredDocumentVersion };
 // Exported service operations
 // ---------------------------------------------------------------------------
 
+function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue;
+}
+
 /**
  * Sanitizes a restored snapshot's `deckJson` against its restored content.
  * Orphaned visual references are stripped so a restore never re-introduces
@@ -59,7 +63,7 @@ export function sanitizeRestoredDeck(
       parsed.data,
       knownVisualIds,
     );
-    return sanitized as unknown as Prisma.InputJsonValue;
+    return toPrismaJsonInput(sanitized);
   }
 
   const parsedLegacy = safeParseLegacyDeck(rawDeckJson);
@@ -75,7 +79,7 @@ export function sanitizeRestoredDeck(
     deck: parsedLegacy.data,
     visualsById: knownVisualIds,
   });
-  return sanitizedLegacy as unknown as Prisma.InputJsonValue;
+  return toPrismaJsonInput(sanitizedLegacy);
 }
 
 function looksLikeDeck(rawDeckJson: Prisma.JsonValue): boolean {

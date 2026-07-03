@@ -249,28 +249,19 @@ export function resolveConnectorElementPoints(
   elements: readonly SlideElement[],
   resolveBox: ConnectorBoxResolver,
 ): { start: PointPct; end: PointPct } {
-  const content = (element as any).content as {
-    start: ConnectorPoint;
-    end: ConnectorPoint;
-  };
+  const { content } = element;
   function resolve(point: ConnectorPoint): PointPct {
     if ("elementId" in point) {
-      const resolved = resolveConnectorEndpoint(
-        point as ConnectorEndpoint,
-        elements,
-        resolveBox,
-      );
+      const resolved = resolveConnectorEndpoint(point, elements, resolveBox);
       if (resolved) return resolved;
-      const target = elements.find(
-        (el) => el.id === (point as ConnectorEndpoint).elementId,
-      );
+      const target = elements.find((el) => el.id === point.elementId);
       if (target) {
         const box = resolveBox(target);
         return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
       }
       return { x: 0, y: 0 };
     }
-    return point as PointPct;
+    return point;
   }
   return { start: resolve(content.start), end: resolve(content.end) };
 }

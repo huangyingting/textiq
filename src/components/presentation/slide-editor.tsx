@@ -2144,7 +2144,7 @@ export function SlideEditor({
     if (typeof window === "undefined") return undefined;
     function handleWindowKeyDown(event: globalThis.KeyboardEvent) {
       if (event.defaultPrevented) return;
-      handleEditorKeyDown(event as unknown as KeyboardEvent<HTMLDivElement>);
+      handleEditorKeyDown(event);
     }
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);

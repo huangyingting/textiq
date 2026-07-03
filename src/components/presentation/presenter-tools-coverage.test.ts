@@ -119,6 +119,22 @@ function clickButtonText(tree: ReactNode, text: string) {
   return (props.onClick as () => unknown)();
 }
 
+function windowSetTimeout(timer: unknown): typeof window.setTimeout {
+  return timer as unknown as typeof window.setTimeout;
+}
+
+function windowClearTimeout(timer: unknown): typeof window.clearTimeout {
+  return timer as unknown as typeof window.clearTimeout;
+}
+
+function windowSetInterval(timer: unknown): typeof window.setInterval {
+  return timer as unknown as typeof window.setInterval;
+}
+
+function windowClearInterval(timer: unknown): typeof window.clearInterval {
+  return timer as unknown as typeof window.clearInterval;
+}
+
 async function withHappyDom<T>(
   run: (window: Window) => T | Promise<T>,
 ): Promise<T> {
@@ -156,12 +172,10 @@ async function withHappyDom<T>(
     callback();
     return 0;
   };
-  window.setTimeout = runTimer as unknown as typeof window.setTimeout;
-  window.clearTimeout = (() =>
-    undefined) as unknown as typeof window.clearTimeout;
-  window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-  window.clearInterval = (() =>
-    undefined) as unknown as typeof window.clearInterval;
+  window.setTimeout = windowSetTimeout(runTimer);
+  window.clearTimeout = windowClearTimeout(() => undefined);
+  window.setInterval = windowSetInterval(() => 0);
+  window.clearInterval = windowClearInterval(() => undefined);
   const globals: Record<string, unknown> = {
     window,
     document: window.document,

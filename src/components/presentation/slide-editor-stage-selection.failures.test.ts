@@ -24,6 +24,15 @@ import {
   withWindow,
 } from "./slide-editor-failure-test-utils";
 
+const reactPointerEvent = <T = Element>(event: object): React.PointerEvent<T> =>
+  event as React.PointerEvent<T>;
+
+const reactKeyboardEvent = <T = Element>(event: object): KeyboardEvent<T> =>
+  event as KeyboardEvent<T>;
+
+const reactMouseEvent = <T = Element>(event: object): MouseEvent<T> =>
+  event as MouseEvent<T>;
+
 function buildGroupNode(id: string, locked = false): GroupNode {
   return {
     id,
@@ -108,23 +117,25 @@ describe("SlideEditor stage selection failures", () => {
         });
         let prevented = false;
 
-        onPointerDown({
-          button: 0,
-          pointerId: 1,
-          clientX: 400,
-          clientY: 50,
-          shiftKey: true,
-          metaKey: false,
-          ctrlKey: false,
-          target,
-          currentTarget: {
-            setPointerCapture: () => undefined,
-            releasePointerCapture: () => undefined,
-          },
-          preventDefault: () => {
-            prevented = true;
-          },
-        } as unknown as React.PointerEvent<HTMLDivElement>);
+        onPointerDown(
+          reactPointerEvent<HTMLDivElement>({
+            button: 0,
+            pointerId: 1,
+            clientX: 400,
+            clientY: 50,
+            shiftKey: true,
+            metaKey: false,
+            ctrlKey: false,
+            target,
+            currentTarget: {
+              setPointerCapture: () => undefined,
+              releasePointerCapture: () => undefined,
+            },
+            preventDefault: () => {
+              prevented = true;
+            },
+          }),
+        );
 
         assert.equal(prevented, true);
         const pointerMove = listeners.get("pointermove");
@@ -191,17 +202,19 @@ describe("SlideEditor stage selection failures", () => {
       ).onKeyDown;
       assert.ok(onKeyDown);
       let prevented = false;
-      onKeyDown({
-        key: "a",
-        ctrlKey: true,
-        metaKey: false,
-        shiftKey: false,
-        altKey: false,
-        target: null,
-        preventDefault: () => {
-          prevented = true;
-        },
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      onKeyDown(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: "a",
+          ctrlKey: true,
+          metaKey: false,
+          shiftKey: false,
+          altKey: false,
+          target: null,
+          preventDefault: () => {
+            prevented = true;
+          },
+        }),
+      );
 
       assert.equal(prevented, true);
       tree = renderTree();
@@ -278,14 +291,16 @@ describe("SlideEditor stage selection failures", () => {
 
       tree = renderTree();
       let prevented = false;
-      keyDownFrom(tree)?.({
-        key: " ",
-        shiftKey: false,
-        target: null,
-        preventDefault: () => {
-          prevented = true;
-        },
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      keyDownFrom(tree)?.(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: " ",
+          shiftKey: false,
+          target: null,
+          preventDefault: () => {
+            prevented = true;
+          },
+        }),
+      );
 
       assert.equal(prevented, true);
       tree = renderTree();
@@ -296,12 +311,14 @@ describe("SlideEditor stage selection failures", () => {
       ).selection;
       assert.ok(selection?.nodeIds?.has("space-target"));
 
-      keyDownFrom(tree)?.({
-        key: " ",
-        shiftKey: true,
-        target: null,
-        preventDefault: () => undefined,
-      } as unknown as KeyboardEvent<HTMLDivElement>);
+      keyDownFrom(tree)?.(
+        reactKeyboardEvent<HTMLDivElement>({
+          key: " ",
+          shiftKey: true,
+          target: null,
+          preventDefault: () => undefined,
+        }),
+      );
 
       tree = renderTree();
       selection = (
@@ -376,13 +393,15 @@ describe("SlideEditor stage selection failures", () => {
         focusNode(tree, nodeId);
         tree = renderTree();
         let prevented = false;
-        keyDownFrom(tree)?.({
-          key: "Enter",
-          target: null,
-          preventDefault: () => {
-            prevented = true;
-          },
-        } as unknown as KeyboardEvent<HTMLDivElement>);
+        keyDownFrom(tree)?.(
+          reactKeyboardEvent<HTMLDivElement>({
+            key: "Enter",
+            target: null,
+            preventDefault: () => {
+              prevented = true;
+            },
+          }),
+        );
 
         tree = renderTree();
         const stageCanvas = stageCanvasFrom(tree);
@@ -474,17 +493,19 @@ describe("SlideEditor stage selection failures", () => {
       let prevented = false;
       let stopped = false;
 
-      onContextMenu({
-        clientX: 360,
-        clientY: 330,
-        target,
-        preventDefault: () => {
-          prevented = true;
-        },
-        stopPropagation: () => {
-          stopped = true;
-        },
-      } as unknown as MouseEvent<HTMLDivElement>);
+      onContextMenu(
+        reactMouseEvent<HTMLDivElement>({
+          clientX: 360,
+          clientY: 330,
+          target,
+          preventDefault: () => {
+            prevented = true;
+          },
+          stopPropagation: () => {
+            stopped = true;
+          },
+        }),
+      );
 
       assert.equal(prevented, true);
       assert.equal(stopped, true);
@@ -580,13 +601,15 @@ describe("SlideEditor stage selection failures", () => {
           },
         });
 
-        onContextMenu({
-          clientX: 410,
-          clientY: 165,
-          target,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as MouseEvent<HTMLDivElement>);
+        onContextMenu(
+          reactMouseEvent<HTMLDivElement>({
+            clientX: 410,
+            clientY: 165,
+            target,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
 
         tree = renderTree();
         const menu = findRequiredElement(
@@ -754,14 +777,16 @@ describe("SlideEditor stage selection failures", () => {
             ).onKeyDown;
             assert.ok(onEditorKeyDown, "Expected editor keydown handler.");
             let prevented = false;
-            onEditorKeyDown?.({
-              key: "]",
-              altKey: true,
-              target: createElement(),
-              preventDefault: () => {
-                prevented = true;
-              },
-            } as unknown as KeyboardEvent<HTMLDivElement>);
+            onEditorKeyDown?.(
+              reactKeyboardEvent<HTMLDivElement>({
+                key: "]",
+                altKey: true,
+                target: createElement(),
+                preventDefault: () => {
+                  prevented = true;
+                },
+              }),
+            );
 
             tree = renderTree();
             const updatedCanvas = findRequiredElement(

@@ -23,6 +23,16 @@ const CONFIG: AzureConfig = {
 
 const MESSAGES: ChatMessage[] = [{ role: "user", content: "hi" }];
 
+function responseFixture(value: unknown): Response {
+  return value as unknown as Response;
+}
+
+function fetchFixture(
+  fetchImpl: (...args: Parameters<typeof fetch>) => Promise<Response>,
+): typeof fetch {
+  return fetchImpl as typeof fetch;
+}
+
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
@@ -182,14 +192,15 @@ test("azureChatComplete includes readable Azure error response details", async (
 });
 
 test("azureChatComplete handles unreadable Azure error response bodies", async () => {
-  globalThis.fetch = (async () =>
-    ({
+  globalThis.fetch = fetchFixture(async () =>
+    responseFixture({
       ok: false,
       status: 502,
       text: async () => {
         throw new Error("body stream failed");
       },
-    }) as unknown as Response) as typeof fetch;
+    }),
+  );
 
   await assert.rejects(
     () => azureChatComplete(MESSAGES, { config: CONFIG }),

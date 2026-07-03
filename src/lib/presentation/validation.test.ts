@@ -23,6 +23,39 @@ import {
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
 
+type BuildDeckOptions = Parameters<typeof buildDeck>[1];
+type TableContentFixture = {
+  content: { columns: unknown[]; rows: unknown[] };
+};
+
+function invalidSlide(value: unknown): SlideNode {
+  return value as unknown as SlideNode;
+}
+
+function invalidChild(value: unknown): SlideChildNode {
+  return value as unknown as SlideChildNode;
+}
+
+function invalidDeckOptions(value: unknown): BuildDeckOptions {
+  return value as unknown as BuildDeckOptions;
+}
+
+function mutableRecord(value: unknown): Record<string, unknown> {
+  return value as unknown as Record<string, unknown>;
+}
+
+function invalidFitMode(value: unknown): "auto-height" {
+  return value as unknown as "auto-height";
+}
+
+function invalidString(value: unknown): string {
+  return value as unknown as string;
+}
+
+function tableContentFixture(value: unknown): TableContentFixture {
+  return value as unknown as TableContentFixture;
+}
+
 describe("safeParseDeck", () => {
   test("accepts a valid minimal presentation deck", () => {
     resetBuilderCounter();
@@ -53,19 +86,22 @@ describe("safeParseDeck", () => {
 
   test("accepts current deck chrome schema", () => {
     resetBuilderCounter();
-    const deck = buildDeck([buildCoverSlide()], {
-      chrome: {
-        logo: { enabled: true, assetId: "img-001" },
-        footer: { enabled: true, text: "Footer", align: "center" },
-        pageNumber: { enabled: true, format: "number-total" },
-        watermark: { enabled: true, text: "Draft", opacity: 0.2 },
-        border: { enabled: true, color: "#111111", widthPt: 1 },
-        safeArea: {
-          enabled: true,
-          insets: { top: 5, right: 5, bottom: 5, left: 5 },
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        chrome: {
+          logo: { enabled: true, assetId: "img-001" },
+          footer: { enabled: true, text: "Footer", align: "center" },
+          pageNumber: { enabled: true, format: "number-total" },
+          watermark: { enabled: true, text: "Draft", opacity: 0.2 },
+          border: { enabled: true, color: "#111111", widthPt: 1 },
+          safeArea: {
+            enabled: true,
+            insets: { top: 5, right: 5, bottom: 5, left: 5 },
+          },
         },
-      },
-    });
+      }),
+    );
 
     const result = safeParseDeck(deck);
     assert.ok(result.success);
@@ -227,7 +263,7 @@ describe("safeParseDeck", () => {
   test("rejects invalid localStyle and chrome style patch contracts", () => {
     resetBuilderCounter();
     const slide = buildCoverSlide();
-    const badSlide = {
+    const badSlide = invalidSlide({
       ...slide,
       localStyle: {
         slide: { chrome: "ultra" },
@@ -242,16 +278,19 @@ describe("safeParseDeck", () => {
           },
         },
       ],
-    } as unknown as SlideNode;
-    const deck = buildDeck([badSlide], {
-      chrome: {
-        footer: {
-          enabled: true,
-          text: "Footer",
-          style: { sparkle: true } as unknown as Record<string, unknown>,
+    });
+    const deck = buildDeck(
+      [badSlide],
+      invalidDeckOptions({
+        chrome: {
+          footer: {
+            enabled: true,
+            text: "Footer",
+            style: mutableRecord({ sparkle: true }),
+          },
         },
-      },
-    } as unknown as Parameters<typeof buildDeck>[1]);
+      }),
+    );
 
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
@@ -272,27 +311,30 @@ describe("safeParseDeck", () => {
   });
 
   test("rejects invalid theme override style patch values", () => {
-    const deck = buildDeck([buildCoverSlide()], {
-      theme: {
-        packageId: "neutral",
-        overrides: {
-          styles: {
-            "text.body": {
-              default: {
-                fill: {
-                  type: "noise",
-                  stops: [{ offsetPct: "zero" }],
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        theme: {
+          packageId: "neutral",
+          overrides: {
+            styles: {
+              "text.body": {
+                default: {
+                  fill: {
+                    type: "noise",
+                    stops: [{ offsetPct: "zero" }],
+                  },
+                  table: {
+                    cellPaddingPt: { top: "bad" },
+                  },
+                  blendMode: "xor",
                 },
-                table: {
-                  cellPaddingPt: { top: "bad" },
-                },
-                blendMode: "xor",
               },
             },
           },
         },
-      },
-    } as unknown as Parameters<typeof buildDeck>[1]);
+      }),
+    );
 
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
@@ -498,19 +540,21 @@ describe("safeParseDeck", () => {
         },
       ],
     };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
   });
 
   test("rejects unknown nested child-node and content keys", () => {
     resetBuilderCounter();
-    const badTextNode = buildTextNode({
-      id: "text-bad-nested",
-      content: {
-        paragraphs: [{ id: "para-bad-nested", text: "Body" }],
-      },
-    }) as unknown as Record<string, unknown>;
+    const badTextNode = mutableRecord(
+      buildTextNode({
+        id: "text-bad-nested",
+        content: {
+          paragraphs: [{ id: "para-bad-nested", text: "Body" }],
+        },
+      }),
+    );
     badTextNode.unexpectedNodeKey = true;
     badTextNode.content = {
       paragraphs: [
@@ -537,18 +581,22 @@ describe("safeParseDeck", () => {
       unexpectedTextContentKey: true,
     };
 
-    const badImageNode = buildImageNode("img-001", {
-      id: "image-bad-nested",
-    }) as unknown as Record<string, unknown>;
+    const badImageNode = mutableRecord(
+      buildImageNode("img-001", {
+        id: "image-bad-nested",
+      }),
+    );
     badImageNode.content = {
       assetId: "img-001",
       unexpectedImageContentKey: true,
     };
 
-    const badShapeNode = buildShapeNode({
-      id: "shape-bad-nested",
-      content: { shape: "rect" },
-    }) as unknown as Record<string, unknown>;
+    const badShapeNode = mutableRecord(
+      buildShapeNode({
+        id: "shape-bad-nested",
+        content: { shape: "rect" },
+      }),
+    );
     badShapeNode.content = {
       shape: "rect",
       unexpectedShapeContentKey: true,
@@ -566,13 +614,15 @@ describe("safeParseDeck", () => {
       },
     };
 
-    const badTableNode = buildTableNode({
-      id: "table-bad-nested",
-      content: {
-        columns: [{ id: "col-0", label: "Name" }],
-        rows: [{ id: "row-0", cells: [{ text: "Value" }] }],
-      },
-    }) as unknown as Record<string, unknown>;
+    const badTableNode = mutableRecord(
+      buildTableNode({
+        id: "table-bad-nested",
+        content: {
+          columns: [{ id: "col-0", label: "Name" }],
+          rows: [{ id: "row-0", cells: [{ text: "Value" }] }],
+        },
+      }),
+    );
     badTableNode.content = {
       columns: [{ id: "col-0", label: "Name", unexpectedColumnKey: true }],
       rows: [
@@ -585,21 +635,25 @@ describe("safeParseDeck", () => {
       unexpectedTableContentKey: true,
     };
 
-    const badVisualNode = buildVisualNode({
-      id: "visual-bad-nested",
-      content: { visualId: "visual-001" },
-    }) as unknown as Record<string, unknown>;
+    const badVisualNode = mutableRecord(
+      buildVisualNode({
+        id: "visual-bad-nested",
+        content: { visualId: "visual-001" },
+      }),
+    );
     badVisualNode.content = {
       visualId: "visual-001",
       unexpectedVisualContentKey: true,
     };
 
-    const badGroupChildNode = buildTextNode({
-      id: "group-child-bad-nested",
-      content: {
-        paragraphs: [{ id: "group-para-1", text: "Nested" }],
-      },
-    }) as unknown as Record<string, unknown>;
+    const badGroupChildNode = mutableRecord(
+      buildTextNode({
+        id: "group-child-bad-nested",
+        content: {
+          paragraphs: [{ id: "group-para-1", text: "Nested" }],
+        },
+      }),
+    );
     badGroupChildNode.content = {
       paragraphs: [{ id: "group-para-1", text: "Nested" }],
       unexpectedNestedTextContentKey: true,
@@ -614,13 +668,13 @@ describe("safeParseDeck", () => {
     };
 
     const slide = buildSlide("content", [
-      badTextNode as unknown as SlideChildNode,
-      badImageNode as unknown as SlideChildNode,
-      badShapeNode as unknown as SlideChildNode,
-      badConnectorNode as unknown as SlideChildNode,
-      badTableNode as unknown as SlideChildNode,
-      badVisualNode as unknown as SlideChildNode,
-      badGroupNode as unknown as SlideChildNode,
+      invalidChild(badTextNode),
+      invalidChild(badImageNode),
+      invalidChild(badShapeNode),
+      invalidChild(badConnectorNode),
+      invalidChild(badTableNode),
+      invalidChild(badVisualNode),
+      invalidChild(badGroupNode),
     ]);
     const result = safeParseDeck(buildDeck([slide]));
     assert.ok(!result.success);
@@ -753,11 +807,11 @@ describe("safeParseDeck", () => {
 
   test("rejects unknown template kind", () => {
     resetBuilderCounter();
-    const slide = {
+    const slide = invalidSlide({
       ...buildCoverSlide(),
       template: { kind: "nonexistent-kind" },
-    };
-    const deck = buildDeck([slide as unknown as SlideNode]);
+    });
+    const deck = buildDeck([slide]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -775,7 +829,7 @@ describe("safeParseDeck", () => {
     ];
 
     for (const notes of invalidNotesValues) {
-      const slide = { ...buildCoverSlide(), notes } as unknown as SlideNode;
+      const slide = invalidSlide({ ...buildCoverSlide(), notes });
       const deck = buildDeck([slide]);
       const result = safeParseDeck(deck);
       assert.ok(!result.success);
@@ -816,7 +870,7 @@ describe("safeParseDeck", () => {
       style: { ref: "not.a.real.ref" },
     };
     const badSlide = { ...slide, children: [badChild] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -829,7 +883,7 @@ describe("safeParseDeck", () => {
     const slide = buildContentSlide();
     const paragraphText = "TOP SECRET PARAGRAPH TEXT";
     const runText = "TOP SECRET RUN CONTENT";
-    const badNode = {
+    const badNode = invalidChild({
       ...slide.children[0],
       type: "text",
       content: {
@@ -841,9 +895,9 @@ describe("safeParseDeck", () => {
           },
         ],
       },
-    };
+    });
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -955,7 +1009,7 @@ describe("safeParseDeck", () => {
     const badNode = buildTextNode({
       content: {
         paragraphs: [{ id: "para-001", text: "hello world" }],
-        fit: "squash" as unknown as "auto-height",
+        fit: invalidFitMode("squash"),
       },
     });
     const deck = buildDeck([buildSlide("content", [badNode])]);
@@ -971,7 +1025,7 @@ describe("safeParseDeck", () => {
     const badNode = buildTextNode({
       content: {
         paragraphs: [{ id: "para-001", text: "hello world" }],
-        language: 42 as unknown as string,
+        language: invalidString(42),
       },
     });
     const deck = buildDeck([buildSlide("content", [badNode])]);
@@ -1008,7 +1062,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1064,7 +1118,7 @@ describe("safeParseDeck", () => {
       },
     };
     const validSlide = { ...slide, children: [validNode] };
-    const deck = buildDeck([validSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(validSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(
       result.success,
@@ -1090,7 +1144,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...tableSlide, children: [badTable] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1119,7 +1173,7 @@ describe("safeParseDeck", () => {
     const slide = buildCoverSlide();
     const sourceChild = slide.children[0];
     assert.ok(sourceChild.layout);
-    const child = {
+    const child = invalidChild({
       ...sourceChild,
       layout: {
         ...sourceChild.layout,
@@ -1128,7 +1182,7 @@ describe("safeParseDeck", () => {
         flipY: false,
         constraints: { minH: 6, preserveAspectRatio: false },
       },
-    };
+    });
     const deck = buildDeck([{ ...slide, children: [child] }]);
     const result = safeParseDeck(deck);
     assert.ok(
@@ -1142,13 +1196,13 @@ describe("safeParseDeck", () => {
     const slide = buildCoverSlide();
     const sourceChild = slide.children[0];
     assert.ok(sourceChild.layout);
-    const child = {
+    const child = invalidChild({
       ...sourceChild,
       layout: {
         ...sourceChild.layout,
         autoHeight: "yes",
       },
-    } as unknown as SlideChildNode;
+    });
     const deck = buildDeck([{ ...slide, children: [child] }]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
@@ -1162,14 +1216,14 @@ describe("safeParseDeck", () => {
     const slide = buildCoverSlide();
     const sourceChild = slide.children[0];
     assert.ok(sourceChild.layout);
-    const child = {
+    const child = invalidChild({
       ...sourceChild,
       layout: {
         ...sourceChild.layout,
         flipX: "yes",
         flipY: "no",
       },
-    } as unknown as SlideChildNode;
+    });
     const deck = buildDeck([{ ...slide, children: [child] }]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
@@ -1199,7 +1253,7 @@ describe("safeParseDeck", () => {
       content: null,
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1221,7 +1275,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1247,7 +1301,7 @@ describe("safeParseDeck", () => {
     const slide = buildSlide("content", [
       startNode,
       endNode,
-      connectorNode as unknown as SlideChildNode,
+      invalidChild(connectorNode),
     ]);
     const result = safeParseDeck(buildDeck([slide]));
     assert.ok(
@@ -1270,7 +1324,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...slide, children: [badNode] };
-    const result = safeParseDeck(buildDeck([badSlide as unknown as SlideNode]));
+    const result = safeParseDeck(buildDeck([invalidSlide(badSlide)]));
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(result.errors.some((e) => /content\.from\.point\.x/.test(e)));
@@ -1292,7 +1346,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...slide, children: [badNode] };
-    const result = safeParseDeck(buildDeck([badSlide as unknown as SlideNode]));
+    const result = safeParseDeck(buildDeck([invalidSlide(badSlide)]));
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(result.errors.some((e) => /content\.from\.nodeId/.test(e)));
@@ -1316,7 +1370,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...slide, children: [badNode] };
-    const result = safeParseDeck(buildDeck([badSlide as unknown as SlideNode]));
+    const result = safeParseDeck(buildDeck([invalidSlide(badSlide)]));
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(result.errors.some((e) => /content\.routing/.test(e)));
@@ -1334,7 +1388,7 @@ describe("safeParseDeck", () => {
       content: { shape: "hexagon" }, // not in SHAPE_KINDS
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1353,7 +1407,7 @@ describe("safeParseDeck", () => {
       content: { shape: "path" }, // path required when shape is "path"
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1372,7 +1426,7 @@ describe("safeParseDeck", () => {
       content: {}, // missing assetId
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1463,9 +1517,9 @@ describe("safeParseDeck", () => {
       const badNode = { ...testCase.node, id: `img-${testCase.name}` };
       const badSlide = {
         ...slide,
-        children: [badNode as unknown as SlideChildNode],
+        children: [invalidChild(badNode)],
       };
-      const deck = buildDeck([badSlide as unknown as SlideNode]);
+      const deck = buildDeck([invalidSlide(badSlide)]);
       const result = safeParseDeck(deck);
       assert.ok(!result.success, `Expected parse failure for ${testCase.name}`);
       if (!result.success) {
@@ -1488,7 +1542,7 @@ describe("safeParseDeck", () => {
       content: {}, // neither assetId nor visualId
     };
     const badSlide = { ...slide, children: [badNode] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1509,7 +1563,7 @@ describe("safeParseDeck", () => {
       children: [innerNode],
     };
     const badSlide = { ...slide, children: [badGroup] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1529,7 +1583,7 @@ describe("safeParseDeck", () => {
       children: [], // empty is invalid
     };
     const badSlide = { ...slide, children: [badGroup] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1642,60 +1696,63 @@ describe("safeParseDeck", () => {
   });
 
   test("accepts safe Deck asset source schemes", () => {
-    const deck = buildDeck([buildCoverSlide()], {
-      assets: {
-        images: {
-          "img-001": {
-            id: "img-001",
-            src: "https://example.test/image.png",
-            alt: "Hero image",
-            widthPx: 1920,
-            heightPx: 1080,
-            mimeType: "image/png",
-            contentHash: "hash-image",
-            origin: {
-              kind: "upload",
-              sourceId: "doc-1",
-              importedAt: "2026-02-01T00:00:00Z",
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        assets: {
+          images: {
+            "img-001": {
+              id: "img-001",
+              src: "https://example.test/image.png",
+              alt: "Hero image",
+              widthPx: 1920,
+              heightPx: 1080,
+              mimeType: "image/png",
+              contentHash: "hash-image",
+              origin: {
+                kind: "upload",
+                sourceId: "doc-1",
+                importedAt: "2026-02-01T00:00:00Z",
+              },
+            },
+            "img-local": {
+              id: "img-local",
+              src: "/api/slide-assets/doc-1/key-1",
+            },
+            "img-data": { id: "img-data", src: "data:image/png;base64,abc123" },
+          },
+          fonts: {
+            "font-001": {
+              id: "font-001",
+              family: "Inter",
+              src: "/api/slide-assets/doc-1/font-1.woff2",
+              weight: [400, 700],
+              style: "normal",
+              contentHash: "hash-font",
             },
           },
-          "img-local": {
-            id: "img-local",
-            src: "/api/slide-assets/doc-1/key-1",
+          visuals: {
+            "visual-001": {
+              id: "visual-001",
+              visualId: "visual-001",
+              documentId: "doc-1",
+              title: "Q2 KPI visual",
+              alt: "KPI chart",
+              contentHash: "hash-visual",
+            },
           },
-          "img-data": { id: "img-data", src: "data:image/png;base64,abc123" },
-        },
-        fonts: {
-          "font-001": {
-            id: "font-001",
-            family: "Inter",
-            src: "/api/slide-assets/doc-1/font-1.woff2",
-            weight: [400, 700],
-            style: "normal",
-            contentHash: "hash-font",
-          },
-        },
-        visuals: {
-          "visual-001": {
-            id: "visual-001",
-            visualId: "visual-001",
-            documentId: "doc-1",
-            title: "Q2 KPI visual",
-            alt: "KPI chart",
-            contentHash: "hash-visual",
+          files: {
+            "file-001": {
+              id: "file-001",
+              src: "data:application/pdf;base64,abc123",
+              filename: "report.pdf",
+              mimeType: "application/pdf",
+              contentHash: "hash-file",
+            },
           },
         },
-        files: {
-          "file-001": {
-            id: "file-001",
-            src: "data:application/pdf;base64,abc123",
-            filename: "report.pdf",
-            mimeType: "application/pdf",
-            contentHash: "hash-file",
-          },
-        },
-      },
-    });
+      }),
+    );
     const result = safeParseDeck(deck);
     assert.ok(
       result.success,
@@ -1704,16 +1761,19 @@ describe("safeParseDeck", () => {
   });
 
   test("rejects unsafe Deck asset source schemes", () => {
-    const deck = buildDeck([buildCoverSlide()], {
-      assets: {
-        images: {
-          "img-001": { id: "img-001", src: "javascript:alert(1)" },
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        assets: {
+          images: {
+            "img-001": { id: "img-001", src: "javascript:alert(1)" },
+          },
+          files: {
+            "file-001": { id: "file-001", src: "ftp://example.test/file.bin" },
+          },
         },
-        files: {
-          "file-001": { id: "file-001", src: "ftp://example.test/file.bin" },
-        },
-      },
-    });
+      }),
+    );
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1727,43 +1787,46 @@ describe("safeParseDeck", () => {
   });
 
   test("rejects malformed nested Deck asset entries", () => {
-    const deck = buildDeck([buildCoverSlide()], {
-      assets: {
-        images: {
-          "img-001": {
-            id: "img-002",
-            src: "https://example.test/image.png",
-            widthPx: "wide",
-            origin: { kind: "legacy" },
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        assets: {
+          images: {
+            "img-001": {
+              id: "img-002",
+              src: "https://example.test/image.png",
+              widthPx: "wide",
+              origin: { kind: "legacy" },
+            },
+          },
+          fonts: {
+            "font-001": {
+              id: "font-001",
+              family: 42,
+              src: "https://example.test/font.woff2",
+              weight: ["heavy"],
+              style: "oblique",
+            },
+          },
+          visuals: {
+            "visual-001": {
+              id: "visual-001",
+              visualId: 123,
+              documentId: false,
+              alt: 999,
+            },
+          },
+          files: {
+            "file-001": {
+              id: "file-001",
+              src: "https://example.test/file.pdf",
+              filename: 42,
+              mimeType: {},
+            },
           },
         },
-        fonts: {
-          "font-001": {
-            id: "font-001",
-            family: 42,
-            src: "https://example.test/font.woff2",
-            weight: ["heavy"],
-            style: "oblique",
-          },
-        },
-        visuals: {
-          "visual-001": {
-            id: "visual-001",
-            visualId: 123,
-            documentId: false,
-            alt: 999,
-          },
-        },
-        files: {
-          "file-001": {
-            id: "file-001",
-            src: "https://example.test/file.pdf",
-            filename: 42,
-            mimeType: {},
-          },
-        },
-      },
-    } as unknown as Parameters<typeof buildDeck>[1]);
+      }),
+    );
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1811,7 +1874,7 @@ describe("safeParseDeck", () => {
       ...slide,
       controls: { tone: "furious" }, // invalid tone
     };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1821,22 +1884,25 @@ describe("safeParseDeck", () => {
 
   test("rejects invalid deck chrome enum and scalar values", () => {
     resetBuilderCounter();
-    const deck = buildDeck([buildCoverSlide()], {
-      chrome: {
-        logo: { enabled: true, assetId: "img-001", size: "huge" },
-        footer: { enabled: true, text: 42, align: "wide" },
-        pageNumber: { enabled: true, format: "roman", placement: "top-left" },
-        watermark: {
-          enabled: true,
-          text: "Draft",
-          layoutMode: "tilted",
-          size: "giant",
-          opacity: "faint",
+    const deck = buildDeck(
+      [buildCoverSlide()],
+      invalidDeckOptions({
+        chrome: {
+          logo: { enabled: true, assetId: "img-001", size: "huge" },
+          footer: { enabled: true, text: 42, align: "wide" },
+          pageNumber: { enabled: true, format: "roman", placement: "top-left" },
+          watermark: {
+            enabled: true,
+            text: "Draft",
+            layoutMode: "tilted",
+            size: "giant",
+            opacity: "faint",
+          },
+          border: { enabled: true, color: 123, widthPt: "thick" },
+          safeArea: { enabled: true, color: false, widthPt: "thin" },
         },
-        border: { enabled: true, color: 123, widthPt: "thick" },
-        safeArea: { enabled: true, color: false, widthPt: "thin" },
-      },
-    } as unknown as Parameters<typeof buildDeck>[1]);
+      }),
+    );
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1889,14 +1955,14 @@ describe("safeParseDeck", () => {
 
     for (const matrixCase of cases) {
       resetBuilderCounter();
-      const slide = {
+      const slide = invalidSlide({
         ...buildCoverSlide(),
         props: {
           deckChrome: {
             footer: matrixCase.override,
           },
         },
-      } as unknown as SlideNode;
+      });
       const result = safeParseDeck(buildDeck([slide]));
       assert.equal(
         result.success,
@@ -1912,9 +1978,9 @@ describe("safeParseDeck", () => {
   test("rejects table content with too few rows", () => {
     resetBuilderCounter();
     const tableSlide = buildTableSlide();
-    const tableNode = tableSlide.children.find(
-      (n) => n.type === "table",
-    ) as unknown as { content: { columns: unknown[]; rows: unknown[] } };
+    const tableNode = tableContentFixture(
+      tableSlide.children.find((n) => n.type === "table"),
+    );
     if (!tableNode) return;
     const badTable = {
       ...tableSlide.children[1],
@@ -1924,7 +1990,7 @@ describe("safeParseDeck", () => {
       },
     };
     const badSlide = { ...tableSlide, children: [badTable] };
-    const deck = buildDeck([badSlide as unknown as SlideNode]);
+    const deck = buildDeck([invalidSlide(badSlide)]);
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
@@ -1968,7 +2034,7 @@ describe("safeParseDeck", () => {
   });
 
   test("rejects invalid source metadata fields", () => {
-    const badNode = {
+    const badNode = invalidChild({
       ...buildTextNode(),
       source: {
         documentId: "doc-1",
@@ -1977,7 +2043,7 @@ describe("safeParseDeck", () => {
         refresh: { state: "invalid" },
         mystery: true,
       },
-    } as unknown as SlideChildNode;
+    });
     const deck = buildDeck([buildSlide("content", [badNode])]);
     const result = safeParseDeck(deck);
 
@@ -2024,7 +2090,7 @@ describe("safeParseDeck", () => {
 
   test("rejects malformed child base-node metadata with precise paths", () => {
     resetBuilderCounter();
-    const badNode = {
+    const badNode = invalidChild({
       ...buildTextNode(),
       name: 42,
       role: "unknown-role",
@@ -2038,7 +2104,7 @@ describe("safeParseDeck", () => {
         readingOrder: "first",
         mystery: true,
       },
-    } as unknown as SlideChildNode;
+    });
     const result = safeParseDeck(buildDeck([buildSlide("content", [badNode])]));
 
     assert.ok(!result.success);
@@ -2065,7 +2131,7 @@ describe("safeParseDeck", () => {
 
   test("rejects malformed slide base-node metadata with precise paths", () => {
     resetBuilderCounter();
-    const badSlide = {
+    const badSlide = invalidSlide({
       ...buildCoverSlide(),
       name: 42,
       role: "unknown-role",
@@ -2079,7 +2145,7 @@ describe("safeParseDeck", () => {
         readingOrder: "first",
         mystery: true,
       },
-    } as unknown as SlideNode;
+    });
     const result = safeParseDeck(buildDeck([badSlide]));
 
     assert.ok(!result.success);
@@ -2191,15 +2257,18 @@ describe("safeParseDeck", () => {
       ],
     };
     const result = safeParseDeck(
-      buildDeck([badSlide as unknown as SlideNode], {
-        canvas: null,
-        assets: { images: null },
-        chrome: {
-          unexpected: {},
-          logo: "bad",
-          safeArea: { enabled: true, insets: "bad" },
-        },
-      } as unknown as Parameters<typeof buildDeck>[1]),
+      buildDeck(
+        [invalidSlide(badSlide)],
+        invalidDeckOptions({
+          canvas: null,
+          assets: { images: null },
+          chrome: {
+            unexpected: {},
+            logo: "bad",
+            safeArea: { enabled: true, insets: "bad" },
+          },
+        }),
+      ),
     );
 
     assert.ok(!result.success);

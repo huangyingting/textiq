@@ -15,6 +15,31 @@ const sourceRef = {
   blockKind: "text" as const,
 };
 
+type SourceRef = typeof sourceRef;
+type DeckWithSourceRefs = ReturnType<typeof deckWithSourceRefs>;
+type DuplicateCreateData = {
+  contentJson: {
+    root: {
+      children: Array<{ bid: string }>;
+    };
+  };
+  visuals: {
+    create: Array<{ anchorBlockId: string | null }>;
+  };
+};
+type DuplicateDeckUpdate = {
+  deckJson: DeckWithSourceRefs;
+};
+
+function elementSource(
+  deck: DeckWithSourceRefs,
+  elementIndex: number,
+): SourceRef {
+  const source = deck.slides[0]!.elements[elementIndex]!.source;
+  assert.ok(source, "expected deck element to have a source ref");
+  return source;
+}
+
 function deckWithSourceRefs() {
   return {
     schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
@@ -61,12 +86,12 @@ test("remapDeckSourceRefs updates source document id and regenerated block id", 
     new Map([["old-bid", "new-bid"]]),
   ) as ReturnType<typeof deckWithSourceRefs>;
 
-  const linked = (remapped.slides[0]!.elements[0]! as any).source!;
+  const linked = elementSource(remapped, 0);
   assert.equal(linked.documentId, "copy-doc");
   assert.equal(linked.blockId, "new-bid");
   assert.equal(linked.blockKind, "text");
 
-  const other = (remapped.slides[0]!.elements[1]! as any).source!;
+  const other = elementSource(remapped, 1);
   assert.equal(other.documentId, "other-doc");
   assert.equal(other.blockId, "old-bid");
 });
@@ -98,7 +123,7 @@ test("remapDeckSourceRefs preserves source refs when the block id was not regene
     new Map([["different-bid", "new-bid"]]),
   ) as ReturnType<typeof deckWithSourceRefs>;
 
-  const linked = (remapped.slides[0]!.elements[0]! as any).source!;
+  const linked = elementSource(remapped, 0);
   assert.equal(linked.documentId, "source-doc");
   assert.equal(linked.blockId, "old-bid");
 });
@@ -160,7 +185,13 @@ test("duplicate create data omits contentJson when source content is null", () =
 
 test("duplicateDocumentForUser returns null when the source document is missing", async () => {
   const db = {
-    $transaction: async (callback: (tx: any) => Promise<unknown>) =>
+    $transaction: async (
+      callback: (tx: {
+        document: {
+          findFirst: () => Promise<null>;
+        };
+      }) => Promise<unknown>,
+    ) =>
       callback({
         document: {
           findFirst: async () => null,
@@ -175,8 +206,8 @@ test("duplicateDocumentForUser returns null when the source document is missing"
 });
 
 test("duplicateDocumentForUser regenerates content block ids and remaps deck source refs", async () => {
-  const createdData: unknown[] = [];
-  const updatedData: unknown[] = [];
+  const createdData: DuplicateCreateData[] = [];
+  const updatedData: DuplicateDeckUpdate[] = [];
   const sourceContent = {
     root: {
       type: "root",
@@ -184,7 +215,19 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
     },
   };
   const db = {
-    $transaction: async (callback: (tx: any) => Promise<unknown>) =>
+    $transaction: async (
+      callback: (tx: {
+        document: {
+          findFirst: () => Promise<unknown>;
+          create: (args: {
+            data: DuplicateCreateData;
+          }) => Promise<{ id: string }>;
+          update: (args: {
+            data: DuplicateDeckUpdate;
+          }) => Promise<{ id: string }>;
+        };
+      }) => Promise<unknown>,
+    ) =>
       callback({
         document: {
           findFirst: async () => ({
@@ -202,10 +245,10 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
             ],
           }),
           create: async ({ data }: { data: unknown }) => {
-            createdData.push(data);
+            createdData.push(data as DuplicateCreateData);
             return { id: "copy-doc" };
           },
-          update: async ({ data }: { data: any }) => {
+          update: async ({ data }: { data: DuplicateDeckUpdate }) => {
             updatedData.push(data);
             return { id: "copy-doc" };
           },
@@ -220,11 +263,11 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
   );
 
   assert.deepEqual(result, { id: "copy-doc" });
-  const createData = createdData[0] as any;
+  const createData = createdData[0]!;
   const newBid = createData.contentJson.root.children[0].bid;
   assert.notEqual(newBid, "old-bid");
   assert.equal(createData.visuals.create[0].anchorBlockId, newBid);
-  const deckUpdate = updatedData[0] as any;
+  const deckUpdate = updatedData[0]!;
   assert.equal(
     deckUpdate.deckJson.slides[0].elements[0].source.documentId,
     "copy-doc",

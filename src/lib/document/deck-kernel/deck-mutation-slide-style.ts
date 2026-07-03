@@ -1,19 +1,27 @@
-import type { Deck } from "./deck-core";
+import type {
+  ColorRef,
+  Deck,
+  Slide,
+  SlideBackgroundDesign,
+  SlideDesignOverrides,
+} from "./deck-core";
 import { mapSlide } from "./deck-mutation-shared";
 
 function setSlideBackgroundOverride(
-  slide: Record<string, any>,
-  background: Record<string, unknown> | undefined,
+  slide: Slide,
+  background: SlideBackgroundDesign | undefined,
 ) {
   return setSlideDesignOverride(slide, "background", background);
 }
 
 function setSlideDesignOverride(
-  slide: Record<string, any>,
+  slide: Slide,
   key: string,
-  value: Record<string, unknown> | undefined,
+  value: SlideDesignOverrides[string] | undefined,
 ) {
-  const designOverrides = { ...(slide.designOverrides ?? {}) };
+  const designOverrides: SlideDesignOverrides = {
+    ...(slide.designOverrides ?? {}),
+  };
   if (value === undefined) {
     delete designOverrides[key];
   } else {
@@ -36,11 +44,11 @@ export function setSlideBackground(
 ): Deck {
   return mapSlide(deck, index, (slide) => {
     return setSlideBackgroundOverride(
-      slide as Record<string, any>,
+      slide,
       background === undefined
         ? undefined
         : { type: "solid", color: { value: background } },
-    ) as typeof slide;
+    );
   });
 }
 
@@ -52,10 +60,10 @@ export function setSlideAccent(
 ): Deck {
   return mapSlide(deck, index, (slide) => {
     return setSlideDesignOverride(
-      slide as Record<string, any>,
+      slide,
       "accent",
-      accent === undefined ? undefined : { value: accent },
-    ) as typeof slide;
+      accent === undefined ? undefined : ({ value: accent } satisfies ColorRef),
+    );
   });
 }
 
@@ -70,7 +78,7 @@ export function setSlideBackgroundGradient(
 ): Deck {
   return mapSlide(deck, index, (slide) => {
     return setSlideBackgroundOverride(
-      slide as Record<string, any>,
+      slide,
       gradient === undefined
         ? undefined
         : {
@@ -79,7 +87,7 @@ export function setSlideBackgroundGradient(
             to: { value: gradient.to },
             ...(gradient.angle !== undefined ? { angle: gradient.angle } : {}),
           },
-    ) as typeof slide;
+    );
   });
 }
 
@@ -94,9 +102,9 @@ export function setSlideBackgroundImage(
 ): Deck {
   return mapSlide(deck, index, (slide) => {
     return setSlideBackgroundOverride(
-      slide as Record<string, any>,
+      slide,
       image === undefined ? undefined : { type: "image", url: image },
-    ) as typeof slide;
+    );
   });
 }
 
@@ -114,10 +122,10 @@ export function setSlideBackgroundAsset(
 ): Deck {
   return mapSlide(deck, index, (slide) => {
     return setSlideBackgroundOverride(
-      slide as Record<string, any>,
+      slide,
       opts === undefined
         ? undefined
         : { type: "image", url: opts.url, assetId: opts.assetId },
-    ) as typeof slide;
+    );
   });
 }

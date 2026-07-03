@@ -9,18 +9,18 @@ import type { SlideFormat } from "@/lib/document/deck-kernel/slide-format";
  * the built-in token set is visible immediately.
  */
 export function setPresentationTheme(deck: Deck, themeId: string): Deck {
-  const design = { ...((deck as any).design ?? {}), themeId };
-  delete (design as { themeOverrides?: unknown }).themeOverrides;
-  return { ...deck, design } as Deck;
+  const design = { ...(deck.design ?? {}), themeId };
+  delete design.themeOverrides;
+  return { ...deck, design };
 }
 
 /** Changes the deck-wide slide format. */
 export function setDeckSlideFormat(deck: Deck, slideFormat: SlideFormat): Deck {
-  const current = (deck as any).canvas?.format;
+  const current = deck.canvas?.format;
   return current === slideFormat
     ? deck
-    : ({
+    : {
         ...deck,
-        canvas: { ...((deck as any).canvas ?? {}), format: slideFormat },
-      } as Deck);
+        canvas: { ...(deck.canvas ?? {}), format: slideFormat },
+      };
 }

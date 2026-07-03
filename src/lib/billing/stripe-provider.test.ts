@@ -66,7 +66,7 @@ function stubObjectMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -130,7 +130,7 @@ describe("StripeBillingProvider local plan guards", () => {
 
     const result = await provider.changePlan(
       "user-stripe",
-      "enterprise" as any,
+      "enterprise" as never,
     );
 
     assert.deepEqual(result, {
@@ -163,7 +163,9 @@ describe("StripeBillingProvider local plan guards", () => {
       "upsert",
       async () => ({}),
     );
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(prisma));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (tx: typeof prisma) => unknown)(prisma),
+    );
     const provider = new StripeBillingProvider();
 
     const result = await provider.cancelSubscription("user-local-downgrade");
@@ -181,7 +183,9 @@ describe("StripeBillingProvider local plan guards", () => {
     stubObjectMethod(t, prisma.subscription, "findUnique", async () => null);
     stubObjectMethod(t, prisma.user, "update", async () => ({}));
     stubObjectMethod(t, prisma.subscription, "upsert", async () => ({}));
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(prisma));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (tx: typeof prisma) => unknown)(prisma),
+    );
     const provider = new StripeBillingProvider();
 
     const result = await provider.changePlan("user-free", "free");
@@ -271,7 +275,10 @@ describe("StripeBillingProvider local plan guards", () => {
     assert.equal(customerCalls.length, 1);
     assert.equal(upsert.calls.length, 1);
     assert.equal(sessionCalls.length, 1);
-    assert.equal((sessionCalls[0] as any).line_items[0].price, "price_plus");
+    const plusSession = sessionCalls[0] as {
+      line_items: Array<{ price: string }>;
+    };
+    assert.equal(plusSession.line_items[0]?.price, "price_plus");
   });
 
   it("reuses an existing Stripe customer for paid checkout", async (t) => {
@@ -324,8 +331,12 @@ describe("StripeBillingProvider local plan guards", () => {
     assert.equal(result.success, true);
     assert.equal(result.redirectUrl, undefined);
     assert.equal(customerCalls.length, 0);
-    assert.equal((sessionCalls[0] as any).customer, "cus_existing");
-    assert.equal((sessionCalls[0] as any).line_items[0].price, "price_pro");
+    const proSession = sessionCalls[0] as {
+      customer: string;
+      line_items: Array<{ price: string }>;
+    };
+    assert.equal(proSession.customer, "cus_existing");
+    assert.equal(proSession.line_items[0]?.price, "price_pro");
   });
 
   it("requires Stripe customer creation to return an id", async (t) => {
@@ -693,8 +704,8 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
       process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
       const client = makeWebhookClient();
       client._events.add("evt_duplicate");
-      stubObjectMethod(t, prisma, "$transaction", async (fn: any) =>
-        client.$transaction(fn),
+      stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+        client.$transaction(fn as Parameters<typeof client.$transaction>[0]),
       );
       setStripeLoaderForTesting(async () => ({
         customers: {
@@ -743,8 +754,8 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
         stripeSubscriptionId: "sub_123",
         currentPeriodEnd: new Date("2026-08-01T00:00:00.000Z"),
       });
-      stubObjectMethod(t, prisma, "$transaction", async (fn: any) =>
-        client.$transaction(fn),
+      stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+        client.$transaction(fn as Parameters<typeof client.$transaction>[0]),
       );
       setStripeLoaderForTesting(async () => ({
         customers: {
@@ -792,8 +803,8 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
     it("returns ok after applying a valid webhook event", async (t) => {
       process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
       const client = makeWebhookClient();
-      stubObjectMethod(t, prisma, "$transaction", async (fn: any) =>
-        client.$transaction(fn),
+      stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+        client.$transaction(fn as Parameters<typeof client.$transaction>[0]),
       );
       setStripeLoaderForTesting(async () => ({
         customers: {

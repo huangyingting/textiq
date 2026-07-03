@@ -13,6 +13,14 @@ import type {
 
 type TestDeck = { title: string };
 
+function timerHandle(handle: number): AutosaveTimerHandle {
+  return handle as unknown as AutosaveTimerHandle;
+}
+
+function manualTimerHandle(handle: AutosaveTimerHandle): number {
+  return handle as unknown as number;
+}
+
 function createManualTimer() {
   let nextHandle = 1;
   const callbacks = new Map<number, () => void>();
@@ -23,10 +31,10 @@ function createManualTimer() {
       const handle = nextHandle++;
       callbacks.set(handle, callback);
       delays.push(delayMs);
-      return handle as unknown as AutosaveTimerHandle;
+      return timerHandle(handle);
     },
     clear(handle): void {
-      const id = handle as unknown as number;
+      const id = manualTimerHandle(handle);
       cleared.push(id);
       callbacks.delete(id);
     },

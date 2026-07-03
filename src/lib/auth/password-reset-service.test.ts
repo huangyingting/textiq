@@ -16,10 +16,16 @@ import {
 } from "@/lib/auth/reset-token";
 import type { prisma } from "@/lib/prisma";
 
+type PrismaClient = typeof prisma;
+
+function asPrismaClient<T extends object>(client: T): T & PrismaClient {
+  return client as T & PrismaClient;
+}
+
 function makeClient(user: { id: string; email: string } | null) {
   const tokens: Array<{ userId: string; tokenHash: string; expiresAt: Date }> =
     [];
-  return {
+  return asPrismaClient({
     user: {
       findUnique() {
         return Promise.resolve(user);
@@ -36,9 +42,7 @@ function makeClient(user: { id: string; email: string } | null) {
       },
     },
     _tokens: tokens,
-  } as unknown as typeof prisma & {
-    _tokens: Array<{ userId: string; tokenHash: string; expiresAt: Date }>;
-  };
+  });
 }
 
 function makeResetClient(rawToken: string) {
@@ -100,7 +104,7 @@ function makeResetClient(rawToken: string) {
     },
     _passwordHashes: passwordHashes,
   };
-  return client as unknown as typeof prisma & { _passwordHashes: string[] };
+  return asPrismaClient(client);
 }
 
 test("requestPasswordResetForEmail preserves anti-enumeration for unknown accounts", async () => {
@@ -175,20 +179,20 @@ test("requestPasswordResetForEmail stores only a hash and sends the raw-token UR
 
 test("requestPasswordResetForEmail validates email and preserves generic response on storage errors", async () => {
   assert.deepEqual(
-    await requestPasswordResetForEmail("not-an-email", {} as typeof prisma),
+    await requestPasswordResetForEmail("not-an-email", asPrismaClient({})),
     { status: "error", message: "Enter a valid email address." },
   );
 
   const originalError = console.error;
   console.error = () => {};
   try {
-    const client = {
+    const client = asPrismaClient({
       user: {
         findUnique: async () => {
           throw new Error("database unavailable");
         },
       },
-    } as unknown as typeof prisma;
+    });
     assert.deepEqual(
       await requestPasswordResetForEmail("ada@example.com", client),
       {
@@ -253,7 +257,7 @@ test("resetPasswordWithToken rejects missing, unknown, expired, and invalid repl
         newPassword: "new-password",
         confirmPassword: "new-password",
       },
-      {} as typeof prisma,
+      asPrismaClient({}),
     ),
     {
       status: "error",
@@ -270,11 +274,11 @@ test("resetPasswordWithToken rejects missing, unknown, expired, and invalid repl
       usedAt: Date | null;
     } | null,
   ) =>
-    ({
+    asPrismaClient({
       passwordResetToken: {
         findUnique: async () => record,
       },
-    }) as unknown as typeof prisma;
+    });
 
   assert.deepEqual(
     await resetPasswordWithToken(
@@ -330,13 +334,13 @@ test("resetPasswordWithToken rejects missing, unknown, expired, and invalid repl
 test("resetPasswordWithToken returns a generic error when storage throws", async () => {
   const originalError = console.error;
   console.error = () => {};
-  const client = {
+  const client = asPrismaClient({
     passwordResetToken: {
       findUnique: async () => {
         throw new Error("database unavailable");
       },
     },
-  } as unknown as typeof prisma;
+  });
 
   try {
     assert.deepEqual(

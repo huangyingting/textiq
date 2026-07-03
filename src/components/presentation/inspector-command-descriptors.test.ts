@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
-import type { Deck, SlideNode } from "@/lib/presentation/schema";
+import type {
+  Deck,
+  SlideChildNode,
+  SlideNode,
+} from "@/lib/presentation/schema";
 import {
   buildDeck,
   buildImageNode,
@@ -26,13 +30,21 @@ const textNode = {
   content: { paragraphs: [{ id: "p", text: "Hello" }] },
 } as const;
 
+function slideFixture(value: unknown): SlideNode {
+  return value as unknown as SlideNode;
+}
+
+function slideChildFixture(value: unknown): SlideChildNode {
+  return value as unknown as SlideChildNode;
+}
+
 function baseDeck(): Deck {
-  const slide = {
+  const slide = slideFixture({
     id: "slide-a",
     type: "slide",
     template: { kind: "blank" },
     children: [textNode],
-  } as unknown as SlideNode;
+  });
   return {
     schemaVersion: 7,
     canvas: { format: "16:9", width: 16, height: 9, unit: "percent" },
@@ -138,14 +150,9 @@ function diagnostic(
 
 describe("inspector command descriptors", () => {
   test("derive style bindings outside the editor shell", () => {
-    assert.deepEqual(
-      defaultStyleBindingForNode(
-        textNode as unknown as import("@/lib/presentation/schema").SlideChildNode,
-      ),
-      {
-        ref: "text.title",
-      },
-    );
+    assert.deepEqual(defaultStyleBindingForNode(slideChildFixture(textNode)), {
+      ref: "text.title",
+    });
   });
 
   test("clamp inspector layout updates before dispatching editor commands", () => {

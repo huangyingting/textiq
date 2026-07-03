@@ -15,7 +15,7 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ) {
   const original = object[methodName];
   Object.defineProperty(object, methodName, {

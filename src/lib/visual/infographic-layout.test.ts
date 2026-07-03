@@ -23,6 +23,10 @@ import {
 // Test-fixture helpers
 // ---------------------------------------------------------------------------
 
+function visualFixture(value: unknown): Visual {
+  return value as unknown as Visual;
+}
+
 function textBlock(
   blockType: "paragraph" | "heading" | "quote" | "listitem" | "hr",
   text: string,
@@ -41,13 +45,13 @@ function visualBlock(visualId: string): DocumentBlock {
   return {
     kind: "visual",
     visualId,
-    visual: {
+    visual: visualFixture({
       version: 1,
       type: "flowchart",
       nodes: [],
       edges: [],
       style: {},
-    } as unknown as Visual,
+    }),
   };
 }
 

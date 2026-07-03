@@ -1,40 +1,21 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, normalize, relative, sep } from "node:path";
+import { dirname, join, normalize } from "node:path";
 import process from "node:process";
+import {
+  lineAndColumn,
+  scanRepositoryRoots,
+  shouldScanSourceFile,
+  toPosix,
+} from "./source-scan-utils.mjs";
 
 const SCAN_ROOTS = ["src/components", "src/lib"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const IMPORT_RE =
   /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s*)?["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 
-function extensionOf(filePath) {
-  const index = filePath.lastIndexOf(".");
-  return index === -1 ? "" : filePath.slice(index);
-}
-
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
-
 function shouldScanFile(filePath) {
-  const normalized = toPosix(filePath);
-  if (!SOURCE_EXTENSIONS.has(extensionOf(normalized))) {
-    return false;
-  }
-  return (
-    !normalized.includes("/node_modules/") && !normalized.includes("/.next/")
-  );
-}
-
-function lineAndColumn(text, index) {
-  const before = text.slice(0, index);
-  const lines = before.split(/\r?\n/);
-  return {
-    lineNumber: lines.length,
-    columnNumber: lines[lines.length - 1].length + 1,
-  };
+  return shouldScanSourceFile(filePath, SOURCE_EXTENSIONS);
 }
 
 function resolveImport(filePath, specifier) {
@@ -99,36 +80,14 @@ export function scanText(filePath, text) {
   return findings;
 }
 
-function walkFiles(root) {
-  const files = [];
-  const entries = readdirSync(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-    } else if (entry.isFile()) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
 export function scanActionPorts(repoRoot = process.cwd()) {
-  const findings = [];
-  for (const root of SCAN_ROOTS) {
-    const absoluteRoot = join(repoRoot, root);
-    if (!statSync(absoluteRoot, { throwIfNoEntry: false })?.isDirectory()) {
-      continue;
-    }
-    for (const absolutePath of walkFiles(absoluteRoot)) {
-      const filePath = toPosix(relative(repoRoot, absolutePath));
-      if (!shouldScanFile(filePath)) {
-        continue;
-      }
-      findings.push(...scanText(filePath, readFileSync(absolutePath, "utf8")));
-    }
-  }
-  return findings;
+  return scanRepositoryRoots({
+    repoRoot,
+    roots: SCAN_ROOTS,
+    sourceExtensions: SOURCE_EXTENSIONS,
+    scanText,
+    shouldScanFile,
+  });
 }
 
 function main() {

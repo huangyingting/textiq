@@ -90,9 +90,16 @@ const PACKAGE_SOURCE_BY_ID = {
   pulse: pulsePackageJson,
 } as const satisfies Record<ThemePackageId, unknown>;
 
+function packageDeckSource(source: unknown): PackageDeckSource {
+  return source as unknown as PackageDeckSource;
+}
+
+function previewSlide(slide: unknown): Slide {
+  return slide as unknown as Slide;
+}
+
 const PACKAGE_SOURCES: PackageDeckSource[] = THEME_PACKAGE_IDS.map(
-  (packageId) =>
-    PACKAGE_SOURCE_BY_ID[packageId] as unknown as PackageDeckSource,
+  (packageId) => packageDeckSource(PACKAGE_SOURCE_BY_ID[packageId]),
 );
 
 function clone<T>(value: T): T {
@@ -225,7 +232,7 @@ export function themePackageTemplatesForDeck(deck: Deck): SlideTemplate[] {
 }
 
 export function slideFromThemePackageTemplate(template: SlideTemplate): Slide {
-  return {
+  return previewSlide({
     id: `preview-${template.id.replace(/[^a-z0-9-]+/gi, "-")}`,
     index: 0,
     title: template.name,
@@ -256,7 +263,7 @@ export function slideFromThemePackageTemplate(template: SlideTemplate): Slide {
         : {}),
       ...(typeof element.name === "string" ? { name: element.name } : {}),
     })),
-  } as unknown as Slide;
+  });
 }
 
 export function previewDeckForThemePackage(
@@ -285,15 +292,15 @@ export function applyThemePackage(deck: Deck, packageId: string): Deck | null {
     ),
     ...clone(themePackage.templates),
   ];
-  const slides = deck.slides.map(
-    (slide) =>
-      ({ ...slide, masterId: themePackage.defaultMasterId }) as typeof slide,
-  );
+  const slides = deck.slides.map((slide) => ({
+    ...slide,
+    masterId: themePackage.defaultMasterId,
+  }));
 
   return {
     ...deck,
     design: {
-      ...((deck as any).design ?? {}),
+      ...(deck.design ?? {}),
       themeId: themePackage.id,
       themeOverrides: { tokenSet: clone(themePackage.tokenSet) },
     },
@@ -301,5 +308,5 @@ export function applyThemePackage(deck: Deck, packageId: string): Deck | null {
     defaultMasterId: themePackage.defaultMasterId,
     customTemplates,
     slides,
-  } as Deck;
+  };
 }

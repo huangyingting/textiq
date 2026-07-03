@@ -26,6 +26,10 @@ import {
   slideAnchorToRecord,
   validateAnchorGeometry,
 } from "@/lib/comments";
+
+function invalidCoordinate(value: unknown): number {
+  return value as unknown as number;
+}
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
@@ -129,7 +133,7 @@ test("anchor parse: validateAnchorGeometry rejects coordinates outside 0-100", (
 
 test("anchor parse: validateAnchorGeometry rejects non-numeric coordinates", () => {
   assert.throws(() =>
-    validateAnchorGeometry({ x: "25" as unknown as number, y: 50 }),
+    validateAnchorGeometry({ x: invalidCoordinate("25"), y: 50 }),
   );
 });
 

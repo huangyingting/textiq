@@ -17,6 +17,17 @@ import {
 
 const SECRET = "rate-limit-test-secret-0987654321";
 
+type InstrumentedRateLimitStore = RateLimitStore & {
+  getAtomicCalls(): number;
+  getCount(): number;
+};
+
+function instrumentedRateLimitStore(
+  value: unknown,
+): InstrumentedRateLimitStore {
+  return value as unknown as InstrumentedRateLimitStore;
+}
+
 function headers(init: Record<string, string>): Headers {
   return new Headers(init);
 }
@@ -206,7 +217,7 @@ function createAtomicFakeStore(opts: {
   let resetAt = opts.initialResetAt ?? 0;
   let atomicCalls = 0;
 
-  const store = {
+  const store = instrumentedRateLimitStore({
     async get(key: string) {
       void key;
       if (!resetAt) return undefined;
@@ -243,10 +254,7 @@ function createAtomicFakeStore(opts: {
     },
     getAtomicCalls: () => atomicCalls,
     getCount: () => count,
-  } as unknown as RateLimitStore & {
-    getAtomicCalls(): number;
-    getCount(): number;
-  };
+  });
 
   return store;
 }

@@ -12,19 +12,33 @@ import { comparePassword, hashPassword } from "@/lib/auth/password";
 type CredentialAuthClient = NonNullable<
   Parameters<typeof authorizeCredentialsUser>[1]
 >;
+type CredentialsWriteClient = Parameters<typeof registerCredentialsUser>[1];
+type CredentialsWriteClientWithUpdates = CredentialsWriteClient & {
+  _updates: Array<{ id: string; passwordHash: string }>;
+};
+
+function credentialAuthStub(value: unknown): CredentialAuthClient {
+  return value as unknown as CredentialAuthClient;
+}
+
+function credentialsWriteStub(
+  value: unknown,
+): CredentialsWriteClientWithUpdates {
+  return value as unknown as CredentialsWriteClientWithUpdates;
+}
 
 function credentialClient(
   user: (AuthorizedCredentialsUser & { passwordHash: string | null }) | null,
   observedEmails: string[] = [],
 ): CredentialAuthClient {
-  return {
+  return credentialAuthStub({
     user: {
       findUnique: async ({ where }: { where: { email: string } }) => {
         observedEmails.push(where.email);
         return user;
       },
     },
-  } as unknown as CredentialAuthClient;
+  });
 }
 
 test("authorizeCredentialsUser normalizes email and returns the DB user on password match", async () => {
@@ -97,15 +111,13 @@ test("authorizeCredentialsUser rejects missing credentials, missing hashes, and 
   );
 });
 
-type CredentialsWriteClient = Parameters<typeof registerCredentialsUser>[1];
-
 function credentialsWriteClient(options: {
   existing?: unknown;
   createError?: Error;
   passwordHash?: string | null;
-}) {
+}): CredentialsWriteClientWithUpdates {
   const updates: Array<{ id: string; passwordHash: string }> = [];
-  const client = {
+  const client = credentialsWriteStub({
     user: {
       findUnique: async ({
         where,
@@ -132,9 +144,7 @@ function credentialsWriteClient(options: {
         return {};
       },
     },
-  } as unknown as CredentialsWriteClient & {
-    _updates: Array<{ id: string; passwordHash: string }>;
-  };
+  });
   client._updates = updates;
   return client;
 }

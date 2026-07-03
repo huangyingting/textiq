@@ -30,7 +30,7 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -49,6 +49,12 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
     });
   });
   return { calls };
+}
+
+function firstCallArg<T>(stub: { calls: unknown[][] }): T {
+  const arg = stub.calls[0]?.[0];
+  assert.ok(arg, "expected stub to record at least one call");
+  return arg as T;
 }
 
 /** A workspace document owned by OWNER, in a workspace owned by WS_OWNER. */
@@ -314,7 +320,7 @@ test("getDocumentCapabilities returns none when the document is absent", async (
   const result = await getDocumentCapabilities("user-1", "missing-doc");
 
   assert.deepEqual(result, { ...capabilitiesForRole("none"), document: null });
-  assert.deepEqual((findUnique.calls[0]![0] as any).where, {
+  assert.deepEqual(firstCallArg<{ where: { id: string } }>(findUnique).where, {
     id: "missing-doc",
   });
 });
@@ -342,8 +348,9 @@ test("getDocumentCapabilities hides soft-deleted rows unless requested", async (
 });
 
 test("requireDocumentCapability returns identity on success and typed denial on missing document", async (t) => {
-  stubPrismaMethod(t, prisma.document, "findUnique", async ({ where }: any) =>
-    where.id === "doc-1"
+  stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
+    const { where } = args as { where: { id: string } };
+    return where.id === "doc-1"
       ? {
           id: "doc-1",
           ownerId: "user-1",
@@ -351,8 +358,8 @@ test("requireDocumentCapability returns identity on success and typed denial on 
           deletedAt: null,
           workspace: null,
         }
-      : null,
-  );
+      : null;
+  });
 
   const allowed = await requireDocumentCapability("user-1", "doc-1", "manage");
   assert.deepEqual(allowed.document, {

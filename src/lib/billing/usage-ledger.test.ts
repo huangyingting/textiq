@@ -30,6 +30,12 @@ interface LedgerRow {
   refundedAt: Date | null;
 }
 
+type PrismaClient = typeof import("@/lib/prisma").prisma;
+
+function asPrismaClient(client: unknown): PrismaClient {
+  return client as PrismaClient;
+}
+
 function makeFakeClient(initialRows: LedgerRow[] = []) {
   const store = new Map<string, LedgerRow>(
     initialRows.map((r) => [r.idempotencyKey, r]),
@@ -136,7 +142,7 @@ describe("reserveUsage (#481)", () => {
       userId: "user-a",
       operation: "generate",
       creditCost: 5,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(entry.idempotencyKey, "req-001");
@@ -155,14 +161,14 @@ describe("reserveUsage (#481)", () => {
       userId: "user-b",
       operation: "generate",
       creditCost: 3,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
     const second = await reserveUsage({
       idempotencyKey: "req-002",
       userId: "user-b",
       operation: "generate",
       creditCost: 3,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(first.id, second.id);
@@ -194,7 +200,7 @@ describe("captureUsage (#481)", () => {
       idempotencyKey: key,
       userId: "user-c",
       creditCost: 4,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(entry.status, "captured");
@@ -220,7 +226,7 @@ describe("captureUsage (#481)", () => {
       idempotencyKey: key,
       userId: "user-d",
       creditCost: 3,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(client.getBalance(), 10); // unchanged — no second deduction
@@ -235,7 +241,7 @@ describe("captureUsage (#481)", () => {
           idempotencyKey: "nonexistent",
           userId: "user-x",
           creditCost: 1,
-          client: client as unknown as typeof import("@/lib/prisma").prisma,
+          client: asPrismaClient(client),
         }),
       /no ledger entry found/,
     );
@@ -259,7 +265,7 @@ describe("captureUsage (#481)", () => {
       idempotencyKey: key,
       userId: "user-e",
       creditCost: 0,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(entry.status, "captured");
@@ -288,7 +294,7 @@ describe("refundUsage (#481)", () => {
     const client = makeFakeClient([row]);
     const result = await refundUsage({
       idempotencyKey: key,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.ok(result);
@@ -300,7 +306,7 @@ describe("refundUsage (#481)", () => {
     const client = makeFakeClient();
     const result = await refundUsage({
       idempotencyKey: "ghost-key",
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
 
     assert.equal(result, null);
@@ -321,7 +327,7 @@ describe("Usage ledger full lifecycle reserve→capture (#481)", () => {
       userId: "user-g",
       operation: "generate",
       creditCost: 7,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
     assert.equal(client.getBalance(), 20); // not yet deducted
 
@@ -329,7 +335,7 @@ describe("Usage ledger full lifecycle reserve→capture (#481)", () => {
       idempotencyKey: key,
       userId: "user-g",
       creditCost: 7,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
     assert.equal(client.getBalance(), 13); // deducted on capture
   });
@@ -343,13 +349,13 @@ describe("Usage ledger full lifecycle reserve→capture (#481)", () => {
       userId: "user-h",
       operation: "generate",
       creditCost: 6,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
     assert.equal(client.getBalance(), 15); // not deducted
 
     await refundUsage({
       idempotencyKey: key,
-      client: client as unknown as typeof import("@/lib/prisma").prisma,
+      client: asPrismaClient(client),
     });
     assert.equal(client.getBalance(), 15); // still unchanged
   });

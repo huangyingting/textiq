@@ -13,7 +13,7 @@ function stubObjectMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -137,13 +137,16 @@ describe("metered usage credit and ledger paths", () => {
         t,
         prisma.usageLedgerEntry,
         "create",
-        async ({ data }: any) => ({
-          id: "ledger-reserved",
-          ...data,
-          reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-          capturedAt: null,
-          refundedAt: null,
-        }),
+        async (args) => {
+          const { data } = args as { data: Record<string, unknown> };
+          return {
+            id: "ledger-reserved",
+            ...data,
+            reservedAt: new Date("2026-01-01T00:00:00.000Z"),
+            capturedAt: null,
+            refundedAt: null,
+          };
+        },
       );
 
       const result = await reserveMeteredUsage({
@@ -210,17 +213,20 @@ describe("metered usage credit and ledger paths", () => {
       t,
       prisma.usageLedgerEntry,
       "update",
-      async ({ data }: any) => ({
-        id: "ledger-entry",
-        idempotencyKey: "usage-capture",
-        userId: "user-metered",
-        operation: "deck-generation",
-        creditCost: 2,
-        status: data.status,
-        reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-        capturedAt: data.capturedAt,
-        refundedAt: null,
-      }),
+      async (args) => {
+        const { data } = args as { data: Record<string, unknown> };
+        return {
+          id: "ledger-entry",
+          idempotencyKey: "usage-capture",
+          userId: "user-metered",
+          operation: "deck-generation",
+          creditCost: 2,
+          status: data.status,
+          reservedAt: new Date("2026-01-01T00:00:00.000Z"),
+          capturedAt: data.capturedAt,
+          refundedAt: null,
+        };
+      },
     );
 
     const result = await captureMeteredUsage({
@@ -258,17 +264,20 @@ describe("metered usage credit and ledger paths", () => {
       t,
       prisma.usageLedgerEntry,
       "update",
-      async ({ data }: any) => ({
-        id: "ledger-entry",
-        idempotencyKey: "usage-refund",
-        userId: "user-metered",
-        operation: "deck-generation",
-        creditCost: 2,
-        status: data.status,
-        reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-        capturedAt: null,
-        refundedAt: data.refundedAt,
-      }),
+      async (args) => {
+        const { data } = args as { data: Record<string, unknown> };
+        return {
+          id: "ledger-entry",
+          idempotencyKey: "usage-refund",
+          userId: "user-metered",
+          operation: "deck-generation",
+          creditCost: 2,
+          status: data.status,
+          reservedAt: new Date("2026-01-01T00:00:00.000Z"),
+          capturedAt: null,
+          refundedAt: data.refundedAt,
+        };
+      },
     );
 
     await refundMeteredUsage({

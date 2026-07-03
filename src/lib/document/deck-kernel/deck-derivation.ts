@@ -17,8 +17,11 @@ import { makeElementId, makeSlideId } from "./deck-ids";
 import type {
   ElementAlign,
   SlideElement,
+  Paragraph,
+  TextElement,
   TextElementStyle,
   TextRun,
+  VisualElement,
 } from "./deck-elements";
 import type { SourceRef } from "./deck-source-refs";
 import { hashDocumentBlock } from "./document-block-hash";
@@ -179,13 +182,13 @@ function textStyle(
 function buildTextElement(input: {
   role: PresentationRole;
   text: string;
-  paragraphs: Array<Record<string, unknown>>;
+  paragraphs: Paragraph[];
   runs?: TextRun[];
   source?: SourceRef;
   zIndex: number;
   box: { x: number; y: number; w: number; h: number };
   style: TextElementStyle;
-}): SlideElement {
+}): TextElement {
   return {
     id: makeElementId(),
     kind: "text",
@@ -200,7 +203,7 @@ function buildTextElement(input: {
     },
     ...(input.source ? { source: input.source } : {}),
     designOverrides: { textStyle: input.style },
-  } as unknown as SlideElement;
+  };
 }
 
 function buildVisualContentElement(input: {
@@ -208,7 +211,7 @@ function buildVisualContentElement(input: {
   source?: SourceRef;
   zIndex: number;
   box: { x: number; y: number; w: number; h: number };
-}): SlideElement {
+}): VisualElement {
   return {
     id: makeElementId(),
     kind: "visual",
@@ -217,7 +220,7 @@ function buildVisualContentElement(input: {
     zIndex: input.zIndex,
     content: { kind: "visual", visualId: input.visualId },
     ...(input.source ? { source: input.source } : {}),
-  } as unknown as SlideElement;
+  };
 }
 
 /** Builds positioned v6 slide elements from document-derived slide content. */
@@ -357,7 +360,7 @@ function finaliseSlide(builder: SlideBuilder, index: number): Slide {
     ...(templateId !== "blank" ? { templateId } : {}),
     ...(sectionId !== undefined ? { source: { sectionId } } : {}),
     elements: buildSlideElementsFromContent(content),
-  } as unknown as Slide;
+  };
 }
 
 /**
@@ -480,7 +483,7 @@ export function buildDeckFromBlocks(
       title: "",
       notes: "",
       elements: [],
-    } as unknown as Slide);
+    });
   }
 
   return {
@@ -490,5 +493,5 @@ export function buildDeckFromBlocks(
     masters: [{ id: "master-default", name: "Default", elements: [] }],
     defaultMasterId: "master-default",
     slides,
-  } as unknown as Deck;
+  };
 }

@@ -8,6 +8,10 @@ import {
   TABBABLE_SELECTOR,
 } from "./focus-helpers";
 
+function testElement(element: unknown): Element {
+  return element as unknown as Element;
+}
+
 // ---------------------------------------------------------------------------
 // nextFocusIndex
 // ---------------------------------------------------------------------------
@@ -60,8 +64,8 @@ test("nextFocusIndex: backward from -1 (no current focus) wraps to last", () => 
 // ---------------------------------------------------------------------------
 
 test("getTabbableElements: returns elements matching TABBABLE_SELECTOR", () => {
-  const button = { tagName: "BUTTON" } as unknown as Element;
-  const input = { tagName: "INPUT" } as unknown as Element;
+  const button = testElement({ tagName: "BUTTON" });
+  const input = testElement({ tagName: "INPUT" });
   const mockContainer = {
     querySelectorAll: (selector: string) => {
       assert.equal(selector, TABBABLE_SELECTOR);

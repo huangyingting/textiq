@@ -38,6 +38,10 @@ function fail(
   return { ok: false, error, failure: { code, retryable } };
 }
 
+function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue;
+}
+
 export async function writeDeckWithCas({
   documentId,
   deckJson,
@@ -75,7 +79,7 @@ export async function writeDeckWithCas({
           ? { id: documentId, deckRevisionToken: clientToken }
           : { id: documentId },
       data: {
-        deckJson: parsedData as unknown as Prisma.InputJsonValue,
+        deckJson: toPrismaJsonInput(parsedData),
         deckRevisionToken: newToken,
       },
     });

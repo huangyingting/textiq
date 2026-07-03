@@ -38,10 +38,14 @@ class MockMenuItem {
   removeEventListener(): void {}
 }
 
+function parentNodeFixture(value: unknown): ParentNode {
+  return value as unknown as ParentNode;
+}
+
 function createContainer(items: MockMenuItem[]): ParentNode {
-  return {
+  return parentNodeFixture({
     querySelectorAll: () => items,
-  } as unknown as ParentNode;
+  });
 }
 
 describe("menu command semantics helpers", () => {

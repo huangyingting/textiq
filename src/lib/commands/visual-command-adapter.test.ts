@@ -26,6 +26,11 @@ import {
 
 const VISUAL_ID = "vis-adapter-1";
 const DOC_ID = "doc-1";
+type VisualCommandPayload = Parameters<typeof applyVisualCommand>[2];
+
+function malformedVisualPayload(value: unknown): VisualCommandPayload {
+  return value as unknown as VisualCommandPayload;
+}
 
 describe("buildVisualCommand", () => {
   test("builds a valid VisualCommand envelope", () => {
@@ -382,9 +387,13 @@ describe("applyVisualCommand — edge flip/toggle + label commits (#507)", () =>
   test("a malformed edge payload (missing edgeId) is rejected before persistence", () => {
     const visual = createBlankVisual("flowchart");
 
-    const result = applyVisualCommand(visual, VISUAL_ID, {
-      op: "visual.flip_edge",
-    } as unknown as Parameters<typeof applyVisualCommand>[2]);
+    const result = applyVisualCommand(
+      visual,
+      VISUAL_ID,
+      malformedVisualPayload({
+        op: "visual.flip_edge",
+      }),
+    );
 
     assert.ok(!result.ok, "malformed payload should be rejected");
     assert.strictEqual(result.visual, visual);
@@ -427,11 +436,15 @@ describe("applyVisualCommand — failure path", () => {
     const visual = createBlankVisual("flowchart");
 
     // Missing the required `value` field — invalid envelope payload.
-    const result = applyVisualCommand(visual, VISUAL_ID, {
-      op: "visual.set_node_style",
-      nodeId: visual.nodes[0]!.id,
-      field: "color",
-    } as unknown as Parameters<typeof applyVisualCommand>[2]);
+    const result = applyVisualCommand(
+      visual,
+      VISUAL_ID,
+      malformedVisualPayload({
+        op: "visual.set_node_style",
+        nodeId: visual.nodes[0]!.id,
+        field: "color",
+      }),
+    );
 
     assert.ok(!result.ok, "malformed payload should be rejected");
     assert.strictEqual(result.visual, visual);

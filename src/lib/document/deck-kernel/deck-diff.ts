@@ -19,7 +19,12 @@
  */
 
 import type { Deck, Slide } from "./deck-core";
-import { normalizeTextParagraphs } from "./deck-elements";
+import {
+  normalizeTextParagraphs,
+  type ElementFill,
+  type SlideElement,
+  type TextElement,
+} from "./deck-elements";
 import { normalizeTitle } from "./deck-hash";
 import { slideEffectiveTitle } from "./slide-title";
 
@@ -65,28 +70,23 @@ function displayTitle(slide: Slide, index: number): string {
   return effective !== "" ? effective : `Slide ${index + 1}`;
 }
 
-function elementContent(element: any): Record<string, any> {
-  return (element?.content ?? {}) as Record<string, any>;
+function isBulletTextElement(element: SlideElement): element is TextElement {
+  return element.kind === "text" && element.role === "bullet";
 }
 
-function elementRole(element: any): string | undefined {
-  return element?.role;
+function fillValue(fill: ElementFill | undefined): string {
+  return fill !== undefined && "value" in fill ? fill.value : "";
 }
 
 function slideBullets(slide: Slide): string[] {
-  const bullet = (slide.elements ?? []).find(
-    (element) => element.kind === "text" && elementRole(element) === "bullet",
-  );
-  return (elementContent(bullet).paragraphs ?? []).map(
-    (paragraph: any) => paragraph.text ?? "",
-  );
+  const bullet = (slide.elements ?? []).find(isBulletTextElement);
+  return bullet?.content.paragraphs?.map((paragraph) => paragraph.text) ?? [];
 }
 
 function slideVisualIds(slide: Slide): string[] {
   return (slide.elements ?? [])
     .filter((element) => element.kind === "visual")
-    .map((element) => elementContent(element).visualId)
-    .filter((visualId): visualId is string => typeof visualId === "string");
+    .map((element) => element.content.visualId);
 }
 
 function slideTableSignatures(slide: Slide): string[] {
@@ -125,7 +125,7 @@ function slideTableSignatures(slide: Slide): string[] {
 function contentSignature(slide: Slide): string {
   const parts: string[] = [
     `t:${normalizeTitle(slideEffectiveTitle(slide))}`,
-    `l:${(slide as any).templateId ?? "blank"}`,
+    `l:${slide.templateId ?? "blank"}`,
     `b:${slideBullets(slide)
       .map((bullet) => bullet.trim())
       .join("\u0001")}`,
@@ -140,19 +140,15 @@ function contentSignature(slide: Slide): string {
       const text = normalizeTextParagraphs(element)
         .map((paragraph) => paragraph.text.trim())
         .join("\u0001");
-      parts.push(`et:${elementRole(element) ?? ""}:${text}`);
+      parts.push(`et:${element.role ?? ""}:${text}`);
     } else if (element.kind === "visual") {
-      parts.push(`ev:${elementContent(element).visualId}`);
+      parts.push(`ev:${element.content.visualId}`);
     } else if (element.kind === "image") {
-      parts.push(`ei:${(elementContent(element).src ?? "").trim()}`);
+      parts.push(`ei:${(element.content.src ?? "").trim()}`);
     } else if (element.kind === "shape") {
-      const content = elementContent(element);
-      const design = ((element as any).designOverrides ?? {}) as Record<
-        string,
-        any
-      >;
+      const { content, designOverrides } = element;
       parts.push(
-        `es:${content.shape}:${design.fill?.value ?? ""}:${content.text?.trim() ?? ""}`,
+        `es:${content.shape}:${fillValue(designOverrides?.fill)}:${content.text?.trim() ?? ""}`,
       );
     } else if (element.kind === "table") {
       parts.push(

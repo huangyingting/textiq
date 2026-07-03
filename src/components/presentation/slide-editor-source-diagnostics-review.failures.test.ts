@@ -134,20 +134,34 @@ function textContent(deck: Deck, nodeId: string): string {
     .join("\n");
 }
 
+function sourceReviewPanelProps(value: unknown): SourceReviewPanelProps {
+  return value as unknown as SourceReviewPanelProps;
+}
+
+function deckDiagnosticsReviewProps(
+  value: unknown,
+): DeckDiagnosticsReviewProps {
+  return value as unknown as DeckDiagnosticsReviewProps;
+}
+
 function sourcePanelProps(root: ReactNode): SourceReviewPanelProps {
-  return findRequiredElement(
-    root,
-    (element) => element.type === SourceReviewPanel,
-    "Expected source review panel.",
-  ).props as unknown as SourceReviewPanelProps;
+  return sourceReviewPanelProps(
+    findRequiredElement(
+      root,
+      (element) => element.type === SourceReviewPanel,
+      "Expected source review panel.",
+    ).props,
+  );
 }
 
 function diagnosticsReviewProps(root: ReactNode): DeckDiagnosticsReviewProps {
-  return findRequiredElement(
-    root,
-    (element) => element.type === DeckDiagnosticsReview,
-    "Expected deck diagnostics review.",
-  ).props as unknown as DeckDiagnosticsReviewProps;
+  return deckDiagnosticsReviewProps(
+    findRequiredElement(
+      root,
+      (element) => element.type === DeckDiagnosticsReview,
+      "Expected deck diagnostics review.",
+    ).props,
+  );
 }
 
 function clickDiagnosticsReview(root: ReactNode): void {

@@ -12,6 +12,10 @@ import {
   type TemplateEntry,
 } from "@/lib/templates/catalog";
 
+function invalidTemplateContent(value: unknown): string {
+  return value as unknown as string;
+}
+
 test("catalog has at least nine templates including the expected set", () => {
   assert.ok(TEMPLATE_CATALOG.length >= 9);
   const names = TEMPLATE_CATALOG.map((entry) => entry.name);
@@ -126,7 +130,7 @@ test("assertTemplateCatalogCompleteness rejects invalid injected catalogs", () =
 
     entries.splice(0, entries.length, {
       ...blank,
-      content: 123 as unknown as string,
+      content: invalidTemplateContent(123),
     });
     assert.throws(
       () => assertTemplateCatalogCompleteness(),

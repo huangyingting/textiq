@@ -24,6 +24,7 @@
  */
 
 import type { Deck, Slide } from "./deck-core";
+import type { TableElement, TextElement, VisualElement } from "./deck-elements";
 import { fnv1aHash32 } from "./fnv-hash";
 
 /** Normalizes a title for matching/hashing: trimmed and lower-cased. */
@@ -38,42 +39,26 @@ export function normalizeTitle(title: string): string {
  * intentionally excluded so manual deck editing never shifts the signature.
  */
 function slideContentSignature(slide: Slide): string {
-  const elements = (slide.elements ?? []) as unknown as Array<
-    Record<string, unknown>
-  >;
+  const elements = slide.elements ?? [];
   const bullets = elements
-    .filter((element) => element.kind === "text" && element.role === "bullet")
-    .flatMap((element) => {
-      const content = element.content as
-        | { paragraphs?: Array<{ text?: string }> }
-        | undefined;
-      return (content?.paragraphs ?? []).map(
-        (paragraph) => paragraph.text ?? "",
-      );
-    });
+    .filter(
+      (element): element is TextElement =>
+        element.kind === "text" && element.role === "bullet",
+    )
+    .flatMap((element) =>
+      (element.content.paragraphs ?? []).map((paragraph) => paragraph.text),
+    );
   /* node:coverage disable */
   /* Visual id extraction is covered by deck-hash.test.ts; tsx maps optional content rows as residual. */
   const visualRefs = elements
-    .filter((element) => element.kind === "visual")
-    .map((element) => {
-      const content = element.content as { visualId?: string } | undefined;
-      return content?.visualId ?? "";
-    })
+    .filter((element): element is VisualElement => element.kind === "visual")
+    .map((element) => element.content.visualId ?? "")
     .filter((visualId) => visualId.length > 0);
   /* node:coverage enable */
   const tableRefs = elements
-    .filter((element) => element.kind === "table")
+    .filter((element): element is TableElement => element.kind === "table")
     .map((element) => {
-      const content = element.content as
-        | {
-            columns?: Array<{ label?: string }>;
-            rows?: Array<{
-              cells?: Array<{ text?: string; runs?: unknown[] }>;
-            }>;
-            header?: boolean;
-            caption?: string;
-          }
-        | undefined;
+      const content = element.content;
       const columns = (content?.columns ?? [])
         .map((column) => column.label?.trim() ?? "")
         .join("\u0001");
@@ -98,7 +83,7 @@ function slideContentSignature(slide: Slide): string {
     });
   const parts = [
     `t:${slide.title.trim()}`,
-    `template:${(slide as any).templateId ?? "blank"}`,
+    `template:${slide.templateId ?? "blank"}`,
     `b:${bullets.map((bullet) => bullet.trim()).join("\u0001")}`,
     `v:${visualRefs.join("\u0001")}`,
     `tb:${tableRefs.join("\u0001")}`,
@@ -112,7 +97,7 @@ function slideContentSignature(slide: Slide): string {
  * every slide's {@link slideContentSignature}, in order.
  */
 export function deckContentSignature(deck: Deck): string {
-  const themeId = (deck as any).design?.themeId ?? "";
+  const themeId = deck.design?.themeId ?? "";
   return [`theme:${themeId}`, ...deck.slides.map(slideContentSignature)].join(
     "\u0003",
   );

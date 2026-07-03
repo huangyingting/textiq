@@ -19,6 +19,10 @@ function commandId(suffix: string): string {
   return `20000000-0000-4000-8000-${suffix.padStart(12, "0")}`;
 }
 
+function invalidSlideCommand(value: unknown): SlideCommand {
+  return value as unknown as SlideCommand;
+}
+
 function makeVisualCommand(
   overrides: Partial<VisualCommand> = {},
 ): VisualCommand {
@@ -307,7 +311,7 @@ test("validateDeckCommand rejects unsupported slide payload types", () => {
 
   const result = validateDeckCommand(
     makeDeckCommand({
-      payload: { type: "BOGUS" } as unknown as SlideCommand,
+      payload: invalidSlideCommand({ type: "BOGUS" }),
     }),
     ctx,
   );

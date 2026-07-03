@@ -12,6 +12,10 @@ import {
   type NodeMovePreview,
 } from "./stage-gesture-feedback";
 
+function nodeMovePreviewFixture(value: unknown): NodeMovePreview {
+  return value as unknown as NodeMovePreview;
+}
+
 describe("createNodeMovePreview", () => {
   test("keeps node drag press-pending under the click-move threshold", () => {
     const preview = createNodeMovePreview({
@@ -249,10 +253,12 @@ describe("createNodeMovePreview", () => {
       null,
     );
     assert.equal(
-      nodeMoveGestureDrafts({
-        patches: new Map([["node-a", { name: "ignored" }]]),
-        guides: [],
-      } as unknown as NodeMovePreview),
+      nodeMoveGestureDrafts(
+        nodeMovePreviewFixture({
+          patches: new Map([["node-a", { name: "ignored" }]]),
+          guides: [],
+        }),
+      ),
       null,
     );
   });

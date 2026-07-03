@@ -28,6 +28,15 @@ export type BackgroundFamilyCommand =
   | SetSlideBackgroundAssetCommand
   | SetSlideAccentCommand;
 
+type SlideFieldPatch = NonNullable<DeckPatch["slideFields"]>[string];
+
+function slideDesignFields(
+  slideId: string,
+  designOverrides: SlideFieldPatch["designOverrides"],
+): DeckPatch["slideFields"] {
+  return { [slideId]: { designOverrides } };
+}
+
 export function executeBackgroundFamilyCommand(
   deck: Deck,
   cmd: BackgroundFamilyCommand,
@@ -38,17 +47,13 @@ export function executeBackgroundFamilyCommand(
       if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const fields: DeckPatch["slideFields"] =
         cmd.background !== undefined
-          ? {
-              [cmd.slideId]: {
-                designOverrides: {
-                  background: {
-                    type: "solid",
-                    color: { value: cmd.background },
-                  },
-                },
-              } as any,
-            }
-          : { [cmd.slideId]: { designOverrides: {} } as any };
+          ? slideDesignFields(cmd.slideId, {
+              background: {
+                type: "solid",
+                color: { value: cmd.background },
+              },
+            })
+          : slideDesignFields(cmd.slideId, {});
       return success(
         setSlideBackground(deck, index, cmd.background),
         [cmd.slideId],
@@ -66,21 +71,17 @@ export function executeBackgroundFamilyCommand(
       if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const fields: DeckPatch["slideFields"] =
         cmd.gradient !== undefined
-          ? {
-              [cmd.slideId]: {
-                designOverrides: {
-                  background: {
-                    type: "gradient",
-                    from: { value: cmd.gradient.from },
-                    to: { value: cmd.gradient.to },
-                    ...(cmd.gradient.angle !== undefined
-                      ? { angle: cmd.gradient.angle }
-                      : {}),
-                  },
-                },
-              } as any,
-            }
-          : { [cmd.slideId]: { designOverrides: {} } as any };
+          ? slideDesignFields(cmd.slideId, {
+              background: {
+                type: "gradient",
+                from: { value: cmd.gradient.from },
+                to: { value: cmd.gradient.to },
+                ...(cmd.gradient.angle !== undefined
+                  ? { angle: cmd.gradient.angle }
+                  : {}),
+              },
+            })
+          : slideDesignFields(cmd.slideId, {});
       return success(
         setSlideBackgroundGradient(deck, index, cmd.gradient),
         [cmd.slideId],
@@ -98,14 +99,10 @@ export function executeBackgroundFamilyCommand(
       if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const fields: DeckPatch["slideFields"] =
         cmd.image !== undefined
-          ? {
-              [cmd.slideId]: {
-                designOverrides: {
-                  background: { type: "image", url: cmd.image },
-                },
-              } as any,
-            }
-          : { [cmd.slideId]: { designOverrides: {} } as any };
+          ? slideDesignFields(cmd.slideId, {
+              background: { type: "image", url: cmd.image },
+            })
+          : slideDesignFields(cmd.slideId, {});
       return success(
         setSlideBackgroundImage(deck, index, cmd.image),
         [cmd.slideId],
@@ -122,18 +119,14 @@ export function executeBackgroundFamilyCommand(
       const index = findSlideIndex(deck, cmd.slideId);
       if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const fields: DeckPatch["slideFields"] = cmd.opts
-        ? {
-            [cmd.slideId]: {
-              designOverrides: {
-                background: {
-                  type: "image",
-                  url: cmd.opts.url,
-                  assetId: cmd.opts.assetId,
-                },
-              },
-            } as any,
-          }
-        : { [cmd.slideId]: { designOverrides: {} } as any };
+        ? slideDesignFields(cmd.slideId, {
+            background: {
+              type: "image",
+              url: cmd.opts.url,
+              assetId: cmd.opts.assetId,
+            },
+          })
+        : slideDesignFields(cmd.slideId, {});
       return success(
         setSlideBackgroundAsset(deck, index, cmd.opts),
         [cmd.slideId],
@@ -151,12 +144,8 @@ export function executeBackgroundFamilyCommand(
       if (index === -1) return failure(deck, `Slide not found: ${cmd.slideId}`);
       const fields: DeckPatch["slideFields"] =
         cmd.accent !== undefined
-          ? {
-              [cmd.slideId]: {
-                designOverrides: { accent: { value: cmd.accent } },
-              } as any,
-            }
-          : { [cmd.slideId]: { designOverrides: {} } as any };
+          ? slideDesignFields(cmd.slideId, { accent: { value: cmd.accent } })
+          : slideDesignFields(cmd.slideId, {});
       return success(
         setSlideAccent(deck, index, cmd.accent),
         [cmd.slideId],

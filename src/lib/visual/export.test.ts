@@ -22,6 +22,22 @@ const ORIGINALS = {
 const BASE_SVG =
   '<svg viewBox="0 0 100 50" width="100" height="50"><rect width="100" height="50" fill="#fff"/><circle cx="50" cy="25" r="10"/></svg>';
 
+function canvasContext(context: unknown): CanvasRenderingContext2D {
+  return context as unknown as CanvasRenderingContext2D;
+}
+
+function imageConstructor(image: unknown): typeof Image {
+  return image as unknown as typeof Image;
+}
+
+function fileReaderConstructor(fileReader: unknown): typeof FileReader {
+  return fileReader as unknown as typeof FileReader;
+}
+
+function browserDocument(document: unknown): Document {
+  return document as unknown as Document;
+}
+
 function svgElement(width = 100, height = 50): SVGSVGElement {
   return {
     viewBox: { baseVal: { width, height } },
@@ -47,7 +63,7 @@ function installBrowserStubs(
   };
   const context =
     options.context === undefined
-      ? ({
+      ? canvasContext({
           scale: (x: number, y: number) => calls.scaled.push([x, y]),
           drawImage: (
             _image: unknown,
@@ -56,7 +72,7 @@ function installBrowserStubs(
             w: number,
             h: number,
           ) => calls.drawn.push([x, y, w, h]),
-        } as unknown as CanvasRenderingContext2D)
+        })
       : options.context;
 
   globalThis.XMLSerializer = class {
@@ -65,34 +81,38 @@ function installBrowserStubs(
     }
   } as typeof XMLSerializer;
 
-  globalThis.Image = class {
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
+  globalThis.Image = imageConstructor(
+    class {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
 
-    set src(_value: string) {
-      queueMicrotask(() => {
-        if (options.imageError) {
-          this.onerror?.();
-        } else {
-          this.onload?.();
-        }
-      });
-    }
-  } as unknown as typeof Image;
+      set src(_value: string) {
+        queueMicrotask(() => {
+          if (options.imageError) {
+            this.onerror?.();
+          } else {
+            this.onload?.();
+          }
+        });
+      }
+    },
+  );
 
-  globalThis.FileReader = class {
-    result: string | ArrayBuffer | null = null;
-    onloadend: (() => void) | null = null;
+  globalThis.FileReader = fileReaderConstructor(
+    class {
+      result: string | ArrayBuffer | null = null;
+      onloadend: (() => void) | null = null;
 
-    readAsDataURL(_blob: Blob) {
-      this.result =
-        "data:image/png;base64," +
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      queueMicrotask(() => this.onloadend?.());
-    }
-  } as unknown as typeof FileReader;
+      readAsDataURL(_blob: Blob) {
+        this.result =
+          "data:image/png;base64," +
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        queueMicrotask(() => this.onloadend?.());
+      }
+    },
+  );
 
-  globalThis.document = {
+  globalThis.document = browserDocument({
     createElement(tag: string) {
       if (tag === "canvas") {
         return {
@@ -115,7 +135,7 @@ function installBrowserStubs(
       appendChild: () => calls.appended++,
       removeChild: () => calls.removed++,
     },
-  } as unknown as Document;
+  });
 
   URL.createObjectURL = (blob: Blob | MediaSource) => {
     if (blob instanceof Blob) {

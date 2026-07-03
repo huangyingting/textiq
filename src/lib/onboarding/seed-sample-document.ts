@@ -46,6 +46,10 @@ TextIQ keeps writing, visual thinking, and deck creation in one flow. You can dr
 
 Edit this document, add another heading, or change the table. The editable visual below is attached to the document, so you can select it, restyle it, regenerate it, or use it as source material for a deck.`;
 
+function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue;
+}
+
 /**
  * Seeds a single first-run sample document (with one pre-attached visual) for a
  * brand-new user.
@@ -76,18 +80,16 @@ export async function seedSampleDocument(userId: string): Promise<void> {
       data: {
         title: SAMPLE_DOCUMENT_TITLE,
         content: SAMPLE_DOCUMENT_CONTENT,
-        contentJson: buildSeedContentJson(
-          SAMPLE_DOCUMENT_CONTENT,
-          sampleVisual,
-          visualId,
-        ) as unknown as Prisma.InputJsonValue,
+        contentJson: toPrismaJsonInput(
+          buildSeedContentJson(SAMPLE_DOCUMENT_CONTENT, sampleVisual, visualId),
+        ),
         ownerId: userId,
         visuals: {
           create: {
             anchorBlockId: visualId,
             type: VISUAL_KIND_TO_PRISMA[sampleVisual.type],
             title: sampleVisual.title ?? null,
-            data: sampleVisual as unknown as Prisma.InputJsonValue,
+            data: toPrismaJsonInput(sampleVisual),
           },
         },
       },

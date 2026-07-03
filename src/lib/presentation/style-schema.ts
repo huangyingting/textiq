@@ -278,10 +278,10 @@ export function resolveToken(
   path: TokenPath,
 ): string | number | ShadowStyle | undefined {
   const parts = path.split(".");
-  let cursor: any = tokens;
+  let cursor: unknown = tokens;
   for (const part of parts) {
     if (cursor === null || typeof cursor !== "object") return undefined;
-    cursor = cursor[part];
+    cursor = (cursor as Record<string, unknown>)[part];
   }
   return cursor as string | number | ShadowStyle | undefined;
 }

@@ -7,13 +7,10 @@ import {
   allowedSccs,
   facadeRules,
 } from "./import-graph-allowlist.mjs";
+import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs"];
 const SOURCE_ROOTS = ["src"];
-
-function toPosix(filePath) {
-  return filePath.split(path.sep).join("/");
-}
 
 function normalizeRelative(rootDir, filePath) {
   return toPosix(path.relative(rootDir, filePath));

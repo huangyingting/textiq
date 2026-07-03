@@ -106,8 +106,7 @@ function presentationRoleToPresentationRole(
 function elementTextStyleOverride(
   element: TextBearingElementLike,
 ): Partial<TextElementStyle> | undefined {
-  const raw = element as any;
-  return raw.designOverrides?.textStyle;
+  return element.designOverrides?.textStyle;
 }
 
 /**

@@ -19,6 +19,10 @@ import {
 } from "./schema-telemetry";
 import { REDACTED } from "@/lib/log";
 
+function stringRecord(value: unknown): Record<string, string> {
+  return value as unknown as Record<string, string>;
+}
+
 describe("buildSchemaDiagnostic", () => {
   test("keeps the category and safe identifiers", () => {
     const record = buildSchemaDiagnostic("deck-parse-failed", {
@@ -57,11 +61,14 @@ describe("buildSchemaDiagnostic", () => {
   });
 
   test("drops non-scalar values that could embed content", () => {
-    const record = buildSchemaDiagnostic("deck-parse-failed", {
-      documentId: "doc-1",
-      nested: { text: "leak" },
-      list: ["leak"],
-    } as unknown as Record<string, string>);
+    const record = buildSchemaDiagnostic(
+      "deck-parse-failed",
+      stringRecord({
+        documentId: "doc-1",
+        nested: { text: "leak" },
+        list: ["leak"],
+      }),
+    );
     const serialized = JSON.stringify(record);
     assert.ok(!serialized.includes("leak"));
     assert.equal(record.documentId, "doc-1");

@@ -26,6 +26,14 @@ type ElementLike = ReactElement<Record<string, unknown>>;
 type Listener = (event: Record<string, unknown>) => void;
 type ComponentResolver = (props: Record<string, unknown>) => ReactNode;
 
+function listenerEvent(event: unknown): Record<string, unknown> {
+  return event as unknown as Record<string, unknown>;
+}
+
+function testHTMLElement(element: unknown): HTMLElement {
+  return element as unknown as HTMLElement;
+}
+
 const originalDocument = Object.getOwnPropertyDescriptor(
   globalThis,
   "document",
@@ -147,7 +155,7 @@ function installDom() {
       removeListener(documentListeners, type, listener),
     dispatchEvent: (event: { type: string }) => {
       for (const listener of documentListeners.get(event.type) ?? []) {
-        listener(event as unknown as Record<string, unknown>);
+        listener(listenerEvent(event));
       }
       return true;
     },
@@ -611,7 +619,7 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
           onClose: () => closed.push("floating"),
           position: { top: 900, left: -20 },
           "aria-label": "Floating actions",
-          clickAwayIgnoreRef: { current: triggerRef as unknown as HTMLElement },
+          clickAwayIgnoreRef: { current: testHTMLElement(triggerRef) },
           keepSelection: true,
           children: "Floating content",
         }),

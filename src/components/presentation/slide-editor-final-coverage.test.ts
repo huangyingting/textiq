@@ -24,6 +24,14 @@ import {
 import { createServerRenderHarness } from "@/test/react-server-renderer";
 import { SlideEditor, type SlideEditorProps } from "./slide-editor";
 
+type DispatchingWindow = {
+  dispatch: (type: string, event: Record<string, unknown>) => void;
+};
+
+function dispatchingWindow(value: unknown): DispatchingWindow {
+  return value as unknown as DispatchingWindow;
+}
+
 type ElementProps = Record<string, unknown>;
 type FakeListener = (event: Record<string, unknown>) => void;
 
@@ -141,9 +149,7 @@ function installBrowserGlobals({ desktop = false, syncTimers = false } = {}) {
   browserGlobals.define("clearTimeout", fakeClearTimeout);
 
   return {
-    window: globalRef.window as unknown as {
-      dispatch: (type: string, event: Record<string, unknown>) => void;
-    },
+    window: dispatchingWindow(globalRef.window),
     restore: browserGlobals.restore,
   };
 }

@@ -16,6 +16,16 @@ import {
   VisualNodeRendererProvider,
 } from "@/lib/lexical/visual-node";
 
+type BuiltVisual = ReturnType<typeof buildVisual>;
+
+function invalidVisual(value: unknown): BuiltVisual {
+  return value as unknown as BuiltVisual;
+}
+
+function mockDocument(value: unknown): Document {
+  return value as unknown as Document;
+}
+
 function makeEditor() {
   return createHeadlessEditor({
     namespace: "visual-node-test",
@@ -96,9 +106,7 @@ test("generates a stable id when none is provided", () => {
 test("preserves an invalid payload through round-trip and flags it as invalid", () => {
   // The node stores whatever payload it is given; rendering uses safeParseVisual
   // to degrade gracefully, so a malformed visual must not break serialization.
-  const broken = { not: "a visual" } as unknown as ReturnType<
-    typeof buildVisual
-  >;
+  const broken = invalidVisual({ not: "a visual" });
 
   const editor = makeEditor();
   editor.update(
@@ -257,32 +265,33 @@ test("visual id generation falls back when randomUUID is unavailable", () => {
 
 function withDocumentStub(run: () => void): void {
   const originalDocument = globalThis.document;
-  (globalThis as typeof globalThis & { document: Document }).document = {
-    createElement(tagName: string) {
-      const attributes = new Map<string, string>();
-      const classNames: string[] = [];
-      const element = {
-        tagName: tagName.toUpperCase(),
-        className: "",
-        classList: {
-          add(...names: string[]) {
-            classNames.push(...names);
-            element.className = classNames.join(" ");
+  (globalThis as typeof globalThis & { document: Document }).document =
+    mockDocument({
+      createElement(tagName: string) {
+        const attributes = new Map<string, string>();
+        const classNames: string[] = [];
+        const element = {
+          tagName: tagName.toUpperCase(),
+          className: "",
+          classList: {
+            add(...names: string[]) {
+              classNames.push(...names);
+              element.className = classNames.join(" ");
+            },
           },
-        },
-        setAttribute(name: string, value: string) {
-          attributes.set(name, value);
-        },
-        getAttribute(name: string) {
-          return attributes.get(name) ?? null;
-        },
-        hasAttribute(name: string) {
-          return attributes.has(name);
-        },
-      };
-      return element;
-    },
-  } as unknown as Document;
+          setAttribute(name: string, value: string) {
+            attributes.set(name, value);
+          },
+          getAttribute(name: string) {
+            return attributes.get(name) ?? null;
+          },
+          hasAttribute(name: string) {
+            return attributes.has(name);
+          },
+        };
+        return element;
+      },
+    });
   try {
     run();
   } finally {

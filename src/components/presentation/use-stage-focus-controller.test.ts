@@ -8,7 +8,17 @@ import {
   focusStageNode,
 } from "./use-stage-focus-controller";
 
-const deck = {
+type StageFocusRegistry = Parameters<typeof focusStageNode>[0];
+
+function deckFixture(value: unknown): Deck {
+  return value as unknown as Deck;
+}
+
+function stageFocusRegistry(value: unknown): StageFocusRegistry {
+  return value as unknown as StageFocusRegistry;
+}
+
+const deck = deckFixture({
   schemaVersion: 7,
   canvas: { format: "16:9", width: 16, height: 9, unit: "percent" },
   theme: { packageId: "neutral" },
@@ -41,7 +51,7 @@ const deck = {
       children: [],
     },
   ],
-} as unknown as Deck;
+});
 
 describe("findSlideIndexForFocus", () => {
   test("finds nested group children before falling back to slide ids", () => {
@@ -57,11 +67,11 @@ describe("findSlideIndexForFocus", () => {
 test("focusStageNode delegates to the focus geometry registry target", () => {
   const focused: unknown[] = [];
   focusStageNode(
-    {
+    stageFocusRegistry({
       focus: (target: unknown) => {
         focused.push(target);
       },
-    } as unknown as Parameters<typeof focusStageNode>[0],
+    }),
     "node-1",
   );
 

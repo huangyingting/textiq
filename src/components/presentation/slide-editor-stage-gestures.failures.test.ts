@@ -20,6 +20,10 @@ import {
   withPointerWindow,
 } from "./slide-editor-failure-test-utils";
 
+function reactPointerEvent(event: object): React.PointerEvent {
+  return event as React.PointerEvent;
+}
+
 describe("SlideEditor stage gesture failures", () => {
   test("moving a node shows the live position badge", () => {
     withMockHTMLElement((createElement) =>
@@ -71,20 +75,23 @@ describe("SlideEditor stage gesture failures", () => {
           },
         });
 
-        onNodePointerDown("badge-move-node", {
-          button: 0,
-          pointerId: 1,
-          clientX: 200,
-          clientY: 200,
-          shiftKey: false,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: false,
-          target: currentTarget,
-          currentTarget,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as React.PointerEvent);
+        onNodePointerDown(
+          "badge-move-node",
+          reactPointerEvent({
+            button: 0,
+            pointerId: 1,
+            clientX: 200,
+            clientY: 200,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
         listeners.get("pointermove")?.({
           clientX: 250,
           clientY: 220,
@@ -150,20 +157,23 @@ describe("SlideEditor stage gesture failures", () => {
             '[data-slide-canvas="true"]': canvasElement,
           },
         });
-        nodePointerDownFrom(tree)("preselected-over", {
-          button: 0,
-          pointerId: 1,
-          clientX: 250,
-          clientY: 250,
-          shiftKey: false,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: false,
-          target: currentTarget,
-          currentTarget,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as React.PointerEvent);
+        nodePointerDownFrom(tree)(
+          "preselected-over",
+          reactPointerEvent({
+            button: 0,
+            pointerId: 1,
+            clientX: 250,
+            clientY: 250,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
         listeners.get("pointermove")?.({
           clientX: 350,
           clientY: 250,
@@ -239,20 +249,23 @@ describe("SlideEditor stage gesture failures", () => {
             '[data-slide-canvas="true"]': canvasElement,
           },
         });
-        onNodePointerDown("alt-drag-source", {
-          button: 0,
-          pointerId: 1,
-          clientX: 200,
-          clientY: 200,
-          shiftKey: false,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: true,
-          target: currentTarget,
-          currentTarget,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as React.PointerEvent);
+        onNodePointerDown(
+          "alt-drag-source",
+          reactPointerEvent({
+            button: 0,
+            pointerId: 1,
+            clientX: 200,
+            clientY: 200,
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: true,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
         listeners.get("pointermove")?.({
           clientX: 350,
           clientY: 260,
@@ -355,17 +368,21 @@ describe("SlideEditor stage gesture failures", () => {
           },
         });
 
-        onResizeHandlePointerDown("badge-resize-node", "se", {
-          button: 0,
-          pointerId: 1,
-          clientX: 500,
-          clientY: 320,
-          altKey: false,
-          target: currentTarget,
-          currentTarget,
-          preventDefault: () => undefined,
-          stopPropagation: () => undefined,
-        } as unknown as React.PointerEvent);
+        onResizeHandlePointerDown(
+          "badge-resize-node",
+          "se",
+          reactPointerEvent({
+            button: 0,
+            pointerId: 1,
+            clientX: 500,
+            clientY: 320,
+            altKey: false,
+            target: currentTarget,
+            currentTarget,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          }),
+        );
         listeners.get("pointermove")?.({
           clientX: 550,
           clientY: 350,

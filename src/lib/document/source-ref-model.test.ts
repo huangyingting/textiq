@@ -26,13 +26,21 @@ import { buildDeck } from "@/test/builders/deck";
 const makeDeck = (slides: Slide[]): Deck =>
   buildDeck({ design: { themeId: "indigo" }, slides });
 
+function fixtureSlide(slide: unknown): Slide {
+  return slide as unknown as Slide;
+}
+
+function fixtureDocumentBlock(block: unknown): DocumentBlock {
+  return block as unknown as DocumentBlock;
+}
+
 function makeVisualSlide(
   slideId: string,
   elementId: string,
   visualId: string,
   sourceRef?: SourceRef,
 ): Slide {
-  return {
+  return fixtureSlide({
     id: slideId,
     title: "",
     index: 0,
@@ -47,7 +55,7 @@ function makeVisualSlide(
         ...(sourceRef ? { source: sourceRef } : {}),
       },
     ],
-  } as unknown as Slide;
+  });
 }
 
 function makeTextSlide(
@@ -56,7 +64,7 @@ function makeTextSlide(
   text: string,
   sourceRef?: SourceRef,
 ): Slide {
-  return {
+  return fixtureSlide({
     id: slideId,
     title: "",
     index: 0,
@@ -71,15 +79,15 @@ function makeTextSlide(
         ...(sourceRef ? { source: sourceRef } : {}),
       },
     ],
-  } as unknown as Slide;
+  });
 }
 
 function makeVisualBlock(visualId: string): DocumentBlock {
-  return { kind: "visual", visualId } as unknown as DocumentBlock;
+  return fixtureDocumentBlock({ kind: "visual", visualId });
 }
 
 function makeTextBlock(blockId: string, text: string): DocumentBlock {
-  return { kind: "text", blockId, text, runs: [] } as unknown as DocumentBlock;
+  return fixtureDocumentBlock({ kind: "text", blockId, text, runs: [] });
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +97,12 @@ function makeTextBlock(blockId: string, text: string): DocumentBlock {
 describe("enumerateDeckDependencies", () => {
   test("returns empty array for a deck with no references", () => {
     const deck = makeDeck([
-      {
+      fixtureSlide({
         id: "s1",
         title: "Title",
         index: 0,
         notes: "",
-      } as unknown as Slide,
+      }),
     ]);
     const deps = enumerateDeckDependencies(deck);
     assert.deepEqual(deps, []);
@@ -224,12 +232,12 @@ describe("checkDependencyHealth", () => {
 
   test("returns empty array for a clean deck with no deps", () => {
     const deck = makeDeck([
-      {
+      fixtureSlide({
         id: "s1",
         title: "No refs",
         index: 0,
         notes: "",
-      } as unknown as Slide,
+      }),
     ]);
     const health = checkDependencyHealth(deck, []);
     assert.deepEqual(health, []);
@@ -286,12 +294,12 @@ describe("collectDeckVisualIds", () => {
 
   test("returns empty set for deck with no visual references", () => {
     const deck = makeDeck([
-      {
+      fixtureSlide({
         id: "s1",
         title: "No visuals",
         index: 0,
         notes: "",
-      } as unknown as Slide,
+      }),
     ]);
     const ids = collectDeckVisualIds(deck);
     assert.equal(ids.size, 0);

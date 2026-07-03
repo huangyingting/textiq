@@ -35,17 +35,20 @@ export type VisualKindMeta = {
   keywords: readonly string[];
 };
 
-export const VISUAL_KIND_META = Object.fromEntries(
-  Object.entries(KIND_DISPLAY_METADATA).map(([kind, meta]) => [
-    kind,
-    {
+export const VISUAL_KIND_META = Object.entries(KIND_DISPLAY_METADATA).reduce<
+  Record<VisualKind, VisualKindMeta>
+>(
+  (metadata, [kind, meta]) => ({
+    ...metadata,
+    [kind]: {
       label: meta.label,
       icon: resolveToolIcon(meta.icon as ToolIconName),
       description: meta.description,
       keywords: meta.keywords,
     },
-  ]),
-) as unknown as Record<VisualKind, VisualKindMeta>;
+  }),
+  {} as Record<VisualKind, VisualKindMeta>,
+);
 
 const registry = new Map<string, EditorTool>();
 const order: string[] = [];

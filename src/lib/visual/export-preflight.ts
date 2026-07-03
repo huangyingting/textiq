@@ -157,6 +157,46 @@ export interface PreflightExportPolicy {
   defaultWatermark: boolean;
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+interface ThemeTypographyTokens {
+  fontFamily?: string;
+  headingFontFamily?: string;
+  roles?: Record<string, { fontFamily?: string } | undefined>;
+}
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return Boolean(value && typeof value === "object");
+}
+
+function typographyTokens(deck: Deck): ThemeTypographyTokens | undefined {
+  const tokenSet = isRecord(deck.design?.themeOverrides)
+    ? deck.design.themeOverrides.tokenSet
+    : undefined;
+  const typography = isRecord(tokenSet) ? tokenSet.typography : undefined;
+  if (!isRecord(typography)) return undefined;
+
+  const roles = isRecord(typography.roles)
+    ? Object.fromEntries(
+        Object.entries(typography.roles).flatMap(([role, token]) =>
+          isRecord(token) && typeof token.fontFamily === "string"
+            ? [[role, { fontFamily: token.fontFamily }]]
+            : [],
+        ),
+      )
+    : undefined;
+
+  return {
+    ...(typeof typography.fontFamily === "string"
+      ? { fontFamily: typography.fontFamily }
+      : {}),
+    ...(typeof typography.headingFontFamily === "string"
+      ? { headingFontFamily: typography.headingFontFamily }
+      : {}),
+    ...(roles && Object.keys(roles).length > 0 ? { roles } : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -205,22 +245,16 @@ function primaryFontFamily(fontFamily: string): string {
     .trim();
 }
 
-function elementContent(element: SlideElement): Record<string, any> {
-  const content = (element as any).content;
-  return content && typeof content === "object" ? content : {};
-}
-
-function elementDesign(element: SlideElement): Record<string, any> {
-  const design = (element as any).designOverrides;
-  return design && typeof design === "object" ? design : {};
-}
-
-function imageField<T>(element: ImageElement, field: string): T | undefined {
-  const content = elementContent(element);
-  const design = elementDesign(element);
-  return (content[field] ?? design[field] ?? (element as any)[field]) as
-    | T
-    | undefined;
+function imageField<T>(
+  element: ImageElement,
+  field:
+    | keyof ImageElement["content"]
+    | keyof NonNullable<ImageElement["designOverrides"]>,
+): T | undefined {
+  return (element.content[field as keyof ImageElement["content"]] ??
+    element.designOverrides?.[
+      field as keyof NonNullable<ImageElement["designOverrides"]>
+    ]) as T | undefined;
 }
 
 function resolvePreflightOutputProfile(
@@ -345,20 +379,17 @@ function checkCustomTemplateFonts(
   customFontFamilies: ReadonlySet<string>,
   diagnostics: PreflightDiagnostic[],
 ): void {
-  const typography = ((deck as any).design?.themeOverrides?.tokenSet as any)
-    ?.typography as any;
+  const typography = typographyTokens(deck);
   if (!typography) return;
 
-  const candidates: string[] = [typography.fontFamily];
+  const candidates: string[] = typography.fontFamily
+    ? [typography.fontFamily]
+    : [];
   if (typography.headingFontFamily) {
     candidates.push(typography.headingFontFamily);
   }
   if (typography.roles) {
-    const roleTokens = typography.roles as Record<
-      string,
-      { fontFamily?: string } | undefined
-    >;
-    for (const token of Object.values(roleTokens)) {
+    for (const token of Object.values(typography.roles)) {
       if (token?.fontFamily) candidates.push(token.fontFamily);
     }
   }
@@ -426,7 +457,7 @@ function checkPptxFidelityFeatures(
 ): void {
   // Connector routing — check for elbow connectors.
   for (const el of elements) {
-    if (el.kind === "connector" && elementContent(el).routing === "elbow") {
+    if (el.kind === "connector" && el.content.routing === "elbow") {
       const fidelity = getFidelity("connector-elbow", "pptx");
       if (fidelity === "partial" || fidelity === "degraded") {
         diagnostics.push({
@@ -442,7 +473,7 @@ function checkPptxFidelityFeatures(
   }
 
   // Background gradient.
-  if ((slide as any).designOverrides?.background?.type === "gradient") {
+  if (slide.designOverrides?.background?.type === "gradient") {
     diagnostics.push({
       severity: "warning",
       code: "unsupported-pptx-feature",

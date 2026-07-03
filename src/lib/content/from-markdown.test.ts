@@ -67,7 +67,9 @@ test("converts Markdown pipe tables into Lexical table nodes", () => {
   assert.ok(table.bid);
   assert.equal(table.children.length, 3);
   const headerRow = table.children[0] as {
-    children: Array<{ children: any[] }>;
+    children: Array<{
+      children: Array<{ children: Array<{ text?: string }> }>;
+    }>;
   };
   assert.equal(headerRow.children[0].children[0].children[0].text, "Region");
   assert.equal(headerRow.children[1].children[0].children[0].text, "ARR");

@@ -33,6 +33,10 @@ function editorElement(node: ReactNode): ReactElement {
   return element;
 }
 
+function commandEvent(value: unknown): Event {
+  return value as unknown as Event;
+}
+
 type FakeElement = {
   nodeType: number;
   tagName: string;
@@ -194,7 +198,7 @@ test("InlineTextEditorPresentation commits serialized list content and toolbar a
     ref.current = container;
 
     assert.ok(commandListener);
-    commandListener({ detail: { command: "align-right" } } as unknown as Event);
+    commandListener(commandEvent({ detail: { command: "align-right" } }));
     (element.props as { onBlur: () => void }).onBlur();
 
     assert.equal(commits.length, 1);

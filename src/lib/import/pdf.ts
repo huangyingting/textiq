@@ -16,6 +16,12 @@ import { ImportBudgetError } from "./archive-budget";
 const PDF_MAX_PAGES = 250;
 const PDF_MAX_TEXT_CHARS = 500_000;
 
+type PdfTextResult = {
+  text: string;
+  total?: unknown;
+  totalPages?: unknown;
+};
+
 /**
  * Extracts text from a PDF `Buffer` and returns it as a plain text string.
  * Throws when `pdf-parse` cannot load or read the document.
@@ -23,11 +29,8 @@ const PDF_MAX_TEXT_CHARS = 500_000;
 export async function parsePdf(buffer: Buffer): Promise<string> {
   const parser = new PDFParse({ data: buffer });
   try {
-    const result = await parser.getText();
-    const pageCount = Number(
-      (result as unknown as { total?: unknown; totalPages?: unknown })
-        .totalPages ?? (result as unknown as { total?: unknown }).total,
-    );
+    const result: PdfTextResult = await parser.getText();
+    const pageCount = Number(result.totalPages ?? result.total);
     if (Number.isFinite(pageCount) && pageCount > PDF_MAX_PAGES) {
       throw new ImportBudgetError("PDF contains too many pages.");
     }

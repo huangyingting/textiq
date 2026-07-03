@@ -26,6 +26,10 @@ const ALLOWED_KEYS = new Set([
   "retryAfterSeconds",
 ]);
 
+function routeDenialEvent(value: unknown): RouteDenialEvent {
+  return value as unknown as RouteDenialEvent;
+}
+
 test("buildRouteDenialContext: minimal event carries only safe fields", () => {
   const ctx = buildRouteDenialContext({
     route: "api.generate",
@@ -73,7 +77,7 @@ test("buildRouteDenialContext: every abuse category is a stable string", () => {
 test("buildRouteDenialContext: never emits keys outside the safe allowlist", () => {
   // Even when a caller (via a loosely-typed object) sprinkles content fields,
   // the builder copies ONLY allowlisted keys — no prompt/text/bytes leak.
-  const polluted = {
+  const polluted = routeDenialEvent({
     route: "api.generate-deck",
     reason: ABUSE_CATEGORIES.AI_TIMEOUT,
     status: 504,
@@ -81,7 +85,7 @@ test("buildRouteDenialContext: never emits keys outside the safe allowlist", () 
     text: "raw imported document body",
     bytes: Buffer.from([1, 2, 3]),
     file: "resume.pdf",
-  } as unknown as RouteDenialEvent;
+  });
 
   const ctx = buildRouteDenialContext(polluted);
   for (const key of Object.keys(ctx)) {

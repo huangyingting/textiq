@@ -50,6 +50,10 @@ function normalizeAnchorBlockId(
   return trimmed.slice(0, MAX_ANCHOR_BLOCK_ID_LENGTH);
 }
 
+function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue;
+}
+
 /**
  * Records a snapshot of a visual's current persisted state into
  * `VisualRevision`, then prunes that visual's history to the most recent
@@ -68,7 +72,7 @@ async function snapshotVisualRevision(
   await tx.visualRevision.create({
     data: {
       visualId: previous.id,
-      data: previous.data as unknown as Prisma.InputJsonValue,
+      data: toPrismaJsonInput(previous.data),
       type: previous.type,
       title: previous.title,
     },
@@ -142,7 +146,7 @@ export async function mirrorVisualNodesInTx(
       orderIndex: index,
       type: VISUAL_KIND_TO_PRISMA[visual.type],
       title: visual.title ?? null,
-      data: visual as unknown as Prisma.InputJsonValue,
+      data: toPrismaJsonInput(visual),
       dataKey: JSON.stringify(visual),
     });
   }
@@ -358,7 +362,7 @@ export async function reconcileDeckAfterMirror(
 
     await prisma.document.updateMany({
       where: { id: documentId },
-      data: { deckJson: reconciled as unknown as Prisma.InputJsonValue },
+      data: { deckJson: toPrismaJsonInput(reconciled) },
     });
 
     logInfo("visual.reconcile", "deck reconciled after mirror", {

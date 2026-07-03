@@ -119,6 +119,10 @@ function visit(node: LexicalNode): void {
   }
 }
 
+function patchableNodeClass(nodeClass: unknown): PatchableNodeClass {
+  return nodeClass as unknown as PatchableNodeClass;
+}
+
 /**
  * Installs once-per-runtime prototype patches that preserve `bid` across
  * Lexical clone/import/export cycles while keeping the serialized node types
@@ -129,12 +133,12 @@ export function ensureLexicalBlockIdSupport(): void {
     return;
   }
   supportInstalled = true;
-  patchNodeClass(ParagraphNode as unknown as PatchableNodeClass);
-  patchNodeClass(HeadingNode as unknown as PatchableNodeClass);
-  patchNodeClass(QuoteNode as unknown as PatchableNodeClass);
-  patchNodeClass(ListItemNode as unknown as PatchableNodeClass);
-  patchNodeClass(HorizontalRuleNode as unknown as PatchableNodeClass);
-  patchNodeClass(TableNode as unknown as PatchableNodeClass);
+  patchNodeClass(patchableNodeClass(ParagraphNode));
+  patchNodeClass(patchableNodeClass(HeadingNode));
+  patchNodeClass(patchableNodeClass(QuoteNode));
+  patchNodeClass(patchableNodeClass(ListItemNode));
+  patchNodeClass(patchableNodeClass(HorizontalRuleNode));
+  patchNodeClass(patchableNodeClass(TableNode));
 }
 
 /**

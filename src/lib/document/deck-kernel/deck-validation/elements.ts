@@ -566,10 +566,15 @@ function validateElementSource(
   if (!isPlainObject(input)) {
     throw new DeckValidationError(`${context} must be an object`);
   }
-  return validateSourceRef(input, context) as unknown as Record<
-    string,
-    unknown
-  >;
+  return validatedSourceRecord(validateSourceRef(input, context));
+}
+
+function validatedSourceRecord(source: unknown): Record<string, unknown> {
+  return source as unknown as Record<string, unknown>;
+}
+
+function validatedSlideElement(element: unknown): SlideElement {
+  return element as unknown as SlideElement;
 }
 
 /* node:coverage ignore next 12 */
@@ -1237,7 +1242,7 @@ export function validateElement(input: unknown, context: string): SlideElement {
       `${context}.designOverrides.effect is not supported on line shapes`,
     );
   }
-  return { ...base, content } as unknown as SlideElement;
+  return validatedSlideElement({ ...base, content });
 }
 
 export function validateMasterElement(

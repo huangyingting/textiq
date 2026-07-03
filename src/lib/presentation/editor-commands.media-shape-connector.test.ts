@@ -90,10 +90,11 @@ describe("detachDecoration", () => {
       style,
     );
     const extras = updated.slides[0].children.filter(
-      (n) => (n as any).role === "themeDecoration",
+      (n): n is SlideChildNode & { role: "themeDecoration" } =>
+        n.role === "themeDecoration",
     );
     assert.equal(extras.length, 1);
-    assert.equal((extras[0] as any).type, "shape");
+    assert.equal(extras[0]?.type, "shape");
     assert.deepEqual(updated.theme.overrides?.disabledDecorations, [
       "deco-bg-01",
     ]);

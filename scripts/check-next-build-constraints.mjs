@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
 import process from "node:process";
+import { lineAndColumn, scanRepositoryRoots } from "./source-scan-utils.mjs";
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const NEXT_CONFIG_EXPORTS = new Set([
@@ -14,42 +13,6 @@ const NEXT_CONFIG_EXPORTS = new Set([
   "preferredRegion",
   "maxDuration",
 ]);
-
-function extensionOf(filePath) {
-  const index = filePath.lastIndexOf(".");
-  return index === -1 ? "" : filePath.slice(index);
-}
-
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
-
-function lineAndColumn(text, index) {
-  const before = text.slice(0, index);
-  const lines = before.split(/\r?\n/);
-  return {
-    lineNumber: lines.length,
-    columnNumber: lines[lines.length - 1].length + 1,
-  };
-}
-
-function walkFiles(root) {
-  const files = [];
-  const entries = readdirSync(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-    } else if (entry.isFile()) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function isSourceFile(filePath) {
-  return SOURCE_EXTENSIONS.has(extensionOf(filePath));
-}
 
 function hasUseServerDirective(text) {
   const firstStatement = text
@@ -167,17 +130,12 @@ export function scanText(filePath, text) {
 }
 
 export function scanNextBuildConstraints(repoRoot = process.cwd()) {
-  const findings = [];
-  const srcRoot = join(repoRoot, "src");
-  if (!statSync(srcRoot, { throwIfNoEntry: false })?.isDirectory()) {
-    return findings;
-  }
-  for (const absolutePath of walkFiles(srcRoot)) {
-    const filePath = toPosix(relative(repoRoot, absolutePath));
-    if (!isSourceFile(filePath)) continue;
-    findings.push(...scanText(filePath, readFileSync(absolutePath, "utf8")));
-  }
-  return findings;
+  return scanRepositoryRoots({
+    repoRoot,
+    roots: ["src"],
+    sourceExtensions: SOURCE_EXTENSIONS,
+    scanText,
+  });
 }
 
 function main() {

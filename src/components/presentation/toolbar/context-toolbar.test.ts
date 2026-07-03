@@ -64,6 +64,10 @@ const source = readFileSync(
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
+function toolbarFixtureNode(node: unknown): SlideChildNode {
+  return node as unknown as SlideChildNode;
+}
+
 function expandToolbarTree(
   node: ReactNode,
   collected: ElementLike[] = [],
@@ -1126,7 +1130,7 @@ describe("ContextToolbar render branches", () => {
       renderToolbar({ ...callbacks }),
       renderToolbar({
         selectedIds: ["image-1"],
-        selectedNode: {
+        selectedNode: toolbarFixtureNode({
           id: "image-1",
           type: "image",
           role: "image",
@@ -1136,24 +1140,24 @@ describe("ContextToolbar render branches", () => {
             crop: { top: 1, right: 2, bottom: 3, left: 4 },
             fit: "cover",
           },
-        } as unknown as SlideChildNode,
+        }),
         ...callbacks,
       }),
       renderToolbar({
         selectedIds: ["visual-1"],
-        selectedNode: {
+        selectedNode: toolbarFixtureNode({
           id: "visual-1",
           type: "visual",
           role: "visual",
           layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
           content: { visualId: "visual-1", transparentBackground: false },
           localStyle: { visual: { styleThemeId: "default" } },
-        } as unknown as SlideChildNode,
+        }),
         ...callbacks,
       }),
       renderToolbar({
         selectedIds: ["connector-1"],
-        selectedNode: {
+        selectedNode: toolbarFixtureNode({
           id: "connector-1",
           type: "connector",
           role: "connector",
@@ -1164,12 +1168,12 @@ describe("ContextToolbar render branches", () => {
             routing: "straight",
           },
           localStyle: { connector: { startArrow: "none", endArrow: "arrow" } },
-        } as unknown as SlideChildNode,
+        }),
         ...callbacks,
       }),
       renderToolbar({
         selectedIds: ["table-1"],
-        selectedNode: {
+        selectedNode: toolbarFixtureNode({
           id: "table-1",
           type: "table",
           role: "table",
@@ -1185,18 +1189,18 @@ describe("ContextToolbar render branches", () => {
             ],
             header: false,
           },
-        } as unknown as SlideChildNode,
+        }),
         ...callbacks,
       }),
       renderToolbar({
         selectedIds: ["a", "b", "c"],
-        selectedNode: {
+        selectedNode: toolbarFixtureNode({
           id: "a",
           type: "group",
           role: "group",
           layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 1 },
           children: [],
-        } as unknown as SlideChildNode,
+        }),
         ...callbacks,
       }),
     ];

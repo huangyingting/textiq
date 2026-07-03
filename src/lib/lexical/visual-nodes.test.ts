@@ -5,14 +5,18 @@ import type { Visual } from "@/lib/visual/schema";
 
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 
+function visualFixture(value: unknown): Visual {
+  return value as unknown as Visual;
+}
+
 function visual(id: string): Visual {
-  return {
+  return visualFixture({
     version: 1,
     type: "flowchart",
     nodes: [{ id: `${id}-n1`, label: "Node" }],
     edges: [],
     style: {},
-  } as unknown as Visual;
+  });
 }
 
 function visualNode(visualId: string) {

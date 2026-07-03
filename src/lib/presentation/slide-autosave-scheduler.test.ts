@@ -8,6 +8,14 @@ import {
 } from "./slide-autosave-scheduler";
 import { SLIDE_SAVE_DEBOUNCE_MS } from "./save-status";
 
+function timerHandle(handle: number): AutosaveTimerHandle {
+  return handle as unknown as AutosaveTimerHandle;
+}
+
+function manualTimerHandle(handle: AutosaveTimerHandle): number {
+  return handle as unknown as number;
+}
+
 function createManualTimer() {
   let nextHandle = 1;
   const callbacks = new Map<number, () => void>();
@@ -18,10 +26,10 @@ function createManualTimer() {
       const handle = nextHandle++;
       callbacks.set(handle, callback);
       delays.push(delayMs);
-      return handle as unknown as AutosaveTimerHandle;
+      return timerHandle(handle);
     },
     clear(handle: AutosaveTimerHandle): void {
-      const manualHandle = handle as unknown as number;
+      const manualHandle = manualTimerHandle(handle);
       cleared.push(manualHandle);
       callbacks.delete(manualHandle);
     },

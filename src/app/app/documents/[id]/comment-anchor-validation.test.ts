@@ -13,6 +13,10 @@ import {
   validateSlideId,
 } from "@/lib/comments";
 
+function invalidCoordinate(value: unknown): number {
+  return value as unknown as number;
+}
+
 // ---------------------------------------------------------------------------
 // validateAnchorGeometry
 // ---------------------------------------------------------------------------
@@ -45,14 +49,14 @@ test("validateAnchorGeometry: valid mid-range → returned as-is", () => {
 
 test("validateAnchorGeometry: non-numeric x → throws", () => {
   assert.throws(
-    () => validateAnchorGeometry({ x: "50" as unknown as number, y: 50 }),
+    () => validateAnchorGeometry({ x: invalidCoordinate("50"), y: 50 }),
     /numeric/,
   );
 });
 
 test("validateAnchorGeometry: non-numeric y → throws", () => {
   assert.throws(
-    () => validateAnchorGeometry({ x: 50, y: null as unknown as number }),
+    () => validateAnchorGeometry({ x: 50, y: invalidCoordinate(null) }),
     /numeric/,
   );
 });

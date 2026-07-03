@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join, relative, sep } from "node:path";
 import process from "node:process";
+import {
+  lineAndColumn,
+  scanRepositoryRoots,
+  toPosix,
+} from "./source-scan-utils.mjs";
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const TEST_SIZE_LIMIT = 1_500;
@@ -32,33 +35,6 @@ const RULES = [
 const FACTORY_PATTERN =
   /\b(?:function|const)\s+(makeDeck|makeSlide|textEl|shapeEl)\b/g;
 const ALLOW_MARKER = "e2e-governance-allow";
-
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
-
-function walkFiles(root) {
-  const files = [];
-  const entries = readdirSync(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === ".next") continue;
-      files.push(...walkFiles(fullPath));
-    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(entry.name))) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function lineAndColumn(text, index) {
-  const lines = text.slice(0, index).split(/\r?\n/);
-  return {
-    lineNumber: lines.length,
-    columnNumber: lines[lines.length - 1].length + 1,
-  };
-}
 
 function hasAllowComment(lines, lineNumber, rule) {
   const window = lines.slice(Math.max(0, lineNumber - 3), lineNumber);
@@ -153,19 +129,12 @@ export function scanText(filePath, text) {
 }
 
 export function scanGovernance(repoRoot = process.cwd()) {
-  const roots = ["e2e", "src", "scripts"];
-  const findings = [];
-  for (const root of roots) {
-    const absoluteRoot = join(repoRoot, root);
-    if (!statSync(absoluteRoot, { throwIfNoEntry: false })?.isDirectory()) {
-      continue;
-    }
-    for (const absolutePath of walkFiles(absoluteRoot)) {
-      const filePath = toPosix(relative(repoRoot, absolutePath));
-      findings.push(...scanText(filePath, readFileSync(absolutePath, "utf8")));
-    }
-  }
-  return findings;
+  return scanRepositoryRoots({
+    repoRoot,
+    roots: ["e2e", "src", "scripts"],
+    sourceExtensions: SOURCE_EXTENSIONS,
+    scanText,
+  });
 }
 
 function main() {

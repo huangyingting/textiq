@@ -178,22 +178,26 @@ function setPathValue<T extends object>(
   value: unknown,
 ): T {
   const keys = path.split(".");
-  const root: any = Array.isArray(object)
-    ? [...(object as any)]
-    : { ...object };
-  let cursor = root;
-  let source: any = object;
+  const root = (Array.isArray(object) ? [...object] : { ...object }) as Record<
+    string,
+    unknown
+  >;
+  let cursor: Record<string, unknown> = root;
+  let source: unknown = object;
   for (const key of keys.slice(0, -1)) {
-    const nextSource = source?.[key];
+    const nextSource =
+      source && typeof source === "object"
+        ? (source as Record<string, unknown>)[key]
+        : undefined;
     const nextValue = Array.isArray(nextSource)
       ? [...nextSource]
-      : { ...nextSource };
+      : { ...(nextSource && typeof nextSource === "object" ? nextSource : {}) };
     cursor[key] = nextValue;
-    cursor = nextValue;
+    cursor = nextValue as Record<string, unknown>;
     source = nextSource;
   }
   cursor[keys[keys.length - 1]!] = value;
-  return root;
+  return root as T;
 }
 
 export function updateBrandKitDraft(

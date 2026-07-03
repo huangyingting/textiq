@@ -64,7 +64,7 @@ export function updatePresentationThemeOverrides(
   patch: PresentationThemeOverridesPatch,
 ): Deck {
   const themeId = resolvePresentationThemeId(deck);
-  const existingTokenSet = (deck as any).design?.themeOverrides?.tokenSet as
+  const existingTokenSet = deck.design?.themeOverrides?.tokenSet as
     | PresentationTheme
     | undefined;
   const base: PresentationTheme = existingTokenSet ?? {
@@ -110,13 +110,14 @@ export function updatePresentationThemeOverrides(
   return {
     ...deck,
     design: {
-      ...((deck as any).design ?? {}),
+      themeId,
+      ...(deck.design ?? {}),
       themeOverrides: {
-        ...((deck as any).design?.themeOverrides ?? {}),
+        ...(deck.design?.themeOverrides ?? {}),
         tokenSet: next,
       },
     },
-  } as Deck;
+  };
 }
 
 /**
@@ -124,19 +125,22 @@ export function updatePresentationThemeOverrides(
  * built-in theme (#612 "reset to theme"). Returns a new deck (immutable).
  */
 export function resetPresentationThemeOverrides(deck: Deck): Deck {
-  const design = { ...((deck as any).design ?? {}) };
+  const design = {
+    themeId: resolvePresentationThemeId(deck),
+    ...(deck.design ?? {}),
+  };
   const themeOverrides = { ...(design.themeOverrides ?? {}) };
   if (!("tokenSet" in themeOverrides)) return deck;
-  delete (themeOverrides as { tokenSet?: unknown }).tokenSet;
+  delete themeOverrides.tokenSet;
   const packageTheme =
     typeof design.themeId === "string" ? getThemePackage(design.themeId) : null;
   if (packageTheme) {
     themeOverrides.tokenSet = packageTheme.tokenSet;
   }
   if (Object.keys(themeOverrides).length === 0) {
-    delete (design as { themeOverrides?: unknown }).themeOverrides;
+    delete design.themeOverrides;
   } else {
     design.themeOverrides = themeOverrides;
   }
-  return { ...deck, design } as Deck;
+  return { ...deck, design };
 }

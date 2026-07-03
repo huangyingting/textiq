@@ -22,7 +22,15 @@ import {
   buildVisualNode,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
-import type { SlideChildNode, SlideNode } from "@/lib/presentation/schema";
+import type {
+  LayoutBox,
+  SlideChildNode,
+  SlideNode,
+} from "@/lib/presentation/schema";
+
+function invalidLayoutBox(value: unknown): LayoutBox {
+  return value as unknown as LayoutBox;
+}
 
 function makeSlideWithZIndices(zIndices: number[]): SlideNode {
   resetBuilderCounter();
@@ -679,8 +687,7 @@ describe("resolveDeckRenderTree", () => {
     const slide = buildCoverSlide();
     const noLayoutNode = {
       ...buildTextNode({ id: "no-layout-node" }),
-      layout:
-        undefined as unknown as import("@/lib/presentation/schema").LayoutBox,
+      layout: invalidLayoutBox(undefined),
     };
     const badSlide = { ...slide, children: [...slide.children, noLayoutNode] };
     const deck = buildDeck([badSlide]);

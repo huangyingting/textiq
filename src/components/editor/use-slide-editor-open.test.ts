@@ -344,7 +344,7 @@ test("applyAiDeckProposal keeps malformed AI decks in recovery path", () => {
   const aiAppliedDeckRef = { current: null as Deck | null };
 
   applyAiDeckProposal({
-    aiDeck: { invalid: true } as unknown as Deck,
+    aiDeck: invalidDeck({ invalid: true }),
     aiAppliedDeckRef,
     generationDiagnostics: [],
     enterRecovery: () => {
@@ -372,3 +372,6 @@ test("applyAiDeckProposal keeps malformed AI decks in recovery path", () => {
   assert.equal(persistCalls, 0);
   assert.equal(aiAppliedDeckRef.current, null);
 });
+function invalidDeck(value: unknown): Deck {
+  return value as unknown as Deck;
+}

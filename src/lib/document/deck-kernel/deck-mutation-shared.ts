@@ -30,7 +30,7 @@ export function freshBlankSlide(): Slide {
     title: "",
     notes: "",
     elements: [],
-  } as unknown as Slide;
+  };
 }
 
 /** Maps a single slide by index, leaving the rest of the deck untouched. */

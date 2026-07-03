@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ReactElement } from "react";
 
 import {
   Card,
@@ -35,10 +36,27 @@ import {
   cx,
 } from "./tokens";
 
-function childrenOf(element: unknown): any[] {
+function testElement(element: unknown): Element {
+  return element as unknown as Element;
+}
+
+type TestElementProps = {
+  children?: unknown;
+  className?: string;
+  htmlFor?: string;
+  role?: string;
+  [key: string]: unknown;
+};
+
+function childrenOf(element: unknown): unknown[] {
   const children = (element as { props?: { children?: unknown } }).props
     ?.children;
   return Array.isArray(children) ? children : [];
+}
+
+function reactElement(value: unknown): ReactElement<TestElementProps> {
+  assert.ok(value && typeof value === "object" && "props" in value);
+  return value as ReactElement<TestElementProps>;
 }
 
 test("ToolbarButton: composes shared toolbar chrome", () => {
@@ -109,7 +127,9 @@ test("FieldRow: uses label semantics when htmlFor is provided", () => {
     "data-testid": "field-row",
     children: "control",
   } as Parameters<typeof FieldRow>[0] & { "data-testid": string });
-  const [label, control, hint] = childrenOf(element) as any[];
+  const [labelNode, control, hintNode] = childrenOf(element);
+  const label = reactElement(labelNode);
+  const hint = reactElement(hintNode);
 
   assert.equal(label.type, "label");
   assert.match(element.props.className, /custom-row/);
@@ -128,7 +148,9 @@ test("FieldRow: renders span labels, hint, and error for unbound rows", () => {
     error: "Pick a value",
     children: "control",
   });
-  const [label, control, hint, error] = childrenOf(element) as any[];
+  const [labelNode, control, hint, errorNode] = childrenOf(element);
+  const label = reactElement(labelNode);
+  const error = reactElement(errorNode);
 
   assert.equal(label.type, "span");
   assert.equal(control, "control");
@@ -142,8 +164,11 @@ test("FieldRow: renders span labels, hint, and error for unbound rows", () => {
     children: "control",
   });
   const withHintAndErrorChildren = childrenOf(withHintAndError);
-  assert.equal(withHintAndErrorChildren[2].props.children, "Optional");
-  assert.equal(withHintAndErrorChildren[3].props.role, "alert");
+  assert.equal(
+    reactElement(withHintAndErrorChildren[2]).props.children,
+    "Optional",
+  );
+  assert.equal(reactElement(withHintAndErrorChildren[3]).props.role, "alert");
 });
 
 test("FieldRow: omits optional hint and error nodes when unset", () => {
@@ -152,7 +177,8 @@ test("FieldRow: omits optional hint and error nodes when unset", () => {
     htmlFor: "density",
     children: "control",
   });
-  const [label, control, hint, error] = childrenOf(element) as any[];
+  const [labelNode, control, hint, error] = childrenOf(element);
+  const label = reactElement(labelNode);
 
   assert.equal(label.type, "label");
   assert.equal(control, "control");
@@ -247,7 +273,10 @@ test("FormField renders label, hint, and error semantics", () => {
     error: "Required",
     children: "control",
   });
-  const [label, control, hint, error] = childrenOf(element) as any[];
+  const [labelNode, control, hintNode, errorNode] = childrenOf(element);
+  const label = reactElement(labelNode);
+  const hint = reactElement(hintNode);
+  const error = reactElement(errorNode);
 
   assert.equal(label.type, "label");
   assert.equal(label.props.htmlFor, "name");
@@ -290,8 +319,8 @@ test("UI token exports compose stable design-system classes", () => {
 });
 
 test("focus helpers enumerate tabbable elements and wrap tab order", () => {
-  const first = { id: "first" } as unknown as Element;
-  const second = { id: "second" } as unknown as Element;
+  const first = testElement({ id: "first" });
+  const second = testElement({ id: "second" });
   const container = {
     querySelectorAll(selector: string) {
       assert.match(selector, /tabindex/);

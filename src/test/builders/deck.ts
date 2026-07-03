@@ -99,7 +99,7 @@ export function buildTextElement(
           : {}),
       },
     ];
-  return {
+  const element: TextElement = {
     id: overrides.id ?? "text-fixture",
     kind: "text",
     role: overrides.role ?? "body",
@@ -139,7 +139,8 @@ export function buildTextElement(
     ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
     ...(overrides.name !== undefined ? { name: overrides.name } : {}),
     ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
-  } as unknown as TextElement;
+  };
+  return element;
 }
 
 type TextListOverrides = TextElementOverrides & {
@@ -166,7 +167,7 @@ export function buildBulletsElement(
     ...paragraph,
     listType: paragraph.listType ?? ("bullet" as const),
   }));
-  return {
+  const element: TextElement = {
     id: overrides.id ?? "bullets-fixture",
     kind: "text",
     role: overrides.role ?? "bullet",
@@ -200,7 +201,8 @@ export function buildBulletsElement(
     ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
     ...(overrides.name !== undefined ? { name: overrides.name } : {}),
     ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
-  } as unknown as TextElement;
+  };
+  return element;
 }
 
 type VisualElementOverrides = Partial<VisualElement> & {
@@ -220,7 +222,7 @@ export function buildVisualElement(
       : {}),
     ...(overrides.alt !== undefined ? { alt: overrides.alt } : {}),
   };
-  return {
+  const element: VisualElement = {
     id: overrides.id ?? "visual-element-fixture",
     kind: "visual",
     role: overrides.role ?? "visual",
@@ -236,7 +238,8 @@ export function buildVisualElement(
     ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
     ...(overrides.name !== undefined ? { name: overrides.name } : {}),
     ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
-  } as unknown as VisualElement;
+  };
+  return element;
 }
 
 type ImageElementOverrides = Partial<ImageElement> & {
@@ -252,7 +255,7 @@ type ImageElementOverrides = Partial<ImageElement> & {
 export function buildImageElement(
   overrides: ImageElementOverrides = {},
 ): ImageElement {
-  return {
+  const element: ImageElement = {
     id: overrides.id ?? "image-fixture",
     kind: "image",
     role: overrides.role ?? "image",
@@ -286,7 +289,8 @@ export function buildImageElement(
     ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
     ...(overrides.name !== undefined ? { name: overrides.name } : {}),
     ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
-  } as unknown as ImageElement;
+  };
+  return element;
 }
 
 type ShapeElementOverrides = Partial<ShapeElement> & {
@@ -302,7 +306,7 @@ type ShapeElementOverrides = Partial<ShapeElement> & {
 export function buildShapeElement(
   overrides: ShapeElementOverrides = {},
 ): ShapeElement {
-  return {
+  const element: ShapeElement = {
     id: overrides.id ?? "shape-fixture",
     kind: "shape",
     role: overrides.role ?? "label",
@@ -334,7 +338,8 @@ export function buildShapeElement(
     ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
     ...(overrides.name !== undefined ? { name: overrides.name } : {}),
     ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
-  } as unknown as ShapeElement;
+  };
+  return element;
 }
 
 type ConnectorElementOverrides = Partial<ConnectorElement> & {
@@ -350,7 +355,7 @@ type ConnectorElementOverrides = Partial<ConnectorElement> & {
 export function buildConnectorElement(
   overrides: ConnectorElementOverrides = {},
 ): ConnectorElement {
-  return {
+  const element: ConnectorElement = {
     id: overrides.id ?? "connector-fixture",
     kind: "connector",
     zIndex: overrides.zIndex ?? 4,
@@ -375,7 +380,8 @@ export function buildConnectorElement(
     },
     ...(overrides.opacity !== undefined ? { opacity: overrides.opacity } : {}),
     ...(overrides.source !== undefined ? { source: overrides.source } : {}),
-  } as unknown as ConnectorElement;
+  };
+  return element;
 }
 
 export function buildPlaceholderElement(
@@ -399,17 +405,18 @@ type DeckBuilderOverrides = Partial<
   masters?: unknown[];
   slides?: Array<Slide | SlideBuilderOverrides>;
 };
+type DeckDesignOverride = { themeId?: string; themeOverrides?: object };
+type DeckCanvasOverride = { format?: NonNullable<Deck["canvas"]>["format"] };
 
 export function buildSlide(overrides: SlideBuilderOverrides = {}): Slide {
-  const slideOverrides = overrides as any;
   const title = overrides.title ?? "Fixture slide";
   return {
-    ...slideOverrides,
-    id: slideOverrides.id ?? "slide-fixture",
-    index: slideOverrides.index ?? 0,
+    ...overrides,
+    id: overrides.id ?? "slide-fixture",
+    index: overrides.index ?? 0,
     title,
-    notes: slideOverrides.notes ?? "",
-    elements: slideOverrides.elements ?? [
+    notes: overrides.notes ?? "",
+    elements: overrides.elements ?? [
       buildTextElement({
         id: "slide-title",
         role: "title",
@@ -422,25 +429,26 @@ export function buildSlide(overrides: SlideBuilderOverrides = {}): Slide {
 }
 
 export function buildDeck(overrides: DeckBuilderOverrides = {}): Deck {
-  const rawOverrides = overrides as any;
-  const themeId = rawOverrides.design?.themeId ?? "default";
-  const themeOverrides = rawOverrides.design?.themeOverrides ?? {};
+  const design = overrides.design as DeckDesignOverride | undefined;
+  const canvasOverride = overrides.canvas as DeckCanvasOverride | undefined;
+  const themeId = design?.themeId ?? "default";
+  const themeOverrides = design?.themeOverrides ?? {};
   const {
     schemaVersion,
-    canvas,
+    canvas: _canvas,
     design: _design,
     masters,
     defaultMasterId,
     slides: overrideSlides,
     deckContentHash,
     ...deckOverrides
-  } = rawOverrides;
+  } = overrides;
   const slides = overrideSlides ?? [buildSlide()];
   return {
     ...deckOverrides,
     schemaVersion: schemaVersion ?? LEGACY_DECK_SCHEMA_VERSION,
     canvas: {
-      format: canvas?.format ?? "16:9",
+      format: canvasOverride?.format ?? "16:9",
     },
     design: {
       themeId,
@@ -465,7 +473,7 @@ export function makeSlideWithElementIds(
   id: string,
   elementIds: string[] = [],
 ): Slide {
-  return {
+  const slide: Slide = {
     id,
     index: 0,
     title: "",
@@ -486,7 +494,8 @@ export function makeSlideWithElementIds(
         },
       },
     })) as SlideElement[],
-  } as unknown as Slide;
+  };
+  return slide;
 }
 
 /** Minimal slide with explicit id/index/title and no elements. */

@@ -18,6 +18,7 @@ import type {
   ElementEffect,
   ElementAlign,
   ElementBox,
+  ElementRadius,
   ImageCrop,
   ImageFitMode,
   ImageMaskShape,
@@ -74,29 +75,18 @@ export function deckGeometry(format: SlideFormat | undefined): DeckGeometry {
   };
 }
 
-function record(value: unknown): Record<string, any> {
-  return value && typeof value === "object"
-    ? (value as Record<string, any>)
-    : {};
-}
-
 function deckFormat(deck: Deck): SlideFormat | undefined {
-  return (deck as any).canvas?.format as SlideFormat | undefined;
-}
-
-function elementContent(element: SlideElement): Record<string, any> {
-  return record((element as any).content);
-}
-
-function elementDesign(element: SlideElement): Record<string, any> {
-  return record((element as any).designOverrides);
+  return deck.canvas?.format;
 }
 
 function textStyleOverride(
   element: SlideElement,
 ): Partial<TextElementStyle> | undefined {
-  const design = elementDesign(element);
-  return design.textStyle;
+  return element.designOverrides?.textStyle;
+}
+
+function numericRadius(radius: ElementRadius | undefined): number | undefined {
+  return typeof radius === "number" ? radius : undefined;
 }
 
 function colorRefValue(
@@ -697,7 +687,7 @@ function buildSlideSpec(
 
     switch (element.kind) {
       case "text": {
-        const content = elementContent(element);
+        const { content } = element;
         const resolvedTextStyle = textStyleOverride(element);
         const exportStyle = adaptTextElementForExport(
           deck,
@@ -768,7 +758,7 @@ function buildSlideSpec(
           kind: "text",
           ...box,
           text,
-          ...(content.runs?.length > 0
+          ...((content.runs?.length ?? 0) > 0
             ? {
                 runs: exportTextRuns(content.runs, geometry.slideHPt),
               }
@@ -792,14 +782,13 @@ function buildSlideSpec(
         break;
       }
       case "shape": {
-        const content = elementContent(element);
-        const design = elementDesign(element);
+        const { content, designOverrides: design } = element;
         const resolvedDesign = renderModel.elementDesigns[element.id];
         const shapeDesign =
           resolvedDesign?.kind === "shape" ? resolvedDesign : undefined;
         const labelStyle = adaptShapeLabelForExport(
           deck,
-          element as any,
+          element,
           geometry.slideHPt,
         );
         const minInch = Math.min(box.w, box.h);
@@ -808,11 +797,11 @@ function buildSlideSpec(
         const textRuns = content.textRuns;
         const fill =
           shapeDesign?.fill ??
-          colorRefValue(design.fill, renderModel.tokenSet) ??
+          colorRefValue(design?.fill, renderModel.tokenSet) ??
           "#000000";
         const color = resolvedFillRepresentativeColor(fill);
-        const stroke = shapeDesign?.stroke ?? design.stroke;
-        const radius = shapeDesign?.radius ?? design.radius;
+        const stroke = shapeDesign?.stroke ?? design?.stroke;
+        const radius = numericRadius(shapeDesign?.radius ?? design?.radius);
         ops.push({
           kind: "shape",
           ...box,
@@ -857,7 +846,7 @@ function buildSlideSpec(
         break;
       }
       case "visual": {
-        const content = elementContent(element);
+        const { content } = element;
         const visualId = content.visualId;
         const visual = visuals.get(visualId);
         if (!visual) break;
@@ -867,20 +856,16 @@ function buildSlideSpec(
         break;
       }
       case "connector": {
-        const content = elementContent(element);
-        const design = elementDesign(element);
+        const design = element.designOverrides;
         const connectorElement = {
           ...element,
-          start: content.start,
-          end: content.end,
-          routing: content.routing,
-          stroke: design.stroke,
-          dash: design.dash,
-          arrowStart: design.arrowStart,
-          arrowEnd: design.arrowEnd,
+          stroke: design?.stroke,
+          dash: design?.dash,
+          arrowStart: design?.arrowStart,
+          arrowEnd: design?.arrowEnd,
         };
         const { start: startPct, end: endPct } = resolveConnectorElementPoints(
-          connectorElement,
+          element,
           elements,
           (candidate) => candidate.box,
         );
@@ -936,8 +921,8 @@ function buildSlideSpec(
     index,
     background,
     ...(backgroundFill ? { backgroundFill } : {}),
-    ...((slide as any).designOverrides?.background?.type === "image"
-      ? { backgroundImage: (slide as any).designOverrides.background.url }
+    ...(slide.designOverrides?.background?.type === "image"
+      ? { backgroundImage: slide.designOverrides.background.url }
       : {}),
     accent,
     ops,

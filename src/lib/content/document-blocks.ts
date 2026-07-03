@@ -366,6 +366,10 @@ function tableBlockFromNode(
   };
 }
 
+function lexicalVisualPayload(visual: unknown): Visual {
+  return visual as unknown as Visual;
+}
+
 function walkBlocks(node: unknown, out: DocumentBlock[]): void {
   if (!isRecord(node)) return;
 
@@ -380,9 +384,10 @@ function walkBlocks(node: unknown, out: DocumentBlock[]): void {
       out.push({
         kind: "visual",
         visualId: node.visualId,
-        visual: node.visual as unknown as Visual,
+        visual: lexicalVisualPayload(node.visual),
       });
     }
+
     return;
   }
 

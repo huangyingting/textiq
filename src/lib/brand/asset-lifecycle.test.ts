@@ -40,7 +40,7 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },
   object: T,
   methodName: K,
-  implementation: (...args: any[]) => unknown,
+  implementation: (...args: unknown[]) => unknown,
 ): { calls: unknown[][] } {
   const original = object[methodName];
   const calls: unknown[][] = [];
@@ -570,7 +570,8 @@ describe("brand persistence service", () => {
   it("creates a brand and links owner-scoped assets", async (t) => {
     const tx = {
       asset: {
-        findMany: async (args: any) => {
+        findMany: async (rawArgs: unknown) => {
+          const args = rawArgs as { where: { id?: { in?: string[] } } };
           if (args.where.id?.in) {
             return [
               { id: "logo-asset", storageKey: "owner-1/logo.svg" },
@@ -599,7 +600,7 @@ describe("brand persistence service", () => {
       t,
       prisma,
       "$transaction",
-      async (fn: any) => fn(tx),
+      async (fn: unknown) => (fn as (txArg: typeof tx) => unknown)(tx),
     );
 
     const created = await createBrandForOwner("owner-1", {
@@ -624,7 +625,9 @@ describe("brand persistence service", () => {
         create: async () => brandRow(),
       },
     };
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (txArg: typeof tx) => unknown)(tx),
+    );
 
     await assert.rejects(
       () =>
@@ -655,7 +658,9 @@ describe("brand persistence service", () => {
           }),
       },
     };
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (txArg: typeof tx) => unknown)(tx),
+    );
 
     const updated = await updateBrandForOwner("brand-acme", "owner-1", {
       name: "Acme refreshed",
@@ -681,7 +686,9 @@ describe("brand persistence service", () => {
         updateMany: async () => ({ count: 0 }),
       },
     };
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (txArg: typeof tx) => unknown)(tx),
+    );
 
     assert.equal(
       await deleteBrandForOwner("brand-missing", "owner-1"),
@@ -702,12 +709,17 @@ describe("brand persistence service", () => {
       },
       asset: {
         findMany: async () => [{ id: "logo-asset" }, { id: "font-asset" }],
-        updateMany: async (args: any) => ({
-          count: args.where.id.in.length,
-        }),
+        updateMany: async (rawArgs: unknown) => {
+          const args = rawArgs as { where: { id: { in: string[] } } };
+          return {
+            count: args.where.id.in.length,
+          };
+        },
       },
     };
-    stubObjectMethod(t, prisma, "$transaction", async (fn: any) => fn(tx));
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (txArg: typeof tx) => unknown)(tx),
+    );
 
     assert.equal(await deleteBrandForOwner("brand-acme", "owner-1"), "deleted");
   });

@@ -27,13 +27,11 @@ export function inspectSlideDesignOrigins(
 ): SlideDesignOriginReport {
   const style = resolveSlideStyle(deck, slide);
   const master = resolveMaster(deck, slide);
-  const rawDeck = deck as any;
-  const rawSlide = slide as any;
-  const slideDesign = rawSlide.designOverrides;
+  const slideDesign = slide.designOverrides;
 
   const themeId =
-    typeof rawDeck.design?.themeId === "string"
-      ? rawDeck.design.themeId
+    typeof deck.design?.themeId === "string"
+      ? deck.design.themeId
       : style.tokenSet.id;
 
   const backgroundLayer: SlideDesignOriginLayer = hasOwnRecordKey(

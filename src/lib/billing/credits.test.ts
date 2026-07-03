@@ -18,6 +18,10 @@ import { loadAndSyncBillingState } from "@/lib/billing/service";
 
 import { prisma } from "@/lib/prisma";
 
+function prismaClientFixture(value: unknown): typeof prisma {
+  return value as unknown as typeof prisma;
+}
+
 // ---------------------------------------------------------------------------
 // In-memory fake of the Prisma calls the credit helpers use, so the atomic
 // deduction and period-reset logic can be exercised without a live DB.
@@ -76,7 +80,7 @@ function makeFakeClient(initial: Partial<FakeRow> & { creditBalance: number }) {
   return {
     row,
     calls,
-    client: client as unknown as typeof prisma,
+    client: prismaClientFixture(client),
   };
 }
 

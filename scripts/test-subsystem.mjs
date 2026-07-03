@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative, sep } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { scanRepositoryRoots, toPosix } from "./source-scan-utils.mjs";
 
 const TEST_ROOTS = ["src", "scripts", "e2e"];
 const SKIPPED_DIRECTORIES = new Set([
@@ -36,6 +37,7 @@ const WEAK_TEST_TITLES = new Set([
   "works",
 ]);
 const MIN_TEST_TITLE_LENGTH = 8;
+const TEST_SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs"]);
 
 export const SUBSYSTEM_TEST_TARGETS = {
   ai: {
@@ -285,34 +287,14 @@ export const SUBSYSTEM_TEST_TARGETS = {
   },
 };
 
-function toPosix(path) {
-  return path.split(sep).join("/");
-}
-
-function walkFiles(root) {
-  const files = [];
-  const entries = readdirSync(root, { withFileTypes: true });
-  for (const entry of entries) {
-    if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-    } else if (entry.isFile() && TEST_FILE_PATTERN.test(entry.name)) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
 export function listTestFiles(repoRoot = process.cwd()) {
-  return TEST_ROOTS.flatMap((root) => {
-    const absoluteRoot = join(repoRoot, root);
-    if (!statSync(absoluteRoot, { throwIfNoEntry: false })?.isDirectory()) {
-      return [];
-    }
-    return walkFiles(absoluteRoot).map((filePath) =>
-      toPosix(relative(repoRoot, filePath)),
-    );
+  return scanRepositoryRoots({
+    repoRoot,
+    roots: TEST_ROOTS,
+    sourceExtensions: TEST_SOURCE_EXTENSIONS,
+    scanText: (filePath) => [filePath],
+    shouldScanFile: (filePath) => TEST_FILE_PATTERN.test(filePath),
+    skipDirectoryNames: SKIPPED_DIRECTORIES,
   }).sort();
 }
 

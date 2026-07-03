@@ -13,6 +13,10 @@ import {
   type OrphanStorage,
 } from "./asset-orphan";
 
+function invalidAssetId(value: unknown): string {
+  return value as unknown as string;
+}
+
 // ---------------------------------------------------------------------------
 // collectDeckAssetRefs
 // ---------------------------------------------------------------------------
@@ -46,7 +50,7 @@ test("#396: collectDeckAssetRefs extracts assetId from image elements", () => {
   const refs = collectDeckAssetRefs(deck);
   assert.ok(refs.has("img-asset-1"));
   assert.ok(refs.has("img-asset-2"));
-  assert.ok(!refs.has(undefined as unknown as string));
+  assert.ok(!refs.has(invalidAssetId(undefined)));
   assert.equal(refs.size, 2);
 });
 

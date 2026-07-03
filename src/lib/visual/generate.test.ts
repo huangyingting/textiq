@@ -181,17 +181,28 @@ test("stampSourceText passes the visual through for empty text", () => {
 // requestVisualCandidates — the shared fetch path (injectable fetch).
 // ---------------------------------------------------------------------------
 
+function mockResponse(response: unknown): Response {
+  return response as unknown as Response;
+}
+
+function mockFetch(
+  fetchImpl: (url: string, init?: RequestInit) => Promise<Response>,
+): typeof fetch {
+  return fetchImpl as unknown as typeof fetch;
+}
+
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return {
+  return mockResponse({
     ok,
     status,
     json: async () => body,
-  } as unknown as Response;
+  });
 }
 
 test("requestVisualCandidates returns validated candidates on success", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse({ candidates: [VALID_VISUAL] })) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ candidates: [VALID_VISUAL] }),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, true);
   if (result.ok) {
@@ -202,11 +213,11 @@ test("requestVisualCandidates returns validated candidates on success", async ()
 test("requestVisualCandidates POSTs to /api/generate with the built body", async () => {
   let capturedUrl: string | undefined;
   let capturedBody: unknown;
-  const fetchImpl = (async (url: string, init?: RequestInit) => {
+  const fetchImpl = mockFetch(async (url: string, init?: RequestInit) => {
     capturedUrl = url;
     capturedBody = init?.body ? JSON.parse(String(init.body)) : undefined;
     return jsonResponse({ candidates: [VALID_VISUAL] });
-  }) as unknown as typeof fetch;
+  });
 
   await requestVisualCandidates("hello", { type: "timeline" }, fetchImpl);
   assert.equal(capturedUrl, "/api/generate");
@@ -214,12 +225,9 @@ test("requestVisualCandidates POSTs to /api/generate with the built body", async
 });
 
 test("requestVisualCandidates surfaces the server error message", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Out of credits" },
-      false,
-      402,
-    )) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ error: "Out of credits" }, false, 402),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -228,8 +236,9 @@ test("requestVisualCandidates surfaces the server error message", async () => {
 });
 
 test("requestVisualCandidates errors when no usable candidates come back", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse({ candidates: [{ bogus: true }] })) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ candidates: [{ bogus: true }] }),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -238,9 +247,9 @@ test("requestVisualCandidates errors when no usable candidates come back", async
 });
 
 test("requestVisualCandidates returns a network error when fetch throws", async () => {
-  const fetchImpl = (async () => {
+  const fetchImpl = mockFetch(async () => {
     throw new Error("offline");
-  }) as unknown as typeof fetch;
+  });
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -279,12 +288,9 @@ test("isCreditError returns false for a successful result", () => {
 });
 
 test("requestVisualCandidates sets errorKind=credit on 402 response", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Insufficient credits" },
-      false,
-      402,
-    )) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ error: "Insufficient credits" }, false, 402),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -293,12 +299,9 @@ test("requestVisualCandidates sets errorKind=credit on 402 response", async () =
 });
 
 test("requestVisualCandidates sets errorKind=other on non-402 error response", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse(
-      { error: "Server error" },
-      false,
-      500,
-    )) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ error: "Server error" }, false, 500),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -307,8 +310,9 @@ test("requestVisualCandidates sets errorKind=other on non-402 error response", a
 });
 
 test("requestVisualCandidates sets errorKind=other when no usable candidates", async () => {
-  const fetchImpl = (async () =>
-    jsonResponse({ candidates: [{ bogus: true }] })) as unknown as typeof fetch;
+  const fetchImpl = mockFetch(async () =>
+    jsonResponse({ candidates: [{ bogus: true }] }),
+  );
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -317,9 +321,9 @@ test("requestVisualCandidates sets errorKind=other when no usable candidates", a
 });
 
 test("requestVisualCandidates sets errorKind=other on network failure", async () => {
-  const fetchImpl = (async () => {
+  const fetchImpl = mockFetch(async () => {
     throw new Error("offline");
-  }) as unknown as typeof fetch;
+  });
   const result = await requestVisualCandidates("hi", {}, fetchImpl);
   assert.equal(result.ok, false);
   if (!result.ok) {

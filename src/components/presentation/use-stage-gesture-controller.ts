@@ -1,6 +1,5 @@
 import type {
   Dispatch,
-  KeyboardEvent,
   MouseEvent,
   PointerEvent as ReactPointerEvent,
   SetStateAction,
@@ -279,7 +278,7 @@ export interface StageGestureController {
     handle: CropHandlePosition,
     event: ReactPointerEvent,
   ) => void;
-  handleEditorKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  handleEditorKeyDown: (event: StageKeyboardEvent) => void;
   handleMultiResizeHandlePointerDown: (
     handle: ResizeHandlePosition,
     event: ReactPointerEvent,
@@ -299,6 +298,16 @@ export interface StageGestureController {
   handleStagePointerLeave: () => void;
   handleStagePointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
+
+type StageKeyboardEvent = {
+  altKey: boolean;
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+  preventDefault: () => void;
+  shiftKey: boolean;
+  target: EventTarget | null;
+};
 
 export function useStageGestureController(
   args: StageGestureControllerArgs,
@@ -425,9 +434,7 @@ export function useStageGestureController(
     );
   }
 
-  function handleKeyboardConnectorModeKey(
-    event: KeyboardEvent<HTMLDivElement>,
-  ): boolean {
+  function handleKeyboardConnectorModeKey(event: StageKeyboardEvent): boolean {
     if (!activeSlide || !keyboardConnectorMode) return false;
     const source = findNodeById(
       activeSlide.children,
@@ -488,9 +495,7 @@ export function useStageGestureController(
     return true;
   }
 
-  function handleKeyboardConnectorShortcut(
-    event: KeyboardEvent<HTMLDivElement>,
-  ) {
+  function handleKeyboardConnectorShortcut(event: StageKeyboardEvent) {
     if (!activeSlide) return false;
     if (event.metaKey || event.ctrlKey || event.altKey) return false;
     if (event.key.toLowerCase() !== "c") return false;
@@ -1322,7 +1327,7 @@ export function useStageGestureController(
     });
   }
 
-  function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function handleEditorKeyDown(event: StageKeyboardEvent) {
     if (inlineEditNodeId) return;
     if (isEditableTarget(event.target)) return;
     if (!activeSlide) return;

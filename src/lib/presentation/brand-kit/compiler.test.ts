@@ -17,6 +17,14 @@ import { validateThemePackage } from "../theme-package-schema";
 import { compileBrandKitDraft } from "./compiler";
 import type { BrandKitDraftV1 } from "./schema";
 
+function invalidString(value: unknown): string {
+  return value as unknown as string;
+}
+
+function invalidDecorations(value: unknown): BrandKitDraftV1["decorations"] {
+  return value as unknown as BrandKitDraftV1["decorations"];
+}
+
 export function buildValidBrandKitDraft(
   overrides: Partial<BrandKitDraftV1> = {},
 ): BrandKitDraftV1 {
@@ -382,11 +390,11 @@ test("compileBrandKitDraft reports malformed optional assets, scope, decorations
       id: "r",
       number: 0,
       createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: 5 as unknown as string,
+      updatedAt: invalidString(5),
     },
     palette: {
       ...buildValidBrandKitDraft().palette,
-      charts: ["#2563eb", 7 as unknown as string],
+      charts: ["#2563eb", invalidString(7)],
     },
     typography: {
       ...buildValidBrandKitDraft().typography,
@@ -408,7 +416,7 @@ test("compileBrandKitDraft reports malformed optional assets, scope, decorations
         >["mimeType"],
         widthPx: Number.NaN,
         heightPx: 10,
-        alt: 7 as unknown as string,
+        alt: invalidString(7),
       },
       fonts: {
         fontKey: {
@@ -417,14 +425,14 @@ test("compileBrandKitDraft reports malformed optional assets, scope, decorations
           src: "https://example.com/font.woff2",
           weight: [400, Number.NaN],
           style: "oblique" as "italic",
-          contentHash: 7 as unknown as string,
+          contentHash: invalidString(7),
         },
       },
     },
-    decorations: {
+    decorations: invalidDecorations({
       background: "loud",
       chrome: "full",
-    } as unknown as BrandKitDraftV1["decorations"],
+    }),
   });
 
   const result = compileBrandKitDraft(draft);

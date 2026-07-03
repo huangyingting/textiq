@@ -37,7 +37,7 @@ function resolveTokenPath(
   path: string,
 ): string | number | undefined {
   const parts = path.split(".");
-  let cursor: any = tokens;
+  let cursor: unknown = tokens;
   for (const part of parts) {
     if (!isPlainObject(cursor)) return undefined;
     cursor = cursor[part];

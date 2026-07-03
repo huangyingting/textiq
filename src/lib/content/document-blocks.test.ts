@@ -4,18 +4,22 @@ import { test } from "node:test";
 import type { Visual } from "@/lib/visual/schema";
 import { blockRichText, collectDocumentBlocks } from "./document-blocks";
 
+function visualFixture(value: unknown): Visual {
+  return value as unknown as Visual;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers matching the Lexical serialised JSON shapes the editor emits
 // ---------------------------------------------------------------------------
 
 function visual(id: string): Visual {
-  return {
+  return visualFixture({
     version: 1,
     type: "flowchart",
     nodes: [{ id: `${id}-n1`, label: "Node" }],
     edges: [],
     style: {},
-  } as unknown as Visual;
+  });
 }
 
 function visualNode(visualId: string) {

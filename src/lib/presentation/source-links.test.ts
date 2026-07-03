@@ -39,6 +39,10 @@ function sourceNode(
   });
 }
 
+function groupNode(node: unknown): SlideChildNode {
+  return node as unknown as SlideChildNode;
+}
+
 function index(): SourceBlockIndex {
   return {
     documentId: "doc-1",
@@ -154,14 +158,14 @@ describe("presentation source link classification", () => {
       documentId: "doc-1",
       blockKind: "text",
     } as NonNullable<SlideChildNode["source"]>);
-    const group = {
+    const group = groupNode({
       id: "group-1",
       type: "group",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
       style: { ref: "surface.card" },
       children: [nested, incomplete],
-    } as unknown as SlideChildNode;
+    });
     const deck = buildDeck([
       buildSlide("content", [group], { id: "slide-group" }),
     ]);
@@ -478,14 +482,14 @@ describe("presentation source link commands", () => {
       blockKind: "text",
       contentHash: "hash-old",
     });
-    const group = {
+    const group = groupNode({
       id: "group-1",
       type: "group",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
       style: { ref: "surface.card" },
       children: [nested],
-    } as unknown as SlideChildNode;
+    });
     const deck = buildDeck([
       buildSlide("content", [group], { id: "slide-group" }),
     ]);

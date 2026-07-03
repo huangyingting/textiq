@@ -156,11 +156,7 @@ function findElement(
 }
 
 function renderSlideCanvasTree(props: SlideCanvasProps): ReactNode {
-  return (
-    SlideCanvas as unknown as {
-      type: (props: SlideCanvasProps) => ReactNode;
-    }
-  ).type(props);
+  return callableSlideCanvas(SlideCanvas).type(props);
 }
 
 function fakeStageElement(
@@ -2549,3 +2545,10 @@ describe("SlideCanvas E01 rendering coverage", () => {
     assert.equal(missingDeckHtml, "");
   });
 });
+type CallableSlideCanvas = {
+  type: (props: SlideCanvasProps) => ReactNode;
+};
+
+function callableSlideCanvas(component: unknown): CallableSlideCanvas {
+  return component as unknown as CallableSlideCanvas;
+}
