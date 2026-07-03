@@ -2,7 +2,7 @@
 
 ## Active Decisions
 
-No decisions recorded yet.
+- 2026-07-03: Initial Squad team is configured from existing TextIQ docs/codebase. The project routes architecture to Morpheus, frontend/editor work to Trinity, backend/persistence to Tank, AI/visual systems to Neo, collaboration/operations to Dozer, testing to Mouse, logging to Scribe, backlog monitoring to Ralph, and RAI review to Rai.
 
 ## Governance
 

@@ -1,14 +1,9 @@
-# Project Context
+# Tank History
 
-- **Owner:** Yingting Huang
-- **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+## 2026-07-03T05:57:20.402+00:00 — Initial context
 
-## Core Context
-
-TextIQ is a text-to-visuals and slide-authoring app combining a Lexical document editor, editable visual blocks, AI-assisted visual/deck generation, presentation editing, sharing, export, workspaces, brand kits, and real-time collaboration.
-
-## Learnings
-
-<!-- Append new learnings below. Each entry is something lasting about the project. -->
+- User: Switch.
+- Project: TextIQ.
+- Backend stack: Prisma 7, SQLite local/test default, PostgreSQL production-style option, Next/Auth.js, server actions, App Router route handlers, and Node scripts.
+- Current architecture treats `Document.contentJson`, `Document.deckJson`, `DocumentVersion`, `Visual`, access policy, sharing metadata, and collaboration recovery snapshot as important persisted surfaces.
+- Contract changes require code, schema, fixtures, tests, docs, and generated artifacts to move together.

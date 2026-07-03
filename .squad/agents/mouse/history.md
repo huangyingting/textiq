@@ -1,14 +1,9 @@
-# Project Context
+# Mouse History
 
-- **Owner:** Yingting Huang
-- **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+## 2026-07-03T05:57:20.402+00:00 — Initial context
 
-## Core Context
-
-TextIQ is a text-to-visuals and slide-authoring app combining a Lexical document editor, editable visual blocks, AI-assisted visual/deck generation, presentation editing, sharing, export, workspaces, brand kits, and real-time collaboration.
-
-## Learnings
-
-<!-- Append new learnings below. Each entry is something lasting about the project. -->
+- User: Switch.
+- Project: TextIQ.
+- Test stack: Node built-in test runner, `tsx`, script tests, subsystem coverage map, line coverage, Playwright, and deterministic E2E profile.
+- Local/test DB defaults to SQLite with `DB_PROVIDER=sqlite` and `DATABASE_URL=file:./prisma/dev.db`; `AUTH_SECRET=ci-placeholder` is used for validation flows.
+- Focused validation should follow touched subsystems before broader gates.

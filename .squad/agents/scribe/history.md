@@ -1,18 +1,19 @@
 # Project Context
 
-- **Owner:** Yingting Huang
 - **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+- **Created:** 2026-07-03
+- **User:** Switch
+- **Stack:** Next.js App Router, React, TypeScript, Prisma, Lexical, Yjs, Tailwind CSS, Node scripts, and Playwright.
 
 ## Core Context
 
-Agent Scribe initialized for TextIQ: a text-to-visuals and slide-authoring app with editor, presentation, AI generation, sharing/export, workspace, brand kit, and collaboration surfaces.
+Scribe maintains decisions, orchestration logs, session logs, and cross-agent context. TextIQ is a text-to-visuals and slide-authoring app with editor, presentation, AI generation, persistence, collaboration, sharing, export, workspace, and brand-kit surfaces.
 
 ## Recent Updates
 
-📌 Team initialized on 2026-07-01
+📌 Team initialized on 2026-07-03
+📌 Initial roster and routing were derived from docs/codebase coverage on 2026-07-03.
 
 ## Learnings
 
-Initial setup complete.
+Source, tests, schemas, and current subsystem docs are authoritative. Logs should stay compact, dated, and redacted.

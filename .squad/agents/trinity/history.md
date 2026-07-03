@@ -1,14 +1,9 @@
-# Project Context
+# Trinity History
 
-- **Owner:** Yingting Huang
-- **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+## 2026-07-03T05:57:20.402+00:00 — Initial context
 
-## Core Context
-
-TextIQ is a text-to-visuals and slide-authoring app combining a Lexical document editor, editable visual blocks, AI-assisted visual/deck generation, presentation editing, sharing, export, workspaces, brand kits, and real-time collaboration.
-
-## Learnings
-
-<!-- Append new learnings below. Each entry is something lasting about the project. -->
+- User: Switch.
+- Project: TextIQ.
+- UI stack: Next.js App Router, React 19, TypeScript, Tailwind CSS, Lexical, shared UI primitives, and presentation/editor components.
+- High-churn UI areas include `src/components/presentation/slide-editor.tsx`, `src/app/app/documents/[id]/lexical-editor.tsx`, `src/components/presentation/slide-canvas.tsx`, and visual card/editor surfaces.
+- Preserve existing behavior and layout parity before restructuring presentation UI.

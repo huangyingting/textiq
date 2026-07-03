@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.squad/team.md'
+      - '.ai-team/team.md'
   workflow_dispatch:
 
 permissions:
@@ -21,9 +22,13 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const teamFile = '.squad/team.md';
+            let teamFile = '.squad/team.md';
             if (!fs.existsSync(teamFile)) {
-              core.info('No .squad/team.md found — skipping label sync');
+              teamFile = '.ai-team/team.md';
+            }
+
+            if (!fs.existsSync(teamFile)) {
+              core.info('No .squad/team.md or .ai-team/team.md found — skipping label sync');
               return;
             }
 

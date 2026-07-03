@@ -6,26 +6,35 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-| Scope, priorities, architecture | Morpheus | System boundaries, cross-module contracts, trade-offs, reviewer gates |
-| Lexical editor and React UI | Trinity | Document editing, toolbar UX, editable block interactions, client boundaries |
-| Slides, visuals, and presentation flows | Switch | Slide editor, visual blocks, themes, sharing/export behavior, public render parity |
-| Backend, data, AI, and collaboration services | Tank | Prisma schema, APIs, AI generation flows, workspaces, brand kits, collaboration backend |
-| Testing and quality | Mouse | Focused tests, Playwright coverage, import/export edge cases, regression checks |
-| Code review | Morpheus | Review PRs, check quality, enforce architecture and handoffs |
-| Work queue monitoring | Ralph | Backlog scans, idle-watch, keep-alive loops |
+| Architecture, scope, cross-subsystem contracts | Morpheus | Decide boundaries, review deck/editor/data-flow changes, resolve trade-offs |
+| Frontend, editor, presentation UI | Trinity | Next/React UI, Lexical editor UX, slide editor, inspector, visual authoring components |
+| Backend, persistence, auth, API routes | Tank | Prisma services, document/deck persistence, auth/account, route handlers, permissions |
+| AI generation, visual schemas, render/export | Neo | Generate flows, visual registry/schema, deck commands, render resolver, PPTX/PDF export |
+| Collaboration, runtime, operations, governance scripts | Dozer | Yjs rooms, custom server, env/runtime config, CI/local scripts, perf/import graph gates |
+| Code review | Morpheus | Review PRs, check subsystem boundaries, suggest implementation direction |
+| Testing | Mouse | Write tests, find edge cases, verify fixes, map subsystem coverage |
+| Scope & priorities | Morpheus | What to build next, trade-offs, decisions |
 | Session logging | Scribe | Automatic — never needs routing |
+| Backlog monitoring | Ralph | Scan issues, queue work, keep the board moving |
 | RAI review | Rai | Content safety, bias checks, credential detection, ethical review |
 
 ## Issue Routing
 
 | Label | Action | Who |
 |-------|--------|-----|
-| `squad` | Triage: analyze issue, assign `squad:{member}` label | Morpheus |
+| `squad` | Triage: analyze issue, assign `squad:{member}` label | Lead |
+| `squad:morpheus` | Architecture, scope, contracts, lead triage | Morpheus |
+| `squad:trinity` | Frontend/editor/presentation UI work | Trinity |
+| `squad:tank` | Backend, persistence, auth, APIs | Tank |
+| `squad:neo` | AI generation, visual system, render/export | Neo |
+| `squad:dozer` | Collaboration, runtime, operations, scripts | Dozer |
+| `squad:mouse` | Testing, QA, regression coverage | Mouse |
+| `squad:rai` | RAI/security-sensitive content review | Rai |
 | `squad:{name}` | Pick up issue and complete the work | Named member |
 
 ### How Issue Assignment Works
 
-1. When a GitHub issue gets the `squad` label, **Morpheus** triages it — analyzing content, assigning the right `squad:{member}` label, and commenting with triage notes.
+1. When a GitHub issue gets the `squad` label, the **Lead** triages it — analyzing content, assigning the right `squad:{member}` label, and commenting with triage notes.
 2. When a `squad:{member}` label is applied, that member picks up the issue in their next session.
 3. Members can reassign by removing their label and adding another member's label.
 4. The `squad` label is the "inbox" — untriaged issues waiting for Lead review.

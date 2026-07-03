@@ -1,18 +1,19 @@
 # Project Context
 
-- **Owner:** Yingting Huang
 - **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+- **Created:** 2026-07-03
+- **User:** Switch
+- **Stack:** Next.js App Router, React, TypeScript, Prisma, Lexical, Yjs, Tailwind CSS, Node scripts, and Playwright.
 
 ## Core Context
 
-Agent Ralph initialized for TextIQ: a text-to-visuals and slide-authoring app with editor, presentation, AI generation, sharing/export, workspace, brand kit, and collaboration surfaces.
+Ralph monitors open work, Squad-labeled issues, and ready follow-ups. TextIQ spans editor/presentation UX, persistence/auth, AI/visual systems, collaboration/ops, public sharing/export, and subsystem test coverage.
 
 ## Recent Updates
 
-📌 Team initialized on 2026-07-01
+📌 Team initialized on 2026-07-03
+📌 Initial roster and routing were derived from docs/codebase coverage on 2026-07-03.
 
 ## Learnings
 
-Initial setup complete.
+Prefer current GitHub issue state and repository evidence over stale markdown. A clear board moves Ralph to idle-watch.

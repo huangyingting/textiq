@@ -1,14 +1,10 @@
-# Project Context
+# Morpheus History
 
-- **Owner:** Yingting Huang
-- **Project:** TextIQ
-- **Stack:** Next.js, React, TypeScript, Lexical, Prisma, Playwright, AI-assisted generation, real-time collaboration
-- **Created:** 2026-07-01T17:51:56+08:00
+## 2026-07-03T05:57:20.402+00:00 — Initial context
 
-## Core Context
-
-TextIQ is a text-to-visuals and slide-authoring app combining a Lexical document editor, editable visual blocks, AI-assisted visual/deck generation, presentation editing, sharing, export, workspaces, brand kits, and real-time collaboration.
-
-## Learnings
-
-<!-- Append new learnings below. Each entry is something lasting about the project. -->
+- User: Switch.
+- Project: TextIQ.
+- Stack: Next.js App Router, React, TypeScript, Prisma, Lexical, Yjs, Tailwind CSS, Node scripts, and Playwright.
+- Core domains: document editor, presentation editor/render/export, AI generation, visual schemas, document/deck persistence, auth/security, collaboration, public sharing, import/export, operations, and testing.
+- Source, tests, schemas, and current docs are authoritative. Docs are background when they conflict with code.
+- Main risks from docs/codebase: high-churn presentation editor, deck/content persistence contracts, collaboration durability, public route/security posture, logs/PII, import/export dependency boundaries, and coverage governance.
