@@ -7,6 +7,7 @@ import { BottomSheetSurface, Surface, cx } from "@/components/ui";
 
 import { GenerateVisualSection } from "./mobile-generate-visual-section";
 import { TextFormatSection } from "./mobile-text-format-section";
+import { TableEditingSection } from "./table-controls";
 import { VisualContextSection } from "./mobile-visual-context-section";
 import { useEditingSurface } from "./use-editing-surface";
 
@@ -23,7 +24,17 @@ function MobileEditingSheet() {
   if (surface.mode !== "sheet") return null;
 
   const fabLabel =
-    group === "text-format" ? "Open text formatting" : "Open visual editing";
+    group === "text-format"
+      ? "Open text formatting"
+      : group === "table-edit"
+        ? "Open table editing"
+        : "Open visual editing";
+  const panelTitle =
+    group === "text-format"
+      ? "Text format"
+      : group === "table-edit"
+        ? "Table"
+        : "Visual";
 
   return (
     <>
@@ -56,7 +67,7 @@ function MobileEditingSheet() {
             className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-ds-pill bg-ds-border-subtle"
           />
           <p className="text-xs font-semibold uppercase tracking-wide text-ds-text-muted">
-            {group === "text-format" ? "Text format" : "Visual"}
+            {panelTitle}
           </p>
           <button
             type="button"
@@ -78,6 +89,11 @@ function MobileEditingSheet() {
           {group === "visual-edit" && (
             <Surface elevation="flat" radius="sm" bordered={false}>
               <VisualContextSection />
+            </Surface>
+          )}
+          {group === "table-edit" && (
+            <Surface elevation="flat" radius="sm" bordered={false}>
+              <TableEditingSection />
             </Surface>
           )}
         </div>

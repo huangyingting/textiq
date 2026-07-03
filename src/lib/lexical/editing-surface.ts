@@ -11,7 +11,7 @@
  * place that turns "what is selected" into "which contextual surface shows
  * which content".
  *
- * The function is TOTAL over its 2 × 3 = 6 input combinations and is
+ * The function is TOTAL over its 2 × 4 = 8 input combinations and is
  * exhaustively pinned by {@link editing-surface.test.ts}.
  */
 
@@ -32,12 +32,17 @@ type EditingSurfaceMode = "float" | "sheet" | "none";
  * (see {@link selectionKindFromContext}):
  * - `"text-format"` ← a non-collapsed text range
  * - `"visual-edit"` ← a selected VisualNode
+ * - `"table-edit"` ← a collapsed cursor/table selection inside a table
  * - `"overall"` ← no element selection (document-level adjustments)
  */
-export type EditingSurfaceGroup = "text-format" | "visual-edit" | "overall";
+export type EditingSurfaceGroup =
+  | "text-format"
+  | "visual-edit"
+  | "table-edit"
+  | "overall";
 
 /** The selection kinds the resolver distinguishes (a projection of {@link EditorContextKind}). */
-export type EditingSurfaceSelectionKind = "range" | "visual" | "none";
+export type EditingSurfaceSelectionKind = "range" | "visual" | "table" | "none";
 
 export type ResolveEditingSurfaceInput = {
   pointerFine: boolean;
@@ -54,6 +59,7 @@ export type ResolvedEditingSurface = {
  * {@link EditingSurfaceSelectionKind} the resolver reasons about:
  * - `"range"` → `"range"`
  * - `"visual"` → `"visual"`
+ * - `"table"` → `"table"`
  * - everything else (`"none"`, `"empty-block"`, `"collapsed"`) → `"none"`
  *
  * Pure: no DOM, no React. Keeps selection derivation centralised so callers
@@ -64,6 +70,7 @@ export function selectionKindFromContext(
 ): EditingSurfaceSelectionKind {
   if (kind === "range") return "range";
   if (kind === "visual") return "visual";
+  if (kind === "table") return "table";
   return "none";
 }
 
@@ -77,6 +84,7 @@ export function groupForSelectionKind(
 ): EditingSurfaceGroup {
   if (selectionKind === "range") return "text-format";
   if (selectionKind === "visual") return "visual-edit";
+  if (selectionKind === "table") return "table-edit";
   return "overall";
 }
 
@@ -86,8 +94,8 @@ export function groupForSelectionKind(
  *
  * Precedence (encoded in this exact order):
  * - **R1**: document context (`selectionKind === "none"`) → `"none"`.
- * - **R2**: fine pointer text/visual context → `"float"`.
- * - **R3**: coarse pointer text/visual context → `"sheet"`.
+ * - **R2**: fine pointer text/visual/table context → `"float"`.
+ * - **R3**: coarse pointer text/visual/table context → `"sheet"`.
  *
  * The `group` is always returned (even when `mode === "none"`) so callers know
  * what would render.

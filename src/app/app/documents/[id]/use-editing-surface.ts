@@ -8,6 +8,7 @@ import {
 } from "@/lib/lexical/editing-surface";
 import { useIsPointerFine } from "@/lib/pointer";
 
+import { useActiveTableCaptionKey } from "./use-active-table-caption";
 import { useVisualPanel } from "./visual-panel-context";
 
 /**
@@ -29,9 +30,15 @@ export function useEditingSurface(): ResolvedEditingSurface {
   const ctx = useEditorContext();
   const { activeVisual } = useVisualPanel();
   const pointerFine = useIsPointerFine();
+  const activeCaptionTableKey = useActiveTableCaptionKey();
+  const contextSelectionKind = selectionKindFromContext(ctx.kind);
   const selectionKind = activeVisual
     ? "visual"
-    : selectionKindFromContext(ctx.kind);
+    : contextSelectionKind === "range"
+      ? "range"
+      : activeCaptionTableKey !== null
+        ? "table"
+        : contextSelectionKind;
 
   return resolveEditingSurface({
     pointerFine,

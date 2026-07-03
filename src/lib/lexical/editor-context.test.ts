@@ -18,11 +18,20 @@ import {
 } from "@lexical/rich-text";
 import { $patchStyleText } from "@lexical/selection";
 import {
+  $createTableNodeWithDimensions,
+  $isTableCellNode,
+  $isTableRowNode,
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+} from "@lexical/table";
+import {
   $createNodeSelection,
   $createParagraphNode,
   $createRangeSelection,
   $createTextNode,
   $getRoot,
+  $isElementNode,
   $setSelection,
   type LexicalEditor,
 } from "lexical";
@@ -51,6 +60,9 @@ function makeEditor(): LexicalEditor {
       ListNode,
       ListItemNode,
       LinkNode,
+      TableNode,
+      TableRowNode,
+      TableCellNode,
       HorizontalRuleNode,
       VisualNode,
     ],
@@ -117,6 +129,47 @@ test("non-collapsed text selection derives kind 'range'", () => {
   assert.equal(descriptor.isEmptyBlock, false);
   assert.equal(descriptor.selectionText, "Hello");
   assert.equal(descriptor.selectionEndBlockKey, descriptor.blockKey);
+});
+
+test("collapsed caret inside a table derives table context", () => {
+  const editor = makeEditor();
+  let tableKey = "";
+  const descriptor = derive(editor, () => {
+    const table = $createTableNodeWithDimensions(2, 2, true);
+    $getRoot().clear().append(table);
+    tableKey = table.getKey();
+    const row = table.getFirstChild();
+    assert.ok(row && $isTableRowNode(row));
+    const cell = row.getFirstChild();
+    assert.ok(cell && $isTableCellNode(cell));
+    const paragraph = cell.getFirstChild();
+    assert.ok(paragraph && $isElementNode(paragraph));
+    paragraph.selectStart();
+  });
+
+  assert.equal(descriptor.kind, "table");
+  assert.equal(descriptor.selectedTableNodeKey, tableKey);
+});
+
+test("non-collapsed text selection inside a table keeps range priority", () => {
+  const editor = makeEditor();
+  const descriptor = derive(editor, () => {
+    const table = $createTableNodeWithDimensions(2, 2, true);
+    $getRoot().clear().append(table);
+    const row = table.getFirstChild();
+    assert.ok(row && $isTableRowNode(row));
+    const cell = row.getFirstChild();
+    assert.ok(cell && $isTableCellNode(cell));
+    const paragraph = cell.getFirstChild();
+    assert.ok(paragraph && $isElementNode(paragraph));
+    paragraph.clear();
+    const text = $createTextNode("Cell text");
+    paragraph.append(text);
+    text.select(0, 4);
+  });
+
+  assert.equal(descriptor.kind, "range");
+  assert.equal(descriptor.selectionText, "Cell");
 });
 
 test("cross-block text selection records the selected text and end block key", () => {

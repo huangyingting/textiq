@@ -11,11 +11,14 @@ import {
   type LexicalNode,
 } from "lexical";
 
+import { $getSelectedDocumentTableKey } from "@/lib/lexical/table-controls";
+
 export type EditorContextKind =
   | "range"
   | "collapsed"
   | "empty-block"
   | "visual"
+  | "table"
   | "none";
 
 export type EditorBlockType =
@@ -73,6 +76,8 @@ export type EditorContextSnapshot = {
   selectedVisualId?: string;
   /** Live Lexical key of the selected VisualNode (transient — never stored). */
   selectedVisualNodeKey?: string;
+  /** Live Lexical key of the active TableNode (transient — never stored). */
+  selectedTableNodeKey?: string;
   rects: EditorContextRects;
 };
 
@@ -95,6 +100,7 @@ export type SelectionDescriptor = Pick<
   | "isEmptyBlock"
   | "selectedVisualId"
   | "selectedVisualNodeKey"
+  | "selectedTableNodeKey"
 >;
 
 export type StableSelectionSnapshot = Omit<
@@ -103,6 +109,7 @@ export type StableSelectionSnapshot = Omit<
   | "blockKey"
   | "selectionEndBlockKey"
   | "selectedVisualNodeKey"
+  | "selectedTableNodeKey"
 > & {
   activeFormats: EditorTextFormat[];
 };
@@ -181,6 +188,14 @@ export function readSelectionDescriptor(): SelectionDescriptor {
   }
 
   if (!$isRangeSelection(selection)) {
+    const tableKey = $getSelectedDocumentTableKey();
+    if (tableKey !== null) {
+      return {
+        ...EMPTY_DESCRIPTOR,
+        kind: "table",
+        selectedTableNodeKey: tableKey,
+      };
+    }
     return EMPTY_DESCRIPTOR;
   }
 
@@ -224,8 +239,11 @@ export function readSelectionDescriptor(): SelectionDescriptor {
   );
 
   let kind: EditorContextKind;
+  const selectedTableNodeKey = $getSelectedDocumentTableKey() ?? undefined;
   if (!isCollapsed && selectionText.trim() !== "") {
     kind = "range";
+  } else if (selectedTableNodeKey !== undefined) {
+    kind = "table";
   } else if (isEmptyBlock) {
     kind = "empty-block";
   } else if (topLevel !== null) {
@@ -250,6 +268,7 @@ export function readSelectionDescriptor(): SelectionDescriptor {
     selectionEndBlockKey,
     selectionEndBlockBid,
     isEmptyBlock,
+    selectedTableNodeKey,
   };
 }
 
@@ -314,6 +333,7 @@ export function snapshotsEqual(
     a.isEmptyBlock === b.isEmptyBlock &&
     a.selectedVisualId === b.selectedVisualId &&
     a.selectedVisualNodeKey === b.selectedVisualNodeKey &&
+    a.selectedTableNodeKey === b.selectedTableNodeKey &&
     sameFormats(a.activeFormats, b.activeFormats) &&
     sameRect(a.rects.selection, b.rects.selection) &&
     sameRect(a.rects.block, b.rects.block)

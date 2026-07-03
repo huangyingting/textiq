@@ -21,6 +21,10 @@ test("selectionKindFromContext maps visual → visual", () => {
   assert.equal(selectionKindFromContext("visual"), "visual");
 });
 
+test("selectionKindFromContext maps table → table", () => {
+  assert.equal(selectionKindFromContext("table"), "table");
+});
+
 test("selectionKindFromContext maps none → none", () => {
   assert.equal(selectionKindFromContext("none"), "none");
 });
@@ -45,12 +49,16 @@ test("groupForSelectionKind maps visual → visual-edit", () => {
   assert.equal(groupForSelectionKind("visual"), "visual-edit");
 });
 
+test("groupForSelectionKind maps table → table-edit", () => {
+  assert.equal(groupForSelectionKind("table"), "table-edit");
+});
+
 test("groupForSelectionKind maps none → overall", () => {
   assert.equal(groupForSelectionKind("none"), "overall");
 });
 
 // ---------------------------------------------------------------------------
-// resolveEditingSurface — the full 2 × 3 = 6-row decision matrix.
+// resolveEditingSurface — the full 2 × 4 = 8-row decision matrix.
 // ---------------------------------------------------------------------------
 
 function expectSurface(
@@ -83,6 +91,13 @@ test("T,visual → float(visual-edit)", () => {
   });
 });
 
+test("T,table → float(table-edit)", () => {
+  expectSurface(true, "table", {
+    mode: "float",
+    group: "table-edit",
+  });
+});
+
 test("T,none → none(overall)", () => {
   expectSurface(true, "none", {
     mode: "none",
@@ -106,6 +121,13 @@ test("F,visual → sheet(visual-edit)", () => {
   });
 });
 
+test("F,table → sheet(table-edit)", () => {
+  expectSurface(false, "table", {
+    mode: "sheet",
+    group: "table-edit",
+  });
+});
+
 test("F,none → none(overall)", () => {
   expectSurface(false, "none", {
     mode: "none",
@@ -118,11 +140,12 @@ test("F,none → none(overall)", () => {
 // the group is always selection-derived.
 // ---------------------------------------------------------------------------
 
-test("resolveEditingSurface is total over all 6 input combinations", () => {
+test("resolveEditingSurface is total over all 8 input combinations", () => {
   const pointerFines = [true, false];
   const selectionKinds: EditingSurfaceSelectionKind[] = [
     "range",
     "visual",
+    "table",
     "none",
   ];
 
@@ -138,10 +161,10 @@ test("resolveEditingSurface is total over all 6 input combinations", () => {
       count += 1;
     }
   }
-  assert.equal(count, 6);
+  assert.equal(count, 8);
 });
 
-test("fine pointer text and visual contexts use popovers", () => {
+test("fine pointer text, visual, and table contexts use popovers", () => {
   expectSurface(true, "range", {
     mode: "float",
     group: "text-format",
@@ -150,9 +173,13 @@ test("fine pointer text and visual contexts use popovers", () => {
     mode: "float",
     group: "visual-edit",
   });
+  expectSurface(true, "table", {
+    mode: "float",
+    group: "table-edit",
+  });
 });
 
-test("coarse pointer text and visual contexts use the sheet toolbox", () => {
+test("coarse pointer text, visual, and table contexts use the sheet toolbox", () => {
   expectSurface(false, "range", {
     mode: "sheet",
     group: "text-format",
@@ -160,6 +187,10 @@ test("coarse pointer text and visual contexts use the sheet toolbox", () => {
   expectSurface(false, "visual", {
     mode: "sheet",
     group: "visual-edit",
+  });
+  expectSurface(false, "table", {
+    mode: "sheet",
+    group: "table-edit",
   });
 });
 

@@ -31,6 +31,7 @@ import { buildPresentationBlocks } from "../document/deck-kernel/present-blocks"
 import { ensureLexicalTableCaptionSupport } from "@/lib/lexical/table-caption-runtime";
 
 import {
+  $getSelectedDocumentTableState,
   $getSelectedDocumentTableCaption,
   $isSelectionInsideDocumentTable,
   runDocumentTableCaptionControl,
@@ -84,7 +85,7 @@ function seedTable(editor: LexicalEditor, rows: string[][]): void {
           setCellText(rowIndex, columnIndex, text);
         }
       }
-      cellAt(1, 0).selectStart();
+      cellAt(Math.min(1, rows.length - 1), 0).selectStart();
     },
     { discrete: true },
   );
@@ -231,6 +232,76 @@ test("document table controls delete rows and columns and participate in undo/re
   } finally {
     unregister();
   }
+});
+
+test("document table controls expose dimensions and guard final row or column deletion", () => {
+  const editor = makeEditor();
+  seedTable(editor, [["Only"]]);
+  const tableKey = editor.getEditorState().read(() => tableNode().getKey());
+
+  assert.deepEqual(
+    editor.getEditorState().read(() => $getSelectedDocumentTableState()),
+    {
+      tableKey,
+      caption: "",
+      rows: 1,
+      columns: 1,
+      canDeleteRow: false,
+      canDeleteColumn: false,
+      headerRow: true,
+    },
+  );
+  assert.equal(runDocumentTableControl(editor, "delete-row"), false);
+  assert.equal(runDocumentTableControl(editor, "delete-column"), false);
+  assert.deepEqual(dimensions(editor), { rows: 1, columns: 1 });
+});
+
+test("document table controls toggle first row header state", () => {
+  const editor = makeEditor();
+  seedTable(editor, [
+    ["Region", "ARR"],
+    ["NA", "$12M"],
+  ]);
+
+  assert.equal(
+    editor.getEditorState().read(() => $getSelectedDocumentTableState())
+      ?.headerRow,
+    true,
+  );
+  assert.equal(runDocumentTableControl(editor, "toggle-header-row"), true);
+  editor.update(() => {}, { discrete: true });
+  assert.equal(
+    editor.getEditorState().read(() => $getSelectedDocumentTableState())
+      ?.headerRow,
+    false,
+  );
+  assert.equal(runDocumentTableControl(editor, "toggle-header-row"), true);
+  editor.update(() => {}, { discrete: true });
+  assert.equal(
+    editor.getEditorState().read(() => $getSelectedDocumentTableState())
+      ?.headerRow,
+    true,
+  );
+});
+
+test("document table controls delete the selected table explicitly", () => {
+  const editor = makeEditor();
+  seedTable(editor, [
+    ["Region", "ARR"],
+    ["NA", "$12M"],
+  ]);
+
+  assert.equal(runDocumentTableControl(editor, "delete-table"), true);
+  editor.update(() => {}, { discrete: true });
+  assert.equal(
+    collectDocumentBlocks(serialized(editor)).some(
+      (block) => block.kind === "table",
+    ),
+    false,
+  );
+  assert.doesNotThrow(() => {
+    editor.getEditorState().read(() => $getRoot().getFirstChildOrThrow());
+  });
 });
 
 test("mutated tables survive serialization round-trip and keep projections aligned", async () => {
