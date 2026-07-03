@@ -53,6 +53,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
       /^e2e\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled|auth-forms|settings-account)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
     ],
   },
   billing: {
@@ -62,6 +63,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/billing\//,
       /^src\/app\/api\/billing\//,
       /^e2e\/billing-brand\.spec\.ts$/,
+      /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
   },
   brand: {
@@ -70,6 +72,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/brand\//,
       /^src\/lib\/brand-studio\//,
       /^e2e\/billing-brand\.spec\.ts$/,
+      /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
   },
   collaboration: {
@@ -138,6 +141,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/trash\.test\.ts$/,
       /^src\/lib\/workspace\//,
       /^e2e\/workspace\.spec\.ts$/,
+      /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
   },
   editor: {
@@ -149,6 +153,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/lexical\//,
       /^src\/app\/app\/documents\//,
       /^e2e\/(?:authenticated-nested-routes|block-id-preservation|document-editor-profile)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/document-editor-ui\.spec\.ts$/,
     ],
   },
   import: {
@@ -181,6 +186,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/scripts\//,
       /^src\/test\//,
       /^e2e\/screenshot-regression\.spec\.ts$/,
+      /^e2e\/ui-matrix\/catalog\.spec\.ts$/,
     ],
   },
   presentation: {
@@ -194,6 +200,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/api\/slide-assets\//,
       /^scripts\/(?:perf-budgets|slide-editor-size-budget)\.test\.mjs$/,
       /^e2e\/(?:present-export|screenshot-regression|slide-asset-upload|slides-layout-screenshots|slides-smoke)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:catalog|presentation-ui|public-render-ui)\.spec\.ts$/,
     ],
   },
   product: {
@@ -204,6 +211,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/brand-studio\//,
       /^src\/app\/api\/billing\//,
       /^e2e\/billing-brand\.spec\.ts$/,
+      /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
   },
   "public-render": {
@@ -214,6 +222,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/share\//,
       /^src\/lib\/share-access\.test\.ts$/,
       /^e2e\/(?:present-export|public-pages|share-fallback)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:auth-public-ui|catalog|presentation-ui|public-render-ui)\.spec\.ts$/,
     ],
   },
   security: {
@@ -233,6 +242,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/security-audit\.test\.ts$/,
       /^src\/lib\/share-access\.test\.ts$/,
       /^e2e\/(?:auth-redirect|oauth-disabled|share-fallback|slide-asset-upload)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:auth-public-ui|public-render-ui)\.spec\.ts$/,
     ],
   },
   system: {
@@ -257,6 +267,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/taxonomy\.test\.ts$/,
       /^src\/lib\/view-models\//,
       /^e2e\/public-pages\.spec\.ts$/,
+      /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
     ],
   },
   ui: {
@@ -268,6 +279,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/app-shell\//,
       /^src\/lib\/mobile-viewport\.test\.ts$/,
       /^scripts\/check-design-system\.test\.mjs$/,
+      /^e2e\/ui-matrix\/catalog\.spec\.ts$/,
     ],
   },
   visual: {
@@ -283,7 +295,11 @@ export const SUBSYSTEM_TEST_TARGETS = {
   },
   workspace: {
     description: "Workspace capabilities and owner/editor/viewer behavior",
-    patterns: [/^src\/lib\/workspace\//, /^e2e\/workspace\.spec\.ts$/],
+    patterns: [
+      /^src\/lib\/workspace\//,
+      /^e2e\/workspace\.spec\.ts$/,
+      /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
+    ],
   },
 };
 
