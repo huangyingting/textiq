@@ -364,7 +364,7 @@ test("workspace document helpers require capabilities and map document rows", as
     },
   );
   assert.deepEqual(
-    await createWorkspaceDocumentForUser("user-1", "workspace-1", "template-1"),
+    await createWorkspaceDocumentForUser("user-1", "workspace-1", "flowchart"),
     { id: "doc-2" },
   );
   assert.deepEqual(
@@ -377,10 +377,25 @@ test("workspace document helpers require capabilities and map document rows", as
     { id: "doc-3" },
   );
 
-  assert.deepEqual(creates[0], {
-    data: { ownerId: "user-1", workspaceId: "workspace-1" },
-    select: { id: true },
-  });
+  assert.equal(
+    (creates[0] as { data: { ownerId: string } }).data.ownerId,
+    "user-1",
+  );
+  assert.equal(
+    (creates[0] as { data: { workspaceId: string } }).data.workspaceId,
+    "workspace-1",
+  );
+  assert.equal(
+    typeof (creates[0] as { data: { contentJson: unknown } }).data.contentJson,
+    "object",
+  );
+  assert.match(
+    JSON.stringify(
+      (creates[0] as { data: { contentJson: unknown } }).data.contentJson,
+    ),
+    /Process overview/,
+  );
+  assert.deepEqual((creates[0] as { select: unknown }).select, { id: true });
   assert.equal(
     (creates[1] as { data: { title: string } }).data.title,
     "Imported title",

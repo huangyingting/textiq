@@ -34,6 +34,10 @@ export function $isSelectionInsideDocumentTable(): boolean {
   return $selectedDocumentTableNode() !== null;
 }
 
+export function $getSelectedDocumentTableKey(): string | null {
+  return $selectedDocumentTableNode()?.getKey() ?? null;
+}
+
 function $selectedDocumentTableNode(): TableNode | null {
   const selection = $getSelection();
   if (!$isRangeSelection(selection) && !$isTableSelection(selection)) {

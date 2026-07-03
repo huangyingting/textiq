@@ -54,7 +54,7 @@ import { OverallAdjustmentsPanel } from "./overall-adjustments-panel";
 import { ShareButton } from "./share-button";
 import { SourceBlockJumpPlugin } from "./source-block-jump";
 import { TagControl } from "./tag-control";
-import { TableControls } from "./table-controls";
+import { FloatingTableToolbar } from "./table-controls";
 import { UndoRedoControls } from "./undo-redo-controls";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { VisualCard } from "./visual-card";
@@ -419,6 +419,9 @@ export function LexicalEditor({
       createEditorPlugin("floating-text-toolbar", () => (
         <FloatingTextToolbar />
       )),
+      createEditorPlugin("floating-table-toolbar", () => (
+        <FloatingTableToolbar editable={editable} />
+      )),
       createEditorPlugin("inline-comments", () => (
         <InlineCommentsLayer
           documentId={documentId}
@@ -426,7 +429,7 @@ export function LexicalEditor({
         />
       )),
     ],
-    [documentId, initialComments],
+    [documentId, editable, initialComments],
   );
   const renderVisualNode = useCallback(
     (props: VisualNodeRendererProps) => <VisualCard {...props} />,
@@ -525,15 +528,6 @@ export function LexicalEditor({
                         onToggle={() => setShowPageBreaks((v) => !v)}
                       />
                     </EditorToolbarGroup>
-
-                    {canEdit && (
-                      <>
-                        <EditorToolbarDivider />
-                        <EditorToolbarGroup label="Table captions, rows, and columns">
-                          <TableControls editable={editable} />
-                        </EditorToolbarGroup>
-                      </>
-                    )}
 
                     <EditorToolbarDivider />
 

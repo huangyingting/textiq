@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { Prisma } from "@/generated/prisma/client";
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
 import { markdownToLexicalState } from "@/lib/content";
+import { templateContentJsonForId } from "@/lib/document/create";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
 import {
@@ -302,14 +303,20 @@ export async function listWorkspaceDocumentsForUser(
 export async function createWorkspaceDocumentForUser(
   userId: string,
   workspaceId: string,
-  _templateId: string,
+  templateId: string,
 ): Promise<{ id: string }> {
   await requireWorkspaceCapability(userId, workspaceId, "mutate");
+
+  const contentJson = templateContentJsonForId(templateId);
 
   // Document.content (the plaintext mirror) is deprecated — stop writing it.
   // Physical column drop is a follow-up migration.
   return prisma.document.create({
-    data: { ownerId: userId, workspaceId },
+    data: {
+      ownerId: userId,
+      workspaceId,
+      ...(contentJson ? { contentJson } : {}),
+    },
     select: { id: true },
   });
 }
