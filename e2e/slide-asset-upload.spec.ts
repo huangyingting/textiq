@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers/auth";
 import {
   e2eProfileEnabled,
+  profileAssetSharePath,
   fixturePngBuffer,
   profileAssetPath,
   profileDocPath,
@@ -74,10 +75,16 @@ test.describe("slide asset access control", () => {
       ).toBeGreaterThanOrEqual(403);
       expect(anonPrivate.status()).toBeLessThan(405);
 
-      const anonShared = await anon.request.get(profileAssetPath());
+      const anonSharedUnbound = await anon.request.get(profileAssetPath());
+      expect(
+        anonSharedUnbound.status(),
+        "access: anonymous shared asset without share binding must be denied",
+      ).toBe(403);
+
+      const anonShared = await anon.request.get(profileAssetSharePath());
       expect(
         anonShared.status(),
-        "access: shared (public present/embed) asset must serve anonymously (200)",
+        "access: share-bound public present asset must serve anonymously (200)",
       ).toBe(200);
       expect(
         (await anonShared.body()).byteLength,
