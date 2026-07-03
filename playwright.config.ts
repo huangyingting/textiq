@@ -20,6 +20,7 @@ const baseURL =
 
 const startWebServer = process.env.E2E_WEB_SERVER === "1";
 const deterministicProfile = process.env.E2E_PROFILE === "1";
+const deterministicProfileTimeoutMs = 12 * 60_000;
 const deterministicProfileSpecs = [
   "authenticated-nested-routes.spec.ts",
   "document-editor-profile.spec.ts",
@@ -35,9 +36,12 @@ export default defineConfig({
   testMatch: deterministicProfile ? deterministicProfileSpecs : /.*\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  retries: deterministicProfile ? 0 : process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
+  globalTimeout: deterministicProfile
+    ? deterministicProfileTimeoutMs
+    : undefined,
   use: {
     baseURL,
     trace: "on-first-retry",

@@ -145,6 +145,11 @@ profile-dependent specs **do not skip** — they run for real. Without
 `E2E_PROFILE=1` they **skip cleanly** via `e2eProfileEnabled()`, so the
 credential-less fast gate and CI stay green.
 
+The deterministic profile is bounded for CI: it runs without retries, has a
+global timeout, and includes only the lightweight UI matrix catalog check by
+default. Run `e2e/ui-matrix/*-ui.spec.ts` explicitly when validating the
+representative browser UI matrix.
+
 ### DOCX coverage note
 
 `import-roundtrip.spec.ts` covers the Markdown import path fully through the UI
