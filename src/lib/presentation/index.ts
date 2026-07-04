@@ -384,6 +384,12 @@ export type {
   ExportDeckSpec,
 } from "./export-spec";
 export { buildExportSpec } from "./export-spec";
+export type {
+  PresentationExportFallbackTier,
+  PresentationExportFormat,
+  PresentationExportPreflightResult,
+} from "./export-preflight";
+export { buildPresentationExportPreflight } from "./export-preflight";
 
 // Editor commands
 export {
