@@ -27,6 +27,7 @@ import { GeneratingIndicator } from "@/components/motion/generation-status";
 import { dedupePresentationDiagnostics } from "@/lib/presentation/diagnostic-handoff";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import type { Deck } from "@/lib/presentation/schema";
+import type { ThemePackageId } from "@/lib/presentation/theme-package-ids";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation/neutral-theme-package";
 import {
@@ -172,6 +173,8 @@ export interface DeckGenerationPreviewProps {
   contentJson: string;
   /** Generation options — re-sent verbatim on Regenerate. */
   options: DeckGenerationOptions;
+  /** Theme package used by the original request — re-sent on Regenerate. */
+  themePackageId: ThemePackageId;
   /** Apply the current proposal: parent opens the presentation editor with it. */
   onApply: (deck: Deck, diagnostics: PresentationDiagnostic[]) => void;
   /** Discard the proposal and fall back to the baseline. */
@@ -192,6 +195,7 @@ export function DeckGenerationPreview({
   generationDiagnostics,
   contentJson,
   options,
+  themePackageId,
   onApply,
   onDerive,
   onCancel,
@@ -221,7 +225,7 @@ export function DeckGenerationPreview({
 
   const handleRegenerate = async () => {
     setRegenError(false);
-    const result = await generate(contentJson, options);
+    const result = await generate(contentJson, options, { themePackageId });
     if (result.ok) {
       setProposal(result.deck);
       setDiagnostics(dedupePresentationDiagnostics(result.diagnostics));
