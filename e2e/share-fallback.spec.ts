@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { E2E_PROFILE_FIXTURE } from "./helpers/profile";
 
@@ -38,6 +38,18 @@ const FIXTURE_CONTENT_MARKERS = [
   E2E_PROFILE_FIXTURE.slideBodyText,
 ] as const;
 
+async function expectVisibleNotFoundWithoutFixtureContent(page: Page) {
+  await expect(
+    page.getByRole("heading", { name: /page not found/i }),
+  ).toBeVisible();
+  await expect(page.getByText("404").first()).toBeVisible();
+
+  const bodyText = await page.locator("body").innerText();
+  for (const marker of FIXTURE_CONTENT_MARKERS) {
+    expect(bodyText, `browser fallback leaked ${marker}`).not.toContain(marker);
+  }
+}
+
 test.describe("share/present fallback", () => {
   test("unknown and malformed public routes return 404 without leaking fixture content", async ({
     request,
@@ -63,7 +75,7 @@ test.describe("share/present fallback", () => {
 
     // Next.js notFound() serves the 404 page.
     expect(response?.status()).toBe(404);
-    await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("unknown /present link renders the not-found fallback", async ({
@@ -72,7 +84,7 @@ test.describe("share/present fallback", () => {
     const response = await page.goto(`/present/${UNKNOWN_SHARE_ID}`);
 
     expect(response?.status()).toBe(404);
-    await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("unknown /embed link renders the not-found fallback", async ({
@@ -81,6 +93,7 @@ test.describe("share/present fallback", () => {
     const response = await page.goto(`/embed/${UNKNOWN_SHARE_ID}`);
 
     expect(response?.status()).toBe(404);
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("unknown /present/<share>/embed renders the not-found fallback", async ({
@@ -92,7 +105,7 @@ test.describe("share/present fallback", () => {
     expect(response?.status()).toBe(404);
     // The embed sub-route goes through the same notFound() path as /present
     // and /embed, so the 404 page must render.
-    await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("slug-prefixed unknown share ID resolves to the safe 404 fallback without leaking content", async ({
@@ -103,7 +116,7 @@ test.describe("share/present fallback", () => {
     const response = await page.goto(`/present/${SLUG_PREFIXED_SHARE_ID}`);
 
     expect(response?.status()).toBe(404);
-    await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("malformed share ID resolves to the safe 404 fallback without leaking content", async ({
@@ -114,7 +127,7 @@ test.describe("share/present fallback", () => {
     );
 
     expect(response?.status()).toBe(404);
-    await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+    await expectVisibleNotFoundWithoutFixtureContent(page);
   });
 
   test("fallback 404 page does not render document editor or presentation regions", async ({
