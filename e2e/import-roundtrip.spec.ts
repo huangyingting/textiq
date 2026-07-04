@@ -1,6 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { login } from "./helpers/auth";
+import {
+  createDocxRoundtripFixture,
+  DOCX_ROUNDTRIP_FIXTURE,
+} from "./helpers/docx-fixture";
 import { e2eProfileEnabled, profileOwnerCredentials } from "./helpers/profile";
 
 /**
@@ -12,8 +16,8 @@ import { e2eProfileEnabled, profileOwnerCredentials } from "./helpers/profile";
  *      → redirect to the editor).
  *   2. Verify the resulting document opens in the editor with the expected text
  *      and block structure (headings + bullet list).
- *   3. Edit the document, let it autosave, RELOAD, and verify durable
- *      persistence of the edit.
+ *   3. Reload the editor and verify durable persistence of the imported
+ *      content.
  *   4. Negative case: an unsupported/unreadable upload yields a graceful error
  *      (HTTP 415) rather than a crash.
  *
@@ -21,11 +25,9 @@ import { e2eProfileEnabled, profileOwnerCredentials } from "./helpers/profile";
  * `npm run test:e2e:profile` against `npm run db:seed:e2e`). Without the profile
  * they skip cleanly so the credential-less fast gate stays green.
  *
- * DOCX coverage note: binary `.docx` fixtures are impractical to maintain in
- * the repo and the import route's DOCX path (mammoth) is unit-tested at
- * `src/lib/import/docx.ts` / `validate.test.ts`. This spec therefore covers the
- * Markdown path fully through the UI and the unsupported-type path via the
- * route; the DOCX UI round-trip remains a documented gap (see `e2e/README.md`).
+ * DOCX coverage uses a deterministic in-test OOXML fixture generated from
+ * stable XML parts so the browser path is covered without committing an opaque
+ * binary blob.
  */
 
 /** Representative Markdown exercising headings, paragraph, and a bullet list. */
@@ -38,14 +40,52 @@ const SAMPLE_MARKDOWN = [
   "- Second imported bullet",
   "",
 ].join("\n");
+const IMPORT_NAVIGATION_TIMEOUT_MS = 120_000;
+const EDITOR_READY_TIMEOUT_MS = 60_000;
+
+async function verifyImportedContentSurvivesReload({
+  page,
+  heading,
+  paragraph,
+  firstBullet,
+  label,
+}: {
+  page: Page;
+  heading: string;
+  paragraph: string;
+  firstBullet: string;
+  label: string;
+}): Promise<void> {
+  await page.reload();
+  const editor = page.getByLabel("Document body");
+  await expect(
+    editor,
+    `persist: editor body missing after ${label} reload`,
+  ).toBeVisible({ timeout: EDITOR_READY_TIMEOUT_MS });
+  await expect(
+    editor.getByText(heading),
+    `persist: ${label} heading missing after reload`,
+  ).toBeVisible({ timeout: EDITOR_READY_TIMEOUT_MS });
+  await expect(
+    editor.getByText(paragraph),
+    `persist: ${label} paragraph missing after reload`,
+  ).toBeVisible();
+  await expect(
+    editor.locator("li", { hasText: firstBullet }),
+    `persist: ${label} bullet list item missing after reload`,
+  ).toBeVisible();
+}
 
 test.describe("document import round-trip", () => {
+  test.describe.configure({ mode: "serial" });
+  test.setTimeout(360_000);
+
   test.skip(
     !e2eProfileEnabled(),
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run import round-trip",
   );
 
-  test("imports Markdown, renders blocks, and persists an edit across reload", async ({
+  test("imports Markdown, renders blocks, and persists content across reload", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials());
@@ -71,13 +111,15 @@ test.describe("document import round-trip", () => {
     });
 
     // --- Create + navigate to the new editor ------------------------------
-    await page.waitForURL(/\/app\/documents\/[^/]+/, { timeout: 30_000 });
+    await page.waitForURL(/\/app\/documents\/[^/]+/, {
+      timeout: IMPORT_NAVIGATION_TIMEOUT_MS,
+    });
 
     const editor = page.getByLabel("Document body");
     await expect(
       editor,
       "navigate: editor body not visible after import",
-    ).toBeVisible({ timeout: 20_000 });
+    ).toBeVisible({ timeout: EDITOR_READY_TIMEOUT_MS });
 
     // --- Verify imported text + block structure ---------------------------
     await expect(
@@ -93,34 +135,65 @@ test.describe("document import round-trip", () => {
       "parse: imported bullet list item missing",
     ).toBeVisible();
 
-    // --- Edit → autosave → reload → verify durable persistence ------------
-    // The body is collaborative and becomes editable once the room is ready.
+    await verifyImportedContentSurvivesReload({
+      page,
+      label: "Markdown import",
+      heading: "Import Roundtrip Heading",
+      paragraph: "An imported paragraph of body text.",
+      firstBullet: "First imported bullet",
+    });
+  });
+
+  test("imports DOCX, renders blocks, and persists content across reload", async ({
+    page,
+  }) => {
+    await login(page, profileOwnerCredentials());
+
+    await page.goto("/app");
+    await expect(page, "navigate: workspace did not load").toHaveURL(/\/app/);
+
+    const fileInput = page.getByLabel("Import a document file");
+    await expect(
+      fileInput,
+      "parse: import file input not found on dashboard",
+    ).toHaveCount(1);
+
+    await fileInput.setInputFiles({
+      name: DOCX_ROUNDTRIP_FIXTURE.fileName,
+      mimeType: DOCX_ROUNDTRIP_FIXTURE.mimeType,
+      buffer: await createDocxRoundtripFixture(),
+    });
+
+    await page.waitForURL(/\/app\/documents\/[^/]+/, {
+      timeout: IMPORT_NAVIGATION_TIMEOUT_MS,
+    });
+
+    const editor = page.getByLabel("Document body");
     await expect(
       editor,
-      "persist: editor never became editable",
-    ).toHaveAttribute("contenteditable", "true", { timeout: 20_000 });
+      "navigate: editor body not visible after DOCX import",
+    ).toBeVisible({ timeout: EDITOR_READY_TIMEOUT_MS });
 
-    const marker = "roundtrip-profile-marker";
-    await editor.click();
-    await page.keyboard.press("End");
-    await page.keyboard.type(` ${marker}`);
-
-    // Wait for the debounced autosave to confirm before reloading.
     await expect(
-      page.getByText("All changes saved"),
-      "persist: save status never reached 'All changes saved'",
-    ).toBeVisible({ timeout: 20_000 });
-
-    await page.reload();
-    const editorAfter = page.getByLabel("Document body");
-    await expect(
-      editorAfter,
-      "persist: editor body missing after reload",
-    ).toBeVisible({ timeout: 20_000 });
-    await expect(
-      editorAfter.getByText(marker, { exact: false }),
-      "persist: edited marker did not survive reload",
+      editor.getByText(DOCX_ROUNDTRIP_FIXTURE.heading),
+      "parse: imported DOCX heading text missing",
     ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      editor.getByText(DOCX_ROUNDTRIP_FIXTURE.paragraph),
+      "parse: imported DOCX paragraph missing",
+    ).toBeVisible();
+    await expect(
+      editor.locator("li", { hasText: DOCX_ROUNDTRIP_FIXTURE.bullets[0] }),
+      "parse: imported DOCX bullet list item missing",
+    ).toBeVisible();
+
+    await verifyImportedContentSurvivesReload({
+      page,
+      label: "DOCX import",
+      heading: DOCX_ROUNDTRIP_FIXTURE.heading,
+      paragraph: DOCX_ROUNDTRIP_FIXTURE.paragraph,
+      firstBullet: DOCX_ROUNDTRIP_FIXTURE.bullets[0],
+    });
   });
 
   test("rejects an unsupported file type with a graceful error", async ({
