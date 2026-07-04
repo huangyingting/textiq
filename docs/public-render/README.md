@@ -68,6 +68,9 @@ deny with 404; existing documents without valid bound access deny with 403.
 Public presentation rendering builds presentation blocks from `contentJson` and
 collects visual dependencies from visual blocks. If `deckJson` parses, it is the
 starting deck; otherwise the public model derives a deck from document blocks.
+Invalid deck diagnostics stay on the server-side public model for observability;
+anonymous present/embed viewers receive the derived read-only deck when content
+is usable, and see recovery/no-slides states only when no fallback can be built.
 The deck is reconciled against available visuals so public rendering never
 references missing visual ids silently.
 
