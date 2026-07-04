@@ -20,7 +20,6 @@ import { Prisma } from "@/generated/prisma/client";
 import {
   atomicSaveDocumentLexical,
   mirrorVisualNodesInTx,
-  patchDeck,
   persistDeck,
   regenerateDocumentShareLink,
   rebuildMirror,
@@ -33,7 +32,6 @@ import {
 } from "./persistence-service";
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
 import { prisma } from "@/lib/prisma";
-import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type { CurrentDeck, CurrentSlideChildNode } from "./deck-schema";
 import * as persistenceService from "./persistence-service";
 import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
@@ -118,10 +116,6 @@ function prismaTransaction<T extends Prisma.TransactionClient>(
 
 function prismaJson(value: unknown): Prisma.JsonValue {
   return value as unknown as Prisma.JsonValue;
-}
-
-function deckPatch(value: unknown): DeckPatch {
-  return value as unknown as DeckPatch;
 }
 
 function requireStringField(value: unknown, fieldName: string): string {
@@ -799,122 +793,6 @@ describe("schema parse-failure telemetry", () => {
 // ---------------------------------------------------------------------------
 
 describe("deck persistence operations", () => {
-  test("patchDeck returns not found before replaying patches", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => null);
-
-    const result = await patchDeck("doc-missing", [], null);
-
-    assert.deepEqual(result, {
-      ok: false,
-      error: "Document not found.",
-      failure: { code: "document_not_found", retryable: false },
-    });
-  });
-
-  test("patchDeck returns fallback for existing documents", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      id: "doc-fallback",
-    }));
-    const updateMany = stubPrismaMethod(
-      t,
-      prisma.document,
-      "updateMany",
-      async () => ({ count: 1 }),
-    );
-
-    const result = await patchDeck("doc-fallback", [], "client-token");
-
-    assert.deepEqual(result, { ok: "fallback" });
-    assert.equal(updateMany.calls.length, 0);
-  });
-
-  test("patchDeck returns fallback when a patch is not replayable", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      deckJson: VALID_DECK,
-      deckRevisionToken: "deck-token",
-    }));
-
-    const unsupportedPatch = deckPatch({
-      schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
-      op: "slide.add",
-      slideIds: ["s2"],
-    });
-
-    const result = await patchDeck(
-      "doc-fallback",
-      [unsupportedPatch],
-      "deck-token",
-    );
-
-    assert.deepEqual(result, { ok: "fallback" });
-  });
-
-  test("patchDeck returns fallback for replayable-looking patches with stale tokens", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      id: "doc-fallback",
-    }));
-    const updateMany = stubPrismaMethod(
-      t,
-      prisma.document,
-      "updateMany",
-      async () => ({ count: 1 }),
-    );
-
-    const titlePatch = deckPatch({
-      schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
-      op: "slide.update_title",
-      slideIds: ["s1"],
-      slideFields: { s1: { title: "Stale token still falls back" } },
-    });
-
-    const result = await patchDeck(
-      "doc-fallback",
-      [titlePatch],
-      "stale-client-token",
-    );
-
-    assert.deepEqual(result, { ok: "fallback" });
-    assert.equal(updateMany.calls.length, 0);
-  });
-
-  test("patchDeck does not replay patches or snapshot documents", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      id: "doc-patch",
-    }));
-    stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
-      count: 1,
-    }));
-    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => null);
-    const createVersion = stubPrismaMethod(
-      t,
-      prisma.documentVersion,
-      "create",
-      async () => ({}),
-    );
-    stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
-    const deleteMany = stubPrismaMethod(
-      t,
-      prisma.documentVersion,
-      "deleteMany",
-      async () => ({}),
-    );
-
-    const titlePatch = deckPatch({
-      schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
-      op: "slide.update_title",
-      slideIds: ["s1"],
-      slideFields: { s1: { title: "Quarterly Readout" } },
-    });
-
-    const result = await patchDeck("doc-patch", [titlePatch], "deck-token", {
-      userId: "user-editor",
-    });
-
-    assert.deepEqual(result, { ok: "fallback" });
-    assert.equal(createVersion.calls.length, 0);
-    assert.equal(deleteMany.calls.length, 0);
-  });
-
   test("persistDeck validates input before writing", async () => {
     const result = await persistDeck("doc-invalid", { not: "a deck" }, null);
 
@@ -1207,19 +1085,9 @@ describe("deck persistence operations", () => {
     assert.equal(commentUpdateMany.calls.length, 0);
   });
 
-  test("patchDeck ignores invalid stored deck content and returns fallback", async (t) => {
-    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
-      id: "doc-invalid-stored",
-    }));
-
-    const result = await patchDeck("doc-invalid-stored", [], "deck-token");
-
-    assert.deepEqual(result, { ok: "fallback" });
-  });
-
-  test("persistence-service closes command save export and keeps supported save exports", () => {
+  test("persistence-service closes patch and command save exports", () => {
     assert.equal(typeof persistenceService.persistDeck, "function");
-    assert.equal(typeof persistenceService.patchDeck, "function");
+    assert.equal("patchDeck" in persistenceService, false);
     assert.equal("persistDeckCommand" in persistenceService, false);
   });
 });

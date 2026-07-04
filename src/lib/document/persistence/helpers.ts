@@ -2,7 +2,7 @@
  * Shared internal helpers for the persistence sub-modules.
  *
  * `snapshotDocumentVersion` is called from visual (via atomicSaveDocumentLexical),
- * deck (persistDeck / patchDeck), and versioning (restoreVersion). Centralising
+ * deck (persistDeck), and versioning (restoreVersion). Centralising
  * it here avoids circular imports between those modules.
  */
 

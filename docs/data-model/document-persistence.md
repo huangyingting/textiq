@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "This document describes the service boundary that persists editable document state, rebuilds visual projections, writes decks, snapshots versions, restores versions, and reconciles document-to-deck dependencies. CRUD/listing behavior lives in ../documents/README.md; JSON schema contracts live in deck.md and visual-mirror.md."
 ---
 
@@ -72,10 +72,10 @@ Deck writes go through `writeDeckWithCas`:
 4. Update `Document.deckJson` only when the caller's expected token matches.
 5. Snapshot document state on successful writes.
 
-`persistDeck` writes a full deck. `patchDeck` is currently a compatibility
-shim: it checks document existence and returns `{ ok: "fallback" }` without
-replaying `DeckPatch[]`. `persistDeckCommand` is currently disabled for presentation-only
-slide editing.
+`persistDeck` writes a full deck and is the only supported deck write service.
+Patch replay is intentionally closed: no `patchDeck`/`saveDeckPatch` endpoint is
+exported for presentation runtime callers, and `persistDeckCommand` is currently
+disabled for presentation-only slide editing.
 
 Conflict results return the latest server revision token so clients can recover
 without overwriting concurrent edits.

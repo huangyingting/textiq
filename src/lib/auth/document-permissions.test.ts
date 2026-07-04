@@ -396,7 +396,6 @@ const ACTION_CAPABILITY: Record<string, Capability> = {
   fetchDeckJson: "view",
   saveDocumentLexical: "edit",
   saveDeckJson: "edit",
-  saveDeckPatch: "edit",
   toggleDocumentSharing: "manage",
   regenerateShareLink: "manage",
   updateSharePolicy: "manage",
@@ -413,9 +412,9 @@ const ACTION_CAPABILITY: Record<string, Capability> = {
   uploadSlideAsset: "edit",
 };
 
-test("deck action capability map omits disabled command-save entry point", () => {
+test("deck action capability map exposes only the full-deck save entry point", () => {
   assert.equal(ACTION_CAPABILITY.saveDeckJson, "edit");
-  assert.equal(ACTION_CAPABILITY.saveDeckPatch, "edit");
+  assert.equal("saveDeckPatch" in ACTION_CAPABILITY, false);
   assert.equal("saveDeckCommand" in ACTION_CAPABILITY, false);
 });
 

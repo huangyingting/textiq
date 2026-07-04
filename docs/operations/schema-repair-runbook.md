@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "Epic: #493 — Persisted schema and cross-projection consistency gates Issue: #504 — Schema parse-failure telemetry + repair playbook"
 ---
 
@@ -24,7 +24,7 @@ through `src/lib/log.ts` (`logError`) with **safe identifiers only** — never
 document content.
 
 Diagnostics are emitted from the document persistence service
-(`src/lib/document/persistence-service.ts`): `persistDeck`, `patchDeck`,
+(`src/lib/document/persistence-service.ts`): `persistDeck`,
 `sanitizeRestoredDeck`, `reconcileDeckAfterMirror`, and the visual mirror
 rebuild (`mirrorVisualNodesInTx`).
 

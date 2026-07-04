@@ -1,30 +1,24 @@
 /**
  * Deck persistence operations.
  *
- * Owns full-deck save (`persistDeck`) and compatibility shims for patch-based
- * (`patchDeck`) entry points.
+ * Owns full-deck save (`persistDeck`) with optimistic revision-token CAS.
  */
 
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeDeckWithCas } from "@/lib/document/deck-cas-writer";
 import { logError } from "@/lib/log";
-import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import {
   safeParseDeck,
   type Deck,
   type SlideChildNode,
   type SlideNode,
 } from "@/lib/document/persistence/current-deck-schema";
-import type {
-  SaveDeckFailureResult,
-  SaveDeckPatchResult,
-  SaveDeckResult,
-} from "@/lib/document/persistence-types";
+import type { SaveDeckResult } from "@/lib/document/persistence-types";
 import { snapshotDocumentVersion } from "./helpers";
 
-// Re-export so the barrel can surface them via `export *`
-export type { DeckPatch, SaveDeckPatchResult, SaveDeckResult };
+// Re-export so the barrel can surface it via `export *`
+export type { SaveDeckResult };
 
 type SlideNodeIndex = Map<string, Set<string>>;
 
@@ -159,14 +153,6 @@ async function reconcileCommentAnchorsAfterDeckSave(
   await floatOrphanedCommentAnchors(documentId, nextDeck);
 }
 
-function fail(
-  error: string,
-  code: SaveDeckFailureResult["failure"]["code"],
-  retryable: boolean,
-): SaveDeckFailureResult {
-  return { ok: false, error, failure: { code, retryable } };
-}
-
 // ---------------------------------------------------------------------------
 // Exported service operations
 // ---------------------------------------------------------------------------
@@ -207,37 +193,4 @@ export async function persistDeck(
       );
     },
   });
-}
-
-/**
- * Compatibility patch entry point for non-presentation clients.
- *
- * Patch replay is currently disabled for the presentation runtime, so this operation does
- * not attempt to apply any `DeckPatch` records and always returns
- * `{ ok: "fallback" }` after confirming the target document exists.
- */
-export async function patchDeck(
-  documentId: string,
-  _patches: DeckPatch[],
-  _clientToken: string | null | undefined,
-  _options: { userId?: string | null } = {},
-): Promise<SaveDeckPatchResult> {
-  try {
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-      select: { id: true },
-    });
-    if (!document) {
-      return fail("Document not found.", "document_not_found", false);
-    }
-  } catch (error) {
-    logError("deck.patch", error, { documentId, operation: "findUnique" });
-    return fail(
-      "Failed to prepare deck patch save. Please try again.",
-      "storage_unavailable",
-      true,
-    );
-  }
-
-  return { ok: "fallback" };
 }

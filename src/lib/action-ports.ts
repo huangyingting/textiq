@@ -7,12 +7,10 @@ import type {
 } from "@/lib/comments";
 import type {
   FetchDeckResult,
-  SaveDeckPatchResult,
   SaveDeckResult,
 } from "@/lib/document/persistence-types";
 import type { SearchResults } from "@/lib/document/list";
 import type { Deck } from "@/lib/document/deck-model";
-import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 import type { GenerateOptions, GenerateResult } from "@/lib/visual/generate";
 import type { Visual } from "@/lib/visual/schema";
 import type {
@@ -31,11 +29,6 @@ export interface DeckSavePort {
     deckJson: unknown,
     clientToken?: string | null,
   ) => Promise<SaveDeckResult>;
-  saveDeckPatch: (
-    documentId: string,
-    patches: DeckPatch[],
-    clientToken: string | null | undefined,
-  ) => Promise<SaveDeckPatchResult>;
 }
 
 export type DeckActionPort = DeckFetchPort & DeckSavePort;
