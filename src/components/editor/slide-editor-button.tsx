@@ -276,6 +276,11 @@ export function SlideEditorButton({
   });
 
   const themeResolution = deck ? resolveThemePackageForDeck(deck) : null;
+  const aiPreviewThemePackage = aiPreview
+    ? resolveThemePackageForDeck({
+        theme: { packageId: aiPreview.themePackageId },
+      }).package
+    : null;
   const editorDiagnostics = [
     ...deckOpenDiagnostics,
     ...(themeResolution?.diagnostics ?? []),
@@ -461,6 +466,8 @@ export function SlideEditorButton({
           generationDiagnostics={aiPreview.generationDiagnostics}
           contentJson={aiPreview.contentJson}
           options={aiPreview.options}
+          themePackageId={aiPreview.themePackageId}
+          themePackage={aiPreviewThemePackage}
           onApply={handleAiPreviewApply}
           onDerive={handleAiPreviewDerive}
           onCancel={handleAiPreviewCancel}
