@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "TextIQ app chrome uses the --ds-* tokens in src/app/globals.css as the source of truth. Visual-content palettes and themes remain separate in src/lib/visual/themes.ts."
 ---
 
@@ -80,6 +80,10 @@ The check rejects:
 Raw palette values are allowed only in token/theme-owned files and visual-content
 theme definitions.
 
+High-contrast and forced-colors support is part of the chrome token contract:
+critical editor affordances must keep visible outlines, borders, or system-color
+fills when `forced-colors: active` disables shadows and translucent surfaces.
+
 ## Invariants
 
 1. App chrome uses `--ds-*` tokens; visual content themes stay separate.
@@ -91,6 +95,9 @@ theme definitions.
    competing overlays.
 5. Pointer and viewport SSR defaults prefer complete controls on first paint and
    progressively adapt after mount.
+6. Forced-colors/high-contrast modes use system colors for app/editor chrome
+   tokens, with explicit outlines for focus, selection frames, handles, guides,
+   filmstrip active states, mobile sheets, diagnostics, and present-mode HUDs.
 
 ## Primary Tests
 
