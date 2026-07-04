@@ -21,6 +21,7 @@
 /* node:coverage enable */
 
 import crypto from "node:crypto";
+import net from "node:net";
 
 import {
   type RateLimitStore,
@@ -28,29 +29,286 @@ import {
   type RateLimitOptions,
   type RateLimitResult,
 } from "@/lib/ai/quota";
+import { logInfo } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 
 type RateLimitPrismaClient = Pick<typeof prisma, "rateLimitHit">;
 
-/**
- * Extracts the originating client IP from standard proxy headers. Returns the
- * first entry of `x-forwarded-for` (the original client when set by a trusted
- * proxy), then falls back to `x-real-ip`. Returns `null` when neither header is
- * present so the caller can decide how to treat an unidentifiable client.
- */
-export function getClientIp(headers: Headers): string | null {
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) {
-      return first;
+type IpFamily = "ipv4" | "ipv6";
+
+export type ClientIpSource =
+  | "forwarded-for"
+  | "real-ip"
+  | "remote-address"
+  | "missing";
+
+export type ClientIpDiagnosticReason =
+  | "forwarded-header-ignored"
+  | "forwarded-header-invalid"
+  | "remote-address-invalid";
+
+export interface ClientIpDiagnostic {
+  readonly reason: ClientIpDiagnosticReason;
+  readonly selectedSource: ClientIpSource;
+  readonly forwardedForCount: number;
+  readonly hasRealIp: boolean;
+  readonly hasRemoteAddress: boolean;
+  readonly trustedProxyConfigured: boolean;
+  readonly remoteAddressTrusted?: boolean;
+}
+
+export interface ClientIpOptions {
+  /**
+   * Platform-provided immediate peer address. In Next.js route handlers this is
+   * usually supplied via `TRUSTED_PROXY_REMOTE_ADDR_HEADER`.
+   */
+  readonly remoteAddress?: string | null;
+  /**
+   * Trusted reverse-proxy addresses or CIDRs. Overrides
+   * `TRUSTED_PROXY_CIDRS`; pass an empty array to explicitly trust none.
+   */
+  readonly trustedProxyCidrs?: readonly string[];
+  /**
+   * Header that contains the immediate peer address. Overrides
+   * `TRUSTED_PROXY_REMOTE_ADDR_HEADER`.
+   */
+  readonly remoteAddressHeader?: string | null;
+  /** Optional safe diagnostics sink. Raw IPs are never included. */
+  readonly onDiagnostic?: (diagnostic: ClientIpDiagnostic) => void;
+}
+
+interface TrustedProxyMatcher {
+  readonly configured: boolean;
+  isTrusted(ip: string): boolean;
+}
+
+const CLIENT_IP_LOG_SCOPE = "rate-limit.client-ip";
+const LOCAL_DEV_TRUSTED_PROXY_CIDRS = ["127.0.0.0/8", "::1/128"] as const;
+
+function splitCsv(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function trustedProxyCidrsFromEnv(): readonly string[] {
+  const configured = splitCsv(process.env.TRUSTED_PROXY_CIDRS);
+  if (configured.length > 0) {
+    return configured;
+  }
+  return process.env.NODE_ENV === "production"
+    ? []
+    : LOCAL_DEV_TRUSTED_PROXY_CIDRS;
+}
+
+function normalizeHeaderName(value: string | null | undefined): string | null {
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) return null;
+  return /^[!#$%&'*+\-.^_`|~0-9a-z]+$/.test(trimmed) ? trimmed : null;
+}
+
+function normalizeIp(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const unwrapped =
+    trimmed.startsWith("[") && trimmed.endsWith("]")
+      ? trimmed.slice(1, -1)
+      : trimmed;
+  return net.isIP(unwrapped) === 0 ? null : unwrapped;
+}
+
+function ipFamily(ip: string): IpFamily | null {
+  const version = net.isIP(ip);
+  if (version === 4) return "ipv4";
+  if (version === 6) return "ipv6";
+  return null;
+}
+
+function createTrustedProxyMatcher(
+  trustedProxyCidrs: readonly string[],
+): TrustedProxyMatcher {
+  const blockList = new net.BlockList();
+  let configured = false;
+  for (const entry of trustedProxyCidrs) {
+    const [addressPart, prefixPart] = entry.split("/", 2);
+    const address = normalizeIp(addressPart);
+    const family = address ? ipFamily(address) : null;
+    if (!address || !family) continue;
+    try {
+      if (prefixPart === undefined) {
+        blockList.addAddress(address, family);
+      } else {
+        const prefix = Number.parseInt(prefixPart, 10);
+        const maxPrefix = family === "ipv4" ? 32 : 128;
+        if (!Number.isInteger(prefix) || prefix < 0 || prefix > maxPrefix) {
+          continue;
+        }
+        blockList.addSubnet(address, prefix, family);
+      }
+      configured = true;
+    } catch {
+      // Invalid trust entries are ignored so they cannot accidentally expand
+      // the trust boundary.
     }
   }
-  const realIp = headers.get("x-real-ip")?.trim();
+  return {
+    configured,
+    isTrusted(ip: string): boolean {
+      const family = ipFamily(ip);
+      return family ? blockList.check(ip, family) : false;
+    },
+  };
+}
+
+function forwardedForEntries(headers: Headers): string[] {
+  const forwarded = headers.get("x-forwarded-for");
+  if (!forwarded) return [];
+  return forwarded
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function emitClientIpDiagnostic(
+  onDiagnostic: ClientIpOptions["onDiagnostic"],
+  diagnostic: ClientIpDiagnostic,
+): void {
+  onDiagnostic?.(diagnostic);
+}
+
+export function buildClientIpDiagnosticContext(
+  diagnostic: ClientIpDiagnostic,
+): Record<string, unknown> {
+  return {
+    reason: diagnostic.reason,
+    selectedSource: diagnostic.selectedSource,
+    forwardedForCount: diagnostic.forwardedForCount,
+    hasRealIp: diagnostic.hasRealIp,
+    hasRemoteAddress: diagnostic.hasRemoteAddress,
+    trustedProxyConfigured: diagnostic.trustedProxyConfigured,
+    ...(diagnostic.remoteAddressTrusted === undefined
+      ? {}
+      : { remoteAddressTrusted: diagnostic.remoteAddressTrusted }),
+  };
+}
+
+export function logClientIpDiagnostic(diagnostic: ClientIpDiagnostic): void {
+  logInfo(
+    CLIENT_IP_LOG_SCOPE,
+    "client-ip-trust-decision",
+    buildClientIpDiagnosticContext(diagnostic),
+  );
+}
+
+/**
+ * Extracts the originating client IP with an explicit trusted-proxy boundary.
+ *
+ * Forwarded headers are honored only when the immediate peer address is known
+ * and falls inside `TRUSTED_PROXY_CIDRS` (or the supplied override). Otherwise
+ * the function uses the platform-provided remote address, or returns `null` so
+ * the caller can fall back to a conservative shared bucket.
+ */
+export function getClientIp(
+  headers: Headers,
+  options: ClientIpOptions = {},
+): string | null {
+  const entries = forwardedForEntries(headers);
+  const realIp = normalizeIp(headers.get("x-real-ip"));
+  const remoteHeader = normalizeHeaderName(
+    options.remoteAddressHeader ?? process.env.TRUSTED_PROXY_REMOTE_ADDR_HEADER,
+  );
+  const remoteAddress = normalizeIp(
+    options.remoteAddress ?? (remoteHeader ? headers.get(remoteHeader) : null),
+  );
+  const matcher = createTrustedProxyMatcher(
+    options.trustedProxyCidrs ?? trustedProxyCidrsFromEnv(),
+  );
+  const hasForwardedHeaders =
+    entries.length > 0 || headers.get("x-real-ip")?.trim() !== undefined;
+  const hasRemoteAddress =
+    (options.remoteAddress !== undefined && options.remoteAddress !== null) ||
+    (remoteHeader !== null && headers.get(remoteHeader) !== null);
+
+  const baseDiagnostic = {
+    forwardedForCount: entries.length,
+    hasRealIp: headers.get("x-real-ip")?.trim() !== undefined,
+    hasRemoteAddress,
+    trustedProxyConfigured: matcher.configured,
+  } satisfies Pick<
+    ClientIpDiagnostic,
+    | "forwardedForCount"
+    | "hasRealIp"
+    | "hasRemoteAddress"
+    | "trustedProxyConfigured"
+  >;
+
+  if (hasRemoteAddress && !remoteAddress) {
+    emitClientIpDiagnostic(options.onDiagnostic, {
+      ...baseDiagnostic,
+      reason: "remote-address-invalid",
+      selectedSource: "missing",
+    });
+  }
+
+  if (!remoteAddress) {
+    if (hasForwardedHeaders) {
+      emitClientIpDiagnostic(options.onDiagnostic, {
+        ...baseDiagnostic,
+        reason: "forwarded-header-ignored",
+        selectedSource: "missing",
+      });
+    }
+    return null;
+  }
+
+  const remoteAddressTrusted = matcher.isTrusted(remoteAddress);
+  if (!matcher.configured || !remoteAddressTrusted) {
+    if (hasForwardedHeaders) {
+      emitClientIpDiagnostic(options.onDiagnostic, {
+        ...baseDiagnostic,
+        reason: "forwarded-header-ignored",
+        selectedSource: "remote-address",
+        remoteAddressTrusted,
+      });
+    }
+    return remoteAddress;
+  }
+
+  if (entries.length > 0) {
+    const chain = entries.map(normalizeIp);
+    if (chain.some((entry) => entry === null)) {
+      emitClientIpDiagnostic(options.onDiagnostic, {
+        ...baseDiagnostic,
+        reason: "forwarded-header-invalid",
+        selectedSource: "remote-address",
+        remoteAddressTrusted,
+      });
+      return remoteAddress;
+    }
+    for (let index = chain.length - 1; index >= 0; index--) {
+      const entry = chain[index]!;
+      if (!matcher.isTrusted(entry)) {
+        return entry;
+      }
+    }
+    return chain[0] ?? remoteAddress;
+  }
+
+  if (headers.get("x-real-ip")?.trim() && !realIp) {
+    emitClientIpDiagnostic(options.onDiagnostic, {
+      ...baseDiagnostic,
+      reason: "forwarded-header-invalid",
+      selectedSource: "remote-address",
+      remoteAddressTrusted,
+    });
+    return remoteAddress;
+  }
   if (realIp) {
     return realIp;
   }
-  return null;
+  return remoteAddress;
 }
 
 /**
