@@ -21,7 +21,7 @@ import { makeDiagnostic } from "@/lib/presentation/diagnostics";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import type { SlideChildNode, SlideNode } from "@/lib/presentation/schema";
 import type { StyleObject, StylePatch } from "@/lib/presentation/style-schema";
-import { renderWithReact } from "@/test/react-server-renderer";
+import { renderWithTestRenderer } from "@/test/react-render-harness";
 import {
   SLIDE_FONT_OPTIONS,
   slideFontCssStack,
@@ -103,7 +103,7 @@ function render(element: ReactNode) {
 }
 
 function withFakeHooks<T>(renderComponent: () => T): T {
-  return renderWithReact(renderComponent);
+  return renderWithTestRenderer(renderComponent);
 }
 
 describe("inspector panels render and wire controls", () => {

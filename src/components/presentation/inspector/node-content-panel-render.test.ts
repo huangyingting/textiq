@@ -11,12 +11,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { NodeContentPanel } from "./node-content-panel";
 import type { SlideChildNode } from "@/lib/presentation/schema";
-import { createServerRenderHarness } from "@/test/react-server-renderer";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
 
 function withMockUseState<T>(callback: () => T): T {
-  return createServerRenderHarness({
+  return createReactRenderHarness({
     idPrefix: "node-content-panel-test-id",
     message: "React internals are required for hook dispatcher tests",
   }).run(callback);

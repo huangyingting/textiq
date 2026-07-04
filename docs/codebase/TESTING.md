@@ -1,7 +1,7 @@
 ---
-type: "reference"
-status: "current"
-last_updated: "2026-07-04"
+Type: "reference"
+Status: "current"
+Last updated: "2026-07-04"
 description: "Test framework, commands, layout, isolation strategy, coverage gates, and known testing gaps for TextIQ."
 ---
 
@@ -48,7 +48,7 @@ npm run test:coverage-map
 - Database isolation: default local/CI gate uses SQLite with `DB_PROVIDER=sqlite` and `DATABASE_URL=file:./prisma/dev.db`.
 - E2E isolation: deterministic profile seeds known users/documents/assets through `npm run db:seed:e2e` and `e2e/.e2e-fixture.json`.
 - Common failure mode: `npm run test:unit -- <file>` still runs the script's `src/**/*.test.ts` glob; direct focused file validation should use `node --import tsx --test <file>`.
-- Known active cleanup: `docs/presentation/test-strategy-plan.md` tracks remaining tests that still use `src/test/react-server-renderer.ts` harnesses.
+- Presentation cleanup: `docs/presentation/test-strategy-plan.md` records the completed removal of React hook-dispatcher harness tests.
 
 ## 5) Coverage And Quality Signals
 
@@ -59,7 +59,7 @@ npm run test:coverage-map
 - Known gaps/flaky areas:
   - DOCX UI E2E round-trip is documented as a manual gap in `e2e/README.md`; parser coverage is unit-tested.
   - Deterministic E2E workflow is advisory/non-fatal until web-server cold-start readiness is hardened.
-  - Presentation hook-harness retirement remains active in `docs/presentation/test-strategy-plan.md`.
+  - Presentation hook-harness retirement is complete; keep new coverage on public controllers, descriptors, DOM adapters, or browser-visible behavior.
 
 ## 6) Evidence
 

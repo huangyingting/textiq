@@ -9,9 +9,9 @@ import {
   buildTextNode,
 } from "@/test/builders/presentation-deck";
 import {
-  createServerRenderHarness,
+  createReactRenderHarness,
   type ServerRenderHarnessOptions,
-} from "@/test/react-server-renderer";
+} from "@/test/react-render-harness";
 import type { Deck, SlideChildNode } from "@/lib/presentation/schema";
 import {
   createSelectionState,
@@ -45,7 +45,7 @@ type TrackedKeyboardEvent = React.KeyboardEvent<HTMLElement> & {
 };
 
 function createHookRenderer(options: ServerRenderHarnessOptions = {}) {
-  return createServerRenderHarness({
+  return createReactRenderHarness({
     idPrefix: "interaction-hooks-id",
     ...options,
   });

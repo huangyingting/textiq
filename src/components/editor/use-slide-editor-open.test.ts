@@ -10,6 +10,7 @@ import {
   createSerializedDeckPersistor,
   createDeckAutosaveOnDue,
   persistDeckWithRecovery,
+  resolveDeckSaveRejectionError,
 } from "./use-slide-editor-open";
 
 function waitForAsyncDrain(): Promise<void> {
@@ -26,6 +27,17 @@ function createDeferred<T>() {
     resolve: (value: T) => resolve?.(value),
   };
 }
+
+test("resolveDeckSaveRejectionError adds fallback details only for non-empty errors", () => {
+  assert.equal(
+    resolveDeckSaveRejectionError(new Error("")),
+    "Couldn't save your deck. Check your connection and retry.",
+  );
+  assert.equal(
+    resolveDeckSaveRejectionError("disk full"),
+    "Couldn't save your deck. Check your connection and retry. (disk full)",
+  );
+});
 
 test("persistDeckWithRecovery clears saving after rejected deck writes", async () => {
   const deck = createBlankDeck({ documentId: "doc-1413" });
