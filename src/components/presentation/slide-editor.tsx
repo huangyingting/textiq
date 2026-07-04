@@ -3127,7 +3127,7 @@ export function SlideEditor({
                       {stageGuides.map((guide, index) => (
                         <span
                           key={`${guide.axis}-${guide.positionPct}-${index}`}
-                          className="absolute bg-ds-accent-fill/70"
+                          className="tiq-stage-snap-guide absolute bg-ds-accent-fill/70"
                           style={
                             guide.axis === "x"
                               ? {
