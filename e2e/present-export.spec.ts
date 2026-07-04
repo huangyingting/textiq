@@ -575,6 +575,10 @@ test.describe("present + export", () => {
 
     const region = page.getByRole("region", { name: /^Presentation/ });
     await expect(region).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByText(SECOND_SLIDE_TEXT, { exact: false }).first(),
+      "embed: deep-link to #2 should render the second seeded slide before Previous",
+    ).toBeVisible({ timeout: 15_000 });
 
     await expect(async () => {
       await page.getByRole("button", { name: "Previous slide" }).last().click();

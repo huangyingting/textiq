@@ -29,6 +29,10 @@ import {
   PresenterPanelPresentation,
   SlideOverviewPanelPresentation,
 } from "./present-mode/presenter-tools";
+import {
+  usePresentSlideNavigation,
+  usePublicPresentSlideHash,
+} from "./present-shell";
 import { PublicPresentViewer } from "./public-present-viewer";
 
 type ElementProps = Record<string, unknown>;
@@ -394,12 +398,37 @@ test("PublicPresentViewer drives navigation, embed chrome, and recovery details"
     );
 
     assert.doesNotMatch(embedHtml, /Presentation controls/);
-    assert.match(embedHtml, /2 \/ 2/);
+    assert.match(embedHtml, /1 \/ 2/);
     assert.match(
       recoveryWithoutDetails,
       /Presentation deck could not be opened/,
     );
     assert.doesNotMatch(recoveryWithoutDetails, /<ul/);
+  });
+});
+
+test("public present hash sync preserves initial deep links before writing navigation state", async () => {
+  await withHappyDom((window) => {
+    window.history.replaceState(null, "", "/present/deck#2");
+    const renderer = createHookRenderer({ runEffects: true });
+    const runProbe = () =>
+      renderer.run(() => {
+        const navigation = usePresentSlideNavigation(2, 0);
+        usePublicPresentSlideHash({
+          currentIndex: navigation.currentIndex,
+          total: 2,
+          goToSlide: navigation.goToSlide,
+        });
+        return navigation;
+      });
+
+    let navigation = runProbe();
+    assert.equal(navigation.currentIndex, 0);
+    assert.equal(window.location.hash, "#2");
+
+    navigation = runProbe();
+    assert.equal(navigation.currentIndex, 1);
+    assert.equal(window.location.hash, "#2");
   });
 });
 

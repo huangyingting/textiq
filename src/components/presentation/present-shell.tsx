@@ -279,18 +279,48 @@ export function usePresentNavigationShellPresentation<T extends HTMLElement>({
   };
 }
 
-export function initialPublicPresentHashSlideIndex(total: number): number {
-  if (typeof window === "undefined") return 0;
-  return presentSlideIndexFromHash(window.location.hash, total);
-}
+export function usePublicPresentSlideHash({
+  currentIndex,
+  total,
+  goToSlide,
+}: {
+  currentIndex: number;
+  total: number;
+  goToSlide: (index: number) => void;
+}): void {
+  const currentIndexRef = useRef(currentIndex);
+  const initialHashSyncedRef = useRef(false);
+  const initialHashWriteSkippedRef = useRef(false);
 
-export function usePublicPresentSlideHash(currentIndex: number): void {
   useEffect(() => {
-    window.history.replaceState(
-      null,
-      "",
-      presentHashFromSlideIndex(currentIndex),
-    );
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    const syncFromHash = () => {
+      const hashIndex = presentSlideIndexFromHash(window.location.hash, total);
+      initialHashSyncedRef.current = true;
+      if (hashIndex !== currentIndexRef.current) {
+        goToSlide(hashIndex);
+      }
+    };
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, [goToSlide, total]);
+
+  useEffect(() => {
+    if (!initialHashSyncedRef.current) return;
+    if (!initialHashWriteSkippedRef.current) {
+      initialHashWriteSkippedRef.current = true;
+      return;
+    }
+
+    const hash = presentHashFromSlideIndex(currentIndex);
+    if (window.location.hash !== hash) {
+      window.history.replaceState(null, "", hash);
+    }
   }, [currentIndex]);
 }
 

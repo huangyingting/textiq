@@ -26,7 +26,6 @@ import { presentCanvasAspectRatio } from "@/lib/presentation/present-shell";
 import type { Visual } from "@/lib/visual/schema";
 import {
   PRESENTATION_NAVIGATION_SHORTCUT_IDS,
-  initialPublicPresentHashSlideIndex,
   usePresentKeyboardNavigation,
   usePresentNavigationShellPresentation,
   usePublicPresentSlideHash,
@@ -39,6 +38,101 @@ import { SlideCanvas } from "./slide-canvas";
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
+
+const PUBLIC_PRESENT_NAVIGATION_SCRIPT = `(() => {
+  const script = document.currentScript;
+  const root = script?.closest("[data-public-present-viewer]");
+  if (!root || root.__textiqPresentEnhanced) return;
+  root.__textiqPresentEnhanced = true;
+
+  const total = Math.max(
+    0,
+    Number(root.getAttribute("data-present-total")) ||
+      root.querySelectorAll("[data-present-slide]").length,
+  );
+  const clamp = (index) =>
+    total <= 0 ? 0 : Math.min(Math.max(Math.floor(index), 0), total - 1);
+  const indexFromHash = () => {
+    const parsed = Number.parseInt(window.location.hash.replace(/^#/, ""), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? clamp(parsed - 1) : 0;
+  };
+  const currentIndex = () =>
+    clamp(Number(root.getAttribute("data-present-current") || "1") - 1);
+  const isEditableTarget = (target) => {
+    const element = target instanceof HTMLElement ? target : null;
+    if (!element) return false;
+    const tag = element.tagName;
+    return (
+      element.isContentEditable ||
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT"
+    );
+  };
+  const setSlide = (index, writeHash) => {
+    const next = clamp(index);
+    root.setAttribute("data-present-current", String(next + 1));
+    root.querySelectorAll("[data-present-slide]").forEach((slide) => {
+      const active = Number(slide.getAttribute("data-present-slide")) === next + 1;
+      slide.hidden = !active;
+      slide.setAttribute("aria-hidden", active ? "false" : "true");
+    });
+    root.querySelectorAll("[data-present-label]").forEach((label) => {
+      label.textContent = String(next + 1) + " / " + String(total);
+    });
+    root.querySelectorAll("[data-present-progress]").forEach((progress) => {
+      progress.setAttribute("aria-valuenow", String(next + 1));
+    });
+    const percentage = total > 1 ? (next / (total - 1)) * 100 : 100;
+    root.querySelectorAll("[data-present-progress-fill]").forEach((fill) => {
+      fill.style.width = String(percentage) + "%";
+    });
+    root.querySelectorAll('[data-present-nav="previous"]').forEach((button) => {
+      button.disabled = next === 0;
+    });
+    root.querySelectorAll('[data-present-nav="next"]').forEach((button) => {
+      button.disabled = next === total - 1;
+    });
+    if (writeHash) {
+      const hash = "#" + String(next + 1);
+      if (window.location.hash !== hash) {
+        window.history.replaceState(null, "", hash);
+      }
+    }
+  };
+
+  root.addEventListener("click", (event) => {
+    const trigger = event.target?.closest?.("[data-present-nav]");
+    if (!trigger || !root.contains(trigger) || trigger.disabled) return;
+    event.preventDefault();
+    const direction = trigger.getAttribute("data-present-nav");
+    setSlide(currentIndex() + (direction === "next" ? 1 : -1), true);
+  });
+  window.addEventListener("hashchange", () => setSlide(indexFromHash(), false));
+  window.addEventListener("keydown", (event) => {
+    if (isEditableTarget(event.target)) return;
+    if (["ArrowRight", "PageDown", " "].includes(event.key)) {
+      event.preventDefault();
+      setSlide(currentIndex() + 1, true);
+    } else if (["ArrowLeft", "PageUp"].includes(event.key)) {
+      event.preventDefault();
+      setSlide(currentIndex() - 1, true);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setSlide(0, true);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setSlide(total - 1, true);
+    }
+  });
+  const syncInitialHash = () =>
+    window.setTimeout(() => setSlide(indexFromHash(), false), 250);
+  if (document.readyState === "complete") {
+    syncInitialHash();
+  } else {
+    window.addEventListener("load", syncInitialHash, { once: true });
+  }
+})();`;
 
 export interface PublicPresentViewerProps {
   deck: Deck;
@@ -83,6 +177,7 @@ export function PublicPresentViewer({
     currentIndex,
     goNext,
     goPrev,
+    goToSlide,
     goFirst,
     goLast,
     progress,
@@ -93,12 +188,12 @@ export function PublicPresentViewer({
     hudVisible,
   } = usePresentNavigationShellPresentation<HTMLDivElement>({
     total,
-    initialIndex: initialPublicPresentHashSlideIndex(total),
+    initialIndex: 0,
     aspectRatio: presentCanvasAspectRatio(canvas),
     autoHideHud: !embed,
   });
 
-  usePublicPresentSlideHash(currentIndex);
+  usePublicPresentSlideHash({ currentIndex, total, goToSlide });
 
   const handleShortcut = useCallback(
     (action: PresentShortcutAction) => {
@@ -174,18 +269,11 @@ export function PublicPresentViewer({
     );
   }
 
-  const currentSlideTree = renderTree.slides[currentIndex];
-
-  if (!currentSlideTree) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-ds-inverse-surface text-ds-inverse-text">
-        <p className="text-sm opacity-60">No slides to display.</p>
-      </div>
-    );
-  }
-
   return (
     <div
+      data-public-present-viewer
+      data-present-total={total}
+      data-present-current={currentIndex + 1}
       role="region"
       aria-label={`Presentation: ${title}`}
       aria-live="polite"
@@ -203,6 +291,7 @@ export function PublicPresentViewer({
           <div className="pointer-events-auto flex items-center gap-3">
             <span
               aria-label={`Slide ${progress.label}`}
+              data-present-label
               className="rounded-md bg-ds-inverse-surface-muted px-2 py-1 text-xs font-medium tabular-nums text-ds-inverse-muted backdrop-blur-sm"
             >
               {progress.label}
@@ -213,9 +302,11 @@ export function PublicPresentViewer({
               aria-valuemin={1}
               aria-valuemax={total}
               aria-label="Presentation progress"
+              data-present-progress
               className="h-1 w-28 overflow-hidden rounded-full bg-ds-inverse-border-subtle"
             >
               <div
+                data-present-progress-fill
                 className="h-full rounded-full bg-white/60 transition-all duration-300 motion-reduce:transition-none"
                 style={{ width: `${progress.percentage}%` }}
               />
@@ -230,25 +321,38 @@ export function PublicPresentViewer({
         className="relative min-h-0 flex-1 overflow-hidden"
       >
         <div className="flex h-full w-full items-center justify-center">
-          <div
-            className="overflow-hidden"
-            style={{
-              width: fittedSlideSize.width,
-              height: fittedSlideSize.height,
-            }}
-          >
-            <SlideCanvas
-              slide={currentSlideTree}
-              canvas={canvas}
-              assetResolver={resolveDeckAsset}
-              visualResolver={resolveVisual}
-            />
+          <div className="relative h-full w-full">
+            {renderTree.slides.map((slideTree, index) => (
+              <div
+                key={slideTree.id}
+                data-present-slide={index + 1}
+                aria-hidden={index === currentIndex ? "false" : "true"}
+                hidden={index !== currentIndex}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <div
+                  className="overflow-hidden"
+                  style={{
+                    width: fittedSlideSize.width,
+                    height: fittedSlideSize.height,
+                  }}
+                >
+                  <SlideCanvas
+                    slide={slideTree}
+                    canvas={canvas}
+                    assetResolver={resolveDeckAsset}
+                    visualResolver={resolveVisual}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
         <button
           type="button"
           {...clickZones.previousZone}
+          data-present-nav="previous"
           className="group absolute bottom-0 left-0 top-0 w-1/2 cursor-pointer bg-transparent focus-visible:outline-none disabled:cursor-default"
         >
           <span
@@ -262,6 +366,7 @@ export function PublicPresentViewer({
         <button
           type="button"
           {...clickZones.nextZone}
+          data-present-nav="next"
           className="group absolute bottom-0 right-0 top-0 w-1/2 cursor-pointer bg-transparent focus-visible:outline-none disabled:cursor-default"
         >
           <span
@@ -281,16 +386,21 @@ export function PublicPresentViewer({
           <button
             type="button"
             {...clickZones.previousZone}
+            data-present-nav="previous"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-ds-inverse-muted transition-colors hover:bg-ds-inverse-state-hover hover:text-ds-inverse-text disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-inverse-focus"
           >
             <ChevronLeft size={16} aria-hidden="true" />
           </button>
-          <span className="text-xs font-medium tabular-nums text-ds-inverse-subtle">
+          <span
+            data-present-label
+            className="text-xs font-medium tabular-nums text-ds-inverse-subtle"
+          >
             {progress.label}
           </span>
           <button
             type="button"
             {...clickZones.nextZone}
+            data-present-nav="next"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-ds-inverse-muted transition-colors hover:bg-ds-inverse-state-hover hover:text-ds-inverse-text disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-inverse-focus"
           >
             <ChevronRight size={16} aria-hidden="true" />
@@ -299,6 +409,9 @@ export function PublicPresentViewer({
       </div>
 
       <MadeWithBadge show={showAttribution} />
+      <script
+        dangerouslySetInnerHTML={{ __html: PUBLIC_PRESENT_NAVIGATION_SCRIPT }}
+      />
     </div>
   );
 }
