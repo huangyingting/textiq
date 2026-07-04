@@ -8,6 +8,7 @@ import {
   checkRateLimitWithStore,
 } from "@/lib/ai/quota";
 import {
+  buildClientIpDiagnosticContext,
   getClientIp,
   createPrismaRateLimitStore,
   hashIdentifier,
@@ -34,36 +35,126 @@ function headers(init: Record<string, string>): Headers {
 
 // ── getClientIp ─────────────────────────────────────────────────────────────
 
-test("getClientIp returns the first x-forwarded-for entry, trimmed", () => {
+test("getClientIp returns the platform remote address for direct clients", () => {
   assert.equal(
-    getClientIp(headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" })),
-    "203.0.113.7",
-  );
-  assert.equal(
-    getClientIp(headers({ "x-forwarded-for": "  198.51.100.2  " })),
-    "198.51.100.2",
+    getClientIp(headers({}), { remoteAddress: "198.51.100.7" }),
+    "198.51.100.7",
   );
 });
 
-test("getClientIp falls back to x-real-ip", () => {
+test("getClientIp ignores spoofable forwarding headers without proxy trust", () => {
+  const diagnostics: ReturnType<typeof buildClientIpDiagnosticContext>[] = [];
   assert.equal(
-    getClientIp(headers({ "x-real-ip": "192.0.2.44" })),
+    getClientIp(
+      headers({
+        "x-forwarded-for": "203.0.113.7",
+        "x-real-ip": "203.0.113.8",
+      }),
+      {
+        remoteAddress: "198.51.100.7",
+        trustedProxyCidrs: [],
+        onDiagnostic: (event) =>
+          diagnostics.push(buildClientIpDiagnosticContext(event)),
+      },
+    ),
+    "198.51.100.7",
+  );
+  assert.deepEqual(diagnostics, [
+    {
+      reason: "forwarded-header-ignored",
+      selectedSource: "remote-address",
+      forwardedForCount: 1,
+      hasRealIp: true,
+      hasRemoteAddress: true,
+      trustedProxyConfigured: false,
+      remoteAddressTrusted: false,
+    },
+  ]);
+  assert.ok(!JSON.stringify(diagnostics).includes("203.0.113.7"));
+});
+
+test("getClientIp returns null when only untrusted forwarding headers are present", () => {
+  const diagnostics: ReturnType<typeof buildClientIpDiagnosticContext>[] = [];
+  assert.equal(
+    getClientIp(headers({ "x-forwarded-for": "203.0.113.7" }), {
+      trustedProxyCidrs: [],
+      onDiagnostic: (event) =>
+        diagnostics.push(buildClientIpDiagnosticContext(event)),
+    }),
+    null,
+  );
+  assert.deepEqual(diagnostics[0], {
+    reason: "forwarded-header-ignored",
+    selectedSource: "missing",
+    forwardedForCount: 1,
+    hasRealIp: false,
+    hasRemoteAddress: false,
+    trustedProxyConfigured: false,
+  });
+});
+
+test("getClientIp honors x-forwarded-for through a trusted proxy", () => {
+  assert.equal(
+    getClientIp(headers({ "x-forwarded-for": "203.0.113.7, 10.1.2.3" }), {
+      remoteAddress: "10.2.3.4",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+    }),
+    "203.0.113.7",
+  );
+});
+
+test("getClientIp returns nearest untrusted hop from multi-hop headers", () => {
+  assert.equal(
+    getClientIp(
+      headers({ "x-forwarded-for": "203.0.113.7, 198.51.100.9, 10.1.2.3" }),
+      {
+        remoteAddress: "10.2.3.4",
+        trustedProxyCidrs: ["10.0.0.0/8"],
+      },
+    ),
+    "198.51.100.9",
+  );
+});
+
+test("getClientIp falls back to x-real-ip only through a trusted proxy", () => {
+  assert.equal(
+    getClientIp(headers({ "x-real-ip": "192.0.2.44" }), {
+      remoteAddress: "10.2.3.4",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+    }),
     "192.0.2.44",
   );
 });
 
-test("getClientIp prefers x-forwarded-for over x-real-ip", () => {
+test("getClientIp uses configured remote-address header before trusting forwarding headers", () => {
   assert.equal(
     getClientIp(
-      headers({ "x-forwarded-for": "203.0.113.9", "x-real-ip": "192.0.2.1" }),
+      headers({
+        "x-platform-remote-addr": "10.2.3.4",
+        "x-forwarded-for": "203.0.113.9",
+      }),
+      {
+        remoteAddressHeader: "x-platform-remote-addr",
+        trustedProxyCidrs: ["10.0.0.0/8"],
+      },
     ),
     "203.0.113.9",
   );
 });
 
-test("getClientIp returns null when no forwarding headers are present", () => {
-  assert.equal(getClientIp(headers({})), null);
-  assert.equal(getClientIp(headers({ "x-forwarded-for": "" })), null);
+test("getClientIp rejects malformed forwarded entries conservatively", () => {
+  const diagnostics: ReturnType<typeof buildClientIpDiagnosticContext>[] = [];
+  assert.equal(
+    getClientIp(headers({ "x-forwarded-for": "unknown, 203.0.113.7" }), {
+      remoteAddress: "10.2.3.4",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+      onDiagnostic: (event) =>
+        diagnostics.push(buildClientIpDiagnosticContext(event)),
+    }),
+    "10.2.3.4",
+  );
+  assert.equal(diagnostics[0]?.reason, "forwarded-header-invalid");
+  assert.ok(!JSON.stringify(diagnostics).includes("203.0.113.7"));
 });
 
 // ── hashIdentifier ──────────────────────────────────────────────────────────
