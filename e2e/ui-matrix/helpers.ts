@@ -1,7 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
-import { profileDocPath, profileOwnerCredentials } from "../helpers/profile";
+import {
+  E2E_PROFILE_FIXTURE,
+  profileDocPath,
+  profileOwnerCredentials,
+} from "../helpers/profile";
 
 export async function loginAsProfileOwner(page: Page, afterLoginPath?: string) {
   await login(page, profileOwnerCredentials(), afterLoginPath);
@@ -12,6 +16,10 @@ export async function openProfileDocument(page: Page) {
   await expect(
     page.getByRole("textbox", { name: "Document body" }),
     "ui-matrix: document editor body surface should render",
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(
+    page.getByText(E2E_PROFILE_FIXTURE.documentBodyText),
+    "ui-matrix: seeded document body text should hydrate into the editor",
   ).toBeVisible({ timeout: 60_000 });
 }
 
