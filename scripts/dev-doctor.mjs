@@ -12,6 +12,8 @@ import { chromium } from "@playwright/test";
 import dotenv from "dotenv";
 
 const REQUIRED_NODE_MAJOR = 22;
+const NODE_POLICY_HINT =
+  "Use Node.js 22 or newer; package.json engines and .nvmrc codify this policy.";
 const SECRET_NAME_RE = /SECRET|TOKEN|PASSWORD|KEY/i;
 
 export function checkNodeVersion(version = process.versions.node) {
@@ -21,14 +23,14 @@ export function checkNodeVersion(version = process.versions.node) {
     return fail(
       "node",
       `Cannot parse Node.js version ${version}.`,
-      "Use Node.js 22.",
+      NODE_POLICY_HINT,
     );
   }
   if (major < REQUIRED_NODE_MAJOR) {
     return fail(
       "node",
       `Node.js ${version} is too old; CI uses Node.js ${REQUIRED_NODE_MAJOR}.`,
-      "Use Node.js 22.",
+      NODE_POLICY_HINT,
     );
   }
   return ok(

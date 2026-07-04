@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -29,6 +29,15 @@ test("dev doctor accepts Node 22 and newer", () => {
   assert.equal(checkNodeVersion("24.0.0").status, "ok");
   assert.equal(checkNodeVersion("20.12.0").status, "fail");
   assert.match(checkNodeVersion("not-a-version").message, /Cannot parse/);
+});
+
+test("repository metadata codifies the Node 22 runtime policy", () => {
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+  const nvmrc = readFileSync(".nvmrc", "utf8").trim();
+
+  assert.equal(packageJson.engines.node, ">=22");
+  assert.equal(nvmrc, "22");
+  assert.match(checkNodeVersion("20.12.0").hint, /package\.json engines/);
 });
 
 test("dev doctor redacts secret-like environment values", () => {
