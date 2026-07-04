@@ -318,6 +318,9 @@ test.describe("deterministic profile document editor smoke", () => {
     await expect(
       page.getByText(E2E_PROFILE_FIXTURE.documentBodyText),
     ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByLabel("Document statistics")).toContainText(
+      "9 words",
+    );
   });
 
   test("document editor survives reload and browser back-forward navigation", async ({
