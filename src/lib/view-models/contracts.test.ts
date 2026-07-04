@@ -82,6 +82,7 @@ test("serialized view-model contract matrix stays JSON-shaped", () => {
       shareExpiresAt: now,
       shareEmbedEnabled: true,
       sharePresentEnabled: true,
+      sharePasscodeHash: null,
       shareMetadataMode: "generic",
       shareDiscoverable: false,
       ownerId: "user-1",

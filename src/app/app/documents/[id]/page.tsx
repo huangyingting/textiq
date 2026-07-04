@@ -41,6 +41,7 @@ export default async function DocumentEditorPage({
       initialShareExpiresAt={viewModel.initialShareExpiresAt}
       initialShareEmbedEnabled={viewModel.initialShareEmbedEnabled}
       initialSharePresentEnabled={viewModel.initialSharePresentEnabled}
+      initialSharePasscodeEnabled={viewModel.initialSharePasscodeEnabled}
       initialShareMetadataMode={viewModel.initialShareMetadataMode}
       initialShareDiscoverable={viewModel.initialShareDiscoverable}
       canEdit={viewModel.canEdit}

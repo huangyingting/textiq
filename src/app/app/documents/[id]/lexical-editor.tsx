@@ -288,6 +288,7 @@ export function LexicalEditor({
   initialShareExpiresAt = null,
   initialShareEmbedEnabled = true,
   initialSharePresentEnabled = true,
+  initialSharePasscodeEnabled = false,
   initialShareMetadataMode = "generic",
   initialShareDiscoverable = false,
   initialTags = [],
@@ -307,6 +308,7 @@ export function LexicalEditor({
     | "initialShareExpiresAt"
     | "initialShareEmbedEnabled"
     | "initialSharePresentEnabled"
+    | "initialSharePasscodeEnabled"
     | "initialShareMetadataMode"
     | "initialShareDiscoverable"
     | "initialTags"
@@ -568,6 +570,7 @@ export function LexicalEditor({
                           initialExpiresAt={initialShareExpiresAt}
                           initialEmbedEnabled={initialShareEmbedEnabled}
                           initialPresentEnabled={initialSharePresentEnabled}
+                          initialPasscodeEnabled={initialSharePasscodeEnabled}
                           initialMetadataMode={initialShareMetadataMode}
                           initialDiscoverable={initialShareDiscoverable}
                           documentTitle={title.value}

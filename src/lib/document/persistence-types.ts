@@ -62,4 +62,5 @@ export type ShareSettings = {
   presentEnabled: boolean;
   metadataMode: "generic" | "title" | "title-excerpt";
   discoverable: boolean;
+  passcodeEnabled: boolean;
 };

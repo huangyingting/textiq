@@ -530,6 +530,12 @@ describe("sharing server actions", () => {
       }),
       { ok: false, error: "Invalid metadata mode." },
     );
+    assert.deepEqual(
+      await sharingActions.updateSharePolicy("doc-1", {
+        passcode: "123",
+      }),
+      { ok: false, error: "Passcode must be at least 4 characters." },
+    );
   });
 
   it("persists normalized share policy fields and revalidates", async () => {
@@ -572,6 +578,26 @@ describe("sharing server actions", () => {
       persisted[2].shareExpiresAt.toISOString(),
       "2027-01-01T00:00:00.000Z",
     );
+
+    state().calls.length = 0;
+    await sharingActions.updateSharePolicy("doc-1", {
+      passcode: " 1234 ",
+    });
+    const passcodePersisted = state().calls[1] as [
+      string,
+      string,
+      { sharePasscodeHash: string },
+    ];
+    assert.equal(passcodePersisted[0], "updateDocumentSharePolicyData");
+    assert.match(passcodePersisted[2].sharePasscodeHash, /^\$2[aby]\$/);
+
+    state().calls.length = 0;
+    await sharingActions.updateSharePolicy("doc-1", { passcode: "" });
+    assert.deepEqual(state().calls[1], [
+      "updateDocumentSharePolicyData",
+      "doc-1",
+      { sharePasscodeHash: null },
+    ]);
   });
 });
 

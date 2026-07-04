@@ -108,6 +108,15 @@ export const ABUSE_BUDGET_NAMESPACES = [
     defaultWindowMs: 60_000,
   },
   {
+    namespace: "public.share-passcode.ip",
+    owner: "public",
+    rationale: "Throttle repeated public share passcode attempts per link.",
+    limitEnv: "PUBLIC_SHARE_PASSCODE_RATE_LIMIT",
+    windowEnv: "PUBLIC_SHARE_PASSCODE_RATE_WINDOW_MS",
+    defaultLimit: 10,
+    defaultWindowMs: 60_000,
+  },
+  {
     namespace: "public.asset.ip",
     owner: "public",
     rationale: "Throttle public/protected asset fetch traffic per network.",

@@ -61,8 +61,8 @@ domain-specific outcomes to the shared access taxonomy:
   or connect;
 - denial reason: unauthenticated, privacy not-found or deleted resource,
   insufficient capability, share not enabled or revoked, expired link, mode
-  disabled, invite revoked or exhausted, invalid role, asset not found, or
-  forbidden.
+  disabled, passcode required, invite revoked or exhausted, invalid role, asset
+  not found, or forbidden.
 
 Adapters convert that shared decision into server-action errors, API responses,
 `notFound()`, and safe diagnostics. The adapters preserve the status selected by
@@ -83,11 +83,16 @@ The route supplies a `toShareAccessInput()` projection:
 - `Document.shareExpiresAt` as `expiresAt`;
 - `Document.shareEmbedEnabled` as `embedEnabled`;
 - `Document.sharePresentEnabled` as `presentEnabled`;
+- `Document.sharePasscodeHash` as `passcodeHash`;
+- request unlock state as `passcodeUnlocked`;
 - requested mode: `view`, `embed`, or `present`.
 
 The request is denied when the document is not shared, the requested id no
 longer matches, the document is deleted, the link is expired, or the requested
-mode is disabled.
+mode is disabled. If the link has a passcode hash and the request has not been
+unlocked, valid public routes render a passcode challenge instead of document
+content; invalid, expired, deleted, revoked, or mode-disabled links still use the
+privacy-preserving 404 path.
 
 | Route                      | Mode      | Output                                 |
 | -------------------------- | --------- | -------------------------------------- |
@@ -108,6 +113,11 @@ The Open Graph image route uses the same share-access mapping. It preserves the
 existing safe fallback card for denied/unknown links instead of rendering private
 document content.
 
+Passcode unlocks are stored as signed, HTTP-only cookies scoped by the current
+`shareId` and `sharePasscodeHash`. Regenerating a share link changes the share id,
+and changing/removing the passcode changes the hash state, so prior unlock cookies
+stop authorizing both pages and share-bound slide assets.
+
 ## Read-List Scoping
 
 `documentAccessOr(userId)` is a read-only list/search scope: it selects documents
@@ -120,11 +130,11 @@ mutation.
 
 Share actions live in the document server actions module.
 
-| Action                  | Effect                                                       |
-| ----------------------- | ------------------------------------------------------------ |
-| `toggleDocumentSharing` | Enables/disables sharing and creates a share id when needed. |
-| `regenerateShareLink`   | Rotates `shareId`; previous URLs stop resolving.             |
-| `updateSharePolicy`     | Updates expiry and embed/present enablement.                 |
+| Action                  | Effect                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `toggleDocumentSharing` | Enables/disables sharing and creates a share id when needed.               |
+| `regenerateShareLink`   | Rotates `shareId`; previous URLs stop resolving.                           |
+| `updateSharePolicy`     | Updates expiry, embed/present enablement, metadata, and optional passcode. |
 
 Public URLs may include a decorative slug, but the stable authorization key is
 the `shareId` extracted from the segment.
@@ -150,8 +160,9 @@ from viewer connections.
 2. Public routes use the shared pure share policy.
 3. Share metadata must not leak private document content when access is denied.
 4. Regenerating a share link invalidates old URLs immediately.
-5. Collaboration upgrades require authorization.
-6. Read-list scopes are read-only; write paths use capability checks.
+5. Passcode-protected public links and slide assets require a valid unlock cookie.
+6. Collaboration upgrades require authorization.
+7. Read-list scopes are read-only; write paths use capability checks.
 
 ## Primary Tests
 

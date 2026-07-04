@@ -40,6 +40,18 @@ test("getAbuseBudgetNamespace returns the configured signup budget", () => {
   });
 });
 
+test("share passcode attempts have a dedicated public abuse budget", () => {
+  assert.deepEqual(getAbuseBudgetNamespace("public.share-passcode.ip"), {
+    namespace: "public.share-passcode.ip",
+    owner: "public",
+    rationale: "Throttle repeated public share passcode attempts per link.",
+    limitEnv: "PUBLIC_SHARE_PASSCODE_RATE_LIMIT",
+    windowEnv: "PUBLIC_SHARE_PASSCODE_RATE_WINDOW_MS",
+    defaultLimit: 10,
+    defaultWindowMs: 60_000,
+  });
+});
+
 test("assertUniqueAbuseBudgetNamespaces rejects drift duplicates", () => {
   assert.throws(
     () =>

@@ -17,3 +17,17 @@ export async function publicShareBudgetExceeded(): Promise<boolean> {
   });
   return !budget.allowed;
 }
+
+export async function publicSharePasscodeBudgetExceeded(
+  shareId: string,
+  requestHeaders: Headers,
+): Promise<boolean> {
+  const secret = requireAbuseBudgetSecret();
+  if (!secret) return false;
+  const budget = await checkAbuseBudget({
+    namespace: "public.share-passcode.ip",
+    subject: `${getClientSubject(requestHeaders)}:${shareId}`,
+    secret,
+  });
+  return !budget.allowed;
+}

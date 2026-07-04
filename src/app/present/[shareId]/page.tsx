@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PublicPresentViewer } from "@/components/presentation/public-present-viewer";
+import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { app as appEnv } from "@/lib/env";
 import { buildPublicMetadata } from "@/lib/public-render/metadata";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
 function siteBaseUrl(): string {
   return appEnv.url();
@@ -25,6 +27,7 @@ export async function generateMetadata({
     params: { shareId },
     mode: "present",
     projection: "metadata",
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
   return buildPublicMetadata({
@@ -37,10 +40,13 @@ export async function generateMetadata({
 
 export default async function PresentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ shareId: string }>;
+  searchParams?: Promise<{ passcode?: string }>;
 }) {
   const { shareId } = await params;
+  const passcodeStatus = (await searchParams)?.passcode;
   if (await publicShareBudgetExceeded()) {
     notFound();
   }
@@ -49,9 +55,27 @@ export default async function PresentPage({
     params: { shareId },
     mode: "present",
     projection: "presentation",
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
   if (!result.ok || result.projection !== "presentation") {
+    if (
+      !result.decision.allow &&
+      result.decision.reason === "passcode-required"
+    ) {
+      return (
+        <SharePasscodeGate
+          shareId={"shareId" in result ? result.shareId : shareId}
+          mode="present"
+          returnTo={`/present/${shareId}`}
+          error={
+            passcodeStatus === "invalid" || passcodeStatus === "limited"
+              ? passcodeStatus
+              : undefined
+          }
+        />
+      );
+    }
     notFound();
   }
   const { presentation } = result;

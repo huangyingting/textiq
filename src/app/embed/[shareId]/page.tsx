@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 
 import { LexicalReadOnly } from "@/components/lexical/lexical-read-only";
 import { MadeWithBadge } from "@/components/made-with-badge";
+import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
 export const metadata: Metadata = {
   title: "Embedded Document — TextIQ",
@@ -21,10 +23,13 @@ export const metadata: Metadata = {
  */
 export default async function EmbedPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ shareId: string }>;
+  searchParams?: Promise<{ passcode?: string }>;
 }) {
   const { shareId } = await params;
+  const passcodeStatus = (await searchParams)?.passcode;
   if (await publicShareBudgetExceeded()) {
     notFound();
   }
@@ -33,9 +38,27 @@ export default async function EmbedPage({
     params: { shareId },
     mode: "embed",
     projection: "document",
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
   if (!result.ok || result.projection !== "document") {
+    if (
+      !result.decision.allow &&
+      result.decision.reason === "passcode-required"
+    ) {
+      return (
+        <SharePasscodeGate
+          shareId={"shareId" in result ? result.shareId : shareId}
+          mode="embed"
+          returnTo={`/embed/${shareId}`}
+          error={
+            passcodeStatus === "invalid" || passcodeStatus === "limited"
+              ? passcodeStatus
+              : undefined
+          }
+        />
+      );
+    }
     notFound();
   }
   const { document } = result;
