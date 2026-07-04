@@ -182,7 +182,10 @@ async function consumePasswordResetTokenAndUpdatePassword(
 
   await client.user.update({
     where: { id: input.userId },
-    data: { passwordHash: input.passwordHash },
+    data: {
+      passwordHash: input.passwordHash,
+      sessionInvalidatedAt: input.usedAt,
+    },
   });
   await client.passwordResetToken.updateMany({
     where: { userId: input.userId, usedAt: null, id: { not: input.tokenId } },

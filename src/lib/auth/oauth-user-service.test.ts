@@ -47,6 +47,7 @@ function oauthClient(input: {
             mutation.data.image === undefined
               ? input.existing.image
               : mutation.data.image,
+          sessionInvalidatedAt: input.existing.sessionInvalidatedAt,
         };
       },
       create: async (mutation: UserMutation) => {
@@ -56,6 +57,7 @@ function oauthClient(input: {
           email: mutation.data.email!,
           name: mutation.data.name ?? null,
           image: mutation.data.image ?? null,
+          sessionInvalidatedAt: null,
         };
       },
     },
@@ -71,6 +73,7 @@ test("linkOAuthLocalUser updates an existing email-linked user without seeding",
       email: "person@example.com",
       name: "Old Name",
       image: null,
+      sessionInvalidatedAt: new Date("2026-07-01T00:00:00.000Z"),
     },
     mutations,
   });
@@ -94,6 +97,7 @@ test("linkOAuthLocalUser updates an existing email-linked user without seeding",
     email: "person@example.com",
     name: "New Name",
     image: "https://lh3.googleusercontent.com/a/avatar",
+    sessionInvalidatedAt: new Date("2026-07-01T00:00:00.000Z"),
   });
   assert.deepEqual(seedCalls, []);
   assert.deepEqual(mutations, [
@@ -134,6 +138,7 @@ test("linkOAuthLocalUser creates and seeds a brand-new OAuth user exactly once",
     email: "new@example.com",
     name: null,
     image: null,
+    sessionInvalidatedAt: null,
   });
   assert.deepEqual(mutations, [
     {
