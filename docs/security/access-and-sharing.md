@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "This document defines document-level access control and public share behavior. It covers authenticated app permissions, public share/embed/present routes, and collaboration upgrade authorization."
 ---
 
@@ -99,8 +99,10 @@ mode is disabled.
 `/present/[shareId]/embed` still renders the presentation projection, but access
 is evaluated in embed mode (`shareEmbedEnabled`).
 
-Denied requests become `notFound()` or no-index metadata. Private titles or
-content must not leak through metadata.
+Denied page requests become `notFound()` and render generic visible fallback text
+(`404` / `Page not found`) with a real 404 status. Private titles or content must
+not leak through the fallback body or metadata; denied metadata remains
+no-indexed.
 
 The Open Graph image route uses the same share-access mapping. It preserves the
 existing safe fallback card for denied/unknown links instead of rendering private

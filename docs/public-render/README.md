@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "The public-render subsystem resolves share/embed/present/OG/asset requests into read-only models. It bridges security policy, public metadata privacy, presentation rendering, visual dependencies, and paid-plan attribution."
 ---
 
@@ -54,6 +54,10 @@ taxonomy from [../security/access-and-sharing.md](../security/access-and-sharing
 Missing shares return concealed 404 decisions. Disabled or expired shares return
 the denial semantics selected by the share-access policy.
 
+Browser-rendered denied share, embed, and present pages must show the shared
+not-found fallback (`404` / `Page not found`) while keeping the response status
+at 404 and omitting private document content.
+
 Protected public slide assets are served only when the request includes the
 share link binding that exposed the deck (`shareId` + `shareMode`) and that
 binding still passes public share policy checks. Deleted or missing documents
@@ -86,7 +90,7 @@ decision.
 1. Public render never mutates document, deck, or visual state.
 2. Mode/projection mismatches fail before producing a public model.
 3. Public asset access requires active share-bound present/embed access.
-4. Missing shares are concealed as not found.
+4. Missing shares are concealed as not found with visible generic fallback text.
 5. Public metadata defaults to generic, non-discoverable output.
 6. Public presentation output reconciles deck refs with available visuals.
 
