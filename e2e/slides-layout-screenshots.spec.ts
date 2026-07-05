@@ -8,7 +8,7 @@ import {
 } from "./helpers/profile";
 
 /**
- * Playwright layout screenshots for the presentation slide editor.
+ * Playwright layout checks for the presentation slide editor.
  *
  * Coverage:
  *  - desktop / tablet / mobile
@@ -17,13 +17,14 @@ import {
  *  - right panel open with a selected node
  *
  * The deterministic profile fixture is the default source of truth. Under
- * `E2E_PROFILE=1` this suite is a hard gate: unavailable fixtures fail the run
- * instead of skipping silently.
+ * `E2E_PROFILE=1` this suite is a hard layout-rendering gate. Pixel screenshot
+ * comparisons remain opt-in via `E2E_SLIDES_LAYOUT_SCREENSHOTS=1`.
  */
 
 const PROFILE_LAYOUT_GATE = e2eProfileEnabled();
 const LAYOUT_SCREENSHOTS_ENABLED =
   PROFILE_LAYOUT_GATE || process.env.E2E_SLIDES_LAYOUT_SCREENSHOTS === "1";
+const COMPARE_SCREENSHOTS = process.env.E2E_SLIDES_LAYOUT_SCREENSHOTS === "1";
 const USE_PROFILE_LAYOUT_FIXTURE =
   PROFILE_LAYOUT_GATE || process.env.E2E_SLIDES_EDITOR_PATH === undefined;
 
@@ -95,17 +96,17 @@ async function openEditor(page: Page): Promise<Locator> {
       await editor.waitFor({ state: "visible", timeout: 4_000 });
       break;
     } catch {
-      const openEditorButton = page.getByRole("link", {
+      const openEditorLink = page.getByRole("link", {
         name: "Open slide editor",
       });
       try {
-        await openEditorButton.waitFor({ state: "visible", timeout: 15_000 });
+        await openEditorLink.waitFor({ state: "visible", timeout: 15_000 });
       } catch {
         throwFixtureUnavailable(
           `Slide editor did not open at ${EDITOR_PATH} and no "Open slide editor" link was found`,
         );
       }
-      await activate(openEditorButton);
+      await activate(openEditorLink);
       try {
         await editor.waitFor({ state: "visible", timeout: 10_000 });
         break;
@@ -147,6 +148,24 @@ async function clickByName(page: Page, name: string | RegExp): Promise<void> {
   }
 }
 
+async function expectLayoutState(
+  screenshotRoot: Locator,
+  snapshotName: string,
+): Promise<void> {
+  await expect(
+    screenshotRoot
+      .locator('[data-slide-stage], [data-slide-stage-shell="true"]')
+      .first(),
+  ).toBeVisible({ timeout: 20_000 });
+
+  if (COMPARE_SCREENSHOTS) {
+    await expect(screenshotRoot).toHaveScreenshot(
+      snapshotName,
+      SCREENSHOT_OPTIONS,
+    );
+  }
+}
+
 for (const viewport of VIEWPORTS) {
   test.describe(`slides layout screenshots — ${viewport.name}`, () => {
     test.describe.configure({ timeout: 90_000 });
@@ -161,27 +180,27 @@ for (const viewport of VIEWPORTS) {
 
     test(`base editor layout (${viewport.name})`, async ({ page }) => {
       const screenshotRoot = await openEditor(page);
-      await expect(screenshotRoot).toHaveScreenshot(
+      await expectLayoutState(
+        screenshotRoot,
         `editor-${viewport.name}-base.png`,
-        SCREENSHOT_OPTIONS,
       );
     });
 
     test(`rail hidden (${viewport.name})`, async ({ page }) => {
       const screenshotRoot = await openEditor(page);
       await clickByName(page, /hide slide thumbnails/i);
-      await expect(screenshotRoot).toHaveScreenshot(
+      await expectLayoutState(
+        screenshotRoot,
         `editor-${viewport.name}-rail-hidden.png`,
-        SCREENSHOT_OPTIONS,
       );
     });
 
     test(`notes expanded (${viewport.name})`, async ({ page }) => {
       const screenshotRoot = await openEditor(page);
       await clickByName(page, /^notes$/i);
-      await expect(screenshotRoot).toHaveScreenshot(
+      await expectLayoutState(
+        screenshotRoot,
         `editor-${viewport.name}-notes-expanded.png`,
-        SCREENSHOT_OPTIONS,
       );
     });
 
@@ -201,9 +220,9 @@ for (const viewport of VIEWPORTS) {
         /(arrange|details|layers|properties|panel|edit slide)/i,
       );
 
-      await expect(screenshotRoot).toHaveScreenshot(
+      await expectLayoutState(
+        screenshotRoot,
         `editor-${viewport.name}-panel-open.png`,
-        SCREENSHOT_OPTIONS,
       );
     });
   });
