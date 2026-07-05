@@ -1,5 +1,7 @@
 export const STAGE_CHROME_Z_INDEX = {
   elementOverlayOffset: 1,
+  precisionGuide: 1900,
+  precisionRuler: 1910,
   selectedElementOverlay: 2000,
   preselectedFrame: 2100,
   selectedFrame: 2110,

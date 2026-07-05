@@ -167,6 +167,11 @@ import {
   writeFilmstripCollapsed,
 } from "./filmstrip/filmstrip-collapse-storage";
 import {
+  PrecisionGuideOverlays,
+  PrecisionGuideToolbarControls,
+} from "./precision-guides-controls";
+import { usePrecisionGuides } from "./use-precision-guides";
+import {
   nextActiveGroupIdForStageTarget,
   resolveStageNodeTarget,
   stageCandidateNodeIds,
@@ -674,6 +679,14 @@ export function SlideEditor({
     suppressNextStageClick,
     shouldSuppressStageClick,
   } = useStageInteractionController();
+  const {
+    precisionGuides,
+    togglePrecisionGrid,
+    togglePrecisionRulers,
+    toggleCustomGuidesVisible,
+    addCustomGuide,
+    removeCustomGuide,
+  } = usePrecisionGuides(documentId, setStageAnnouncement);
   const {
     focusGeometryRegistry,
     canvasElement,
@@ -2031,6 +2044,7 @@ export function SlideEditor({
     selectedNode,
     selection,
     snapToGuides,
+    customGuides: precisionGuides.customGuides,
     tableEditingNodeId,
     draggingStage,
     activeResizeHandle,
@@ -2407,6 +2421,14 @@ export function SlideEditor({
               <Grid3x3 size={14} aria-hidden="true" />
               Snap
             </DeckToolbarButton>
+            <PrecisionGuideToolbarControls
+              preferences={precisionGuides}
+              onToggleGrid={togglePrecisionGrid}
+              onToggleRulers={togglePrecisionRulers}
+              onToggleGuides={toggleCustomGuidesVisible}
+              onAddGuide={addCustomGuide}
+              onRemoveGuide={removeCustomGuide}
+            />
           </DeckToolbarGroup>
 
           <DeckToolbarDivider />
@@ -3190,6 +3212,8 @@ export function SlideEditor({
                         />
                       );
                     })()}
+
+                  <PrecisionGuideOverlays preferences={precisionGuides} />
 
                   {stageGuides.length > 0 ? (
                     <div
