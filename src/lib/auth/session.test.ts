@@ -22,12 +22,12 @@ describe("requireUserCore", () => {
     await assert.rejects(
       requireUserCore(
         {
-          async getCurrentUser() {
+          async getSessionUser() {
             return null;
           },
           async findUserById() {
             queried = true;
-            return { id: "unused" };
+            return { id: "unused", sessionInvalidatedAt: null };
           },
         },
         redirects.redirect,
@@ -45,7 +45,7 @@ describe("requireUserCore", () => {
     await assert.rejects(
       requireUserCore(
         {
-          async getCurrentUser() {
+          async getSessionUser() {
             return { id: "user-missing" } as CurrentUser;
           },
           async findUserById(id) {
@@ -61,18 +61,53 @@ describe("requireUserCore", () => {
     assert.deepEqual(redirects.calls, ["/signout"]);
   });
 
-  test("returns the session user when the backing user row exists", async () => {
-    const user = { id: "user-1", email: "ada@example.test" } as CurrentUser;
+  test("redirects stale sessions to signout when credentials rotated", async () => {
+    const redirects = redirectRecorder();
+    const user = {
+      id: "user-1",
+      email: "ada@example.test",
+      sessionInvalidatedAt: "2026-07-04T20:00:00.000Z",
+    } as CurrentUser;
+
+    await assert.rejects(
+      requireUserCore(
+        {
+          async getSessionUser() {
+            return user;
+          },
+          async findUserById(id) {
+            assert.equal(id, "user-1");
+            return {
+              id,
+              sessionInvalidatedAt: new Date("2026-07-04T21:00:00.000Z"),
+            };
+          },
+        },
+        redirects.redirect,
+      ),
+      /redirect:\/signout/,
+    );
+
+    assert.deepEqual(redirects.calls, ["/signout"]);
+  });
+
+  test("returns the session user when the backing user row and stamp are current", async () => {
+    const stamp = "2026-07-04T21:00:00.000Z";
+    const user = {
+      id: "user-1",
+      email: "ada@example.test",
+      sessionInvalidatedAt: stamp,
+    } as CurrentUser;
     const redirects = redirectRecorder();
 
     const result = await requireUserCore(
       {
-        async getCurrentUser() {
+        async getSessionUser() {
           return user;
         },
         async findUserById(id) {
           assert.equal(id, "user-1");
-          return { id };
+          return { id, sessionInvalidatedAt: new Date(stamp) };
         },
       },
       redirects.redirect,

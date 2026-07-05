@@ -89,6 +89,11 @@ export async function deleteAccountForUser(
       }
     }
 
+    await client.user.update({
+      where: { id: input.userId },
+      data: { sessionInvalidatedAt: new Date() },
+    });
+
     /* node:coverage ignore next 5 -- Erasure dependency payload is asserted through deletion outcomes; tsx maps the object literal as uncovered. */
     const erasure = await eraseAccountPersonalData({
       client,

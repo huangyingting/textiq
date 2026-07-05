@@ -313,7 +313,7 @@ export function PresentMode({
             className="h-1 w-28 overflow-hidden rounded-full bg-ds-inverse-border-subtle"
           >
             <div
-              className="h-full rounded-full bg-white/60 transition-all duration-300 motion-reduce:transition-none"
+              className="h-full rounded-full bg-ds-inverse-subtle transition-all duration-300 motion-reduce:transition-none"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
@@ -321,7 +321,7 @@ export function PresentMode({
             <PresenterTimer elapsedSeconds={elapsedSeconds} />
           ) : null}
           {fullscreenHintVisible ? (
-            <span className="rounded-md border border-amber-400/40 bg-ds-inverse-surface-muted px-2 py-1 text-xs font-medium text-ds-inverse-text backdrop-blur-sm">
+            <span className="rounded-md border border-ds-warning-border bg-ds-inverse-surface-muted px-2 py-1 text-xs font-medium text-ds-inverse-text backdrop-blur-sm">
               Fullscreen unavailable — press F11
             </span>
           ) : null}
@@ -500,7 +500,7 @@ export function PresentMode({
       {laserActive && laserPosition ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed z-sticky h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500 shadow-[var(--ds-shadow-laser-cursor)]"
+          className="pointer-events-none fixed z-sticky h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ds-danger shadow-[var(--ds-shadow-laser-cursor)]"
           style={{ left: laserPosition.x, top: laserPosition.y }}
         />
       ) : null}

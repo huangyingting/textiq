@@ -48,7 +48,7 @@ export function KeyboardHelpOverlay({
 }): JSX.Element {
   return (
     <div
-      className="absolute inset-0 z-header flex items-center justify-center bg-black/60 p-6"
+      className="absolute inset-0 z-header flex items-center justify-center bg-ds-backdrop-strong p-6"
       onClick={onClose}
     >
       <div
@@ -166,7 +166,7 @@ export function PresenterToolIcon({
           aria-hidden="true"
           className={`block h-2.5 w-2.5 rounded-full ${
             laserActive
-              ? "bg-red-400 shadow-[var(--ds-shadow-laser-indicator)]"
+              ? "bg-ds-danger shadow-[var(--ds-shadow-laser-indicator)]"
               : "border border-current"
           }`}
         />
@@ -350,7 +350,7 @@ export function SlideOverviewPanelPresentation({
 
   return (
     <div
-      className="absolute inset-0 z-header flex items-center justify-center bg-black/60 p-6"
+      className="absolute inset-0 z-header flex items-center justify-center bg-ds-backdrop-strong p-6"
       onClick={onClose}
     >
       <div

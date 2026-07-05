@@ -64,7 +64,7 @@ Next route/page -> view-model/domain loader -> Prisma/domain helpers -> client e
 
 - The presentation editor remains a large/high-churn area. Current `src/components/presentation/slide-editor.tsx` is 3,270 lines, and the scan reports it as the highest-churn file in the last 90 days. Some scan high-churn entries are deleted or relocated historical paths; current stage and inspector code is split across `stage-*`, `use-stage-*`, and `inspector/` modules.
 - Browser E2E remains intentionally bounded: `.github/workflows/e2e-deterministic.yml` hard-gates the deterministic seeded profile through the self-contained prebuilt-server runner, while broader Playwright coverage stays opt-in.
-- Exact local Node version policy is not encoded in `.nvmrc` or `package.json.engines`; CI uses Node 22.
+- Node.js 22+ is the repository runtime policy: `package.json.engines.node` requires `>=22`, `.nvmrc` pins the local/CI major line to `22`, and CI reads that file when setting up Node.
 
 ## 6) Evidence
 
