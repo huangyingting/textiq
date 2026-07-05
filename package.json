@@ -105,7 +105,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@lexical/headless": "^0.46.0",
+    "@lexical/headless": "^0.45.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26",
@@ -113,7 +113,7 @@
     "@types/react-dom": "^19",
     "@types/react-test-renderer": "^19.1.0",
     "@types/ws": "^8.18.1",
-    "eslint": "^10",
+    "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "eslint-config-prettier": "^10",
     "prettier": "^3",

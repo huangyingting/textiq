@@ -16,11 +16,9 @@ function readDeck(id: string) {
       ),
     ),
   );
-  assert.equal(
-    parsed.success,
-    true,
-    parsed.success ? undefined : parsed.errors.join("; "),
-  );
+  if (!parsed.success) {
+    assert.fail(parsed.errors.join("; "));
+  }
   assert.ok(parsed.success);
   return parsed.data;
 }
@@ -37,13 +35,11 @@ function readPackage(id: string) {
       ),
     ),
   );
-  assert.equal(
-    parsed.valid,
-    true,
-    parsed.valid
-      ? undefined
-      : parsed.diagnostics.map((diagnostic) => diagnostic.message).join("; "),
-  );
+  if (!parsed.valid) {
+    assert.fail(
+      parsed.diagnostics.map((diagnostic) => diagnostic.message).join("; "),
+    );
+  }
   assert.ok(parsed.valid);
   return parsed.package;
 }
