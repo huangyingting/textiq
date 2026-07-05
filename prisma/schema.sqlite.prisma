@@ -12,22 +12,25 @@ datasource db {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  email               String    @unique
-  name                String?
-  image               String?
-  passwordHash        String?
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  name                 String?
+  image                String?
+  passwordHash         String?
+  // Bumped when credentials rotate so JWT sessions issued before the stamp are
+  // rejected by Node-runtime session validation.
+  sessionInvalidatedAt DateTime?
   // Email verification (#162): null until the user confirms ownership of their
   // address via a verification link; stamped with the confirmation time.
-  emailVerified       DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  emailVerified        DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   // Monetization: tier + credit balance
-  plan                String    @default("free")
-  creditBalance       Int       @default(0)
-  creditPeriodStart   DateTime?
+  plan                 String    @default("free")
+  creditBalance        Int       @default(0)
+  creditPeriodStart    DateTime?
   // Onboarding: once dismissed (or completed), the checklist is never shown again
-  onboardingDismissed Boolean   @default(false)
+  onboardingDismissed  Boolean   @default(false)
 
   documents                      Document[]               @relation("DocumentOwner")
   ownedWorkspaces                Workspace[]              @relation("WorkspaceOwner")

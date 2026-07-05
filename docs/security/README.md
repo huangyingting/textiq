@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "Security docs cover authorization, public access, share-link behavior, and HTTP surface governance. They are the contract for routes and server actions that decide who may see or mutate a document."
 ---
 
@@ -28,6 +28,13 @@ semantics, and is enforced by a guard test. Shared denial responses come from
 `src/lib/access-policy/adapters.ts` and `src/lib/api/errors.ts`; abuse-control
 diagnostics for the public expensive endpoints come from
 `src/lib/diagnostics/api-abuse.ts`.
+
+## Runtime Session Validation
+
+The Edge proxy uses Auth.js JWT verification and route policy only. Server
+components, actions, and API route helpers perform the durable database check:
+stale JWTs whose credential-rotation stamp no longer matches the user row are
+rejected, and page/action gates send them through `/signout` to clear cookies.
 
 ## Related
 

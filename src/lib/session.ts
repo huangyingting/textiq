@@ -1,35 +1,76 @@
 import { auth } from "@/auth";
+import { isSessionSecurityStampCurrent } from "@/lib/auth/session-security";
 import { prisma } from "@/lib/prisma";
 
 export type CurrentUser = Awaited<ReturnType<typeof getCurrentUser>>;
+
+interface SessionBackedUser {
+  id: string;
+  sessionInvalidatedAt: Date | null;
+}
 
 /**
  * Returns the currently authenticated user, or `null` when no valid session
  * exists. Safe to call from any server component, route handler, or action.
  */
 /* node:coverage disable */
-export async function getCurrentUser() {
+async function getSessionUser() {
   const session = await auth();
   return session?.user ?? null;
+}
+
+export async function getCurrentUser() {
+  const user = await getSessionUser();
+  if (!user?.id) {
+    return null;
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, sessionInvalidatedAt: true },
+  });
+  if (!dbUser) {
+    return null;
+  }
+
+  if (
+    !isSessionSecurityStampCurrent(
+      user.sessionInvalidatedAt,
+      dbUser.sessionInvalidatedAt,
+    )
+  ) {
+    return null;
+  }
+
+  return user;
 }
 /* node:coverage enable */
 
 interface RequireUserDependencies {
-  getCurrentUser(): Promise<CurrentUser>;
-  findUserById(id: string): Promise<{ id: string } | null>;
+  getSessionUser(): Promise<CurrentUser>;
+  findUserById(id: string): Promise<SessionBackedUser | null>;
 }
 
 export async function requireUserCore(
   dependencies: RequireUserDependencies,
   redirect: (url: string) => never,
 ) {
-  const user = await dependencies.getCurrentUser();
+  const user = await dependencies.getSessionUser();
   if (!user?.id) {
     redirect("/login");
   }
 
-  const exists = await dependencies.findUserById(user.id);
-  if (!exists) {
+  const dbUser = await dependencies.findUserById(user.id);
+  if (!dbUser) {
+    redirect("/signout");
+  }
+
+  if (
+    !isSessionSecurityStampCurrent(
+      user.sessionInvalidatedAt,
+      dbUser.sessionInvalidatedAt,
+    )
+  ) {
     redirect("/signout");
   }
 
@@ -54,11 +95,11 @@ export async function requireUserCore(
 export async function requireUser(redirect: (url: string) => never) {
   return requireUserCore(
     {
-      getCurrentUser,
+      getSessionUser,
       findUserById(id) {
         return prisma.user.findUnique({
           where: { id },
-          select: { id: true },
+          select: { id: true, sessionInvalidatedAt: true },
         });
       },
     },

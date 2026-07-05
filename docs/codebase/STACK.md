@@ -9,12 +9,12 @@ description: "Technology stack, runtime, dependencies, commands, and configurati
 
 ## 1) Runtime Summary
 
-| Area                | Value                                                                                                                                    | Evidence                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Primary language    | TypeScript and TSX. The scan counted 1,118 TypeScript files and 195 TypeScript/React files.                                              | `tsconfig.json`, `docs/codebase/.codebase-scan.txt`                                   |
-| Runtime + version   | Node.js. CI uses Node 22; no `.nvmrc` or `package.json.engines` pin was found, so the local required version is `[TODO]`.                | `.github/workflows/ci.yml`, `.github/workflows/e2e-deterministic.yml`, `package.json` |
-| Package manager     | npm with `package-lock.json` lockfile.                                                                                                   | `package.json`, `package-lock.json`                                                   |
-| Module/build system | Next.js App Router with a custom Node server; TypeScript uses `moduleResolution: "bundler"`, `module: "esnext"`, and `jsx: "react-jsx"`. | `server.mjs`, `package.json`, `tsconfig.json`, `next.config.ts`                       |
+| Area                | Value                                                                                                                                    | Evidence                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Primary language    | TypeScript and TSX. The scan counted 1,118 TypeScript files and 195 TypeScript/React files.                                              | `tsconfig.json`, `docs/codebase/.codebase-scan.txt`                                             |
+| Runtime + version   | Node.js 22 or newer. `package.json.engines.node` requires `>=22`; `.nvmrc` pins the local/CI major line to `22`.                         | `package.json`, `.nvmrc`, `.github/workflows/ci.yml`, `.github/workflows/e2e-deterministic.yml` |
+| Package manager     | npm with `package-lock.json` lockfile.                                                                                                   | `package.json`, `package-lock.json`                                                             |
+| Module/build system | Next.js App Router with a custom Node server; TypeScript uses `moduleResolution: "bundler"`, `module: "esnext"`, and `jsx: "react-jsx"`. | `server.mjs`, `package.json`, `tsconfig.json`, `next.config.ts`                                 |
 
 ## 2) Production Frameworks And Dependencies
 
@@ -81,7 +81,7 @@ npm run db:push
 
 - Config sources: `.env.example`, `src/lib/env.ts`, `src/lib/client-config.ts`, `src/lib/db-provider.ts`, `prisma.config.ts`, `playwright.config.ts`, `server.mjs`, `docs/operations/runtime-config.md`.
 - Required env vars: `AUTH_SECRET` is required for auth/session and several signed/rate-limited paths. `DATABASE_URL` is required when `DB_PROVIDER=postgres`; SQLite defaults to `file:./prisma/dev.db`. Azure generation requires `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` when used. Google OAuth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` together. Stripe billing requires Stripe env vars when real Stripe billing is enabled. Collaboration eviction flush requires `COLLAB_INTERNAL_SECRET`; without it, the flusher is a no-op and the internal flush route returns `503`.
-- Deployment/runtime constraints: the app can run with the inline `/collab` Yjs websocket via `server.mjs`; standalone collaboration uses `npm run collab`. Repository security intake is documented in `SECURITY.md`, and dependency update automation is configured in `.github/dependabot.yml`. No Dockerfile, Compose file, or `.nvmrc` was found by file search; exact local Node version policy is `[TODO]`.
+- Deployment/runtime constraints: the app can run with the inline `/collab` Yjs websocket via `server.mjs`; standalone collaboration uses `npm run collab`. The local runtime policy is Node.js 22 or newer via `package.json.engines.node`, with `.nvmrc` pinning the Node 22 major line for version managers and CI. Repository security intake is documented in `SECURITY.md`, and dependency update automation is configured in `.github/dependabot.yml`. No Dockerfile or Compose file was found by file search.
 
 ## 6) Evidence
 

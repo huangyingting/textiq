@@ -8,6 +8,7 @@ import type { prisma } from "@/lib/prisma";
 function makeClient(email: string | null) {
   const deleted: string[] = [];
   const deletedDelegates: string[] = [];
+  const invalidations: Array<{ id: string; sessionInvalidatedAt: Date }> = [];
   const countDelegate = () => ({ count: async () => 0 });
   const deleteManyDelegate = (name: string) => ({
     count: async () => 0,
@@ -27,6 +28,19 @@ function makeClient(email: string | null) {
         return Promise.resolve(email ? { email } : null);
       },
       count: async () => 0,
+      update({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: { sessionInvalidatedAt: Date };
+      }) {
+        invalidations.push({
+          id: where.id,
+          sessionInvalidatedAt: data.sessionInvalidatedAt,
+        });
+        return Promise.resolve({ id: where.id, ...data });
+      },
       delete({ where }: { where: { id: string } }) {
         deleted.push(where.id);
         return Promise.resolve({ id: where.id });
@@ -52,12 +66,14 @@ function makeClient(email: string | null) {
     },
     _deleted: deleted,
     _deletedDelegates: deletedDelegates,
+    _invalidations: invalidations,
   };
   client.$transaction = async (fn: (tx: unknown) => Promise<unknown>) =>
     fn(client);
   return client as unknown as typeof prisma & {
     _deleted: string[];
     _deletedDelegates: string[];
+    _invalidations: Array<{ id: string; sessionInvalidatedAt: Date }>;
   };
 }
 
@@ -149,6 +165,12 @@ test("deleteAccountForUser attempts billing cancellation and still deletes if ca
     },
   });
   assert.deepEqual(client._deleted, ["u1"]);
+  assert.equal(client._invalidations.length, 1);
+  assert.equal(client._invalidations[0].id, "u1");
+  assert.equal(
+    client._invalidations[0].sessionInvalidatedAt instanceof Date,
+    true,
+  );
   assert.deepEqual(client._deletedDelegates, [
     "inviteLinkUse",
     "usageLedgerEntry",

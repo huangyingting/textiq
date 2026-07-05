@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { buildSlide } from "@/test/builders/presentation-deck";
+import type { InspectorPanelId } from "@/lib/presentation/inspector-panel-ui";
 import { SlideEditorInspectorRegion } from "./slide-editor-regions";
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {
@@ -73,4 +74,60 @@ test("SlideEditorInspectorRegion wires mobile open, backdrop, escape, and close 
   (closeButton.props as { onClick: () => void }).onClick();
 
   assert.deepEqual(calls, ["open", "close", "stop", "close", "close"]);
+});
+
+test("SlideEditorInspectorRegion exposes selection-aware mobile labels and panel chips", () => {
+  const calls: string[] = [];
+  const selectedPanels: InspectorPanelId[] = [];
+  const tree = SlideEditorInspectorRegion({
+    isDesktopInspectorViewport: false,
+    activeSlide: buildSlide(),
+    inspectorSheetOpen: true,
+    onOpenMobileInspector: () => calls.push("open"),
+    onCloseMobileInspector: () => calls.push("close"),
+    renderInspectorShell: () =>
+      createElement("div", { "data-inspector-shell": "true" }, "Inspector"),
+    mobileInspectorContext: {
+      targetLabel: "Text",
+      actionLabel: "Edit text",
+      dialogLabel: "Text inspector",
+      activePanel: "text",
+      activePanelLabel: "Text",
+      panels: [
+        { id: "text", label: "Text" },
+        { id: "arrange", label: "Arrange" },
+        { id: "layers", label: "Layers" },
+      ],
+      onSelectPanel: (panel) => selectedPanels.push(panel),
+    },
+  });
+
+  const elements = collectElements(tree);
+  const openButton = elements.find(
+    (element) =>
+      (element.props as { "aria-label"?: string })["aria-label"] ===
+      "Edit text",
+  );
+  const dialog = elements.find(
+    (element) =>
+      (element.props as { role?: string; "aria-label"?: string }).role ===
+        "dialog" &&
+      (element.props as { "aria-label"?: string })["aria-label"] ===
+        "Text inspector",
+  );
+  const arrangePanelButton = elements.find(
+    (element) =>
+      (element.props as { "aria-label"?: string })["aria-label"] ===
+      "Show Arrange inspector panel",
+  );
+
+  assert.ok(openButton);
+  assert.ok(dialog);
+  assert.ok(arrangePanelButton);
+
+  (openButton.props as { onClick: () => void }).onClick();
+  (arrangePanelButton.props as { onClick: () => void }).onClick();
+
+  assert.deepEqual(calls, ["open"]);
+  assert.deepEqual(selectedPanels, ["arrange"]);
 });

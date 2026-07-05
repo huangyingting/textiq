@@ -74,6 +74,7 @@ export const PERSONAL_DATA_INVENTORY = [
       name: field("identifier", "delete_with_account", "user"),
       image: field("identifier", "delete_with_account", "user"),
       passwordHash: field("security_only", "delete_with_account"),
+      sessionInvalidatedAt: field("security_only", "delete_with_account"),
       emailVerified: field(
         "operational_metadata",
         "delete_with_account",

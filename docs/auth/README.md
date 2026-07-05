@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "This subsystem covers sign-in, account creation, provider linking, account settings, self-serve recovery, email verification, export, and deletion. Route authorization and document/workspace capabilities live in ../security/; this document covers how a user becomes and remains an authenticated account."
 ---
 
@@ -39,7 +39,8 @@ Authentication has two runtime layers:
    provider, optional Google provider, Prisma-backed callbacks, password
    hashing, and local user linking.
 
-The session callback stores the database user id on `session.user.id`. Route
+The session callback stores the database user id on `session.user.id` and the
+user's credential-rotation stamp on `session.user.sessionInvalidatedAt`. Route
 authorization uses only the presence of an authenticated user at the proxy
 layer; document/workspace authorization is resolved later by the security
 helpers.
@@ -72,6 +73,21 @@ Password reset deliberately returns the same success message whether or not an
 email exists. Email verification requests mark previous unconsumed verification
 tokens as used before creating a new one.
 
+## JWT Session Revocation
+
+Auth.js uses JWT sessions, so the Edge proxy can verify only the signed cookie
+and route policy without importing Prisma. Durable revocation is enforced in the
+Node runtime: credentials sign-in and OAuth linking copy `User.sessionInvalidatedAt`
+into the JWT/session, while `getCurrentUser` and `requireUser` compare that
+issued stamp with the current database value. Missing users or stale stamps are
+treated as invalid sessions; page/server-action gates redirect stale sessions to
+`/signout`, and API helpers receive `null` from `getCurrentUser`.
+
+Credential rotations bump the stamp for password changes and successful
+password resets. Account deletion stamps the user after confirmation and before
+erasure/sign-out, so other active JWTs stop passing Node-runtime validation even
+before the user row is removed.
+
 ## Settings, Export, And Deletion
 
 The settings account view model exposes profile defaults, email verification
@@ -91,7 +107,9 @@ that no personal-data findings remain. Operational DSAR steps live in
 3. OAuth accounts are linked by normalized email, not by a separate provider row.
 4. Raw reset and verification tokens are never persisted.
 5. Password-reset requests do not disclose whether an email is registered.
-6. Account deletion verifies erasure before returning success.
+6. Credential rotation invalidates JWT sessions issued before the current
+   `User.sessionInvalidatedAt` stamp.
+7. Account deletion verifies erasure before returning success.
 
 ## Primary Tests
 
@@ -99,6 +117,7 @@ that no personal-data findings remain. Operational DSAR steps live in
 - [`src/lib/auth/credentials-service.test.ts`](../../src/lib/auth/credentials-service.test.ts)
 - [`src/lib/auth/oauth-user-service.test.ts`](../../src/lib/auth/oauth-user-service.test.ts)
 - [`src/lib/auth/password-reset-service.test.ts`](../../src/lib/auth/password-reset-service.test.ts)
+- [`src/lib/auth/session-security.test.ts`](../../src/lib/auth/session-security.test.ts)
 - [`src/lib/auth/email-verification-service.test.ts`](../../src/lib/auth/email-verification-service.test.ts)
 - [`src/lib/auth/single-use-token.test.ts`](../../src/lib/auth/single-use-token.test.ts)
 - [`src/lib/settings/view-model.test.ts`](../../src/lib/settings/view-model.test.ts)
