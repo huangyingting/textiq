@@ -101,6 +101,7 @@ async function openPresentationOverlay(
   await expect(async () => {
     await presentBtn.click();
     if (
+      // e2e-governance-allow broad-catch: isVisible timeout is a bounded overlay readiness probe before keyboard fallback.
       !(await presentRegion.isVisible({ timeout: 2_000 }).catch(() => false))
     ) {
       await presentBtn.focus();
