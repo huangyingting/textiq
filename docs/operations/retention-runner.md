@@ -52,3 +52,7 @@ rate-limit subjects, or asset storage keys.
 
 Dry-run mode performs the same bounded candidate selection without database
 deletes or storage deletes.
+
+Asset cleanup is domain-scoped before touching storage: slide assets must remain
+document-scoped, and brand assets must remain explicitly `brandId`-scoped.
+Rows with no document/workspace/brand scope are skipped rather than guessed.

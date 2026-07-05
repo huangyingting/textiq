@@ -15,6 +15,7 @@ type TokenRow = { id: string; expiresAt: Date; usedAt: Date | null };
 type AssetRow = {
   id: string;
   storageKey: string;
+  brandId?: string | null;
   documentId: string | null;
   workspaceId: string | null;
   deletedAt: Date | null;
@@ -105,8 +106,13 @@ function makeDb(seed?: {
             if (asset.deletedAt === null || asset.deletedAt >= deletedAt.lt) {
               return false;
             }
-            if ("workspaceId" in args.where) {
-              return asset.documentId === null && asset.workspaceId === null;
+            if ("brandId" in args.where) {
+              return (
+                asset.brandId !== null &&
+                asset.brandId !== undefined &&
+                asset.documentId === null &&
+                asset.workspaceId === null
+              );
             }
             return asset.documentId !== null;
           })
@@ -192,6 +198,7 @@ describe("runOperationalRetention", () => {
         {
           id: "brand-old",
           storageKey: "owner/old.png",
+          brandId: "brand-1",
           documentId: null,
           workspaceId: null,
           deletedAt: daysAgo(8),
@@ -362,5 +369,47 @@ describe("runOperationalRetention", () => {
       assetId: "slide-fail",
     });
     assert.ok(!JSON.stringify(logger.errors).includes("doc/fail.png"));
+  });
+
+  it("does not purge document-null slide orphans through brand storage", async () => {
+    const db = makeDb({
+      assets: [
+        {
+          id: "slide-after-document-hard-delete",
+          storageKey: "doc-deleted/orphan.png",
+          brandId: null,
+          documentId: null,
+          workspaceId: null,
+          deletedAt: daysAgo(8),
+        },
+        {
+          id: "brand-expired",
+          storageKey: "owner/brand.png",
+          brandId: "brand-1",
+          documentId: null,
+          workspaceId: null,
+          deletedAt: daysAgo(8),
+        },
+      ],
+    });
+    const slideStorage = makeStorage();
+    const brandStorage = makeStorage();
+
+    const result = await runOperationalRetention({
+      db,
+      storages: { slide: slideStorage, brand: brandStorage },
+      dryRun: false,
+      now: NOW,
+    });
+
+    assert.equal(result.slideAssets.candidateCount, 0);
+    assert.equal(result.brandAssets.candidateCount, 1);
+    assert.equal(result.brandAssets.deletedCount, 1);
+    assert.deepEqual(slideStorage.deletedKeys, []);
+    assert.deepEqual(brandStorage.deletedKeys, ["owner/brand.png"]);
+    assert.deepEqual(
+      db.rows.assets.map((row) => row.id),
+      ["slide-after-document-hard-delete"],
+    );
   });
 });

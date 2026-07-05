@@ -59,6 +59,7 @@ export interface RetentionDb {
             deletedAt: { not: null; lt: Date };
           }
         | {
+            brandId: { not: null };
             documentId: null;
             workspaceId: null;
             deletedAt: { not: null; lt: Date };
@@ -342,6 +343,7 @@ async function purgeAssetRows(opts: {
             deletedAt: { not: null, lt: opts.cutoff },
           }
         : {
+            brandId: { not: null },
             documentId: null,
             workspaceId: null,
             deletedAt: { not: null, lt: opts.cutoff },
