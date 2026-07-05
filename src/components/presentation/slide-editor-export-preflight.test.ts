@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import type { PresentationExportPreflightResult } from "@/lib/presentation/export-preflight";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
@@ -11,11 +12,48 @@ import {
   buildSlide,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
-import {
-  createHookRenderer,
-  findRequiredElement,
-  flattenText,
-} from "./slide-editor-failure-test-utils";
+import { createReactRenderHarness } from "@/test/react-render-harness";
+
+type ElementLike = ReactElement<Record<string, unknown>>;
+
+function collectElements(
+  node: ReactNode,
+  predicate: (element: ElementLike) => boolean,
+  collected: ElementLike[] = [],
+): ElementLike[] {
+  if (Array.isArray(node)) {
+    for (const child of node) collectElements(child, predicate, collected);
+    return collected;
+  }
+  if (!isValidElement(node)) return collected;
+  const element = node as ElementLike;
+  if (predicate(element)) collected.push(element);
+  collectElements(element.props.children as ReactNode, predicate, collected);
+  return collected;
+}
+
+function flattenText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) return node.map(flattenText).join("");
+  if (!isValidElement(node)) return "";
+  return flattenText((node.props as { children?: ReactNode }).children);
+}
+
+function createHookRenderer() {
+  return createReactRenderHarness();
+}
+
+function findRequiredElement(
+  root: ReactNode,
+  predicate: (element: ElementLike) => boolean,
+  message: string,
+): ElementLike {
+  const [element] = collectElements(root, predicate);
+  assert.ok(element, message);
+  return element;
+}
 
 describe("SlideEditor export preflight", () => {
   test("blocks PDF download behind a fatal format preflight", () => {

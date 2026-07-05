@@ -45,7 +45,7 @@ import {
   tableWithDeletedLastColumn,
   tableWithDeletedLastRow,
 } from "./context-toolbar";
-import { createHookRenderer } from "../slide-editor-failure-test-utils";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { SlideChildNode } from "@/lib/presentation/schema";
 import type { StyleObject } from "@/lib/presentation/style-schema";
 import {
@@ -63,6 +63,10 @@ const source = readFileSync(
 );
 
 type ElementLike = ReactElement<Record<string, unknown>>;
+
+function createHookRenderer() {
+  return createReactRenderHarness();
+}
 
 function toolbarFixtureNode(node: unknown): SlideChildNode {
   return node as unknown as SlideChildNode;
@@ -284,7 +288,17 @@ afterEach(() => {
     Object.defineProperty(globalThis, "document", originalDocumentDescriptor);
     return;
   }
-  Reflect.deleteProperty(globalThis, "document");
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    writable: true,
+    value: {
+      activeElement: null,
+      addEventListener: () => undefined,
+      dispatchEvent: () => true,
+      querySelector: () => null,
+      removeEventListener: () => undefined,
+    },
+  });
 });
 
 describe("restoreFocusAfterContextToolbarEscape", () => {

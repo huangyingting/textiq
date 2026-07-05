@@ -33,7 +33,7 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
-import { createServerRenderHarness } from "@/test/react-server-renderer";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 import { PresentMode } from "./present-mode";
 import {
   PresenterPanelPresentation,
@@ -54,7 +54,7 @@ type PortalLike = {
 };
 
 function createHookRenderer() {
-  return createServerRenderHarness({ idPrefix: "render-surface-id" });
+  return createReactRenderHarness({ idPrefix: "render-surface-id" });
 }
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {

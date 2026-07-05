@@ -29,7 +29,7 @@ import {
   buildTableNode,
   buildTextNode,
 } from "@/test/builders/presentation-deck";
-import { renderWithReact } from "@/test/react-server-renderer";
+import { renderWithTestRenderer } from "@/test/react-render-harness";
 import { makeDiagnostic } from "@/lib/presentation/diagnostics";
 import type {
   NodeSourceMetadata,
@@ -258,7 +258,7 @@ function render(element: ReturnType<typeof createElement>): string {
 }
 
 function withFakeHooks<T>(renderComponent: () => T): T {
-  return renderWithReact(renderComponent);
+  return renderWithTestRenderer(renderComponent);
 }
 
 function collectHandlers(

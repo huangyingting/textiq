@@ -30,6 +30,7 @@ in [release-gate.md](release-gate.md); local setup and troubleshooting live in
 | Performance budgets    | `scripts/perf-budgets.mjs`, `scripts/slide-editor-size-budget.test.mjs`   |
 | Prisma schema drift    | `scripts/gen-sqlite-schema.mjs`                                           |
 | Production install     | `scripts/production-install-smoke.mjs`                                    |
+| Retention runner       | `scripts/retention-runner.mjs`, `src/lib/maintenance/retention-runner.ts` |
 
 ## Primary Gate
 
