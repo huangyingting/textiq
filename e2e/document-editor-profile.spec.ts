@@ -695,7 +695,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await login(page, profileOwnerCredentials(), profileDocPath());
     await expect(
-      page.getByRole("button", { name: "Open slide editor" }),
+      page.getByRole("link", { name: "Open slide editor" }),
     ).toBeVisible({ timeout: 60_000 });
     const editor = await openProfileSlideEditor(page);
     const filmstrip = editor.getByRole("list", { name: "Slides" });
@@ -1198,7 +1198,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await expectReachable(page.getByRole("button", { name: /^import$/i }));
     await expectReachable(page.getByRole("button", { name: /^style$/i }));
     await expectReachable(
-      page.getByRole("button", { name: "Open slide editor" }),
+      page.getByRole("link", { name: "Open slide editor" }),
     );
     await expectReachable(page.getByRole("button", { name: /^Present / }));
     await expectReachable(

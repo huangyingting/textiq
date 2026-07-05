@@ -129,10 +129,10 @@ test.describe("slide image upload round-trip", () => {
     await page.goto(profileDocPath());
 
     // Open the slide editor.
-    const openEditor = page.getByRole("button", { name: "Open slide editor" });
+    const openEditor = page.getByRole("link", { name: "Open slide editor" });
     await expect(
       openEditor,
-      "upload: 'Open slide editor' button not found",
+      "upload: 'Open slide editor' link not found",
     ).toBeVisible({ timeout: 20_000 });
     await openEditor.click();
 

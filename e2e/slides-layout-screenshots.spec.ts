@@ -95,14 +95,14 @@ async function openEditor(page: Page): Promise<Locator> {
       await editor.waitFor({ state: "visible", timeout: 4_000 });
       break;
     } catch {
-      const openEditorButton = page.getByRole("button", {
+      const openEditorButton = page.getByRole("link", {
         name: "Open slide editor",
       });
       try {
         await openEditorButton.waitFor({ state: "visible", timeout: 15_000 });
       } catch {
         throwFixtureUnavailable(
-          `Slide editor did not open at ${EDITOR_PATH} and no "Open slide editor" button was found`,
+          `Slide editor did not open at ${EDITOR_PATH} and no "Open slide editor" link was found`,
         );
       }
       await activate(openEditorButton);
