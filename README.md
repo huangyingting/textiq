@@ -165,6 +165,13 @@ npm run lint
 npm run format:check
 ```
 
+The required deterministic browser gate runs separately in CI and can be
+reproduced locally with:
+
+```bash
+npm run test:e2e:profile:self-contained
+```
+
 For documentation-only changes, at minimum run:
 
 ```bash

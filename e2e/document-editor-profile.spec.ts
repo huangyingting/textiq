@@ -84,7 +84,7 @@ async function openProfileDocument(page: Page): Promise<void> {
 }
 
 async function openProfileSlideEditor(page: Page): Promise<Locator> {
-  await activate(page.getByRole("button", { name: "Open slide editor" }));
+  await activate(page.getByRole("link", { name: "Open slide editor" }));
   const editor = page.getByRole("dialog", { name: "Slide editor" }).first();
   await expect(editor).toBeVisible({ timeout: 20_000 });
   return editor;
@@ -291,26 +291,28 @@ test.describe("deterministic profile document editor smoke", () => {
     await expect(
       drawer.getByRole("link", { name: /documents/i }),
     ).toBeVisible();
-    await activate(drawer.getByRole("link", { name: /workspaces/i }));
+    const workspacesLink = drawer.getByRole("link", { name: /workspaces/i });
+    await expect(workspacesLink).toHaveAttribute("href", "/app/workspaces");
+    await workspacesLink.click();
 
-    await expect(page).toHaveURL(/\/app\/workspaces$/);
+    await expect(page).toHaveURL(/\/app\/workspaces$/, { timeout: 60_000 });
     await expect(
       page.getByRole("heading", { name: /^workspaces$/i }),
     ).toBeVisible({ timeout: 20_000 });
 
     await activate(page.getByRole("button", { name: /open navigation menu/i }));
-    await activate(
-      page
-        .getByRole("dialog", { name: /navigation menu/i })
-        .getByRole("link", { name: /brands/i }),
-    );
-    await expect(page).toHaveURL(/\/app\/brands$/);
+    const brandsLink = page
+      .getByRole("dialog", { name: /navigation menu/i })
+      .getByRole("link", { name: /brands/i });
+    await expect(brandsLink).toHaveAttribute("href", "/app/brands");
+    await brandsLink.click();
+    await expect(page).toHaveURL(/\/app\/brands$/, { timeout: 60_000 });
     await expect(
       page.getByRole("heading", { name: /brand studio/i }),
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("opens the seeded document editor with deterministic content", async ({
+  test("opens the seeded document editor with deterministic content @required-profile", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials(), profileDocPath());
@@ -459,10 +461,10 @@ test.describe("deterministic profile document editor smoke", () => {
       exportMenu.getByRole("menuitem", { name: /^PPTX deck\b/ }),
     ).toHaveAttribute("aria-disabled", /^(true|false)$/);
     await expect(
-      exportMenu.getByRole("menuitem", { name: /^Slide SVGs\b/ }),
+      exportMenu.getByRole("menuitem", { name: /^Infographic PNG\b/ }),
     ).toBeVisible();
     await expect(
-      exportMenu.getByRole("menuitem", { name: /^Slide PNGs\b/ }),
+      exportMenu.getByRole("menuitem", { name: /^Infographic PDF\b/ }),
     ).toBeVisible();
 
     const defaultWidth = exportMenu.getByRole("button", { name: "1080px" });
@@ -484,7 +486,7 @@ test.describe("deterministic profile document editor smoke", () => {
     const editor = await openProfileSlideEditor(page);
 
     await expect(
-      editor.getByRole("toolbar", { name: "Slide editing tools" }),
+      page.getByRole("toolbar", { name: "Context toolbar" }),
     ).toBeVisible();
     const slideOneButton = editor.getByRole("button", {
       name: new RegExp(
@@ -534,7 +536,9 @@ test.describe("deterministic profile document editor smoke", () => {
     await expect(shortcutsDialog).toHaveCount(0);
 
     await editor
-      .locator("[data-slide-stage]")
+      .locator(
+        '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"]',
+      )
       .click({ position: { x: 5, y: 5 } });
     const slideTools = page.getByRole("toolbar", { name: "Slide tools" });
     await expect(slideTools).toBeVisible();
@@ -693,7 +697,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await login(page, profileOwnerCredentials(), profileDocPath());
     await expect(
-      page.getByRole("button", { name: "Open slide editor" }),
+      page.getByRole("link", { name: "Open slide editor" }),
     ).toBeVisible({ timeout: 60_000 });
     const editor = await openProfileSlideEditor(page);
     const filmstrip = editor.getByRole("list", { name: "Slides" });
@@ -1196,7 +1200,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await expectReachable(page.getByRole("button", { name: /^import$/i }));
     await expectReachable(page.getByRole("button", { name: /^style$/i }));
     await expectReachable(
-      page.getByRole("button", { name: "Open slide editor" }),
+      page.getByRole("link", { name: "Open slide editor" }),
     );
     await expectReachable(page.getByRole("button", { name: /^Present / }));
     await expectReachable(

@@ -34,13 +34,13 @@ npm run test:coverage-map
 
 ## 3) Test Scope Matrix
 
-| Scope                     | Covered?             | Typical target                                                                                                        | Notes                                                                                                                                                               |
-| ------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit                      | Yes                  | `src/lib/**`, component controllers/helpers, schema validation, route logic helpers.                                  | Run with Node test + `tsx`; examples include `src/lib/presentation/open-deck.test.ts`.                                                                              |
-| Script/governance         | Yes                  | `scripts/*.mjs` guardrails and CLI behavior.                                                                          | Run with Node test; mapped into coverage and subsystem checks.                                                                                                      |
-| Integration               | Yes                  | API route parsers, persistence helpers, Prisma-adjacent logic through fakes or test DB paths.                         | Import/security/public-render docs list route/helper tests.                                                                                                         |
-| E2E                       | Yes, opt-in/separate | Public pages, auth redirects, workspace flows, imports, present/export, slide asset upload, slide layout screenshots. | `e2e/README.md` says E2E specs are not part of the required fast unit gate.                                                                                         |
-| Deterministic E2E profile | Yes, advisory in CI  | Seeded profile specs for document editor, import, present/export, asset upload, layout screenshots.                   | `.github/workflows/e2e-deterministic.yml` runs on PR/push but uses `continue-on-error: true`, so failures are visible in Actions logs without failing the workflow. |
+| Scope                     | Covered?             | Typical target                                                                                                      | Notes                                                                                                                                                                                          |
+| ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | Yes                  | `src/lib/**`, component controllers/helpers, schema validation, route logic helpers.                                | Run with Node test + `tsx`; examples include `src/lib/presentation/open-deck.test.ts`.                                                                                                         |
+| Script/governance         | Yes                  | `scripts/*.mjs` guardrails and CLI behavior.                                                                        | Run with Node test; mapped into coverage and subsystem checks.                                                                                                                                 |
+| Integration               | Yes                  | API route parsers, persistence helpers, Prisma-adjacent logic through fakes or test DB paths.                       | Import/security/public-render docs list route/helper tests.                                                                                                                                    |
+| E2E                       | Yes, opt-in/separate | Public pages, auth redirects, workspace flows, imports, present/export, slide asset upload, slide layout rendering. | `e2e/README.md` keeps broad E2E coverage separate from the required fast unit gate.                                                                                                            |
+| Deterministic E2E profile | Yes, required in CI  | Seeded profile specs for document editor, import, present/export, asset access, layout rendering.                   | `.github/workflows/e2e-deterministic.yml` runs on PR/push through the no-build dev-server profile runner with `E2E_PROFILE_GREP=@required-profile` and fails the workflow on profile failures. |
 
 ## 4) Mocking And Isolation Strategy
 
@@ -57,7 +57,7 @@ npm run test:coverage-map
 - Coverage-map gate: `npm test` runs line coverage and then `scripts/test-subsystem.mjs --check` to enforce subsystem assignment, bucket coverage, test filename shape, and weak-title checks.
 - Current reported coverage: `[TODO]` this run did not execute `npm test`, so current numeric coverage output is not recorded here.
 - Known gaps/flaky areas:
-  - Deterministic E2E workflow is advisory/non-fatal until web-server cold-start readiness is hardened.
+  - Broad E2E specs outside the deterministic profile remain opt-in/local unless explicitly mapped into the profile.
   - Presentation hook-harness retirement is complete; keep new coverage on public controllers, descriptors, DOM adapters, or browser-visible behavior.
 
 ## 6) Evidence

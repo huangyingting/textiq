@@ -85,7 +85,7 @@ test.describe("document import round-trip", () => {
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run import round-trip",
   );
 
-  test("imports Markdown, renders blocks, and persists content across reload", async ({
+  test("imports Markdown, renders blocks, and persists content across reload @required-profile", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials());
@@ -144,7 +144,7 @@ test.describe("document import round-trip", () => {
     });
   });
 
-  test("imports DOCX, renders blocks, and persists content across reload", async ({
+  test("imports DOCX, renders blocks, and persists content across reload @required-profile", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials());
