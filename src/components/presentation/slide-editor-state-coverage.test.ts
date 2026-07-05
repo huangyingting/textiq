@@ -1177,6 +1177,18 @@ test("SlideEditor direct state coverage drives desktop toolbar branches", async 
     clickPopoverTrigger(tree, "Export slides");
     tree = harness.render();
     await clickByLabel(tree, "Export PPTX");
+    tree = harness.render();
+    const exportPreflight = maybeProps(
+      tree,
+      (_props, element) => typeName(element.type) === "ExportPreflightDialog",
+    );
+    if (exportPreflight) {
+      assert.equal(
+        (exportPreflight.result as { canExport: boolean }).canExport,
+        true,
+      );
+      (exportPreflight.onContinue as () => void)();
+    }
     (footerProps(tree).onOpenDiagnosticsReview as () => void)();
     tree = harness.render();
     const review = findProps(
