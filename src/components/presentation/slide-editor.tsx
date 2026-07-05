@@ -42,6 +42,7 @@ import {
 } from "react";
 import {
   ChevronDown,
+  Command as CommandIcon,
   FileDown,
   Grid3x3,
   Keyboard,
@@ -212,6 +213,7 @@ import { useSourceReviewController } from "./use-source-review-controller";
 import { useTableCellEditing } from "./use-table-cell-editing";
 import { useInlineTextEditingController } from "./use-inline-text-editing-controller";
 import { useInspectorCommands } from "./inspector-command-descriptors";
+import { useSlideCommandPaletteController } from "./use-slide-command-palette-controller";
 import { SourceReviewPanel } from "./source-review-panel";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
 import {
@@ -219,6 +221,7 @@ import {
   VISUAL_PICKER_FAILURE_MESSAGE,
 } from "./visual-picker-recovery";
 import { KeyboardShortcutHelpDialog } from "@/components/presentation/keyboard-shortcut-help-dialog";
+import { SlideCommandPalette } from "@/components/presentation/slide-command-palette";
 import {
   clipboardImageNode,
   clipboardTextNode,
@@ -590,6 +593,7 @@ export function SlideEditor({
   const [snapToGuides, setSnapToGuides] = useState(true);
   const [clipboardNodes, setClipboardNodes] = useState<SlideChildNode[]>([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [stageZoomPercent, setStageZoomPercent] = useState(100);
   const [filmstripCollapsed, setFilmstripCollapsed] = useState(() =>
     readFilmstripCollapsed(documentId),
@@ -1567,6 +1571,21 @@ export function SlideEditor({
     );
   }
 
+  function handleDuplicateSelection() {
+    if (!activeSlide || selectedIds.length === 0) return;
+    const result = duplicateNodes(deck, activeSlide.id, selectedIds);
+    onDeckChange(result.deck);
+    if (result.duplicatedIds.length > 0) {
+      setSelection((s) => setSelectedNodeIds(s, result.duplicatedIds));
+      focusSelectedNodeSoon(result.duplicatedIds[0]);
+      setStageAnnouncement(
+        `Duplicated ${result.duplicatedIds.length} ${
+          result.duplicatedIds.length === 1 ? "node" : "nodes"
+        }.`,
+      );
+    }
+  }
+
   function handleNodeDoubleClick(nodeId: string, event: MouseEvent) {
     if (!activeSlide) return;
     const target = semanticTargetFromEvent(nodeId, event, {
@@ -2085,6 +2104,67 @@ export function SlideEditor({
         ?.label ?? panel;
     setStageAnnouncement(`${panelLabel} inspector panel selected`);
   }
+  const {
+    commandPaletteCommands,
+    handleRunCommandPaletteCommand,
+    handleSlideEditorKeyDown,
+  } = useSlideCommandPaletteController({
+    deck,
+    hasActiveSlide: activeSlide !== undefined,
+    selectedNode: selectedNode ?? null,
+    selectedIds,
+    isDecorationSelected,
+    isInlineEditing: inlineEditNodeId !== null,
+    isTableEditing: tableEditingNodeId !== null,
+    hasSelectedSource: selectedSource !== undefined,
+    sourceReviewCount: sourceReview.length,
+    diagnosticsCount: diagnostics.length,
+    saveStatus,
+    canUndo,
+    canRedo,
+    onSave,
+    onUndo,
+    onRedo,
+    onPresent,
+    onShare,
+    onExportPptx,
+    onExportPdf,
+    onExportPng,
+    handleEditorKeyDown,
+    handleRoundtripAction,
+    handleExportPptx,
+    handleExportPdf,
+    handleExportPng,
+    handleInsertSlide,
+    handleDuplicateActiveSlide,
+    handleDeleteActiveSlide,
+    handleInsertText,
+    handleInsertShape,
+    handleInsertImage,
+    handleInsertVisual,
+    handleInsertConnector,
+    handleInsertTable,
+    handleAlignSelection,
+    handleDistributeSelection,
+    handleMatchSize,
+    handleReorderSelection,
+    handleGroupSelection,
+    handleUngroupSelection,
+    handleDuplicateSelection,
+    handleDeleteSelection,
+    handleCutNodes,
+    handleUpdateSelectedAttributes,
+    handleReviewSourceLinks,
+    openInspectorPanel,
+    focusSelectedNodeSoon,
+    focusStageViewportSoon,
+    focusEditorRootSoon,
+    setCommandPaletteOpen,
+    setShortcutHelpOpen,
+    setDeckDiagnosticsReviewOpen,
+    setDeckChromeToolbarOpen,
+    setStageAnnouncement,
+  });
   const inspectorKey = `${inspectorPanelRequest?.panel ?? "auto"}-${inspectorPanelRequest?.nonce ?? 0}`;
   const renderInspectorShell = () => (
     <InspectorShell
@@ -2165,7 +2245,7 @@ export function SlideEditor({
     if (typeof window === "undefined") return undefined;
     function handleWindowKeyDown(event: globalThis.KeyboardEvent) {
       if (event.defaultPrevented) return;
-      handleEditorKeyDown(event);
+      handleSlideEditorKeyDown(event);
     }
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
@@ -2178,7 +2258,7 @@ export function SlideEditor({
       data-slide-editor="true"
       ref={editorRootRef}
       tabIndex={-1}
-      onKeyDown={handleEditorKeyDown}
+      onKeyDown={handleSlideEditorKeyDown}
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-ds-surface"
     >
       <input
@@ -2553,6 +2633,22 @@ export function SlideEditor({
               <button
                 type="button"
                 role="menuitem"
+                aria-label="Command palette"
+                onClick={() => {
+                  setCommandPaletteOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <CommandIcon size={14} aria-hidden="true" />
+                Command palette
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 aria-label="Keyboard shortcuts"
                 onClick={() => {
                   setShortcutHelpOpen(true);
@@ -2766,6 +2862,14 @@ export function SlideEditor({
         />
       ) : null}
 
+      <SlideCommandPalette
+        open={commandPaletteOpen}
+        commands={commandPaletteCommands}
+        isMac={isMac}
+        onClose={() => setCommandPaletteOpen(false)}
+        onRun={handleRunCommandPaletteCommand}
+      />
+
       <KeyboardShortcutHelpDialog
         open={shortcutHelpOpen}
         isMac={isMac}
@@ -2841,20 +2945,6 @@ export function SlideEditor({
                 const candidates = contextMenu.candidateIds
                   .map((id) => findNodeById(activeSlide.children, id) ?? null)
                   .filter((node): node is SlideChildNode => node !== null);
-                const duplicateSelection = () => {
-                  const result = duplicateNodes(
-                    deck,
-                    activeSlide.id,
-                    selectedIds,
-                  );
-                  onDeckChange(result.deck);
-                  if (result.duplicatedIds.length > 0) {
-                    setSelection((s) =>
-                      setSelectedNodeIds(s, result.duplicatedIds),
-                    );
-                    focusSelectedNodeSoon(result.duplicatedIds[0]);
-                  }
-                };
                 return (
                   <StageNodeContextMenu
                     x={contextMenu.x}
@@ -2886,7 +2976,7 @@ export function SlideEditor({
                         enterInlineEdit(contextNode.id);
                       }
                     }}
-                    onDuplicate={duplicateSelection}
+                    onDuplicate={handleDuplicateSelection}
                     onCopy={handleCopyNodes}
                     onCut={handleCutNodes}
                     onPaste={handlePasteNodes}
@@ -2977,17 +3067,7 @@ export function SlideEditor({
             isDecorationSelected={isDecorationSelected}
             onDelete={handleDeleteSelection}
             onCut={handleCutNodes}
-            onDuplicate={() => {
-              if (!activeSlide) return;
-              const result = duplicateNodes(deck, activeSlide.id, selectedIds);
-              onDeckChange(result.deck);
-              if (result.duplicatedIds.length > 0) {
-                setSelection((s) =>
-                  setSelectedNodeIds(s, result.duplicatedIds),
-                );
-                focusSelectedNodeSoon(result.duplicatedIds[0]);
-              }
-            }}
+            onDuplicate={handleDuplicateSelection}
             onGroup={handleGroupSelection}
             onUngroup={handleUngroupSelection}
             onBringForward={() => handleReorderSelection("forward")}

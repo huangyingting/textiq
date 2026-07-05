@@ -80,6 +80,8 @@ test("presentation barrel exposes the stable runtime surface", () => {
     "currentObjectAlignCommandDescriptor",
     "currentObjectReorderCommandDescriptor",
     "currentObjectInsertNodeCommandDescriptor",
+    "resolveSlideCommandPaletteCommands",
+    "filterSlideCommandPaletteCommands",
     "alignmentGuidesForFrames",
     "snapFrameToStageGuides",
     "normalizeSelectionFrame",

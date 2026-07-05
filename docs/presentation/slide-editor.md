@@ -27,6 +27,7 @@ and pointer state rules, see
 | Inspector           | [`src/components/presentation/inspector/inspector-shell.tsx`](../../src/components/presentation/inspector/inspector-shell.tsx)                 |
 | Inspector panels    | [`src/components/presentation/inspector/`](../../src/components/presentation/inspector/)                                                       |
 | Context toolbar     | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)                     |
+| Command palette     | [`src/components/presentation/slide-command-palette.tsx`](../../src/components/presentation/slide-command-palette.tsx)                         |
 | Filmstrip           | [`src/components/presentation/filmstrip/filmstrip.tsx`](../../src/components/presentation/filmstrip/filmstrip.tsx)                             |
 | Stage state         | [`src/components/presentation/use-stage-interaction-controller.ts`](../../src/components/presentation/use-stage-interaction-controller.ts)     |
 | Stage targeting     | [`src/components/presentation/stage-targeting.ts`](../../src/components/presentation/stage-targeting.ts)                                       |
@@ -135,10 +136,13 @@ steady-state save labels are polite updates, and save failures are assertive.
 ## Command Surface Ownership
 
 The editor uses one current-object command model across toolbar, canvas popover,
-inspector, keyboard shortcuts, and stage gestures. Deck-level commands stay in
-the top toolbar. Current-slide and current-node commands are routed through the
-canvas popover and inspector so the active object has one visible owner at a
-time.
+inspector, keyboard shortcuts, stage gestures, and the `Cmd/Ctrl+K` command
+palette. Deck-level commands stay in the top toolbar. Current-slide and
+current-node commands are routed through the canvas popover and inspector so the
+active object has one visible owner at a time. The palette resolves commands
+from the same descriptors and inspector panel availability helpers, preserving
+disabled reasons for commands that do not apply in the current selection or edit
+mode.
 
 Inspector continuity preserves compatible panels when selection changes. For
 example, text-to-text and shape-to-shape selection changes keep the same panel;

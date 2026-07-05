@@ -26,6 +26,10 @@ const stageGestureControllerSource = readFileSync(
   new URL("./use-stage-gesture-controller.ts", import.meta.url),
   "utf8",
 );
+const commandPaletteControllerSource = readFileSync(
+  new URL("./use-slide-command-palette-controller.ts", import.meta.url),
+  "utf8",
+);
 
 describe("SlideEditor toolbar command ownership", () => {
   test("exposes the top command row as a named deck toolbar landmark", () => {
@@ -56,7 +60,7 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(source.includes('aria-label="More deck commands"'), true);
     assert.match(
       source,
-      /aria-label="More deck commands"[\s\S]*Keyboard shortcuts[\s\S]*Save now[\s\S]*Diagnostics/,
+      /aria-label="More deck commands"[\s\S]*Command palette[\s\S]*Keyboard shortcuts[\s\S]*Save now[\s\S]*Diagnostics/,
     );
   });
 
@@ -161,6 +165,33 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(
       source.includes(
         "<KeyboardShortcutHelpDialog\n        open={shortcutHelpOpen}",
+      ),
+      true,
+    );
+  });
+
+  test("wires the slide command palette to Cmd/Ctrl+K and the More menu", () => {
+    assert.equal(source.includes("setCommandPaletteOpen(true)"), true);
+    assert.equal(source.includes('aria-label="Command palette"'), true);
+    assert.equal(
+      source.includes(
+        "<SlideCommandPalette\n        open={commandPaletteOpen}",
+      ),
+      true,
+    );
+    assert.match(
+      commandPaletteControllerSource,
+      /event\.key\.toLowerCase\(\) === "k"[\s\S]*event\.metaKey \|\| event\.ctrlKey/,
+    );
+    assert.equal(
+      commandPaletteControllerSource.includes(
+        "resolveSlideCommandPaletteCommands({",
+      ),
+      true,
+    );
+    assert.equal(
+      commandPaletteControllerSource.includes(
+        'else args.openInspectorPanel("source")',
       ),
       true,
     );

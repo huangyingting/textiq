@@ -40,6 +40,47 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     ).toBeVisible();
   });
 
+  test("command palette filters and runs insert and panel commands", async ({
+    page,
+  }) => {
+    await loginAsProfileOwner(page, `${profileDocPath()}/slides`);
+
+    const editor = page.locator('[data-slide-editor="true"]').first();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+
+    const textNodes = editor.locator('[data-node-type="text"]');
+    const textCountBefore = await textNodes.count();
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+K" : "Control+K",
+    );
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    await expect(palette).toBeVisible();
+    await palette
+      .getByRole("combobox", { name: "Search commands" })
+      .fill("insert text");
+    await palette
+      .getByRole("combobox", { name: "Search commands" })
+      .press("Enter");
+    await expect(textNodes).toHaveCount(textCountBefore + 1);
+
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+K" : "Control+K",
+    );
+    await expect(palette).toBeVisible();
+    await palette
+      .getByRole("combobox", { name: "Search commands" })
+      .fill("open notes");
+    await palette
+      .getByRole("combobox", { name: "Search commands" })
+      .press("Enter");
+    await expect(
+      editor.getByRole("textbox", { name: "Speaker Notes" }),
+    ).toBeVisible();
+  });
+
   test("filmstrip exposes both seeded slides and their controls", async ({
     page,
   }) => {

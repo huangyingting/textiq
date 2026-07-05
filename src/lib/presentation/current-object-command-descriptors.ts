@@ -117,12 +117,7 @@ export type CurrentObjectCommandDescriptor = {
 };
 
 export type CurrentObjectInsertNodeKind =
-  | "text"
-  | "shape"
-  | "image"
-  | "visual"
-  | "connector"
-  | "table";
+  "text" | "shape" | "image" | "visual" | "connector" | "table";
 
 export type CurrentObjectInsertNodeCommandDescriptor =
   CurrentObjectCommandDescriptor & {
@@ -131,12 +126,7 @@ export type CurrentObjectInsertNodeCommandDescriptor =
   };
 
 export type CurrentObjectAlignMode =
-  | "left"
-  | "center"
-  | "right"
-  | "top"
-  | "middle"
-  | "bottom";
+  "left" | "center" | "right" | "top" | "middle" | "bottom";
 
 export type CurrentObjectAlignCommandDescriptor =
   CurrentObjectCommandDescriptor & {
@@ -145,10 +135,7 @@ export type CurrentObjectAlignCommandDescriptor =
   };
 
 export type CurrentObjectReorderMode =
-  | "front"
-  | "back"
-  | "forward"
-  | "backward";
+  "front" | "back" | "forward" | "backward";
 
 export type CurrentObjectReorderCommandId =
   `selection.reorder-${CurrentObjectReorderMode}`;
@@ -535,11 +522,36 @@ const CURRENT_OBJECT_BASE_COMMAND_DESCRIPTORS = [
     ],
   },
   {
+    id: "selection.distribute-vertical",
+    family: "distribute-selection",
+    label: "Distribute vertically",
+    shortLabel: "Distribute V",
+    accessibilityLabel: "Distribute selection vertically",
+    liveMessage: "Selection distributed vertically.",
+    currentObjects: ["multi-selection"],
+    owners: ARRANGE_OWNERS,
+    disabledReasons: [
+      "requires-multi-selection",
+      "requires-three-selections",
+      "missing-handler",
+    ],
+  },
+  {
     id: "selection.match-width",
     family: "match-selection-size",
     label: "Match width",
     accessibilityLabel: "Match selection width",
     liveMessage: "Selection widths matched.",
+    currentObjects: ["multi-selection"],
+    owners: ARRANGE_OWNERS,
+    disabledReasons: ["requires-multi-selection", "missing-handler"],
+  },
+  {
+    id: "selection.match-height",
+    family: "match-selection-size",
+    label: "Match height",
+    accessibilityLabel: "Match selection height",
+    liveMessage: "Selection heights matched.",
     currentObjects: ["multi-selection"],
     owners: ARRANGE_OWNERS,
     disabledReasons: ["requires-multi-selection", "missing-handler"],
