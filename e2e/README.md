@@ -159,7 +159,8 @@ credential-less fast gate and CI stay green.
 
 The deterministic profile is bounded for CI: it runs without config-level
 retries, has an 18-minute Playwright global timeout inside a 40-minute workflow
-job (including install/build/setup), and the required CI job uses
+job (including dependency install, database setup, browser provisioning, and the
+no-build dev server), and the required CI job uses
 `E2E_PROFILE_GREP=@required-profile` to run the stabilized critical-flow slice.
 Run `npm run test:e2e:profile` without that grep for the broader deterministic
 profile, and run `e2e/ui-matrix/*-ui.spec.ts` explicitly when validating the
