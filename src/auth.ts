@@ -7,6 +7,7 @@ import { authorizeCredentialsUser } from "@/lib/auth/credentials-service";
 import { google } from "@/lib/env";
 import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
 import { linkOAuthLocalUser } from "@/lib/auth/oauth-user-service";
+import { applySessionSecurityStampToToken } from "@/lib/auth/session-security";
 
 const nextAuth = NextAuth({
   ...authConfig,
@@ -44,15 +45,21 @@ const nextAuth = NextAuth({
           name: user.name,
           image: user.image,
         });
-        token.id = dbUser.id;
-      } else if (user) {
-        token.id = user.id;
+        applySessionSecurityStampToToken(token, dbUser);
+      } else if (user?.id) {
+        applySessionSecurityStampToToken(token, {
+          id: user.id,
+          sessionInvalidatedAt: (
+            user as { sessionInvalidatedAt?: Date | string | null }
+          ).sessionInvalidatedAt,
+        });
       }
       return token;
     },
     session({ session, token }) {
       if (token.id && session.user) {
         session.user.id = token.id;
+        session.user.sessionInvalidatedAt = token.sessionInvalidatedAt ?? null;
       }
       return session;
     },

@@ -21,6 +21,7 @@ import type { DeckGenerationOptions } from "@/lib/ai/use-deck-generation";
 import { logInfo } from "@/lib/log";
 import {
   DEFAULT_THEME_PACKAGE_ID,
+  resolveBuiltInThemePackageId,
   type ThemePackageId,
 } from "@/lib/presentation/theme-package-ids";
 import {
@@ -74,6 +75,8 @@ export interface AiPreviewState {
   generationDiagnostics: PresentationDiagnostic[];
   /** Generation options, re-sent verbatim on Regenerate. */
   options: DeckGenerationOptions;
+  /** Theme package used for the AI generation request and preview regenerate. */
+  themePackageId: ThemePackageId;
   /** The document snapshot, re-sent verbatim on Regenerate / used on apply. */
   contentJson: string;
 }
@@ -92,6 +95,13 @@ const SAVE_CONFLICT_ERROR_MESSAGE =
   "Save conflict: another session modified this deck.";
 const SAVE_DECK_REJECTED_FALLBACK_MESSAGE =
   "Couldn't save your deck. Check your connection and retry.";
+
+function resolveDeckRequestThemePackageId(deck: Pick<Deck, "theme">) {
+  return (
+    resolveBuiltInThemePackageId(deck.theme.packageId) ??
+    DEFAULT_THEME_PACKAGE_ID
+  );
+}
 
 export type SlideEditorOpenError = {
   error: string;
@@ -642,12 +652,15 @@ export function useSlideEditorOpen({
   );
 
   const openDerived = useCallback(
-    async (contentJson: string) => {
+    async (
+      contentJson: string,
+      themePackageId: ThemePackageId = pendingThemePackageId,
+    ) => {
       aiAppliedDeckRef.current = null;
       const derived = deriveDeckFromDocumentContent({
         contentJson,
         documentId,
-        themePackageId: pendingThemePackageId,
+        themePackageId,
       });
       if (derived.ok) {
         finishOpen(derived.deck, derived.diagnostics);
@@ -684,6 +697,7 @@ export function useSlideEditorOpen({
       truncated: boolean,
       generationDiagnostics: PresentationDiagnostic[],
       options: DeckGenerationOptions,
+      themePackageId: ThemePackageId,
       json: string,
     ) => {
       const preparedBaseline = await prepareOpen(json);
@@ -695,6 +709,7 @@ export function useSlideEditorOpen({
         });
         return;
       }
+      revisionTokenRef.current = preparedBaseline.revisionToken;
       setPendingJson(null);
       setAiPreview({
         proposedDeck,
@@ -704,6 +719,7 @@ export function useSlideEditorOpen({
           generationDiagnostics,
         ),
         options,
+        themePackageId,
         contentJson: json,
       });
     },
@@ -729,14 +745,31 @@ export function useSlideEditorOpen({
     const contentJson = effectiveContentJson(liveJson);
 
     if (aiEnabled) {
+      const prepared = await prepareOpen(contentJson);
+      if (!prepared.ok) {
+        enterRecovery({
+          error: prepared.error,
+          diagnostics: prepared.diagnostics,
+          validationErrors: prepared.validationErrors,
+        });
+        return;
+      }
+      revisionTokenRef.current = prepared.revisionToken;
       setEmptyDocument(isEffectivelyEmptyEditorState(contentJson));
-      setPendingThemePackageId(DEFAULT_THEME_PACKAGE_ID);
+      setPendingThemePackageId(resolveDeckRequestThemePackageId(prepared.deck));
       setPendingJson(contentJson);
       return;
     }
 
     await openSaved(contentJson);
-  }, [aiEnabled, editor, effectiveContentJson, openSaved]);
+  }, [
+    aiEnabled,
+    editor,
+    effectiveContentJson,
+    enterRecovery,
+    openSaved,
+    prepareOpen,
+  ]);
 
   const handleClose = useCallback(() => {
     setOpen(false);
@@ -873,10 +906,11 @@ export function useSlideEditorOpen({
         truncated,
         diagnostics,
         options,
+        pendingThemePackageId,
         pendingJson,
       );
     },
-    [pendingJson, showAiPreview],
+    [pendingJson, pendingThemePackageId, showAiPreview],
   );
 
   const handleOpenDialogDerive = useCallback(() => {
@@ -901,7 +935,7 @@ export function useSlideEditorOpen({
 
   const handleAiPreviewDerive = useCallback(() => {
     if (aiPreview) {
-      void openDerived(aiPreview.contentJson);
+      void openDerived(aiPreview.contentJson, aiPreview.themePackageId);
     }
   }, [aiPreview, openDerived]);
 

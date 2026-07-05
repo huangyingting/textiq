@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { ReactElement } from "react";
 
@@ -218,6 +219,18 @@ test("GUTTER_BUTTON: lives in the owned UI token module", () => {
   assert.match(GUTTER_BUTTON, /h-9 w-9/);
   assert.match(GUTTER_BUTTON, /shadow-ds-raised/);
   assert.match(GUTTER_BUTTON, /focus-visible:ring-ds-focus-ring/);
+});
+
+test("global chrome tokens include forced-colors and contrast overrides", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+
+  assert.match(css, /@media \(prefers-contrast: more\)/);
+  assert.match(css, /@media \(forced-colors: active\)/);
+  assert.match(css, /--ds-accent-fill: Highlight/);
+  assert.match(css, /--ds-focus-ring: Highlight/);
+  assert.match(css, /outline: 2px solid Highlight/);
+  assert.match(css, /\[data-node-chrome-frame\]/);
+  assert.match(css, /\.tiq-mobile-sheet/);
 });
 
 test("Card and EmptyState use DS chrome tokens", () => {

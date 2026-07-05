@@ -260,6 +260,7 @@ import {
   FocusTrapped,
   SlideEditorInspectorRegion,
 } from "./slide-editor-regions";
+import { buildMobileInspectorContext } from "./mobile-inspector-context";
 import { Popover } from "@/components/ui/popover";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import {
@@ -774,8 +775,8 @@ export function SlideEditor({
     }));
   }
 
-  function openMobileInspector(panel: InspectorPanelId = "slide") {
-    requestInspectorPanel(panel);
+  function openMobileInspector(panel?: InspectorPanelId) {
+    requestInspectorPanel(panel ?? mobileInspectorContext.activePanel);
     setInspectorSheetOpen(true);
   }
 
@@ -2181,6 +2182,26 @@ export function SlideEditor({
   const isDecorationSelected =
     selectedResolvedNode?.source === "themeDecoration" ||
     selectedResolvedNode?.source === "deckChrome";
+  const mobileInspectorContext = buildMobileInspectorContext({
+    activeSlide,
+    selectedNode,
+    selectedIds,
+    isDecorationSelected,
+    selectedGeneratedSource:
+      selectedResolvedNode?.source === "themeDecoration" ||
+      selectedResolvedNode?.source === "deckChrome"
+        ? selectedResolvedNode.source
+        : undefined,
+    requestedPanel: inspectorPanelRequest?.panel,
+    hasDiagnostics: diagnostics.length > 0,
+  });
+  function handleMobileInspectorPanelSelect(panel: InspectorPanelId) {
+    requestInspectorPanel(panel);
+    const panelLabel =
+      mobileInspectorContext.panels.find((option) => option.id === panel)
+        ?.label ?? panel;
+    setStageAnnouncement(`${panelLabel} inspector panel selected`);
+  }
   const inspectorKey = `${inspectorPanelRequest?.panel ?? "auto"}-${inspectorPanelRequest?.nonce ?? 0}`;
   const renderInspectorShell = () => (
     <InspectorShell
@@ -3254,7 +3275,7 @@ export function SlideEditor({
                       {stageGuides.map((guide, index) => (
                         <span
                           key={`${guide.axis}-${guide.positionPct}-${index}`}
-                          className="absolute bg-ds-accent-fill/70"
+                          className="tiq-stage-snap-guide absolute bg-ds-accent-fill/70"
                           style={
                             guide.axis === "x"
                               ? {
@@ -3308,6 +3329,10 @@ export function SlideEditor({
           onOpenMobileInspector={openMobileInspector}
           onCloseMobileInspector={closeMobileInspector}
           renderInspectorShell={renderInspectorShell}
+          mobileInspectorContext={{
+            ...mobileInspectorContext,
+            onSelectPanel: handleMobileInspectorPanelSelect,
+          }}
         />
       </div>
 

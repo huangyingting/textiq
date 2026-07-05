@@ -54,6 +54,7 @@ function makeResetClient(rawToken: string) {
     usedAt: null as Date | null,
   };
   const passwordHashes: string[] = [];
+  const sessionInvalidatedAts: Date[] = [];
   const client = {
     user: {
       update({
@@ -61,9 +62,11 @@ function makeResetClient(rawToken: string) {
         data,
       }: {
         where: { id: string };
-        data: { passwordHash: string };
+        data: { passwordHash: string; sessionInvalidatedAt: Date };
       }) {
         assert.equal(where.id, "u1");
+        assert.equal(data.sessionInvalidatedAt instanceof Date, true);
+        sessionInvalidatedAts.push(data.sessionInvalidatedAt);
         passwordHashes.push(data.passwordHash);
         return Promise.resolve({ id: where.id, ...data });
       },
@@ -103,6 +106,7 @@ function makeResetClient(rawToken: string) {
       return fn(client);
     },
     _passwordHashes: passwordHashes,
+    _sessionInvalidatedAts: sessionInvalidatedAts,
   };
   return asPrismaClient(client);
 }
@@ -247,6 +251,7 @@ test("resetPasswordWithToken consumes the token with a race-safe conditional upd
     1,
   );
   assert.equal(client._passwordHashes.length, 1);
+  assert.equal(client._sessionInvalidatedAts.length, 1);
 });
 
 test("resetPasswordWithToken rejects missing, unknown, expired, and invalid replacement inputs", async () => {
