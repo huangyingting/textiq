@@ -207,7 +207,8 @@ Key properties:
   run for real. Without it, every profile-dependent spec **skips cleanly** so the
   credential-less fast gate and CI stay green.
 - `.github/workflows/e2e-deterministic.yml` is a hard PR/push gate: it runs the
-  self-contained profile wrapper and fails the workflow on any profile failure.
+  self-contained profile wrapper with `E2E_PROFILE_GREP=@required-profile` and
+  fails the workflow on any required-profile failure.
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
 

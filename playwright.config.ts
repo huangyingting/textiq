@@ -31,6 +31,9 @@ const reuseExistingServer = booleanEnv(
 );
 const deterministicProfile = process.env.E2E_PROFILE === "1";
 const deterministicProfileTimeoutMs = 18 * 60_000;
+const profileGrep = process.env.E2E_PROFILE_GREP
+  ? new RegExp(process.env.E2E_PROFILE_GREP)
+  : undefined;
 const deterministicProfileSpecs = [
   "authenticated-nested-routes.spec.ts",
   "document-editor-profile.spec.ts",
@@ -44,6 +47,7 @@ const deterministicProfileSpecs = [
 export default defineConfig({
   testDir: "e2e",
   testMatch: deterministicProfile ? deterministicProfileSpecs : /.*\.spec\.ts/,
+  grep: deterministicProfile ? profileGrep : undefined,
   timeout: deterministicProfile ? 180_000 : undefined,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
