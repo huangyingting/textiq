@@ -17,6 +17,7 @@ decide who may see or mutate a document.
 | [workspaces.md](workspaces.md)                               | Contract  | Workspace roles, capabilities, invite links, member removal, and document handoff behavior.     |
 | [api-route-security-matrix.md](api-route-security-matrix.md) | Reference | Authoritative classification of every `src/app/api/**/route.ts` route, enforced by guard tests. |
 | [page-route-access-surface.md](page-route-access-surface.md) | Reference | Typed manifest for app/page surfaces, auth pages, share routes, and public proxy exclusions.    |
+| [../../SECURITY.md](../../SECURITY.md)                       | Policy    | Repository-level vulnerability reporting, supported version scope, and response expectations.   |
 
 ## API Surface Governance
 
@@ -50,3 +51,5 @@ rejected, and page/action gates send them through `/signout` to clear cookies.
   tied to shared documents.
 - [../operations/release-gate.md](../operations/release-gate.md) — release
   readiness gate.
+- [../operations/dependency-update-policy.md](../operations/dependency-update-policy.md) —
+  Dependabot cadence and dependency review policy.

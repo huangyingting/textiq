@@ -24,6 +24,10 @@ dedicated CI job; the broader optional E2E suite remains local/opt-in.
 | `e2e/ui-matrix/catalog.spec.ts`     | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                         |
 | `e2e/ui-matrix/*-ui.spec.ts`        | Representative presentation/public/auth/editor/workspace checks (explicit opt-in, not default profile)          |
 
+The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
+`e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
+spec is missing from the inventory or when the generated README section drifts.
+
 ## Prerequisites
 
 1. Install the Chromium browser binary (one-time):
