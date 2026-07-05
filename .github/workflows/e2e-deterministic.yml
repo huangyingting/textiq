@@ -18,9 +18,9 @@ jobs:
       E2E_BASE_URL: http://127.0.0.1:4000
       E2E_PROFILE: "1"
       E2E_PROFILE_GREP: "@required-profile"
-      E2E_PROFILE_SERVER: production
+      E2E_PROFILE_SERVER: dev
       E2E_WEB_SERVER: "1"
-      E2E_WEB_SERVER_COMMAND: npm run start
+      E2E_WEB_SERVER_COMMAND: npm run dev
       E2E_WEB_SERVER_TIMEOUT_MS: "240000"
       E2E_REUSE_EXISTING_SERVER: "0"
       E2E_INSTALL_BROWSER_DEPS: "1"

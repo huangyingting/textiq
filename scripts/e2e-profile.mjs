@@ -4,8 +4,7 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 const configuredBaseUrl = process.env.E2E_BASE_URL ?? process.env.BASE_URL;
-const profileServer = process.env.E2E_PROFILE_SERVER ?? "production";
-const useProductionServer = profileServer !== "dev";
+const profileServer = process.env.E2E_PROFILE_SERVER ?? "dev";
 
 const env = {
   ...process.env,
@@ -16,9 +15,7 @@ const env = {
   E2E_PROFILE: "1",
   E2E_WEB_SERVER: "1",
   E2E_PROFILE_SERVER: profileServer,
-  E2E_WEB_SERVER_COMMAND:
-    process.env.E2E_WEB_SERVER_COMMAND ??
-    (useProductionServer ? "npm run start" : "npm run dev"),
+  E2E_WEB_SERVER_COMMAND: process.env.E2E_WEB_SERVER_COMMAND ?? "npm run dev",
   E2E_WEB_SERVER_TIMEOUT_MS: process.env.E2E_WEB_SERVER_TIMEOUT_MS ?? "480000",
   E2E_REUSE_EXISTING_SERVER: process.env.E2E_REUSE_EXISTING_SERVER ?? "0",
 };
@@ -34,12 +31,16 @@ const steps = [
   ["Generate Prisma client", "npm", ["run", "db:generate"]],
   ["Push SQLite schema", "npm", ["run", "db:push"]],
   ["Seed deterministic profile", "npm", ["run", "db:seed:e2e"]],
-  ...(useProductionServer
-    ? [["Build production app", "npm", ["run", "build"]]]
-    : []),
   ["Install Chromium", "npx", installBrowserArgs],
   ["Run deterministic E2E profile", "npx", ["playwright", "test"]],
 ];
+
+if (process.argv.includes("--list")) {
+  for (const [label, command, args] of steps) {
+    console.log(`${label}: ${command} ${args.join(" ")}`);
+  }
+  process.exit(0);
+}
 
 for (const [label, command, args] of steps) {
   console.log(`\n[e2e-profile] ${label}`);
