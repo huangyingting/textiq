@@ -1,8 +1,8 @@
 ---
-type: "plan"
-status: "active — hook-dispatcher retirement pending"
-last_updated: "2026-07-03"
-description: "Remaining P1 work to retire createServerRenderHarness/renderWithReact based presentation tests in favor of controller, descriptor, component, or browser coverage."
+Type: "plan"
+Status: "completed — hook-dispatcher harness retired"
+Last updated: "2026-07-04"
+description: "Completed P1 work retiring hook-dispatcher presentation tests in favor of controller, descriptor, component, or renderer coverage."
 ---
 
 # Presentation Test Strategy Plan
@@ -14,16 +14,20 @@ description: "Remaining P1 work to retire createServerRenderHarness/renderWithRe
 Remove presentation test coverage that depends on manually patching React hook
 dispatchers, while keeping behavior coverage refactor-safe.
 
-## Remaining Work
+## Completed Work
 
-| Gap                            | Work                                                                                                                                                                                           | Exit criteria                                                                                           |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Hook-dispatcher retirement     | Replace presentation/editor tests that use `createServerRenderHarness` or `renderWithReact` from `src/test/react-server-renderer.ts` with controller, descriptor, component, or browser tests. | Presentation tests no longer patch React exports to exercise hook state.                                |
-| Shared failure harness cleanup | Remove hook-dispatcher use from the shared slide-editor failure harness where region/controller tests can cover the behavior directly.                                                         | Failure tests validate public behavior or extracted owners instead of private hook state.               |
-| Focused replacement coverage   | For each retired hook-dispatcher test, identify the behavior owner and focused replacement file.                                                                                               | Coverage remains behavior-readable and can run without mounting the full editor shell when unnecessary. |
+| Gap                            | Resolution                                                                                                                                                        | Exit criteria                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Hook-dispatcher retirement     | Removed the React export-patching helper and migrated surviving component tests to stable React renderer, server markup, controller, descriptor, or DOM coverage. | Presentation tests no longer patch React exports to exercise hook state.    |
+| Shared failure harness cleanup | Removed the shared slide-editor failure harness and retired redundant full-shell failure tests now covered by region, stage, toolbar, and controller tests.       | Failure coverage validates public behavior or extracted owners.             |
+| Focused replacement coverage   | Retained focused coverage in editor controllers, inline-text DOM adapters, stage interaction controllers, inspector panels, filmstrip, and render surfaces.       | Coverage remains behavior-readable without private hook dispatcher patches. |
 
 ## Completed Progress
 
+- 2026-07-04: Removed `src/test/react-server-renderer.ts` and the remaining
+  direct presentation/editor hook-dispatcher consumers; retained stable coverage
+  through controller, descriptor, DOM-adapter, server-render, and React-renderer
+  tests.
 - 2026-07-03: Extracted `createSlideEditorShellController` and migrated
   `src/components/presentation/use-slide-editor-shell-controller.test.ts` to a
   hook-free controller test.
@@ -32,9 +36,9 @@ dispatchers, while keeping behavior coverage refactor-safe.
   `src/components/presentation/use-source-review-controller.test.ts` to a
   hook-free controller test.
 
-## Current Harness Inventory
+## Retired Harness Inventory
 
-The remaining direct imports of `src/test/react-server-renderer.ts` are:
+The retired direct imports were:
 
 - `src/components/editor/use-slide-editor-open-coverage.test.ts`
 - `src/components/presentation/conflict-recovery-dialog.test.ts`

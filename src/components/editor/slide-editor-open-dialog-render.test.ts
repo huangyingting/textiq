@@ -7,7 +7,7 @@ import {
   buildSlide,
   buildTextNode,
 } from "@/test/builders/presentation-deck";
-import { createServerRenderHarness } from "@/test/react-server-renderer";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 import { SlideEditorOpenDialog } from "./slide-editor-open-dialog";
 
 function collectElements(node: ReactNode, elements: ReactElement[] = []) {
@@ -29,7 +29,7 @@ function textContent(node: ReactNode): string {
 }
 
 test("SlideEditorOpenDialog sends the active theme package when generating", async () => {
-  const hookRenderer = createServerRenderHarness({
+  const hookRenderer = createReactRenderHarness({
     idPrefix: "open-dialog-test-id",
   });
   const generatedDeck = buildDeck(
