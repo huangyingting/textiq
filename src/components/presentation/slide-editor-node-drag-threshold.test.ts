@@ -74,6 +74,24 @@ describe("createNodeMovePreview", () => {
     assert.equal(Math.round(frame.y * 10), 899);
   });
 
+  test("snaps movement previews to custom persistent guides", () => {
+    const preview = createNodeMovePreview({
+      startClientX: 100,
+      startClientY: 100,
+      nextClientX: 106,
+      nextClientY: 100,
+      rectWidth: 1000,
+      rectHeight: 1000,
+      originalFrames: new Map([["node-a", { x: 34, y: 20, w: 10, h: 10 }]]),
+      alignmentGuides: [{ axis: "x", positionPct: 34.5 }],
+      snapToGuides: true,
+    });
+
+    assert.ok(preview);
+    assert.equal(preview.patches.get("node-a")?.frame?.x, 34.5);
+    assert.deepEqual(preview.guides, [{ axis: "x", positionPct: 34.5 }]);
+  });
+
   test("snaps multi-node movement as a group without changing relative offsets", () => {
     const originalFrames = new Map([
       ["node-a", { x: 9.6, y: 20, w: 10, h: 10 }],

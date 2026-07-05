@@ -26,6 +26,7 @@ import {
   alignmentGuidesForFrames,
   snapFrameToStageGuides,
   type StageGuide,
+  type StageGuideInput,
 } from "@/lib/presentation/stage-guides";
 import { nextLayeredZIndex } from "@/lib/presentation/layer-bands";
 import {
@@ -143,6 +144,25 @@ function hasUsableCanvasArea(
   return Boolean(rect && rect.width > 0 && rect.height > 0);
 }
 
+function formatGuidePosition(positionPct: number): string {
+  return Number.isInteger(positionPct)
+    ? String(positionPct)
+    : positionPct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function snappedGuideAnnouncement(
+  guides: readonly StageGuide[],
+): string | null {
+  if (guides.length === 0) return null;
+  const labels = guides.map(
+    (guide) =>
+      `${guide.axis === "x" ? "vertical" : "horizontal"} ${formatGuidePosition(
+        guide.positionPct,
+      )}%`,
+  );
+  return `Snapped to ${labels.join(" and ")}`;
+}
+
 /* node:coverage ignore next 28 */
 type SetSelection = Dispatch<SetStateAction<SelectionState>>;
 
@@ -187,6 +207,7 @@ export interface StageGestureControllerArgs {
   selectedNode: SlideChildNode | undefined;
   selection: SelectionState;
   snapToGuides: boolean;
+  customGuides: readonly StageGuideInput[];
   tableEditingNodeId: string | null;
   draggingStage: boolean;
   activeResizeHandle: unknown | null;
@@ -326,6 +347,7 @@ export function useStageGestureController(
     selectedNode,
     selection,
     snapToGuides,
+    customGuides,
     tableEditingNodeId,
     draggingStage,
     activeResizeHandle,
@@ -750,9 +772,12 @@ export function useStageGestureController(
       selectUnderFromHits(hits);
       return;
     }
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
-    );
+    const alignmentGuides = [
+      ...alignmentGuidesForFrames(
+        layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
+      ),
+      ...customGuides,
+    ];
 
     const startX = event.clientX;
     const startY = event.clientY;
@@ -800,6 +825,10 @@ export function useStageGestureController(
         setDraggingStage(false);
         if (reason !== "up") return;
         if (moved && latestPreview) {
+          const snapAnnouncement = snappedGuideAnnouncement(
+            latestPreview.guides,
+          );
+          if (snapAnnouncement) setStageAnnouncement(snapAnnouncement);
           suppressNextStageClick();
           const duplication = duplicateNodes(deck, activeSlide.id, dragIds);
           if (duplication.duplicatedIds.length === 0) return;
@@ -895,14 +924,18 @@ export function useStageGestureController(
       originalFrames.set(id, node.layout.frame);
     }
     if (originalFrames.size === 0) return;
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
-    );
+    const alignmentGuides = [
+      ...alignmentGuidesForFrames(
+        layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
+      ),
+      ...customGuides,
+    ];
 
     const startX = event.clientX;
     const startY = event.clientY;
     let dragThresholdPassed = false;
     let pointerMovedPastClickThreshold = false;
+    let latestPreview: NodeMovePreview | null = null;
     const gesture = createSingleCommitGesture<NodeMovePreview>({
       initialValue: {
         patches: new Map<string, Partial<LayoutBox>>(),
@@ -944,6 +977,7 @@ export function useStageGestureController(
           lockAxis: moveEvent.shiftKey,
         });
         if (!preview) return;
+        latestPreview = preview;
         if (!dragThresholdPassed) {
           dragThresholdPassed = true;
           setHoveredNodeId(null);
@@ -962,6 +996,10 @@ export function useStageGestureController(
         });
         const moved = pointerMovedPastClickThreshold || endedPastClickThreshold;
         if (reason === "up" && moved) {
+          const snapAnnouncement = snappedGuideAnnouncement(
+            latestPreview?.guides ?? [],
+          );
+          if (snapAnnouncement) setStageAnnouncement(snapAnnouncement);
           suppressNextStageClick();
         }
         if (
@@ -1007,9 +1045,13 @@ export function useStageGestureController(
     const startX = event.clientX;
     const startY = event.clientY;
     const originalFrame = node.layout.frame;
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, new Set([nodeId])),
-    );
+    let lastSnappedGuides: StageGuide[] = [];
+    const alignmentGuides = [
+      ...alignmentGuidesForFrames(
+        layoutFramesExcluding(activeSlide.children, new Set([nodeId])),
+      ),
+      ...customGuides,
+    ];
     const gesture = createSingleCommitGesture<LayoutBox["frame"]>({
       initialValue: originalFrame,
       equals: framesEqual,
@@ -1040,11 +1082,14 @@ export function useStageGestureController(
           snapToGuides && !moveEvent.altKey
             ? snapFrameToStageGuides(nextFrame, 0.75, alignmentGuides)
             : { frame: nextFrame, guides: [] as StageGuide[] };
+        lastSnappedGuides = snapped.guides;
         setStageGuides(snapped.guides);
         gesture.update(snapped.frame);
       },
       onEnd: () => {
         gesture.finish();
+        const snapAnnouncement = snappedGuideAnnouncement(lastSnappedGuides);
+        if (snapAnnouncement) setStageAnnouncement(snapAnnouncement);
         setActiveResizeHandle(null);
         setStageGuides([]);
       },
@@ -1086,10 +1131,14 @@ export function useStageGestureController(
     const startX = event.clientX;
     const startY = event.clientY;
     let dragging = false;
+    let latestPreview: NodeMovePreview | null = null;
     const selectedSet = new Set(entries.map((entry) => entry.id));
-    const alignmentGuides = alignmentGuidesForFrames(
-      layoutFramesExcluding(activeSlide.children, selectedSet),
-    );
+    const alignmentGuides = [
+      ...alignmentGuidesForFrames(
+        layoutFramesExcluding(activeSlide.children, selectedSet),
+      ),
+      ...customGuides,
+    ];
     const gesture = createSingleCommitGesture<NodeMovePreview>({
       initialValue: { patches: new Map(), guides: [] },
       equals: nodeMovePreviewsEqual,
@@ -1134,17 +1183,22 @@ export function useStageGestureController(
           snapToGuides && !moveEvent.altKey
             ? snapFrameToStageGuides(nextBounds, 0.75, alignmentGuides)
             : { frame: nextBounds, guides: [] as StageGuide[] };
-        gesture.update({
+        latestPreview = {
           patches: scaleMultiSelectionFrames(
             entries,
             startBounds,
             snapped.frame,
           ),
           guides: snapped.guides,
-        });
+        };
+        gesture.update(latestPreview);
       },
       onEnd: () => {
         gesture.finish();
+        const snapAnnouncement = snappedGuideAnnouncement(
+          latestPreview?.guides ?? [],
+        );
+        if (snapAnnouncement) setStageAnnouncement(snapAnnouncement);
         setMoveGestureDraft(null);
         setStageGuides([]);
         setDraggingStage(false);

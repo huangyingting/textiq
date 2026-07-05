@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-04"
 description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit Deck nodes when many nodes overlap. It is the interaction contract for the presentation slide editor stage, not the persisted deck schema."
 ---
 
@@ -407,6 +407,9 @@ processing with `requestAnimationFrame`; hit testing should preserve that model.
 Implementation guidance:
 
 - Keep hit-test helpers pure and DOM-free where possible.
+- Keep grid/ruler/custom guide overlays as editor-only, pointer-transparent
+  chrome; only normalized guide positions should enter the pure snapping
+  pipeline.
 - Reuse fitted boxes computed for rendering/manipulation.
 - Avoid measuring DOM line boxes on every pointer move; cache measured text
   geometry if precise text hit testing is added later.

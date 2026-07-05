@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   alignmentGuidesForFrames,
+  normalizeStageGuideInputs,
   snapFrameToStageGuides,
 } from "./stage-guides";
 
@@ -43,6 +44,31 @@ test("snapFrameToStageGuides snaps to custom alignment guides", () => {
 
   assert.equal(result.frame.x, 28);
   assert.deepEqual(result.guides, [{ axis: "x", positionPct: 28 }]);
+});
+
+test("normalizeStageGuideInputs clamps, rounds, and dedupes custom guides", () => {
+  const guides = normalizeStageGuideInputs([
+    { axis: "x", positionPct: 25.123 },
+    { axis: "x", positionPct: 25.124 },
+    { axis: "y", positionPct: -5 },
+    { axis: "y", positionPct: Number.NaN },
+    { axis: "x", positionPct: 120 },
+  ]);
+
+  assert.deepEqual(guides, [
+    { axis: "x", positionPct: 25.12 },
+    { axis: "y", positionPct: 0 },
+    { axis: "x", positionPct: 100 },
+  ]);
+});
+
+test("snapFrameToStageGuides prefers custom guides over default ties", () => {
+  const result = snapFrameToStageGuides({ x: 49.5, y: 20, w: 10, h: 10 }, 1, [
+    { axis: "x", positionPct: 49 },
+  ]);
+
+  assert.equal(result.frame.x, 49);
+  assert.deepEqual(result.guides, [{ axis: "x", positionPct: 49 }]);
 });
 
 test("alignmentGuidesForFrames returns edge and center guides", () => {

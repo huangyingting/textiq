@@ -471,7 +471,10 @@ export type {
 } from "./stage-guides";
 export {
   alignmentGuidesForFrames,
+  normalizeStageGuideInputs,
+  normalizeStageGuidePosition,
   snapFrameToStageGuides,
+  stageGuideInputKey,
 } from "./stage-guides";
 export type { SelectionFrame } from "./selection-geometry";
 export {
