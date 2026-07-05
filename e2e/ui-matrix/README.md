@@ -8,7 +8,7 @@ This directory contains the source-backed Playwright UI matrix inventory, a gene
 
 ## Sources reviewed
 
-- `docs/codebase/TESTING.md`
+- `docs/import/README.md`
 - `e2e/README.md` and existing `e2e/*.spec.ts` helpers
 - `docs/system/design-system.md`
 - `docs/editor/document-editor.md`
@@ -78,7 +78,7 @@ The repository currently has 21 Playwright specs under `e2e/`. Every `e2e/**/*.s
 
 | ID                       | Owner               | Status  | Gap                                                                                                                                                                  | Sources                                                               |
 | ------------------------ | ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| DOCX-UI-ROUNDTRIP        | import              | manual  | DOCX import is parser-tested but remains a manual UI round-trip because binary fixtures are not maintained in-repo.                                                  | `e2e/README.md`, `docs/codebase/TESTING.md`                           |
+| DOCX-UI-ROUNDTRIP        | import              | manual  | DOCX import is parser-tested but remains a manual UI round-trip because binary fixtures are not maintained in-repo.                                                  | `e2e/README.md`, `docs/import/README.md`                              |
 | BLOCK-ID-DEEP-ASSERTIONS | editor/presentation | blocked | Block-id preservation spec currently exercises fixture reachability; persisted bid/sourceRef assertions need stable diagnostics hooks.                               | `e2e/block-id-preservation.spec.ts`, `docs/editor/document-editor.md` |
 | FULL-500-BROWSER-MATRIX  | ui matrix           | catalog | The 500-case catalog is intentionally not expanded into 500 browser tests; representative automated slices are promoted only when fixtures and selectors are stable. | `e2e/ui-matrix/cases.ts`, `e2e/ui-matrix/README.md`                   |
 

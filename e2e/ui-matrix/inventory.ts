@@ -99,7 +99,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     roles: ["seeded owner", "anonymous request API"],
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
-    sourceRefs: ["e2e/README.md", "docs/codebase/TESTING.md"],
+    sourceRefs: ["e2e/README.md", "docs/import/README.md"],
   },
   {
     spec: "e2e/oauth-disabled.spec.ts",
@@ -314,7 +314,7 @@ export const UI_MATRIX_MANUAL_GAPS = [
     owner: "import",
     gap: "DOCX import is parser-tested but remains a manual UI round-trip because binary fixtures are not maintained in-repo.",
     status: "manual",
-    sourceRefs: ["e2e/README.md", "docs/codebase/TESTING.md"],
+    sourceRefs: ["e2e/README.md", "docs/import/README.md"],
   },
   {
     id: "BLOCK-ID-DEEP-ASSERTIONS",

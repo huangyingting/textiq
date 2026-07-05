@@ -51,18 +51,22 @@ jobs:
         run: npm ci
 
       - name: Verify Copilot CLI is available
+        id: copilot_cli
         run: |
           if ! command -v copilot >/dev/null 2>&1; then
-            echo "The 'copilot' CLI command is not available on this runner."
-            echo "Install/configure Copilot CLI for this workflow, or run it on a runner image that provides it."
-            exit 1
+            echo "::warning::The 'copilot' CLI command is not available on this runner; skipping automated docs refresh."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Ask Copilot to refresh docs
+        if: steps.copilot_cli.outputs.available == 'true'
         run: |
           copilot --allow-all-tools -p "$COPILOT_PROMPT" 2>&1 | tee "$RUNNER_TEMP/copilot-docs-refresh.log"
 
       - name: Ensure only documentation files changed
+        if: steps.copilot_cli.outputs.available == 'true'
         run: |
           changed_files="$(git status --short | awk '{print $2}')"
           if [ -z "$changed_files" ]; then
@@ -78,12 +82,15 @@ jobs:
           fi
 
       - name: Format docs
+        if: steps.copilot_cli.outputs.available == 'true'
         run: npx prettier --write "docs/**/*.md" README.md AGENTS.md
 
       - name: Verify docs
+        if: steps.copilot_cli.outputs.available == 'true'
         run: npm run docs:check
 
       - name: Create pull request
+        if: steps.copilot_cli.outputs.available == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ github.token }}

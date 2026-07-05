@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-05"
 description: "This map ties the main code subsystems to their design documents. It is a coverage index, not a replacement for source, tests, or schemas."
 ---
 
@@ -12,7 +12,7 @@ coverage index, not a replacement for source, tests, or schemas.
 
 | Code subsystem                 | Primary source anchors                                                                                               | Owning docs                                                                                                                                                  | Main types                           |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| Whole-repo onboarding          | `README.md`, `package.json`, `docs/codebase/.codebase-scan.txt`, `docs/`                                             | [../codebase/](../codebase/README.md)                                                                                                                        | Reference, Architecture              |
+| Whole-repo onboarding          | `README.md`, `package.json`, `docs/README.md`, `docs/`                                                               | [../](../README.md)                                                                                                                                          | Reference, Architecture              |
 | System invariants and ADRs     | `src/lib/*`, `scripts/*`, `prisma/*`, `src/lib/app-shell/`                                                           | [architecture.md](architecture.md), [architecture-decisions.md](architecture-decisions.md)                                                                   | Architecture, ADR                    |
 | Authentication and account     | `src/auth.ts`, `src/lib/auth/`, `src/lib/account/`, `src/lib/settings/`                                              | [../auth/](../auth/README.md), [../security/](../security/README.md)                                                                                         | Architecture, Runbook                |
 | Authorization and route policy | `src/lib/access-policy/`, `src/lib/auth/*permissions*`, `src/lib/workspace/`                                         | [../security/](../security/README.md)                                                                                                                        | Contract, Reference                  |
