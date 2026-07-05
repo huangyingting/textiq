@@ -556,7 +556,9 @@ CI/CD: GitHub Actions
 No containerization configs detected.
 
 === SECURITY & COMPLIANCE ===
-No security configs detected.
+Security configs detected:
+SECURITY.md
+.github/dependabot.yml
 
 === PERFORMANCE & TESTING ===
 No performance testing configs detected.
