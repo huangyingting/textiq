@@ -174,10 +174,10 @@ The following subsystems have dedicated test files that must stay green:
 ### Critical-flow E2E profile (Epic #517)
 
 The unit gate above is intentionally credential-less and never starts a server.
-A second, opt-in **deterministic E2E profile** drives the critical product
+A second, required **deterministic E2E profile** drives the critical product
 flows end to end through a real browser. It is **not** part of `npm test` or the
-required fast gate — it runs in a dedicated job against a seeded database and a
-running app.
+required fast gate — it runs in a dedicated CI job against a seeded database and
+prebuilt Playwright-started app.
 
 ```bash
 # 1. Seed the deterministic fixture (owner + viewer users, one shared document
@@ -192,6 +192,12 @@ npm run dev &
 npm run test:e2e:profile
 ```
 
+For fresh checkouts or CI parity, prefer the self-contained profile runner:
+
+```bash
+npm run test:e2e:profile:self-contained
+```
+
 Key properties:
 
 - The seeded **document URL** (`/app/documents/<documentId>`) and **share id**
@@ -200,6 +206,8 @@ Key properties:
 - Under the profile (`E2E_PROFILE=1`), authenticated specs **do not skip**; they
   run for real. Without it, every profile-dependent spec **skips cleanly** so the
   credential-less fast gate and CI stay green.
+- `.github/workflows/e2e-deterministic.yml` is a hard PR/push gate: it runs the
+  self-contained profile wrapper and fails the workflow on any profile failure.
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
 

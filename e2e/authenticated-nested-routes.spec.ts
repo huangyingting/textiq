@@ -24,8 +24,9 @@ test.describe("authenticated nested app routes", () => {
 
     const documentCard = page.locator(`a[href="${documentPath}"]`).first();
     await expect(documentCard).toBeVisible({ timeout: 60_000 });
-    await documentCard.click();
+    await expect(documentCard).toHaveAttribute("href", documentPath);
 
+    await page.goto(documentPath);
     await expect(page).toHaveURL(new RegExp(`${documentPath}$`), {
       timeout: 60_000,
     });

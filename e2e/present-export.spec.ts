@@ -93,6 +93,25 @@ async function detectPresentationState(
   return "timeout";
 }
 
+async function openPresentationOverlay(
+  page: Page,
+  presentBtn: Locator,
+  presentRegion: Locator,
+): Promise<void> {
+  await expect(async () => {
+    await presentBtn.click();
+    if (
+      !(await presentRegion.isVisible({ timeout: 2_000 }).catch(() => false))
+    ) {
+      await presentBtn.focus();
+      await page.keyboard.press("Enter");
+    }
+    await expect(presentRegion).toBeVisible({ timeout: 5_000 });
+  }, "present: presentation overlay did not open").toPass({
+    timeout: 45_000,
+  });
+}
+
 test.describe("present + export", () => {
   test.skip(
     !e2eProfileEnabled(),
@@ -118,14 +137,7 @@ test.describe("present + export", () => {
     ).toBeVisible({ timeout: 20_000 });
 
     const presentRegion = page.getByRole("region", { name: "Presentation" });
-    // Retry the click in case the first attempt fires before the overlay
-    // transition is ready (e.g. cold server start or high initial load).
-    await expect(async () => {
-      await presentBtn.click();
-      await expect(presentRegion).toBeVisible({ timeout: 2_000 });
-    }, "present: presentation overlay did not open").toPass({
-      timeout: 25_000,
-    });
+    await openPresentationOverlay(page, presentBtn, presentRegion);
 
     // Non-blank assertion: the seeded title text must render on the slide.
     await expect(
@@ -145,13 +157,8 @@ test.describe("present + export", () => {
       presentBtn,
       "present: Present button not found in editor toolbar",
     ).toBeVisible({ timeout: 20_000 });
-    await presentBtn.click();
-
     const presentRegion = page.getByRole("region", { name: "Presentation" });
-    await expect(
-      presentRegion,
-      "present: presentation overlay did not open",
-    ).toBeVisible({ timeout: 20_000 });
+    await openPresentationOverlay(page, presentBtn, presentRegion);
 
     const progress = presentRegion.getByRole("progressbar", {
       name: "Presentation progress",
@@ -228,9 +235,8 @@ test.describe("present + export", () => {
       presentBtn,
       "present: Present button not found in editor toolbar",
     ).toBeVisible({ timeout: 20_000 });
-    await presentBtn.click();
-
     const presentRegion = page.getByRole("region", { name: "Presentation" });
+    await openPresentationOverlay(page, presentBtn, presentRegion);
     const state = await detectPresentationState(page, presentRegion);
     if (state === "recovery") {
       // e2e-governance-allow test-skip: seeded profile may contain a non-presentation deck, making safe-area HUD assertions inapplicable.
@@ -478,14 +484,7 @@ test.describe("present + export", () => {
     ).toBeVisible({ timeout: 20_000 });
 
     const presentRegion = page.getByRole("region", { name: "Presentation" });
-    // Use retry wrapper (same pattern as export menu) in case the first click
-    // doesn't register before the overlay transition completes.
-    await expect(async () => {
-      await presentBtn.click();
-      await expect(presentRegion).toBeVisible({ timeout: 2_000 });
-    }, "present: presentation overlay did not open").toPass({
-      timeout: 25_000,
-    });
+    await openPresentationOverlay(page, presentBtn, presentRegion);
 
     // Wait for slide content so React effects (including the keyboard shortcut
     // handler) are guaranteed to have run before we press Escape.

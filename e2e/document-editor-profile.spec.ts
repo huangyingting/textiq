@@ -84,7 +84,7 @@ async function openProfileDocument(page: Page): Promise<void> {
 }
 
 async function openProfileSlideEditor(page: Page): Promise<Locator> {
-  await activate(page.getByRole("button", { name: "Open slide editor" }));
+  await activate(page.getByRole("link", { name: "Open slide editor" }));
   const editor = page.getByRole("dialog", { name: "Slide editor" }).first();
   await expect(editor).toBeVisible({ timeout: 20_000 });
   return editor;
@@ -291,20 +291,22 @@ test.describe("deterministic profile document editor smoke", () => {
     await expect(
       drawer.getByRole("link", { name: /documents/i }),
     ).toBeVisible();
-    await activate(drawer.getByRole("link", { name: /workspaces/i }));
+    const workspacesLink = drawer.getByRole("link", { name: /workspaces/i });
+    await expect(workspacesLink).toHaveAttribute("href", "/app/workspaces");
+    await workspacesLink.click();
 
-    await expect(page).toHaveURL(/\/app\/workspaces$/);
+    await expect(page).toHaveURL(/\/app\/workspaces$/, { timeout: 60_000 });
     await expect(
       page.getByRole("heading", { name: /^workspaces$/i }),
     ).toBeVisible({ timeout: 20_000 });
 
     await activate(page.getByRole("button", { name: /open navigation menu/i }));
-    await activate(
-      page
-        .getByRole("dialog", { name: /navigation menu/i })
-        .getByRole("link", { name: /brands/i }),
-    );
-    await expect(page).toHaveURL(/\/app\/brands$/);
+    const brandsLink = page
+      .getByRole("dialog", { name: /navigation menu/i })
+      .getByRole("link", { name: /brands/i });
+    await expect(brandsLink).toHaveAttribute("href", "/app/brands");
+    await brandsLink.click();
+    await expect(page).toHaveURL(/\/app\/brands$/, { timeout: 60_000 });
     await expect(
       page.getByRole("heading", { name: /brand studio/i }),
     ).toBeVisible({ timeout: 20_000 });
@@ -459,10 +461,10 @@ test.describe("deterministic profile document editor smoke", () => {
       exportMenu.getByRole("menuitem", { name: /^PPTX deck\b/ }),
     ).toHaveAttribute("aria-disabled", /^(true|false)$/);
     await expect(
-      exportMenu.getByRole("menuitem", { name: /^Slide SVGs\b/ }),
+      exportMenu.getByRole("menuitem", { name: /^Infographic PNG\b/ }),
     ).toBeVisible();
     await expect(
-      exportMenu.getByRole("menuitem", { name: /^Slide PNGs\b/ }),
+      exportMenu.getByRole("menuitem", { name: /^Infographic PDF\b/ }),
     ).toBeVisible();
 
     const defaultWidth = exportMenu.getByRole("button", { name: "1080px" });

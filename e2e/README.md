@@ -2,8 +2,8 @@
 
 These Playwright specs cover critical product flows (issue #107). They live
 **only** in `e2e/` so the unit gate (`npm test`) maps them to subsystem buckets
-but never executes them. They are **not** run by the required CI workflow — run
-them locally or in a dedicated E2E job.
+but never executes them. The deterministic profile subset runs as a required
+dedicated CI job; the broader optional E2E suite remains local/opt-in.
 
 ## What's covered
 
@@ -65,22 +65,27 @@ Public-page, auth-redirect, OAuth-disabled, and share-fallback specs run with no
 extra configuration. Authenticated flows skip cleanly unless you provide seeded
 credentials:
 
-| Variable                        | Used by                            | Purpose                                                                      |
-| ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `E2E_BASE_URL` / `BASE_URL`     | all                                | App base URL (default `http://localhost:4000`)                               |
-| `E2E_WEB_SERVER`                | config                             | `1` to let Playwright run `npm run dev`                                      |
-| `E2E_USER_EMAIL/PASSWORD`       | workspace, billing, brand, slides  | A seeded owner/editor login                                                  |
-| `E2E_VIEWER_EMAIL/PASSWORD`     | workspace                          | A seeded viewer-only login                                                   |
-| `E2E_VIEWER_DOC_URL`            | workspace                          | A document URL the viewer can open read-only                                 |
-| `E2E_BRAND_FONT_URL`            | brand                              | Path to a `.woff2`/`.ttf` font to upload                                     |
-| `BILLING_UNLIMITED_CREDITS`     | billing                            | Match the server's unlimited-credit gate                                     |
-| `GOOGLE_CLIENT_ID/SECRET`       | oauth-disabled                     | Match the server's Google provider configuration                             |
-| `E2E_SLIDES_DOC_URL`            | slides-smoke                       | Full URL to a seeded document with a Slides presentation                     |
-| `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to run layout screenshots outside the deterministic profile       |
-| `E2E_SLIDES_EDITOR_PATH`        | slides-layout-screenshots          | Override the seeded editor document path used by layout screenshots          |
-| `E2E_SCREENSHOT_REGRESSION`     | screenshot-regression              | Set to `1` to enable screenshot comparison tests                             |
-| `E2E_REGRESSION_SHARE_ID`       | screenshot-regression              | A share id for the public present/embed regression slides                    |
-| `E2E_PROFILE`                   | profile specs + layout screenshots | Set to `1` to run deterministic profile specs (including layout screenshots) |
+| Variable                        | Used by                            | Purpose                                                                           |
+| ------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------- |
+| `E2E_BASE_URL` / `BASE_URL`     | all                                | App base URL (default `http://localhost:4000`)                                    |
+| `E2E_WEB_SERVER`                | config                             | `1` to let Playwright run the app                                                 |
+| `E2E_WEB_SERVER_COMMAND`        | config                             | Server command when `E2E_WEB_SERVER=1` (defaults to `npm run dev`)                |
+| `E2E_WEB_SERVER_TIMEOUT_MS`     | config                             | Server readiness timeout override (defaults to 240000)                            |
+| `E2E_REUSE_EXISTING_SERVER`     | config                             | Override Playwright server reuse (`1`/`true` or `0`/`false`)                      |
+| `E2E_PROFILE_SERVER`            | self-contained profile             | `production` (default) builds first and starts `npm run start`; `dev` skips build |
+| `E2E_INSTALL_BROWSER_DEPS`      | self-contained profile             | `1` to install Playwright OS dependencies with Chromium                           |
+| `E2E_USER_EMAIL/PASSWORD`       | workspace, billing, brand, slides  | A seeded owner/editor login                                                       |
+| `E2E_VIEWER_EMAIL/PASSWORD`     | workspace                          | A seeded viewer-only login                                                        |
+| `E2E_VIEWER_DOC_URL`            | workspace                          | A document URL the viewer can open read-only                                      |
+| `E2E_BRAND_FONT_URL`            | brand                              | Path to a `.woff2`/`.ttf` font to upload                                          |
+| `BILLING_UNLIMITED_CREDITS`     | billing                            | Match the server's unlimited-credit gate                                          |
+| `GOOGLE_CLIENT_ID/SECRET`       | oauth-disabled                     | Match the server's Google provider configuration                                  |
+| `E2E_SLIDES_DOC_URL`            | slides-smoke                       | Full URL to a seeded document with a Slides presentation                          |
+| `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to run layout screenshots outside the deterministic profile            |
+| `E2E_SLIDES_EDITOR_PATH`        | slides-layout-screenshots          | Override the seeded editor document path used by layout screenshots               |
+| `E2E_SCREENSHOT_REGRESSION`     | screenshot-regression              | Set to `1` to enable screenshot comparison tests                                  |
+| `E2E_REGRESSION_SHARE_ID`       | screenshot-regression              | A share id for the public present/embed regression slides                         |
+| `E2E_PROFILE`                   | profile specs + layout screenshots | Set to `1` to run deterministic profile specs (including layout screenshots)      |
 
 ## Deterministic E2E profile (Epic #517)
 
@@ -136,19 +141,24 @@ npm run test:e2e:profile:self-contained
 ```
 
 It generates the Prisma client, pushes the SQLite schema, seeds the deterministic
-fixture, installs Chromium, starts the app through Playwright, and runs only the
-deterministic profile specs. CI uses the same profile in
-`.github/workflows/e2e-deterministic.yml`.
+fixture, builds the app, installs Chromium, starts the prebuilt production server
+through Playwright, and runs only the deterministic profile specs. CI uses the
+same required hard gate in `.github/workflows/e2e-deterministic.yml`; profile
+failures fail the workflow. If `E2E_BASE_URL` includes an explicit port, the
+wrapper passes the same `PORT` to the app server unless `PORT` is already set.
+Set `E2E_PROFILE_SERVER=dev` only for local debugging when you intentionally
+want to skip the production build.
 
 Under the profile (`E2E_PROFILE=1`, set by `test:e2e:profile`) the
 profile-dependent specs **do not skip** — they run for real. Without
 `E2E_PROFILE=1` they **skip cleanly** via `e2eProfileEnabled()`, so the
 credential-less fast gate and CI stay green.
 
-The deterministic profile is bounded for CI: it runs without retries, has a
-global timeout, and includes only the lightweight UI matrix catalog check by
-default. Run `e2e/ui-matrix/*-ui.spec.ts` explicitly when validating the
-representative browser UI matrix.
+The deterministic profile is bounded for CI: it runs without config-level
+retries, has an 18-minute Playwright global timeout inside a 40-minute workflow
+job (including install/build/setup), and includes only the lightweight UI matrix
+catalog check by default. Run `e2e/ui-matrix/*-ui.spec.ts` explicitly when
+validating the representative browser UI matrix.
 
 ### DOCX coverage note
 

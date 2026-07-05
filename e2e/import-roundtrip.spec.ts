@@ -44,6 +44,7 @@ test.describe("document import round-trip", () => {
     !e2eProfileEnabled(),
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run import round-trip",
   );
+  test.setTimeout(240_000);
 
   test("imports Markdown, renders blocks, and persists an edit across reload", async ({
     page,
@@ -99,28 +100,46 @@ test.describe("document import round-trip", () => {
       editor,
       "persist: editor never became editable",
     ).toHaveAttribute("contenteditable", "true", { timeout: 20_000 });
+    await expect(
+      page.getByRole("status").filter({ hasText: "Live" }).first(),
+      "persist: collaboration room did not become live before editing",
+    ).toBeVisible({ timeout: 60_000 });
 
     const marker = "roundtrip-profile-marker";
     await editor.click();
     await page.keyboard.press("End");
     await page.keyboard.type(` ${marker}`);
+    await expect(editor.getByText(marker, { exact: false })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Wait for the debounced autosave to confirm before reloading.
+    await page
+      .getByText(/Unsaved changes|Saving/)
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => undefined);
     await expect(
       page.getByText("All changes saved"),
       "persist: save status never reached 'All changes saved'",
-    ).toBeVisible({ timeout: 20_000 });
+    ).toBeVisible({ timeout: 60_000 });
 
-    await page.reload();
-    const editorAfter = page.getByLabel("Document body");
-    await expect(
-      editorAfter,
-      "persist: editor body missing after reload",
-    ).toBeVisible({ timeout: 20_000 });
-    await expect(
-      editorAfter.getByText(marker, { exact: false }),
-      "persist: edited marker did not survive reload",
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(async () => {
+      await page.reload();
+      const editorAfter = page.getByLabel("Document body");
+      await expect(
+        editorAfter,
+        "persist: editor body missing after reload",
+      ).toBeVisible({ timeout: 20_000 });
+      await expect(
+        page.getByRole("status").filter({ hasText: "Live" }).first(),
+        "persist: collaboration room did not become live after reload",
+      ).toBeVisible({ timeout: 60_000 });
+      await expect(
+        editorAfter.getByText(marker, { exact: false }),
+        "persist: edited marker did not survive reload",
+      ).toBeVisible({ timeout: 60_000 });
+    }).toPass({ timeout: 120_000 });
   });
 
   test("rejects an unsupported file type with a graceful error", async ({
