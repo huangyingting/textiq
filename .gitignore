@@ -75,9 +75,15 @@ progress.txt
 .squad/.scratch/
 .squad/.cache/
 .squad/*.log
+.squad/scratch/
+.squad/agents/*/history.md
 
 # Repo-local test scratch files
 .tmp/
+test-results/
+
+# Local worktrees
+.worktrees/
 
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
