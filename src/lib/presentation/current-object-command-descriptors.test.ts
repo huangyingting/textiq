@@ -218,4 +218,27 @@ describe("current-object command descriptor bijections", () => {
       );
     }
   });
+
+  test("keeps multi-selection arrange descriptors aligned with toolbar verbs", () => {
+    assert.ok(
+      CURRENT_OBJECT_COMMAND_DESCRIPTORS.some(
+        (descriptor) => descriptor.id === "selection.distribute-horizontal",
+      ),
+    );
+    assert.ok(
+      CURRENT_OBJECT_COMMAND_DESCRIPTORS.some(
+        (descriptor) => descriptor.id === "selection.distribute-vertical",
+      ),
+    );
+    assert.ok(
+      CURRENT_OBJECT_COMMAND_DESCRIPTORS.some(
+        (descriptor) => descriptor.id === "selection.match-width",
+      ),
+    );
+    assert.ok(
+      CURRENT_OBJECT_COMMAND_DESCRIPTORS.some(
+        (descriptor) => descriptor.id === "selection.match-height",
+      ),
+    );
+  });
 });
