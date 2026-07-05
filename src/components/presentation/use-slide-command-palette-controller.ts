@@ -7,6 +7,8 @@ import {
   type Deck,
   type SlideChildNode,
   type SlideCommandPaletteCommand,
+  type StyleObject,
+  type StylePatch,
 } from "@/lib/presentation";
 import type { SaveStatus } from "@/lib/presentation/save-status";
 import {
@@ -19,6 +21,10 @@ import type {
   SelectionAlignMode,
   SelectionDistributeMode,
   SelectionMatchSizeMode,
+} from "./toolbar/context-toolbar";
+import {
+  routeContextToolbarTextCommand,
+  seedContextToolbarStyles,
 } from "./toolbar/context-toolbar";
 
 type SlideCommandPaletteKeyboardEvent =
@@ -34,6 +40,7 @@ export interface SlideCommandPaletteControllerArgs {
   isInlineEditing: boolean;
   isTableEditing: boolean;
   hasSelectedSource: boolean;
+  selectedResolvedStyle?: StyleObject;
   sourceReviewCount: number;
   diagnosticsCount: number;
   saveStatus: SaveStatus;
@@ -74,6 +81,7 @@ export interface SlideCommandPaletteControllerArgs {
   handleDeleteSelection: () => void;
   handleCutNodes: () => Promise<void>;
   handleUpdateSelectedAttributes: (patch: { locked?: boolean }) => void;
+  handleUpdateSelectedLocalStyle: (patch: StylePatch) => void;
   handleReviewSourceLinks: () => void;
   openInspectorPanel: (panel: InspectorPanelId) => void;
   focusSelectedNodeSoon: (nodeId: string) => void;
@@ -228,6 +236,17 @@ export function useSlideCommandPaletteController(
             locked: selectedNode.locked !== true,
           });
         }
+        return;
+      case "text.bold":
+        routeContextToolbarTextCommand({
+          command: "bold",
+          isInlineEditing,
+          textStyle: seedContextToolbarStyles(
+            selectedNode ?? undefined,
+            args.selectedResolvedStyle,
+          ).textStyle,
+          onUpdateSelectedLocalStyle: args.handleUpdateSelectedLocalStyle,
+        });
         return;
       case "source.review":
         if (sourceReviewCount > 0) args.handleReviewSourceLinks();
