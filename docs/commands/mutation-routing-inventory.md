@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "accepted"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "Date: 2026-06-23 Issue: #437 / Epic #436 — Cross-surface command envelope for document visuals and deck artifacts Authors: Switch (Frontend Dev)"
 ---
 
@@ -90,10 +90,7 @@ The command routing rule is:
       "src/lib/presentation/editor-commands.ts",
       "src/components/presentation/slide-editor.tsx"
     ],
-    "persistence": [
-      "src/app/app/documents/[id]/actions.ts::saveDeckJson",
-      "src/app/app/documents/[id]/actions.ts::saveDeckPatch"
-    ],
+    "persistence": ["src/app/app/documents/[id]/actions.ts::saveDeckJson"],
     "busDisposition": "wrap existing SlideCommand payloads in CommandEnvelope; do not replace executor"
   },
   {
@@ -122,7 +119,7 @@ The command routing rule is:
       "src/components/presentation/source-review-panel.tsx",
       "src/components/presentation/slide-editor.tsx"
     ],
-    "persistence": "saveDeckJson/saveDeckPatch through deckJson",
+    "persistence": "saveDeckJson through deckJson",
     "busDisposition": "wrapped as UPDATE_ELEMENT_SOURCE / REMOVE_SOURCE_ELEMENT commands"
   },
   {
@@ -233,8 +230,8 @@ Deck mutations already have the right separation:
 - `src/lib/presentation/editor-commands.ts` owns pure Deck mutations;
 - `src/components/presentation/slide-editor.tsx` owns editor state,
   history, and autosave handoff;
-- `saveDeckJson` and `saveDeckPatch` are the persistence endpoints guarded by
-  document capability checks and revision tokens.
+- `saveDeckJson` is the persistence endpoint guarded by document capability
+  checks and revision tokens; patch replay is not exposed as a deck write path.
 
 **Audit decision:** the new envelope must wrap this layer, not fork it.
 Deck command payloads remain domain-specific; the envelope owns addressing,

@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-07-02"
+last_updated: "2026-07-04"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -242,16 +242,16 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Slide / deck flows
 
-| #   | Flow                                | Owner           | Notes                                                                                                                                                                       |
-| --- | ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                           |
-| S-2 | Deck patch save (`saveDeckPatch`)   | **D**           | Current `patchDeck` implementation is fallback-only (`{ ok: "fallback" }`); fallback behavior covered by `persistence-service.test.ts` and `patch-autosave.test.ts` (#1336) |
-| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`            |
-| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                        |
-| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                                       |
-| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                               |
-| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                                  |
-| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout screenshots in `e2e/slides-layout-screenshots.spec.ts` (#1449)                                                                            |
+| #   | Flow                                | Owner           | Notes                                                                                                                                                            |
+| --- | ----------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                |
+| S-2 | Deck patch save endpoint            | **A**           | No supported patch persistence endpoint; absence is asserted while slide edits save full deck snapshots through `saveDeckJson` (#1740)                           |
+| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts` |
+| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                             |
+| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                            |
+| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                    |
+| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                       |
+| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout screenshots in `e2e/slides-layout-screenshots.spec.ts` (#1449)                                                                 |
 
 ### Visual projection flows
 
@@ -321,9 +321,9 @@ For each flow below, check the indicated owner: **A** = automated test,
   yet have direct `SlideEditor` keyboard interaction tests for those flows.
   Keep **AC-5** as deferred until that coverage lands; track connector free-draw
   follow-up in #1574.
-- Slide patch-save flow (**S-2 / D**) remains deferred while `patchDeck` is
-  fallback-only (`{ ok: "fallback" }`): keep #1336 open and do not sign off this
-  path as automated patch persistence until Deck patch replay is implemented.
+- Slide patch-save flow (**S-2**) is not a release path: `saveDeckPatch`/`patchDeck`
+  are closed, and automated deck persistence is covered by full-snapshot
+  `saveDeckJson` checks (#1740).
 - Performance budgets report `warned: true` (not `exceeded`) for any metric: log the
   finding and plan remediation within the next sprint.
 

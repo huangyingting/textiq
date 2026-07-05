@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-04"
 description: "The document editor pairs a Lexical rich-text surface with visual blocks and document table editing, plus context-aware surfaces such as floating toolbars, a mobile bottom sheet, insert menus, and per-visual editing popovers. This document explains how those pieces fit together and how to extend them safely."
 ---
 
@@ -464,12 +464,11 @@ next save. `saveDeckJson` performs an atomic compare-and-swap:
   → the editor opens the `ConflictRecoveryDialog`.
 - `clientToken` absent / `null` → conflict.
 
-### Patch saves (`saveDeckPatch`)
+### Patch saves
 
-`saveDeckPatch(id, patches, clientToken)` accepts an array of `DeckPatch`
-records, but patch replay is currently disabled in the presentation runtime. The action
-returns `{ ok: "fallback" }` as a compatibility signal so callers can retry
-with `saveDeckJson`.
+Patch saves are not a supported editor persistence path. The presentation runtime
+exposes only `saveDeckJson`, so command-produced `DeckPatch` metadata must not be
+sent as a durable write log.
 
 ### `DocumentVersion` snapshot policy
 
@@ -479,7 +478,6 @@ with `saveDeckJson`.
 | ---------------------------------- | --------------------------------- |
 | Successful whole-deck save         | Yes (throttled: max 1 per 10 min) |
 | Conflicted save (`ok: "conflict"`) | **No** (no write occurred)        |
-| Patch fallback (`ok: "fallback"`)  | **No** (no write occurred)        |
 | Pre-restore checkpoint             | Yes (forced — bypasses throttle)  |
 
 This invariant ensures that a conflict storm (e.g., two tabs rapidly saving)

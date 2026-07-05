@@ -90,9 +90,9 @@ a confirmed write, and reconciles slide comment anchors that now point at
 deleted slides or deleted nodes.
 
 `fetchDeckJson` returns the freshest saved deck and revision token for editor
-startup or conflict recovery. `saveDeckPatch` accepts `DeckPatch[]` records for
-compatibility, but patch replay is disabled for the presentation runtime and
-returns `{ ok: "fallback" }`; callers should save the full deck snapshot.
+startup or conflict recovery. There is no presentation `saveDeckPatch` server
+action: patch replay is closed rather than exposed as a fallback endpoint, so
+callers save the full deck snapshot.
 
 ## Command Execution
 
