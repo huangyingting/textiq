@@ -47,6 +47,7 @@ function document(
     shareExpiresAt: null,
     shareEmbedEnabled: true,
     sharePresentEnabled: true,
+    sharePasscodeHash: null,
     shareMetadataMode: "generic",
     shareDiscoverable: false,
     owner: { name: null, plan: "free" },
@@ -139,6 +140,38 @@ test("resolvePublicRenderWithSource applies embed mode policy centrally", async 
   }
   assert.equal(result.decision.status, 404);
   assert.equal(result.decision.concealResource, true);
+});
+
+test("resolvePublicRenderWithSource gates passcode-protected shares without leaking content", async () => {
+  const locked = await resolvePublicRenderWithSource(
+    source(document({ sharePasscodeHash: "hash" })),
+    {
+      params: { shareId: "shared-doc-share123" },
+      mode: "view",
+      projection: "document",
+      now: NOW,
+    },
+  );
+  assert.equal(locked.ok, false);
+  assert.equal(locked.decision.allow, false);
+  if (locked.decision.allow) {
+    throw new Error("Expected a denied access decision.");
+  }
+  assert.equal(locked.decision.reason, "passcode-required");
+  assert.equal(locked.decision.status, 403);
+  assert.equal(locked.decision.concealResource, false);
+
+  const unlocked = await resolvePublicRenderWithSource(
+    source(document({ sharePasscodeHash: "hash" })),
+    {
+      params: { shareId: "shared-doc-share123" },
+      mode: "view",
+      projection: "document",
+      now: NOW,
+      passcodeUnlocked: true,
+    },
+  );
+  assert.equal(unlocked.ok, true);
 });
 
 test("resolvePublicRenderWithSource enforces independent present/embed policy for presentation projection", async () => {
@@ -362,6 +395,31 @@ test("resolvePublicAssetAccessForDocument enforces share-bound mode-specific acc
       allow: false,
       status: 403,
       reason: "forbidden",
+    },
+  );
+});
+
+test("resolvePublicAssetAccessForDocument requires passcode unlock for protected shares", () => {
+  assert.deepEqual(
+    resolvePublicAssetAccessForDocument(
+      document({ sharePasscodeHash: "hash" }),
+      "share123",
+      "present",
+      NOW,
+    ),
+    { allow: false, status: 403, reason: "forbidden" },
+  );
+  assert.deepEqual(
+    resolvePublicAssetAccessForDocument(
+      document({ sharePasscodeHash: "hash" }),
+      "share123",
+      "present",
+      NOW,
+      true,
+    ),
+    {
+      allow: true,
+      via: "share-present",
     },
   );
 });

@@ -198,6 +198,7 @@ export const PERSONAL_DATA_INVENTORY = [
       ),
       shareMetadataMode: field("public_metadata", "delete_owned", "documents"),
       shareDiscoverable: field("public_metadata", "delete_owned", "documents"),
+      sharePasscodeHash: field("security_only", "delete_owned"),
       favorite: field("operational_metadata", "delete_owned"),
       createdAt: field("operational_metadata", "delete_owned", "documents"),
       updatedAt: field("operational_metadata", "delete_owned", "documents"),

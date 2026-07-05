@@ -10,9 +10,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { createDefaultBrandKitDraft } from "./brand-kit-authoring-controller";
 import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
-import { createHookRenderer } from "./slide-editor-failure-test-utils";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
+
+function createHookRenderer() {
+  return createReactRenderHarness();
+}
 
 function collectExpandedElements(
   node: ReactNode,

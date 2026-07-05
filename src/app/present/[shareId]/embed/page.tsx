@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PublicPresentViewer } from "@/components/presentation/public-present-viewer";
+import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { buildPresentEmbedRenderInput } from "@/lib/public-render/present-embed-route";
 import { publicPresentationRecoveryForViewer } from "@/lib/public-render/presentation";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
 export const metadata: Metadata = {
   title: "Presentation — TextIQ",
@@ -23,19 +25,40 @@ export const metadata: Metadata = {
  */
 export default async function PresentEmbedPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ shareId: string }>;
+  searchParams?: Promise<{ passcode?: string }>;
 }) {
   const { shareId } = await params;
+  const passcodeStatus = (await searchParams)?.passcode;
   if (await publicShareBudgetExceeded()) {
     notFound();
   }
 
-  const result = await resolvePublicRender(
-    buildPresentEmbedRenderInput(shareId),
-  );
+  const result = await resolvePublicRender({
+    ...buildPresentEmbedRenderInput(shareId),
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
+  });
 
   if (!result.ok || result.projection !== "presentation") {
+    if (
+      !result.decision.allow &&
+      result.decision.reason === "passcode-required"
+    ) {
+      return (
+        <SharePasscodeGate
+          shareId={"shareId" in result ? result.shareId : shareId}
+          mode="embed"
+          returnTo={`/present/${shareId}/embed`}
+          error={
+            passcodeStatus === "invalid" || passcodeStatus === "limited"
+              ? passcodeStatus
+              : undefined
+          }
+        />
+      );
+    }
     notFound();
   }
   const { presentation } = result;

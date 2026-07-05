@@ -78,6 +78,7 @@ credentials:
 | `E2E_REUSE_EXISTING_SERVER`     | config                             | Override Playwright server reuse (`1`/`true` or `0`/`false`)                      |
 | `E2E_PROFILE_SERVER`            | self-contained profile             | `production` (default) builds first and starts `npm run start`; `dev` skips build |
 | `E2E_INSTALL_BROWSER_DEPS`      | self-contained profile             | `1` to install Playwright OS dependencies with Chromium                           |
+| `E2E_PROFILE_GREP`              | deterministic profile              | Optional grep for a bounded required-profile slice such as `@required-profile`    |
 | `E2E_USER_EMAIL/PASSWORD`       | workspace, billing, brand, slides  | A seeded owner/editor login                                                       |
 | `E2E_VIEWER_EMAIL/PASSWORD`     | workspace                          | A seeded viewer-only login                                                        |
 | `E2E_VIEWER_DOC_URL`            | workspace                          | A document URL the viewer can open read-only                                      |
@@ -160,9 +161,11 @@ credential-less fast gate and CI stay green.
 
 The deterministic profile is bounded for CI: it runs without config-level
 retries, has an 18-minute Playwright global timeout inside a 40-minute workflow
-job (including install/build/setup), and includes only the lightweight UI matrix
-catalog check by default. Run `e2e/ui-matrix/*-ui.spec.ts` explicitly when
-validating the representative browser UI matrix.
+job (including install/build/setup), and the required CI job uses
+`E2E_PROFILE_GREP=@required-profile` to run the stabilized critical-flow slice.
+Run `npm run test:e2e:profile` without that grep for the broader deterministic
+profile, and run `e2e/ui-matrix/*-ui.spec.ts` explicitly when validating the
+representative browser UI matrix.
 
 ### DOCX fixture policy
 

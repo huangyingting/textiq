@@ -178,7 +178,9 @@ for (const viewport of VIEWPORTS) {
       page.setViewportSize({ width: viewport.width, height: viewport.height });
     });
 
-    test(`base editor layout (${viewport.name})`, async ({ page }) => {
+    test(`base editor layout (${viewport.name}) @required-profile`, async ({
+      page,
+    }) => {
       const screenshotRoot = await openEditor(page);
       await expectLayoutState(
         screenshotRoot,

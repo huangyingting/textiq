@@ -26,6 +26,10 @@ const stageGestureControllerSource = readFileSync(
   new URL("./use-stage-gesture-controller.ts", import.meta.url),
   "utf8",
 );
+const precisionGuidesControlsSource = readFileSync(
+  new URL("./precision-guides-controls.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("SlideEditor toolbar command ownership", () => {
   test("exposes the top command row as a named deck toolbar landmark", () => {
@@ -116,6 +120,39 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(source.includes("onClick={toggleSnapToGuides}"), true);
   });
 
+  test("exposes persistent grid, ruler, and custom guide controls", () => {
+    assert.equal(
+      precisionGuidesControlsSource.includes('label="Toggle grid overlay"'),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes('label="Toggle rulers"'),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes('label="Manage custom guides"'),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes(
+        'aria-label="Precision guide controls"',
+      ),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes("data-precision-grid-overlay"),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes("data-precision-ruler-overlay"),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes("data-precision-guides-overlay"),
+      true,
+    );
+  });
+
   test("gates move and resize guide snapping behind snap state", () => {
     assert.equal(
       stageGestureControllerSource.includes(
@@ -126,6 +163,10 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.match(
       stageGestureControllerSource,
       /snapToGuides && !moveEvent\.altKey[\s\S]*snapFrameToStageGuides/,
+    );
+    assert.equal(
+      stageGestureControllerSource.includes("...customGuides"),
+      true,
     );
   });
 

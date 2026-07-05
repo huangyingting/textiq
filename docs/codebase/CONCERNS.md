@@ -1,7 +1,7 @@
 ---
-type: "reference"
-status: "current"
-last_updated: "2026-07-04"
+Type: "reference"
+Status: "current"
+Last updated: "2026-07-04"
 description: "Evidence-backed risks, debt, security concerns, performance concerns, high-churn areas, and open questions for TextIQ."
 ---
 
@@ -18,12 +18,11 @@ description: "Evidence-backed risks, debt, security concerns, performance concer
 
 ## 2) Technical Debt
 
-| Debt item                                      | Why it exists                                                                                                | Where                                                                                  | Risk if ignored                                                                            | Suggested fix                                                                                      |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| Hook-harness retirement                        | Some presentation tests still patch React hook exports instead of testing public controllers/components.     | `docs/presentation/test-strategy-plan.md`, `src/test/react-server-renderer.ts`         | Refactors can preserve private hook behavior while missing public interaction regressions. | Continue migrating tests to pure controller, descriptor, component, or browser coverage.           |
-| Native PPTX gradient/pattern fills are blocked | PptxGenJS 4.0.1 public `ShapeFillProps` exposes only `none`/`solid`; current code uses image-retry fallback. | `docs/presentation/pptx-fidelity-plan.md`, `docs/presentation/rendering-and-export.md` | Editable PPTX fidelity remains lower for gradient/pattern fills.                           | Wait for supported PPTX writer API or add controlled OpenXML postprocess with archive-level tests. |
-| Slide editor file size                         | Presentation editor has many responsibilities and 3,270 lines in the surviving high-churn file.              | `src/components/presentation/slide-editor.tsx`, terminal `wc -l` output                | Higher conflict and review cost.                                                           | Keep behavior-preserving extraction scoped to owned controllers/regions.                           |
-| Runtime Node version policy not codified       | CI uses Node 22 but local version pin is absent.                                                             | `.github/workflows/ci.yml`, `package.json`, file search for `.nvmrc`                   | Local/CI drift can appear late.                                                            | Add runtime version metadata if team wants it enforced.                                            |
+| Debt item                                      | Why it exists                                                                                                | Where                                                                                  | Risk if ignored                                                  | Suggested fix                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Native PPTX gradient/pattern fills are blocked | PptxGenJS 4.0.1 public `ShapeFillProps` exposes only `none`/`solid`; current code uses image-retry fallback. | `docs/presentation/pptx-fidelity-plan.md`, `docs/presentation/rendering-and-export.md` | Editable PPTX fidelity remains lower for gradient/pattern fills. | Wait for supported PPTX writer API or add controlled OpenXML postprocess with archive-level tests. |
+| Slide editor file size                         | Presentation editor has many responsibilities and 3,270 lines in the surviving high-churn file.              | `src/components/presentation/slide-editor.tsx`, terminal `wc -l` output                | Higher conflict and review cost.                                 | Keep behavior-preserving extraction scoped to owned controllers/regions.                           |
+| Runtime Node version policy not codified       | CI uses Node 22 but local version pin is absent.                                                             | `.github/workflows/ci.yml`, `package.json`, file search for `.nvmrc`                   | Local/CI drift can appear late.                                  | Add runtime version metadata if team wants it enforced.                                            |
 
 ## 3) Security Concerns
 

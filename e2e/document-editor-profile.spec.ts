@@ -312,7 +312,7 @@ test.describe("deterministic profile document editor smoke", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("opens the seeded document editor with deterministic content", async ({
+  test("opens the seeded document editor with deterministic content @required-profile", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials(), profileDocPath());

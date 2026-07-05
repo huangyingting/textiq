@@ -36,6 +36,7 @@ import {
   slideAssetAccessDecisionToAccessDecision,
 } from "@/lib/slides/asset-access";
 import { SHARE_ACCESS_SELECT } from "@/lib/share-access";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 import { shareIdFromParam } from "@/lib/slug";
 import { logError } from "@/lib/log";
 import { getDefaultStorageAdapter } from "@/lib/slides/asset-storage";
@@ -99,12 +100,19 @@ export async function GET(
 
   const user = await getCurrentUser();
   const document = asset?.document ?? null;
+  const publicShareId = requestedShareId
+    ? shareIdFromParam(requestedShareId) || requestedShareId
+    : "";
+  const passcodeUnlocked =
+    document && publicShareId
+      ? await isPublicSharePasscodeUnlocked(document, publicShareId)
+      : false;
   const publicAssetAccess = resolvePublicAssetAccessForDocument(
     document,
-    requestedShareId
-      ? shareIdFromParam(requestedShareId) || requestedShareId
-      : "",
+    publicShareId,
     requestedShareMode,
+    undefined,
+    passcodeUnlocked,
   );
 
   // -------------------------------------------------------------------

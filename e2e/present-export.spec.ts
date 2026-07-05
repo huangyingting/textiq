@@ -125,7 +125,7 @@ test.describe("present + export", () => {
   // slide-editor serial test saturating the dev server briefly.
   test.describe.configure({ retries: 1 });
 
-  test("authenticated present mode renders the seeded slide text", async ({
+  test("authenticated present mode renders the seeded slide text @required-profile", async ({
     page,
   }) => {
     await login(page, profileOwnerCredentials());
@@ -261,7 +261,7 @@ test.describe("present + export", () => {
     await expectHudRespectsSafeAreas(page, progress, bottomHud);
   });
 
-  test("public present mode renders the seeded deck via the share link", async ({
+  test("public present mode renders the seeded deck via the share link @required-profile", async ({
     page,
   }) => {
     const response = await page.goto(profilePresentPath());
@@ -588,7 +588,7 @@ test.describe("present + export", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("exports a real PDF file with nonzero bytes", async ({ page }) => {
+  test("exports a real PDF file with nonzero bytes @required-profile", async ({ page }) => {
     await login(page, profileOwnerCredentials());
     await page.goto(profileDocPath());
 

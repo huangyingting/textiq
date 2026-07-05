@@ -38,7 +38,7 @@ test.describe("slide asset access control", () => {
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run slide-asset checks",
   );
 
-  test("owner fetches protected bytes; anonymous denied for private, allowed for shared", async ({
+  test("owner fetches protected bytes; anonymous denied for private, allowed for shared @required-profile", async ({
     page,
     browser,
   }) => {

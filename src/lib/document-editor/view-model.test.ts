@@ -26,6 +26,7 @@ test("document editor view model serializes document state and share settings", 
       shareExpiresAt: new Date("2026-02-03T04:05:06.000Z"),
       shareEmbedEnabled: false,
       sharePresentEnabled: true,
+      sharePasscodeHash: "hash",
       shareMetadataMode: "title-excerpt",
       shareDiscoverable: true,
       ownerId: "user-1",
@@ -55,6 +56,7 @@ test("document editor view model serializes document state and share settings", 
   assert.equal(viewModel.initialShareExpiresAt, "2026-02-03T04:05:06.000Z");
   assert.equal(viewModel.initialShareMetadataMode, "title-excerpt");
   assert.equal(viewModel.initialShareDiscoverable, true);
+  assert.equal(viewModel.initialSharePasscodeEnabled, true);
   assert.equal(viewModel.canEdit, true);
   assert.equal(viewModel.canManage, true);
   assert.equal(viewModel.workspaceName, null);
@@ -78,6 +80,7 @@ test("document editor view model derives workspace viewer capabilities", () => {
       shareExpiresAt: null,
       shareEmbedEnabled: true,
       sharePresentEnabled: true,
+      sharePasscodeHash: null,
       shareMetadataMode: "generic",
       shareDiscoverable: false,
       ownerId: "owner-1",

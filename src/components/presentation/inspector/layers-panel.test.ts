@@ -5,7 +5,7 @@ import * as React from "react";
 import { LayersPanel } from "./layers-panel";
 import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
 import type { SlideChildNode } from "@/lib/presentation/schema";
-import { createServerRenderHarness } from "@/test/react-server-renderer";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 
 type ElementWithProps = React.ReactElement<Record<string, unknown>>;
 
@@ -24,7 +24,7 @@ function elements(root: React.ReactNode): ElementWithProps[] {
 }
 
 function createStatefulRenderer<T>(renderComponent: () => T): () => T {
-  const renderer = createServerRenderHarness({
+  const renderer = createReactRenderHarness({
     idPrefix: "layer-panel-test-id",
     requireInternals: false,
   });
