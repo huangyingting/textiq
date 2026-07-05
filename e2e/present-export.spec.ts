@@ -588,7 +588,9 @@ test.describe("present + export", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("exports a real PDF file with nonzero bytes @required-profile", async ({ page }) => {
+  test("exports a real PDF file with nonzero bytes @required-profile", async ({
+    page,
+  }) => {
     await login(page, profileOwnerCredentials());
     await page.goto(profileDocPath());
 
