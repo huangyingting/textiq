@@ -105,7 +105,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@lexical/headless": "^0.45.0",
+    "@lexical/headless": "^0.46.0",
     "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
