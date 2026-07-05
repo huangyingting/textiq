@@ -471,6 +471,19 @@ export {
 } from "./current-object-command-descriptors";
 
 export type {
+  SlideCommandPaletteSection,
+  SlideCommandPaletteIntent,
+  SlideCommandPaletteDisabledReason,
+  SlideCommandPaletteCommand,
+  SlideCommandPaletteCapabilities,
+  SlideCommandPaletteContext,
+} from "./slide-command-palette";
+export {
+  resolveSlideCommandPaletteCommands,
+  filterSlideCommandPaletteCommands,
+} from "./slide-command-palette";
+
+export type {
   StageGuide,
   StageGuideInput,
   SnapFrameResult,
