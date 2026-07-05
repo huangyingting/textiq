@@ -87,10 +87,6 @@ const SURFACES: SurfaceContract[] = [
         name: "saveDeckJson",
         file: "src/app/app/documents/[id]/deck-actions.ts",
       },
-      {
-        name: "saveDeckPatch",
-        file: "src/app/app/documents/[id]/deck-actions.ts",
-      },
     ],
   },
   {
@@ -218,12 +214,12 @@ const ROLES: { role: DocumentRole; userId: string }[] = [
   { role: "none", userId: STRANGER },
 ];
 
-test("deck surface keeps json/patch save actions and closes command-save entry point", () => {
+test("deck surface keeps the full-deck save action and closes patch/command save entry points", () => {
   const deckSurface = SURFACES.find((surface) => surface.surface === "deck");
   assert.ok(deckSurface);
   assert.deepEqual(
     deckSurface.actions.map((action) => action.name),
-    ["saveDeckJson", "saveDeckPatch"],
+    ["saveDeckJson"],
   );
 });
 

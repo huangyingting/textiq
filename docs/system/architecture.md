@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "Purpose: Current system design map"
 ---
 
@@ -24,7 +24,7 @@ description: "Purpose: Current system design map"
 | Collaboration state | In-memory Y.Doc (collab server)           | Client autosave writes `contentJson`; dirty room eviction writes best-effort recovery snapshots |
 | Permissions         | `WorkspaceMembership`, `Document.ownerId` | `requireDocumentCapability` capability cache                                                    |
 | Sharing             | `Document.isShared`, `shareId`, `slug`    | Public URLs `/share/…`, `/embed/…`, `/present/…`                                                |
-| Command envelope    | `CommandEnvelope` + pure executors        | Applied to `deckJson` via `saveDeckPatch`                                                       |
+| Command envelope    | `CommandEnvelope` + pure executors        | Produces in-memory deck mutations; persisted as full `deckJson` via `saveDeckJson`              |
 
 ---
 
@@ -144,8 +144,8 @@ mirror. This guards against partial-mirror edge cases.
 ## 4. Slides/Deck Persistence
 
 **Source files:**
-`src/lib/document/persistence-service.ts` (`persistDeck`, `patchDeck`)
-`src/app/app/documents/[id]/actions.ts` (`saveDeckJson`, `saveDeckPatch`)
+`src/lib/document/persistence-service.ts` (`persistDeck`)
+`src/app/app/documents/[id]/actions.ts` (`saveDeckJson`)
 `src/lib/document/deck-cas-writer.ts`
 `src/lib/presentation/schema.ts`
 `src/lib/presentation/validation.ts`
@@ -162,13 +162,13 @@ the resolved Deck render tree.
 
 ### 4.2 Write paths
 
-| Action                        | Token check  | Outcome                                   |
-| ----------------------------- | ------------ | ----------------------------------------- |
-| `saveDeckJson` (full save)    | Required CAS | `{ ok: true, revisionToken }` or conflict |
-| `saveDeckPatch` (incremental) | Required CAS | `{ ok: true }`, conflict, or fallback     |
+| Action                     | Token check  | Outcome                                   |
+| -------------------------- | ------------ | ----------------------------------------- |
+| `saveDeckJson` (full save) | Required CAS | `{ ok: true, revisionToken }` or conflict |
 
-Both write paths use revision-token compare-and-swap. Missing or stale tokens
-are conflicts; successful writes mint a new token.
+The full-deck write path uses revision-token compare-and-swap. Missing or stale
+tokens are conflicts; successful writes mint a new token. Patch replay is not a
+supported persistence path.
 
 See [data-model/deck.md](../data-model/deck.md) for the full Deck schema and
 sync contract.
@@ -201,7 +201,6 @@ All persistence orchestration lives in the service:
 | `mirrorVisualNodesInTx`     | Mirror pipeline accepting a caller tx               |
 | `rebuildMirror`             | Standalone mirror repair                            |
 | `persistDeck`               | Full deck CAS write + version snapshot              |
-| `patchDeck`                 | Incremental patch apply + CAS write                 |
 | `restoreVersion`            | Pre-restore checkpoint + atomic restore + reconcile |
 | `sanitizeRestoredDeck`      | Orphan-strip restored deckJson before write         |
 | `reconcileDeckAfterMirror`  | Post-mirror deck reconcile against actual DB rows   |
@@ -387,7 +386,6 @@ durable command log yet.
 
 - **Lexical autosave** → `saveDocumentLexical` → `atomicSaveDocumentLexical` (contentJson + mirror in one tx)
 - **Deck full save** → `saveDeckJson` → `persistDeck` (CAS token)
-- **Deck patch save** → `saveDeckPatch` → `patchDeck` (CAS token, incremental)
 - **Version restore** → `restoreDocumentVersion` → `restoreVersion` (checkpoint + atomic restore)
 - **Mirror rebuild** → `rebuildVisualMirror` → `rebuildMirror` (repair, idempotent)
 - **Collab flush on evict** → `onBeforeEvict` (`createEvictionFlusher`) → `POST /api/collab/flush` → best-effort recovery snapshot on `Document.collabRecoverySnapshot` (NOT canonical; `contentJson` remains the source of truth)

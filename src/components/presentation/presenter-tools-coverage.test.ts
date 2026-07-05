@@ -572,6 +572,7 @@ test("DeckGenerationPreview renders diagnostics, applies actions, and handles re
       generationDiagnostics: [diagnostic("Initial diagnostic")],
       contentJson: "{}",
       options: { length: "short" as const },
+      themePackageId: "noir" as const,
       onApply: () => calls.push("apply"),
       onDerive: () => calls.push("derive"),
       onCancel: () => calls.push("cancel"),

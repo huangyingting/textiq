@@ -46,6 +46,7 @@
   --ds-accent: #4f46e5;
   --ds-accent-hover: #4338ca;
   --ds-accent-contrast: #ffffff;
+  --ds-accent-fill: var(--ds-accent);
   --ds-accent-surface: #eef2ff;
   --ds-accent-subtle: #f5f3ff;
   --ds-accent-border: rgba(79, 70, 229, 0.24);
@@ -193,6 +194,7 @@
   --color-ds-accent: var(--ds-accent);
   --color-ds-accent-hover: var(--ds-accent-hover);
   --color-ds-accent-contrast: var(--ds-accent-contrast);
+  --color-ds-accent-fill: var(--ds-accent-fill);
   --color-ds-accent-surface: var(--ds-accent-surface);
   --color-ds-accent-subtle: var(--ds-accent-subtle);
   --color-ds-accent-border: var(--ds-accent-border);
@@ -508,6 +510,166 @@
     --ds-state-hover: rgba(255, 255, 255, 0.08);
     --ds-state-active: rgba(255, 255, 255, 0.14);
     --ds-state-selected: rgba(129, 140, 248, 0.18);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ds-border-subtle: var(--ds-border-strong);
+    --ds-accent-fill: var(--ds-accent);
+    --ds-accent-border: var(--ds-accent);
+    --ds-state-selected: var(--ds-accent-surface);
+    --ds-focus-ring: var(--ds-accent);
+    --ds-focus-offset: var(--ds-surface-base);
+  }
+}
+
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme],
+  :root[data-theme="system"] {
+    color-scheme: light dark;
+    --background: Canvas;
+    --foreground: CanvasText;
+
+    --ds-surface-base: Canvas;
+    --ds-surface: Canvas;
+    --ds-surface-raised: ButtonFace;
+    --ds-surface-overlay: Canvas;
+    --ds-surface-sunken: Canvas;
+    --ds-surface-chrome: Canvas;
+    --ds-surface-glass: Canvas;
+
+    --ds-text-primary: CanvasText;
+    --ds-text-secondary: CanvasText;
+    --ds-text-muted: GrayText;
+    --ds-text-on-accent: HighlightText;
+
+    --ds-border-subtle: CanvasText;
+    --ds-border-strong: CanvasText;
+
+    --ds-accent: Highlight;
+    --ds-accent-hover: Highlight;
+    --ds-accent-contrast: HighlightText;
+    --ds-accent-fill: Highlight;
+    --ds-accent-surface: Canvas;
+    --ds-accent-subtle: Canvas;
+    --ds-accent-border: Highlight;
+    --ds-accent-text: Highlight;
+
+    --ds-success: CanvasText;
+    --ds-success-surface: Canvas;
+    --ds-success-border: CanvasText;
+    --ds-success-text: CanvasText;
+    --ds-warning: Mark;
+    --ds-warning-surface: Canvas;
+    --ds-warning-border: Mark;
+    --ds-warning-text: CanvasText;
+    --ds-danger: Mark;
+    --ds-danger-hover: Mark;
+    --ds-danger-surface: Canvas;
+    --ds-danger-border: Mark;
+    --ds-danger-text: CanvasText;
+    --ds-error-surface: Canvas;
+    --ds-error-text: CanvasText;
+
+    --ds-backdrop: Canvas;
+    --ds-backdrop-strong: Canvas;
+    --ds-inverse-surface: Canvas;
+    --ds-inverse-surface-muted: Canvas;
+    --ds-inverse-control: ButtonFace;
+    --ds-inverse-control-hover: Highlight;
+    --ds-inverse-text: CanvasText;
+    --ds-inverse-muted: CanvasText;
+    --ds-inverse-subtle: CanvasText;
+    --ds-inverse-border-subtle: CanvasText;
+    --ds-inverse-state-hover: Highlight;
+    --ds-inverse-focus: Highlight;
+    --ds-stage: Canvas;
+    --ds-stage-panel: Canvas;
+    --ds-stage-panel-muted: Canvas;
+    --ds-stage-border: CanvasText;
+    --ds-stage-text: CanvasText;
+    --ds-stage-muted: GrayText;
+    --ds-present-loading: Canvas;
+
+    --ds-control: ButtonFace;
+    --ds-control-hover: Highlight;
+    --ds-control-text: ButtonText;
+    --ds-state-hover: Highlight;
+    --ds-state-active: Highlight;
+    --ds-state-selected: Highlight;
+    --ds-segment-track: Canvas;
+    --ds-segment-thumb: ButtonFace;
+    --ds-focus-ring: Highlight;
+    --ds-focus-offset: Canvas;
+
+    --ds-shadow-flat: none;
+    --ds-shadow-raised: none;
+    --ds-shadow-overlay: none;
+    --ds-shadow-popover: none;
+    --ds-shadow-laser-indicator: none;
+    --ds-shadow-laser-cursor: none;
+  }
+
+  :where(
+    button,
+    [href],
+    input,
+    select,
+    textarea,
+    [role="button"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  :where(
+    [data-node-chrome-frame],
+    [data-slide-chrome-frame],
+    [data-multi-selection-bounds]
+  ) {
+    border-color: Highlight !important;
+    background: transparent !important;
+    opacity: 1 !important;
+  }
+
+  :where(
+    [data-resize-handle],
+    [data-crop-handle],
+    [data-connector-endpoint],
+    [data-multi-resize-handle],
+    [data-rotation-handle],
+    [data-multi-rotation-handle]
+  ) {
+    border-color: Highlight !important;
+    background-color: Canvas !important;
+    box-shadow: none !important;
+    outline: 1px solid CanvasText;
+  }
+
+  .tiq-stage-snap-guide {
+    background-color: Highlight !important;
+  }
+
+  .tiq-filmstrip-thumbnail-frame {
+    border: 1px solid CanvasText;
+    box-shadow: none !important;
+  }
+
+  [aria-current="true"] .tiq-filmstrip-thumbnail-frame {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .tiq-mobile-sheet,
+  .tiq-high-contrast-surface {
+    border: 1px solid CanvasText;
+    box-shadow: none !important;
+    backdrop-filter: none;
   }
 }
 

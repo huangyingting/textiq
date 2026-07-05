@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PublicPresentViewer } from "@/components/presentation/public-present-viewer";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { buildPresentEmbedRenderInput } from "@/lib/public-render/present-embed-route";
+import { publicPresentationRecoveryForViewer } from "@/lib/public-render/presentation";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default async function PresentEmbedPage({
     notFound();
   }
   const { presentation } = result;
+  const recovery = publicPresentationRecoveryForViewer(presentation.recovery);
 
   return (
     <PublicPresentViewer
@@ -46,7 +48,7 @@ export default async function PresentEmbedPage({
       visuals={presentation.visuals}
       title={presentation.title}
       embed
-      recovery={presentation.recovery}
+      recovery={recovery}
       showAttribution={presentation.attribution.showAttribution}
     />
   );

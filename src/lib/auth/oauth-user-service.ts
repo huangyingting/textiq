@@ -15,6 +15,7 @@ export type OAuthLocalUser = {
   email: string;
   name: string | null;
   image: string | null;
+  sessionInvalidatedAt: Date | null;
 };
 
 export async function linkOAuthLocalUser(
@@ -59,5 +60,6 @@ export async function linkOAuthLocalUser(
     email: dbUser.email,
     name: dbUser.name,
     image: dbUser.image,
+    sessionInvalidatedAt: dbUser.sessionInvalidatedAt,
   };
 }

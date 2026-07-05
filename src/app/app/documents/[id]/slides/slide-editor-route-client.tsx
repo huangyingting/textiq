@@ -51,12 +51,7 @@ import {
 import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
 import { downloadBlob } from "@/lib/visual/export";
 
-import {
-  fetchDeckJson,
-  saveDeckJson,
-  saveDeckPatch,
-  toggleDocumentSharing,
-} from "../actions";
+import { fetchDeckJson, saveDeckJson, toggleDocumentSharing } from "../actions";
 import { saveBrandKitDraft } from "../brand-kit-actions";
 import { uploadSlideAsset } from "../slide-asset-actions";
 import { persistDeckWithRecovery } from "@/components/editor/use-slide-editor-open";
@@ -256,10 +251,7 @@ export function SlideEditorRouteClient({
   const autosaveSchedulerRef = useRef<SlideAutosaveScheduler<Deck> | null>(
     null,
   );
-  const deckPort = useMemo(
-    () => ({ fetchDeckJson, saveDeckJson, saveDeckPatch }),
-    [],
-  );
+  const deckPort = useMemo(() => ({ fetchDeckJson, saveDeckJson }), []);
   const documentBlocks = useMemo(
     () => collectDocumentBlocks(initialContentJson),
     [initialContentJson],

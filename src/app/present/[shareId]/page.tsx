@@ -5,6 +5,7 @@ import { PublicPresentViewer } from "@/components/presentation/public-present-vi
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { app as appEnv } from "@/lib/env";
 import { buildPublicMetadata } from "@/lib/public-render/metadata";
+import { publicPresentationRecoveryForViewer } from "@/lib/public-render/presentation";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 
 function siteBaseUrl(): string {
@@ -55,6 +56,7 @@ export default async function PresentPage({
     notFound();
   }
   const { presentation } = result;
+  const recovery = publicPresentationRecoveryForViewer(presentation.recovery);
 
   return (
     <PublicPresentViewer
@@ -62,7 +64,7 @@ export default async function PresentPage({
       themePackage={presentation.themePackage}
       visuals={presentation.visuals}
       title={presentation.title}
-      recovery={presentation.recovery}
+      recovery={recovery}
       showAttribution={presentation.attribution.showAttribution}
     />
   );

@@ -4,6 +4,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      sessionInvalidatedAt?: string | null;
     } & DefaultSession["user"];
   }
 }
@@ -11,5 +12,6 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     id?: string;
+    sessionInvalidatedAt?: string | null;
   }
 }

@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "API route security matrix covering route access policy, authentication requirements, response semantics, public surface governance, and security test enforcement."
 ---
 
@@ -99,5 +99,8 @@ privacy-preserving bodies (see Notes).
 - Access adapters: `src/lib/access-policy/adapters.ts` (#813).
 - Error helper: `src/lib/api/errors.ts` (#511).
 - Abuse diagnostics: `src/lib/diagnostics/api-abuse.ts` (#512).
+- Trusted proxy client-IP policy:
+  [../operations/runtime-config.md](../operations/runtime-config.md#trusted-proxy-client-ip-extraction)
+  (#1745).
 - Access policy: [access-and-sharing.md](access-and-sharing.md).
 - Release gate: [../operations/release-gate.md](../operations/release-gate.md).

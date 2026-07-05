@@ -211,19 +211,26 @@ function emptyEditorJson() {
   };
 }
 
-function deckWithText(text: string, nodeId: string = "text-node-1"): Deck {
-  return buildDeck([
-    buildSlide(
-      "content",
-      [
-        buildTextNode({
-          id: nodeId,
-          content: buildTextContent([text]),
-        }),
-      ],
-      { id: "slide-1" },
-    ),
-  ]);
+function deckWithText(
+  text: string,
+  nodeId: string = "text-node-1",
+  overrides: Partial<Deck> = {},
+): Deck {
+  return buildDeck(
+    [
+      buildSlide(
+        "content",
+        [
+          buildTextNode({
+            id: nodeId,
+            content: buildTextContent([text]),
+          }),
+        ],
+        { id: "slide-1" },
+      ),
+    ],
+    overrides,
+  );
 }
 
 function diagnostic(message: string): PresentationDiagnostic {
@@ -282,7 +289,6 @@ function createDeckPort({
       if (result instanceof Error) throw result;
       return result ?? { ok: true, revisionToken: "rev-saved" };
     },
-    saveDeckPatch: async () => ({ ok: "fallback" }),
   };
 
   return { port, fetchCalls, saveCalls, fetchResults, saveResults };
@@ -489,6 +495,7 @@ test("useSlideEditorOpen stages, cancels, derives, and applies AI previews", asy
       ],
       saveResults: [{ ok: true, revisionToken: "rev-ai-save" }],
     });
+
     const renderer = createHookRenderer(nonEmptyEditorJson("AI source"));
     const options = { deckPort: deckPort.port };
     const generationOptions: DeckGenerationOptions = { length: "short" };
@@ -556,6 +563,43 @@ test("useSlideEditorOpen stages, cancels, derives, and applies AI previews", asy
     assert.equal(hook.deck, appliedDeck);
     assert.equal(deckPort.saveCalls.length, 1);
     assert.equal(deckPort.saveCalls[0]?.deckJson, appliedDeck);
+    renderer.cleanup();
+  });
+});
+
+test("useSlideEditorOpen preserves the saved theme through AI preview state", async () => {
+  await withAiFlag("true", async () => {
+    const savedDeck = deckWithText("Saved noir deck", "saved-node", {
+      theme: { packageId: "noir" },
+    });
+    const proposedDeck = deckWithText("AI noir proposal", "proposal-node", {
+      theme: { packageId: "noir" },
+    });
+    const deckPort = createDeckPort({
+      fetchResults: [
+        { ok: true, deckJson: savedDeck, revisionToken: "rev-noir-open" },
+        { ok: true, deckJson: savedDeck, revisionToken: "rev-noir-preview" },
+      ],
+    });
+    const renderer = createHookRenderer(nonEmptyEditorJson("Noir source"));
+    const options = { deckPort: deckPort.port };
+
+    let hook = runHook(renderer, options);
+    await hook.handleOpen();
+    hook = runHook(renderer, options);
+
+    assert.equal(hook.pendingThemePackageId, "noir");
+    hook.handleOpenDialogApply({
+      deck: proposedDeck,
+      truncated: false,
+      diagnostics: [],
+      options: { length: "medium" },
+    });
+    await waitForAsyncDrain();
+    hook = runHook(renderer, options);
+
+    assert.equal(hook.aiPreview?.themePackageId, "noir");
+    assert.equal(hook.aiPreview?.baselineDeck, savedDeck);
     renderer.cleanup();
   });
 });

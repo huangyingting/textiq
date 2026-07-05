@@ -454,9 +454,9 @@ Save status distinguishes idle, queued, saving, offline, retrying, persistent
 failure, and conflict states. The bottom dock exposes retry and unload-warning
 copy when local changes are durable but not yet synced.
 
-`saveDeckPatch` remains available only as a compatibility endpoint and currently
-returns `{ ok: "fallback" }`; presentation runtime autosave does not enqueue or persist
-`DeckPatch[]` records.
+The presentation runtime does not expose a `saveDeckPatch` action. Autosave,
+manual save, retries, and conflict recovery all persist full deck snapshots
+through `saveDeckJson`; `DeckPatch[]` command metadata is not a persistence log.
 
 ## Document Sync And Source Links
 

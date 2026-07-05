@@ -17,6 +17,7 @@ export type AuthorizedCredentialsUser = {
   email: string;
   name: string | null;
   image: string | null;
+  sessionInvalidatedAt: Date | null;
 };
 
 const GENERIC_PASSWORD_ERROR =
@@ -52,6 +53,7 @@ export async function authorizeCredentialsUser(
     email: user.email,
     name: user.name,
     image: user.image,
+    sessionInvalidatedAt: user.sessionInvalidatedAt,
   };
 }
 
@@ -144,9 +146,10 @@ export async function changePasswordForUser(
   }
 
   const passwordHash = await hashPassword(newPassword);
+  const sessionInvalidatedAt = new Date();
   await client.user.update({
     where: { id: input.userId },
-    data: { passwordHash },
+    data: { passwordHash, sessionInvalidatedAt },
   });
 
   return actionOk();

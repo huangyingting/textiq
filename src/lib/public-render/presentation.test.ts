@@ -11,11 +11,48 @@ import {
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
 import { DEFAULT_STYLE, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
+import type { SlideChildNode } from "@/lib/presentation/schema";
 
 import {
   buildPublicPresentationModel,
   buildPublicPresentationModelAny,
+  publicPresentationRecoveryForViewer,
 } from "./presentation";
+
+function textFromNodes(nodes: readonly SlideChildNode[]): string {
+  return nodes
+    .flatMap((node) => {
+      if (node.type === "text") {
+        return node.content.paragraphs.map((paragraph) => paragraph.text);
+      }
+      if (node.type === "group") return [textFromNodes(node.children)];
+      return [];
+    })
+    .join("\n");
+}
+
+function fallbackContentJson() {
+  return {
+    root: {
+      type: "root",
+      children: [
+        {
+          type: "heading",
+          tag: "h1",
+          bid: "heading-1",
+          children: [{ type: "text", text: "Launch plan" }],
+        },
+        {
+          type: "paragraph",
+          bid: "paragraph-1",
+          children: [
+            { type: "text", text: "Public visitors should see this content." },
+          ],
+        },
+      ],
+    },
+  };
+}
 
 test("buildPublicPresentationModel carries valid presentation deckJson", () => {
   resetBuilderCounter();
@@ -52,7 +89,49 @@ test("buildPublicPresentationModel resolves runtime presentation theme package f
   assert.equal(model.diagnostics[0]?.code, "unknown-theme-package");
 });
 
-test("buildPublicPresentationModel exposes recovery for invalid deckJson", () => {
+test("buildPublicPresentationModel derives a public fallback for invalid deckJson with usable content", () => {
+  const model = buildPublicPresentationModel({
+    id: "doc-public-1",
+    title: "Fallback deck",
+    contentJson: fallbackContentJson(),
+    deckJson: { schemaVersion: -1 },
+    owner: { name: null, plan: "free" },
+  });
+
+  assert.equal(model.title, "Fallback deck");
+  assert.equal(model.deck.schemaVersion, 7);
+  assert.equal(model.deck.metadata?.sourceDocumentId, "doc-public-1");
+  assert.equal(model.recovery?.fallback, "derived");
+  assert.equal(
+    model.recovery?.error.includes("Unrecognised deck schema"),
+    true,
+  );
+  assert.equal(publicPresentationRecoveryForViewer(model.recovery), undefined);
+  assert.match(
+    model.deck.slides.map((slide) => textFromNodes(slide.children)).join("\n"),
+    /Public visitors should see this content/,
+  );
+  assert.equal(model.attribution.ownerName, "Document owner");
+});
+
+test("buildPublicPresentationModel derives a public fallback for missing deckJson with usable content", () => {
+  const model = buildPublicPresentationModel({
+    title: "Fallback deck",
+    contentJson: fallbackContentJson(),
+    deckJson: null,
+    owner: { name: null, plan: "free" },
+  });
+
+  assert.equal(model.deck.schemaVersion, 7);
+  assert.equal(model.recovery?.fallback, "derived");
+  assert.equal(
+    model.recovery?.error.includes("Deck JSON must be a plain object"),
+    true,
+  );
+  assert.equal(publicPresentationRecoveryForViewer(model.recovery), undefined);
+});
+
+test("buildPublicPresentationModel exposes blocking recovery for invalid deckJson without usable content", () => {
   const model = buildPublicPresentationModel({
     title: "Fallback deck",
     contentJson: { root: { children: [] } },
@@ -66,6 +145,11 @@ test("buildPublicPresentationModel exposes recovery for invalid deckJson", () =>
     true,
   );
   assert.equal(model.recovery?.validationErrors?.length, 1);
+  assert.equal(model.recovery?.fallback, "none");
+  assert.equal(
+    publicPresentationRecoveryForViewer(model.recovery),
+    model.recovery,
+  );
   assert.equal(model.attribution.ownerName, "Document owner");
 });
 
