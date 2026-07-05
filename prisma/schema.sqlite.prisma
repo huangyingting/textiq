@@ -183,6 +183,7 @@ model Document {
   shareExpiresAt      DateTime?
   shareEmbedEnabled   Boolean   @default(true)
   sharePresentEnabled Boolean   @default(true)
+  sharePasscodeHash   String?
   // Public metadata privacy controls (Epic N15): links default to generic,
   // non-discoverable unfurls unless the owner explicitly opts in.
   shareMetadataMode   String    @default("generic")

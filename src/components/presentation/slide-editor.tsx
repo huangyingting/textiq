@@ -69,7 +69,6 @@ import type {
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import type { SourceBlockIndex } from "@/lib/presentation/block-index";
-import { diagnosticTargetKey } from "@/lib/presentation/diagnostics";
 import type {
   SourceLinkHostRefreshArgs,
   SourceLinkHostRefreshResult,
@@ -168,6 +167,11 @@ import {
   writeFilmstripCollapsed,
 } from "./filmstrip/filmstrip-collapse-storage";
 import {
+  PrecisionGuideOverlays,
+  PrecisionGuideToolbarControls,
+} from "./precision-guides-controls";
+import { usePrecisionGuides } from "./use-precision-guides";
+import {
   nextActiveGroupIdForStageTarget,
   resolveStageNodeTarget,
   stageCandidateNodeIds,
@@ -206,6 +210,11 @@ import { applyInlineTextCommit } from "./inline-text-commit";
 import { useDeckRenderTree } from "./use-deck-render-tree";
 import { useExportDiagnostics } from "./use-export-diagnostics";
 import {
+  buildPresentationExportPreflight,
+  type PresentationExportFormat,
+  type PresentationExportPreflightResult,
+} from "@/lib/presentation/export-preflight";
+import {
   SlideEditorCloseConfirmDialog,
   useSlideEditorShellController,
 } from "./use-slide-editor-shell-controller";
@@ -214,8 +223,15 @@ import { useTableCellEditing } from "./use-table-cell-editing";
 import { useInlineTextEditingController } from "./use-inline-text-editing-controller";
 import { useInspectorCommands } from "./inspector-command-descriptors";
 import { useSlideCommandPaletteController } from "./use-slide-command-palette-controller";
+import {
+  dedupeDiagnostics,
+  isMobileInspectorViewport,
+  scheduleEffectStateUpdate,
+  useDesktopInspectorViewport,
+} from "./slide-editor-support";
 import { SourceReviewPanel } from "./source-review-panel";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
+import { ExportPreflightDialog } from "./export-preflight-dialog";
 import {
   runVisualPickerMutation,
   VISUAL_PICKER_FAILURE_MESSAGE,
@@ -271,50 +287,6 @@ export {
 
 const TEMPLATE_REGISTRY = createDefaultTemplateRegistry();
 const TEMPLATE_OPTIONS = TEMPLATE_REGISTRY.all();
-const DESKTOP_INSPECTOR_MEDIA_QUERY = "(min-width: 1024px)";
-
-function isDesktopInspectorViewport(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia(DESKTOP_INSPECTOR_MEDIA_QUERY).matches
-  );
-}
-
-function isMobileInspectorViewport(): boolean {
-  return !isDesktopInspectorViewport();
-}
-
-function scheduleEffectStateUpdate(callback: () => void): () => void {
-  let canceled = false;
-  const timeoutId = globalThis.setTimeout(() => {
-    if (!canceled) callback();
-  }, 0);
-  return () => {
-    canceled = true;
-    globalThis.clearTimeout(timeoutId);
-  };
-}
-
-function useDesktopInspectorViewport(): boolean {
-  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mediaQuery = window.matchMedia(DESKTOP_INSPECTOR_MEDIA_QUERY);
-    const syncViewport = () => {
-      setIsDesktopViewport(mediaQuery.matches);
-    };
-    syncViewport();
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", syncViewport);
-      return () => mediaQuery.removeEventListener("change", syncViewport);
-    }
-    mediaQuery.addListener(syncViewport);
-    return () => mediaQuery.removeListener(syncViewport);
-  }, []);
-
-  return isDesktopViewport;
-}
 
 export type SlideEditorImageUploadResult = ImageUploadResult;
 
@@ -412,20 +384,6 @@ export interface SlideEditorProps {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function dedupeDiagnostics(
-  diagnostics: readonly PresentationDiagnostic[],
-): PresentationDiagnostic[] {
-  const seen = new Set<string>();
-  const result: PresentationDiagnostic[] = [];
-  for (const diagnostic of diagnostics) {
-    const key = `${diagnostic.code}:${diagnosticTargetKey(diagnostic.target)}:${diagnostic.path ?? ""}:${diagnostic.message}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(diagnostic);
-  }
-  return result;
-}
 
 function readImageFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -620,6 +578,8 @@ export function SlideEditor({
   const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [deckDiagnosticsReviewOpen, setDeckDiagnosticsReviewOpen] =
     useState(false);
+  const [exportPreflight, setExportPreflight] =
+    useState<PresentationExportPreflightResult | null>(null);
   const [inspectorPanelRequest, setInspectorPanelRequest] = useState<{
     panel: InspectorPanelId;
     nonce: number;
@@ -670,6 +630,14 @@ export function SlideEditor({
     suppressNextStageClick,
     shouldSuppressStageClick,
   } = useStageInteractionController();
+  const {
+    precisionGuides,
+    togglePrecisionGrid,
+    togglePrecisionRulers,
+    toggleCustomGuidesVisible,
+    addCustomGuide,
+    removeCustomGuide,
+  } = usePrecisionGuides(documentId, setStageAnnouncement);
   const {
     focusGeometryRegistry,
     canvasElement,
@@ -1762,6 +1730,43 @@ export function SlideEditor({
 
   const exportDiagnostics = useExportDiagnostics(renderTree);
 
+  function runExportAction(format: PresentationExportFormat): Promise<void> {
+    if (format === "pptx") return handleExportPptx();
+    if (format === "pdf") return handleExportPdf();
+    return handleExportPng();
+  }
+
+  function handleExportRequest(format: PresentationExportFormat): void {
+    setExportMenuOpen(false);
+    if (!renderTree) {
+      void runExportAction(format);
+      return;
+    }
+
+    try {
+      const result = buildPresentationExportPreflight({
+        deck,
+        renderTree,
+        format,
+      });
+      if (!result.hasFatal && !result.hasWarnings) {
+        void runExportAction(format);
+        return;
+      }
+      setToolbarError(null);
+      setExportPreflight(result);
+    } catch {
+      setToolbarError("Export preflight failed. Please try again.");
+    }
+  }
+
+  function handleExportPreflightContinue(): void {
+    const format = exportPreflight?.format;
+    setExportPreflight(null);
+    if (!format) return;
+    void runExportAction(format);
+  }
+
   // ---------------------------------------------------------------------------
   // Selected node data (from the persisted deck, not the resolved tree)
   // ---------------------------------------------------------------------------
@@ -2005,6 +2010,7 @@ export function SlideEditor({
     selectedNode,
     selection,
     snapToGuides,
+    customGuides: precisionGuides.customGuides,
     tableEditingNodeId,
     draggingStage,
     activeResizeHandle,
@@ -2444,6 +2450,14 @@ export function SlideEditor({
               <Grid3x3 size={14} aria-hidden="true" />
               Snap
             </DeckToolbarButton>
+            <PrecisionGuideToolbarControls
+              preferences={precisionGuides}
+              onToggleGrid={togglePrecisionGrid}
+              onToggleRulers={togglePrecisionRulers}
+              onToggleGuides={toggleCustomGuidesVisible}
+              onAddGuide={addCustomGuide}
+              onRemoveGuide={removeCustomGuide}
+            />
           </DeckToolbarGroup>
 
           <DeckToolbarDivider />
@@ -2780,8 +2794,7 @@ export function SlideEditor({
                     role="menuitem"
                     aria-label="Export PPTX"
                     onClick={() => {
-                      setExportMenuOpen(false);
-                      void handleExportPptx();
+                      handleExportRequest("pptx");
                     }}
                     className={cx(
                       "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
@@ -2797,8 +2810,7 @@ export function SlideEditor({
                     role="menuitem"
                     aria-label="Export PDF"
                     onClick={() => {
-                      setExportMenuOpen(false);
-                      void handleExportPdf();
+                      handleExportRequest("pdf");
                     }}
                     className={cx(
                       "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
@@ -2814,8 +2826,7 @@ export function SlideEditor({
                     role="menuitem"
                     aria-label="Export PNGs"
                     onClick={() => {
-                      setExportMenuOpen(false);
-                      void handleExportPng();
+                      handleExportRequest("png");
                     }}
                     className={cx(
                       "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
@@ -2885,6 +2896,15 @@ export function SlideEditor({
             onClose={() => setDeckDiagnosticsReviewOpen(false)}
             onNavigate={handleDiagnosticNavigate}
             onAction={handleDiagnosticAction}
+          />
+        </FocusTrapped>
+      ) : null}
+      {exportPreflight ? (
+        <FocusTrapped>
+          <ExportPreflightDialog
+            result={exportPreflight}
+            onClose={() => setExportPreflight(null)}
+            onContinue={handleExportPreflightContinue}
           />
         </FocusTrapped>
       ) : null}
@@ -3221,6 +3241,8 @@ export function SlideEditor({
                         />
                       );
                     })()}
+
+                  <PrecisionGuideOverlays preferences={precisionGuides} />
 
                   {stageGuides.length > 0 ? (
                     <div

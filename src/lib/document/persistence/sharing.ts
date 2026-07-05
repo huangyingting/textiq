@@ -49,6 +49,7 @@ function toShareSettings(row: {
   shareExpiresAt: Date | null;
   shareEmbedEnabled: boolean;
   sharePresentEnabled: boolean;
+  sharePasscodeHash: string | null;
   shareMetadataMode?: string;
   shareDiscoverable?: boolean;
 }): ShareSettings {
@@ -61,6 +62,7 @@ function toShareSettings(row: {
     expiresAt: row.shareExpiresAt ? row.shareExpiresAt.toISOString() : null,
     embedEnabled: row.shareEmbedEnabled,
     presentEnabled: row.sharePresentEnabled,
+    passcodeEnabled: row.sharePasscodeHash !== null,
     metadataMode:
       row.shareMetadataMode === "title" ||
       row.shareMetadataMode === "title-excerpt"
@@ -88,13 +90,20 @@ async function writeShareData(
   shareExpiresAt: Date | null;
   shareEmbedEnabled: boolean;
   sharePresentEnabled: boolean;
+  sharePasscodeHash: string | null;
   shareMetadataMode?: string;
   shareDiscoverable?: boolean;
 }> {
   if (!isShared) {
     return prisma.document.update({
       where: { id },
-      data: { isShared, shareId: null, slug: null, shareExpiresAt: null },
+      data: {
+        isShared,
+        shareId: null,
+        slug: null,
+        shareExpiresAt: null,
+        sharePasscodeHash: null,
+      },
       select: {
         isShared: true,
         shareId: true,
@@ -102,6 +111,7 @@ async function writeShareData(
         shareExpiresAt: true,
         shareEmbedEnabled: true,
         sharePresentEnabled: true,
+        sharePasscodeHash: true,
         shareMetadataMode: true,
         shareDiscoverable: true,
       },
@@ -125,6 +135,7 @@ async function writeShareData(
           shareExpiresAt: true,
           shareEmbedEnabled: true,
           sharePresentEnabled: true,
+          sharePasscodeHash: true,
           shareMetadataMode: true,
           shareDiscoverable: true,
         },
@@ -197,6 +208,7 @@ export async function updateDocumentSharePolicyData(
     shareExpiresAt?: Date | null;
     shareEmbedEnabled?: boolean;
     sharePresentEnabled?: boolean;
+    sharePasscodeHash?: string | null;
     shareMetadataMode?: string;
     shareDiscoverable?: boolean;
   },
@@ -211,6 +223,7 @@ export async function updateDocumentSharePolicyData(
       shareExpiresAt: true,
       shareEmbedEnabled: true,
       sharePresentEnabled: true,
+      sharePasscodeHash: true,
       shareMetadataMode: true,
       shareDiscoverable: true,
     },

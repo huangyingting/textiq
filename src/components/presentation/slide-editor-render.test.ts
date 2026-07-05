@@ -9,6 +9,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { SlideEditor } from "./slide-editor";
+import { PrecisionGuideOverlays } from "./precision-guides-controls";
 import {
   buildDeck,
   buildImageNode,
@@ -152,4 +153,33 @@ test("SlideEditor top-level handlers tolerate no-op editor callbacks", async () 
   }
 
   assert.ok(invoked > 10);
+});
+
+test("PrecisionGuideOverlays keeps editor chrome off by default and renders persisted overlays", () => {
+  const hidden = renderToStaticMarkup(
+    createElement(PrecisionGuideOverlays, {
+      preferences: {
+        gridVisible: false,
+        rulersVisible: false,
+        guidesVisible: false,
+        customGuides: [],
+      },
+    }),
+  );
+  assert.doesNotMatch(hidden, /data-precision-grid-overlay/);
+  assert.doesNotMatch(hidden, /data-precision-ruler-overlay/);
+
+  const visible = renderToStaticMarkup(
+    createElement(PrecisionGuideOverlays, {
+      preferences: {
+        gridVisible: true,
+        rulersVisible: true,
+        guidesVisible: true,
+        customGuides: [{ axis: "x", positionPct: 25 }],
+      },
+    }),
+  );
+  assert.match(visible, /data-precision-grid-overlay="true"/);
+  assert.match(visible, /data-precision-ruler-overlay="true"/);
+  assert.match(visible, /data-precision-guides-overlay="true"/);
 });

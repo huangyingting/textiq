@@ -30,6 +30,7 @@ type ShareState = {
   presentEnabled: boolean;
   metadataMode: "generic" | "title" | "title-excerpt";
   discoverable: boolean;
+  passcodeEnabled: boolean;
 };
 
 /** Builds the displayed share URL from the current origin + shareId/slug. */
@@ -56,6 +57,7 @@ function toShareState(settings: ShareSettings): ShareState {
     presentEnabled: settings.presentEnabled,
     metadataMode: settings.metadataMode,
     discoverable: settings.discoverable,
+    passcodeEnabled: settings.passcodeEnabled ?? false,
   };
 }
 
@@ -85,6 +87,7 @@ export function ShareButton({
   initialPresentEnabled = true,
   initialMetadataMode = "generic",
   initialDiscoverable = false,
+  initialPasscodeEnabled = false,
   documentTitle = "Untitled",
   iconOnly = false,
 }: {
@@ -97,6 +100,7 @@ export function ShareButton({
   initialPresentEnabled?: boolean;
   initialMetadataMode?: "generic" | "title" | "title-excerpt";
   initialDiscoverable?: boolean;
+  initialPasscodeEnabled?: boolean;
   documentTitle?: string;
   iconOnly?: boolean;
 }) {
@@ -111,11 +115,13 @@ export function ShareButton({
     presentEnabled: initialPresentEnabled,
     metadataMode: initialMetadataMode,
     discoverable: initialDiscoverable,
+    passcodeEnabled: initialPasscodeEnabled,
   });
   const [copying, setCopying] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [presentCopied, setPresentCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [passcode, setPasscode] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // The embed URL points at the chrome-free /embed/[shareId] route. Derive it
@@ -208,6 +214,28 @@ export function ShareButton({
       setError(result.error);
       return;
     }
+    setError(null);
+    setShareState(toShareState(result.data));
+  };
+
+  const handlePasscodeSave = async () => {
+    const result = await updateSharePolicy(id, { passcode });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPasscode("");
+    setError(null);
+    setShareState(toShareState(result.data));
+  };
+
+  const handlePasscodeClear = async () => {
+    const result = await updateSharePolicy(id, { passcode: null });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPasscode("");
     setError(null);
     setShareState(toShareState(result.data));
   };
@@ -343,6 +371,47 @@ export function ShareButton({
               ? "After this time the link stops working everywhere."
               : "No expiry — the link works until disabled or regenerated."}
           </p>
+        </div>
+      )}
+
+      {shareState.isShared && (
+        <div className="mt-4 border-t border-ds-border-subtle pt-3">
+          <h4 className="mb-2 text-xs font-semibold text-ds-text-primary">
+            Passcode
+          </h4>
+          <p className="mb-2 text-xs text-ds-text-muted">
+            {shareState.passcodeEnabled
+              ? "A passcode is required before visitors can view this link."
+              : "Optional — require visitors to enter a short passcode."}
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              value={passcode}
+              onChange={(event) => setPasscode(event.target.value)}
+              placeholder={
+                shareState.passcodeEnabled ? "New passcode" : "Set passcode"
+              }
+              aria-label="Share passcode"
+              className="flex-1 rounded-md border border-ds-border-subtle bg-ds-surface-sunken px-2 py-1 text-xs text-ds-text-secondary outline-none"
+            />
+            <button
+              type="button"
+              onClick={handlePasscodeSave}
+              className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+            >
+              {shareState.passcodeEnabled ? "Update" : "Set"}
+            </button>
+          </div>
+          {shareState.passcodeEnabled && (
+            <button
+              type="button"
+              onClick={handlePasscodeClear}
+              className="mt-2 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+            >
+              Remove passcode
+            </button>
+          )}
         </div>
       )}
 

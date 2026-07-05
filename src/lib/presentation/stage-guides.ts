@@ -11,11 +11,46 @@ export type SnapFrameResult = {
 };
 
 const DEFAULT_GUIDES = [0, 10, 50, 90, 100] as const;
+const GUIDE_POSITION_PRECISION = 100;
 
 export type StageGuideInput = {
   axis: "x" | "y";
   positionPct: number;
 };
+
+export function normalizeStageGuidePosition(
+  positionPct: number,
+): number | null {
+  if (!Number.isFinite(positionPct)) return null;
+  const clamped = Math.max(0, Math.min(100, positionPct));
+  return (
+    Math.round(clamped * GUIDE_POSITION_PRECISION) / GUIDE_POSITION_PRECISION
+  );
+}
+
+export function stageGuideInputKey(guide: StageGuideInput): string {
+  return `${guide.axis}:${guide.positionPct}`;
+}
+
+export function normalizeStageGuideInputs(
+  guides: readonly StageGuideInput[],
+): StageGuideInput[] {
+  const seen = new Set<string>();
+  const normalized: StageGuideInput[] = [];
+
+  for (const guide of guides) {
+    if (guide.axis !== "x" && guide.axis !== "y") continue;
+    const positionPct = normalizeStageGuidePosition(guide.positionPct);
+    if (positionPct === null) continue;
+    const item = { axis: guide.axis, positionPct };
+    const key = stageGuideInputKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(item);
+  }
+
+  return normalized;
+}
 
 function nearestGuide(
   value: number,
@@ -89,7 +124,7 @@ export function snapFrameToStageGuides(
       { axis: "x" as const, positionPct },
       { axis: "y" as const, positionPct },
     ]),
-    ...customGuides,
+    ...normalizeStageGuideInputs(customGuides),
   ];
 
   for (const candidate of candidatePositions(frame)) {

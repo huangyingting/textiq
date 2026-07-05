@@ -255,6 +255,13 @@ Current stage capabilities:
 - enter a group for member editing;
 - hide advanced controls in simple mode.
 
+The Snap/Grid/Rulers/Guides toolbar controls own precision layout chrome.
+Grid, ruler, and custom guide visibility plus custom percent guide positions are
+stored per `documentId` in browser local storage, keeping the persisted Deck
+schema and present/share/export rendering unchanged. Custom horizontal and
+vertical guide lines feed the same pure stage-guide snap pipeline as transient
+alignment guides, while grid/ruler overlays remain editor-only chrome.
+
 Geometry is percentage-based (`LayoutBox.frame`) so the same deck renders
 consistently at thumbnail, editor, present, and export sizes.
 

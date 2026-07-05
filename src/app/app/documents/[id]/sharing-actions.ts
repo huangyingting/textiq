@@ -10,6 +10,11 @@ import {
   updateDocumentSharePolicyData,
 } from "@/lib/document/persistence-service";
 import type { ShareSettings } from "@/lib/document/persistence-types";
+import {
+  hashSharePasscode,
+  normalizeSharePasscode,
+  validateSharePasscode,
+} from "@/lib/share-passcode";
 
 // Furthest-out expiry a caller may set, guarding against absurd dates.
 const MAX_SHARE_EXPIRY_MS = 5 * 365 * 24 * 60 * 60 * 1000; // ~5 years
@@ -82,6 +87,7 @@ export async function updateSharePolicy(
     presentEnabled?: boolean;
     metadataMode?: "generic" | "title" | "title-excerpt";
     discoverable?: boolean;
+    passcode?: string | null;
   },
 ): Promise<ActionResult<ShareSettings>> {
   await requireDocumentActionContext(id, "manage");
@@ -92,6 +98,7 @@ export async function updateSharePolicy(
     sharePresentEnabled?: boolean;
     shareMetadataMode?: string;
     shareDiscoverable?: boolean;
+    sharePasscodeHash?: string | null;
   } = {};
 
   if ("expiresAt" in policy) {
@@ -123,6 +130,18 @@ export async function updateSharePolicy(
   }
   if (typeof policy.discoverable === "boolean") {
     data.shareDiscoverable = policy.discoverable;
+  }
+  if ("passcode" in policy) {
+    const passcode = normalizeSharePasscode(policy.passcode);
+    if (!passcode) {
+      data.sharePasscodeHash = null;
+    } else {
+      const validation = validateSharePasscode(passcode);
+      if (!validation.ok) {
+        return actionError(validation.message);
+      }
+      data.sharePasscodeHash = await hashSharePasscode(passcode);
+    }
   }
 
   const settings = await updateDocumentSharePolicyData(id, data);
