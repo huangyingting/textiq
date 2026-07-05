@@ -16,6 +16,7 @@
     "ci:local": "node scripts/ci-local.mjs",
     "qa:browser": "node scripts/browser-qa.mjs",
     "account:erasure:dry-run": "node --import tsx scripts/account-erasure-dry-run.mjs",
+    "retention:run": "node --import tsx scripts/retention-runner.mjs",
     "lint": "npm run design-system:check && npm run action-ports:check && npm run next-build-constraints:check && npm run client-boundary:check && npm run import-graph:check && npm run e2e-governance:check && npm run perf-budgets:check && eslint",
     "typecheck": "tsc --noEmit",
     "typecheck:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
