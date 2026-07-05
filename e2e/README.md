@@ -7,22 +7,26 @@ them locally or in a dedicated E2E job.
 
 ## What's covered
 
-| Spec                                | Coverage                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `public-pages.spec.ts`              | Home / login / signup render (smoke)                                                                   |
-| `auth-redirect.spec.ts`             | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                          |
-| `oauth-disabled.spec.ts`            | Google CTA hidden when the provider is unconfigured                                                    |
-| `workspace.spec.ts`                 | Create / import, empty state, viewer restriction (auth-gated)                                          |
-| `share-fallback.spec.ts`            | Unknown share/present/embed links → not-found fallback                                                 |
-| `billing-brand.spec.ts`             | Billing unlimited-credit UI + Brand Studio font persistence                                            |
-| `slides-smoke.spec.ts`              | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                        |
-| `slides-layout-screenshots.spec.ts` | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)          |
-| `screenshot-regression.spec.ts`     | Slide screenshot regression with deterministic fixtures (opt-in via env var)                           |
-| `import-roundtrip.spec.ts`          | Markdown import → editor render → edit/save/reload; unsupported-type error (profile-gated, #519)       |
-| `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)                  |
-| `slide-asset-upload.spec.ts`        | Inspector image upload + protected slide-asset access control (profile-gated, #521)                    |
-| `e2e/ui-matrix/catalog.spec.ts`     | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                |
-| `e2e/ui-matrix/*-ui.spec.ts`        | Representative presentation/public/auth/editor/workspace checks (explicit opt-in, not default profile) |
+| Spec                                | Coverage                                                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `public-pages.spec.ts`              | Home / login / signup render (smoke)                                                                            |
+| `auth-redirect.spec.ts`             | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                                   |
+| `oauth-disabled.spec.ts`            | Google CTA hidden when the provider is unconfigured                                                             |
+| `workspace.spec.ts`                 | Create / import, empty state, viewer restriction (auth-gated)                                                   |
+| `share-fallback.spec.ts`            | Unknown share/present/embed links → not-found fallback                                                          |
+| `billing-brand.spec.ts`             | Billing unlimited-credit UI + Brand Studio font persistence                                                     |
+| `slides-smoke.spec.ts`              | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                 |
+| `slides-layout-screenshots.spec.ts` | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                   |
+| `screenshot-regression.spec.ts`     | Slide screenshot regression with deterministic fixtures (opt-in via env var)                                    |
+| `import-roundtrip.spec.ts`          | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734) |
+| `present-export.spec.ts`            | Authenticated + public present render; real PDF export download (profile-gated, #520)                           |
+| `slide-asset-upload.spec.ts`        | Inspector image upload + protected slide-asset access control (profile-gated, #521)                             |
+| `e2e/ui-matrix/catalog.spec.ts`     | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                         |
+| `e2e/ui-matrix/*-ui.spec.ts`        | Representative presentation/public/auth/editor/workspace checks (explicit opt-in, not default profile)          |
+
+The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
+`e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
+spec is missing from the inventory or when the generated README section drifts.
 
 ## Prerequisites
 
@@ -150,13 +154,14 @@ global timeout, and includes only the lightweight UI matrix catalog check by
 default. Run `e2e/ui-matrix/*-ui.spec.ts` explicitly when validating the
 representative browser UI matrix.
 
-### DOCX coverage note
+### DOCX fixture policy
 
-`import-roundtrip.spec.ts` covers the Markdown import path fully through the UI
-and the unsupported-type path through the route. Binary `.docx` fixtures are
-impractical to maintain in-repo; the DOCX parser is unit-tested
-(`src/lib/import/docx.ts`, `validate.test.ts`), so the DOCX **UI** round-trip
-remains a documented manual gap (release-gate flow D-5).
+`import-roundtrip.spec.ts` covers Markdown and DOCX imports fully through the UI,
+plus the unsupported-type path through the route. DOCX coverage uses
+`e2e/helpers/docx-fixture.ts` to generate a minimal deterministic OOXML package
+from stable XML parts at test time, avoiding opaque binary fixture churn while
+still exercising upload/form wiring, `POST /api/import`, editor rendering, and
+save/reload behavior.
 
 ## Slides smoke (`slides-smoke.spec.ts`)
 

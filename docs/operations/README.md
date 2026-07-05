@@ -21,6 +21,7 @@ manual release procedures.
 | [resource-limits.md](resource-limits.md)                                             | Contract  | Central limit inventory for import, AI, deck persistence, assets, documents, and timing budgets.    |
 | [privacy-dsar-runbook.md](privacy-dsar-runbook.md)                                   | Runbook   | Personal-data inventory, account export coverage, erasure verification, and public metadata policy. |
 | [retention-runner.md](retention-runner.md)                                           | Runbook   | Scheduled purge runner for expired tokens, rate-limit windows, and soft-deleted asset bytes.        |
+| [dependency-update-policy.md](dependency-update-policy.md)                           | Runbook   | Dependabot cadence, dependency labels, and review policy.                                           |
 | [../security/api-route-security-matrix.md](../security/api-route-security-matrix.md) | Reference | API route classification, denial semantics, and abuse-control diagnostics (Epic #495).              |
 
 ## Rule Of Thumb
