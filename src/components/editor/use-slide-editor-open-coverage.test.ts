@@ -289,7 +289,6 @@ function createDeckPort({
       if (result instanceof Error) throw result;
       return result ?? { ok: true, revisionToken: "rev-saved" };
     },
-    saveDeckPatch: async () => ({ ok: "fallback" }),
   };
 
   return { port, fetchCalls, saveCalls, fetchResults, saveResults };

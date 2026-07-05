@@ -29,9 +29,5 @@ export {
 export type { RestoredDocumentVersion } from "./persistence/versioning";
 export { sanitizeRestoredDeck, restoreVersion } from "./persistence/versioning";
 
-export type {
-  DeckPatch,
-  SaveDeckPatchResult,
-  SaveDeckResult,
-} from "./persistence/deck";
-export { persistDeck, patchDeck } from "./persistence/deck";
+export type { SaveDeckResult } from "./persistence/deck";
+export { persistDeck } from "./persistence/deck";

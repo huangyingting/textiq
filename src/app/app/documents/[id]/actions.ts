@@ -5,7 +5,7 @@ export {
   regenerateShareLink,
   updateSharePolicy,
 } from "./sharing-actions";
-export { fetchDeckJson, saveDeckJson, saveDeckPatch } from "./deck-actions";
+export { fetchDeckJson, saveDeckJson } from "./deck-actions";
 export {
   listDocumentVersions,
   restoreDocumentVersion,

@@ -20,12 +20,6 @@ export type SaveDeckResult =
   | { ok: "conflict"; serverRevisionToken: string | null }
   | SaveDeckFailureResult;
 
-export type SaveDeckPatchResult =
-  | { ok: true; revisionToken: string }
-  | { ok: "conflict"; serverRevisionToken: string | null }
-  | { ok: "fallback" }
-  | SaveDeckFailureResult;
-
 export type FetchDeckResult =
   | { ok: true; deckJson: unknown; revisionToken: string | null }
   | {
