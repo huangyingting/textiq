@@ -174,10 +174,10 @@ The following subsystems have dedicated test files that must stay green:
 ### Critical-flow E2E profile (Epic #517)
 
 The unit gate above is intentionally credential-less and never starts a server.
-A second, opt-in **deterministic E2E profile** drives the critical product
+A second, required **deterministic E2E profile** drives the critical product
 flows end to end through a real browser. It is **not** part of `npm test` or the
-required fast gate — it runs in a dedicated job against a seeded database and a
-running app.
+required fast gate — it runs in a dedicated CI job against a seeded database and
+prebuilt Playwright-started app.
 
 ```bash
 # 1. Seed the deterministic fixture (owner + viewer users, one shared document
@@ -192,6 +192,12 @@ npm run dev &
 npm run test:e2e:profile
 ```
 
+For fresh checkouts or CI parity, prefer the self-contained profile runner:
+
+```bash
+npm run test:e2e:profile:self-contained
+```
+
 Key properties:
 
 - The seeded **document URL** (`/app/documents/<documentId>`) and **share id**
@@ -200,15 +206,18 @@ Key properties:
 - Under the profile (`E2E_PROFILE=1`), authenticated specs **do not skip**; they
   run for real. Without it, every profile-dependent spec **skips cleanly** so the
   credential-less fast gate and CI stay green.
+- `.github/workflows/e2e-deterministic.yml` is a hard PR/push gate: it runs the
+  self-contained profile wrapper with `E2E_PROFILE_GREP=@required-profile` and
+  fails the workflow on any required-profile failure.
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
 
-| Spec (Epic #517)                    | Covers                                                                                                                  |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `import-roundtrip.spec.ts`          | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                           |
-| `present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                               |
-| `slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                          |
-| `slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout screenshots (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open) |
+| Spec (Epic #517)                    | Covers                                                                                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `import-roundtrip.spec.ts`          | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                                                 |
+| `present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                                                     |
+| `slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                                                |
+| `slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout rendering (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open); pixel snapshots opt-in |
 
 See [`e2e/README.md`](../../e2e/README.md) for the full environment-variable
 reference and per-spec run instructions.
@@ -234,16 +243,16 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Slide / deck flows
 
-| #   | Flow                                | Owner           | Notes                                                                                                                                                            |
-| --- | ----------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                |
-| S-2 | Deck patch save endpoint            | **A**           | No supported patch persistence endpoint; absence is asserted while slide edits save full deck snapshots through `saveDeckJson` (#1740)                           |
-| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts` |
-| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                             |
-| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                            |
-| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                    |
-| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                       |
-| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout screenshots in `e2e/slides-layout-screenshots.spec.ts` (#1449)                                                                 |
+| #   | Flow                                | Owner           | Notes                                                                                                                                                                   |
+| --- | ----------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                       |
+| S-2 | Deck patch save endpoint            | **A**           | No supported patch persistence endpoint; absence is asserted while slide edits save full deck snapshots through `saveDeckJson` (#1740)                                  |
+| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`        |
+| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                    |
+| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                                   |
+| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                           |
+| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                              |
+| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout rendering in `e2e/slides-layout-screenshots.spec.ts` (#1449); pixel snapshot comparisons opt-in via `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` |
 
 ### Visual projection flows
 

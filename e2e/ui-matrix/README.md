@@ -85,6 +85,7 @@ The repository currently has 21 Playwright specs under `e2e/`. Every `e2e/**/*.s
 ## Drift guard
 
 Run `npm run ui-matrix:check` after adding, renaming, or removing any `e2e/**/*.spec.ts` file. Use `npm run ui-matrix:write` to refresh this generated README section after changing `e2e/ui-matrix/inventory.ts` or `e2e/ui-matrix/cases.ts`.
+
 <!-- ui-matrix-inventory:end -->
 
 ## Execution

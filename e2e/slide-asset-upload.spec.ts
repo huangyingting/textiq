@@ -38,7 +38,7 @@ test.describe("slide asset access control", () => {
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run slide-asset checks",
   );
 
-  test("owner fetches protected bytes; anonymous denied for private, allowed for shared", async ({
+  test("owner fetches protected bytes; anonymous denied for private, allowed for shared @required-profile", async ({
     page,
     browser,
   }) => {
@@ -129,10 +129,10 @@ test.describe("slide image upload round-trip", () => {
     await page.goto(profileDocPath());
 
     // Open the slide editor.
-    const openEditor = page.getByRole("button", { name: "Open slide editor" });
+    const openEditor = page.getByRole("link", { name: "Open slide editor" });
     await expect(
       openEditor,
-      "upload: 'Open slide editor' button not found",
+      "upload: 'Open slide editor' link not found",
     ).toBeVisible({ timeout: 20_000 });
     await openEditor.click();
 
@@ -146,8 +146,8 @@ test.describe("slide image upload round-trip", () => {
     ).toBeVisible({ timeout: 20_000 });
     await seededImage.click();
 
-    // The inspector exposes an image upload control (accept="image/*").
-    const fileInput = page.locator('input[type="file"][accept="image/*"]');
+    // The editor exposes image upload controls with explicit accepted formats.
+    const fileInput = page.locator('input[type="file"][accept*="image/png"]');
     await expect(
       fileInput.first(),
       "upload: inspector image file input not found after selecting element",
