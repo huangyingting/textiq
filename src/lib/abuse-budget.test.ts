@@ -40,6 +40,18 @@ test("getAbuseBudgetNamespace returns the configured signup budget", () => {
   });
 });
 
+test("share passcode attempts have a dedicated public abuse budget", () => {
+  assert.deepEqual(getAbuseBudgetNamespace("public.share-passcode.ip"), {
+    namespace: "public.share-passcode.ip",
+    owner: "public",
+    rationale: "Throttle repeated public share passcode attempts per link.",
+    limitEnv: "PUBLIC_SHARE_PASSCODE_RATE_LIMIT",
+    windowEnv: "PUBLIC_SHARE_PASSCODE_RATE_WINDOW_MS",
+    defaultLimit: 10,
+    defaultWindowMs: 60_000,
+  });
+});
+
 test("assertUniqueAbuseBudgetNamespaces rejects drift duplicates", () => {
   assert.throws(
     () =>
@@ -124,7 +136,7 @@ test("InMemoryAbuseBudgetStore returns copies and can be cleared", async () => {
   assert.equal(await store.get("key"), undefined);
 });
 
-test("checkIpRateLimit hashes the forwarded client IP subject", async () => {
+test("checkIpRateLimit hashes the trusted forwarded client IP subject", async () => {
   process.env.PUBLIC_SHARE_RATE_LIMIT = "1";
   process.env.PUBLIC_SHARE_RATE_WINDOW_MS = "1000";
   try {
@@ -132,7 +144,11 @@ test("checkIpRateLimit hashes the forwarded client IP subject", async () => {
     const headers = new Headers({
       "x-forwarded-for": "203.0.113.10, 10.0.0.1",
     });
-    assert.equal(getClientSubject(headers), "203.0.113.10");
+    const clientIp = {
+      remoteAddress: "10.0.0.2",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+    };
+    assert.equal(getClientSubject(headers, clientIp), "203.0.113.10");
 
     const first = await checkIpRateLimit({
       namespace: "public.share.ip",
@@ -140,6 +156,7 @@ test("checkIpRateLimit hashes the forwarded client IP subject", async () => {
       secret: SECRET,
       store,
       now: 0,
+      clientIp,
     });
     const blocked = await checkIpRateLimit({
       namespace: "public.share.ip",
@@ -147,12 +164,87 @@ test("checkIpRateLimit hashes the forwarded client IP subject", async () => {
       secret: SECRET,
       store,
       now: 10,
+      clientIp,
     });
 
     assert.equal(first.allowed, true);
     assert.equal(blocked.allowed, false);
     assert.equal(blocked.key, first.key);
     assert.equal(blocked.retryAfterSeconds, 1);
+  } finally {
+    delete process.env.PUBLIC_SHARE_RATE_LIMIT;
+    delete process.env.PUBLIC_SHARE_RATE_WINDOW_MS;
+  }
+});
+
+test("checkIpRateLimit collapses untrusted spoofed forwarding headers", async () => {
+  process.env.PUBLIC_SHARE_RATE_LIMIT = "1";
+  process.env.PUBLIC_SHARE_RATE_WINDOW_MS = "1000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const spoofA = new Headers({ "x-forwarded-for": "203.0.113.10" });
+    const spoofB = new Headers({ "x-forwarded-for": "203.0.113.11" });
+    const clientIp = {
+      remoteAddress: "198.51.100.2",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+      onDiagnostic: () => undefined,
+    };
+
+    assert.equal(getClientSubject(spoofA, clientIp), "198.51.100.2");
+
+    const first = await checkIpRateLimit({
+      namespace: "public.share.ip",
+      headers: spoofA,
+      secret: SECRET,
+      store,
+      now: 0,
+      clientIp,
+    });
+    const blocked = await checkIpRateLimit({
+      namespace: "public.share.ip",
+      headers: spoofB,
+      secret: SECRET,
+      store,
+      now: 10,
+      clientIp,
+    });
+
+    assert.equal(first.allowed, true);
+    assert.equal(blocked.allowed, false);
+    assert.equal(blocked.key, first.key);
+  } finally {
+    delete process.env.PUBLIC_SHARE_RATE_LIMIT;
+    delete process.env.PUBLIC_SHARE_RATE_WINDOW_MS;
+  }
+});
+
+test("checkIpRateLimit uses a shared unknown bucket when no IP is available", async () => {
+  process.env.PUBLIC_SHARE_RATE_LIMIT = "1";
+  process.env.PUBLIC_SHARE_RATE_WINDOW_MS = "1000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    assert.equal(getClientSubject(new Headers({})), "unknown");
+
+    const first = await checkIpRateLimit({
+      namespace: "public.share.ip",
+      headers: new Headers({}),
+      secret: SECRET,
+      store,
+      now: 0,
+      clientIp: { onDiagnostic: () => undefined },
+    });
+    const blocked = await checkIpRateLimit({
+      namespace: "public.share.ip",
+      headers: new Headers({}),
+      secret: SECRET,
+      store,
+      now: 10,
+      clientIp: { onDiagnostic: () => undefined },
+    });
+
+    assert.equal(first.allowed, true);
+    assert.equal(blocked.allowed, false);
+    assert.equal(blocked.key, first.key);
   } finally {
     delete process.env.PUBLIC_SHARE_RATE_LIMIT;
     delete process.env.PUBLIC_SHARE_RATE_WINDOW_MS;

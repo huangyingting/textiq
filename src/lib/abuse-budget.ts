@@ -7,8 +7,10 @@ import {
 } from "@/lib/ai/quota";
 import { auth as authEnv, readPositiveIntEnv } from "@/lib/env";
 import {
+  type ClientIpOptions,
   getClientIp,
   hashIdentifier,
+  logClientIpDiagnostic,
   prismaRateLimitStore,
   rateLimitSubject,
   retryAfterSeconds,
@@ -105,6 +107,15 @@ export const ABUSE_BUDGET_NAMESPACES = [
     limitEnv: "PUBLIC_SHARE_RATE_LIMIT",
     windowEnv: "PUBLIC_SHARE_RATE_WINDOW_MS",
     defaultLimit: 120,
+    defaultWindowMs: 60_000,
+  },
+  {
+    namespace: "public.share-passcode.ip",
+    owner: "public",
+    rationale: "Throttle repeated public share passcode attempts per link.",
+    limitEnv: "PUBLIC_SHARE_PASSCODE_RATE_LIMIT",
+    windowEnv: "PUBLIC_SHARE_PASSCODE_RATE_WINDOW_MS",
+    defaultLimit: 10,
     defaultWindowMs: 60_000,
   },
   {
@@ -301,8 +312,16 @@ export async function checkAbuseBudget(opts: {
   };
 }
 
-export function getClientSubject(headers: Headers): string {
-  return getClientIp(headers) ?? "unknown";
+export function getClientSubject(
+  headers: Headers,
+  options: ClientIpOptions = {},
+): string {
+  return (
+    getClientIp(headers, {
+      ...options,
+      onDiagnostic: options.onDiagnostic ?? logClientIpDiagnostic,
+    }) ?? "unknown"
+  );
 }
 
 export function requireAbuseBudgetSecret(): string | undefined {
@@ -320,10 +339,11 @@ export async function checkIpRateLimit(opts: {
   secret: string;
   store?: RateLimitStore;
   now?: number;
+  clientIp?: ClientIpOptions;
 }): Promise<AbuseBudgetCheck> {
   return checkAbuseBudget({
     namespace: opts.namespace,
-    subject: getClientSubject(opts.headers),
+    subject: getClientSubject(opts.headers, opts.clientIp),
     secret: opts.secret,
     store: opts.store,
     now: opts.now,

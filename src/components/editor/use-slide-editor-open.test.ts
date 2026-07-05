@@ -117,18 +117,13 @@ test("persistDeckWithRecovery keeps conflict result semantics", async () => {
   ]);
 });
 
-test("persistDeckWithRecovery only uses saveDeckJson autosave path", async () => {
+test("persistDeckWithRecovery uses only the full-deck autosave port", async () => {
   const deck = createBlankDeck({ documentId: "doc-1336" });
   let saveDeckJsonCalls = 0;
-  let saveDeckPatchCalls = 0;
   const deckPort = {
     saveDeckJson: async () => {
       saveDeckJsonCalls += 1;
       return { ok: true, revisionToken: "rev-2" } as const;
-    },
-    saveDeckPatch: async () => {
-      saveDeckPatchCalls += 1;
-      return { ok: "fallback" } as const;
     },
   };
 
@@ -148,7 +143,6 @@ test("persistDeckWithRecovery only uses saveDeckJson autosave path", async () =>
 
   assert.equal(result.ok, true);
   assert.equal(saveDeckJsonCalls, 1);
-  assert.equal(saveDeckPatchCalls, 0);
 });
 
 test("createDeckAutosaveOnDue catches rejected autosave saves and logs them", async () => {

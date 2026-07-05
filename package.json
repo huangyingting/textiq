@@ -47,10 +47,10 @@
     "slide-themes:generate": "npm run slide-themes:build && npm run slide-themes:html",
     "client-boundary:check": "node scripts/check-client-boundary.mjs",
     "import-graph:check": "node scripts/check-import-graph.mjs",
-    "docs:check": "node --import tsx --test src/app/api/api-route-security-matrix.test.ts && node scripts/check-docs-source-inventory.mjs && node scripts/check-docs-links.mjs && prettier --check \"docs/**/*.md\"",
+    "docs:check": "node --import tsx --test src/app/api/api-route-security-matrix.test.ts && node scripts/check-docs-source-inventory.mjs && npm run ui-matrix:check && node scripts/check-docs-links.mjs && prettier --check \"docs/**/*.md\" \"e2e/ui-matrix/README.md\"",
     "design-system:check": "node scripts/check-design-system.mjs",
     "action-ports:check": "node scripts/check-action-ports.mjs",
-    "e2e-governance:check": "node scripts/check-e2e-governance.mjs",
+    "e2e-governance:check": "node scripts/check-e2e-governance.mjs && npm run ui-matrix:check",
     "next-build-constraints:check": "node scripts/check-next-build-constraints.mjs",
     "perf-budgets:check": "node scripts/perf-budgets.mjs",
     "postinstall": "npm run db:generate",
@@ -61,7 +61,9 @@
     "db:seed": "prisma db seed",
     "db:seed:e2e": "node --import tsx prisma/seed-e2e.ts",
     "db:reset": "node scripts/gen-sqlite-schema.mjs --if-sqlite && prisma generate && prisma db push --force-reset && prisma db seed",
-    "audit:schema": "node --import tsx src/scripts/audit-persisted-schema.ts"
+    "audit:schema": "node --import tsx src/scripts/audit-persisted-schema.ts",
+    "ui-matrix:check": "node --import tsx scripts/check-ui-matrix-inventory.mjs",
+    "ui-matrix:write": "node --import tsx scripts/check-ui-matrix-inventory.mjs --write"
   },
   "dependencies": {
     "@lexical/history": "^0.45.0",

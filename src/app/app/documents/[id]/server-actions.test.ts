@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, it } from "node:test";
 
-import { LEGACY_DECK_SCHEMA_VERSION } from "../../../../lib/document/deck-kernel/deck";
-import type { DeckPatch } from "../../../../lib/commands/deck-command-contracts";
-
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -55,12 +52,6 @@ type ActionTestState = {
   persistDeck: (
     documentId: string,
     deckJson: unknown,
-    clientToken: string | null | undefined,
-    options: unknown,
-  ) => Promise<unknown>;
-  patchDeck: (
-    documentId: string,
-    patches: unknown[],
     clientToken: string | null | undefined,
     options: unknown,
   ) => Promise<unknown>;
@@ -187,9 +178,6 @@ const stubbedModules = new Map<string, string>([
       export async function persistDeck(...args) {
         return globalThis.__documentActionsTestState.persistDeck(...args);
       }
-      export async function patchDeck(...args) {
-        return globalThis.__documentActionsTestState.patchDeck(...args);
-      }
       export async function setDocumentSharing(...args) {
         return globalThis.__documentActionsTestState.setDocumentSharing(...args);
       }
@@ -292,10 +280,6 @@ function createDefaultState(): ActionTestState {
       calls.push(["persistDeck", documentId, deckJson, clientToken, options]);
       return { ok: true, revisionToken: "rev-2" };
     },
-    async patchDeck(documentId, patches, clientToken, options) {
-      calls.push(["patchDeck", documentId, patches, clientToken, options]);
-      return { ok: true, revisionToken: "rev-3" };
-    },
     async setDocumentSharing(documentId, isShared) {
       calls.push(["setDocumentSharing", documentId, isShared]);
       return { isShared, shareId: isShared ? "share-1" : null };
@@ -375,35 +359,6 @@ describe("deck server actions", () => {
     assert.deepEqual(await deckActions.saveDeckJson("doc-1", {}, null), {
       ok: false,
       error: "Failed to save deck. Please try again.",
-      failure: { code: "storage_unavailable", retryable: true },
-    });
-  });
-
-  it("saves deck patches with revalidation and storage errors", async () => {
-    const patches: DeckPatch[] = [
-      {
-        schemaVersion: LEGACY_DECK_SCHEMA_VERSION,
-        op: "slide.update",
-        slideIds: ["slide-1"],
-        elementIds: [],
-      },
-    ];
-    assert.deepEqual(await deckActions.saveDeckPatch("doc-1", patches, null), {
-      ok: true,
-      revisionToken: "rev-3",
-    });
-    assert.deepEqual(state().calls.slice(0, 3), [
-      ["requireDocumentActionContext", "doc-1", "edit"],
-      ["patchDeck", "doc-1", patches, null, { userId: "user-1" }],
-      ["revalidatePath", "/app/documents/doc-1"],
-    ]);
-
-    state().patchDeck = async () => {
-      throw new Error("database down");
-    };
-    assert.deepEqual(await deckActions.saveDeckPatch("doc-1", [], "rev-2"), {
-      ok: false,
-      error: "Failed to save deck patches. Please try again.",
       failure: { code: "storage_unavailable", retryable: true },
     });
   });
@@ -530,6 +485,12 @@ describe("sharing server actions", () => {
       }),
       { ok: false, error: "Invalid metadata mode." },
     );
+    assert.deepEqual(
+      await sharingActions.updateSharePolicy("doc-1", {
+        passcode: "123",
+      }),
+      { ok: false, error: "Passcode must be at least 4 characters." },
+    );
   });
 
   it("persists normalized share policy fields and revalidates", async () => {
@@ -572,6 +533,26 @@ describe("sharing server actions", () => {
       persisted[2].shareExpiresAt.toISOString(),
       "2027-01-01T00:00:00.000Z",
     );
+
+    state().calls.length = 0;
+    await sharingActions.updateSharePolicy("doc-1", {
+      passcode: " 1234 ",
+    });
+    const passcodePersisted = state().calls[1] as [
+      string,
+      string,
+      { sharePasscodeHash: string },
+    ];
+    assert.equal(passcodePersisted[0], "updateDocumentSharePolicyData");
+    assert.match(passcodePersisted[2].sharePasscodeHash, /^\$2[aby]\$/);
+
+    state().calls.length = 0;
+    await sharingActions.updateSharePolicy("doc-1", { passcode: "" });
+    assert.deepEqual(state().calls[1], [
+      "updateDocumentSharePolicyData",
+      "doc-1",
+      { sharePasscodeHash: null },
+    ]);
   });
 });
 

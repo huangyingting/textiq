@@ -85,6 +85,7 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
       ],
       contentJson: "{}",
       options: { length: "short" },
+      themePackageId: "noir",
       onApply: (deck, diagnostics) => {
         calls.push("apply");
         applied.push(deck, diagnostics);
@@ -128,6 +129,7 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
       ],
       contentJson: "{}",
       options: { length: "short" },
+      themePackageId: "noir",
       onApply: () => undefined,
       onDerive: () => undefined,
       onCancel: () => undefined,
@@ -150,4 +152,63 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
       (element) => element.type === DeckDiagnosticsReview,
     ),
   );
+});
+
+test("DeckGenerationPreview sends the original theme package on regenerate", async () => {
+  const { baseline, proposal } = previewDecks();
+  const hookRenderer = createHookRenderer();
+  const originalFetch = globalThis.fetch;
+  const regenerated = buildDeck(
+    [
+      buildSlide("content", [buildTextNode({ id: "text-regenerated" })], {
+        id: "slide-regenerated",
+      }),
+    ],
+    { theme: { packageId: "noir" } },
+  );
+  let seenUrl = "";
+  let seenBody: unknown = null;
+
+  globalThis.fetch = (async (url, init) => {
+    seenUrl = String(url);
+    seenBody = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({ deck: regenerated, truncated: false, diagnostics: [] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    const tree = hookRenderer.run(() =>
+      DeckGenerationPreview({
+        proposedDeck: proposal,
+        baselineDeck: baseline,
+        truncated: false,
+        generationDiagnostics: [],
+        contentJson: '{"root":{"children":[]}}',
+        options: { length: "medium" },
+        themePackageId: "noir",
+        onApply: () => undefined,
+        onDerive: () => undefined,
+        onCancel: () => undefined,
+      }),
+    );
+    const regenerate = collectElements(tree).find(
+      (element) =>
+        textContent((element.props as { children?: ReactNode }).children) ===
+        "Regenerate",
+    );
+    assert.ok(regenerate, "Missing Regenerate button");
+
+    await (regenerate.props as { onClick: () => Promise<void> }).onClick();
+
+    assert.equal(seenUrl, "/api/generate-deck");
+    assert.deepEqual(seenBody, {
+      contentJson: '{"root":{"children":[]}}',
+      options: { length: "medium" },
+      themePackageId: "noir",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

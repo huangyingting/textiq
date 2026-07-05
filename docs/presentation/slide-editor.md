@@ -251,6 +251,13 @@ Current stage capabilities:
 - enter a group for member editing;
 - hide advanced controls in simple mode.
 
+The Snap/Grid/Rulers/Guides toolbar controls own precision layout chrome.
+Grid, ruler, and custom guide visibility plus custom percent guide positions are
+stored per `documentId` in browser local storage, keeping the persisted Deck
+schema and present/share/export rendering unchanged. Custom horizontal and
+vertical guide lines feed the same pure stage-guide snap pipeline as transient
+alignment guides, while grid/ruler overlays remain editor-only chrome.
+
 Geometry is percentage-based (`LayoutBox.frame`) so the same deck renders
 consistently at thumbnail, editor, present, and export sizes.
 
@@ -454,9 +461,9 @@ Save status distinguishes idle, queued, saving, offline, retrying, persistent
 failure, and conflict states. The bottom dock exposes retry and unload-warning
 copy when local changes are durable but not yet synced.
 
-`saveDeckPatch` remains available only as a compatibility endpoint and currently
-returns `{ ok: "fallback" }`; presentation runtime autosave does not enqueue or persist
-`DeckPatch[]` records.
+The presentation runtime does not expose a `saveDeckPatch` action. Autosave,
+manual save, retries, and conflict recovery all persist full deck snapshots
+through `saveDeckJson`; `DeckPatch[]` command metadata is not a persistence log.
 
 ## Document Sync And Source Links
 

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createElement } from "react";
+import {
+  createElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { SlideEditor } from "./slide-editor";
+import { PrecisionGuideOverlays } from "./precision-guides-controls";
 import {
   buildDeck,
   buildImageNode,
@@ -13,6 +19,30 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
+import { createReactRenderHarness } from "@/test/react-render-harness";
+
+function createHookRenderer() {
+  return createReactRenderHarness({ idPrefix: "fake-id" });
+}
+
+type FakeEventTarget = {
+  value: string;
+  checked: boolean;
+  files: File[];
+  closest: () => null;
+  focus: () => void;
+};
+
+function collectElements(node: ReactNode, elements: ReactElement[] = []) {
+  if (Array.isArray(node)) {
+    for (const child of node) collectElements(child, elements);
+    return elements;
+  }
+  if (!isValidElement(node)) return elements;
+  elements.push(node);
+  collectElements((node.props as { children?: ReactNode }).children, elements);
+  return elements;
+}
 
 function mixedDeck() {
   return buildDeck([
@@ -57,4 +87,100 @@ test("SlideEditor renders the full editor shell for mixed slide content", () => 
 
   assert.match(html, /Deck tools/);
   assert.match(html, /data-slide-bottom-dock="true"/);
+});
+test("SlideEditor top-level handlers tolerate no-op editor callbacks", async () => {
+  const actionOk = async () => ({ ok: true as const, data: undefined });
+  const renderer = createHookRenderer();
+  const tree = renderer.run(() =>
+    SlideEditor({
+      documentId: "doc-render",
+      deck: mixedDeck(),
+      onDeckChange: () => undefined,
+      onSave: actionOk,
+      onClose: () => undefined,
+      onPresent: actionOk,
+      onShare: actionOk,
+      onExportPptx: async () => undefined,
+      onUploadImage: async () => ({ src: "", assetId: "replacement" }),
+    }),
+  );
+
+  const previousHTMLElement = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "HTMLElement",
+  );
+  const fakeTarget: FakeEventTarget = {
+    value: "1",
+    checked: true,
+    files: [],
+    closest: () => null,
+    focus: () => undefined,
+  };
+  const event = {
+    key: "Escape",
+    button: 0,
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+    currentTarget: fakeTarget,
+    target: fakeTarget,
+  };
+  let invoked = 0;
+  const handlerPromises: Promise<unknown>[] = [];
+
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    writable: true,
+    value: class TestHTMLElement {},
+  });
+  try {
+    for (const element of collectElements(tree)) {
+      const props = element.props as Record<string, unknown>;
+      for (const name of ["onClick", "onKeyDown", "onChange"]) {
+        const handler = props[name];
+        if (typeof handler !== "function") continue;
+        const result = handler(event);
+        invoked += 1;
+        handlerPromises.push(Promise.resolve(result));
+      }
+    }
+    await Promise.all(handlerPromises);
+  } finally {
+    renderer.cleanup();
+    if (previousHTMLElement) {
+      Object.defineProperty(globalThis, "HTMLElement", previousHTMLElement);
+    } else {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+  }
+
+  assert.ok(invoked > 10);
+});
+
+test("PrecisionGuideOverlays keeps editor chrome off by default and renders persisted overlays", () => {
+  const hidden = renderToStaticMarkup(
+    createElement(PrecisionGuideOverlays, {
+      preferences: {
+        gridVisible: false,
+        rulersVisible: false,
+        guidesVisible: false,
+        customGuides: [],
+      },
+    }),
+  );
+  assert.doesNotMatch(hidden, /data-precision-grid-overlay/);
+  assert.doesNotMatch(hidden, /data-precision-ruler-overlay/);
+
+  const visible = renderToStaticMarkup(
+    createElement(PrecisionGuideOverlays, {
+      preferences: {
+        gridVisible: true,
+        rulersVisible: true,
+        guidesVisible: true,
+        customGuides: [{ axis: "x", positionPct: 25 }],
+      },
+    }),
+  );
+  assert.match(visible, /data-precision-grid-overlay="true"/);
+  assert.match(visible, /data-precision-ruler-overlay="true"/);
+  assert.match(visible, /data-precision-guides-overlay="true"/);
 });

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { UI_TEST_CASES, UI_TEST_CASE_TOTAL, summarizeUiCases } from "./cases";
+import { UI_MATRIX_SPEC_INVENTORY } from "./inventory";
 
 test.describe("UI matrix catalog", () => {
   test("catalogs exactly 500 subsystem UI cases with unique IDs", () => {
@@ -22,12 +23,16 @@ test.describe("UI matrix catalog", () => {
     const automatedCases = UI_TEST_CASES.filter(
       (testCase) => testCase.status === "automated",
     );
+    const inventoriedSpecs = new Set<string>(
+      UI_MATRIX_SPEC_INVENTORY.map((entry) => entry.spec),
+    );
 
     expect(automatedCases.length).toBe(98);
     for (const testCase of automatedCases) {
       expect(testCase.automation?.spec).toMatch(
         /^e2e\/ui-matrix\/.*\.spec\.ts$/,
       );
+      expect(inventoriedSpecs.has(testCase.automation!.spec)).toBe(true);
       expect(testCase.refs.length).toBeGreaterThan(0);
       expect(testCase.title).toContain(testCase.area);
     }

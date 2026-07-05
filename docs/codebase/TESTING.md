@@ -46,7 +46,7 @@ npm run test:coverage-map
 
 - Main mocking approach: inject dependencies into pure helpers and service factories; use fake stores/builders and explicit adapters instead of global monkeypatching where current code permits.
 - Database isolation: default local/CI gate uses SQLite with `DB_PROVIDER=sqlite` and `DATABASE_URL=file:./prisma/dev.db`.
-- E2E isolation: deterministic profile seeds known users/documents/assets through `npm run db:seed:e2e` and `e2e/.e2e-fixture.json`.
+- E2E isolation: deterministic profile seeds known users/documents/assets through `npm run db:seed:e2e` and `e2e/.e2e-fixture.json`; DOCX import round-trip coverage generates its OOXML upload fixture in `e2e/helpers/docx-fixture.ts`.
 - Common failure mode: `npm run test:unit -- <file>` still runs the script's `src/**/*.test.ts` glob; direct focused file validation should use `node --import tsx --test <file>`.
 - Presentation cleanup: `docs/presentation/test-strategy-plan.md` records the completed removal of React hook-dispatcher harness tests.
 
@@ -57,7 +57,6 @@ npm run test:coverage-map
 - Coverage-map gate: `npm test` runs line coverage and then `scripts/test-subsystem.mjs --check` to enforce subsystem assignment, bucket coverage, test filename shape, and weak-title checks.
 - Current reported coverage: `[TODO]` this run did not execute `npm test`, so current numeric coverage output is not recorded here.
 - Known gaps/flaky areas:
-  - DOCX UI E2E round-trip is documented as a manual gap in `e2e/README.md`; parser coverage is unit-tested.
   - Deterministic E2E workflow is advisory/non-fatal until web-server cold-start readiness is hardened.
   - Presentation hook-harness retirement is complete; keep new coverage on public controllers, descriptors, DOM adapters, or browser-visible behavior.
 

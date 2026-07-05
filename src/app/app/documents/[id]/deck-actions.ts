@@ -5,14 +5,12 @@ import { revalidatePath } from "next/cache";
 import { requireDocumentActionContext } from "./document-context";
 import { prisma } from "@/lib/prisma";
 import { logError } from "@/lib/log";
-import { persistDeck, patchDeck } from "@/lib/document/persistence-service";
+import { persistDeck } from "@/lib/document/persistence-service";
 import type {
   FetchDeckResult,
   SaveDeckFailureResult,
-  SaveDeckPatchResult,
   SaveDeckResult,
 } from "@/lib/document/persistence-types";
-import type { DeckPatch } from "@/lib/commands/deck-command-contracts";
 
 function fail(
   error: string,
@@ -75,14 +73,10 @@ export async function fetchDeckJson(id: string): Promise<FetchDeckResult> {
  *
  * ## Mutation entry-point boundaries (Epic #494)
  *
- * The deck has two write entry points, each with a distinct input contract:
- *  - {@link saveDeckJson} — accepts a **full deck JSON** snapshot.
- *  - {@link saveDeckPatch} — accepts **`DeckPatch[]`** records but currently
- *    returns a compatibility `{ ok: "fallback" }` response for presentation runtime
- *    callers, which then use {@link saveDeckJson}.
- *
- * Active presentation writes use optimistic revision-token CAS via `saveDeckJson`
- * (`clientToken`).
+ * The deck has one active write entry point: {@link saveDeckJson}, which
+ * accepts a **full deck JSON** snapshot and uses optimistic revision-token CAS
+ * (`clientToken`). Patch replay is intentionally not exposed as a server action
+ * for the presentation runtime.
  *
  * @param clientToken - The revision token last received from `fetchDeckJson` or
  *   a prior successful save. When supplied the write uses an atomic CAS.
@@ -103,43 +97,6 @@ export async function saveDeckJson(
     logError("deck.save", error, { documentId: id });
     return fail(
       "Failed to save deck. Please try again.",
-      "storage_unavailable",
-      true,
-    );
-  }
-
-  if (result.ok === true) {
-    revalidatePath(`/app/documents/${id}`);
-    revalidatePath(`/app/documents/${id}/slides`);
-  }
-  return result;
-}
-
-/**
- * Compatibility patch endpoint for non-presentation callers.
- *
- * Patch replay is currently disabled for the presentation runtime. Delegates to
- * {@link patchDeck}, which validates document availability and returns
- * `{ ok: "fallback" }` for replay attempts so callers can save a full deck via
- * {@link saveDeckJson}.
- *
- * Input contract: pre-built `DeckPatch[]` (typically produced by `commitCommand`
- * on the client).
- */
-export async function saveDeckPatch(
-  id: string,
-  patches: DeckPatch[],
-  clientToken: string | null | undefined,
-): Promise<SaveDeckPatchResult> {
-  const { user } = await requireDocumentActionContext(id, "edit");
-
-  let result: SaveDeckPatchResult;
-  try {
-    result = await patchDeck(id, patches, clientToken, { userId: user.id });
-  } catch (error) {
-    logError("deck.patch", error, { documentId: id });
-    return fail(
-      "Failed to save deck patches. Please try again.",
       "storage_unavailable",
       true,
     );

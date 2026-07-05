@@ -14,7 +14,11 @@ type CredentialAuthClient = NonNullable<
 >;
 type CredentialsWriteClient = Parameters<typeof registerCredentialsUser>[1];
 type CredentialsWriteClientWithUpdates = CredentialsWriteClient & {
-  _updates: Array<{ id: string; passwordHash: string }>;
+  _updates: Array<{
+    id: string;
+    passwordHash: string;
+    sessionInvalidatedAt: Date;
+  }>;
 };
 
 function credentialAuthStub(value: unknown): CredentialAuthClient {
@@ -51,6 +55,7 @@ test("authorizeCredentialsUser normalizes email and returns the DB user on passw
       name: "Person",
       image: "https://example.com/avatar.png",
       passwordHash,
+      sessionInvalidatedAt: new Date("2026-07-01T00:00:00.000Z"),
     },
     observedEmails,
   );
@@ -66,6 +71,7 @@ test("authorizeCredentialsUser normalizes email and returns the DB user on passw
     email: "person@example.com",
     name: "Person",
     image: "https://example.com/avatar.png",
+    sessionInvalidatedAt: new Date("2026-07-01T00:00:00.000Z"),
   });
 });
 
@@ -90,6 +96,7 @@ test("authorizeCredentialsUser rejects missing credentials, missing hashes, and 
         name: null,
         image: null,
         passwordHash: null,
+        sessionInvalidatedAt: null,
       }),
     ),
     null,
@@ -105,6 +112,7 @@ test("authorizeCredentialsUser rejects missing credentials, missing hashes, and 
         name: null,
         image: null,
         passwordHash,
+        sessionInvalidatedAt: null,
       }),
     ),
     null,
@@ -116,7 +124,11 @@ function credentialsWriteClient(options: {
   createError?: Error;
   passwordHash?: string | null;
 }): CredentialsWriteClientWithUpdates {
-  const updates: Array<{ id: string; passwordHash: string }> = [];
+  const updates: Array<{
+    id: string;
+    passwordHash: string;
+    sessionInvalidatedAt: Date;
+  }> = [];
   const client = credentialsWriteStub({
     user: {
       findUnique: async ({
@@ -138,9 +150,13 @@ function credentialsWriteClient(options: {
         data,
       }: {
         where: { id: string };
-        data: { passwordHash: string };
+        data: { passwordHash: string; sessionInvalidatedAt: Date };
       }) => {
-        updates.push({ id: where.id, passwordHash: data.passwordHash });
+        updates.push({
+          id: where.id,
+          passwordHash: data.passwordHash,
+          sessionInvalidatedAt: data.sessionInvalidatedAt,
+        });
         return {};
       },
     },
@@ -257,6 +273,7 @@ test("changePasswordForUser stores a hash for passwordless users", async () => {
   assert.equal(result.ok, true);
   assert.equal(client._updates.length, 1);
   assert.equal(client._updates[0].id, "user_credentials");
+  assert.equal(client._updates[0].sessionInvalidatedAt instanceof Date, true);
   assert.equal(
     await comparePassword("new-password", client._updates[0].passwordHash),
     true,

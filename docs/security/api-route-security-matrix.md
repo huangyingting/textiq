@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "API route security matrix covering route access policy, authentication requirements, response semantics, public surface governance, and security test enforcement."
 ---
 
@@ -11,7 +11,7 @@ description: "API route security matrix covering route access policy, authentica
 **Issue:** #509
 
 Enforced by `src/app/api/api-route-security-matrix.test.ts`.
-Last content update: #1420 — share-bound public slide asset access.
+Last content update: #1747 — passcode-protected public share links.
 
 ---
 
@@ -77,6 +77,7 @@ privacy-preserving bodies (see Notes).
 | `generate`                            | `public+rate-limited`   | Optional              | Per-user + anon IP + anon trial | Credit metering for authenticated users                                                                                      | 400/413 validation; 429 rate/quota (+`Retry-After`); 402 insufficient credits; 503 Azure misconfig; 504 timeout; 502                                                                                                                | Shared `{error, code}` body | AI               | Public by design. Abuse denials emit `api-abuse` diagnostics (#512).                                                                                                                                            |
 | `generate-deck`                       | `public+rate-limited`   | Optional              | Per-user + anon IP + anon trial | Feature flag `AI_DECK_GEN_ENABLED`; credits                                                                                  | 404 when flag OFF (intentional); 400/413; 429 (+`Retry-After`); 402; 503; 504; 502                                                                                                                                                  | Shared `{error, code}` body | AI               | 404-when-disabled hides the route by design. Do NOT normalize this away. Emits `api-abuse` diagnostics (#512).                                                                                                  |
 | `import`                              | `public+rate-limited`   | None                  | Per client IP                   | Parser timeout bounds each parse                                                                                             | 429 rate limit (+`Retry-After`); 400 bad form / read; 413/415 invalid file; 422 empty / parse-timeout / parse-failed                                                                                                                | None                        | AI/Import        | Public by design. Heavy parsers run server-side only. Emits `api-abuse` diagnostics (#512).                                                                                                                     |
+| `share-passcode/unlock`               | `share-policy`          | None                  | Per client IP + share id        | Validates the submitted passcode against `Document.sharePasscodeHash`, then sets a signed, share-id-bound unlock cookie      | 303 redirect back to the public route with `?passcode=invalid`; 303 `?passcode=limited` when attempt budget is exhausted; no document content in response                                                                           | None                        | Presentation     | Passcode attempts are throttled through `public.share-passcode.ip`; unlock cookies are invalidated by share regeneration or passcode changes.                                                                   |
 | `slide-assets/[documentId]/[...path]` | `share-policy`          | Optional              | No                              | `decideSlideAssetAccess` (document capability OR share-bound public access via `shareId` + `shareMode`) + plain-text adapter | 429 `{error:"...",code:"RATE_LIMITED"}` (+`Retry-After`); 404 plain `Not found` (missing asset/doc — privacy); 403 plain `Forbidden` (exists but unauthorized); 404 `{error:"Not found.",code:"NOT_FOUND"}` storage miss; 200 bytes | Binary/plain-text           | Presentation     | Access-control denials are plain-text (image route, privacy-preserving). Rate-limit and storage-miss errors use canonical JSON. Privacy 404 must NEVER become a 403. Decision tested in `asset-access.test.ts`. |
 | `user/entitlements`                   | `authenticated-session` | Required              | No                              | Derives plan/credit state for session `user.id`                                                                              | 401 `{error:"Unauthorized.",code:"UNAUTHORIZED"}`                                                                                                                                                                                   | None                        | Billing          | Body normalized in #511 (was `"Unauthorized"` without a trailing period).                                                                                                                                       |
 
@@ -99,5 +100,8 @@ privacy-preserving bodies (see Notes).
 - Access adapters: `src/lib/access-policy/adapters.ts` (#813).
 - Error helper: `src/lib/api/errors.ts` (#511).
 - Abuse diagnostics: `src/lib/diagnostics/api-abuse.ts` (#512).
+- Trusted proxy client-IP policy:
+  [../operations/runtime-config.md](../operations/runtime-config.md#trusted-proxy-client-ip-extraction)
+  (#1745).
 - Access policy: [access-and-sharing.md](access-and-sharing.md).
 - Release gate: [../operations/release-gate.md](../operations/release-gate.md).

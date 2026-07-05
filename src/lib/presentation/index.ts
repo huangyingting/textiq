@@ -384,6 +384,12 @@ export type {
   ExportDeckSpec,
 } from "./export-spec";
 export { buildExportSpec } from "./export-spec";
+export type {
+  PresentationExportFallbackTier,
+  PresentationExportFormat,
+  PresentationExportPreflightResult,
+} from "./export-preflight";
+export { buildPresentationExportPreflight } from "./export-preflight";
 
 // Editor commands
 export {
@@ -471,7 +477,10 @@ export type {
 } from "./stage-guides";
 export {
   alignmentGuidesForFrames,
+  normalizeStageGuideInputs,
+  normalizeStageGuidePosition,
   snapFrameToStageGuides,
+  stageGuideInputKey,
 } from "./stage-guides";
 export type { SelectionFrame } from "./selection-geometry";
 export {

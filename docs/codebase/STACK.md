@@ -81,7 +81,7 @@ npm run db:push
 
 - Config sources: `.env.example`, `src/lib/env.ts`, `src/lib/client-config.ts`, `src/lib/db-provider.ts`, `prisma.config.ts`, `playwright.config.ts`, `server.mjs`, `docs/operations/runtime-config.md`.
 - Required env vars: `AUTH_SECRET` is required for auth/session and several signed/rate-limited paths. `DATABASE_URL` is required when `DB_PROVIDER=postgres`; SQLite defaults to `file:./prisma/dev.db`. Azure generation requires `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` when used. Google OAuth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` together. Stripe billing requires Stripe env vars when real Stripe billing is enabled. Collaboration eviction flush requires `COLLAB_INTERNAL_SECRET`; without it, the flusher is a no-op and the internal flush route returns `503`.
-- Deployment/runtime constraints: the app can run with the inline `/collab` Yjs websocket via `server.mjs`; standalone collaboration uses `npm run collab`. The local runtime policy is Node.js 22 or newer via `package.json.engines.node`, with `.nvmrc` pinning the Node 22 major line for version managers and CI. No Dockerfile, Compose file, `SECURITY.md`, or Dependabot config was found by file search.
+- Deployment/runtime constraints: the app can run with the inline `/collab` Yjs websocket via `server.mjs`; standalone collaboration uses `npm run collab`. The local runtime policy is Node.js 22 or newer via `package.json.engines.node`, with `.nvmrc` pinning the Node 22 major line for version managers and CI. Repository security intake is documented in `SECURITY.md`, and dependency update automation is configured in `.github/dependabot.yml`. No Dockerfile or Compose file was found by file search.
 
 ## 6) Evidence
 
@@ -100,5 +100,7 @@ npm run db:push
 - `src/lib/prisma.ts`
 - `prisma.config.ts`
 - `.github/workflows/ci.yml`
+- `.github/dependabot.yml`
+- `SECURITY.md`
 - `playwright.config.ts`
 - `docs/codebase/.codebase-scan.txt`
