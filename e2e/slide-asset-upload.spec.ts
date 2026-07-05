@@ -146,8 +146,8 @@ test.describe("slide image upload round-trip", () => {
     ).toBeVisible({ timeout: 20_000 });
     await seededImage.click();
 
-    // The inspector exposes an image upload control (accept="image/*").
-    const fileInput = page.locator('input[type="file"][accept="image/*"]');
+    // The editor exposes image upload controls with explicit accepted formats.
+    const fileInput = page.locator('input[type="file"][accept*="image/png"]');
     await expect(
       fileInput.first(),
       "upload: inspector image file input not found after selecting element",

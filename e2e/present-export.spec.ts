@@ -183,9 +183,7 @@ test.describe("present + export", () => {
       "present: speaker-notes control missing",
     ).toBeVisible();
 
-    await presentRegion
-      .getByRole("button", { name: "Show presenter timer" })
-      .click();
+    await presentRegion.getByRole("button", { name: "Show timer" }).click();
     await expect(
       presentRegion.getByLabel(/Elapsed time/),
       "present: presenter timer did not become visible",

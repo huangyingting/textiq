@@ -486,7 +486,7 @@ test.describe("deterministic profile document editor smoke", () => {
     const editor = await openProfileSlideEditor(page);
 
     await expect(
-      editor.getByRole("toolbar", { name: "Slide editing tools" }),
+      page.getByRole("toolbar", { name: "Context toolbar" }),
     ).toBeVisible();
     const slideOneButton = editor.getByRole("button", {
       name: new RegExp(
