@@ -121,7 +121,7 @@ async function openEditor(page: Page): Promise<Locator> {
 
   const stage = editor
     .locator(
-      '[data-slide-stage], [data-slide-stage-shell="true"], [data-slide-canvas="true"], [data-testid="slide-canvas"], .slide-canvas',
+      '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"], [data-slide-canvas="true"], [data-testid="slide-canvas"], .slide-canvas',
     )
     .first();
   try {
@@ -154,7 +154,9 @@ async function expectLayoutState(
 ): Promise<void> {
   await expect(
     screenshotRoot
-      .locator('[data-slide-stage], [data-slide-stage-shell="true"]')
+      .locator(
+        '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"]',
+      )
       .first(),
   ).toBeVisible({ timeout: 20_000 });
 
@@ -212,7 +214,9 @@ for (const viewport of VIEWPORTS) {
       const screenshotRoot = await openEditor(page);
 
       const stage = screenshotRoot
-        .locator('[data-slide-stage], [data-slide-stage-shell="true"]')
+        .locator(
+          '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"]',
+        )
         .first();
       await stage.click({ position: { x: 5, y: 5 } });
       await settleLayout(page);

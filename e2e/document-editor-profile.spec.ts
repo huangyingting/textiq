@@ -536,7 +536,9 @@ test.describe("deterministic profile document editor smoke", () => {
     await expect(shortcutsDialog).toHaveCount(0);
 
     await editor
-      .locator("[data-slide-stage]")
+      .locator(
+        '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"]',
+      )
       .click({ position: { x: 5, y: 5 } });
     const slideTools = page.getByRole("toolbar", { name: "Slide tools" });
     await expect(slideTools).toBeVisible();
