@@ -16,6 +16,8 @@
  *   - expiry     — `shareExpiresAt`; once reached the link is denied.
  *   - embed/present access — `shareEmbedEnabled` / `sharePresentEnabled` gate
  *     whether the embed and presentation modes are reachable for a shared doc.
+ *   - optional passcode — `sharePasscodeHash` requires a signed unlock tied to
+ *     the current `shareId` before public content or share-bound assets render.
  *
  * No React / Next / Prisma imports — safe to run server-side and unit-test
  * under `node --test` + `tsx`.
@@ -38,7 +40,8 @@ export type ShareDenyReason =
   | "deleted"
   | "expired"
   | "embed-disabled"
-  | "present-disabled";
+  | "present-disabled"
+  | "passcode-required";
 
 /** Result of a share-access evaluation. */
 export type ShareAccessDecision =
@@ -64,6 +67,10 @@ export type ShareAccessInput = {
   embedEnabled: boolean;
   /** Whether the presentation mode is allowed for this shared document. */
   presentEnabled: boolean;
+  /** Stored passcode hash (`null` when no passcode is required). */
+  passcodeHash?: string | null;
+  /** Whether the current request has a valid unlock for this share id/hash. */
+  passcodeUnlocked?: boolean;
   /** The access mode the request is for. */
   mode: ShareMode;
   /** Clock injection point for deterministic tests (default `new Date()`). */
@@ -75,8 +82,9 @@ export type ShareAccessInput = {
  *
  * Denies (in order) when: the document is not shared, the requested id no
  * longer matches the stored id (regenerated/revoked link), the document is
- * soft-deleted, the link has expired, or the requested mode (embed/present) is
- * disabled. Otherwise allows.
+ * soft-deleted, the link has expired, the requested mode (embed/present) is
+ * disabled, or a passcode is required and the request is not unlocked.
+ * Otherwise allows.
  */
 export function evaluateShareAccess(
   input: ShareAccessInput,
@@ -110,6 +118,10 @@ export function evaluateShareAccess(
     return { allow: false, reason: "present-disabled" };
   }
 
+  if (input.passcodeHash && !input.passcodeUnlocked) {
+    return { allow: false, reason: "passcode-required" };
+  }
+
   return { allow: true };
 }
 
@@ -125,12 +137,14 @@ const SHARE_DENY_TAXONOMY: Record<ShareDenyReason, AccessDenialReason> = {
   expired: "expired",
   "embed-disabled": "mode-disabled",
   "present-disabled": "mode-disabled",
+  "passcode-required": "passcode-required",
 };
 
 /**
  * Maps the public-share policy result into the shared access-decision taxonomy.
- * Public share denial always uses privacy-preserving 404 semantics; routes may
- * translate that 404 to `notFound()` or safe no-index metadata.
+ * Public share lifecycle denials use privacy-preserving 404 semantics; a valid
+ * passcode-protected link maps to a non-concealed 403 so routes can render the
+ * unlock challenge without exposing document content.
  */
 export function shareAccessDecisionToAccessDecision(
   mode: ShareMode,
@@ -138,6 +152,17 @@ export function shareAccessDecisionToAccessDecision(
 ): AccessDecision {
   if (decision.allow) {
     return allowAccess({ resource: { kind: "share" }, capability: mode });
+  }
+
+  if (decision.reason === "passcode-required") {
+    return denyAccess({
+      resource: { kind: "share" },
+      capability: mode,
+      reason: "passcode-required",
+      status: 403,
+      safeMessage: "Enter the share passcode to continue.",
+      concealResource: false,
+    });
   }
 
   return denyAccess({
@@ -172,6 +197,7 @@ export const SHARE_ACCESS_SELECT = {
   shareExpiresAt: true,
   shareEmbedEnabled: true,
   sharePresentEnabled: true,
+  sharePasscodeHash: true,
   shareMetadataMode: true,
   shareDiscoverable: true,
 } as const;
@@ -184,6 +210,7 @@ export type ShareAccessFields = {
   shareExpiresAt: Date | null;
   shareEmbedEnabled: boolean;
   sharePresentEnabled: boolean;
+  sharePasscodeHash?: string | null;
   shareMetadataMode?: string;
   shareDiscoverable?: boolean;
 };
@@ -198,6 +225,7 @@ export function toShareAccessInput(
   requestedShareId: string,
   mode: ShareMode,
   now?: Date,
+  passcodeUnlocked = false,
 ): ShareAccessInput {
   return {
     requestedShareId,
@@ -207,6 +235,8 @@ export function toShareAccessInput(
     expiresAt: document.shareExpiresAt,
     embedEnabled: document.shareEmbedEnabled,
     presentEnabled: document.sharePresentEnabled,
+    passcodeHash: document.sharePasscodeHash ?? null,
+    passcodeUnlocked,
     mode,
     now,
   };

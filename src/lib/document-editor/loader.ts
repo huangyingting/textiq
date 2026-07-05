@@ -27,6 +27,7 @@ const documentEditorSelect = (userId: string) =>
     shareExpiresAt: true,
     shareEmbedEnabled: true,
     sharePresentEnabled: true,
+    sharePasscodeHash: true,
     shareMetadataMode: true,
     shareDiscoverable: true,
     ownerId: true,

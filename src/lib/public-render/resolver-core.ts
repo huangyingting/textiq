@@ -133,6 +133,12 @@ export interface ResolvePublicRenderInput {
   mode: PublicRenderMode;
   projection: PublicRenderProjection;
   now?: Date;
+  passcodeUnlocked?:
+    | boolean
+    | ((
+        document: ShareAccessFields,
+        shareId: string,
+      ) => boolean | Promise<boolean>);
 }
 
 function shareModeForPublicMode(mode: PublicRenderMode): ShareMode {
@@ -189,6 +195,7 @@ export function resolvePublicAssetAccessForDocument(
   requestedShareId: string,
   requestedShareMode: PublicAssetShareMode | null,
   now?: Date,
+  passcodeUnlocked = false,
 ): PublicAssetAccessDecision {
   if (!document || document.deletedAt) {
     return { allow: false, status: 404, reason: "document-not-found" };
@@ -199,7 +206,13 @@ export function resolvePublicAssetAccessForDocument(
   }
 
   const decision = evaluateShareAccessDecision(
-    toShareAccessInput(document, requestedShareId, requestedShareMode, now),
+    toShareAccessInput(
+      document,
+      requestedShareId,
+      requestedShareMode,
+      now,
+      passcodeUnlocked,
+    ),
   );
   if (decision.allow) {
     return {
@@ -210,6 +223,17 @@ export function resolvePublicAssetAccessForDocument(
 
   return { allow: false, status: 403, reason: "forbidden" };
   /* node:coverage ignore next 3 -- tsx maps the function close/next signature to non-runtime lines. */
+}
+
+async function resolvePasscodeUnlocked(
+  input: ResolvePublicRenderInput,
+  document: ShareAccessFields,
+  shareId: string,
+): Promise<boolean> {
+  if (typeof input.passcodeUnlocked === "function") {
+    return input.passcodeUnlocked(document, shareId);
+  }
+  return input.passcodeUnlocked ?? false;
 }
 
 /* node:coverage disable */
@@ -235,11 +259,15 @@ export async function resolvePublicRenderWithSource(
       input.params.shareMode === "present" || input.params.shareMode === "embed"
         ? input.params.shareMode
         : null;
+    const passcodeUnlocked = document
+      ? await resolvePasscodeUnlocked(input, document, requestedShareId)
+      : false;
     const publicAccess = resolvePublicAssetAccessForDocument(
       document,
       requestedShareId,
       requestedShareMode,
       input.now,
+      passcodeUnlocked,
     );
 
     return {
@@ -270,8 +298,19 @@ export async function resolvePublicRenderWithSource(
   }
 
   const shareMode = shareModeForPublicMode(mode);
+  const passcodeUnlocked = await resolvePasscodeUnlocked(
+    input,
+    document,
+    shareId,
+  );
   const decision = evaluateShareAccessDecision(
-    toShareAccessInput(document, shareId, shareMode, input.now),
+    toShareAccessInput(
+      document,
+      shareId,
+      shareMode,
+      input.now,
+      passcodeUnlocked,
+    ),
   );
   if (!decision.allow) {
     return { ok: false, mode, projection, shareId, decision };

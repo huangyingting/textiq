@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-04"
 description: "Classifies non-API app routes and proxy exclusions, documents access-surface ownership, route classification, and page-route manifest governance."
 ---
 
@@ -17,19 +17,19 @@ source of truth is `src/lib/auth/page-route-access-manifest.ts`; the proxy match
 in `src/proxy.ts` stays a literal because Next.js requires build-time static
 analysis.
 
-| Surface                                             | Classification          | Proxy    | Owner         | Notes                                       |
-| --------------------------------------------------- | ----------------------- | -------- | ------------- | ------------------------------------------- |
-| `/`, `/visuals`                                     | `public`                | matched  | Growth        | Public marketing/example pages.             |
-| `/login`, `/signup`                                 | `auth-page`             | matched  | Platform/Auth | Signed-in users redirect to `/app`.         |
-| `/forgot-password`                                  | `auth-page`             | matched  | Platform/Auth | Public password-reset request form.         |
-| `/reset-password`                                   | `auth-page`             | matched  | Platform/Auth | Token-gated password reset form.            |
-| `/verify-email/*`                                   | `auth-page`             | matched  | Platform/Auth | Token-gated email verification route.       |
-| `/signout`                                          | `auth-page`             | matched  | Platform/Auth | Route handler signs out and redirects.      |
-| `/share/*`, `/embed/*`                              | `share-policy`          | matched  | Presentation  | Public render resolver enforces policy.     |
-| `/present/*`                                        | `share-policy`          | matched  | Presentation  | Present/embed viewers use share policy.     |
-| `/app/*`                                            | `authenticated-session` | matched  | Product       | App shell, documents, workspaces, settings. |
-| `/api/*`                                            | `api-excluded`          | excluded | Platform      | Governed by the API route matrix.           |
-| `/_next/static/*`, `/_next/image/*`, `/favicon.ico` | `public-asset`          | excluded | Platform      | Next/browser public assets.                 |
+| Surface                                             | Classification          | Proxy    | Owner         | Notes                                                                       |
+| --------------------------------------------------- | ----------------------- | -------- | ------------- | --------------------------------------------------------------------------- |
+| `/`, `/visuals`                                     | `public`                | matched  | Growth        | Public marketing/example pages.                                             |
+| `/login`, `/signup`                                 | `auth-page`             | matched  | Platform/Auth | Signed-in users redirect to `/app`.                                         |
+| `/forgot-password`                                  | `auth-page`             | matched  | Platform/Auth | Public password-reset request form.                                         |
+| `/reset-password`                                   | `auth-page`             | matched  | Platform/Auth | Token-gated password reset form.                                            |
+| `/verify-email/*`                                   | `auth-page`             | matched  | Platform/Auth | Token-gated email verification route.                                       |
+| `/signout`                                          | `auth-page`             | matched  | Platform/Auth | Route handler signs out and redirects.                                      |
+| `/share/*`, `/embed/*`                              | `share-policy`          | matched  | Presentation  | Public render resolver enforces policy, including optional passcode unlock. |
+| `/present/*`                                        | `share-policy`          | matched  | Presentation  | Present/embed viewers use share policy, including optional passcode unlock. |
+| `/app/*`                                            | `authenticated-session` | matched  | Product       | App shell, documents, workspaces, settings.                                 |
+| `/api/*`                                            | `api-excluded`          | excluded | Platform      | Governed by the API route matrix.                                           |
+| `/_next/static/*`, `/_next/image/*`, `/favicon.ico` | `public-asset`          | excluded | Platform      | Next/browser public assets.                                                 |
 
 ## Related
 

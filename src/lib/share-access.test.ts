@@ -35,6 +35,38 @@ test("evaluateShareAccess: active link → allow (view)", () => {
   assert.deepEqual(decision, { allow: true });
 });
 
+test("evaluateShareAccess: optional passcode allows unprotected links", () => {
+  assert.deepEqual(evaluateShareAccess(input({ passcodeHash: null })), {
+    allow: true,
+  });
+});
+
+test("evaluateShareAccess: passcode-protected link requires unlock", () => {
+  assert.deepEqual(evaluateShareAccess(input({ passcodeHash: "hash" })), {
+    allow: false,
+    reason: "passcode-required",
+  });
+  assert.deepEqual(
+    evaluateShareAccess(
+      input({ passcodeHash: "hash", passcodeUnlocked: true }),
+    ),
+    { allow: true },
+  );
+});
+
+test("evaluateShareAccess: regenerated links deny before passcode challenge", () => {
+  assert.deepEqual(
+    evaluateShareAccess(
+      input({
+        shareId: "newRotatedId99",
+        requestedShareId: SHARE_ID,
+        passcodeHash: "hash",
+      }),
+    ),
+    { allow: false, reason: "revoked" },
+  );
+});
+
 test("evaluateShareAccess: active link → allow (embed and present too)", () => {
   assert.equal(isShareAccessAllowed(input({ mode: "embed" })), true);
   assert.equal(isShareAccessAllowed(input({ mode: "present" })), true);
@@ -91,6 +123,18 @@ test("evaluateShareAccessDecision uses the same mapping for view/embed/present",
       status: 404,
       safeMessage: "Shared document not found.",
       concealResource: true,
+    },
+  );
+  assert.deepEqual(
+    evaluateShareAccessDecision(input({ passcodeHash: "hash" })),
+    {
+      allow: false,
+      resource: { kind: "share" },
+      capability: "view",
+      reason: "passcode-required",
+      status: 403,
+      safeMessage: "Enter the share passcode to continue.",
+      concealResource: false,
     },
   );
 });
@@ -219,15 +263,19 @@ test("toShareAccessInput: maps a selected document row to the policy input", () 
         shareExpiresAt: null,
         shareEmbedEnabled: true,
         sharePresentEnabled: false,
+        sharePasscodeHash: "hash",
       },
       SHARE_ID,
       mode,
       NOW,
+      true,
     );
     assert.equal(mapped.requestedShareId, SHARE_ID);
     assert.equal(mapped.shareId, SHARE_ID);
     assert.equal(mapped.presentEnabled, false);
     assert.equal(mapped.embedEnabled, true);
+    assert.equal(mapped.passcodeHash, "hash");
+    assert.equal(mapped.passcodeUnlocked, true);
     assert.equal(mapped.mode, mode);
     assert.equal(mapped.now, NOW);
   }

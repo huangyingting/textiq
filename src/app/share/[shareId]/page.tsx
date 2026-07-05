@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { LexicalReadOnly } from "@/components/lexical/lexical-read-only";
+import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 
 import { ShareLightbox } from "./share-lightbox";
 import { MadeWithBadge } from "@/components/made-with-badge";
 import { app as appEnv } from "@/lib/env";
 import { buildPublicMetadata } from "@/lib/public-render/metadata";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 
 /** Absolute base URL for canonical/OG links. */
@@ -31,6 +33,7 @@ export async function generateMetadata({
     params: { shareId },
     mode: "view",
     projection: "metadata",
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
   return buildPublicMetadata({
@@ -43,10 +46,13 @@ export async function generateMetadata({
 
 export default async function SharedDocumentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ shareId: string }>;
+  searchParams?: Promise<{ passcode?: string }>;
 }) {
   const { shareId } = await params;
+  const passcodeStatus = (await searchParams)?.passcode;
   if (await publicShareBudgetExceeded()) {
     notFound();
   }
@@ -55,9 +61,27 @@ export default async function SharedDocumentPage({
     params: { shareId },
     mode: "view",
     projection: "document",
+    passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
   if (!result.ok || result.projection !== "document") {
+    if (
+      !result.decision.allow &&
+      result.decision.reason === "passcode-required"
+    ) {
+      return (
+        <SharePasscodeGate
+          shareId={"shareId" in result ? result.shareId : shareId}
+          mode="view"
+          returnTo={`/share/${shareId}`}
+          error={
+            passcodeStatus === "invalid" || passcodeStatus === "limited"
+              ? passcodeStatus
+              : undefined
+          }
+        />
+      );
+    }
     notFound();
   }
   const { document } = result;
