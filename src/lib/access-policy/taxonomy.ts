@@ -44,6 +44,7 @@ export type AccessDenialReason =
   | "share-revoked"
   | "expired"
   | "mode-disabled"
+  | "passcode-required"
   | "invite-revoked"
   | "invite-exhausted"
   | "invalid-role"

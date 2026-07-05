@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { deriveFromContentJson, excerpt } from "@/lib/document-stats";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
+import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
 // Prisma access requires the Node.js runtime (not the default edge runtime).
 export const runtime = "nodejs";
@@ -37,6 +38,7 @@ export default async function Image({
         params: { shareId },
         mode: "og",
         projection: "metadata",
+        passcodeUnlocked: isPublicSharePasscodeUnlocked,
       });
   const document =
     result?.ok && result.projection === "metadata" ? result.metadata : null;

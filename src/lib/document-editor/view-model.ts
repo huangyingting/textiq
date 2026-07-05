@@ -15,6 +15,7 @@ export interface DocumentEditorViewModel {
   initialShareExpiresAt: string | null;
   initialShareEmbedEnabled: boolean;
   initialSharePresentEnabled: boolean;
+  initialSharePasscodeEnabled: boolean;
   initialShareMetadataMode: "generic" | "title" | "title-excerpt";
   initialShareDiscoverable: boolean;
   canEdit: boolean;
@@ -40,6 +41,7 @@ export interface DocumentEditorRow {
   shareExpiresAt: Date | null;
   shareEmbedEnabled: boolean;
   sharePresentEnabled: boolean;
+  sharePasscodeHash: string | null;
   shareMetadataMode: string;
   shareDiscoverable: boolean;
   ownerId: string;
@@ -87,6 +89,7 @@ export function buildDocumentEditorViewModel({
       : null,
     initialShareEmbedEnabled: document.shareEmbedEnabled,
     initialSharePresentEnabled: document.sharePresentEnabled,
+    initialSharePasscodeEnabled: document.sharePasscodeHash !== null,
     initialShareMetadataMode:
       document.shareMetadataMode === "title" ||
       document.shareMetadataMode === "title-excerpt"

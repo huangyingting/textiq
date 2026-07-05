@@ -1105,6 +1105,7 @@ describe("sharing persistence operations", () => {
       shareExpiresAt: null,
       shareEmbedEnabled: false,
       sharePresentEnabled: false,
+      sharePasscodeHash: null,
       shareMetadataMode: "generic",
       shareDiscoverable: false,
     }));
@@ -1129,6 +1130,7 @@ describe("sharing persistence operations", () => {
         shareExpiresAt: new Date("2026-07-01T00:00:00.000Z"),
         shareEmbedEnabled: true,
         sharePresentEnabled: true,
+        sharePasscodeHash: null,
         shareMetadataMode: "title-excerpt",
         shareDiscoverable: true,
       };
@@ -1155,6 +1157,7 @@ describe("sharing persistence operations", () => {
         shareExpiresAt: null,
         shareEmbedEnabled: false,
         sharePresentEnabled: false,
+        sharePasscodeHash: null,
         shareMetadataMode: "generic",
         shareDiscoverable: false,
       };
@@ -1193,6 +1196,7 @@ describe("sharing persistence operations", () => {
           shareExpiresAt: null,
           shareEmbedEnabled: false,
           sharePresentEnabled: false,
+          sharePasscodeHash: null,
           shareMetadataMode: "generic",
           shareDiscoverable: false,
         };
@@ -1214,6 +1218,7 @@ describe("sharing persistence operations", () => {
       shareExpiresAt: null,
       shareEmbedEnabled: false,
       sharePresentEnabled: true,
+      sharePasscodeHash: "hash",
       shareMetadataMode: "unexpected",
       shareDiscoverable: undefined,
     }));
@@ -1224,6 +1229,7 @@ describe("sharing persistence operations", () => {
 
     assert.equal(result.metadataMode, "generic");
     assert.equal(result.discoverable, false);
+    assert.equal(result.passcodeEnabled, true);
     assert.match(result.shareUrl ?? "", /\/share\/policy-deck-share-policy$/);
   });
 
@@ -1264,6 +1270,7 @@ describe("sharing persistence operations", () => {
           shareExpiresAt: null,
           shareEmbedEnabled: true,
           sharePresentEnabled: false,
+          sharePasscodeHash: "hash",
           shareMetadataMode: "title",
           shareDiscoverable: false,
         };
