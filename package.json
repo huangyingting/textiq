@@ -117,7 +117,7 @@
     "eslint-config-next": "16.2.10",
     "eslint-config-prettier": "^10",
     "prettier": "^3",
-    "react-test-renderer": "^19.2.7",
+    "react-test-renderer": "19.2.4",
     "tailwindcss": "^4",
     "tsx": "^4.23.0",
     "typescript": "^6"
