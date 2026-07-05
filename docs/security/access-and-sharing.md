@@ -172,5 +172,5 @@ from viewer connections.
 - [`src/lib/access-policy/adapters.test.ts`](../../src/lib/access-policy/adapters.test.ts)
 - [`src/lib/share-access.test.ts`](../../src/lib/share-access.test.ts)
 - [`src/lib/collab/room-access.test.ts`](../../src/lib/collab/room-access.test.ts)
-- [`e2e/public-pages.spec.ts`](../../e2e/public-pages.spec.ts)
-- [`e2e/share-fallback.spec.ts`](../../e2e/share-fallback.spec.ts)
+- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)
+- [`e2e/public-render/share-fallback.spec.ts`](../../e2e/public-render/share-fallback.spec.ts)

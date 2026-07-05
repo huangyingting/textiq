@@ -15,7 +15,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { login, ownerCredentials } from "./helpers/auth";
+import { login, ownerCredentials } from "../helpers/auth";
 
 function blockIdDocUrl(): string | undefined {
   return process.env.E2E_BLOCK_ID_DOC_URL;

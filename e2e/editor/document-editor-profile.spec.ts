@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -10,8 +10,8 @@ import {
   profileOwnerCredentials,
   profileShareSegment,
   profileViewerCredentials,
-} from "./helpers/profile";
-import { waitForSlideAutosave } from "./helpers/readiness";
+} from "../helpers/profile";
+import { waitForSlideAutosave } from "../helpers/readiness";
 
 async function activate(locator: Locator): Promise<void> {
   await locator.focus();

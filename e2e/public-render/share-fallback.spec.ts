@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { E2E_PROFILE_FIXTURE } from "./helpers/profile";
+import { E2E_PROFILE_FIXTURE } from "../helpers/profile";
 
 /**
  * Share / presentation fallback coverage (issue #107, building on #98).

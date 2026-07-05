@@ -40,7 +40,7 @@ function captureConsole(callback) {
 }
 
 const SAMPLE_TEST_FILES = [
-  "e2e/present-export.spec.ts",
+  "e2e/presentation/present-export.spec.ts",
   "scripts/collab-auth.test.mjs",
   "scripts/check-docs-links.test.mjs",
   "src/app/api/collab/authorize/parser.test.ts",
@@ -68,7 +68,9 @@ test("test subsystem map classifies files by owning subsystem", () => {
     ),
   );
   assert.ok(
-    classifyTestFile("e2e/present-export.spec.ts").includes("presentation"),
+    classifyTestFile("e2e/presentation/present-export.spec.ts").includes(
+      "presentation",
+    ),
   );
   assert.deepEqual(
     classifyTestFile("e2e/ui-matrix/document-editor-ui.spec.ts"),
@@ -124,11 +126,13 @@ test("test subsystem plan keeps e2e specs opt-in", () => {
     includeE2e: true,
   });
 
-  assert.deepEqual(withoutE2e.skippedE2e, ["e2e/present-export.spec.ts"]);
+  assert.deepEqual(withoutE2e.skippedE2e, [
+    "e2e/presentation/present-export.spec.ts",
+  ]);
   assert.deepEqual(withE2e.commands.at(-1), {
     label: "e2e tests",
     command: "npx",
-    args: ["playwright", "test", "e2e/present-export.spec.ts"],
+    args: ["playwright", "test", "e2e/presentation/present-export.spec.ts"],
   });
 });
 
@@ -247,17 +251,20 @@ test("test subsystem file lister finds unit, script, and e2e tests", () => {
   const root = fixtureRoot("test-subsystem-list-files");
   mkdirSync(join(root, "src", "lib", "auth"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
-  mkdirSync(join(root, "e2e"), { recursive: true });
+  mkdirSync(join(root, "e2e", "presentation"), { recursive: true });
   mkdirSync(join(root, "e2e", "ui-matrix"), { recursive: true });
   mkdirSync(join(root, "node_modules", "ignored"), { recursive: true });
   writeFileSync(join(root, "src", "lib", "auth", "password.test.ts"), "");
   writeFileSync(join(root, "scripts", "collab-auth.test.mjs"), "");
-  writeFileSync(join(root, "e2e", "present-export.spec.ts"), "");
+  writeFileSync(
+    join(root, "e2e", "presentation", "present-export.spec.ts"),
+    "",
+  );
   writeFileSync(join(root, "e2e", "ui-matrix", "catalog.spec.ts"), "");
   writeFileSync(join(root, "node_modules", "ignored", "fake.test.ts"), "");
 
   assert.deepEqual(listTestFiles(root), [
-    "e2e/present-export.spec.ts",
+    "e2e/presentation/present-export.spec.ts",
     "e2e/ui-matrix/catalog.spec.ts",
     "scripts/collab-auth.test.mjs",
     "src/lib/auth/password.test.ts",
@@ -316,8 +323,11 @@ test("test subsystem main prints all audit problem groups and success", () => {
 
 test("test subsystem main supports dry runs, skipped e2e notices, and empty selections", () => {
   const root = fixtureRoot("test-subsystem-main-dry-run");
-  mkdirSync(join(root, "e2e"), { recursive: true });
-  writeFileSync(join(root, "e2e", "present-export.spec.ts"), "");
+  mkdirSync(join(root, "e2e", "presentation"), { recursive: true });
+  writeFileSync(
+    join(root, "e2e", "presentation", "present-export.spec.ts"),
+    "",
+  );
 
   const dryRun = captureConsole(() =>
     main(["presentation", "--dry-run"], root),

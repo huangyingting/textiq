@@ -1,11 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   createDocxRoundtripFixture,
   DOCX_ROUNDTRIP_FIXTURE,
-} from "./helpers/docx-fixture";
-import { e2eProfileEnabled, profileOwnerCredentials } from "./helpers/profile";
+} from "../helpers/docx-fixture";
+import { e2eProfileEnabled, profileOwnerCredentials } from "../helpers/profile";
 
 /**
  * Document import round-trip E2E coverage (Epic #517, issue #519).

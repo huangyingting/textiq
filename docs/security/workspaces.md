@@ -103,4 +103,4 @@ semantics.
 - [`src/lib/workspace/service.test.ts`](../../src/lib/workspace/service.test.ts)
 - [`src/lib/auth/workspace-capabilities.test.ts`](../../src/lib/auth/workspace-capabilities.test.ts)
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
-- [`e2e/workspace.spec.ts`](../../e2e/workspace.spec.ts)
+- [`e2e/workspace/workspace.spec.ts`](../../e2e/workspace/workspace.spec.ts)

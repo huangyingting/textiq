@@ -103,4 +103,4 @@ decision.
 - [`src/lib/public-render/resolver-core.test.ts`](../../src/lib/public-render/resolver-core.test.ts)
 - [`src/lib/public-render/presentation.test.ts`](../../src/lib/public-render/presentation.test.ts)
 - [`src/lib/public-render/metadata.test.ts`](../../src/lib/public-render/metadata.test.ts)
-- [`e2e/public-pages.spec.ts`](../../e2e/public-pages.spec.ts)
+- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)

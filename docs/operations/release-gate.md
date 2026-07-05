@@ -212,12 +212,12 @@ Key properties:
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
 
-| Spec (Epic #517)                    | Covers                                                                                                                                        |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `import-roundtrip.spec.ts`          | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                                                 |
-| `present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                                                     |
-| `slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                                                |
-| `slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout rendering (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open); pixel snapshots opt-in |
+| Spec (Epic #517)                                     | Covers                                                                                                                                        |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/import/import-roundtrip.spec.ts`                | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                                                 |
+| `e2e/presentation/present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                                                     |
+| `e2e/presentation/slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                                                |
+| `e2e/presentation/slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout rendering (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open); pixel snapshots opt-in |
 
 See [`e2e/README.md`](../../e2e/README.md) for the full environment-variable
 reference and per-spec run instructions.
@@ -231,28 +231,28 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Document flows
 
-| #   | Flow                              | Owner           | Notes                                                                                                                     |
-| --- | --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                      |
-| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                         |
-| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                 |
-| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                         |
-| D-5 | Document import (markdown, .docx) | **M** + **E2E** | Pure import helpers tested; Markdown round-trip in `e2e/import-roundtrip.spec.ts` (#519); DOCX UI round-trip still manual |
-| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                          |
-| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                           |
+| #   | Flow                              | Owner           | Notes                                                                                                                            |
+| --- | --------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                             |
+| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                |
+| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                        |
+| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                |
+| D-5 | Document import (markdown, .docx) | **M** + **E2E** | Pure import helpers tested; Markdown round-trip in `e2e/import/import-roundtrip.spec.ts` (#519); DOCX UI round-trip still manual |
+| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                 |
+| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                  |
 
 ### Slide / deck flows
 
-| #   | Flow                                | Owner           | Notes                                                                                                                                                                   |
-| --- | ----------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                       |
-| S-2 | Deck patch save endpoint            | **A**           | No supported patch persistence endpoint; absence is asserted while slide edits save full deck snapshots through `saveDeckJson` (#1740)                                  |
-| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`        |
-| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                    |
-| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/present-export.spec.ts` (#520)                                                                   |
-| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/present-export.spec.ts` (#520)                                                                           |
-| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                              |
-| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout rendering in `e2e/slides-layout-screenshots.spec.ts` (#1449); pixel snapshot comparisons opt-in via `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` |
+| #   | Flow                                | Owner           | Notes                                                                                                                                                                                |
+| --- | ----------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| S-1 | Slide edit and autosave (deck JSON) | **A**           | Deck CAS + autosave path covered by `deck-cas-writer.test.ts` and `use-slide-editor-open.test.ts`                                                                                    |
+| S-2 | Deck patch save endpoint            | **A**           | No supported patch persistence endpoint; absence is asserted while slide edits save full deck snapshots through `saveDeckJson` (#1740)                                               |
+| S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`                     |
+| S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                                 |
+| S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/presentation/present-export.spec.ts` (#520)                                                                   |
+| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/presentation/present-export.spec.ts` (#520)                                                                           |
+| S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                                           |
+| S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout rendering in `e2e/presentation/slides-layout-screenshots.spec.ts` (#1449); pixel snapshot comparisons opt-in via `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` |
 
 ### Visual projection flows
 
@@ -277,11 +277,11 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Asset flows
 
-| #    | Flow                             | Owner           | Notes                                                                                                                                  |
-| ---- | -------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| AS-1 | Image upload and protected asset | **M** + **E2E** | UI smoke; budget check in `perf-budgets.test.ts`; inspector upload + protected-asset access in `e2e/slide-asset-upload.spec.ts` (#521) |
-| AS-2 | Missing asset preflight warning  | **A**           | `export-preflight.test.ts`                                                                                                             |
-| AS-3 | Oversized image rejection        | **A**           | `perf-budgets.test.ts` (INLINE_IMAGE_HARD_BYTES)                                                                                       |
+| #    | Flow                             | Owner           | Notes                                                                                                                                               |
+| ---- | -------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AS-1 | Image upload and protected asset | **M** + **E2E** | UI smoke; budget check in `perf-budgets.test.ts`; inspector upload + protected-asset access in `e2e/presentation/slide-asset-upload.spec.ts` (#521) |
+| AS-2 | Missing asset preflight warning  | **A**           | `export-preflight.test.ts`                                                                                                                          |
+| AS-3 | Oversized image rejection        | **A**           | `perf-budgets.test.ts` (INLINE_IMAGE_HARD_BYTES)                                                                                                    |
 
 ### Accessibility flows
 
@@ -358,6 +358,6 @@ Before each foundation release wave:
 | #495          | API surface governance — `docs/security/api-route-security-matrix.md`, `src/lib/api/errors.ts`, `src/lib/diagnostics/api-abuse.ts`                                                                                                                                        |
 | #493          | Persisted-schema gates — `src/lib/schema-audit/audit.ts`, `docs/operations/schema-repair-runbook.md`                                                                                                                                                                      |
 | #517          | Release-gate E2E profile — `prisma/seed-e2e.ts`, `e2e/helpers/profile.ts`, `e2e/{import-roundtrip,present-export,slide-asset-upload,slides-layout-screenshots}.spec.ts`, [slide canvas keyboard accessibility decision](../system/slide-canvas-keyboard-accessibility.md) |
-| #1449         | Deterministic presentation layout screenshot gate — `e2e/slides-layout-screenshots.spec.ts`, `playwright.config.ts`, [E2E README](../../e2e/README.md)                                                                                                                    |
+| #1449         | Deterministic presentation layout screenshot gate — `e2e/presentation/slides-layout-screenshots.spec.ts`, `playwright.config.ts`, [E2E README](../../e2e/README.md)                                                                                                       |
 | #1390         | Deck release-gate slide blocker ownership reconciliation — this runbook's S-1/S-2/S-3 rows                                                                                                                                                                                |
 | #1004         | Documentation, ADR, and source-driven verification — [runtime config](runtime-config.md), [API route matrix](../security/api-route-security-matrix.md), [ADR index](../system/architecture-decisions.md), `npm run docs:check`                                            |

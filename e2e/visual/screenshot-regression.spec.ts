@@ -3,8 +3,8 @@ import {
   REGRESSION_DECK_FIXTURE,
   SCREENSHOT_OPTIONS,
   SLIDE_VIEWPORT,
-} from "./helpers/screenshot-fixtures";
-import { waitForStableSlideStage } from "./helpers/readiness";
+} from "../helpers/screenshot-fixtures";
+import { waitForStableSlideStage } from "../helpers/readiness";
 
 /**
  * Playwright screenshot regression spec for Slides (Epic #379, issue #415).
@@ -28,10 +28,10 @@ import { waitForStableSlideStage } from "./helpers/readiness";
  *  - The `E2E_SCREENSHOT_REGRESSION` environment variable is not set to `1`.
  *
  * To generate / refresh baselines:
- *   E2E_SCREENSHOT_REGRESSION=1 npx playwright test screenshot-regression.spec.ts --update-snapshots
+ *   E2E_SCREENSHOT_REGRESSION=1 npx playwright test e2e/visual/screenshot-regression.spec.ts --update-snapshots
  *
  * To run comparisons:
- *   E2E_SCREENSHOT_REGRESSION=1 npx playwright test screenshot-regression.spec.ts
+ *   E2E_SCREENSHOT_REGRESSION=1 npx playwright test e2e/visual/screenshot-regression.spec.ts
  */
 
 const SCREENSHOT_REGRESSION_ENABLED =

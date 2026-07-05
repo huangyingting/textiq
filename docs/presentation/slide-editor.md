@@ -505,4 +505,4 @@ refs must carry explicit `blockKind`.
 - [`src/lib/presentation/slide-editor-collaboration-state.test.ts`](../../src/lib/presentation/slide-editor-collaboration-state.test.ts)
 - [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
 - [`src/lib/presentation/slide-autosave-scheduler.test.ts`](../../src/lib/presentation/slide-autosave-scheduler.test.ts)
-- [`e2e/slides-smoke.spec.ts`](../../e2e/slides-smoke.spec.ts)
+- [`e2e/presentation/slides-smoke.spec.ts`](../../e2e/presentation/slides-smoke.spec.ts)

@@ -369,7 +369,7 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
     focusTrap: true,
     coverage: [
       "src/components/presentation/slide-editor.tsx",
-      "e2e/slides-smoke.spec.ts",
+      "e2e/presentation/slides-smoke.spec.ts",
     ],
   }),
   dialogSurfaceDescriptor({
@@ -379,7 +379,7 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
     focusTrap: true,
     coverage: [
       "src/components/presentation/present-mode.tsx",
-      "e2e/present-export.spec.ts",
+      "e2e/presentation/present-export.spec.ts",
     ],
   }),
   iconOnlyButtonDescriptor({
@@ -401,7 +401,10 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
         { role: "button", textContent: "Open visual", tabIndex: 0 },
       ],
     },
-    coverage: ["e2e/share-fallback.spec.ts", "e2e/public-pages.spec.ts"],
+    coverage: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "e2e/public-render/public-pages.spec.ts",
+    ],
   }),
   slideCanvasKeyboardDescriptor({
     id: "slide-canvas.keyboard",
@@ -411,7 +414,7 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
     hasLiveAnnouncements: true,
     coverage: [
       "src/lib/presentation/canvas-keyboard-rotate.test.ts",
-      "e2e/slides-smoke.spec.ts",
+      "e2e/presentation/slides-smoke.spec.ts",
     ],
   }),
   liveAnnouncementDescriptor({

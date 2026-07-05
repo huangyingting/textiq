@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { login, ownerCredentials } from "./helpers/auth";
-import { waitForSlideAutosave } from "./helpers/readiness";
+import { login, ownerCredentials } from "../helpers/auth";
+import { waitForSlideAutosave } from "../helpers/readiness";
 
 /**
  * E2E smoke tests for the Slides feature: edit, save, present, and export

@@ -249,5 +249,5 @@ diagnostics, and focused tests together.
 - [`src/lib/presentation/pptx-apply.test.ts`](../../src/lib/presentation/pptx-apply.test.ts)
 - [`src/lib/presentation/render-export-parity.test.ts`](../../src/lib/presentation/render-export-parity.test.ts)
 - [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
-- [`e2e/slides-smoke.spec.ts`](../../e2e/slides-smoke.spec.ts)
-- [`e2e/public-pages.spec.ts`](../../e2e/public-pages.spec.ts)
+- [`e2e/presentation/slides-smoke.spec.ts`](../../e2e/presentation/slides-smoke.spec.ts)
+- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)

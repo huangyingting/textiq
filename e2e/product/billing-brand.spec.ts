@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login, ownerCredentials } from "./helpers/auth";
+import { login, ownerCredentials } from "../helpers/auth";
 
 /**
  * Billing unlimited-credit UI + Brand Studio font persistence coverage

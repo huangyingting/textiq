@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   e2eProfileEnabled,
   profileAssetSharePath,
@@ -11,8 +11,8 @@ import {
   profilePresentPath,
   profilePrivateAssetPath,
   profileViewerCredentials,
-} from "./helpers/profile";
-import { waitForSlideAutosave } from "./helpers/readiness";
+} from "../helpers/profile";
+import { waitForSlideAutosave } from "../helpers/readiness";
 
 /**
  * Slide image upload + protected asset access-control E2E (Epic #517, #521).

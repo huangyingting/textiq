@@ -22,7 +22,7 @@ export type UiMatrixManualGap = {
 
 export const UI_MATRIX_SPEC_INVENTORY = [
   {
-    spec: "e2e/auth-redirect.spec.ts",
+    spec: "e2e/auth/auth-redirect.spec.ts",
     owners: ["auth", "security"],
     coverage:
       "Unauthenticated /app and deep /app redirects preserve callbackUrl.",
@@ -34,7 +34,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
   },
   {
-    spec: "e2e/authenticated-nested-routes.spec.ts",
+    spec: "e2e/auth/authenticated-nested-routes.spec.ts",
     owners: ["auth", "editor", "presentation", "billing"],
     coverage:
       "Seeded owner reaches dashboard-linked document, billing, and slide routes after login.",
@@ -46,7 +46,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", ".github/workflows/e2e-deterministic.yml"],
   },
   {
-    spec: "e2e/billing-brand.spec.ts",
+    spec: "e2e/product/billing-brand.spec.ts",
     owners: ["billing", "brand", "product"],
     coverage:
       "Billing unlimited-credit display and Brand Studio font upload persistence.",
@@ -66,7 +66,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     ],
   },
   {
-    spec: "e2e/block-id-preservation.spec.ts",
+    spec: "e2e/editor/block-id-preservation.spec.ts",
     owners: ["editor", "presentation"],
     coverage:
       "Block id preservation catalog hooks for save/reload, visual insertion, and duplication.",
@@ -78,7 +78,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
   },
   {
-    spec: "e2e/document-editor-profile.spec.ts",
+    spec: "e2e/editor/document-editor-profile.spec.ts",
     owners: ["editor", "documents"],
     coverage:
       "Seeded document editor body hydration, title, toolbar, and save status.",
@@ -90,7 +90,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
   },
   {
-    spec: "e2e/import-roundtrip.spec.ts",
+    spec: "e2e/import/import-roundtrip.spec.ts",
     owners: ["import", "editor"],
     coverage:
       "Markdown import creates an editable document and unsupported uploads fail gracefully.",
@@ -102,7 +102,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/import/README.md"],
   },
   {
-    spec: "e2e/oauth-disabled.spec.ts",
+    spec: "e2e/auth/oauth-disabled.spec.ts",
     owners: ["auth", "security"],
     coverage:
       "Login/signup Google CTA matches provider configuration while credentials remain usable.",
@@ -114,7 +114,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
   },
   {
-    spec: "e2e/present-export.spec.ts",
+    spec: "e2e/presentation/present-export.spec.ts",
     owners: ["presentation", "public-render"],
     coverage:
       "Authenticated/public present render, mobile safe areas, embed mode, and real PDF export.",
@@ -126,7 +126,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/rendering-and-export.md"],
   },
   {
-    spec: "e2e/public-pages.spec.ts",
+    spec: "e2e/public-render/public-pages.spec.ts",
     owners: ["system", "public-render"],
     coverage:
       "Marketing home, login, and signup primary unauthenticated surfaces render.",
@@ -138,7 +138,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md"],
   },
   {
-    spec: "e2e/screenshot-regression.spec.ts",
+    spec: "e2e/visual/screenshot-regression.spec.ts",
     owners: ["presentation", "visual", "operations"],
     coverage:
       "Opt-in visual snapshots for editor stage, in-app present, and public present fixtures.",
@@ -154,7 +154,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/rendering-and-export.md"],
   },
   {
-    spec: "e2e/share-fallback.spec.ts",
+    spec: "e2e/public-render/share-fallback.spec.ts",
     owners: ["public-render", "security"],
     coverage:
       "Unknown, malformed, and slug-prefixed share/present/embed routes return safe 404s.",
@@ -166,7 +166,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/public-render/README.md"],
   },
   {
-    spec: "e2e/slide-asset-upload.spec.ts",
+    spec: "e2e/presentation/slide-asset-upload.spec.ts",
     owners: ["presentation", "security"],
     coverage:
       "Protected slide asset authorization and image upload persistence against seeded documents.",
@@ -178,7 +178,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/assets.md"],
   },
   {
-    spec: "e2e/slides-layout-screenshots.spec.ts",
+    spec: "e2e/presentation/slides-layout-screenshots.spec.ts",
     owners: ["presentation", "visual"],
     coverage:
       "Slide editor shell screenshots across desktop, tablet, mobile, rail, notes, and panel states.",
@@ -193,7 +193,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
   },
   {
-    spec: "e2e/slides-smoke.spec.ts",
+    spec: "e2e/presentation/slides-smoke.spec.ts",
     owners: ["presentation"],
     coverage:
       "Credential-gated slide edit, save, present, and export smoke against a provided document.",
@@ -291,7 +291,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     ],
   },
   {
-    spec: "e2e/workspace.spec.ts",
+    spec: "e2e/workspace/workspace.spec.ts",
     owners: ["workspace", "documents"],
     coverage:
       "Credential-gated dashboard create/import, empty state, and read-only viewer restrictions.",
@@ -322,7 +322,7 @@ export const UI_MATRIX_MANUAL_GAPS = [
     gap: "Block-id preservation spec currently exercises fixture reachability; persisted bid/sourceRef assertions need stable diagnostics hooks.",
     status: "blocked",
     sourceRefs: [
-      "e2e/block-id-preservation.spec.ts",
+      "e2e/editor/block-id-preservation.spec.ts",
       "docs/editor/document-editor.md",
     ],
   },

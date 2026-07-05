@@ -109,4 +109,4 @@ blank imported document accidentally.
 - [`src/lib/import/timeout.test.ts`](../../src/lib/import/timeout.test.ts)
 - [`src/lib/import/archive-budget.test.ts`](../../src/lib/import/archive-budget.test.ts)
 - [`src/lib/import/html.test.ts`](../../src/lib/import/html.test.ts)
-- [`e2e/import-roundtrip.spec.ts`](../../e2e/import-roundtrip.spec.ts)
+- [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)

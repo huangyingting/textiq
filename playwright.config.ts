@@ -35,12 +35,12 @@ const profileGrep = process.env.E2E_PROFILE_GREP
   ? new RegExp(process.env.E2E_PROFILE_GREP)
   : undefined;
 const deterministicProfileSpecs = [
-  "authenticated-nested-routes.spec.ts",
-  "document-editor-profile.spec.ts",
-  "import-roundtrip.spec.ts",
-  "present-export.spec.ts",
-  "slide-asset-upload.spec.ts",
-  "slides-layout-screenshots.spec.ts",
+  "auth/authenticated-nested-routes.spec.ts",
+  "editor/document-editor-profile.spec.ts",
+  "import/import-roundtrip.spec.ts",
+  "presentation/present-export.spec.ts",
+  "presentation/slide-asset-upload.spec.ts",
+  "presentation/slides-layout-screenshots.spec.ts",
   "ui-matrix/catalog.spec.ts",
 ];
 

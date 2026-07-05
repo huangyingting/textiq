@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login, ownerCredentials, viewerCredentials } from "./helpers/auth";
+import { login, ownerCredentials, viewerCredentials } from "../helpers/auth";
 
 /**
  * Workspace E2E flows (issue #107): document create/import, the empty state,

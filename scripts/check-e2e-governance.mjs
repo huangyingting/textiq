@@ -13,7 +13,7 @@ const OVERSIZED_TEST_ALLOWLIST = new Set([
   // deck-schema.test.ts was split into focused per-concern files (#1147)
 ]);
 const FIXTURE_FACTORY_FILES = new Set([
-  "e2e/screenshot-regression.spec.ts",
+  "e2e/visual/screenshot-regression.spec.ts",
   "e2e/helpers/screenshot-fixtures.ts",
 ]);
 const RULES = [

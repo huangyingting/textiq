@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -11,7 +11,7 @@ import {
   profilePresentEmbedPath,
   profilePresentPath,
   profileViewerCredentials,
-} from "./helpers/profile";
+} from "../helpers/profile";
 
 /**
  * Present + export E2E coverage (Epic #517, issue #520).
@@ -24,7 +24,7 @@ import {
  *   3. A real export download is triggered (PDF) and asserted to produce a file
  *      with a `.pdf` extension and nonzero bytes (via `waitForEvent('download')`).
  *
- * Pixel-level regression stays in `screenshot-regression.spec.ts`.
+ * Pixel-level regression stays in `e2e/visual/screenshot-regression.spec.ts`.
  *
  * Runs ONLY under the deterministic E2E profile (`E2E_PROFILE=1` +
  * `npm run db:seed:e2e`); skips cleanly otherwise so the fast gate stays green.

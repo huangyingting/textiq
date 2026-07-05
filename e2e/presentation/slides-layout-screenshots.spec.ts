@@ -1,11 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   e2eProfileEnabled,
   profileLayoutDocPath,
   profileOwnerCredentials,
-} from "./helpers/profile";
+} from "../helpers/profile";
 
 /**
  * Playwright layout checks for the presentation slide editor.

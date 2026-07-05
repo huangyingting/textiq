@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./helpers/auth";
+import { login } from "../helpers/auth";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
   profileDocPath,
   profileOwnerCredentials,
-} from "./helpers/profile";
+} from "../helpers/profile";
 
 test.describe("authenticated nested app routes", () => {
   test.skip(
