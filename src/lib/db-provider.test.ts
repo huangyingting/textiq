@@ -46,9 +46,12 @@ test("resolveProvider returns sqlite for DB_PROVIDER=sqlite", () => {
   assert.equal(resolveProvider(), "sqlite");
 });
 
-test("resolveProvider returns sqlite for an unrecognised value", () => {
+test("resolveProvider rejects an unrecognised value", () => {
   process.env.DB_PROVIDER = "mysql";
-  assert.equal(resolveProvider(), "sqlite");
+  assert.throws(
+    () => resolveProvider(),
+    /Invalid DB_PROVIDER "mysql"\. Expected "sqlite" or "postgres"\./,
+  );
 });
 
 test("resolveProvider returns postgres for DB_PROVIDER=postgres", () => {
@@ -56,9 +59,12 @@ test("resolveProvider returns postgres for DB_PROVIDER=postgres", () => {
   assert.equal(resolveProvider(), "postgres");
 });
 
-test("resolveProvider is case-sensitive: 'Postgres' falls back to sqlite", () => {
+test("resolveProvider is case-sensitive and rejects 'Postgres'", () => {
   process.env.DB_PROVIDER = "Postgres";
-  assert.equal(resolveProvider(), "sqlite");
+  assert.throws(
+    () => resolveProvider(),
+    /Invalid DB_PROVIDER "Postgres"\. Expected "sqlite" or "postgres"\./,
+  );
 });
 
 // ---------------------------------------------------------------------------

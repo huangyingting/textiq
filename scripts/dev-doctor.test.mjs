@@ -44,11 +44,17 @@ test("dev doctor redacts secret-like environment values", () => {
   const env = {
     AUTH_SECRET: "super-secret",
     DATABASE_URL: "file:./prisma/dev.db",
+    CACHE_ENDPOINT: "redis://localhost:6379",
+    WEBHOOK_ENDPOINT: "https://token@example.test/hook",
+    PUBLIC_ORIGIN: "https://example.test",
   };
   assert.equal(describeEnvValue("AUTH_SECRET", env), "set (redacted)");
+  assert.equal(describeEnvValue("DATABASE_URL", env), "set (redacted)");
+  assert.equal(describeEnvValue("CACHE_ENDPOINT", env), "set (redacted)");
+  assert.equal(describeEnvValue("WEBHOOK_ENDPOINT", env), "set (redacted)");
   assert.equal(
-    describeEnvValue("DATABASE_URL", env),
-    "set to file:./prisma/dev.db",
+    describeEnvValue("PUBLIC_ORIGIN", env),
+    "set to https://example.test",
   );
 });
 
@@ -164,8 +170,11 @@ test("dev doctor reports ports as available or already in use", async () => {
 });
 
 test("dev doctor loads local env and returns the full check list", async () => {
+  const root = fixtureRoot("dev-doctor-run-doctor");
+  writeFileSync(join(root, ".env"), "AUTH_SECRET=local-secret\n");
+
   const results = await runDoctor({
-    repoRoot: process.cwd(),
+    repoRoot: root,
     env: {
       DB_PROVIDER: "sqlite",
       DATABASE_URL: "file:./prisma/dev.db",

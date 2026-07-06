@@ -2,8 +2,11 @@ name: Production install smoke
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   production-install-smoke:

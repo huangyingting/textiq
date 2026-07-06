@@ -15,6 +15,10 @@ const REQUIRED_NODE_MAJOR = 22;
 const NODE_POLICY_HINT =
   "Use Node.js 22 or newer; package.json engines and .nvmrc codify this policy.";
 const SECRET_NAME_RE = /SECRET|TOKEN|PASSWORD|KEY/i;
+const DATABASE_URL_NAME_RE = /^DATABASE_URL$/i;
+const CREDENTIAL_URL_RE = /^[a-z][a-z0-9+.-]*:\/\/[^/\s?#]*@/i;
+const DATABASE_LIKE_URL_RE =
+  /^(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis):\/\//i;
 
 export function checkNodeVersion(version = process.versions.node) {
   const [majorText] = version.replace(/^v/, "").split(".");
@@ -43,7 +47,16 @@ export function checkNodeVersion(version = process.versions.node) {
 
 export function describeEnvValue(name, env) {
   if (!env[name]) return "unset";
-  return SECRET_NAME_RE.test(name) ? "set (redacted)" : `set to ${env[name]}`;
+  const value = String(env[name]);
+  if (
+    SECRET_NAME_RE.test(name) ||
+    DATABASE_URL_NAME_RE.test(name) ||
+    CREDENTIAL_URL_RE.test(value) ||
+    DATABASE_LIKE_URL_RE.test(value)
+  ) {
+    return "set (redacted)";
+  }
+  return `set to ${value}`;
 }
 
 export function checkEnvironment(env = process.env) {

@@ -52,7 +52,7 @@ test("normalizeSearchQuery preserves short strings verbatim", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildSearchOr – SQLite path (default when DB_PROVIDER is not 'postgres')
+// buildSearchOr – SQLite path (default when DB_PROVIDER is unset or sqlite)
 // ---------------------------------------------------------------------------
 
 test("buildSearchOr SQLite: returns OR with title and content contains", () => {

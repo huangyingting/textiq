@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "npm run test:line-coverage && npm run test:coverage-map",
-    "test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test:unit": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "test:line-coverage": "node scripts/check-line-coverage.mjs",
     "test:subsystem": "node scripts/test-subsystem.mjs",

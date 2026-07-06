@@ -1,7 +1,7 @@
 import "server-only";
 
 import { uploadValidationStatus } from "@/lib/api/errors";
-import { rejectOversizedBody } from "@/lib/api/route-adapters";
+import { readFormData } from "@/lib/api/route-adapters";
 import { prisma } from "@/lib/prisma";
 import {
   formatAssetUploadPolicyError,
@@ -93,29 +93,30 @@ async function uploadBrandAsset<TBody>(
   ownerId: string,
   config: BrandUploadConfig<TBody>,
 ): Promise<BrandUploadResult<TBody>> {
-  const oversized = rejectOversizedBody(
+  const parsedForm = await readFormData(
     request,
-    config.maxBytes + 64 * 1024,
-    "Uploaded file is too large.",
+    "Request must be multipart/form-data.",
+    undefined,
+    {
+      maxBytes: config.maxBytes + 64 * 1024,
+      tooLargeMessage: "Uploaded file is too large.",
+    },
   );
-  if (oversized) {
-    return {
-      ok: false,
-      error: "Uploaded file is too large.",
-      status: 413,
-    };
-  }
-
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
+  if (!parsedForm.ok) {
+    if (parsedForm.response.status === 413) {
+      return {
+        ok: false,
+        error: "Uploaded file is too large.",
+        status: 413,
+      };
+    }
     return {
       ok: false,
       error: "Request must be multipart/form-data.",
       status: 400,
     };
   }
+  const formData = parsedForm.formData;
 
   const file = formData.get(config.kind);
   if (!(file instanceof File)) {

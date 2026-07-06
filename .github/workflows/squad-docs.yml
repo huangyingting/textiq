@@ -1,54 +1,44 @@
-name: Squad Docs — Build & Deploy
+# Replaces the copied Squad docs-site deploy workflow. TextIQ keeps flat docs under docs/
+# and does not have a docs/package.json or docs/dist site artifact.
+name: Docs Check
 
 on:
   workflow_dispatch:
   push:
-    branches: [preview]
+    branches: [main, dev, preview]
     paths:
       - 'docs/**'
+      - 'e2e/ui-matrix/README.md'
+      - '.github/workflows/squad-docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'e2e/ui-matrix/README.md'
       - '.github/workflows/squad-docs.yml'
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
-  build:
+  docs-check:
+    name: Docs check (root package)
     runs-on: ubuntu-latest
+    env:
+      DB_PROVIDER: sqlite
+      DATABASE_URL: "file:./prisma/dev.db"
+      AUTH_SECRET: ci-placeholder-secret-not-used-in-production
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: docs/package-lock.json
 
-      - name: Install docs dependencies
-        working-directory: docs
+      - name: Install dependencies
         run: npm ci
 
-      - name: Build docs site
-        working-directory: docs
-        run: npm run build
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Check docs
+        run: npm run docs:check

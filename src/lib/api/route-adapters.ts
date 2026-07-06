@@ -4,12 +4,15 @@ import { validationError } from "@/lib/api/errors";
 
 export interface JsonObjectRequest {
   json(): Promise<unknown>;
+  text?(): Promise<string>;
+  body?: ReadableStream<Uint8Array> | null;
   headers?: Headers;
 }
 
 export interface FormDataRequest {
   formData(): Promise<FormData>;
   headers?: Headers;
+  body?: ReadableStream<Uint8Array> | null;
 }
 
 interface BodySizeOptions {
@@ -20,6 +23,8 @@ interface BodySizeOptions {
 type BodyReadResult<T> =
   | { ok: true; value: T }
   | { ok: false; response: NextResponse };
+
+const utf8Encoder = new TextEncoder();
 
 export function isPlainObject(
   value: unknown,
@@ -44,6 +49,172 @@ export function rejectOversizedBody(
     return validationError(message, 413);
   }
   return null;
+}
+
+function byteLength(value: string): number {
+  return utf8Encoder.encode(value).byteLength;
+}
+
+function tooLargeResponse(options: BodySizeOptions): NextResponse {
+  return validationError(
+    options.tooLargeMessage ?? "Request body is too large.",
+    413,
+  );
+}
+
+type BodySizeOptionsWithLimit = Required<Pick<BodySizeOptions, "maxBytes">> &
+  BodySizeOptions;
+
+async function readBytesWithLimit(
+  request: { headers?: Headers; body?: ReadableStream<Uint8Array> | null },
+  options: BodySizeOptionsWithLimit,
+): Promise<BodyReadResult<Uint8Array[]>> {
+  const preflight = rejectOversizedBody(
+    request,
+    options.maxBytes,
+    options.tooLargeMessage,
+  );
+  if (preflight) return { ok: false, response: preflight };
+
+  if (!request.body) {
+    return { ok: true, value: [] };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > options.maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, response: tooLargeResponse(options) };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return { ok: true, value: chunks };
+}
+
+async function readTextWithLimit(
+  request: JsonObjectRequest,
+  options: BodySizeOptionsWithLimit,
+): Promise<BodyReadResult<string>> {
+  const preflight = rejectOversizedBody(
+    request,
+    options.maxBytes,
+    options.tooLargeMessage,
+  );
+  if (preflight) return { ok: false, response: preflight };
+
+  if (request.body) {
+    const reader = request.body.getReader();
+    const decoder = new TextDecoder();
+    let totalBytes = 0;
+    let text = "";
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > options.maxBytes) {
+        return { ok: false, response: tooLargeResponse(options) };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+
+    text += decoder.decode();
+    return { ok: true, value: text };
+  }
+
+  if (request.text) {
+    const text = await request.text();
+    if (byteLength(text) > options.maxBytes) {
+      return { ok: false, response: tooLargeResponse(options) };
+    }
+    return { ok: true, value: text };
+  }
+
+  return {
+    ok: false,
+    response: validationError("Request body must be valid JSON."),
+  };
+}
+
+async function readJsonBody(
+  request: JsonObjectRequest,
+  options: BodySizeOptions,
+  createInvalidResponse: () => NextResponse,
+): Promise<BodyReadResult<unknown>> {
+  if (options.maxBytes !== undefined) {
+    let text: BodyReadResult<string>;
+    try {
+      text = await readTextWithLimit(request, {
+        ...options,
+        maxBytes: options.maxBytes,
+      });
+    } catch {
+      return { ok: false, response: createInvalidResponse() };
+    }
+    if (!text.ok) return text;
+
+    try {
+      return { ok: true, value: JSON.parse(text.value) };
+    } catch {
+      return { ok: false, response: createInvalidResponse() };
+    }
+  }
+
+  return readBody(
+    request,
+    options,
+    () => request.json(),
+    createInvalidResponse,
+  );
+}
+
+function formDataPayloadBytes(formData: FormData): number {
+  let totalBytes = 0;
+  for (const [, value] of formData) {
+    totalBytes +=
+      typeof value === "string" ? byteLength(value) : Math.max(0, value.size);
+  }
+  return totalBytes;
+}
+
+function multipartParseHeaders(request: FormDataRequest): Headers {
+  const headers = new Headers();
+  const contentType = request.headers?.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+  return headers;
+}
+
+async function parseBoundedFormData(
+  request: FormDataRequest,
+  chunks: Uint8Array[],
+): Promise<FormData> {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(chunk);
+      }
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: multipartParseHeaders(request),
+  }).formData();
 }
 
 async function readBody<T>(
@@ -74,11 +245,8 @@ export async function readJsonObject(
   | { ok: true; body: Record<string, unknown> }
   | { ok: false; response: NextResponse }
 > {
-  const parsed = await readBody(
-    request,
-    options,
-    () => request.json(),
-    () => validationError("Request body must be valid JSON."),
+  const parsed = await readJsonBody(request, options, () =>
+    validationError("Request body must be valid JSON."),
   );
   if (!parsed.ok) return parsed;
   const body = parsed.value;
@@ -98,11 +266,8 @@ export async function readJsonValue(
 ): Promise<
   { ok: true; body: unknown } | { ok: false; response: NextResponse }
 > {
-  const parsed = await readBody(
-    request,
-    options,
-    () => request.json(),
-    () => validationError(invalidMessage),
+  const parsed = await readJsonBody(request, options, () =>
+    validationError(invalidMessage),
   );
   return parsed.ok ? { ok: true, body: parsed.value } : parsed;
 }
@@ -117,13 +282,44 @@ export async function readFormData(
   /* node:coverage ignore next -- Return union is a type-only signature artifact; form-data outcomes are asserted. */
   { ok: true; formData: FormData } | { ok: false; response: NextResponse }
 > {
-  const parsed = await readBody(
-    request,
-    options,
-    () => request.formData(),
-    () => createErrorResponse(invalidMessage),
-  );
-  return parsed.ok ? { ok: true, formData: parsed.value } : parsed;
+  const maxBytes = options.maxBytes;
+  const parsed =
+    maxBytes === undefined || !request.body
+      ? await readBody(
+          request,
+          options,
+          () => request.formData(),
+          () => createErrorResponse(invalidMessage),
+        )
+      : await (async (): Promise<BodyReadResult<FormData>> => {
+          let body: BodyReadResult<Uint8Array[]>;
+          try {
+            body = await readBytesWithLimit(request, {
+              ...options,
+              maxBytes,
+            });
+          } catch {
+            return { ok: false, response: createErrorResponse(invalidMessage) };
+          }
+          if (!body.ok) return body;
+
+          try {
+            return {
+              ok: true,
+              value: await parseBoundedFormData(request, body.value),
+            };
+          } catch {
+            return { ok: false, response: createErrorResponse(invalidMessage) };
+          }
+        })();
+  if (!parsed.ok) return parsed;
+  if (
+    options.maxBytes !== undefined &&
+    formDataPayloadBytes(parsed.value) > options.maxBytes
+  ) {
+    return { ok: false, response: tooLargeResponse(options) };
+  }
+  return { ok: true, formData: parsed.value };
 }
 
 export function requiredSearchParam(

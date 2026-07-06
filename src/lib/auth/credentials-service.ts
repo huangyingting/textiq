@@ -11,6 +11,13 @@ import { seedSampleDocument } from "@/lib/onboarding/seed-sample-document";
 import { prisma } from "@/lib/prisma";
 
 type PrismaClientLike = typeof prisma;
+type RegisterCredentialsDeps = {
+  seedSampleDocument(userId: string): Promise<void>;
+};
+
+const defaultRegisterDeps: RegisterCredentialsDeps = {
+  seedSampleDocument,
+};
 
 export type AuthorizedCredentialsUser = {
   id: string;
@@ -64,7 +71,8 @@ export async function registerCredentialsUser(
     password: FormDataEntryValue | string | null;
   },
   client: PrismaClientLike = prisma,
-): Promise<ActionResult<{ id: string; email: string; password: string }>> {
+  deps: RegisterCredentialsDeps = defaultRegisterDeps,
+): Promise<ActionResult<{ id: string; email: string }>> {
   const name = String(input.name ?? "").trim();
   const email = normalizeEmail(input.email);
   const password = String(input.password ?? "");
@@ -95,8 +103,8 @@ export async function registerCredentialsUser(
     return actionError("Could not create your account. Please try again.");
   }
 
-  await seedSampleDocument(createdUser.id);
-  return actionOk({ id: createdUser.id, email, password });
+  await deps.seedSampleDocument(createdUser.id);
+  return actionOk({ id: createdUser.id, email });
 }
 
 /* node:coverage ignore next 12 -- Change-password input normalization is asserted; tsx maps this signature span as uncovered. */

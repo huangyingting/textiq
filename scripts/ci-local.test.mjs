@@ -20,6 +20,7 @@ test("ci local mirrors the GitHub CI quality gate order", () => {
       "npm run typecheck",
       "npm run typecheck:unused",
       "npm run lint",
+      "npm run docs:check",
       "npm run format:check",
       "npm run build",
     ],
@@ -35,7 +36,10 @@ test("ci local forces documented SQLite CI environment", () => {
 });
 
 test("ci local stage banner includes stage position", () => {
-  assert.match(stageBanner(0, 8, CI_LOCAL_STAGES[0]), /\[ci:local 1\/8\]/);
+  assert.match(
+    stageBanner(0, CI_LOCAL_STAGES.length, CI_LOCAL_STAGES[0]),
+    /\[ci:local 1\/9\]/,
+  );
 });
 
 test("ci local runs stages with forced env and stops on failure", () => {
