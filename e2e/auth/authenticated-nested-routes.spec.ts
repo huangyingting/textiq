@@ -15,7 +15,7 @@ test.describe("authenticated nested app routes", () => {
   );
   test.setTimeout(180_000);
 
-  test("dashboard-linked document, billing, and slide routes render after login", async ({
+  test("dashboard-linked document, billing, and slide routes render after login @required-profile", async ({
     page,
   }) => {
     const documentPath = profileDocPath();

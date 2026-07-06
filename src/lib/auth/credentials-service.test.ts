@@ -13,7 +13,15 @@ type CredentialAuthClient = NonNullable<
   Parameters<typeof authorizeCredentialsUser>[1]
 >;
 type CredentialsWriteClient = Parameters<typeof registerCredentialsUser>[1];
+type RegisterCredentialsDeps = NonNullable<
+  Parameters<typeof registerCredentialsUser>[2]
+>;
 type CredentialsWriteClientWithUpdates = CredentialsWriteClient & {
+  _creates: Array<{
+    email: string;
+    name: string | null;
+    passwordHash: string;
+  }>;
   _updates: Array<{
     id: string;
     passwordHash: string;
@@ -124,6 +132,11 @@ function credentialsWriteClient(options: {
   createError?: Error;
   passwordHash?: string | null;
 }): CredentialsWriteClientWithUpdates {
+  const creates: Array<{
+    email: string;
+    name: string | null;
+    passwordHash: string;
+  }> = [];
   const updates: Array<{
     id: string;
     passwordHash: string;
@@ -141,8 +154,13 @@ function credentialsWriteClient(options: {
             ? { passwordHash: options.passwordHash ?? null }
             : options.existing
           : (options.existing ?? null),
-      create: async () => {
+      create: async ({
+        data,
+      }: {
+        data: { email: string; name: string | null; passwordHash: string };
+      }) => {
         if (options.createError) throw options.createError;
+        creates.push(data);
         return { id: "user_credentials" };
       },
       update: async ({
@@ -161,6 +179,7 @@ function credentialsWriteClient(options: {
       },
     },
   });
+  client._creates = creates;
   client._updates = updates;
   return client;
 }
@@ -194,6 +213,40 @@ test("registerCredentialsUser rejects invalid, duplicate, and failed-create inpu
     ),
     { ok: false, error: "Could not create your account. Please try again." },
   );
+});
+
+test("registerCredentialsUser stores a hash and does not return the raw password", async () => {
+  const client = credentialsWriteClient({});
+  const seededUsers: string[] = [];
+  const deps: RegisterCredentialsDeps = {
+    seedSampleDocument: async (userId) => {
+      seededUsers.push(userId);
+    },
+  };
+  const result = await registerCredentialsUser(
+    { name: " Ada ", email: " ADA@EXAMPLE.COM ", password: "valid-password" },
+    client,
+    deps,
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    data: { id: "user_credentials", email: "ada@example.com" },
+  });
+  assert.equal("password" in (result.ok ? result.data : {}), false);
+  assert.equal(client._creates.length, 1);
+  assert.deepEqual(
+    {
+      email: client._creates[0].email,
+      name: client._creates[0].name,
+    },
+    { email: "ada@example.com", name: "Ada" },
+  );
+  assert.equal(
+    await comparePassword("valid-password", client._creates[0].passwordHash),
+    true,
+  );
+  assert.deepEqual(seededUsers, ["user_credentials"]);
 });
 
 test("changePasswordForUser validates current and replacement passwords", async () => {

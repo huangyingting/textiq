@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
+
+permissions:
+  contents: read
 
 # Mirrors the local quality gate documented in AGENTS.md. Runs entirely against
 # SQLite with a file: DATABASE_URL, so no external database service is required.
@@ -46,6 +49,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Check docs
+        run: npm run docs:check
 
       - name: Check formatting
         run: npm run format:check

@@ -65,6 +65,8 @@ export type CompleteFn = (messages: ChatMessage[]) => Promise<string>;
 
 export interface GenerationRouteRequest {
   json(): Promise<unknown>;
+  text(): Promise<string>;
+  body?: ReadableStream<Uint8Array> | null;
   headers: Headers;
   cookies: {
     get(name: string): { value: string } | undefined;

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { UI_TEST_CASES, UI_TEST_CASE_TOTAL, summarizeUiCases } from "./cases";
 import { UI_MATRIX_SPEC_INVENTORY } from "./inventory";
 
-test.describe("UI matrix catalog", () => {
+test.describe("UI matrix catalog @required-profile", () => {
   test("catalogs exactly 500 subsystem UI cases with unique IDs", () => {
     const ids = new Set(UI_TEST_CASES.map((testCase) => testCase.id));
     const summary = summarizeUiCases();

@@ -3,15 +3,26 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-// Select the database engine at runtime. SQLite is the zero-setup default for
-// local dev/test; Postgres is used in production. Anything other than the exact
-// string "postgres" falls back to SQLite.
+// Select the database engine at runtime. SQLite is the zero-setup default only
+// when DB_PROVIDER is unset; unknown values fail closed instead of silently
+// selecting the wrong database.
 //
 // NOTE: this file is loaded by Prisma CLI tooling which may run outside the
 // app's TS path aliases, so it cannot import from src/lib/db-provider.ts.
 // The logic below intentionally mirrors that single source of truth.
-const provider =
-  process.env["DB_PROVIDER"] === "postgres" ? "postgres" : "sqlite";
+function resolvePrismaProvider(): "postgres" | "sqlite" {
+  const rawProvider = process.env["DB_PROVIDER"];
+  if (rawProvider === undefined) return "sqlite";
+
+  const provider = rawProvider.trim();
+  if (provider === "sqlite" || provider === "postgres") return provider;
+
+  throw new Error(
+    `Invalid DB_PROVIDER "${rawProvider}". Expected "sqlite" or "postgres".`,
+  );
+}
+
+const provider = resolvePrismaProvider();
 const isSqlite = provider === "sqlite";
 
 // Each provider has its own schema file. Development applies the selected

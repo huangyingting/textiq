@@ -34,6 +34,11 @@ export const CI_LOCAL_STAGES = [
   },
   { name: "Lint", command: ["npm", "run", "lint"], hint: "Run npm run lint." },
   {
+    name: "Docs",
+    command: ["npm", "run", "docs:check"],
+    hint: "Run npm run docs:check.",
+  },
+  {
     name: "Formatting",
     command: ["npm", "run", "format:check"],
     hint: "Run npm run format, or npx prettier --write '<flagged path>'.",

@@ -13,6 +13,7 @@ export async function register(
   formData: FormData,
 ): Promise<string | undefined> {
   const email = normalizeEmail(formData.get("email"));
+  const password = String(formData.get("password") ?? "");
   return withAbuseBudget(
     "auth.signup.email",
     email || "missing-email",
@@ -20,7 +21,7 @@ export async function register(
       const registered = await registerCredentialsUser({
         name: formData.get("name"),
         email,
-        password: formData.get("password"),
+        password,
       });
       if (!registered.ok) {
         return registered.error;
@@ -29,7 +30,7 @@ export async function register(
       try {
         await signIn("credentials", {
           email: registered.data.email,
-          password: registered.data.password,
+          password,
           redirectTo: safeCallbackUrl(formData.get("callbackUrl")),
         });
       } catch (error) {

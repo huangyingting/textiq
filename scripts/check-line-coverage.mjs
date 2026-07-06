@@ -11,7 +11,13 @@ export const LINE_COVERAGE_STAGES = [
     // TEMPORARY: lowered to unblock merge queue churn; restore to 97 after backlog clears.
     defaultMinimum: 95,
     command: "node",
-    args: ["--import", "tsx", "--test", "--experimental-test-coverage"],
+    args: [
+      "--import",
+      "tsx",
+      "--test",
+      "--test-concurrency=1",
+      "--experimental-test-coverage",
+    ],
     includes: ["src/**/*.ts", "src/**/*.tsx"],
     excludes: [
       "src/**/*.test.ts",
@@ -20,7 +26,7 @@ export const LINE_COVERAGE_STAGES = [
       "src/test/**",
       "src/lib/document/deck-kernel/**",
     ],
-    testFiles: ["src/**/*.test.ts"],
+    testFiles: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
   {
     name: "Script line coverage",

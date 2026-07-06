@@ -4,15 +4,25 @@ import type { Prisma } from "@/generated/prisma/client";
  * Single source of truth for provider resolution.
  *
  * Rules (mirror what prisma.config.ts does at the Prisma-tooling layer):
+ *  - DB_PROVIDER unset           →  "sqlite"  (zero-setup local default)
+ *  - DB_PROVIDER === "sqlite"    →  "sqlite"
  *  - DB_PROVIDER === "postgres"  →  "postgres"
- *  - anything else               →  "sqlite"  (zero-setup local default)
+ *  - anything else               →  throw
  *
  * `prisma.config.ts` is loaded by Prisma CLI outside the app's TS path
  * aliases, so it cannot import this module; its copy of the logic is kept
  * intentionally in sync — see the comment there.
  */
 export function resolveProvider(): "postgres" | "sqlite" {
-  return process.env.DB_PROVIDER === "postgres" ? "postgres" : "sqlite";
+  const rawProvider = process.env.DB_PROVIDER;
+  if (rawProvider === undefined) return "sqlite";
+
+  const provider = rawProvider.trim();
+  if (provider === "sqlite" || provider === "postgres") return provider;
+
+  throw new Error(
+    `Invalid DB_PROVIDER "${rawProvider}". Expected "sqlite" or "postgres".`,
+  );
 }
 
 /**

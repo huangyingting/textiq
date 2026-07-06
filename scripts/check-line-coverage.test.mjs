@@ -19,6 +19,10 @@ test("line coverage stages cover source and script unit gates", () => {
     "src/**/*.ts",
     "src/**/*.tsx",
   ]);
+  assert.deepEqual(LINE_COVERAGE_STAGES[0].testFiles, [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+  ]);
   assert.deepEqual(LINE_COVERAGE_STAGES[1].testFiles, [
     "scripts/**/*.test.mjs",
   ]);
@@ -65,6 +69,7 @@ test("source line coverage command excludes tests, generated code, and test supp
     "--import",
     "tsx",
     "--test",
+    "--test-concurrency=1",
     "--experimental-test-coverage",
     "--test-coverage-lines=92",
     "--test-coverage-include=src/**/*.ts",
@@ -75,6 +80,7 @@ test("source line coverage command excludes tests, generated code, and test supp
     "--test-coverage-exclude=src/test/**",
     "--test-coverage-exclude=src/lib/document/deck-kernel/**",
     "src/**/*.test.ts",
+    "src/**/*.test.tsx",
   ]);
 });
 

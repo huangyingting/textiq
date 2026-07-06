@@ -250,6 +250,12 @@ function createRequest(
       }
       return body;
     },
+    async text() {
+      if (body instanceof Error) {
+        throw body;
+      }
+      return JSON.stringify(body) ?? "";
+    },
     headers: new Headers(options.headers),
     cookies: {
       get(name) {
