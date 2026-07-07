@@ -671,7 +671,7 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
     event({ stopPropagation: () => stopEvents.push("popover-mouse") }),
   );
   dom.fireDocument("keydown", { key: "Escape" });
-  dom.fireDocument("mousedown", { target: fakeNode() });
+  dom.fireDocument("pointerdown", { target: fakeNode() });
 
   const tooltip = withFakeReact(
     {

@@ -52,7 +52,6 @@ import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-reg
 import { downloadBlob } from "@/lib/visual/export";
 
 import { fetchDeckJson, saveDeckJson, toggleDocumentSharing } from "../actions";
-import { saveBrandKitDraft } from "../brand-kit-actions";
 import { uploadSlideAsset } from "../slide-asset-actions";
 import { persistDeckWithRecovery } from "@/components/editor/use-slide-editor-open";
 
@@ -714,8 +713,6 @@ export function SlideEditorRouteClient({
         undoRedoFocus={undoRedoFocus}
         onDeckChange={handleDeckChange}
         onSave={handleSave}
-        saveBrandKitDraft={saveBrandKitDraft}
-        brandKitOwnerId={userId}
         onRegenerate={handleRegenerate}
         onClose={goBackToDocument}
         onUploadImage={handleUploadImage}

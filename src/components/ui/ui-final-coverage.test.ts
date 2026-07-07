@@ -395,13 +395,15 @@ test("SelectMenu final toolbar alignment, pointer-away closing, and hidden trigg
   )[0];
   assert.equal(button.props["aria-expanded"], true);
   assert.equal(textContent(button), "◎");
+  assert.doesNotMatch(String(button.props.className), /focus-visible:ring/);
   (button.props.onClick as () => void)();
   (button.props.onKeyDown as (event: unknown) => void)(keyEvent("ArrowDown"));
+  (button.props.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
 
   const listbox = findAll(tree, (element) => element.type === "ul")[0];
   (listbox.props.onKeyDown as (event: unknown) => void)(keyEvent("ArrowUp"));
   (listbox.props.onKeyDown as (event: unknown) => void)(keyEvent(" "));
-  dom.fireDocument("mousedown", { target: fakeElement() });
+  dom.fireDocument("pointerdown", { target: fakeElement() });
 
   assert.deepEqual(changes, ["three"]);
   assert.ok(openChanges.includes(false));

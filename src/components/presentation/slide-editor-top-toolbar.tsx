@@ -9,7 +9,6 @@ import {
   Magnet,
   MoreHorizontal,
   MonitorPlay,
-  Palette,
   Redo2,
   RefreshCw,
   Share2,
@@ -39,6 +38,7 @@ import { Popover } from "@/components/ui/popover";
 import { SelectMenu } from "@/components/ui/select-menu";
 import type { SelectMenuOption } from "@/components/ui/select-menu";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
+import { ThemePreviewPicker } from "./theme-preview-picker";
 
 const CANVAS_RATIO_OPTIONS: readonly SelectMenuOption[] = [
   { value: "16:9", label: "16:9" },
@@ -63,7 +63,6 @@ export interface SlideEditorTopToolbarProps {
   activeSlide: SlideNode | undefined;
   themePackages: readonly ThemePackageV1[];
   currentCanvasFormat: "16:9" | "4:3" | "square";
-  brandKitAuthoringOpen: boolean;
   deckChromeToolbarOpen: boolean;
   deckChromeToolbarPanelRef: RefObject<HTMLDivElement | null>;
   snapToGuides: boolean;
@@ -101,7 +100,7 @@ export interface SlideEditorTopToolbarProps {
   onClose: (() => void) | undefined;
   handleThemePackageChange: (packageId: string) => void;
   handleCanvasRatioChange: (format: "16:9" | "4:3" | "square") => void;
-  handleOpenBrandKitAuthoring: () => void;
+  onSelectMenuOpenChange: (open: boolean) => void;
   setDeckChromeToolbarOpen: Dispatch<SetStateAction<boolean>>;
   handleUpdateDeckChrome: Parameters<
     typeof DeckChromePanel
@@ -143,7 +142,6 @@ export function SlideEditorTopToolbar({
   activeSlide,
   themePackages,
   currentCanvasFormat,
-  brandKitAuthoringOpen,
   deckChromeToolbarOpen,
   deckChromeToolbarPanelRef,
   snapToGuides,
@@ -181,7 +179,7 @@ export function SlideEditorTopToolbar({
   onClose,
   handleThemePackageChange,
   handleCanvasRatioChange,
-  handleOpenBrandKitAuthoring,
+  onSelectMenuOpenChange,
   setDeckChromeToolbarOpen,
   handleUpdateDeckChrome,
   handleUpdateProps,
@@ -213,41 +211,31 @@ export function SlideEditorTopToolbar({
       <div aria-hidden="true" className="flex-1" />
       <DeckToolbarRow>
         <DeckToolbarGroup label="Deck setup">
-          <SelectMenu
+          <ThemePreviewPicker
             aria-label="Deck theme"
             value={deck.theme.packageId}
+            themes={themePackages}
             onChange={handleThemePackageChange}
-            options={themePackages.map((themePackageOption) => ({
-              value: themePackageOption.id,
-              label: themePackageOption.name,
-            }))}
+            onOpenChange={onSelectMenuOpenChange}
           />
-          <DeckToolbarIconButton
-            label="Author brand kit"
-            hasPopup="dialog"
-            expanded={brandKitAuthoringOpen}
-            active={brandKitAuthoringOpen}
-            onClick={handleOpenBrandKitAuthoring}
-          >
-            <Palette size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
           <SelectMenu
             aria-label="Slide ratio"
             value={currentCanvasFormat}
             onChange={(value) =>
               handleCanvasRatioChange(value as "16:9" | "4:3" | "square")
             }
+            onOpenChange={onSelectMenuOpenChange}
             options={CANVAS_RATIO_OPTIONS}
           />
           <Popover
             open={deckChromeToolbarOpen}
             onClose={() => setDeckChromeToolbarOpen(false)}
-            aria-label="Deck chrome controls"
+            aria-label="Slide master controls"
             portal
             className="max-h-[calc(100vh-6rem)] w-[22rem] overflow-y-auto p-0"
             trigger={
               <DeckToolbarIconButton
-                label="Deck chrome"
+                label="Slide master"
                 active={deckChromeToolbarOpen}
                 hasPopup="dialog"
                 expanded={deckChromeToolbarOpen}

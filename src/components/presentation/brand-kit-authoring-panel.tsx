@@ -177,7 +177,7 @@ export function BrandKitAuthoringPanel({
             id="brand-kit-authoring-title"
             className="text-sm font-semibold text-ds-text-primary"
           >
-            Author brand kit
+            Customize theme
           </h2>
           <p className="mt-1 text-xs text-ds-text-muted">
             Edit draft tokens, preview the compiler output, then save an

@@ -49,21 +49,39 @@ describe("SlideEditor toolbar command ownership", () => {
     );
   });
 
-  test("renders deck chrome in the top toolbar as a keyboard-focusable dialog command", () => {
+  test("renders slide master controls in the top toolbar as a keyboard-focusable dialog command", () => {
     assert.match(
       topToolbarSource,
-      /label="Deck chrome"[\s\S]*hasPopup="dialog"[\s\S]*setDeckChromeToolbarOpen\(\(open\) => !open\)/,
+      /label="Slide master"[\s\S]*hasPopup="dialog"[\s\S]*setDeckChromeToolbarOpen\(\(open\) => !open\)/,
     );
     assert.equal(
-      topToolbarSource.includes('aria-label="Deck chrome controls"'),
+      topToolbarSource.includes('aria-label="Slide master controls"'),
       true,
     );
   });
 
-  test("routes toolbar deck chrome updates through existing deck and slide patch handlers", () => {
+  test("routes slide master updates through existing deck and slide patch handlers", () => {
     assert.match(
       topToolbarSource,
       /<DeckChromePanel[\s\S]*onUpdateChrome={handleUpdateDeckChrome}[\s\S]*onUpdateSlideProps={handleUpdateProps}/,
+    );
+  });
+
+  test("blocks stage pointer handling while floating toolbar layers are open", () => {
+    assert.equal(source.includes("const stageInteractionsBlocked ="), true);
+    assert.equal(source.includes("deckChromeToolbarOpen ||"), true);
+    assert.equal(source.includes("sourceMenuOpen ||"), true);
+    assert.equal(source.includes("compactToolbarMenuOpen ||"), true);
+    assert.equal(source.includes("topToolbarSelectMenuOpen ||"), true);
+    assert.equal(topToolbarSource.includes("onSelectMenuOpenChange"), true);
+    assert.equal(source.includes("stageInteractionsBlocked,"), true);
+    assert.match(
+      stageGestureControllerSource,
+      /handleStagePointerDown[\s\S]*stageInteractionsBlocked[\s\S]*return;/,
+    );
+    assert.match(
+      stageGestureControllerSource,
+      /handleStagePointerMove[\s\S]*stageInteractionsBlocked[\s\S]*setHoveredNodeId/,
     );
   });
 
@@ -89,7 +107,7 @@ describe("SlideEditor toolbar command ownership", () => {
     );
     assert.match(
       topToolbarSource,
-      /<Popover[\s\S]*aria-label="Deck chrome controls"[\s\S]*portal[\s\S]*className="max-h-\[calc\(100vh-6rem\)\] w-\[22rem\] overflow-y-auto p-0"/,
+      /<Popover[\s\S]*aria-label="Slide master controls"[\s\S]*portal[\s\S]*className="max-h-\[calc\(100vh-6rem\)\] w-\[22rem\] overflow-y-auto p-0"/,
     );
     assert.match(
       topToolbarSource,
@@ -118,7 +136,7 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(topToolbarSource.includes('label="Deck setup"'), true);
     assert.equal(topToolbarSource.includes('aria-label="Deck theme"'), true);
     assert.equal(topToolbarSource.includes('aria-label="Slide ratio"'), true);
-    assert.equal(topToolbarSource.includes('label="Deck chrome"'), true);
+    assert.equal(topToolbarSource.includes('label="Slide master"'), true);
     assert.equal(
       topToolbarSource.includes('aria-label="Document source"'),
       true,

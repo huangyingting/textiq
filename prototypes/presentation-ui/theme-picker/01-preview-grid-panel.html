@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>01 · Preview Grid Panel — Theme Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body { min-height: 100vh; background: var(--ds-surface-base); color: var(--ds-text-primary); }
+    .spec { padding: 20px 28px 16px; border-bottom: 1px solid var(--ds-border-subtle); background: var(--ds-surface); }
+    .spec h1 { margin: 0 0 5px; font-size: 16px; font-weight: 800; }
+    .spec p { margin: 0 0 10px; max-width: 720px; color: var(--ds-text-secondary); font-size: 12.5px; line-height: 1.55; }
+    .spec ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+    .spec li { border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-pill); background: var(--ds-surface-sunken); color: var(--ds-text-secondary); padding: 2px 9px; font-size: 11px; }
+    .stage { min-height: 620px; padding: 34px; background: linear-gradient(180deg, #eef3f8, #f8fafc); }
+    .toolbar { display: flex; align-items: center; gap: 6px; height: 42px; border-bottom: 1px solid var(--ds-border-subtle); background: var(--ds-surface-chrome); padding: 0 14px; }
+    .trigger { display: inline-flex; align-items: center; gap: 8px; height: 30px; border: 0; border-radius: var(--ds-radius-md); background: var(--ds-state-active); color: var(--ds-text-primary); padding: 0 10px; font: 700 13px var(--ds-font-sans); }
+    .trigger svg { width: 14px; color: var(--ds-text-muted); }
+    .panel { width: min(780px, calc(100vw - 68px)); margin: 12px 0 0 2px; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-xl); background: var(--ds-surface-overlay); box-shadow: var(--ds-shadow-popover); overflow: hidden; }
+    .panel-head { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px; border-bottom: 1px solid var(--ds-border-subtle); }
+    .search { height: 34px; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-md); background: var(--ds-surface); padding: 0 10px; color: var(--ds-text-primary); font-size: 13px; }
+    .count { align-self: center; color: var(--ds-text-muted); font-size: 11px; }
+    .filters { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-pill); background: var(--ds-surface); color: var(--ds-text-secondary); padding: 4px 10px; font-size: 11px; font-weight: 650; }
+    .chip.active { border-color: var(--ds-accent-border); background: var(--ds-accent-surface); color: var(--ds-accent-text); }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: 420px; overflow-y: auto; padding: 12px; }
+    .theme { position: relative; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-lg); background: var(--ds-surface); padding: 8px; cursor: pointer; }
+    .theme.selected { border-color: var(--ds-accent-border); box-shadow: inset 0 0 0 2px var(--ds-accent-border); background: var(--ds-accent-subtle); }
+    .preview { height: 92px; border-radius: var(--ds-radius-md); overflow: hidden; border: 1px solid var(--ds-border-subtle); background: var(--bg); padding: 10px; color: var(--fg); }
+    .mini-title { width: 62%; height: 12px; border-radius: 20px; background: var(--fg); opacity: .94; }
+    .mini-line { width: 86%; height: 5px; margin-top: 8px; border-radius: 20px; background: var(--muted); }
+    .mini-card { display: flex; gap: 5px; margin-top: 12px; }
+    .mini-card span { flex: 1; height: 28px; border-radius: 6px; background: var(--accent); opacity: .9; }
+    .theme-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+    .theme-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 750; }
+    .theme-kind { flex-shrink: 0; color: var(--ds-text-muted); font-size: 10px; }
+    .swatches { display: flex; gap: 4px; margin-top: 6px; }
+    .swatches i { width: 14px; height: 14px; border: 1px solid rgb(0 0 0 / .12); border-radius: 50%; background: var(--c); }
+    .footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--ds-border-subtle); background: var(--ds-surface-base); color: var(--ds-text-muted); font-size: 11px; }
+    .apply { height: 30px; border: 0; border-radius: var(--ds-radius-md); background: var(--ds-accent); color: var(--ds-accent-contrast); padding: 0 12px; font-weight: 800; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } .panel { width: 100%; } }
+  </style>
+</head>
+<body>
+  <div class="spec"><h1>01 · Preview Grid Panel</h1><p>Small enough to feel like a toolbar popover, but replaces the plain dropdown with searchable preview cards. Scales to 100+ themes with filters, scroll, and compact cards.</p><ul><li>3-column preview grid</li><li>Search + filter chips</li><li>Current theme pinned visually</li><li>Shows 24 of 128 footer</li></ul></div>
+  <div class="toolbar"><button class="trigger">Neutral <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span style="color:var(--ds-text-muted);font-size:12px">16:9</span></div>
+  <main class="stage">
+    <section class="panel" role="dialog" aria-label="Theme picker">
+      <div class="panel-head"><input class="search" value="" placeholder="Search 128 themes by name, style, color, or owner" /><span class="count">24 visible · 128 total</span><div class="filters"><button class="chip active">All</button><button class="chip">Recent</button><button class="chip">Editorial</button><button class="chip">Dark</button><button class="chip">High contrast</button><button class="chip">Brand approved</button></div></div>
+      <div class="grid">
+        <article class="theme selected" style="--bg:#f8fafc;--fg:#172033;--muted:#9aa6b2;--accent:#4f46e5"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Neutral</b><span class="theme-kind">current</span></div><div class="swatches"><i style="--c:#172033"></i><i style="--c:#f8fafc"></i><i style="--c:#4f46e5"></i></div></article>
+        <article class="theme" style="--bg:#f4f6f1;--fg:#10231d;--muted:#839186;--accent:#87a96b"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Swiss Minimal Grid</b><span class="theme-kind">clean</span></div><div class="swatches"><i style="--c:#10231d"></i><i style="--c:#f4f6f1"></i><i style="--c:#87a96b"></i></div></article>
+        <article class="theme" style="--bg:linear-gradient(135deg,#fff1f7,#ebf4ff);--fg:#29294f;--muted:#8d8db1;--accent:#f472b6"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Iridescent Gradient</b><span class="theme-kind">bold</span></div><div class="swatches"><i style="--c:#29294f"></i><i style="--c:#f472b6"></i><i style="--c:#60a5fa"></i></div></article>
+        <article class="theme" style="--bg:#101827;--fg:#f8fafc;--muted:#7dd3fc;--accent:#38bdf8"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Dark Aurora Corporate</b><span class="theme-kind">dark</span></div><div class="swatches"><i style="--c:#101827"></i><i style="--c:#38bdf8"></i><i style="--c:#f8fafc"></i></div></article>
+        <article class="theme" style="--bg:#fff200;--fg:#111111;--muted:#555;--accent:#ff3b30"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Brutalist Bold</b><span class="theme-kind">loud</span></div><div class="swatches"><i style="--c:#111"></i><i style="--c:#fff200"></i><i style="--c:#ff3b30"></i></div></article>
+        <article class="theme" style="--bg:#fbf7ef;--fg:#261b12;--muted:#b08b68;--accent:#8b5e34"><div class="preview"><div class="mini-title"></div><div class="mini-line"></div><div class="mini-card"><span></span><span style="opacity:.55"></span><span style="opacity:.32"></span></div></div><div class="theme-meta"><b class="theme-name">Editorial Serif Luxe</b><span class="theme-kind">serif</span></div><div class="swatches"><i style="--c:#261b12"></i><i style="--c:#fbf7ef"></i><i style="--c:#8b5e34"></i></div></article>
+      </div>
+      <div class="footer"><span>Showing first 24 results · scroll loads next page · press / to search</span><button class="apply">Apply theme</button></div>
+    </section>
+  </main>
+</body>
+</html>

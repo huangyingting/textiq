@@ -145,20 +145,20 @@ describe("AddSlideTemplatePicker", () => {
     assert.deepEqual(calls, ["close"]);
   });
 
-  test("routes the brand-kit authoring affordance when provided", () => {
+  test("routes the slide-master editing affordance when provided", () => {
     const registry = createDefaultTemplateRegistry();
     const calls: string[] = [];
     const tree = AddSlideTemplatePicker({
       templates: [registry.get("content")!],
       onChoose: () => undefined,
       onClose: () => undefined,
-      onAuthorBrandKit: () => calls.push("author"),
+      onEditSlideMaster: () => calls.push("master"),
     });
-    const authorButton = findButtonByText(tree, "Author brand kit");
-    assert.ok(authorButton);
-    const author = authorButton.props.onClick;
-    if (typeof author !== "function") throw new Error("Missing handler");
-    author();
-    assert.deepEqual(calls, ["author"]);
+    const masterButton = findButtonByText(tree, "Edit slide master");
+    assert.ok(masterButton);
+    const editMaster = masterButton.props.onClick;
+    if (typeof editMaster !== "function") throw new Error("Missing handler");
+    editMaster();
+    assert.deepEqual(calls, ["master"]);
   });
 });

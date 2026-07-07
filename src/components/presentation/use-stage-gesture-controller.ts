@@ -208,6 +208,7 @@ export interface StageGestureControllerArgs {
   selection: SelectionState;
   snapToGuides: boolean;
   customGuides: readonly StageGuideInput[];
+  stageInteractionsBlocked: boolean;
   tableEditingNodeId: string | null;
   draggingStage: boolean;
   activeResizeHandle: unknown | null;
@@ -348,6 +349,7 @@ export function useStageGestureController(
     selection,
     snapToGuides,
     customGuides,
+    stageInteractionsBlocked,
     tableEditingNodeId,
     draggingStage,
     activeResizeHandle,
@@ -610,7 +612,12 @@ export function useStageGestureController(
   }
 
   function handleStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!activeSlide || event.button !== 0 || isEditableTarget(event.target)) {
+    if (
+      !activeSlide ||
+      stageInteractionsBlocked ||
+      event.button !== 0 ||
+      isEditableTarget(event.target)
+    ) {
       return;
     }
     if (isStageHandleTarget(event.target)) return;
@@ -663,6 +670,7 @@ export function useStageGestureController(
       activeCropHandle ||
       activeRotationNodeId ||
       activeConnectorEndpoint ||
+      stageInteractionsBlocked ||
       isEditableTarget(event.target) ||
       isStageEditingHandleTarget(event.target)
     ) {

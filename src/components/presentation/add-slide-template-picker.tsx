@@ -41,7 +41,7 @@ export type AddSlideTemplatePickerProps = {
   templates: readonly SemanticTemplateV1[];
   onChoose: (choice: AddSlideTemplateChoice) => void;
   onClose: () => void;
-  onAuthorBrandKit?: () => void;
+  onEditSlideMaster?: () => void;
 };
 
 function layoutLabel(layout: TemplateLayoutVariant): string {
@@ -79,7 +79,7 @@ export function AddSlideTemplatePicker({
   templates,
   onChoose,
   onClose,
-  onAuthorBrandKit,
+  onEditSlideMaster,
 }: AddSlideTemplatePickerProps): JSX.Element {
   return (
     <section
@@ -99,16 +99,16 @@ export function AddSlideTemplatePicker({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {onAuthorBrandKit ? (
+          {onEditSlideMaster ? (
             <button
               type="button"
-              onClick={onAuthorBrandKit}
+              onClick={onEditSlideMaster}
               className={cx(
                 "rounded-ds-sm border border-ds-accent-border bg-ds-accent-surface px-2 py-1 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
                 FOCUS_RING,
               )}
             >
-              Author brand kit
+              Edit slide master
             </button>
           ) : null}
           <button

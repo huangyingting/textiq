@@ -372,7 +372,7 @@ describe("SlideEditor regions", () => {
       onClose: () => {
         closeCalls += 1;
       },
-      onAuthorBrandKit: () => undefined,
+      onEditSlideMaster: () => undefined,
     });
     invokeProp(
       firstElement(

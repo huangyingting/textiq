@@ -563,7 +563,7 @@ describe("presentation inspector components", () => {
       }),
     );
 
-    assert.match(html, /Deck chrome defaults/);
+    assert.match(html, /Slide master defaults/);
     assert.match(html, /Selected slide overrides/);
     assert.match(html, /Use deck default/);
     assert.match(html, /Slide footer/);

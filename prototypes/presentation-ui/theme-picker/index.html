@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Theme Picker — Design Exploration Gallery</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body { min-height: 100vh; background: var(--ds-surface-base); color: var(--ds-text-primary); }
+    .page-header { padding: 32px 40px 24px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border-subtle); }
+    .page-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+    .page-header p { margin: 0; max-width: 720px; color: var(--ds-text-secondary); font-size: 14px; line-height: 1.6; }
+    .page-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .page-meta span { border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-pill); background: var(--ds-surface-sunken); color: var(--ds-text-muted); padding: 3px 10px; font-size: 11px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 24px; padding: 32px 40px; }
+    .card { overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-xl); background: var(--ds-surface); box-shadow: var(--ds-shadow-raised); transition: transform var(--ds-motion-base) var(--ds-ease-standard), box-shadow var(--ds-motion-base) var(--ds-ease-standard); }
+    .card:hover { transform: translateY(-2px); box-shadow: var(--ds-shadow-overlay); }
+    .card-header { display: flex; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--ds-border-subtle); }
+    .card-title { margin: 0; color: var(--ds-text-primary); font-size: 14px; font-weight: 700; }
+    .card-desc { margin: 4px 0 0; color: var(--ds-text-secondary); font-size: 12px; line-height: 1.5; }
+    .card-num { flex-shrink: 0; height: 22px; border: 1px solid var(--ds-accent-border); border-radius: var(--ds-radius-pill); background: var(--ds-accent-subtle); color: var(--ds-accent); padding: 2px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
+    .card-preview { display: block; width: 100%; height: 360px; border: none; background: var(--ds-surface-base); pointer-events: none; }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 20px; border-top: 1px solid var(--ds-border-subtle); background: var(--ds-surface-base); }
+    .features { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .features li { border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-pill); background: var(--ds-surface-sunken); color: var(--ds-text-muted); padding: 1px 7px; font-size: 10px; }
+    .open-link { flex-shrink: 0; border-radius: var(--ds-radius-md); background: var(--ds-accent); color: var(--ds-accent-contrast); padding: 6px 14px; text-decoration: none; font-size: 12px; font-weight: 700; }
+    .open-link:hover { background: var(--ds-accent-hover); }
+  </style>
+</head>
+<body>
+<header class="page-header">
+  <h1>Theme Picker — Design Exploration</h1>
+  <p>Six richer replacements for the top-toolbar theme dropdown. Every direction includes real theme previews, search or filtering, and a scalable selection model for 100+ themes.</p>
+  <div class="page-meta">
+    <span>6 design directions</span><span>Preview-first theme selection</span><span>100+ theme library ready</span><span>Plain HTML + CSS</span>
+  </div>
+</header>
+<main class="gallery">
+  <article class="card"><header class="card-header"><div><p class="card-title">01 · Preview Grid Panel</p><p class="card-desc">A compact popover with search, filters, current theme, and preview cards in a virtualized grid.</p></div><span class="card-num">01</span></header><iframe class="card-preview" src="01-preview-grid-panel.html" title="Preview Grid Panel"></iframe><footer class="card-footer"><ul class="features"><li>grid</li><li>search</li><li>filters</li><li>favorites</li></ul><a class="open-link" href="01-preview-grid-panel.html" target="_blank" rel="noopener">Open</a></footer></article>
+  <article class="card"><header class="card-header"><div><p class="card-title">02 · Split Preview Browser</p><p class="card-desc">Dense theme list on the left, large live slide preview on the right, sticky apply footer.</p></div><span class="card-num">02</span></header><iframe class="card-preview" src="02-split-preview-browser.html" title="Split Preview Browser"></iframe><footer class="card-footer"><ul class="features"><li>list</li><li>large preview</li><li>compare</li><li>keyboard</li></ul><a class="open-link" href="02-split-preview-browser.html" target="_blank" rel="noopener">Open</a></footer></article>
+  <article class="card"><header class="card-header"><div><p class="card-title">03 · Visual Gallery Board</p><p class="card-desc">Pinterest-like visual board with bigger thumbnails, tags, and progressive library sections.</p></div><span class="card-num">03</span></header><iframe class="card-preview" src="03-visual-gallery-board.html" title="Visual Gallery Board"></iframe><footer class="card-footer"><ul class="features"><li>masonry</li><li>tags</li><li>recents</li><li>infinite scroll</li></ul><a class="open-link" href="03-visual-gallery-board.html" target="_blank" rel="noopener">Open</a></footer></article>
+  <article class="card"><header class="card-header"><div><p class="card-title">04 · Command Preview Palette</p><p class="card-desc">A command-palette picker with fuzzy search, ranked rows, shortcuts, and preview side pane.</p></div><span class="card-num">04</span></header><iframe class="card-preview" src="04-command-preview-palette.html" title="Command Preview Palette"></iframe><footer class="card-footer"><ul class="features"><li>fuzzy search</li><li>ranked rows</li><li>shortcuts</li><li>preview</li></ul><a class="open-link" href="04-command-preview-palette.html" target="_blank" rel="noopener">Open</a></footer></article>
+  <article class="card"><header class="card-header"><div><p class="card-title">05 · Compare Tray</p><p class="card-desc">Pick candidates into a compare tray, inspect palette/type/layout side-by-side, then apply.</p></div><span class="card-num">05</span></header><iframe class="card-preview" src="05-compare-tray.html" title="Compare Tray"></iframe><footer class="card-footer"><ul class="features"><li>compare</li><li>candidate tray</li><li>metrics</li><li>apply</li></ul><a class="open-link" href="05-compare-tray.html" target="_blank" rel="noopener">Open</a></footer></article>
+  <article class="card"><header class="card-header"><div><p class="card-title">06 · Library Drawer</p><p class="card-desc">A larger drawer for enterprise-scale theme libraries with folders, owners, and pagination.</p></div><span class="card-num">06</span></header><iframe class="card-preview" src="06-library-drawer.html" title="Library Drawer"></iframe><footer class="card-footer"><ul class="features"><li>drawer</li><li>folders</li><li>owners</li><li>pagination</li></ul><a class="open-link" href="06-library-drawer.html" target="_blank" rel="noopener">Open</a></footer></article>
+</main>
+</body>
+</html>

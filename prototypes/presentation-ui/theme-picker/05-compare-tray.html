@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>05 · Compare Tray — Theme Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body { min-height:100vh; background:#f3f6fa; color:var(--ds-text-primary); }
+    .spec { padding:20px 28px 16px; border-bottom:1px solid var(--ds-border-subtle); background:var(--ds-surface); }
+    .spec h1 { margin:0 0 5px; font-size:16px; font-weight:800; }
+    .spec p { margin:0 0 10px; max-width:760px; color:var(--ds-text-secondary); font-size:12.5px; line-height:1.55; }
+    .spec ul { display:flex; flex-wrap:wrap; gap:5px; margin:0; padding:0; list-style:none; }
+    .spec li { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-pill); background:var(--ds-surface-sunken); color:var(--ds-text-secondary); padding:2px 9px; font-size:11px; }
+    .stage { padding:30px; }
+    .panel { width:min(1040px, calc(100vw - 60px)); border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-xl); background:var(--ds-surface); box-shadow:var(--ds-shadow-popover); overflow:hidden; }
+    .head { display:flex; justify-content:space-between; gap:14px; padding:16px 18px; border-bottom:1px solid var(--ds-border-subtle); }
+    .head h2 { margin:0; font-size:17px; } .head p { margin:4px 0 0; color:var(--ds-text-secondary); font-size:12px; }
+    .search { width:280px; height:34px; border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-md); padding:0 10px; }
+    .content { display:grid; grid-template-columns: 300px 1fr; min-height:500px; }
+    .library { border-right:1px solid var(--ds-border-subtle); background:var(--ds-surface-base); padding:10px; overflow:auto; }
+    .pick { display:grid; grid-template-columns:52px 1fr auto; gap:9px; align-items:center; border-radius:var(--ds-radius-md); padding:7px; min-height:60px; }
+    .pick:hover { background:var(--ds-state-hover); }
+    .pick.active { background:var(--ds-state-selected); }
+    .thumb { width:52px; height:36px; border-radius:7px; border:1px solid var(--ds-border-subtle); background:linear-gradient(135deg,var(--a),var(--b)); }
+    .pick b { display:block; font-size:12px; } .pick small { color:var(--ds-text-muted); font-size:10px; }
+    .add { border:1px solid var(--ds-border-subtle); border-radius:50%; background:var(--ds-surface); width:24px; height:24px; color:var(--ds-accent-text); font-weight:900; }
+    .compare { display:grid; grid-template-rows:1fr auto; }
+    .columns { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; padding:14px; }
+    .theme { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-xl); overflow:hidden; background:var(--ds-surface); }
+    .theme.selected { border-color:var(--ds-accent-border); box-shadow:0 0 0 2px var(--ds-accent-border); }
+    .preview { aspect-ratio:16/9; background:var(--bg); color:var(--fg); padding:18px; }
+    .preview h3 { margin:0; font-size:22px; line-height:1.05; } .preview p { margin:10px 0 0; color:var(--muted); font-size:10px; }
+    .info { padding:11px; }
+    .info h4 { margin:0 0 8px; font-size:13px; }
+    .metric { display:flex; justify-content:space-between; border-top:1px solid var(--ds-border-subtle); padding:7px 0; color:var(--ds-text-secondary); font-size:11px; }
+    .swatches { display:flex; gap:5px; margin-top:8px; } .swatches i { width:18px; height:18px; border-radius:50%; border:1px solid rgb(0 0 0 / .12); background:var(--c); }
+    .tray { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; border-top:1px solid var(--ds-border-subtle); background:var(--ds-surface-base); }
+    .tray span { color:var(--ds-text-muted); font-size:11px; } .tray button { height:32px; border:0; border-radius:var(--ds-radius-md); background:var(--ds-accent); color:var(--ds-accent-contrast); padding:0 13px; font-weight:800; }
+    @media (max-width:900px){.content{grid-template-columns:1fr}.library{max-height:220px;border-right:0;border-bottom:1px solid var(--ds-border-subtle)}.columns{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="spec"><h1>05 · Compare Tray</h1><p>For teams that need confidence before applying a visual system. Users add candidates from a 100+ theme library, compare previews and properties, then apply the winner.</p><ul><li>Candidate tray</li><li>Side-by-side comparison</li><li>Palette/type metrics</li><li>Best for design review</li></ul></div>
+<main class="stage"><section class="panel"><header class="head"><div><h2>Compare themes</h2><p>Add up to three candidates, review master-slide behavior, then apply.</p></div><input class="search" placeholder="Search 128 themes" /></header><div class="content"><aside class="library">
+  <div class="pick active"><i class="thumb" style="--a:#f8fafc;--b:#4f46e5"></i><span><b>Neutral</b><small>current · default</small></span><button class="add">✓</button></div>
+  <div class="pick"><i class="thumb" style="--a:#101827;--b:#38bdf8"></i><span><b>Dark Aurora Corporate</b><small>dark · executive</small></span><button class="add">+</button></div>
+  <div class="pick active"><i class="thumb" style="--a:#fbf7ef;--b:#8b5e34"></i><span><b>Editorial Serif Luxe</b><small>premium · serif</small></span><button class="add">✓</button></div>
+  <div class="pick active"><i class="thumb" style="--a:#fff200;--b:#ff3b30"></i><span><b>Brutalist Bold</b><small>launch · loud</small></span><button class="add">✓</button></div>
+  <div class="pick"><i class="thumb" style="--a:#06130f;--b:#34d399"></i><span><b>Tech Terminal Mono</b><small>product · mono</small></span><button class="add">+</button></div>
+</aside><section class="compare"><div class="columns">
+  <article class="theme selected"><div class="preview" style="--bg:#f8fafc;--fg:#172033;--muted:#4d5b6a"><h3>Q3 roadmap</h3><p>Balanced neutral report slide</p></div><div class="info"><h4>Neutral</h4><div class="metric"><span>Contrast</span><b>AA</b></div><div class="metric"><span>Layouts</span><b>9</b></div><div class="swatches"><i style="--c:#172033"></i><i style="--c:#f8fafc"></i><i style="--c:#4f46e5"></i></div></div></article>
+  <article class="theme"><div class="preview" style="--bg:#fbf7ef;--fg:#261b12;--muted:#8b5e34"><h3>Q3 roadmap</h3><p>Editorial investor narrative</p></div><div class="info"><h4>Editorial Serif Luxe</h4><div class="metric"><span>Contrast</span><b>AAA</b></div><div class="metric"><span>Layouts</span><b>12</b></div><div class="swatches"><i style="--c:#261b12"></i><i style="--c:#fbf7ef"></i><i style="--c:#8b5e34"></i></div></div></article>
+  <article class="theme"><div class="preview" style="--bg:#fff200;--fg:#111;--muted:#444"><h3>Q3 roadmap</h3><p>Launch campaign energy</p></div><div class="info"><h4>Brutalist Bold</h4><div class="metric"><span>Contrast</span><b>AA</b></div><div class="metric"><span>Layouts</span><b>7</b></div><div class="swatches"><i style="--c:#111"></i><i style="--c:#fff200"></i><i style="--c:#ff3b30"></i></div></div></article>
+</div><footer class="tray"><span>3 candidates selected · add/remove from the library list</span><button>Apply Neutral</button></footer></section></div></section></main>
+</body>
+</html>

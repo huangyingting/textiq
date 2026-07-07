@@ -186,7 +186,7 @@ export function SelectMenu({
 
   useEffect(() => {
     if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
+    const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (
         buttonRef.current?.contains(target) ||
@@ -197,13 +197,20 @@ export function SelectMenu({
       setOpen(false);
       onOpenChangeRef.current?.(false);
     };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
 
   const handleButtonKeyDown = (
     event: React.KeyboardEvent<HTMLButtonElement>,
   ) => {
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      setOpen(false);
+      onOpenChangeRef.current?.(false);
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setOpen(true);
@@ -260,10 +267,10 @@ export function SelectMenu({
         variant === "field"
           ? "flex h-auto w-full items-center justify-between gap-1.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-[13px] font-normal text-ds-text-primary transition-colors hover:bg-ds-state-hover"
           : cx(
-              "inline-flex h-7 max-w-40 items-center gap-1.5 rounded-ds-sm px-2 font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover aria-expanded:bg-ds-state-active",
+              "inline-flex h-7 max-w-40 items-center gap-1.5 rounded-ds-sm px-2 font-medium text-ds-text-primary outline-none transition-colors hover:bg-ds-state-hover aria-expanded:bg-ds-state-active",
               triggerTextClass,
             ),
-        FOCUS_RING,
+        variant === "field" ? FOCUS_RING : undefined,
         buttonClassName,
       )}
     >
@@ -302,12 +309,17 @@ export function SelectMenu({
             <ul
               ref={menuRef}
               id={listboxId}
+              data-floating-panel="true"
               role="listbox"
               tabIndex={-1}
               aria-label={ariaLabel}
               aria-labelledby={buttonId}
               aria-activedescendant={activeId}
               onKeyDown={handleMenuKeyDown}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerMove={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onMouseMove={(event) => event.stopPropagation()}
               style={{
                 top: coords.top,
                 left: coords.left,

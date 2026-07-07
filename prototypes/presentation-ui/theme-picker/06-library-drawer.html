@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>06 · Library Drawer — Theme Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body { min-height:100vh; background:#e8eef5; color:var(--ds-text-primary); }
+    .spec { padding:20px 28px 16px; border-bottom:1px solid var(--ds-border-subtle); background:var(--ds-surface); }
+    .spec h1 { margin:0 0 5px; font-size:16px; font-weight:800; }
+    .spec p { margin:0 0 10px; max-width:780px; color:var(--ds-text-secondary); font-size:12.5px; line-height:1.55; }
+    .spec ul { display:flex; flex-wrap:wrap; gap:5px; margin:0; padding:0; list-style:none; }
+    .spec li { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-pill); background:var(--ds-surface-sunken); color:var(--ds-text-secondary); padding:2px 9px; font-size:11px; }
+    .app { height:640px; margin:26px; border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-xl); overflow:hidden; background:var(--ds-surface); box-shadow:var(--ds-shadow-overlay); position:relative; }
+    .toolbar { height:44px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid var(--ds-border-subtle); background:var(--ds-surface-chrome); }
+    .trigger { border:0; border-radius:var(--ds-radius-md); background:var(--ds-state-active); color:var(--ds-text-primary); height:30px; padding:0 10px; font-weight:800; }
+    .canvas { height:calc(100% - 44px); background:linear-gradient(135deg,#111827,#334155); }
+    .drawer { position:absolute; inset:44px 0 0 auto; width:min(880px, 88%); display:grid; grid-template-columns:210px 1fr; background:var(--ds-surface-overlay); border-left:1px solid var(--ds-border-subtle); box-shadow:var(--ds-shadow-popover); }
+    .nav { border-right:1px solid var(--ds-border-subtle); background:var(--ds-surface-base); padding:14px; }
+    .nav h2 { margin:0 0 12px; font-size:14px; }
+    .nav button { display:flex; width:100%; justify-content:space-between; border:0; border-radius:var(--ds-radius-md); background:transparent; color:var(--ds-text-secondary); padding:8px 9px; font-size:12px; text-align:left; }
+    .nav .active { background:var(--ds-accent-surface); color:var(--ds-accent-text); font-weight:800; }
+    .main { display:grid; grid-template-rows:auto 1fr auto; min-width:0; }
+    .head { padding:14px 16px; border-bottom:1px solid var(--ds-border-subtle); }
+    .head-row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    .head h2 { margin:0; font-size:18px; }
+    .head input { width:320px; height:34px; border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-md); padding:0 10px; }
+    .chips { display:flex; gap:6px; margin-top:10px; }
+    .chips span { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-pill); background:var(--ds-surface); color:var(--ds-text-muted); padding:3px 9px; font-size:11px; }
+    .grid { overflow:auto; padding:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; align-content:start; }
+    .card { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-lg); background:var(--ds-surface); overflow:hidden; }
+    .card.selected { border-color:var(--ds-accent-border); box-shadow:0 0 0 2px var(--ds-accent-border); }
+    .preview { height:96px; background:var(--bg); color:var(--fg); padding:12px; position:relative; overflow:hidden; }
+    .preview::before { content:""; display:block; width:58%; height:12px; border-radius:20px; background:var(--fg); }
+    .preview::after { content:""; position:absolute; left:12px; right:12px; bottom:12px; height:24px; border-radius:7px; background:var(--accent); opacity:.82; }
+    .body { padding:9px; }
+    .body b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+    .body small { color:var(--ds-text-muted); font-size:10px; }
+    .pager { display:flex; align-items:center; justify-content:space-between; padding:11px 16px; border-top:1px solid var(--ds-border-subtle); background:var(--ds-surface-base); color:var(--ds-text-muted); font-size:11px; }
+    .pager button { border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-md); background:var(--ds-surface); height:30px; padding:0 10px; font-weight:750; }
+    .pager .apply { border:0; background:var(--ds-accent); color:var(--ds-accent-contrast); }
+    @media (max-width:760px){.drawer{grid-template-columns:1fr;width:100%;}.nav{display:none}.head-row{align-items:flex-start;flex-direction:column}.head input{width:100%}}
+  </style>
+</head>
+<body>
+<div class="spec"><h1>06 · Library Drawer</h1><p>Largest-scale option: a right drawer with folders, ownership scopes, search, filters, pagination, and grid previews. Best when enterprise libraries grow beyond 100 themes.</p><ul><li>Right drawer</li><li>Folders / owners</li><li>Pagination</li><li>Grid preview library</li></ul></div>
+<main class="app"><div class="toolbar"><button class="trigger">Neutral ▾</button><span style="color:var(--ds-text-muted);font-size:12px">Slide master</span></div><div class="canvas"></div><section class="drawer" role="dialog" aria-label="Theme library"><aside class="nav"><h2>Theme library</h2><button class="active"><span>All themes</span><b>128</b></button><button><span>Approved</span><b>42</b></button><button><span>My team</span><b>18</b></button><button><span>Recent</span><b>12</b></button><button><span>Archived</span><b>61</b></button></aside><section class="main"><header class="head"><div class="head-row"><div><h2>All themes</h2><p style="margin:4px 0 0;color:var(--ds-text-secondary);font-size:12px">Enterprise-ready picker for 100+ themes.</p></div><input placeholder="Search by name, color, tag, owner" /></div><div class="chips"><span>Owner: anyone</span><span>Aspect: all</span><span>Contrast: AA+</span><span>Sort: recently used</span></div></header><div class="grid">
+  <article class="card selected"><div class="preview" style="--bg:#f8fafc;--fg:#172033;--accent:#4f46e5"></div><div class="body"><b>Neutral</b><small>System · current</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#101827;--fg:#f8fafc;--accent:#38bdf8"></div><div class="body"><b>Dark Aurora Corporate</b><small>Design Systems</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#fbf7ef;--fg:#261b12;--accent:#8b5e34"></div><div class="body"><b>Editorial Serif Luxe</b><small>Marketing</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#fff200;--fg:#111;--accent:#ff3b30"></div><div class="body"><b>Brutalist Bold</b><small>Brand lab</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#06130f;--fg:#d1fae5;--accent:#34d399"></div><div class="body"><b>Tech Terminal Mono</b><small>Product</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#f4f6f1;--fg:#10231d;--accent:#87a96b"></div><div class="body"><b>Swiss Minimal Grid</b><small>Consulting</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#ffe4e6;--fg:#4c0519;--accent:#e11d48"></div><div class="body"><b>Vibrant Pop</b><small>Social</small></div></article>
+  <article class="card"><div class="preview" style="--bg:#fff7ed;--fg:#431407;--accent:#fb923c"></div><div class="body"><b>Warm Launch Deck</b><small>Growth</small></div></article>
+</div><footer class="pager"><span>Page 1 of 7 · 20 per page · 128 total</span><span><button>Previous</button> <button>Next</button> <button class="apply">Apply selected</button></span></footer></section></section></main>
+</body>
+</html>

@@ -42,7 +42,6 @@ import {
 } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
-import type { BrandKitSavePort } from "@/lib/action-ports";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import type { SaveStatus } from "@/lib/presentation/save-status";
 import type {
@@ -177,7 +176,6 @@ import {
   AddSlideTemplatePicker,
   type AddSlideTemplateChoice,
 } from "./add-slide-template-picker";
-import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
 import {
   InlineTextEditorPresentation,
   type InlineTextInitialCaret,
@@ -347,10 +345,6 @@ export interface SlideEditorProps {
    * chrome. The callback should route to/open/copy the share target.
    */
   onShare?: () => Promise<ActionResult>;
-  /** Saves a compiled brand-kit draft snapshot from the authoring dialog. */
-  saveBrandKitDraft?: BrandKitSavePort["saveBrandKitDraft"];
-  /** Current user id used to seed new user-scoped brand-kit drafts. */
-  brandKitOwnerId?: string;
   presenceAwareness?: SlidePresenceAwareness | null;
   presenceUserId?: string;
   presenceUserName?: string;
@@ -410,8 +404,6 @@ export function SlideEditor({
   onExportPng,
   onPresent,
   onShare,
-  saveBrandKitDraft,
-  brandKitOwnerId = documentId,
   presenceAwareness = null,
   presenceUserId = "",
   presenceUserName = "Anonymous",
@@ -448,7 +440,6 @@ export function SlideEditor({
   );
 
   const [addSlidePickerOpen, setAddSlidePickerOpen] = useState(false);
-  const [brandKitAuthoringOpen, setBrandKitAuthoringOpen] = useState(false);
   const replaceImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceSlideBackgroundFileInputRef = useRef<HTMLInputElement | null>(
     null,
@@ -549,6 +540,8 @@ export function SlideEditor({
   const compactToolbarMenuId = useId();
   const compactToolbarMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const compactToolbarMenuPanelRef = useRef<HTMLDivElement | null>(null);
+  const [topToolbarSelectMenuOpen, setTopToolbarSelectMenuOpen] =
+    useState(false);
   const [deckChromeToolbarOpen, setDeckChromeToolbarOpen] = useState(false);
   const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [deckDiagnosticsReviewOpen, setDeckDiagnosticsReviewOpen] =
@@ -681,6 +674,30 @@ export function SlideEditor({
 
   const effectiveInspectorSheetOpen =
     inspectorSheetOpen && !isDesktopInspectorViewport;
+
+  const stageInteractionsBlocked =
+    addSlidePickerOpen ||
+    closeConfirmOpen ||
+    commandPaletteOpen ||
+    compactToolbarMenuOpen ||
+    contextMenu !== null ||
+    deckChromeToolbarOpen ||
+    deckDiagnosticsReviewOpen ||
+    effectiveInspectorSheetOpen ||
+    exportMenuOpen ||
+    exportPreflight !== null ||
+    footerStatusMenuOpen ||
+    shortcutHelpOpen ||
+    sourceMenuOpen ||
+    topToolbarSelectMenuOpen ||
+    zoomMenuOpen;
+
+  useEffect(() => {
+    if (!stageInteractionsBlocked) return;
+    semanticCandidateStackRef.current = [];
+    setHoveredNodeId((current) => (current === null ? current : null));
+    setSlideHovered((current) => (current === false ? current : false));
+  }, [stageInteractionsBlocked, setHoveredNodeId, setSlideHovered]);
 
   useEffect(() => {
     return scheduleEffectStateUpdate(() => {
@@ -861,20 +878,9 @@ export function SlideEditor({
     setAddSlidePickerOpen(true);
   }
 
-  function handleOpenBrandKitAuthoring() {
+  function handleOpenSlideMaster() {
     setAddSlidePickerOpen(false);
-    setBrandKitAuthoringOpen(true);
-  }
-
-  function handleSavedBrandKit(result: {
-    packageId: string;
-    packageVersion: string;
-  }) {
-    onDeckChange(
-      setThemePackage(deck, result.packageId, result.packageVersion),
-    );
-    setBrandKitAuthoringOpen(false);
-    setStageAnnouncement("Brand kit saved and applied to this deck.");
+    setDeckChromeToolbarOpen(true);
   }
 
   function handleInsertTemplateSlide(choice: AddSlideTemplateChoice) {
@@ -1450,7 +1456,12 @@ export function SlideEditor({
   }
 
   function handleStageContextMenu(event: MouseEvent<HTMLDivElement>) {
-    if (!activeSlide || isEditableTarget(event.target)) return;
+    if (
+      stageInteractionsBlocked ||
+      !activeSlide ||
+      isEditableTarget(event.target)
+    )
+      return;
     if (isStageEditingHandleTarget(event.target)) return;
     const hits = semanticHitsFromEvent(event, { selectedNodeBonus: true });
     const target = semanticTargetFromHits(hits);
@@ -1610,7 +1621,13 @@ export function SlideEditor({
   }
 
   function handleStageClick(e: MouseEvent) {
-    if (shouldSuppressStageClick() || isEditableTarget(e.target)) return;
+    if (
+      stageInteractionsBlocked ||
+      shouldSuppressStageClick() ||
+      isEditableTarget(e.target)
+    ) {
+      return;
+    }
     const clickTarget = e.target as { closest?: (selector: string) => unknown };
     const insideSelectionOrFloatingPanel =
       typeof clickTarget.closest === "function" &&
@@ -1623,7 +1640,11 @@ export function SlideEditor({
   }
 
   function handleStageDoubleClick(event: MouseEvent<HTMLDivElement>) {
-    if (!activeSlide || isEditableTarget(event.target)) {
+    if (
+      stageInteractionsBlocked ||
+      !activeSlide ||
+      isEditableTarget(event.target)
+    ) {
       return;
     }
     if (isStageHandleTarget(event.target)) return;
@@ -1981,6 +2002,7 @@ export function SlideEditor({
     selection,
     snapToGuides,
     customGuides: precisionGuides.customGuides,
+    stageInteractionsBlocked,
     tableEditingNodeId,
     draggingStage,
     activeResizeHandle,
@@ -2286,40 +2308,7 @@ export function SlideEditor({
                 templates={TEMPLATE_OPTIONS}
                 onChoose={handleInsertTemplateSlide}
                 onClose={() => setAddSlidePickerOpen(false)}
-                onAuthorBrandKit={handleOpenBrandKitAuthoring}
-              />
-            </div>
-          </FocusTrapped>
-        </>
-      ) : null}
-
-      {brandKitAuthoringOpen ? (
-        <>
-          <div
-            data-floating-panel="true"
-            aria-hidden="true"
-            onClick={() => setBrandKitAuthoringOpen(false)}
-            className="fixed inset-0 z-modal bg-ds-backdrop"
-          />
-          <FocusTrapped>
-            <div
-              data-floating-panel="true"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Author brand kit"
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.stopPropagation();
-                  setBrandKitAuthoringOpen(false);
-                }
-              }}
-              className="fixed inset-x-4 top-8 z-modal mx-auto flex max-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay shadow-ds-overlay"
-            >
-              <BrandKitAuthoringPanel
-                ownerId={brandKitOwnerId}
-                saveBrandKitDraft={saveBrandKitDraft}
-                onSaved={handleSavedBrandKit}
-                onClose={() => setBrandKitAuthoringOpen(false)}
+                onEditSlideMaster={handleOpenSlideMaster}
               />
             </div>
           </FocusTrapped>
@@ -2331,7 +2320,6 @@ export function SlideEditor({
         activeSlide={activeSlide}
         themePackages={themePackages}
         currentCanvasFormat={currentCanvasFormat}
-        brandKitAuthoringOpen={brandKitAuthoringOpen}
         deckChromeToolbarOpen={deckChromeToolbarOpen}
         deckChromeToolbarPanelRef={deckChromeToolbarPanelRef}
         snapToGuides={snapToGuides}
@@ -2369,7 +2357,7 @@ export function SlideEditor({
         onClose={onClose}
         handleThemePackageChange={handleThemePackageChange}
         handleCanvasRatioChange={handleCanvasRatioChange}
-        handleOpenBrandKitAuthoring={handleOpenBrandKitAuthoring}
+        onSelectMenuOpenChange={setTopToolbarSelectMenuOpen}
         setDeckChromeToolbarOpen={setDeckChromeToolbarOpen}
         handleUpdateDeckChrome={handleUpdateDeckChrome}
         handleUpdateProps={handleUpdateProps}

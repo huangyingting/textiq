@@ -405,12 +405,13 @@ export function resolveSlideCommandPaletteCommands(
     }),
     fixedCommand({
       id: "deck.chrome",
-      label: "Deck chrome",
-      description: "Open deck-level chrome defaults.",
+      label: "Slide master",
+      description:
+        "Open logo, footer, page number, watermark, and other deck-wide defaults.",
       section: "Deck",
-      keywords: ["header", "footer", "brand"],
+      keywords: ["header", "footer", "brand", "logo", "watermark"],
       intent: { kind: "deck-chrome" },
-      liveMessage: "Deck chrome controls opened.",
+      liveMessage: "Slide master controls opened.",
     }),
     fixedCommand({
       id: "source.review-all",

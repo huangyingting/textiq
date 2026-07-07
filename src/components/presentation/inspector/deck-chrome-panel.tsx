@@ -316,10 +316,10 @@ export function DeckChromePanel({
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1">
           <h4 className="text-[10px] font-bold uppercase tracking-[0.06em] text-ds-text-muted">
-            Deck chrome defaults
+            Slide master defaults
           </h4>
           <p className="text-[11px] text-ds-text-muted">
-            Owned by deck settings; selected-slide overrides are below.
+            Logo, footer, page number, watermark, and other deck-wide defaults.
           </p>
         </div>
         <EditorActionButton

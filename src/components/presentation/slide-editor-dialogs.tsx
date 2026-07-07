@@ -189,14 +189,14 @@ interface SlideEditorAddSlideDialogProps {
   templates: Parameters<typeof AddSlideTemplatePicker>[0]["templates"];
   onChoose: (choice: AddSlideTemplateChoice) => void;
   onClose: () => void;
-  onAuthorBrandKit?: () => void;
+  onEditSlideMaster?: () => void;
 }
 
 export function SlideEditorAddSlideDialog({
   templates,
   onChoose,
   onClose,
-  onAuthorBrandKit,
+  onEditSlideMaster,
 }: SlideEditorAddSlideDialogProps): JSX.Element {
   return (
     <>
@@ -224,7 +224,7 @@ export function SlideEditorAddSlideDialog({
             templates={templates}
             onChoose={onChoose}
             onClose={onClose}
-            onAuthorBrandKit={onAuthorBrandKit}
+            onEditSlideMaster={onEditSlideMaster}
           />
         </div>
       </FocusTrapped>

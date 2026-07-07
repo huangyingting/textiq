@@ -81,7 +81,7 @@ test("BrandKitAuthoringPanel renders authoring controls and compiler diagnostics
     }),
   );
 
-  assert.match(html, /Author brand kit/);
+  assert.match(html, /Customize theme/);
   assert.match(html, /Palette roles/);
   assert.match(html, /Typography roles/);
   assert.match(html, /Logo token/);

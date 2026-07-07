@@ -193,13 +193,12 @@ export function Popover({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // Pointer-down outside the container closes the popover. Use mousedown
-  // instead of click so portaled panel buttons that swap their own subtree
-  // (for example a Customize view) are classified before React unmounts the
-  // original event target.
+  // Pointer-down outside the container closes the popover. Capture phase keeps
+  // toolbar popovers aligned with SelectMenu: a canvas pointer handler may
+  // prevent the later mouse event, but it cannot suppress this close-away path.
   useEffect(() => {
     if (!open) return;
-    const onDocMouseDown = (event: MouseEvent) => {
+    const onDocPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       const insideTrigger = containerRef.current?.contains(target) ?? false;
       const insidePanel = panelRef.current?.contains(target) ?? false;
@@ -207,9 +206,9 @@ export function Popover({
         onClose();
       }
     };
-    document.addEventListener("mousedown", onDocMouseDown, true);
+    document.addEventListener("pointerdown", onDocPointerDown, true);
     return () =>
-      document.removeEventListener("mousedown", onDocMouseDown, true);
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
   }, [open, onClose]);
 
   const panel = (
