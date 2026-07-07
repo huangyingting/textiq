@@ -167,3 +167,31 @@ test("hitTestSlideNodes includes group containers behind their children", () => 
   assert.equal(emptyGroupHits[0]?.node.id, "group");
   assert.equal(selectedGroupHits[0]?.node.id, "group");
 });
+
+test("hitTestSlideNodes prefers grouped box children over their parent group for hover", () => {
+  const imageChild: SlideChildNode = {
+    id: "group-image-child",
+    type: "image",
+    role: "image",
+    layout: { frame: frame(20, 20, 20, 10), zIndex: 1 },
+    style: { ref: "media.inline" },
+    content: { assetId: "image-1" },
+  };
+  const group: SlideChildNode = {
+    id: "group",
+    type: "group",
+    component: "custom",
+    layout: { frame: frame(10, 10, 60, 40), zIndex: 20 },
+    style: { ref: "surface.card" },
+    children: [imageChild],
+  };
+
+  const hits = hitTestSlideNodes({ x: 25, y: 25 }, [group], {
+    includeLocked: true,
+    selectedNodeIds: new Set(["group"]),
+    selectedNodeBonus: false,
+  });
+
+  assert.equal(hits[0]?.node.id, "group-image-child");
+  assert.ok(hits.some((hit) => hit.node.id === "group"));
+});

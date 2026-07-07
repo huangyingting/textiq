@@ -299,6 +299,7 @@ function rotateNodeTreeAroundPoint(
   node: SlideChildNode,
   center: { x: number; y: number },
   deltaDegrees: number,
+  stageAspect: number,
 ): SlideChildNode {
   if (!node.layout) return node;
   const radians = (deltaDegrees * Math.PI) / 180;
@@ -307,9 +308,9 @@ function rotateNodeTreeAroundPoint(
   const frame = node.layout.frame;
   const nodeCenterX = frame.x + frame.w / 2;
   const nodeCenterY = frame.y + frame.h / 2;
-  const dx = nodeCenterX - center.x;
+  const dx = (nodeCenterX - center.x) * stageAspect;
   const dy = nodeCenterY - center.y;
-  const nextCenterX = center.x + dx * cos - dy * sin;
+  const nextCenterX = center.x + (dx * cos - dy * sin) / stageAspect;
   const nextCenterY = center.y + dx * sin + dy * cos;
   const layout = {
     ...node.layout,
@@ -325,11 +326,17 @@ function rotateNodeTreeAroundPoint(
       ...node,
       layout,
       children: node.children.map((child) =>
-        rotateNodeTreeAroundPoint(child, center, deltaDegrees),
+        rotateNodeTreeAroundPoint(child, center, deltaDegrees, stageAspect),
       ),
     };
   }
   return { ...node, layout } as SlideChildNode;
+}
+
+function canvasAspectRatio(deck: Pick<Deck, "canvas">): number {
+  const width = deck.canvas.width > 0 ? deck.canvas.width : 16;
+  const height = deck.canvas.height > 0 ? deck.canvas.height : 9;
+  return width / height;
 }
 
 function shortestRotationDelta(from: number | undefined, to: number): number {
@@ -1089,6 +1096,7 @@ export function updateNodeLayout(
         : (layoutPatch as LayoutBox);
       if (node.type === "group" && node.layout?.frame) {
         let children = node.children;
+        const stageAspect = canvasAspectRatio(deck);
         if (layoutPatch.frame) {
           children = children.map((child) =>
             scaleNodeTreeForFrameChange(
@@ -1110,7 +1118,7 @@ export function updateNodeLayout(
               y: frame.y + frame.h / 2,
             };
             children = children.map((child) =>
-              rotateNodeTreeAroundPoint(child, center, delta),
+              rotateNodeTreeAroundPoint(child, center, delta, stageAspect),
             );
           }
         }

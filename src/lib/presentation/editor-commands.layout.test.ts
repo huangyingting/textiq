@@ -11,7 +11,13 @@ import {
   groupNodes,
   ungroupNodes,
 } from "@/lib/presentation/editor-commands";
+import type { SlideChildNode } from "@/lib/presentation/schema";
 import { makeTestDeck, findNode } from "./editor-commands.test-utils";
+
+function assertNear(actual: number | undefined, expected: number): void {
+  assert.ok(actual !== undefined);
+  assert.ok(Math.abs(actual - expected) < 0.0000001);
+}
 
 describe("updateNodeLayout", () => {
   test("updates frame of the target node", () => {
@@ -195,5 +201,41 @@ describe("moveNodesBy", () => {
     assert.ok(childAfter?.layout);
     assert.notDeepEqual(childAfter.layout.frame, childBefore.layout.frame);
     assert.equal(childAfter.layout.rotation, 90);
+  });
+
+  test("rotates grouped children in physical canvas space on widescreen slides", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const child: SlideChildNode = {
+      id: "aspect-child",
+      type: "text",
+      role: "body",
+      layout: { frame: { x: 50, y: 35, w: 10, h: 10 }, zIndex: 1 },
+      style: { ref: "text.body" },
+      content: { paragraphs: [{ id: "aspect-child-p1", text: "Child" }] },
+    };
+    const group: SlideChildNode = {
+      id: "aspect-group",
+      type: "group",
+      component: "custom",
+      layout: { frame: { x: 20, y: 20, w: 40, h: 40 }, zIndex: 2 },
+      style: { ref: "surface.card" },
+      children: [child],
+    };
+    const withGroup = {
+      ...deck,
+      slides: deck.slides.map((candidate) =>
+        candidate.id === slide.id
+          ? { ...candidate, children: [group] }
+          : candidate,
+      ),
+    };
+
+    const rotated = updateNodeRotation(withGroup, slide.id, "aspect-group", 90);
+    const rotatedChild = findNode(rotated.slides[0].children, child.id);
+
+    assertNear(rotatedChild?.layout?.frame.x, 35);
+    assertNear(rotatedChild?.layout?.frame.y, 61.66666666666667);
+    assert.equal(rotatedChild?.layout?.rotation, 90);
   });
 });

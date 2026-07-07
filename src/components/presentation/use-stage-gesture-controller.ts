@@ -123,6 +123,7 @@ import type {
   ActiveResizeHandle,
   NodeMoveGestureDraft,
 } from "./use-stage-interaction-controller";
+import { canvasAspectRatio } from "./slide-editor-stage-fit";
 import {
   applyAspectLock,
   clientAngleDegrees,
@@ -1387,6 +1388,7 @@ export function useStageGestureController(
             centerPct.x,
             centerPct.y,
             delta,
+            canvasAspectRatio(deck),
           ),
           guides: [],
         });
@@ -1460,6 +1462,7 @@ export function useStageGestureController(
               centerPct.x,
               centerPct.y,
               delta,
+              canvasAspectRatio(deck),
             ),
             guides: [],
           });

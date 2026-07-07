@@ -72,4 +72,19 @@ describe("multi-selection transform helpers", () => {
     });
     assert.equal(patches.get("b")?.rotation, 90);
   });
+
+  test("rotates frame centers in physical canvas space on widescreen slides", () => {
+    const patches = rotateMultiSelectionFrames(
+      [{ id: "wide", frame: { x: 50, y: 35, w: 10, h: 10 } }],
+      40,
+      40,
+      90,
+      16 / 9,
+    );
+    const frame = patches.get("wide")?.frame;
+
+    assert.ok(frame);
+    assert.equal(frame.x, 35);
+    assert.ok(Math.abs(frame.y - 61.66666666666667) < 0.0000001);
+  });
 });

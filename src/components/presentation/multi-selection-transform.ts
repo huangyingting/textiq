@@ -56,6 +56,7 @@ export function rotateMultiSelectionFrames(
   centerX: number,
   centerY: number,
   deltaDegrees: number,
+  stageAspect = 1,
 ): Map<string, Partial<LayoutBox>> {
   const patches = new Map<string, Partial<LayoutBox>>();
   const radians = (deltaDegrees * Math.PI) / 180;
@@ -64,9 +65,9 @@ export function rotateMultiSelectionFrames(
   for (const entry of entries) {
     const nodeCenterX = entry.frame.x + entry.frame.w / 2;
     const nodeCenterY = entry.frame.y + entry.frame.h / 2;
-    const dx = nodeCenterX - centerX;
+    const dx = (nodeCenterX - centerX) * stageAspect;
     const dy = nodeCenterY - centerY;
-    const nextCenterX = centerX + dx * cos - dy * sin;
+    const nextCenterX = centerX + (dx * cos - dy * sin) / stageAspect;
     const nextCenterY = centerY + dx * sin + dy * cos;
     patches.set(entry.id, {
       frame: {

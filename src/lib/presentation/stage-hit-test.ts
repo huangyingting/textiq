@@ -56,10 +56,10 @@ const SCORE = {
 function flattenHitNodes(nodes: readonly SlideChildNode[]): SlideChildNode[] {
   const result: SlideChildNode[] = [];
   for (const node of nodes) {
-    result.push(node);
     if (node.type === "group") {
       result.push(...flattenHitNodes(node.children));
     }
+    result.push(node);
   }
   return result;
 }
@@ -261,6 +261,54 @@ function zIndex(node: SlideChildNode): number {
 
 function zIndexBonus(node: SlideChildNode): number {
   return Math.max(0, Math.min(SCORE.maxZIndexBonus, zIndex(node) * 0.1));
+}
+
+function collectParentIds(
+  nodes: readonly SlideChildNode[],
+  parentId: string | null = null,
+  result = new Map<string, string | null>(),
+): Map<string, string | null> {
+  for (const node of nodes) {
+    result.set(node.id, parentId);
+    if (node.type === "group") {
+      collectParentIds(node.children, node.id, result);
+    }
+  }
+  return result;
+}
+
+function isAncestorNode(
+  maybeAncestorId: string,
+  nodeId: string,
+  parentIds: ReadonlyMap<string, string | null>,
+): boolean {
+  let currentId = parentIds.get(nodeId) ?? null;
+  while (currentId) {
+    if (currentId === maybeAncestorId) return true;
+    currentId = parentIds.get(currentId) ?? null;
+  }
+  return false;
+}
+
+function descendantTieBreak(
+  left: SlideChildNode,
+  right: SlideChildNode,
+  parentIds: ReadonlyMap<string, string | null>,
+): number {
+  if (isAncestorNode(left.id, right.id, parentIds)) return 1;
+  if (isAncestorNode(right.id, left.id, parentIds)) return -1;
+  return 0;
+}
+
+function selectedTieBreak(
+  left: SlideChildNode,
+  right: SlideChildNode,
+  selectedNodeIds: ReadonlySet<string> | undefined,
+): number {
+  const leftSelected = selectedNodeIds?.has(left.id) === true;
+  const rightSelected = selectedNodeIds?.has(right.id) === true;
+  if (leftSelected === rightSelected) return 0;
+  return leftSelected ? -1 : 1;
 }
 
 function withBonuses(
@@ -559,6 +607,7 @@ export function hitTestSlideNodes(
     options.selectedNodeBonus === false ? undefined : options.selectedNodeIds;
   const allNodes = flattenAllNodes(nodes);
   const nodesById = new Map(allNodes.map((node) => [node.id, node]));
+  const parentIds = collectParentIds(nodes);
 
   return flattenHitNodes(nodes)
     .map((node, index) => ({ node, index, frame: node.layout?.frame }))
@@ -592,11 +641,23 @@ export function hitTestSlideNodes(
         index: number;
       } => candidate !== null,
     )
-    .sort(
-      (left, right) =>
+    .sort((left, right) => {
+      const descendantOrder = descendantTieBreak(
+        left.node,
+        right.node,
+        parentIds,
+      );
+      if (descendantOrder !== 0) {
+        return (
+          selectedTieBreak(left.node, right.node, selectedNodeIds) ||
+          descendantOrder
+        );
+      }
+      return (
         right.score - left.score ||
         zIndex(right.node) - zIndex(left.node) ||
-        right.index - left.index,
-    )
+        right.index - left.index
+      );
+    })
     .map(({ index: _index, ...candidate }) => candidate);
 }
