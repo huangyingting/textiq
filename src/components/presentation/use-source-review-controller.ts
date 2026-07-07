@@ -67,7 +67,6 @@ export interface UseSourceReviewControllerArgs {
   setSelection: Dispatch<SetStateAction<SelectionState>>;
   focusSelectedNodeSoon: (nodeId: string | undefined) => void;
   openInspectorPanel: (panel: InspectorPanelId) => void;
-  setSourceMenuOpen: (open: boolean) => void;
   setStageAnnouncement: (announcement: string) => void;
 }
 
@@ -143,7 +142,6 @@ export function createSourceReviewController({
   setSelection,
   focusSelectedNodeSoon,
   openInspectorPanel,
-  setSourceMenuOpen,
   setStageAnnouncement,
   documentSourceIndex,
   sourceDerivations,
@@ -279,7 +277,6 @@ export function createSourceReviewController({
 
   function handleSyncFromDocument() {
     handleRefreshAllSources();
-    setSourceMenuOpen(false);
   }
 
   function handleReviewSourceLinks() {
@@ -287,7 +284,6 @@ export function createSourceReviewController({
     if (!first) return;
     handleSelectSourceItem(first.slideId, first.nodeId);
     openInspectorPanel("source");
-    setSourceMenuOpen(false);
   }
 
   return {
@@ -325,7 +321,6 @@ export function useSourceReviewController({
   setSelection,
   focusSelectedNodeSoon,
   openInspectorPanel,
-  setSourceMenuOpen,
   setStageAnnouncement,
 }: UseSourceReviewControllerArgs): SourceReviewController {
   const derivations = useMemo(
@@ -353,7 +348,6 @@ export function useSourceReviewController({
     setSelection,
     focusSelectedNodeSoon,
     openInspectorPanel,
-    setSourceMenuOpen,
     setStageAnnouncement,
     ...derivations,
     sourceReviewStatus,

@@ -7,6 +7,7 @@ import React, {
 } from "react";
 
 import type { SlideChildNode } from "@/lib/presentation/schema";
+import type { DocumentSourceInsertBlock } from "@/lib/presentation/document-source-commands";
 import type { StyleObject, StylePatch } from "@/lib/presentation/style-schema";
 import {
   buildImageNode,
@@ -699,4 +700,69 @@ test("seedContextToolbarStyles final fallbacks prefer local values when resolved
   assert.equal(seed.connectorStartArrow, "filled");
   assert.equal(seed.connectorEndArrow, "none");
   assert.equal(seed.opacity, 0.42);
+});
+
+test("ContextToolbar From document insert menu opens, navigates, and inserts", () => {
+  const focusLog: string[] = [];
+  const menuItems = [fakeElement({ focusLog }), fakeElement({ focusLog })];
+  const toolbarNode = fakeElement({ width: 280, height: 32 });
+  const moreMenu = fakeElement();
+  const moreTrigger = fakeElement({ focusLog });
+  const fromDocMenu = fakeElement({ query: menuItems });
+  const fromDocTrigger = fakeElement({ focusLog });
+  installDom();
+  const recorder = createRecorder();
+  const inserted: string[] = [];
+  const blocks = [
+    { kind: "text", id: "block-1", displayLabel: "Intro paragraph" },
+    { kind: "table", id: "block-2", displayLabel: "Metrics table" },
+  ] as unknown as DocumentSourceInsertBlock[];
+
+  const tree = withFakeReact(
+    {
+      states: [{ top: -1000, left: -1000 }, false, "https://", false, true],
+      refs: [toolbarNode, moreMenu, moreTrigger, fromDocMenu, fromDocTrigger],
+      runEffects: true,
+    },
+    () =>
+      ContextToolbar(
+        toolbarProps(undefined, recorder, {
+          documentInsertBlocks: blocks,
+          onInsertDocumentSourceBlock: (block) => inserted.push(block.id),
+        }),
+      ),
+  );
+
+  const trigger = findAll(
+    tree,
+    (element) =>
+      componentName(element) === "ContextToolbarButton" &&
+      element.props.label === "From document",
+  )[0];
+  assert.ok(trigger);
+  (trigger.props.onClick as () => void)();
+
+  const menuDiv = findAll(
+    tree,
+    (element) =>
+      element.type === "div" && element.props.id === "final-toolbar-2",
+  )[0];
+  assert.ok(menuDiv);
+  (menuDiv.props.onKeyDown as (event: unknown) => void)(
+    keyEvent("ArrowDown", menuItems[0]),
+  );
+  (menuDiv.props.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
+
+  const insertItem = findAll(
+    tree,
+    (element) =>
+      element.type === "button" &&
+      element.props.role === "menuitem" &&
+      textContent(element).includes("Metrics table"),
+  )[0];
+  assert.ok(insertItem);
+  (insertItem.props.onClick as () => void)();
+
+  assert.deepEqual(inserted, ["block-2"]);
+  assert.ok(focusLog.length >= 1);
 });

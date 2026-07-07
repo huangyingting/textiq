@@ -169,7 +169,6 @@ describe("useSourceReviewController", () => {
       setSelection,
       focusSelectedNodeSoon: () => undefined,
       openInspectorPanel: () => undefined,
-      setSourceMenuOpen: () => undefined,
       setStageAnnouncement: (message) => {
         announcement = message;
       },
@@ -209,7 +208,6 @@ describe("useSourceReviewController", () => {
     let selection = createSelectionState("normal");
     let focusedNodeId: string | undefined;
     let openedPanel: string | undefined;
-    let sourceMenuOpen = true;
 
     const setSelection: Dispatch<SetStateAction<SelectionState>> = (next) => {
       selection = applySelectionUpdate(selection, next);
@@ -234,9 +232,6 @@ describe("useSourceReviewController", () => {
       openInspectorPanel: (panel) => {
         openedPanel = panel;
       },
-      setSourceMenuOpen: (open) => {
-        sourceMenuOpen = open;
-      },
       setStageAnnouncement: () => undefined,
     }));
 
@@ -246,6 +241,5 @@ describe("useSourceReviewController", () => {
     assert.deepEqual(selectedNodeIds(selection), ["text-stale"]);
     assert.equal(focusedNodeId, "text-stale");
     assert.equal(openedPanel, "source");
-    assert.equal(sourceMenuOpen, false);
   });
 });

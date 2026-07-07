@@ -525,7 +525,6 @@ export function SlideEditor({
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [footerStatusMenuOpen, setFooterStatusMenuOpen] = useState(false);
-  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [compactToolbarMenuOpen, setCompactToolbarMenuOpen] = useState(false);
   const zoomMenuId = useId();
   const exportMenuId = useId();
@@ -534,9 +533,6 @@ export function SlideEditor({
   const footerStatusMenuId = useId();
   const footerStatusMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const footerStatusMenuPanelRef = useRef<HTMLDivElement | null>(null);
-  const sourceMenuId = useId();
-  const sourceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const sourceMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const compactToolbarMenuId = useId();
   const compactToolbarMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const compactToolbarMenuPanelRef = useRef<HTMLDivElement | null>(null);
@@ -663,11 +659,6 @@ export function SlideEditor({
   }, [footerStatusMenuOpen]);
 
   useEffect(() => {
-    if (!sourceMenuOpen) return;
-    focusFirstMenuCommand(sourceMenuPanelRef.current);
-  }, [sourceMenuOpen]);
-
-  useEffect(() => {
     if (!compactToolbarMenuOpen) return;
     focusFirstMenuCommand(compactToolbarMenuPanelRef.current);
   }, [compactToolbarMenuOpen]);
@@ -688,7 +679,6 @@ export function SlideEditor({
     exportPreflight !== null ||
     footerStatusMenuOpen ||
     shortcutHelpOpen ||
-    sourceMenuOpen ||
     topToolbarSelectMenuOpen ||
     zoomMenuOpen;
 
@@ -772,11 +762,6 @@ export function SlideEditor({
     footerStatusMenuTriggerRef.current?.focus();
   }
 
-  function closeSourceMenuAndRestoreFocus() {
-    setSourceMenuOpen(false);
-    sourceMenuTriggerRef.current?.focus();
-  }
-
   function closeCompactToolbarMenuAndRestoreFocus() {
     setCompactToolbarMenuOpen(false);
     compactToolbarMenuTriggerRef.current?.focus();
@@ -813,26 +798,6 @@ export function SlideEditor({
     if (
       moveMenuCommandFocus({
         container: footerStatusMenuPanelRef.current,
-        key: event.key,
-        currentTarget: event.target,
-      })
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  }
-
-  function handleSourceMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeSourceMenuAndRestoreFocus();
-      return;
-    }
-    if (!isMenuCommandNavigationKey(event.key)) return;
-    if (
-      moveMenuCommandFocus({
-        container: sourceMenuPanelRef.current,
         key: event.key,
         currentTarget: event.target,
       })
@@ -1120,7 +1085,6 @@ export function SlideEditor({
     onDeckChange(result.deck);
     setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
     focusSelectedNodeSoon(result.nodeId);
-    setSourceMenuOpen(false);
     setStageAnnouncement(
       `Inserted ${sourceBlockKindLabel(block.kind)} from document.`,
     );
@@ -1801,7 +1765,6 @@ export function SlideEditor({
     setSelection,
     focusSelectedNodeSoon,
     openInspectorPanel,
-    setSourceMenuOpen,
     setStageAnnouncement,
   });
   const diagnostics = dedupeDiagnostics([
@@ -2324,16 +2287,8 @@ export function SlideEditor({
         deckChromeToolbarPanelRef={deckChromeToolbarPanelRef}
         snapToGuides={snapToGuides}
         precisionGuides={precisionGuides}
-        sourceMenuOpen={sourceMenuOpen}
-        sourceMenuTriggerRef={sourceMenuTriggerRef}
-        sourceMenuPanelRef={sourceMenuPanelRef}
-        sourceMenuId={sourceMenuId}
-        sourceStatusLabel={sourceStatusLabel}
         sourceReview={sourceReview}
         documentSourceIndex={documentSourceIndex}
-        selectedSource={selectedSource}
-        selectedNode={selectedNode}
-        documentInsertBlocks={documentInsertBlocks}
         onRegenerate={onRegenerate}
         saveStatus={saveStatus}
         compactToolbarMenuOpen={compactToolbarMenuOpen}
@@ -2364,14 +2319,8 @@ export function SlideEditor({
         toggleSnapToGuides={toggleSnapToGuides}
         togglePrecisionGrid={togglePrecisionGrid}
         togglePrecisionRulers={togglePrecisionRulers}
-        setSourceMenuOpen={setSourceMenuOpen}
-        handleSourceMenuKeyDown={handleSourceMenuKeyDown}
         handleSyncFromDocument={handleSyncFromDocument}
         handleReviewSourceLinks={handleReviewSourceLinks}
-        handleRefreshSelectedSource={handleRefreshSelectedSource}
-        closeSourceMenuAndRestoreFocus={closeSourceMenuAndRestoreFocus}
-        handleUnlinkSourceAt={handleUnlinkSourceAt}
-        handleInsertDocumentSourceBlock={handleInsertDocumentSourceBlock}
         handleRegenerate={handleRegenerate}
         setCompactToolbarMenuOpen={setCompactToolbarMenuOpen}
         handleCompactToolbarMenuKeyDown={handleCompactToolbarMenuKeyDown}
@@ -2652,6 +2601,8 @@ export function SlideEditor({
             onInsertVisual={() => void handleInsertVisual()}
             onInsertConnector={handleInsertConnector}
             onInsertTable={handleInsertTable}
+            documentInsertBlocks={documentInsertBlocks}
+            onInsertDocumentSourceBlock={handleInsertDocumentSourceBlock}
             onDuplicateSlide={handleDuplicateActiveSlide}
             onDeleteSlide={handleDeleteActiveSlide}
             canDeleteSlide={deck.slides.length > 1}

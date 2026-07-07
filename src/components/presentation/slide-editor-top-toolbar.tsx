@@ -6,6 +6,7 @@ import {
   Command as CommandIcon,
   FileDown,
   Keyboard,
+  Link2,
   Magnet,
   MoreHorizontal,
   MonitorPlay,
@@ -23,15 +24,9 @@ import {
 } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
-import { sourceBlockKindLabel } from "@/lib/presentation/document-source-commands";
-import type { DocumentSourceInsertBlock } from "@/lib/presentation/document-source-commands";
 import type { PresentationExportFormat } from "@/lib/presentation/export-preflight";
 import type { SaveStatus } from "@/lib/presentation/save-status";
-import type {
-  Deck,
-  SlideChildNode,
-  SlideNode,
-} from "@/lib/presentation/schema";
+import type { Deck, SlideNode } from "@/lib/presentation/schema";
 import type { SourceReviewItem } from "@/lib/presentation/source-links";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import { Popover } from "@/components/ui/popover";
@@ -67,16 +62,8 @@ export interface SlideEditorTopToolbarProps {
   deckChromeToolbarPanelRef: RefObject<HTMLDivElement | null>;
   snapToGuides: boolean;
   precisionGuides: PrecisionGuidePreferences;
-  sourceMenuOpen: boolean;
-  sourceMenuTriggerRef: RefObject<HTMLButtonElement | null>;
-  sourceMenuPanelRef: RefObject<HTMLDivElement | null>;
-  sourceMenuId: string;
-  sourceStatusLabel: string;
   sourceReview: readonly SourceReviewItem[];
   documentSourceIndex: unknown;
-  selectedSource: SlideChildNode["source"] | undefined;
-  selectedNode: SlideChildNode | undefined;
-  documentInsertBlocks: readonly DocumentSourceInsertBlock[];
   onRegenerate: (() => Promise<ActionResult>) | undefined;
   saveStatus: SaveStatus;
   compactToolbarMenuOpen: boolean;
@@ -111,14 +98,8 @@ export interface SlideEditorTopToolbarProps {
   toggleSnapToGuides: () => void;
   togglePrecisionGrid: () => void;
   togglePrecisionRulers: () => void;
-  setSourceMenuOpen: Dispatch<SetStateAction<boolean>>;
-  handleSourceMenuKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   handleSyncFromDocument: () => void;
   handleReviewSourceLinks: () => void;
-  handleRefreshSelectedSource: () => Promise<void>;
-  closeSourceMenuAndRestoreFocus: () => void;
-  handleUnlinkSourceAt: (slideId: string, nodeId: string) => void;
-  handleInsertDocumentSourceBlock: (block: DocumentSourceInsertBlock) => void;
   handleRegenerate: () => Promise<void>;
   setCompactToolbarMenuOpen: Dispatch<SetStateAction<boolean>>;
   handleCompactToolbarMenuKeyDown: (
@@ -146,16 +127,8 @@ export function SlideEditorTopToolbar({
   deckChromeToolbarPanelRef,
   snapToGuides,
   precisionGuides,
-  sourceMenuOpen,
-  sourceMenuTriggerRef,
-  sourceMenuPanelRef,
-  sourceMenuId,
-  sourceStatusLabel,
   sourceReview,
   documentSourceIndex,
-  selectedSource,
-  selectedNode,
-  documentInsertBlocks,
   onRegenerate,
   saveStatus,
   compactToolbarMenuOpen,
@@ -186,14 +159,8 @@ export function SlideEditorTopToolbar({
   toggleSnapToGuides,
   togglePrecisionGrid,
   togglePrecisionRulers,
-  setSourceMenuOpen,
-  handleSourceMenuKeyDown,
   handleSyncFromDocument,
   handleReviewSourceLinks,
-  handleRefreshSelectedSource,
-  closeSourceMenuAndRestoreFocus,
-  handleUnlinkSourceAt,
-  handleInsertDocumentSourceBlock,
   handleRegenerate,
   setCompactToolbarMenuOpen,
   handleCompactToolbarMenuKeyDown,
@@ -206,6 +173,25 @@ export function SlideEditorTopToolbar({
   handleExportRequest,
   handleCloseRequest,
 }: SlideEditorTopToolbarProps) {
+  const hasSourceIssues = sourceReview.length > 0;
+  const canRefreshSourceLinks = Boolean(documentSourceIndex);
+  const sourceActionLabel = hasSourceIssues
+    ? "Review source links"
+    : canRefreshSourceLinks
+      ? "Refresh all source links"
+      : "No live document source";
+  const sourceActionDisabled = !hasSourceIssues && !canRefreshSourceLinks;
+
+  function handleDocumentSourceAction() {
+    if (hasSourceIssues) {
+      handleReviewSourceLinks();
+      return;
+    }
+    if (canRefreshSourceLinks) {
+      handleSyncFromDocument();
+    }
+  }
+
   return (
     <DeckToolbar>
       <div aria-hidden="true" className="flex-1" />
@@ -278,141 +264,20 @@ export function SlideEditorTopToolbar({
         <DeckToolbarDivider />
 
         <DeckToolbarGroup label="Document source">
-          <Popover
-            open={sourceMenuOpen}
-            onClose={() => setSourceMenuOpen(false)}
-            role="menu"
-            aria-label="Document source commands"
-            portal
-            className="w-72 p-2"
-            trigger={
-              <button
-                ref={sourceMenuTriggerRef}
-                type="button"
-                aria-label="Document source"
-                aria-haspopup="menu"
-                aria-expanded={sourceMenuOpen}
-                aria-controls={sourceMenuOpen ? sourceMenuId : undefined}
-                onClick={() => setSourceMenuOpen((open) => !open)}
-                className={cx(
-                  "relative flex h-7 items-center gap-1.5 rounded-ds-md px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
-                  FOCUS_RING,
-                )}
-              >
-                Source
-                <ChevronDown size={12} aria-hidden="true" />
-                {sourceReview.length > 0 ? (
-                  <span className="absolute -right-1 -top-1 rounded-full bg-ds-warning-surface px-1 text-[10px] font-bold text-ds-warning-text">
-                    {sourceReview.length}
-                  </span>
-                ) : null}
-              </button>
-            }
+          <DeckToolbarIconButton
+            label={sourceActionLabel}
+            tooltip={sourceActionLabel}
+            disabled={sourceActionDisabled}
+            onClick={handleDocumentSourceAction}
+            className="relative"
           >
-            <div
-              ref={sourceMenuPanelRef}
-              id={sourceMenuId}
-              className="space-y-1"
-              onKeyDown={handleSourceMenuKeyDown}
-            >
-              <div className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-secondary">
-                {sourceStatusLabel}
-              </div>
-              {documentSourceIndex ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleSyncFromDocument}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Refresh all source links
-                </button>
-              ) : null}
-              {sourceReview.length > 0 ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleReviewSourceLinks}
-                  className={cx(
-                    "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Review source links
-                </button>
-              ) : null}
-              {selectedSource && selectedNode && activeSlide ? (
-                <>
-                  <div className="my-1 border-t border-ds-border-subtle" />
-                  <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                    Selected source
-                  </p>
-                  <p className="truncate px-2 py-1 text-[11px] text-ds-text-secondary">
-                    {(selectedSource.blockKind ?? "source").toString()} ·{" "}
-                    {selectedSource.blockId ?? "linked"}
-                  </p>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      void handleRefreshSelectedSource();
-                      closeSourceMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Refresh selected source
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      handleUnlinkSourceAt(activeSlide.id, selectedNode.id);
-                      closeSourceMenuAndRestoreFocus();
-                    }}
-                    className={cx(
-                      "flex w-full items-center rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                      FOCUS_RING,
-                    )}
-                  >
-                    Mark selected as unlinked
-                  </button>
-                </>
-              ) : null}
-              {documentInsertBlocks.length > 0 ? (
-                <>
-                  <div className="my-1 border-t border-ds-border-subtle" />
-                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
-                    From document
-                  </p>
-                  {documentInsertBlocks.map((block) => (
-                    <button
-                      key={`${block.kind}:${block.id}`}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => handleInsertDocumentSourceBlock(block)}
-                      className={cx(
-                        "flex w-full min-w-0 flex-col items-start rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                        FOCUS_RING,
-                      )}
-                    >
-                      <span className="w-full truncate font-medium text-ds-text-primary">
-                        {block.displayLabel}
-                      </span>
-                      <span className="w-full truncate text-[10px] text-ds-text-muted">
-                        {sourceBlockKindLabel(block.kind)} · {block.id}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              ) : null}
-            </div>
-          </Popover>
+            <Link2 size={14} aria-hidden="true" />
+            {hasSourceIssues ? (
+              <span className="absolute -right-1 -top-1 rounded-full bg-ds-warning-surface px-1 text-[10px] font-bold text-ds-warning-text">
+                {sourceReview.length}
+              </span>
+            ) : null}
+          </DeckToolbarIconButton>
           {onRegenerate ? (
             <DeckToolbarIconButton
               label="Regenerate deck from document"

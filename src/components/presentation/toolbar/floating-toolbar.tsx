@@ -28,6 +28,7 @@ import {
   Ellipsis,
   Group,
   EyeOff,
+  FileText,
   IndentDecrease,
   IndentIncrease,
   Italic,
@@ -69,6 +70,10 @@ import {
   type CurrentObjectReorderCommandId,
   type CurrentObjectReorderMode,
 } from "@/lib/presentation/current-object-command-descriptors";
+import {
+  sourceBlockKindLabel,
+  type DocumentSourceInsertBlock,
+} from "@/lib/presentation/document-source-commands";
 import {
   focusFirstMenuCommand,
   isMenuCommandNavigationKey,
@@ -808,6 +813,8 @@ export interface ContextToolbarProps {
   onInsertVisual?: () => void;
   onInsertConnector?: () => void;
   onInsertTable?: () => void;
+  documentInsertBlocks?: readonly DocumentSourceInsertBlock[];
+  onInsertDocumentSourceBlock?: (block: DocumentSourceInsertBlock) => void;
   onDuplicateSlide?: () => void;
   onDeleteSlide?: () => void;
   canDeleteSlide?: boolean;
@@ -863,6 +870,8 @@ export function ContextToolbar({
   onInsertVisual,
   onInsertConnector,
   onInsertTable,
+  documentInsertBlocks,
+  onInsertDocumentSourceBlock,
   onDuplicateSlide,
   onDeleteSlide,
   canDeleteSlide = true,
@@ -877,6 +886,10 @@ export function ContextToolbar({
   const moreMenuId = useId();
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const moreMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [fromDocOpen, setFromDocOpen] = useState(false);
+  const fromDocMenuId = useId();
+  const fromDocMenuRef = useRef<HTMLDivElement | null>(null);
+  const fromDocMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const prevPositionRef = useRef({ top: -1000, left: -1000 });
   const isMultiSelect = selectedIds.length > 1;
   const slideToolInsertActions = buildSlideToolInsertActions({
@@ -985,6 +998,11 @@ export function ContextToolbar({
     if (!moreOpen) return;
     focusFirstMenuCommand(moreMenuRef.current);
   }, [moreOpen]);
+
+  useEffect(() => {
+    if (!fromDocOpen) return;
+    focusFirstMenuCommand(fromDocMenuRef.current);
+  }, [fromDocOpen]);
 
   const nodeType = selectedNode?.type;
   const showTextGroup =
@@ -1107,6 +1125,31 @@ export function ContextToolbar({
     }
   }
 
+  function closeFromDocMenuAndRestoreFocus() {
+    setFromDocOpen(false);
+    fromDocMenuTriggerRef.current?.focus();
+  }
+
+  function handleFromDocMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeFromDocMenuAndRestoreFocus();
+      return;
+    }
+    if (!isMenuCommandNavigationKey(event.key)) return;
+    if (
+      moveMenuCommandFocus({
+        container: fromDocMenuRef.current,
+        key: event.key,
+        currentTarget: event.target,
+      })
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
   /*! node:coverage ignore next 800 -- Server tests exercise toolbar branches by expanding public React elements; native coverage cannot follow the portal-rendered JSX path. */
   return (
     <FloatingSurface
@@ -1159,6 +1202,58 @@ export function ContextToolbar({
                 {renderContextToolbarInsertIcon(action.key)}
               </ContextToolbarButton>
             ))}
+            {documentInsertBlocks &&
+            documentInsertBlocks.length > 0 &&
+            onInsertDocumentSourceBlock ? (
+              <Popover
+                open={fromDocOpen}
+                onClose={() => setFromDocOpen(false)}
+                portal
+                align="center"
+                trigger={
+                  <ContextToolbarButton
+                    label="From document"
+                    buttonRef={fromDocMenuTriggerRef}
+                    hasPopup="menu"
+                    expanded={fromDocOpen}
+                    controls={fromDocOpen ? fromDocMenuId : undefined}
+                    onClick={() => setFromDocOpen((open) => !open)}
+                  >
+                    <FileText size={13} aria-hidden />
+                  </ContextToolbarButton>
+                }
+                className="max-h-[60vh] min-w-56 overflow-y-auto py-1"
+                aria-label="Insert from document"
+                role="menu"
+              >
+                <div
+                  ref={fromDocMenuRef}
+                  id={fromDocMenuId}
+                  className="flex flex-col"
+                  onKeyDown={handleFromDocMenuKeyDown}
+                >
+                  {documentInsertBlocks.map((block) => (
+                    <button
+                      key={`${block.kind}:${block.id}`}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onInsertDocumentSourceBlock(block);
+                        closeFromDocMenuAndRestoreFocus();
+                      }}
+                      className="flex w-full min-w-0 flex-col items-start px-3 py-1.5 text-left text-xs text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+                    >
+                      <span className="w-full truncate font-medium text-ds-text-primary">
+                        {block.displayLabel}
+                      </span>
+                      <span className="w-full truncate text-[10px] text-ds-text-muted">
+                        {sourceBlockKindLabel(block.kind)} · {block.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Popover>
+            ) : null}
             <ContextToolbarButton
               label="Duplicate slide"
               onClick={() => onDuplicateSlide?.()}

@@ -70,7 +70,6 @@ describe("SlideEditor toolbar command ownership", () => {
   test("blocks stage pointer handling while floating toolbar layers are open", () => {
     assert.equal(source.includes("const stageInteractionsBlocked ="), true);
     assert.equal(source.includes("deckChromeToolbarOpen ||"), true);
-    assert.equal(source.includes("sourceMenuOpen ||"), true);
     assert.equal(source.includes("compactToolbarMenuOpen ||"), true);
     assert.equal(source.includes("topToolbarSelectMenuOpen ||"), true);
     assert.equal(topToolbarSource.includes("onSelectMenuOpenChange"), true);
@@ -103,10 +102,6 @@ describe("SlideEditor toolbar command ownership", () => {
   test("portals top toolbar popovers out of clipped editor chrome", () => {
     assert.match(
       topToolbarSource,
-      /<Popover[\s\S]*aria-label="Document source commands"[\s\S]*portal[\s\S]*className="w-72 p-2"/,
-    );
-    assert.match(
-      topToolbarSource,
       /<Popover[\s\S]*aria-label="Slide master controls"[\s\S]*portal[\s\S]*className="max-h-\[calc\(100vh-6rem\)\] w-\[22rem\] overflow-y-auto p-0"/,
     );
     assert.match(
@@ -137,10 +132,7 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(topToolbarSource.includes('aria-label="Deck theme"'), true);
     assert.equal(topToolbarSource.includes('aria-label="Slide ratio"'), true);
     assert.equal(topToolbarSource.includes('label="Slide master"'), true);
-    assert.equal(
-      topToolbarSource.includes('aria-label="Document source"'),
-      true,
-    );
+    assert.equal(topToolbarSource.includes("sourceActionLabel"), true);
     assert.equal(
       topToolbarSource.includes('label="Regenerate deck from document"'),
       true,
