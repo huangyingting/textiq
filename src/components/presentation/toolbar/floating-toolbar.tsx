@@ -1114,7 +1114,7 @@ export function ContextToolbar({
       position={position}
       role="toolbar"
       aria-label="Context toolbar"
-      layer="tooltip"
+      layer="canvas"
       elevation="overlay"
       radius="sm"
       closeOnClickAway={false}

@@ -33,10 +33,12 @@ export const UI_LAYER = {
   raised: "z-raised",
   sticky: "z-sticky",
   header: "z-header",
+  canvas: "z-canvas",
   dropdown: "z-dropdown",
   overlay: "z-overlay",
   panel: "z-panel",
   modal: "z-modal",
+  menu: "z-menu",
   toast: "z-toast",
   tooltip: "z-tooltip",
 } as const;

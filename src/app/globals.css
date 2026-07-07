@@ -273,10 +273,12 @@
   --z-index-raised: 10; /* in-content floating controls (badges, HUDs, gutter) */
   --z-index-sticky: 20; /* sticky in-page toolbars / editor controls */
   --z-index-header: 30; /* global site header */
+  --z-index-canvas: 35; /* canvas/selection-anchored editing overlays (context toolbar, floating text toolbar) */
   --z-index-dropdown: 40; /* header/toolbar-anchored menus & popovers */
   --z-index-overlay: 50; /* full-screen scrims behind drawers/sheets */
   --z-index-panel: 60; /* drawers & side panels (slide editor, comments, nav) */
   --z-index-modal: 70; /* centered dialogs (self-scrim) & fullscreen present */
+  --z-index-menu: 75; /* menus/popovers opened from within a panel/modal (clear their opener) */
   --z-index-toast: 80; /* transient toasts / notifications */
   --z-index-tooltip: 90; /* tooltips — always on top */
 

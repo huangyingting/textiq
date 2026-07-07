@@ -72,10 +72,16 @@ Run `npm run design-system:check` before UI refactors. It is also part of
 The check rejects:
 
 - raw numeric z-index utilities like `z-10` or `z-[999]`; use semantic utilities
-  from the Tailwind bridge, such as `z-raised`, `z-dropdown`, `z-modal`, or
-  `z-toast`;
+  from the Tailwind bridge, such as `z-raised`, `z-canvas`, `z-dropdown`,
+  `z-panel`, `z-modal`, `z-menu`, or `z-toast`;
 - raw arbitrary hex color classes in feature components, such as
   `bg-[#ffffff]`; add or reuse a semantic token/theme utility instead.
+
+Pick the z tier by **what the surface is**, not by "what it must beat":
+canvas/selection-anchored editing overlays use `canvas`; side panels use `panel`;
+dialogs use `modal`; menus opened from inside a panel/dialog use `menu`; and
+`tooltip` is reserved for the `Tooltip` primitive. The full ordering and the
+migration status live in [z-order-plan.md](z-order-plan.md).
 
 Raw palette values are allowed only in token/theme-owned files and visual-content
 theme definitions.

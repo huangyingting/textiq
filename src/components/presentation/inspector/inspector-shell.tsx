@@ -1026,7 +1026,7 @@ export function InspectorShell({
     <aside
       role="region"
       aria-label="Inspector"
-      className="flex h-full w-80 shrink-0 flex-col overflow-hidden bg-ds-surface"
+      className="relative z-panel flex h-full w-80 shrink-0 flex-col overflow-hidden bg-ds-surface"
     >
       {/* Identity header */}
       <div className="flex items-center justify-between border-b border-ds-border-subtle px-3 py-2">

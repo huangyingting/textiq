@@ -33,6 +33,7 @@ import {
 } from "./block-id-runtime";
 import { createEditorPlugin, type CoreEditorPlugin } from "./editor-api";
 import { BLOCK_ID_REPAIR_TAG } from "@/lib/content";
+import { installTableObserverReadGuard } from "./table-observer-guard";
 import {
   useCollaborationFallbackSeed,
   useEditableGate,
@@ -126,6 +127,8 @@ function DocumentTablePlugin({
   hasHorizontalScroll?: boolean;
 }) {
   const [editor] = useLexicalComposerContext();
+
+  useEffect(() => installTableObserverReadGuard(editor), [editor]);
 
   useEffect(() => {
     const hadHorizontalScroll = $isScrollableTablesActive(editor);

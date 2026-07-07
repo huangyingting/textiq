@@ -157,7 +157,7 @@ function main() {
   for (const item of findings) {
     const guidance =
       item.rule === "raw-z-index"
-        ? "Use a named semantic z utility from globals.css (for example z-raised, z-modal, z-toast)."
+        ? "Use a named semantic z utility from globals.css (for example z-raised, z-canvas, z-panel, z-modal, z-menu, z-toast)."
         : item.rule === "raw-hex-class"
           ? "Move raw hex colors into the DS token/theme layer; feature class names must use semantic utilities."
           : "Use DS radius, elevation, and neutral utilities instead of raw chrome classes.";
