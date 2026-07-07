@@ -9,8 +9,22 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
-import { $getRoot, type EditorState } from "lexical";
+import {
+  $isScrollableTablesActive,
+  registerTableCellUnmergeTransform,
+  registerTablePlugin,
+  registerTableSelectionObserver,
+  setScrollableTablesActive,
+  TableCellNode,
+  TableNode,
+} from "@lexical/table";
+import {
+  $fullReconcile,
+  $getRoot,
+  $nodesOfType,
+  type EditorState,
+  type LexicalEditor,
+} from "lexical";
 import { useEffect, type ComponentProps } from "react";
 
 import {
@@ -73,6 +87,116 @@ function DurableBlockIdPlugin() {
     );
     return unregisterTransforms;
   }, [editor]);
+
+  return null;
+}
+
+function hasMountedTableDOM(editor: LexicalEditor): boolean {
+  let tableKeys: string[] = [];
+  editor.getEditorState().read(() => {
+    tableKeys = $nodesOfType(TableNode).map((node) => node.getKey());
+  });
+
+  return tableKeys.every((tableKey) => {
+    const element = editor.getElementByKey(tableKey);
+    return (
+      element?.tagName === "TABLE" || element?.querySelector("table") !== null
+    );
+  });
+}
+
+function isMissingTableDOMError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(
+      "TableObserver: Expected to find TableElement in DOM",
+    )
+  );
+}
+
+function DocumentTablePlugin({
+  hasCellMerge = true,
+  hasCellBackgroundColor = true,
+  hasTabHandler = true,
+  hasHorizontalScroll = false,
+}: {
+  hasCellMerge?: boolean;
+  hasCellBackgroundColor?: boolean;
+  hasTabHandler?: boolean;
+  hasHorizontalScroll?: boolean;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const hadHorizontalScroll = $isScrollableTablesActive(editor);
+    if (hadHorizontalScroll !== hasHorizontalScroll) {
+      setScrollableTablesActive(editor, hasHorizontalScroll);
+      editor.update($fullReconcile);
+    }
+  }, [editor, hasHorizontalScroll]);
+
+  useEffect(() => registerTablePlugin(editor), [editor]);
+
+  useEffect(() => {
+    let disposed = false;
+    let frame: number | null = null;
+    let unregister: (() => void) | undefined;
+
+    const scheduleRegister = () => {
+      if (disposed || frame !== null || unregister) {
+        return;
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        registerWhenTablesAreMounted();
+      });
+    };
+
+    const registerWhenTablesAreMounted = () => {
+      if (disposed || unregister) {
+        return;
+      }
+      if (!hasMountedTableDOM(editor)) {
+        scheduleRegister();
+        return;
+      }
+      try {
+        unregister = registerTableSelectionObserver(editor, hasTabHandler);
+      } catch (error) {
+        if (!isMissingTableDOMError(error)) {
+          throw error;
+        }
+        scheduleRegister();
+      }
+    };
+
+    registerWhenTablesAreMounted();
+
+    return () => {
+      disposed = true;
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+      unregister?.();
+    };
+  }, [editor, hasTabHandler]);
+
+  useEffect(() => {
+    if (!hasCellMerge) {
+      return registerTableCellUnmergeTransform(editor);
+    }
+  }, [editor, hasCellMerge]);
+
+  useEffect(() => {
+    if (hasCellBackgroundColor) {
+      return;
+    }
+    return editor.registerNodeTransform(TableCellNode, (node) => {
+      if (node.getBackgroundColor() !== null) {
+        node.setBackgroundColor(null);
+      }
+    });
+  }, [editor, hasCellBackgroundColor]);
 
   return null;
 }
@@ -152,11 +276,10 @@ export function createCoreEditorPlugins({
     createEditorPlugin("list", () => <ListPlugin />),
     createEditorPlugin("link", () => <LinkPlugin />),
     createEditorPlugin("table", () => (
-      <TablePlugin
+      <DocumentTablePlugin
         hasCellMerge={false}
         hasCellBackgroundColor={false}
         hasHorizontalScroll={false}
-        hasNestedTables={false}
         hasTabHandler
       />
     )),
