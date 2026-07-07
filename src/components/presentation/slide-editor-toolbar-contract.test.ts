@@ -84,6 +84,14 @@ describe("SlideEditor toolbar command ownership", () => {
     );
   });
 
+  test("resolves inline text editor styles from flattened render nodes", () => {
+    assert.match(
+      source,
+      /const resolvedEditNode = getSlideRenderLists\(\s*activeSlideTree,\s*\)\.userNodes\.find/,
+    );
+    assert.equal(source.includes("activeSlideTree.nodes.find"), false);
+  });
+
   test("keeps low-frequency toolbar commands behind a More menu", () => {
     assert.equal(
       topToolbarSource.includes('aria-label="Open more deck commands"'),

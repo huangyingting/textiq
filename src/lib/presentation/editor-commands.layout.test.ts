@@ -124,4 +124,76 @@ describe("moveNodesBy", () => {
     assert.equal(editedChild?.layout?.frame.x, targetChild.layout.frame.x + 5);
     assert.equal(editedChild?.layout?.frame.y, targetChild.layout.frame.y);
   });
+
+  test("scales grouped children when resizing a selected group", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const grouped = groupNodes(
+      deck,
+      slide.id,
+      slide.children.map((node) => node.id),
+      "resize-group",
+      { ref: "surface.card" },
+    );
+    const groupBeforeResize = findNode(
+      grouped.slides[0].children,
+      "resize-group",
+    );
+    assert.equal(groupBeforeResize?.type, "group");
+    if (groupBeforeResize?.type !== "group") return;
+    const childBefore = groupBeforeResize.children[0];
+    assert.ok(childBefore?.layout);
+    if (!childBefore?.layout || !groupBeforeResize.layout) return;
+
+    const resized = updateNodeLayout(grouped, slide.id, "resize-group", {
+      frame: {
+        ...groupBeforeResize.layout.frame,
+        w: groupBeforeResize.layout.frame.w * 2,
+        h: groupBeforeResize.layout.frame.h * 2,
+      },
+    });
+    const groupAfterResize = findNode(
+      resized.slides[0].children,
+      "resize-group",
+    );
+    assert.equal(groupAfterResize?.type, "group");
+    if (groupAfterResize?.type !== "group") return;
+    const childAfter = groupAfterResize.children[0];
+    assert.ok(childAfter?.layout);
+    assert.equal(childAfter.layout.frame.w, childBefore.layout.frame.w * 2);
+    assert.equal(childAfter.layout.frame.h, childBefore.layout.frame.h * 2);
+  });
+
+  test("rotates grouped children when rotating a selected group", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const grouped = groupNodes(
+      deck,
+      slide.id,
+      slide.children.map((node) => node.id),
+      "rotate-group",
+      { ref: "surface.card" },
+    );
+    const groupBeforeRotate = findNode(
+      grouped.slides[0].children,
+      "rotate-group",
+    );
+    assert.equal(groupBeforeRotate?.type, "group");
+    if (groupBeforeRotate?.type !== "group") return;
+    const childBefore = groupBeforeRotate.children[0];
+    assert.ok(childBefore?.layout);
+    if (!childBefore?.layout) return;
+
+    const rotated = updateNodeRotation(grouped, slide.id, "rotate-group", 90);
+    const groupAfterRotate = findNode(
+      rotated.slides[0].children,
+      "rotate-group",
+    );
+    assert.equal(groupAfterRotate?.type, "group");
+    if (groupAfterRotate?.type !== "group") return;
+    const childAfter = groupAfterRotate.children[0];
+    assert.ok(childAfter?.layout);
+    assert.notDeepEqual(childAfter.layout.frame, childBefore.layout.frame);
+    assert.equal(childAfter.layout.rotation, 90);
+  });
 });

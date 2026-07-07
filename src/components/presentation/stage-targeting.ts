@@ -45,17 +45,41 @@ export function resolveStageNodeTarget({
 }
 
 export function nextActiveGroupIdForStageTarget({
-  currentActiveGroupId,
   target,
 }: {
   currentActiveGroupId: string | null;
   target: StageNodeInteractionTarget;
 }): string | null {
-  if (target.parentGroupId) return target.parentGroupId;
-  if (currentActiveGroupId && target.nodeId !== currentActiveGroupId) {
-    return null;
+  return target.parentGroupId;
+}
+
+export function resolveProgressiveGroupTarget({
+  target,
+  nodes,
+  selectedNodeIds,
+  activeGroupId,
+}: {
+  target: StageNodeInteractionTarget;
+  nodes: readonly SlideChildNode[];
+  selectedNodeIds: readonly string[];
+  activeGroupId: string | null;
+}): StageNodeInteractionTarget {
+  if (!target.parentGroupId) return target;
+  if (
+    selectedNodeIds.includes(target.parentGroupId) ||
+    selectedNodeIds.includes(target.nodeId) ||
+    activeGroupId === target.parentGroupId
+  ) {
+    return target;
   }
-  return currentActiveGroupId;
+  const group = findNodeById(nodes, target.parentGroupId);
+  if (!group || group.type !== "group") return target;
+  return {
+    node: group,
+    nodeId: group.id,
+    candidateIds: [group.id, ...target.candidateIds],
+    parentGroupId: parentGroupIdForNode(nodes, group.id),
+  };
 }
 
 export function isStageNodeTargetSelected(

@@ -7,6 +7,7 @@ import type { StageHitCandidate } from "@/lib/presentation/stage-hit-test";
 import {
   isStageNodeTargetSelected,
   nextActiveGroupIdForStageTarget,
+  resolveProgressiveGroupTarget,
   resolveStageNodeTarget,
   stageCandidateNodeIds,
 } from "./stage-targeting";
@@ -115,6 +116,52 @@ describe("resolveStageNodeTarget", () => {
         target: target!,
       }),
       null,
+    );
+  });
+
+  test("progressive group targeting selects parent first, then child", () => {
+    const child = textNode("child");
+    const group: SlideChildNode = {
+      id: "group",
+      type: "group",
+      role: "card",
+      component: "custom",
+      layout: { frame: { x: 0, y: 0, w: 20, h: 20 }, zIndex: 2 },
+      style: { ref: "surface.card" },
+      children: [child],
+    };
+    const childTarget = resolveStageNodeTarget({
+      hits: [hit(child)],
+      nodes: [group],
+    });
+    assert.ok(childTarget);
+
+    assert.equal(
+      resolveProgressiveGroupTarget({
+        target: childTarget,
+        nodes: [group],
+        selectedNodeIds: [],
+        activeGroupId: null,
+      }).nodeId,
+      "group",
+    );
+    assert.equal(
+      resolveProgressiveGroupTarget({
+        target: childTarget,
+        nodes: [group],
+        selectedNodeIds: ["group"],
+        activeGroupId: null,
+      }).nodeId,
+      "child",
+    );
+    assert.equal(
+      resolveProgressiveGroupTarget({
+        target: childTarget,
+        nodes: [group],
+        selectedNodeIds: ["child"],
+        activeGroupId: "group",
+      }).nodeId,
+      "child",
     );
   });
 });

@@ -140,3 +140,30 @@ test("hitTestSlideNodes hits connector strokes with tolerance", () => {
     "background",
   );
 });
+
+test("hitTestSlideNodes includes group containers behind their children", () => {
+  const group: SlideChildNode = {
+    id: "group",
+    type: "group",
+    component: "custom",
+    layout: { frame: frame(10, 10, 60, 40), zIndex: 5 },
+    style: { ref: "surface.card" },
+    children: [textNode("group-child", 10, frame(20, 20, 20, 10), "Child")],
+  };
+
+  const childHits = hitTestSlideNodes({ x: 25, y: 25 }, [group], {
+    includeLocked: true,
+  });
+  const emptyGroupHits = hitTestSlideNodes({ x: 65, y: 45 }, [group], {
+    includeLocked: true,
+  });
+  const selectedGroupHits = hitTestSlideNodes({ x: 25, y: 25 }, [group], {
+    includeLocked: true,
+    selectedNodeIds: new Set(["group"]),
+  });
+
+  assert.equal(childHits[0]?.node.id, "group-child");
+  assert.ok(childHits.some((hit) => hit.node.id === "group"));
+  assert.equal(emptyGroupHits[0]?.node.id, "group");
+  assert.equal(selectedGroupHits[0]?.node.id, "group");
+});

@@ -265,29 +265,77 @@ function appendNodeAtPath(
   );
 }
 
-function translateNodeTree(
+function scaleNodeTreeForFrameChange(
   node: SlideChildNode,
-  delta: { x: number; y: number },
+  oldFrame: LayoutBox["frame"],
+  newFrame: LayoutBox["frame"],
 ): SlideChildNode {
-  const layout = node.layout
-    ? {
-        ...node.layout,
-        frame: {
-          ...node.layout.frame,
-          x: node.layout.frame.x + delta.x,
-          y: node.layout.frame.y + delta.y,
-        },
-      }
-    : node.layout;
+  if (!node.layout) return node;
+  const scaleX = oldFrame.w === 0 ? 1 : newFrame.w / oldFrame.w;
+  const scaleY = oldFrame.h === 0 ? 1 : newFrame.h / oldFrame.h;
+  const frame = node.layout.frame;
+  const layout = {
+    ...node.layout,
+    frame: {
+      x: newFrame.x + (frame.x - oldFrame.x) * scaleX,
+      y: newFrame.y + (frame.y - oldFrame.y) * scaleY,
+      w: Math.max(0.5, frame.w * scaleX),
+      h: Math.max(0.5, frame.h * scaleY),
+    },
+  };
   if (node.type === "group") {
     return {
       ...node,
-      ...(layout ? { layout } : {}),
-      children: node.children.map((child) => translateNodeTree(child, delta)),
+      layout,
+      children: node.children.map((child) =>
+        scaleNodeTreeForFrameChange(child, oldFrame, newFrame),
+      ),
     };
   }
-  if (!layout) return node;
   return { ...node, layout } as SlideChildNode;
+}
+
+function rotateNodeTreeAroundPoint(
+  node: SlideChildNode,
+  center: { x: number; y: number },
+  deltaDegrees: number,
+): SlideChildNode {
+  if (!node.layout) return node;
+  const radians = (deltaDegrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const frame = node.layout.frame;
+  const nodeCenterX = frame.x + frame.w / 2;
+  const nodeCenterY = frame.y + frame.h / 2;
+  const dx = nodeCenterX - center.x;
+  const dy = nodeCenterY - center.y;
+  const nextCenterX = center.x + dx * cos - dy * sin;
+  const nextCenterY = center.y + dx * sin + dy * cos;
+  const layout = {
+    ...node.layout,
+    frame: {
+      ...frame,
+      x: nextCenterX - frame.w / 2,
+      y: nextCenterY - frame.h / 2,
+    },
+    rotation: normalizeRotation((node.layout.rotation ?? 0) + deltaDegrees),
+  };
+  if (node.type === "group") {
+    return {
+      ...node,
+      layout,
+      children: node.children.map((child) =>
+        rotateNodeTreeAroundPoint(child, center, deltaDegrees),
+      ),
+    };
+  }
+  return { ...node, layout } as SlideChildNode;
+}
+
+function shortestRotationDelta(from: number | undefined, to: number): number {
+  const start = normalizeRotation(from ?? 0);
+  const end = normalizeRotation(to);
+  return ((((end - start) % 360) + 540) % 360) - 180;
 }
 
 function duplicateNodeWithIds(
@@ -1039,19 +1087,35 @@ export function updateNodeLayout(
       const nextLayout = node.layout
         ? { ...node.layout, ...layoutPatch }
         : (layoutPatch as LayoutBox);
-      if (node.type === "group" && node.layout?.frame && layoutPatch.frame) {
-        const delta = {
-          x: layoutPatch.frame.x - node.layout.frame.x,
-          y: layoutPatch.frame.y - node.layout.frame.y,
-        };
-        if (delta.x !== 0 || delta.y !== 0) {
-          return {
-            ...node,
-            layout: nextLayout,
-            children: node.children.map((child) =>
-              translateNodeTree(child, delta),
+      if (node.type === "group" && node.layout?.frame) {
+        let children = node.children;
+        if (layoutPatch.frame) {
+          children = children.map((child) =>
+            scaleNodeTreeForFrameChange(
+              child,
+              node.layout!.frame,
+              layoutPatch.frame as LayoutBox["frame"],
             ),
-          };
+          );
+        }
+        if (layoutPatch.rotation !== undefined) {
+          const frame = layoutPatch.frame ?? node.layout.frame;
+          const delta = shortestRotationDelta(
+            node.layout.rotation,
+            layoutPatch.rotation,
+          );
+          if (delta !== 0) {
+            const center = {
+              x: frame.x + frame.w / 2,
+              y: frame.y + frame.h / 2,
+            };
+            children = children.map((child) =>
+              rotateNodeTreeAroundPoint(child, center, delta),
+            );
+          }
+        }
+        if (children !== node.children) {
+          return { ...node, layout: nextLayout, children };
         }
       }
       return { ...node, layout: nextLayout } as SlideChildNode;

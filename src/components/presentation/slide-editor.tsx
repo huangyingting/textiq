@@ -63,7 +63,10 @@ import {
   sourceBlockKindLabel,
 } from "@/lib/presentation/document-source-commands";
 import type { InspectorPanelId } from "@/lib/presentation/inspector-panel-ui";
-import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
+import {
+  getSlideRenderLists,
+  type ResolvedRenderNode,
+} from "@/lib/presentation/render-tree";
 import {
   emptySlideSpecFromLayout,
   slideSpecFromSlide,
@@ -130,7 +133,6 @@ import {
 } from "./selection-model";
 import {
   adjacentInlineEditableNodeId,
-  childIdsForGroup,
   findNodeById,
   flattenEditorNodes,
   nodesInReadingOrder,
@@ -1290,8 +1292,8 @@ export function SlideEditor({
       }),
     );
     setSelection((s) => setSelectedNodeIds(s, [groupId]));
-    setActiveGroupId(groupId);
-    setStageAnnouncement("Grouped nodes. Group context active.");
+    setActiveGroupId(null);
+    setStageAnnouncement("Grouped nodes");
     focusSelectedNodeSoon(groupId);
   }
 
@@ -1299,9 +1301,7 @@ export function SlideEditor({
     if (!activeSlide || !selectedNode || selectedNode.type !== "group") return;
     const result = ungroupNodes(deck, activeSlide.id, selectedNode.id);
     onDeckChange(result.deck);
-    setActiveGroupId((current) =>
-      current === selectedNode.id ? null : current,
-    );
+    setActiveGroupId(null);
     if (result.nodeIds.length > 0) {
       setSelection((s) => setSelectedNodeIds(s, result.nodeIds));
       setStageAnnouncement("Ungrouped nodes");
@@ -1512,24 +1512,11 @@ export function SlideEditor({
     setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
     setFocusedNodeId(targetNodeId);
 
-    if (target.parentGroupId && activeGroupId !== target.parentGroupId) {
-      setActiveGroupId(target.parentGroupId);
-      setStageAnnouncement("Entered group. Press Escape to exit group.");
-      return;
-    }
-
     applyStageTargetContext(target);
 
     if (node.locked) return;
 
     if (node.type === "group") {
-      setActiveGroupId(node.id);
-      const firstChildId = childIdsForGroup(activeSlide.children, node.id)[0];
-      if (firstChildId) {
-        setSelection((s) => setSelectedNodeIds(s, [firstChildId]));
-        focusSelectedNodeSoon(firstChildId);
-      }
-      setStageAnnouncement("Entered group. Press Escape to exit group.");
       return;
     }
     if (node.type === "table") {
@@ -1813,11 +1800,20 @@ export function SlideEditor({
         setActiveGroupId(null);
         return;
       }
-      if (activeGroupId && !findNodeById(activeSlide.children, activeGroupId)) {
-        setActiveGroupId(null);
-      }
+      const parentIds = selectedIds
+        .map((id) => parentGroupIdForNode(activeSlide.children, id))
+        .filter((id): id is string => id !== null);
+      const nextActiveGroupId =
+        parentIds.length === selectedIds.length &&
+        parentIds.length > 0 &&
+        parentIds.every((id) => id === parentIds[0])
+          ? parentIds[0]
+          : null;
+      setActiveGroupId((current) =>
+        current === nextActiveGroupId ? current : nextActiveGroupId,
+      );
     });
-  }, [activeGroupId, activeSlide]);
+  }, [activeSlide, selectedIds]);
 
   // Also find the selected resolved node to support decoration detach
   const selectedResolvedNode: ResolvedRenderNode | undefined =
@@ -2411,25 +2407,6 @@ export function SlideEditor({
             {stageAnnouncement}
           </div>
 
-          {activeGroupId ? (
-            <div className="absolute left-4 top-4 z-panel flex items-center gap-2 rounded-ds-md border border-ds-warning-border bg-ds-warning-surface px-2.5 py-1.5 text-xs text-ds-warning-text shadow-ds-popover">
-              <span>Editing group</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const groupId = activeGroupId;
-                  setActiveGroupId(null);
-                  setSelection((s) => setSelectedNodeIds(s, [groupId]));
-                  focusSelectedNodeSoon(groupId);
-                  setStageAnnouncement("Exited group");
-                }}
-                className="rounded-ds-sm px-1.5 py-0.5 font-medium underline-offset-2 hover:underline"
-              >
-                Exit
-              </button>
-            </div>
-          ) : null}
-
           {/* Context / Popover Toolbar */}
           {contextMenu && activeSlide
             ? (() => {
@@ -2673,9 +2650,9 @@ export function SlideEditor({
                         editNode.type === "text"
                           ? editNode.content.paragraphs
                           : [{ id: `${inlineEditNodeId}-p-1`, text: "" }];
-                      const resolvedEditNode = activeSlideTree.nodes.find(
-                        (node) => node.id === inlineEditNodeId,
-                      );
+                      const resolvedEditNode = getSlideRenderLists(
+                        activeSlideTree,
+                      ).userNodes.find((node) => node.id === inlineEditNodeId);
                       const inlineEditFrame =
                         stageNodeGestureDrafts?.get(inlineEditNodeId)?.frame ??
                         editNode.layout.frame;
@@ -2829,7 +2806,6 @@ export function SlideEditor({
         sourceReviewCount={sourceReview.length}
         sourceStatusLabel={sourceStatusLabel}
         diagnosticsCount={diagnostics.length}
-        activeGroupId={activeGroupId}
         tableEditingNodeId={tableEditingNodeId}
         selectionMode={selection.mode}
         selectedCount={selectedIds.length}

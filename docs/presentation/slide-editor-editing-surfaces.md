@@ -132,6 +132,32 @@ It excludes:
 - Bring to front, send to back, bring forward, and send backward.
 - Style, color, typography, crop, image adjustment, source, binding, diagnostics, and inspector-tab navigation.
 
+## Group Selection And Editing
+
+Grouping is a structural operation, not an editing mode.
+
+Group behavior:
+
+- Grouping selected elements creates a group and selects the new group.
+- Grouping does not enter a persistent group editing mode.
+- The editor does not show an `Editing group` badge or an `Exit` button.
+- Ungrouping removes only the selected group layer and selects the former children.
+- Ungrouping does not recursively ungroup nested groups.
+
+Group child selection uses progressive clicks:
+
+- First click on a grouped element selects the parent group.
+- When the parent group is already selected, clicking a child selects that child.
+- When a group child is selected, its popover toolbar and right inspector panel show the child configuration, not the parent group configuration.
+- Clicking empty space inside the selected group keeps the parent group selected.
+- Double-clicking a grouped text/table child enters that child editing surface directly; double-clicking grouped shapes, images, visuals, or connectors selects the child.
+
+Group context is visual only:
+
+- When a group child is selected, the parent group may show a lightweight context outline.
+- The context outline does not create a mode and does not need an explicit Exit action.
+- Escape exits by selection hierarchy: text/table editing first, then child to parent group, then parent group to canvas/no selection.
+
 ## Layer Management
 
 Layering is type-banded rather than globally freeform. The system keeps stable type bands for slide objects, and users manage order only within compatible layer groups.

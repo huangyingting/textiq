@@ -90,6 +90,7 @@ import {
 } from "./stage-pointer-interactions";
 import {
   nextActiveGroupIdForStageTarget,
+  resolveProgressiveGroupTarget,
   resolveStageNodeTarget,
   stageCandidateNodeIds,
   type StageNodeInteractionTarget,
@@ -189,6 +190,41 @@ export function topLevelSelectedNodeIds(
     }
   }
   return result;
+}
+
+function collectTransformEntriesForNodeTree(
+  node: SlideChildNode,
+): MultiSelectionTransformEntry[] {
+  const entries: MultiSelectionTransformEntry[] = node.layout
+    ? [
+        {
+          id: node.id,
+          frame: node.layout.frame,
+          rotation: node.layout.rotation,
+        },
+      ]
+    : [];
+  if (node.type === "group") {
+    for (const child of node.children) {
+      entries.push(...collectTransformEntriesForNodeTree(child));
+    }
+  }
+  return entries;
+}
+
+export function collectMovePreviewFrames(
+  nodes: readonly SlideChildNode[],
+  nodeIds: readonly string[],
+): Map<string, LayoutBox["frame"]> {
+  const frames = new Map<string, LayoutBox["frame"]>();
+  for (const id of nodeIds) {
+    const node = findNodeById(nodes, id);
+    if (!node || node.locked) continue;
+    for (const entry of collectTransformEntriesForNodeTree(node)) {
+      frames.set(entry.id, entry.frame);
+    }
+  }
+  return frames;
 }
 
 /* node:coverage ignore next 1462 */
@@ -886,11 +922,19 @@ export function useStageGestureController(
       return;
     }
 
-    const target = resolveStageNodeTarget({
+    const resolvedTarget = resolveStageNodeTarget({
       hits,
       nodes: activeSlide.children,
       fallbackNodeId: nodeId,
     });
+    const target = resolvedTarget
+      ? resolveProgressiveGroupTarget({
+          target: resolvedTarget,
+          nodes: activeSlide.children,
+          selectedNodeIds: selectedIds,
+          activeGroupId,
+        })
+      : null;
     if (!target) return;
     const targetNodeId = target.nodeId;
     if (inlineEditNodeId && inlineEditNodeId !== targetNodeId) {
@@ -920,16 +964,17 @@ export function useStageGestureController(
     const rect = canvasRectFromEvent(event);
     if (!hasUsableCanvasArea(rect)) return;
 
-    const originalFrames = new Map<string, LayoutBox["frame"]>();
-    for (const id of dragIds) {
-      const node = findNodeById(activeSlide.children, id);
-      if (!node?.layout || node.locked) continue;
-      originalFrames.set(id, node.layout.frame);
-    }
+    const originalFrames = collectMovePreviewFrames(
+      activeSlide.children,
+      dragIds,
+    );
     if (originalFrames.size === 0) return;
     const alignmentGuides = [
       ...alignmentGuidesForFrames(
-        layoutFramesExcluding(activeSlide.children, new Set(dragIds)),
+        layoutFramesExcluding(
+          activeSlide.children,
+          new Set(originalFrames.keys()),
+        ),
       ),
       ...customGuides,
     ];
@@ -1055,6 +1100,79 @@ export function useStageGestureController(
       ),
       ...customGuides,
     ];
+
+    if (node.type === "group") {
+      const entries = collectTransformEntriesForNodeTree(node);
+      const excludedIds = new Set(entries.map((entry) => entry.id));
+      const groupAlignmentGuides = [
+        ...alignmentGuidesForFrames(
+          layoutFramesExcluding(activeSlide.children, excludedIds),
+        ),
+        ...customGuides,
+      ];
+      const gesture = createSingleCommitGesture<NodeMovePreview>({
+        initialValue: { patches: new Map(), guides: [] },
+        equals: nodeMovePreviewsEqual,
+        onPreview: (preview) => {
+          setMoveGestureDraft(nodeMoveGestureDrafts(preview));
+          setStageGuides(preview?.guides ?? []);
+        },
+        onCommit: (preview) => {
+          const groupPatch = preview.patches.get(nodeId);
+          if (!groupPatch) return;
+          onDeckChange(
+            updateNodeLayouts(
+              deck,
+              activeSlide.id,
+              new Map([[nodeId, groupPatch]]),
+            ),
+          );
+        },
+      });
+
+      startPointerDragLifecycle(event, {
+        onMove: (moveEvent) => {
+          const delta = clientDeltaPct({
+            startClientX: startX,
+            startClientY: startY,
+            nextClientX: moveEvent.clientX,
+            nextClientY: moveEvent.clientY,
+            rectWidth: rect.width,
+            rectHeight: rect.height,
+          });
+          const constrainAspect =
+            node.layout?.constraints?.preserveAspectRatio === true ||
+            moveEvent.shiftKey;
+          const resized = resizeFrame(originalFrame, handle, delta.x, delta.y);
+          const nextFrame = constrainAspect
+            ? applyAspectLock(originalFrame, resized)
+            : resized;
+          const snapped =
+            snapToGuides && !moveEvent.altKey
+              ? snapFrameToStageGuides(nextFrame, 0.75, groupAlignmentGuides)
+              : { frame: nextFrame, guides: [] as StageGuide[] };
+          lastSnappedGuides = snapped.guides;
+          gesture.update({
+            patches: scaleMultiSelectionFrames(
+              entries,
+              originalFrame,
+              snapped.frame,
+            ),
+            guides: snapped.guides,
+          });
+        },
+        onEnd: () => {
+          gesture.finish();
+          const snapAnnouncement = snappedGuideAnnouncement(lastSnappedGuides);
+          if (snapAnnouncement) setStageAnnouncement(snapAnnouncement);
+          setMoveGestureDraft(null);
+          setActiveResizeHandle(null);
+          setStageGuides([]);
+        },
+      });
+      return;
+    }
+
     const gesture = createSingleCommitGesture<LayoutBox["frame"]>({
       initialValue: originalFrame,
       equals: framesEqual,
@@ -1298,6 +1416,64 @@ export function useStageGestureController(
     );
     const startRotation = node.layout.rotation ?? 0;
 
+    if (node.type === "group") {
+      const entries = collectTransformEntriesForNodeTree(node);
+      const centerPct = {
+        x: node.layout.frame.x + node.layout.frame.w / 2,
+        y: node.layout.frame.y + node.layout.frame.h / 2,
+      };
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveRotationNodeId(nodeId);
+      setSelection((s) => setSelectedNodeIds(s, [nodeId]));
+      const gesture = createSingleCommitGesture<NodeMovePreview>({
+        initialValue: { patches: new Map(), guides: [] },
+        equals: nodeMovePreviewsEqual,
+        onPreview: (preview) =>
+          setMoveGestureDraft(nodeMoveGestureDrafts(preview)),
+        onCommit: (preview) => {
+          const groupPatch = preview.patches.get(nodeId);
+          if (!groupPatch) return;
+          onDeckChange(
+            updateNodeLayouts(
+              deck,
+              activeSlide.id,
+              new Map([[nodeId, groupPatch]]),
+            ),
+          );
+        },
+      });
+
+      startPointerDragLifecycle(event, {
+        onMove: (moveEvent) => {
+          const angle = clientAngleDegrees(
+            { x: moveEvent.clientX, y: moveEvent.clientY },
+            center,
+          );
+          const delta = snapRotationDegrees(
+            angle - startAngle,
+            !moveEvent.altKey,
+          );
+          gesture.update({
+            patches: rotateMultiSelectionFrames(
+              entries,
+              centerPct.x,
+              centerPct.y,
+              delta,
+            ),
+            guides: [],
+          });
+          setStageAnnouncement(`Rotated group ${Math.round(delta)} degrees`);
+        },
+        onEnd: () => {
+          gesture.finish();
+          setMoveGestureDraft(null);
+          setActiveRotationNodeId(null);
+        },
+      });
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
     setActiveRotationNodeId(nodeId);
@@ -1429,7 +1605,7 @@ export function useStageGestureController(
         setActiveGroupId(null);
         setSelection((s) => setSelectedNodeIds(s, [groupId]));
         focusSelectedNodeSoon(groupId);
-        setStageAnnouncement("Exited group");
+        setStageAnnouncement("Selected parent group");
         event.preventDefault();
         return;
       }
@@ -1449,16 +1625,16 @@ export function useStageGestureController(
         return;
       }
       if (selectedNode.type === "group") {
-        setActiveGroupId(selectedNode.id);
         const firstChildId = childIdsForGroup(
           activeSlide.children,
           selectedNode.id,
         )[0];
         if (firstChildId) {
           setSelection((s) => setSelectedNodeIds(s, [firstChildId]));
+          setActiveGroupId(selectedNode.id);
           focusSelectedNodeSoon(firstChildId);
         }
-        setStageAnnouncement("Entered group. Press Escape to exit group.");
+        setStageAnnouncement("Selected group child");
         event.preventDefault();
         return;
       }

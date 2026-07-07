@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { topLevelSelectedNodeIds } from "./use-stage-gesture-controller";
+import {
+  collectMovePreviewFrames,
+  topLevelSelectedNodeIds,
+} from "./use-stage-gesture-controller";
 import type { SlideChildNode } from "@/lib/presentation/schema";
 
 const frame = { x: 0, y: 0, w: 10, h: 10 };
@@ -52,5 +55,22 @@ describe("stage gesture controller helpers", () => {
     assert.deepEqual(topLevelSelectedNodeIds(nodes, new Set(["child-b"])), [
       "child-b",
     ]);
+  });
+
+  test("collects group descendants for live move previews", () => {
+    const nodes: SlideChildNode[] = [
+      {
+        id: "group-a",
+        type: "group",
+        component: "custom",
+        layout: { frame, zIndex: 2 },
+        children: [textNode("child-a"), textNode("child-b")],
+      },
+    ];
+
+    assert.deepEqual(
+      [...collectMovePreviewFrames(nodes, ["group-a"]).keys()],
+      ["group-a", "child-a", "child-b"],
+    );
   });
 });

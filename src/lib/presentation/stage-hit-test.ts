@@ -56,11 +56,10 @@ const SCORE = {
 function flattenHitNodes(nodes: readonly SlideChildNode[]): SlideChildNode[] {
   const result: SlideChildNode[] = [];
   for (const node of nodes) {
+    result.push(node);
     if (node.type === "group") {
       result.push(...flattenHitNodes(node.children));
-      continue;
     }
-    result.push(node);
   }
   return result;
 }

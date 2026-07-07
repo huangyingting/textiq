@@ -5,6 +5,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { resolveDeckRenderTree } from "@/lib/presentation/render-resolver";
+import { getSlideRenderLists } from "@/lib/presentation/render-tree";
 import {
   groupNodes,
   moveNodesBy,
@@ -14,6 +15,7 @@ import {
   buildDeck,
   buildCoverSlide,
   buildContentSlide,
+  buildSlide,
   buildMinimalThemePackage,
   buildShapeNode,
   buildTextNode,
@@ -123,6 +125,33 @@ describe("resolveDeckRenderTree", () => {
       alt: "Quarterly highlight alt",
       decorative: false,
     });
+  });
+
+  test("includes grouped children in flattened user render lists with resolved styles", () => {
+    resetBuilderCounter();
+    const groupedText = buildTextNode({
+      id: "grouped-text",
+      layout: { frame: { x: 20, y: 22, w: 30, h: 8 }, zIndex: 2 },
+      localStyle: { text: { fontSizePt: 22, fontFamily: "Georgia" } },
+    });
+    const group = {
+      id: "group-node",
+      type: "group" as const,
+      component: "custom" as const,
+      layout: { frame: { x: 18, y: 20, w: 36, h: 14 }, zIndex: 3 },
+      style: { ref: "surface.card" as const },
+      children: [groupedText],
+    };
+    const slide = buildSlide("content", [group]);
+    const deck = buildDeck([slide]);
+
+    const result = resolveDeckRenderTree(deck, buildMinimalThemePackage());
+    const resolvedGroupedText = getSlideRenderLists(
+      result.slides[0],
+    ).userNodes.find((node) => node.id === groupedText.id);
+
+    assert.equal(resolvedGroupedText?.style.text?.fontSizePt, 22);
+    assert.equal(resolvedGroupedText?.style.text?.fontFamily, "Georgia");
   });
 
   test("resolves connector node endpoints to target anchor points", () => {

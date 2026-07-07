@@ -120,7 +120,6 @@ function footerProps(
     sourceReviewCount: 0,
     sourceStatusLabel: "No source issues",
     diagnosticsCount: 0,
-    activeGroupId: null,
     tableEditingNodeId: null,
     selectionMode: "normal",
     selectedCount: 0,
@@ -188,7 +187,6 @@ describe("SlideEditorFooter", () => {
         sourceReviewCount: 2,
         sourceStatusLabel: "2 source issues",
         diagnosticsCount: 1,
-        activeGroupId: "group-a",
         tableEditingNodeId: "table-a",
         selectionMode: "layers",
         selectedCount: 2,
@@ -207,7 +205,7 @@ describe("SlideEditorFooter", () => {
     assert.match(html, /Save failed/);
     assert.match(html, /Network offline/);
     assert.match(html, /1 diagnostic/);
-    assert.match(html, /Group edit/);
+    assert.doesNotMatch(html, /Group edit/);
     assert.match(html, /Table edit/);
     assert.match(html, /Layers mode/);
     assert.match(html, /2 nodes selected/);

@@ -121,7 +121,6 @@ interface SlideEditorFooterProps {
   sourceReviewCount: number;
   sourceStatusLabel: string;
   diagnosticsCount: number;
-  activeGroupId: string | null;
   tableEditingNodeId: string | null;
   selectionMode: "normal" | "layers";
   selectedCount: number;
@@ -165,7 +164,6 @@ export function SlideEditorFooter({
   sourceReviewCount,
   sourceStatusLabel,
   diagnosticsCount,
-  activeGroupId,
   tableEditingNodeId,
   selectionMode,
   selectedCount,
@@ -455,7 +453,6 @@ export function SlideEditorFooter({
                 {diagnosticSummary}
               </button>
             ) : null}
-            {activeGroupId ? <p>Group edit</p> : null}
             {tableEditingNodeId ? <p>Table edit</p> : null}
             {selectionMode !== "normal" ? <p>{selectionModeLabel}</p> : null}
             {shouldShowSelectionStatus ? <p>{selectedNodeSummary}</p> : null}
@@ -547,7 +544,6 @@ export function SlideEditorFooter({
             {diagnosticSummary}
           </button>
         ) : null}
-        {activeGroupId ? <span>Group edit</span> : null}
         {tableEditingNodeId ? <span>Table edit</span> : null}
         {selectionMode !== "normal" ? <span>{selectionModeLabel}</span> : null}
         {shouldShowSelectionStatus ? (
