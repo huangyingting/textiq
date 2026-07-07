@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modal · 04 Toolbar Footer Checklist</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+  /* ── Spec header ──────────────────────────────────────────────────── */
+  .spec {
+    padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface); flex-shrink: 0;
+  }
+  .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 700px; }
+  .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+  .spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle-btn {
+    padding: 4px 10px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border: 1px solid var(--ds-accent-border); font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .toggle-btn:hover { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+
+  /* ── Stage ────────────────────────────────────────────────────────── */
+  .stage { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+
+  .faux-editor { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .faux-toolbar {
+    height: 40px; flex-shrink: 0; background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    display: flex; align-items: center; gap: 6px; padding: 0 14px; filter: blur(0.4px);
+  }
+  .faux-logo { width: 20px; height: 20px; background: var(--ds-accent); border-radius: 4px; }
+  .faux-sep { width: 1px; height: 18px; background: var(--ds-border-subtle); margin: 0 4px; }
+  .faux-tab { height: 24px; border-radius: var(--ds-radius-sm); background: var(--ds-surface-sunken); }
+  .faux-workspace { flex: 1; display: flex; min-height: 0; }
+  .faux-filmstrip {
+    width: 80px; flex-shrink: 0; background: var(--ds-surface-sunken);
+    border-right: 1px solid var(--ds-border-subtle);
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; filter: blur(0.4px);
+  }
+  .faux-thumb {
+    width: 64px; height: 36px; border-radius: 4px; background: var(--ds-surface);
+    border: 1px solid var(--ds-border-subtle); box-shadow: var(--ds-shadow-raised);
+    position: relative; overflow: hidden; flex-shrink: 0;
+  }
+  .faux-thumb.active { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .thumb-line { position: absolute; height: 4px; border-radius: 2px; background: var(--ds-surface-sunken); }
+  .faux-canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center; filter: blur(0.4px);
+  }
+  .faux-slide {
+    width: 380px; height: 214px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay);
+    padding: 20px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .slide-h { height: 14px; border-radius: 3px; background: var(--ds-surface-sunken); }
+  .slide-l { height: 8px; border-radius: 2px; background: var(--ds-surface-sunken); }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: absolute; inset: 0; background: var(--ds-backdrop);
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    transition: opacity var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  /* Modal panel — wider for checklist layout */
+  .modal {
+    background: var(--ds-surface-overlay);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-overlay);
+    width: 100%; max-width: 500px;
+    display: flex; flex-direction: column;
+    font-family: var(--ds-font-sans); max-height: calc(100% - 32px);
+  }
+
+  /* Header with breadcrumb style */
+  .modal-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .breadcrumb { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+  .breadcrumb-step { font-size: 11px; color: var(--ds-text-muted); font-weight: 500; }
+  .breadcrumb-sep { font-size: 11px; color: var(--ds-text-muted); }
+  .breadcrumb-cur { font-size: 12px; font-weight: 700; color: var(--ds-text-primary); }
+  .header-badge {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: var(--ds-radius-pill);
+    background: var(--ds-warning-surface); color: var(--ds-warning-text);
+    border: 1px solid var(--ds-warning-border); flex-shrink: 0;
+  }
+  .modal-close {
+    width: 26px; height: 26px; border-radius: var(--ds-radius-sm);
+    border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted); flex-shrink: 0;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .modal-close:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .modal-close:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+  /* Summary strip below header */
+  .summary-strip {
+    display: flex; gap: 0; border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .summary-cell {
+    flex: 1; padding: 7px 14px;
+    border-right: 1px solid var(--ds-border-subtle);
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .summary-cell:last-child { border-right: none; }
+  .sc-val { font-size: 18px; font-weight: 700; color: var(--ds-text-primary); line-height: 1.1; }
+  .sc-val.pass-c { color: var(--ds-success-text); }
+  .sc-val.warn-c { color: var(--ds-warning-text); }
+  .sc-val.error-c { color: var(--ds-danger-text); }
+  .sc-label { font-size: 10px; color: var(--ds-text-muted); }
+
+  /* Body */
+  .modal-body { padding: 10px 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+
+  .section-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ds-text-muted); padding: 2px 0 4px;
+    border-bottom: 1px solid var(--ds-border-subtle); margin-bottom: 2px;
+  }
+
+  /* Checklist table layout */
+  .checklist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .check-row {
+    display: grid; grid-template-columns: 18px 1fr auto auto;
+    align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: var(--ds-radius-sm);
+    font-size: 12px; cursor: default;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .check-row:hover { background: var(--ds-state-hover); }
+  .cr-icon { display: flex; align-items: center; justify-content: center; }
+  .cr-icon.pass { color: var(--ds-success-text); }
+  .cr-icon.warn { color: var(--ds-warning-text); }
+  .cr-icon.error { color: var(--ds-danger-text); }
+  .cr-name { font-weight: 500; color: var(--ds-text-primary); }
+  .cr-note { font-size: 10.5px; color: var(--ds-text-muted); }
+  .cr-target { font-size: 10px; color: var(--ds-text-muted); font-family: var(--ds-font-mono); }
+  .cr-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    padding: 2px 5px; border-radius: var(--ds-radius-pill);
+    white-space: nowrap;
+  }
+  .badge-pass { background: var(--ds-success-surface); color: var(--ds-success-text); border: 1px solid var(--ds-success-border); }
+  .badge-warn { background: var(--ds-warning-surface); color: var(--ds-warning-text); border: 1px solid var(--ds-warning-border); }
+  .badge-error { background: var(--ds-danger-surface); color: var(--ds-danger-text); border: 1px solid var(--ds-danger-border); }
+
+  /* Toolbar footer */
+  .modal-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px 8px 10px;
+    border-top: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+    background: var(--ds-surface-sunken);
+  }
+  .footer-toolbar { display: flex; align-items: center; gap: 2px; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: var(--ds-radius-sm);
+    border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .footer-actions { display: flex; gap: 6px; align-items: center; }
+  .btn {
+    padding: 6px 14px; border-radius: var(--ds-radius-pill);
+    font-size: 12px; font-weight: 600; font-family: var(--ds-font-sans);
+    cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 5px;
+    transition: all var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .btn-ghost { background: transparent; color: var(--ds-text-secondary); border: 1px solid var(--ds-border-strong); }
+  .btn-ghost:hover { background: var(--ds-state-hover); }
+  .btn-primary { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+  .btn-primary:hover { background: var(--ds-accent-hover); }
+  .btn-sm { padding: 5px 11px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="spec">
+  <div class="spec-row">
+    <div>
+      <h1>04 · Toolbar Footer Checklist — Export Preflight Extended</h1>
+      <p>A split footer separates quick-access secondary toolbar actions (settings, info, re-run) from the primary CTA — keeps the preflight checklist cleanly scannable without crowding the action zone.</p>
+    </div>
+    <button class="toggle-btn" id="toggleBtn">Hide dialog</button>
+  </div>
+  <ul>
+    <li>Breadcrumb header (Format › Preflight) signals context without a sub-title line</li>
+    <li>Summary stat cells (Passed / Warnings / Errors) give at-a-glance status before the detail list</li>
+    <li>Checklist uses grid columns (icon · name+note · target · badge) for perfect horizontal alignment</li>
+    <li>Footer left-toolbar (icon buttons) separates meta actions from Cancel / Export on the right</li>
+    <li>Sunken footer background distinguishes it from the scrollable body; adds visual anchor</li>
+  </ul>
+</div>
+
+<div class="stage">
+  <div class="faux-editor">
+    <div class="faux-toolbar">
+      <div class="faux-logo"></div>
+      <div class="faux-sep"></div>
+      <div class="faux-tab" style="width:52px;"></div>
+      <div class="faux-tab" style="width:44px;"></div>
+      <div style="flex:1;"></div>
+      <div style="width:72px;height:26px;border-radius:var(--ds-radius-pill);background:var(--ds-accent);"></div>
+    </div>
+    <div class="faux-workspace">
+      <div class="faux-filmstrip">
+        <div class="faux-thumb active">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:38px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:32px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;width:44px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:28px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+        </div>
+      </div>
+      <div class="faux-canvas-area">
+        <div class="faux-slide">
+          <div class="slide-h" style="width:50%;"></div>
+          <div class="slide-l" style="width:78%;"></div>
+          <div class="slide-l" style="width:62%;"></div>
+          <div class="slide-l" style="width:70%;"></div>
+          <div class="slide-l" style="width:55%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg04-title">
+
+      <!-- Header: breadcrumb -->
+      <div class="modal-header">
+        <div class="breadcrumb">
+          <span class="breadcrumb-step">PPTX</span>
+          <span class="breadcrumb-sep">›</span>
+          <span class="breadcrumb-cur" id="dlg04-title">Preflight Check</span>
+        </div>
+        <span class="header-badge">2 warnings</span>
+        <button class="modal-close" aria-label="Close dialog" id="closeBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Summary strip -->
+      <div class="summary-strip">
+        <div class="summary-cell">
+          <span class="sc-val pass-c">5</span>
+          <span class="sc-label">Passed</span>
+        </div>
+        <div class="summary-cell">
+          <span class="sc-val warn-c">2</span>
+          <span class="sc-label">Warnings</span>
+        </div>
+        <div class="summary-cell">
+          <span class="sc-val error-c">0</span>
+          <span class="sc-label">Blockers</span>
+        </div>
+        <div class="summary-cell">
+          <span class="sc-val" style="color:var(--ds-text-secondary);">3</span>
+          <span class="sc-label">Fallback tiers</span>
+        </div>
+      </div>
+
+      <!-- Body: checklist -->
+      <div class="modal-body">
+        <div class="section-title">Passed checks</div>
+        <ul class="checklist">
+          <li class="check-row">
+            <span class="cr-icon pass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Fonts embedded</div>
+              <div class="cr-note">3 custom fonts</div>
+            </div>
+            <span class="cr-target">all slides</span>
+            <span class="cr-badge badge-pass">Pass</span>
+          </li>
+          <li class="check-row">
+            <span class="cr-icon pass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Images optimized</div>
+              <div class="cr-note">12 images, PPTX-safe</div>
+            </div>
+            <span class="cr-target">all slides</span>
+            <span class="cr-badge badge-pass">Pass</span>
+          </li>
+          <li class="check-row">
+            <span class="cr-icon pass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Animations compatible</div>
+              <div class="cr-note">Native PPTX mapping</div>
+            </div>
+            <span class="cr-target">all slides</span>
+            <span class="cr-badge badge-pass">Pass</span>
+          </li>
+          <li class="check-row">
+            <span class="cr-icon pass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Slide dimensions valid</div>
+              <div class="cr-note">16:9 widescreen</div>
+            </div>
+            <span class="cr-target">all slides</span>
+            <span class="cr-badge badge-pass">Pass</span>
+          </li>
+          <li class="check-row">
+            <span class="cr-icon pass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Hyperlinks reachable</div>
+              <div class="cr-note">4 external links</div>
+            </div>
+            <span class="cr-target">slides 1,6,9</span>
+            <span class="cr-badge badge-pass">Pass</span>
+          </li>
+        </ul>
+
+        <div class="section-title" style="margin-top:4px;">Warnings</div>
+        <ul class="checklist">
+          <li class="check-row" style="background:var(--ds-warning-surface);border-radius:var(--ds-radius-sm);">
+            <span class="cr-icon warn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">2 unsupported transitions</div>
+              <div class="cr-note">Raster fallback used</div>
+            </div>
+            <span class="cr-target">slides 4,7</span>
+            <span class="cr-badge badge-warn">Warn</span>
+          </li>
+          <li class="check-row" style="background:var(--ds-warning-surface);border-radius:var(--ds-radius-sm);">
+            <span class="cr-icon warn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
+            <div>
+              <div class="cr-name">Missing alt text on 3 images</div>
+              <div class="cr-note">Accessibility · WCAG 2.1 AA</div>
+            </div>
+            <span class="cr-target">slides 2,5,11</span>
+            <span class="cr-badge badge-warn">Warn</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Toolbar footer -->
+      <div class="modal-footer">
+        <div class="footer-toolbar">
+          <!-- Settings icon button -->
+          <button class="icon-btn" title="Export settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          </button>
+          <!-- Info icon button -->
+          <button class="icon-btn" title="About PPTX export">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </button>
+          <!-- Refresh icon button -->
+          <button class="icon-btn" title="Re-run checks">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.47"/></svg>
+          </button>
+        </div>
+        <div class="footer-actions">
+          <button class="btn btn-ghost btn-sm">Cancel</button>
+          <button class="btn btn-primary btn-sm">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 13 12 17 16 13"/><line x1="12" y1="17" x2="12" y2="5"/><path d="M20 21H4"/></svg>
+            Export PPTX
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const overlay = document.getElementById('overlay');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  toggleBtn.addEventListener('click', () => {
+    const hidden = overlay.classList.toggle('hidden');
+    toggleBtn.textContent = hidden ? 'Show dialog' : 'Hide dialog';
+  });
+  closeBtn.addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    toggleBtn.textContent = 'Show dialog';
+  });
+</script>
+</body>
+</html>

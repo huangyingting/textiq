@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>04 · Icon-Forward Compact — TextIQ Status Bar</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    body { display: flex; flex-direction: column; background: var(--ds-surface-base); }
+
+    .spec-header { flex: 0 0 auto; padding: 11px 18px 10px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border-strong); }
+    .spec-header h1 { font-size: 13px; font-weight: 700; margin: 0 0 3px; color: var(--ds-text-primary); letter-spacing: -0.01em; }
+    .spec-header .rationale { font-size: 11.5px; color: var(--ds-text-secondary); margin: 0 0 7px; line-height: 1.5; max-width: 680px; }
+    .spec-header .features { display: flex; flex-wrap: wrap; gap: 10px 18px; list-style: none; margin: 0; padding: 0; }
+    .spec-header .features li { font-size: 10.5px; color: var(--ds-text-muted); display: flex; align-items: center; gap: 5px; }
+    .spec-header .features li::before { content: "·"; color: var(--ds-accent); font-size: 14px; }
+
+    .editor-wrap { flex: 1 1 0; min-height: 0; display: flex; }
+    .editor-shell { flex: 1; display: flex; min-height: 0; }
+    .filmstrip { width: 78px; flex-shrink: 0; background: var(--ds-surface); border-right: 1px solid var(--ds-border-subtle); padding: 6px 5px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+    .thumb { aspect-ratio: 16/9; background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8.5px; color: var(--ds-text-muted); }
+    .thumb.active { border-color: var(--ds-accent-border); background: var(--ds-accent-surface); color: var(--ds-accent-text); font-weight: 600; }
+    .editor-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--ds-surface-base); }
+    .canvas-slide { width: 100%; max-width: 440px; aspect-ratio: 16/9; background: var(--ds-surface); border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ds-text-muted); }
+
+    /* ======================================
+       04 · ICON-FORWARD COMPACT
+       Ultra-tight 26px bar. Icons carry meaning; text only shown on focus/hover via
+       CSS pseudo-content. Counts appear as badge chips. Maximum density.
+       ====================================== */
+    .status-bar {
+      flex: 0 0 26px;
+      background: var(--ds-surface-chrome);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center;
+      padding: 0 6px; gap: 2px;
+      font-size: 11px; color: var(--ds-text-muted);
+      font-family: var(--ds-font-sans);
+    }
+    .z-left { display: flex; align-items: center; flex: 1; min-width: 0; gap: 2px; }
+    .z-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+
+    /* Hairline separator */
+    .vsep { width: 1px; height: 11px; background: var(--ds-border-subtle); flex-shrink: 0; margin: 0 3px; }
+
+    /* Icon-only button */
+    .ib {
+      all: unset;
+      position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: var(--ds-radius-sm);
+      color: var(--ds-text-muted);
+      cursor: pointer;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .ib:hover, .ib:focus-visible {
+      background: var(--ds-state-hover);
+      color: var(--ds-text-primary);
+    }
+    .ib:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+    .ib[aria-pressed="true"] { color: var(--ds-accent-text); background: var(--ds-accent-surface); }
+
+    /* Tooltip via CSS — shows label below on hover */
+    .ib[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 5px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--ds-inverse-surface);
+      color: var(--ds-inverse-text);
+      font-size: 10px; font-weight: 500;
+      padding: 3px 7px;
+      border-radius: var(--ds-radius-sm);
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 300;
+      box-shadow: var(--ds-shadow-raised);
+    }
+
+    /* Icon button with count badge */
+    .ib-count {
+      all: unset;
+      position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 22px;
+      border-radius: var(--ds-radius-sm);
+      color: var(--ds-text-muted);
+      cursor: pointer;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .ib-count:hover, .ib-count:focus-visible {
+      background: var(--ds-state-hover);
+      color: var(--ds-text-primary);
+    }
+    .ib-count:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    .badge {
+      position: absolute;
+      top: 1px; right: 1px;
+      min-width: 12px; height: 12px;
+      padding: 0 3px;
+      background: var(--ds-warning-surface);
+      color: var(--ds-warning-text);
+      border-radius: 6px;
+      font-size: 8.5px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+      border: 1px solid var(--ds-surface-chrome);
+    }
+    .badge.link { background: var(--ds-surface-sunken); color: var(--ds-text-secondary); }
+
+    /* Slide position — compact */
+    .slide-pos {
+      font-size: 10.5px; color: var(--ds-text-muted);
+      font-variant-numeric: tabular-nums;
+      padding: 0 4px; white-space: nowrap;
+      font-weight: 500;
+    }
+    /* Selection chip */
+    .sel-chip {
+      display: inline-flex; align-items: center;
+      padding: 0 5px; height: 16px;
+      background: var(--ds-accent-surface);
+      color: var(--ds-accent-text);
+      border-radius: var(--ds-radius-pill);
+      font-size: 10px; font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Zoom: icon-forward — [−][nn%][+] ultra compact */
+    .zoom-compact {
+      display: inline-flex; align-items: center; gap: 0;
+    }
+    .zoom-num {
+      all: unset;
+      display: inline-flex; align-items: center; gap: 2px;
+      padding: 0 4px; height: 22px;
+      font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+      color: var(--ds-text-secondary);
+      border-radius: var(--ds-radius-sm);
+      cursor: pointer;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+      white-space: nowrap;
+    }
+    .zoom-num:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .zoom-num:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    /* Save dot only (ultra compact) */
+    .save-icon-state {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      position: relative; cursor: default;
+    }
+    .save-icon-state[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 5px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--ds-inverse-surface);
+      color: var(--ds-inverse-text);
+      font-size: 10px; font-weight: 500;
+      padding: 3px 7px;
+      border-radius: var(--ds-radius-sm);
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 300;
+    }
+    .save-ring {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .save-ring.saved { background: var(--ds-success); }
+    .save-ring.saving { background: var(--ds-text-muted); animation: blink 1.4s ease-in-out infinite; }
+    .save-ring.unsaved { background: var(--ds-warning); }
+    .save-ring.error { background: var(--ds-danger); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+    /* Presence: tiny avatars */
+    .presence { display: inline-flex; align-items: center; margin-left: 1px; }
+    .av {
+      width: 16px; height: 16px; border-radius: 50%;
+      font-size: 7px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--ds-surface-chrome);
+    }
+    .av + .av { margin-left: -4px; }
+    .av-1 { background: var(--ds-accent-surface); color: var(--ds-accent-text); }
+    .av-2 { background: var(--ds-success-surface); color: var(--ds-success-text); }
+
+    /* === STATE PANEL === */
+    .state-panel { flex: 0 0 auto; background: var(--ds-surface); border-top: 1px solid var(--ds-border-strong); padding: 8px 16px 10px; }
+    .state-panel h2 { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ds-text-muted); margin: 0 0 7px; }
+    .state-rows { display: flex; flex-direction: column; gap: 5px; }
+    .state-row { display: flex; align-items: center; gap: 8px; }
+    .state-lbl { font-size: 10px; color: var(--ds-text-muted); font-weight: 500; width: 110px; flex-shrink: 0; }
+    .state-strip {
+      flex: 1; height: 26px;
+      background: var(--ds-surface-chrome); border: 1px solid var(--ds-border-subtle); border-radius: 3px;
+      display: flex; align-items: center; padding: 0 6px; gap: 4px;
+      font-size: 11px;
+    }
+    .state-strip .sr { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--ds-text-muted); }
+  </style>
+</head>
+<body>
+  <header class="spec-header" role="banner">
+    <h1>04 · Icon-Forward Compact</h1>
+    <p class="rationale">Maximum density: 26px bar height, icons-first with badge counts, text labels revealed only on hover via CSS tooltip. Every pixel is intentional. Suits power users who know the bar by heart.</p>
+    <ul class="features">
+      <li>26px bar height — smallest viable touch-safe footprint</li>
+      <li>Diagnostic &amp; source counts as small badge chips on icon buttons</li>
+      <li>CSS :hover pseudo-element tooltips (no JS) reveal full labels</li>
+      <li>Save state shown as 8px colored ring dot — pure signal, zero text</li>
+      <li>Active selection shown as an indigo chip beside slide position</li>
+    </ul>
+  </header>
+
+  <div class="editor-wrap">
+    <div class="editor-shell">
+      <aside class="filmstrip" aria-label="Slide filmstrip">
+        <div class="thumb">1</div>
+        <div class="thumb">2</div>
+        <div class="thumb active">3</div>
+        <div class="thumb">4</div>
+        <div class="thumb">5</div>
+        <div class="thumb">6</div>
+      </aside>
+      <div class="editor-main">
+        <main class="canvas-area" aria-label="Slide canvas">
+          <div class="canvas-slide">Slide 3 of 12</div>
+        </main>
+        <footer class="status-bar" role="contentinfo" aria-label="Slide editor status bar">
+          <div class="z-left">
+            <!-- Filmstrip toggle: icon only -->
+            <button class="ib" aria-pressed="true" aria-label="Hide slide thumbnails" data-tip="Hide thumbnails">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M3 9h6"/><path d="M3 15h6"/></svg>
+            </button>
+            <!-- Notes toggle: icon only -->
+            <button class="ib" aria-pressed="false" aria-label="Show speaker notes" data-tip="Speaker notes">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
+            </button>
+            <div class="vsep" aria-hidden="true"></div>
+            <span class="slide-pos" aria-label="Slide 3 of 12">3 / 12</span>
+            <span class="sel-chip" aria-label="1 object selected" title="1 object selected">1</span>
+          </div>
+          <div class="z-right">
+            <!-- Diagnostics: icon + badge -->
+            <button class="ib-count" aria-label="3 diagnostics — open review" data-tip="3 diagnostics">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--ds-warning-text)"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <span class="badge" aria-hidden="true">3</span>
+            </button>
+            <!-- Source links: icon + badge -->
+            <button class="ib-count" aria-label="2 source links — review" data-tip="2 source issues">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <span class="badge link" aria-hidden="true">2</span>
+            </button>
+            <div class="vsep" aria-hidden="true"></div>
+            <!-- Zoom: ultra compact -->
+            <div class="zoom-compact" role="group" aria-label="Zoom">
+              <button class="ib" aria-label="Zoom out" data-tip="Zoom out" style="width:18px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="zoom-num" aria-label="Set zoom, currently 100%" aria-haspopup="menu">
+                100%
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <button class="ib" aria-label="Zoom in" data-tip="Zoom in" style="width:18px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              </button>
+            </div>
+            <div class="vsep" aria-hidden="true"></div>
+            <!-- Save ring: pure dot -->
+            <div class="save-icon-state" role="status" aria-live="polite" aria-atomic="true" aria-label="Saved" data-tip="Saved">
+              <span class="save-ring saved" aria-hidden="true"></span>
+            </div>
+            <!-- Presence -->
+            <div class="presence" aria-label="2 collaborators: JS and MK">
+              <span class="av av-1" title="JS — viewing Slide 3">JS</span>
+              <span class="av av-2" title="MK — on Slide 7">MK</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <section class="state-panel" aria-label="Save state variations">
+    <h2>Save state variations — dot signal only</h2>
+    <div class="state-rows">
+      <div class="state-row">
+        <span class="state-lbl">● Saved</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted);font-size:10.5px">3 / 12</span>
+          <span class="sel-chip">1</span>
+          <div class="sr">
+            <span title="Saved" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px"><span class="save-ring saved"></span></span>
+            <span style="font-size:10px;color:var(--ds-success-text)">Saved</span>
+          </div>
+        </div>
+      </div>
+      <div class="state-row">
+        <span class="state-lbl">◌ Saving…</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted);font-size:10.5px">3 / 12</span>
+          <span class="sel-chip">1</span>
+          <div class="sr">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px"><span class="save-ring saving"></span></span>
+            <span style="font-size:10px;color:var(--ds-text-muted)">Saving…</span>
+          </div>
+        </div>
+      </div>
+      <div class="state-row">
+        <span class="state-lbl">● Unsaved changes</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted);font-size:10.5px">3 / 12</span>
+          <span class="sel-chip">1</span>
+          <div class="sr">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px"><span class="save-ring unsaved"></span></span>
+            <span style="font-size:10px;color:var(--ds-warning-text)">Unsaved changes</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

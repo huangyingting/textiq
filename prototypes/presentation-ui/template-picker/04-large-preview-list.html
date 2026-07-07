@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>04 Large Preview List — Template Picker · TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /*
+      Direction 04 · LARGE PREVIEW LIST
+      Rationale: Confidence-first picker — a master list on the left shows
+      template names grouped by category; the right panel shows a large
+      wireframe preview + layout variant grid for the active selection.
+      Ideal for users who want to understand a template before inserting.
+
+      • Wide dialog over dimmed editor — two-column master/detail
+      • Left: scrollable grouped list of template names (40% width)
+      • Right: large 16:9 wireframe preview + layout variant cards (60%)
+      • Bottom strip of the right pane: layout variant buttons with density badges
+      • Author Brand Kit as a pill in the dialog header
+    */
+
+    body { margin:0; background:var(--ds-surface-base); font-family:var(--ds-font-sans); display:flex; flex-direction:column; min-height:100vh; }
+
+    /* ── Spec header ────────────────────────────────────────────────── */
+    .spec { padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle); background: var(--ds-surface); flex-shrink: 0; }
+    .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 720px; }
+    .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+    /* ── Stage ──────────────────────────────────────────────────────── */
+    .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+    .editor-shell {
+      width:100%; height:100%;
+      background:var(--ds-surface-sunken);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .backdrop {
+      position:absolute; inset:0; background:var(--ds-backdrop);
+      display:flex; align-items:center; justify-content:center;
+    }
+
+    /* Dialog — wider than others for master/detail layout */
+    .dialog {
+      width:720px; height:500px;
+      background:var(--ds-surface);
+      border-radius:var(--ds-radius-lg);
+      box-shadow:var(--ds-shadow-overlay);
+      border:1px solid var(--ds-border-subtle);
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+
+    /* Header */
+    .dialog-header {
+      flex-shrink:0; padding:12px 16px;
+      border-bottom:1px solid var(--ds-border-subtle);
+      display:flex; align-items:center; gap:10px;
+    }
+    .dialog-icon {
+      color:var(--ds-accent); flex-shrink:0;
+    }
+    .dialog-title {
+      font-size:13px; font-weight:700; color:var(--ds-text-primary);
+      letter-spacing:-.01em; margin:0; flex:1; min-width:0;
+    }
+    .search-wrap { position:relative; width:180px; }
+    .search-icon {
+      position:absolute; left:8px; top:50%; transform:translateY(-50%);
+      color:var(--ds-text-muted); pointer-events:none; display:flex;
+    }
+    .search-input {
+      width:100%; padding:5px 8px 5px 27px; font-size:11.5px;
+      font-family:var(--ds-font-sans);
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      color:var(--ds-text-primary); outline:none;
+    }
+    .search-input:focus { border-color:var(--ds-focus-ring); }
+    .btn-brand {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:5px 10px; font-size:11px; font-weight:600;
+      color:var(--ds-accent-text); background:var(--ds-accent-surface);
+      border:1px solid var(--ds-accent-border); border-radius:var(--ds-radius-md);
+      cursor:pointer; flex-shrink:0;
+    }
+    .btn-brand:hover { background:var(--ds-accent); color:var(--ds-text-on-accent); border-color:var(--ds-accent); }
+    .btn-close {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:26px; height:26px; border:none; background:transparent;
+      border-radius:var(--ds-radius-md); color:var(--ds-text-muted); cursor:pointer;
+    }
+    .btn-close:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+
+    /* Two-column body */
+    .dialog-body { flex:1; display:flex; min-height:0; overflow:hidden; }
+
+    /* ── Left: template list ── */
+    .template-list {
+      width:220px; flex-shrink:0;
+      border-right:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-sunken);
+      overflow-y:auto;
+      padding:6px 0;
+    }
+    .template-list::-webkit-scrollbar { width:3px; }
+    .template-list::-webkit-scrollbar-thumb { background:var(--ds-border-strong); border-radius:3px; }
+
+    .list-group-header {
+      padding:8px 12px 4px;
+      font-size:9.5px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--ds-text-muted);
+    }
+    .list-item {
+      display:flex; align-items:center; gap:8px;
+      padding:7px 12px; cursor:pointer;
+      border:none; background:transparent; width:100%; text-align:left;
+      border-left:2.5px solid transparent;
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .list-item:hover {
+      background:var(--ds-state-hover); color:var(--ds-text-primary);
+    }
+    .list-item.active {
+      background:var(--ds-state-selected);
+      border-left-color:var(--ds-accent);
+    }
+    .list-item-icon {
+      width:28px; height:20px; flex-shrink:0;
+      background:var(--ds-surface);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:3px;
+      position:relative; overflow:hidden;
+    }
+    .list-item.active .list-item-icon {
+      background:var(--ds-accent-surface);
+      border-color:var(--ds-accent-border);
+    }
+    /* mini thumb lines */
+    .list-item-icon::before {
+      content:'';
+      position:absolute; left:3px; right:3px; top:3px; height:2px;
+      background:var(--ds-border-strong); border-radius:1px; opacity:.6;
+    }
+    .list-item-icon::after {
+      content:'';
+      position:absolute; left:3px; right:6px; top:7px; height:1.5px;
+      background:var(--ds-border-strong); border-radius:1px; opacity:.3;
+    }
+    .list-item-text { min-width:0; }
+    .list-item-name {
+      font-size:12px; font-weight:600; color:var(--ds-text-primary);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      display:block;
+    }
+    .list-item.active .list-item-name { color:var(--ds-accent-text); }
+    .list-item-sub {
+      font-size:10px; color:var(--ds-text-muted);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      display:block;
+    }
+
+    /* ── Right: detail pane ── */
+    .detail-pane {
+      flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;
+    }
+
+    /* Large preview */
+    .large-preview-wrap {
+      flex-shrink:0;
+      padding:16px 20px 12px;
+      border-bottom:1px solid var(--ds-border-subtle);
+    }
+    .preview-label-row {
+      display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;
+    }
+    .preview-template-name {
+      font-size:15px; font-weight:700; color:var(--ds-text-primary); letter-spacing:-.01em;
+      margin:0;
+    }
+    .preview-badge {
+      font-size:10px; font-weight:600; padding:2px 8px;
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+      border:1px solid var(--ds-accent-border); border-radius:var(--ds-radius-pill);
+    }
+
+    .large-thumb {
+      width:100%; aspect-ratio:16/9;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      position:relative; overflow:hidden;
+    }
+
+    /* Wireframe elements — absolute positioned within large thumb */
+    .wft { position:absolute; border-radius:2px; background:var(--ds-border-strong); }
+    .wfl { position:absolute; height:2.5px; border-radius:1.5px; background:var(--ds-border-strong); opacity:.3; }
+    .wfb { position:absolute; border-radius:4px; background:var(--ds-surface); border:1px solid var(--ds-border-subtle); }
+    .wfa { position:absolute; border-radius:4px; background:var(--ds-accent-subtle); border:1px solid var(--ds-accent-border); }
+    .wfi { position:absolute; border-radius:4px; background:var(--ds-surface-sunken); border:2px dashed var(--ds-border-strong); opacity:.5; }
+
+    /* Layout variants */
+    .variants-section {
+      flex:1; overflow-y:auto; padding:12px 20px;
+    }
+    .variants-section::-webkit-scrollbar { width:3px; }
+    .variants-section::-webkit-scrollbar-thumb { background:var(--ds-border-strong); border-radius:3px; }
+
+    .variants-label {
+      font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+      color:var(--ds-text-muted); margin:0 0 8px;
+    }
+    .variants-grid {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:7px;
+    }
+    .variant-card {
+      background:var(--ds-surface-raised);
+      border:1.5px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      padding:7px; cursor:pointer;
+      transition:border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .variant-card:hover { border-color:var(--ds-border-strong); }
+    .variant-card.active {
+      border-color:var(--ds-accent-border);
+      box-shadow:0 0 0 2px var(--ds-focus-ring);
+      background:var(--ds-accent-surface);
+    }
+    .variant-thumb {
+      width:100%; aspect-ratio:16/9;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-sm);
+      position:relative; overflow:hidden; margin-bottom:5px;
+    }
+    .variant-name {
+      font-size:10px; font-weight:600; color:var(--ds-text-secondary);
+      text-align:center; display:block;
+    }
+    .variant-card.active .variant-name { color:var(--ds-accent-text); }
+
+    /* Footer */
+    .detail-footer {
+      flex-shrink:0; padding:10px 20px;
+      border-top:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-sunken);
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .footer-intent { font-size:11px; color:var(--ds-text-muted); max-width:300px; line-height:1.35; }
+    .btn-insert {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:7px 18px; font-size:12.5px; font-weight:600;
+      color:var(--ds-text-on-accent); background:var(--ds-accent);
+      border:none; border-radius:var(--ds-radius-md); cursor:pointer;
+    }
+    .btn-insert:hover { background:var(--ds-accent-hover); }
+  </style>
+</head>
+<body>
+
+<div class="spec">
+  <h1>04 · Large Preview List</h1>
+  <p>Confidence-first master/detail dialog — a grouped name list on the left with a large 16:9 wireframe preview on the right lets users understand a template before committing.</p>
+  <ul>
+    <li>Wide dialog over dimmed editor — two-column master/detail layout (40 % list / 60 % preview)</li>
+    <li>Left: scrollable grouped list of template names; active item highlighted with accent surface</li>
+    <li>Right: large 16:9 wireframe preview updates on selection; layout-variant cards below</li>
+    <li>Layout variant strip at the bottom of the right pane with density badges</li>
+    <li>Author Brand Kit pill in the dialog header for brand-consistent quick access</li>
+  </ul>
+</div>
+<div class="stage">
+
+<div class="editor-shell">
+<div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+  <div class="dialog">
+
+    <!-- Header -->
+    <div class="dialog-header">
+      <span class="dialog-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </span>
+      <h2 class="dialog-title" id="dlg-title">Add Slide — Choose a template</h2>
+      <div class="search-wrap">
+        <span class="search-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input class="search-input" type="search" placeholder="Search templates…">
+      </div>
+      <button class="btn-brand" type="button">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+        Brand kit
+      </button>
+      <button class="btn-close" type="button" aria-label="Close">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="dialog-body">
+
+      <!-- Left: template list -->
+      <nav class="template-list" aria-label="Template list">
+
+        <div class="list-group-header">Orient</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Cover</span>
+            <span class="list-item-sub">hero · title</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Agenda</span>
+            <span class="list-item-sub">list · overview</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Section</span>
+            <span class="list-item-sub">divider · chapter</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Explain</div>
+        <button class="list-item active" type="button" aria-current="true">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Content</span>
+            <span class="list-item-sub">title + body</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Detail</span>
+            <span class="list-item-sub">text + visual</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Exec. Summary</span>
+            <span class="list-item-sub">highlights</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Quote</span>
+            <span class="list-item-sub">pull quote</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Compare</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Comparison</span>
+            <span class="list-item-sub">side by side</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Matrix</span>
+            <span class="list-item-sub">2×2 grid</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Prove</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Big Stat</span>
+            <span class="list-item-sub">hero number</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Metric Row</span>
+            <span class="list-item-sub">KPI columns</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Sequence</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Process</span>
+            <span class="list-item-sub">step flow</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Timeline</span>
+            <span class="list-item-sub">horizontal time</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Roadmap</span>
+            <span class="list-item-sub">gantt-style</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Decide</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Recommendation</span>
+            <span class="list-item-sub">next action</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Framework</span>
+            <span class="list-item-sub">model / canvas</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Commercial</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Pricing</span>
+            <span class="list-item-sub">tiers table</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Case Study</span>
+            <span class="list-item-sub">story + result</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Team</span>
+            <span class="list-item-sub">bios + photos</span>
+          </span>
+        </button>
+
+        <div class="list-group-header">Close</div>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Closing</span>
+            <span class="list-item-sub">CTA / thank you</span>
+          </span>
+        </button>
+        <button class="list-item" type="button">
+          <span class="list-item-icon"></span>
+          <span class="list-item-text">
+            <span class="list-item-name">Appendix</span>
+            <span class="list-item-sub">supporting data</span>
+          </span>
+        </button>
+
+      </nav>
+
+      <!-- Right: detail pane — showing "Content" -->
+      <div class="detail-pane">
+
+        <!-- Large preview -->
+        <div class="large-preview-wrap">
+          <div class="preview-label-row">
+            <h3 class="preview-template-name">Content</h3>
+            <span class="preview-badge">Explain group</span>
+          </div>
+          <!-- Large wireframe — title + body layout -->
+          <div class="large-thumb">
+            <!-- Title bar -->
+            <div class="wft" style="left:20px;right:60px;top:18px;height:10px;opacity:.65;"></div>
+            <!-- Subtitle -->
+            <div class="wft" style="left:20px;right:100px;top:32px;height:5px;opacity:.35;"></div>
+            <!-- Content lines -->
+            <div class="wfl" style="left:20px;right:24px;top:52px;"></div>
+            <div class="wfl" style="left:20px;right:40px;top:60px;"></div>
+            <div class="wfl" style="left:20px;right:28px;top:68px;"></div>
+            <div class="wfl" style="left:20px;right:56px;top:76px;"></div>
+            <div class="wfl" style="left:20px;right:36px;top:84px;"></div>
+            <div class="wfl" style="left:20px;right:48px;top:92px;"></div>
+            <!-- Accent left bar -->
+            <div class="wfa" style="left:12px;top:50px;width:4px;bottom:30px;opacity:.65;border-radius:2px;"></div>
+          </div>
+        </div>
+
+        <!-- Layout variants -->
+        <div class="variants-section">
+          <p class="variants-label">Layout variants</p>
+          <div class="variants-grid">
+
+            <div class="variant-card active">
+              <div class="variant-thumb">
+                <div class="wft" style="left:4px;right:12px;top:4px;height:3px;opacity:.6;"></div>
+                <div class="wfl" style="left:4px;right:6px;top:10px;"></div>
+                <div class="wfl" style="left:4px;right:10px;top:14px;"></div>
+                <div class="wfl" style="left:4px;right:6px;top:18px;"></div>
+              </div>
+              <span class="variant-name">default · balanced</span>
+            </div>
+
+            <div class="variant-card">
+              <div class="variant-thumb">
+                <div class="wft" style="left:3px;right:8px;top:3px;height:3px;opacity:.6;"></div>
+                <div class="wfl" style="left:3px;right:4px;top:9px;"></div>
+                <div class="wfl" style="left:3px;right:6px;top:13px;"></div>
+                <div class="wfl" style="left:3px;right:4px;top:17px;"></div>
+                <div class="wfl" style="left:3px;right:8px;top:21px;"></div>
+              </div>
+              <span class="variant-name">dense · data</span>
+            </div>
+
+            <div class="variant-card">
+              <div class="variant-thumb">
+                <div class="wft" style="left:6px;right:18px;top:5px;height:4px;opacity:.6;"></div>
+                <div class="wfl" style="left:8px;right:12px;top:14px;"></div>
+                <div class="wfl" style="left:8px;right:18px;top:19px;"></div>
+              </div>
+              <span class="variant-name">airy · visual</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="detail-footer">
+          <p class="footer-intent">Title + body text, bullets, or narrative prose. Content slots stay semantic.</p>
+          <button class="btn-insert" type="button">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Insert slide
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+</div><!-- /stage -->
+
+<script>
+  document.querySelectorAll('.list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.list-item').forEach(i => { i.classList.remove('active'); i.removeAttribute('aria-current'); });
+      item.classList.add('active'); item.setAttribute('aria-current','true');
+    });
+  });
+  document.querySelectorAll('.variant-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.variant-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

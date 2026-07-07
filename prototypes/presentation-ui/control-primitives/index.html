@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control Primitives Kit — Design Language Gallery</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    body {
+      padding: 40px 32px;
+      min-height: 100vh;
+      background: var(--ds-surface-base);
+    }
+
+    .gallery-header {
+      max-width: 900px;
+      margin: 0 auto 48px;
+    }
+    .gallery-header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--ds-text-primary);
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .gallery-header p {
+      font-size: 14px;
+      color: var(--ds-text-secondary);
+      max-width: 560px;
+      line-height: 1.65;
+      margin: 0;
+    }
+    .gallery-header .meta {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--ds-text-muted);
+      display: flex;
+      gap: 16px;
+    }
+    .gallery-header .meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .grid {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl);
+      background: var(--ds-surface);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--ds-shadow-raised);
+      transition: box-shadow 160ms, border-color 160ms;
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      border-color: var(--ds-border-strong);
+    }
+
+    .card-preview {
+      position: relative;
+      height: 220px;
+      overflow: hidden;
+      border-bottom: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-base);
+    }
+    .card-preview iframe {
+      width: 160%;
+      height: 160%;
+      border: none;
+      transform: scale(0.625);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    .card-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .card-number {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--ds-text-muted);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ds-text-primary);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--ds-text-secondary);
+      line-height: 1.6;
+      margin: 0;
+      flex: 1;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 99px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--ds-text-muted);
+      white-space: nowrap;
+    }
+
+    .card-footer {
+      padding: 12px 18px 14px;
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 12px;
+      border-radius: var(--ds-radius-md);
+      background: var(--ds-accent);
+      color: var(--ds-text-on-accent);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 120ms;
+      border: none;
+      cursor: pointer;
+    }
+    .open-link:hover { background: var(--ds-accent-hover); }
+    .open-link:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+
+    .lang-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--ds-text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Distinct accent color for each card number badge */
+    .card:nth-child(1) .card-number { color: #4f46e5; }
+    .card:nth-child(2) .card-number { color: #0ea5e9; }
+    .card:nth-child(3) .card-number { color: #10b981; }
+    .card:nth-child(4) .card-number { color: #f59e0b; }
+    .card:nth-child(5) .card-number { color: #8b5cf6; }
+    .card:nth-child(6) .card-number { color: #172033; }
+
+    /* Glass card gets tinted preview bg */
+    .card:nth-child(5) .card-preview {
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 20%, rgba(99,102,241,.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 80% 70%, rgba(14,165,233,.14) 0%, transparent 60%),
+        var(--ds-surface-base);
+    }
+
+    svg { display: inline-block; vertical-align: middle; }
+  </style>
+</head>
+<body>
+
+  <div class="gallery-header">
+    <h1>Control Primitives Kit — Design Languages</h1>
+    <p>Six distinct visual languages applied to the same atom set: toolbar buttons, icon buttons, segmented controls, tabs, selects, popovers, swatches, switches, tooltips, and dividers. All use the same <code>var(--ds-*)</code> tokens.</p>
+    <div class="meta">
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        6 languages
+      </span>
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Static HTML mockups — open in browser
+      </span>
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Tokens: design-tokens.css
+      </span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 01 Flat Outline -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="01-flat-outline.html" title="01 Flat Outline preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">01</div>
+        <h2 class="card-title">Flat Outline</h2>
+        <p class="card-desc">Hairline 1px borders, flat fills, zero elevation. Every edge is drawn; depth is implied through placement, not shadow. Dense, precise, editorial.</p>
+        <div class="card-tags">
+          <span class="tag">1px border</span>
+          <span class="tag">no shadow</span>
+          <span class="tag">accent-surface active</span>
+          <span class="tag">flat fills</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">flat-outline</span>
+        <a href="01-flat-outline.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 02 Soft Raised -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="02-soft-raised.html" title="02 Soft Raised preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">02</div>
+        <h2 class="card-title">Soft Raised</h2>
+        <p class="card-desc">White raised surfaces with gentle drop shadows. Controls feel like physical keys with tactile hover feedback. Depth through light, not borders.</p>
+        <div class="card-tags">
+          <span class="tag">shadow-raised</span>
+          <span class="tag">white surfaces</span>
+          <span class="tag">elevated hover</span>
+          <span class="tag">accent glow on</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">soft-raised</span>
+        <a href="02-soft-raised.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 03 Pill Capsule -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="03-pill-capsule.html" title="03 Pill Capsule preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">03</div>
+        <h2 class="card-title">Pill Capsule</h2>
+        <p class="card-desc">Every control is a fully-rounded pill (border-radius: 9999px). Friendly, airy, mobile-inspired. Swatches are circles, tabs sit in a pill strip.</p>
+        <div class="card-tags">
+          <span class="tag">9999px radius</span>
+          <span class="tag">airy</span>
+          <span class="tag">pill tabs</span>
+          <span class="tag">spring bounce</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">pill-capsule</span>
+        <a href="03-pill-capsule.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 04 Recessed Segment -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="04-recessed-segment.html" title="04 Recessed Segment preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">04</div>
+        <h2 class="card-title">Recessed Segment</h2>
+        <p class="card-desc">Controls are set into sunken tracks with inset shadows. The active state "pops" a white raised thumb out of the recess — physical slot mechanism.</p>
+        <div class="card-tags">
+          <span class="tag">surface-sunken track</span>
+          <span class="tag">inset shadow</span>
+          <span class="tag">raised thumb</span>
+          <span class="tag">slot idiom</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">recessed-segment</span>
+        <a href="04-recessed-segment.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 05 Glass Translucent -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="05-glass-translucent.html" title="05 Glass Translucent preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">05</div>
+        <h2 class="card-title">Glass Translucent</h2>
+        <p class="card-desc">Frosted glass panes — translucent white fills with backdrop-filter: blur. Controls float above the page, revealing blurred color gradients beneath.</p>
+        <div class="card-tags">
+          <span class="tag">backdrop-filter blur</span>
+          <span class="tag">rgba surfaces</span>
+          <span class="tag">inset highlight</span>
+          <span class="tag">layered depth</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">glass-translucent</span>
+        <a href="05-glass-translucent.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 06 High Contrast Mono -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="06-high-contrast-mono.html" title="06 High Contrast Mono preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">06</div>
+        <h2 class="card-title">High Contrast Mono</h2>
+        <p class="card-desc">Stark black and white. No color except the single accent token on active/selected only. 1.5px borders, bold type, invert hover. Precision instruments aesthetic.</p>
+        <div class="card-tags">
+          <span class="tag">1.5px border</span>
+          <span class="tag">invert hover</span>
+          <span class="tag">accent only active</span>
+          <span class="tag">uppercase labels</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">high-contrast-mono</span>
+        <a href="06-high-contrast-mono.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

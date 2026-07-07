@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inspector · 05 Segmented Header Tabs</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--ds-surface-base); }
+
+  .spec-header {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface);
+  }
+  .spec-header h1 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec-header p  { margin: 0 0 8px; font-size: 12px; color: var(--ds-text-secondary); }
+  .spec-header ul { margin: 0; padding: 0 0 0 16px; font-size: 11px; color: var(--ds-text-muted); }
+  .spec-header ul li { margin-bottom: 2px; }
+
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .canvas-slide {
+    width: 480px; height: 270px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-lg); box-shadow: var(--ds-shadow-overlay);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted); font-size: 12px;
+  }
+
+  .inspector {
+    width: 320px; flex-shrink: 0; display: flex; flex-direction: column;
+    height: 100%; background: var(--ds-surface);
+    border-left: 1px solid var(--ds-border-subtle); overflow: hidden;
+  }
+
+  /* Identity header */
+  .id-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px 9px; border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .id-label {
+    font-size: 12px; font-weight: 600; color: var(--ds-text-primary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .id-sep { color: var(--ds-text-muted); font-weight: 400; }
+  .layers-pill {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: var(--ds-radius-pill);
+    border: 1px solid var(--ds-border-strong);
+    background: transparent; color: var(--ds-text-secondary); cursor: pointer;
+  }
+  .layers-pill:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+  /* ── Segmented control ─────────────────────────────────────────── */
+  .seg-bar {
+    padding: 8px 12px 7px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    flex-shrink: 0;
+  }
+  .seg-track {
+    display: flex;
+    background: var(--ds-segment-track);
+    border-radius: var(--ds-radius-md);
+    padding: 2px;
+    gap: 1px;
+  }
+  .seg-btn {
+    flex: 1; height: 24px;
+    font-size: 11px; font-weight: 500;
+    color: var(--ds-text-muted); background: none; border: none;
+    border-radius: var(--ds-radius-sm);
+    cursor: pointer; white-space: nowrap;
+    transition: background var(--ds-motion-fast), color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+  }
+  .seg-btn:hover { color: var(--ds-text-secondary); }
+  .seg-btn.active {
+    background: var(--ds-segment-thumb);
+    color: var(--ds-text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  }
+  .seg-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -1px; }
+
+  /* ── Sticky section subnav ──────────────────────────────────────── */
+  .section-nav {
+    display: flex; gap: 0;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    flex-shrink: 0;
+    overflow-x: auto; scrollbar-width: none;
+    background: var(--ds-surface);
+  }
+  .section-nav::-webkit-scrollbar { display: none; }
+  .snav-btn {
+    padding: 5px 8px 4px; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ds-text-muted); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+    transition: color var(--ds-motion-fast), border-color var(--ds-motion-fast);
+  }
+  .snav-btn:hover { color: var(--ds-text-secondary); }
+  .snav-btn.active { color: var(--ds-accent-text); border-bottom-color: var(--ds-accent); }
+  .snav-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -1px; border-radius: 2px; }
+
+  /* Scrollable body */
+  .panel-body {
+    flex: 1; overflow-y: auto; min-height: 0;
+    scrollbar-width: thin; scrollbar-color: var(--ds-border-strong) transparent;
+  }
+
+  /* Section */
+  .section { padding: 10px 12px 12px; scroll-margin-top: 0; }
+  .section + .section { border-top: 1px solid var(--ds-border-subtle); }
+  .section-title {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ds-text-muted); margin: 0 0 8px;
+  }
+
+  /* Form */
+  .form-row {
+    display: flex; align-items: center; justify-content: space-between;
+    min-height: 28px; gap: 8px; margin-bottom: 4px;
+  }
+  .form-row:last-child { margin-bottom: 0; }
+  .row-label { font-size: 11px; color: var(--ds-text-muted); flex-shrink: 0; min-width: 68px; }
+  select, input[type="number"] {
+    flex: 1; height: 26px; padding: 0 8px;
+    font-size: 12px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-md); outline: none; font-family: inherit;
+    transition: border-color var(--ds-motion-fast);
+  }
+  select:focus, input:focus {
+    border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-border);
+  }
+
+  .num-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; }
+  .num-cell label { font-size: 10px; color: var(--ds-text-muted); display: block; margin-bottom: 2px; }
+  .num-cell input { width: 100%; text-align: center; height: 26px; flex: unset; }
+
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .slider-label { font-size: 11px; color: var(--ds-text-muted); flex-shrink: 0; min-width: 50px; }
+  input[type="range"] { flex: 1; height: 3px; accent-color: var(--ds-accent); cursor: pointer; }
+  .slider-val { font-size: 11px; color: var(--ds-text-secondary); min-width: 28px; text-align: right; }
+
+  .swatch-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .swatch { width: 22px; height: 22px; border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-strong); cursor: pointer; flex-shrink: 0; }
+  .swatch-label { font-size: 11px; color: var(--ds-text-muted); }
+  .swatch-hex { font-size: 11px; color: var(--ds-text-secondary); font-family: var(--ds-font-mono); margin-left: auto; }
+
+  .icon-btn {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    color: var(--ds-text-muted); border-radius: var(--ds-radius-sm);
+    transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+  }
+  .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .icon-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+  .layer-row {
+    display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px;
+    border-radius: var(--ds-radius-sm); transition: background var(--ds-motion-fast);
+  }
+  .layer-row:hover { background: var(--ds-state-hover); }
+  .layer-row.selected { background: var(--ds-state-selected); }
+  .layer-name { flex: 1; font-size: 11px; color: var(--ds-text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .layer-badge { font-size: 9px; color: var(--ds-text-muted); background: var(--ds-surface-sunken); padding: 1px 5px; border-radius: var(--ds-radius-pill); }
+
+  .toggle { position: relative; width: 30px; height: 16px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: var(--ds-border-strong); border-radius: var(--ds-radius-pill); cursor: pointer; transition: background var(--ds-motion-fast); }
+  .toggle input:checked + .toggle-track { background: var(--ds-accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: left var(--ds-motion-fast); pointer-events: none; }
+  .toggle input:checked ~ .toggle-thumb { left: 16px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 28px; margin-bottom: 4px; }
+
+  .align-btns { display: flex; gap: 4px; }
+  .align-btn { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm); cursor: pointer; color: var(--ds-text-muted); }
+  .align-btn.active { background: var(--ds-accent-surface); border-color: var(--ds-accent-border); color: var(--ds-accent-text); }
+  .align-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+</style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>05 · Segmented Header Tabs</h1>
+  <p>Replaces the underline tab strip with a pill-track segmented control and adds a persistent section subnav for fast jumping within the panel.</p>
+  <ul>
+    <li>Segmented control uses var(--ds-segment-track) / var(--ds-segment-thumb) tokens</li>
+    <li>Section subnav (TMPL · GEO · FILL · TYPE · EFX · LYR) lets users jump to anchors</li>
+    <li>Tabs and subnav are both sticky — always visible while scrolling content</li>
+    <li>Raised thumb shadow distinguishes active segment from track without color</li>
+  </ul>
+</div>
+
+<div class="layout">
+  <div class="canvas-area">
+    <div class="canvas-slide">Slide Canvas</div>
+  </div>
+
+  <aside class="inspector" role="complementary" aria-label="Properties inspector">
+
+    <div class="id-header">
+      <div class="id-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+        Text <span class="id-sep">·</span> Title
+      </div>
+      <button class="layers-pill" aria-pressed="false" aria-label="Toggle layers panel">Layers</button>
+    </div>
+
+    <!-- Segmented control replaces tab strip -->
+    <div class="seg-bar" role="tablist" aria-label="Inspector mode">
+      <div class="seg-track">
+        <button class="seg-btn active" role="tab" aria-selected="true">Slide</button>
+        <button class="seg-btn" role="tab" aria-selected="false">Content</button>
+        <button class="seg-btn" role="tab" aria-selected="false">Style</button>
+        <button class="seg-btn" role="tab" aria-selected="false">Arrange</button>
+      </div>
+    </div>
+
+    <!-- Section subnav -->
+    <nav class="section-nav" aria-label="Jump to section">
+      <button class="snav-btn active">TMPL</button>
+      <button class="snav-btn">GEO</button>
+      <button class="snav-btn">FILL</button>
+      <button class="snav-btn">TYPE</button>
+      <button class="snav-btn">EFX</button>
+      <button class="snav-btn">LYR</button>
+    </nav>
+
+    <div class="panel-body" role="tabpanel">
+
+      <section class="section" id="sec-tmpl">
+        <h2 class="section-title">Template</h2>
+        <div class="form-row"><span class="row-label">Tone</span><select aria-label="Tone"><option>confident</option><option>neutral</option><option>warm</option></select></div>
+        <div class="form-row"><span class="row-label">Density</span><select aria-label="Density"><option>normal</option><option>airy</option><option>dense</option></select></div>
+        <div class="form-row"><span class="row-label">Emphasis</span><select aria-label="Emphasis"><option>title</option><option>balanced</option><option>data</option></select></div>
+        <div class="form-row"><span class="row-label">Decoration</span><select aria-label="Decoration"><option>subtle</option><option>none</option><option>expressive</option></select></div>
+        <div class="form-row"><span class="row-label">Chrome</span><select aria-label="Chrome"><option>default</option><option>minimal</option><option>none</option></select></div>
+      </section>
+
+      <section class="section" id="sec-geo">
+        <h2 class="section-title">Geometry</h2>
+        <div class="num-grid">
+          <div class="num-cell"><label for="e-x">X</label><input id="e-x" type="number" value="12.5" step="0.5" /></div>
+          <div class="num-cell"><label for="e-y">Y</label><input id="e-y" type="number" value="8.0" step="0.5" /></div>
+          <div class="num-cell"><label for="e-w">W</label><input id="e-w" type="number" value="75.0" step="0.5" /></div>
+          <div class="num-cell"><label for="e-h">H</label><input id="e-h" type="number" value="22.0" step="0.5" /></div>
+          <div class="num-cell"><label for="e-r">Rot °</label><input id="e-r" type="number" value="0" step="1" /></div>
+          <div class="num-cell"><label for="e-z">Layer</label><input id="e-z" type="number" value="3" step="1" /></div>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Opacity</span>
+          <input type="range" min="0" max="100" value="100" aria-label="Opacity" />
+          <span class="slider-val">100%</span>
+        </div>
+      </section>
+
+      <section class="section" id="sec-fill">
+        <h2 class="section-title">Fill &amp; Stroke</h2>
+        <div class="swatch-row">
+          <div class="swatch" style="background:#4f46e5;" aria-label="Fill color"></div>
+          <span class="swatch-label">Fill</span>
+          <span class="swatch-hex">#4F46E5</span>
+        </div>
+        <div class="swatch-row">
+          <div class="swatch" style="background:#172033;" aria-label="Stroke color"></div>
+          <span class="swatch-label">Stroke</span>
+          <span class="swatch-hex">#172033</span>
+        </div>
+        <div class="form-row" style="margin-top:4px;">
+          <span class="row-label">Stroke W</span>
+          <input type="number" value="1" step="0.5" aria-label="Stroke width" style="max-width:80px;" />
+        </div>
+      </section>
+
+      <section class="section" id="sec-type">
+        <h2 class="section-title">Typography</h2>
+        <div class="form-row"><span class="row-label">Family</span><select aria-label="Font family"><option>Inter (Theme)</option><option>Georgia</option></select></div>
+        <div class="form-row"><span class="row-label">Size / pt</span><input type="number" value="24" step="1" aria-label="Font size" /></div>
+        <div class="form-row"><span class="row-label">Weight</span><select aria-label="Weight"><option>Bold</option><option>Semibold</option><option>Regular</option></select></div>
+        <div class="form-row" style="align-items:center;">
+          <span class="row-label">Align</span>
+          <div class="align-btns">
+            <button class="align-btn active" aria-label="Left" aria-pressed="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+            <button class="align-btn" aria-label="Center" aria-pressed="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="5" y1="18" x2="19" y2="18"/></svg></button>
+            <button class="align-btn" aria-label="Right" aria-pressed="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-efx">
+        <h2 class="section-title">Effects</h2>
+        <div class="toggle-row">
+          <span style="font-size:11px;color:var(--ds-text-muted);">Drop shadow</span>
+          <label class="toggle"><input type="checkbox" checked aria-label="Drop shadow" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+        <div class="slider-row" style="padding-left:8px;">
+          <span class="slider-label" style="min-width:36px;">Blur</span>
+          <input type="range" min="0" max="40" value="18" aria-label="Shadow blur" />
+          <span class="slider-val">18</span>
+        </div>
+        <div class="toggle-row">
+          <span style="font-size:11px;color:var(--ds-text-muted);">Background blur</span>
+          <label class="toggle"><input type="checkbox" aria-label="Background blur" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+      </section>
+
+      <section class="section" id="sec-lyr">
+        <h2 class="section-title">Layers</h2>
+        <div role="list">
+          <div class="layer-row selected" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Title Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Subtitle Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Background Image</span>
+            <span class="layer-badge">Theme</span>
+            <button class="icon-btn" aria-label="Hidden" style="color:var(--ds-text-primary)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+            <button class="icon-btn" aria-label="Locked" style="color:var(--ds-accent)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.5"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+<script>
+  /* Section subnav smooth-scroll to anchors */
+  const snavMap = {
+    'TMPL': 'sec-tmpl', 'GEO': 'sec-geo', 'FILL': 'sec-fill',
+    'TYPE': 'sec-type', 'EFX': 'sec-efx', 'LYR': 'sec-lyr'
+  };
+  document.querySelectorAll('.snav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = snavMap[btn.textContent.trim()];
+      if (id) {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      document.querySelectorAll('.snav-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

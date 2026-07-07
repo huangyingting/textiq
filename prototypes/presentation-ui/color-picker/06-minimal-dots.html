@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 — Minimal Dots | Color Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ── Specimen scaffold ──────────────────────────────────────────────── */
+    body { padding: 32px; min-height: 100vh; background: var(--ds-surface-base); }
+    .spec-header {
+      max-width: 720px; margin: 0 auto 36px;
+      border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 20px;
+    }
+    .spec-header h1 { font-size: 17px; font-weight: 700; color: var(--ds-text-primary); margin: 0 0 6px; letter-spacing: -0.01em; }
+    .spec-header p { font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 10px; line-height: 1.65; max-width: 600px; }
+    .spec-header ul { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--ds-text-muted); line-height: 1.9; }
+
+    /* ── Demo stage ─────────────────────────────────────────────────────── */
+    .demo-area { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+
+    /* Faux formatting toolbar context */
+    .faux-toolbar {
+      width: 100%;
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-raised);
+      padding: 6px 10px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .tb-sep {
+      width: 1px; height: 18px;
+      background: var(--ds-border-subtle); margin: 0 2px; flex-shrink: 0;
+    }
+    .tb-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border: none; border-radius: var(--ds-radius-md);
+      background: transparent; color: var(--ds-text-secondary);
+      cursor: pointer; padding: 0;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .tb-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .tb-btn.active { background: var(--ds-accent-surface); color: var(--ds-accent-text); }
+
+    /* Color trigger for the toolbar */
+    .tb-color-btn {
+      display: inline-flex; align-items: center; justify-content: center; flex-direction: column;
+      width: 28px; height: 28px;
+      border: none; border-radius: var(--ds-radius-md);
+      background: transparent; cursor: pointer; padding: 4px 4px 3px; gap: 2px;
+      position: relative;
+      transition: background var(--ds-motion-fast);
+    }
+    .tb-color-btn:hover { background: var(--ds-state-hover); }
+    .tb-color-btn.open { background: var(--ds-state-selected); }
+    .tb-color-icon { color: var(--ds-text-secondary); }
+    .tb-color-bar {
+      width: 100%; height: 3px;
+      border-radius: var(--ds-radius-pill);
+      background: #3b82f6; transition: background var(--ds-motion-fast);
+    }
+
+    /* ── Minimal Dots Popover ────────────────────────────────────────────── */
+    /*
+      This design deliberately eschews a panel. It's a floating pill of dots
+      with near-zero chrome — perfect for inline toolbar integration.
+    */
+    .cp-anchor { position: relative; }
+    .cp {
+      position: absolute; top: calc(100% + 6px);
+      /* Center under the trigger */
+      left: 50%; transform: translateX(-50%);
+      /* Pill container */
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill);
+      box-shadow: var(--ds-shadow-popover);
+      padding: 5px 8px;
+      display: none; flex-direction: column; gap: 4px;
+      z-index: 300;
+      min-width: 0; white-space: nowrap;
+    }
+    .cp.open { display: flex; }
+
+    /* Main dot row */
+    .dot-row {
+      display: flex; align-items: center; gap: 3px;
+    }
+
+    /* Separator pill-style */
+    .dot-sep {
+      width: 1px; height: 14px; flex-shrink: 0;
+      background: var(--ds-border-subtle); margin: 0 2px;
+    }
+
+    /* Color dot – fill is CONTENT (hex), ring is CHROME (token) */
+    .dot {
+      width: 18px; height: 18px; flex-shrink: 0;
+      border-radius: var(--ds-radius-pill);
+      border: 1.5px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform 70ms ease, box-shadow 90ms ease;
+    }
+    .dot:hover { transform: scale(1.2); z-index: 1; }
+    .dot.sel {
+      border-color: transparent;
+      box-shadow: 0 0 0 1.5px var(--ds-surface-overlay), 0 0 0 3px var(--ds-focus-ring);
+    }
+    /* White checkmark for selected state, with drop-shadow */
+    .dot.sel::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='%23fff' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 8px 8px no-repeat;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+    }
+
+    /* None dot (transparent/no color) */
+    .dot-none {
+      width: 18px; height: 18px; flex-shrink: 0;
+      border-radius: var(--ds-radius-pill);
+      border: 1.5px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative; overflow: hidden;
+      background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 8px 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform 70ms, box-shadow 90ms;
+    }
+    .dot-none::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(239,68,68,.8) 40% 60%, transparent 60%);
+      border-radius: var(--ds-radius-pill);
+    }
+    .dot-none:hover { transform: scale(1.2); z-index: 1; }
+
+    /* Add custom icon button */
+    .dot-add {
+      width: 18px; height: 18px; flex-shrink: 0;
+      border-radius: var(--ds-radius-pill);
+      border: 1.5px dashed var(--ds-border-strong);
+      cursor: pointer; padding: 0;
+      background: transparent; color: var(--ds-text-muted);
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast), border-style var(--ds-motion-fast);
+    }
+    .dot-add:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); border-style: solid; }
+
+    /* ── Hex input row (shown only when Add is clicked) ──────────────────── */
+    .hex-row {
+      display: flex; align-items: center; gap: 4px;
+      padding: 0 2px;
+      display: none; /* toggled by JS */
+    }
+    .hex-row.open { display: flex; }
+    .hex-pill {
+      display: flex; align-items: center;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill);
+      overflow: hidden; flex: 1;
+    }
+    .hex-pill-hash {
+      padding: 0 4px 0 8px;
+      font-family: var(--ds-font-mono); font-size: 11px;
+      color: var(--ds-text-muted); user-select: none;
+    }
+    .hex-pill-input {
+      flex: 1; height: 24px; padding: 0; border: none;
+      background: transparent; color: var(--ds-text-primary);
+      font-family: var(--ds-font-mono); font-size: 11px; outline: none;
+    }
+    .hex-apply {
+      width: 24px; height: 24px;
+      border: none; border-left: 1px solid var(--ds-border-subtle);
+      background: transparent; color: var(--ds-text-muted);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+      flex-shrink: 0;
+    }
+    .hex-apply:hover { background: var(--ds-state-hover); color: var(--ds-accent-text); }
+    /* Eyedropper in hex row */
+    .hex-eye {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-pill);
+      background: var(--ds-surface); color: var(--ds-text-muted);
+      cursor: pointer; flex-shrink: 0; padding: 0;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .hex-eye:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+
+    /* ── Faux canvas ─────────────────────────────────────────────────────── */
+    .faux-canvas {
+      width: 100%; min-height: 180px;
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg); display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .faux-slide {
+      width: 140px; height: 90px; border-radius: var(--ds-radius-md);
+      background: #3b82f6; box-shadow: var(--ds-shadow-overlay); transition: background var(--ds-motion-base);
+    }
+  </style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>06 — Minimal Dots</h1>
+  <p>An ultra-compact, borderless dot strip designed for inline toolbar integration. No panel, no labels, no padding — just a pill-shaped floating row of 18px color circles. The selected dot carries the accent ring; tapping "+" reveals a compact hex-input row within the same pill. Perfect for text-color and highlight-color toolbar buttons.</p>
+  <ul>
+    <li>Floating pill shape (full border-radius) — looks native beside toolbar buttons; no box-like panel chrome</li>
+    <li>18px circle dots: <code>--ds-radius-pill</code> swatches from DEFAULT_SWATCH_PRESETS; fill is hardcoded hex (content)</li>
+    <li>None/transparent dot (checkerboard + red diagonal) and "+" add-custom dot flank the color circles</li>
+    <li>Selected dot: <code>--ds-focus-ring</code> ring with offset, white checkmark + drop-shadow for visibility</li>
+    <li>"+" toggles an inline hex input row (monospace, <code>--ds-font-mono</code>) + eyedropper — expands pill height, never width</li>
+  </ul>
+</div>
+
+<div class="demo-area">
+
+  <!-- Faux inline formatting toolbar -->
+  <div class="faux-toolbar">
+    <!-- Bold, Italic, Underline mock buttons -->
+    <button class="tb-btn active" title="Bold" aria-label="Bold">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+    </button>
+    <button class="tb-btn" title="Italic" aria-label="Italic">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+    </button>
+    <button class="tb-btn" title="Underline" aria-label="Underline">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+    </button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Text color trigger -->
+    <div class="cp-anchor" id="colorAnchor">
+      <button class="tb-color-btn open" id="trig" onclick="togglePicker()" title="Text color" aria-label="Text color">
+        <svg class="tb-color-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>
+        <div class="tb-color-bar" id="colorBar"></div>
+      </button>
+
+      <!-- ── Minimal Dots Popover ── -->
+      <div class="cp open" id="picker">
+
+        <!-- Dot strip -->
+        <div class="dot-row">
+          <!-- None/transparent -->
+          <button class="dot-none" onclick="pickNone()" title="No color" aria-label="No color"></button>
+
+          <div class="dot-sep"></div>
+
+          <!-- DEFAULT_SWATCH_PRESETS – all 24, fill=content hex, ring=chrome token -->
+          <button class="dot" style="background:#ffffff" onclick="pick(this,'#ffffff')" title="#ffffff" aria-label="White"></button>
+          <button class="dot" style="background:#f1f5f9" onclick="pick(this,'#f1f5f9')" title="#f1f5f9" aria-label="Slate 100"></button>
+          <button class="dot" style="background:#cbd5e1" onclick="pick(this,'#cbd5e1')" title="#cbd5e1" aria-label="Slate 300"></button>
+          <button class="dot" style="background:#64748b" onclick="pick(this,'#64748b')" title="#64748b" aria-label="Slate 500"></button>
+          <button class="dot" style="background:#1e293b" onclick="pick(this,'#1e293b')" title="#1e293b" aria-label="Slate 800"></button>
+          <button class="dot" style="background:#000000" onclick="pick(this,'#000000')" title="#000000" aria-label="Black"></button>
+          <button class="dot" style="background:#ef4444" onclick="pick(this,'#ef4444')" title="#ef4444" aria-label="Red 500"></button>
+          <button class="dot" style="background:#f97316" onclick="pick(this,'#f97316')" title="#f97316" aria-label="Orange 500"></button>
+          <button class="dot" style="background:#f59e0b" onclick="pick(this,'#f59e0b')" title="#f59e0b" aria-label="Amber 400"></button>
+          <button class="dot" style="background:#eab308" onclick="pick(this,'#eab308')" title="#eab308" aria-label="Yellow 500"></button>
+          <button class="dot" style="background:#84cc16" onclick="pick(this,'#84cc16')" title="#84cc16" aria-label="Lime 400"></button>
+          <button class="dot" style="background:#22c55e" onclick="pick(this,'#22c55e')" title="#22c55e" aria-label="Green 500"></button>
+          <button class="dot" style="background:#10b981" onclick="pick(this,'#10b981')" title="#10b981" aria-label="Emerald 500"></button>
+          <button class="dot" style="background:#14b8a6" onclick="pick(this,'#14b8a6')" title="#14b8a6" aria-label="Teal 500"></button>
+          <button class="dot" style="background:#06b6d4" onclick="pick(this,'#06b6d4')" title="#06b6d4" aria-label="Cyan 500"></button>
+          <button class="dot" style="background:#0ea5e9" onclick="pick(this,'#0ea5e9')" title="#0ea5e9" aria-label="Sky 500"></button>
+          <button class="dot sel" style="background:#3b82f6" onclick="pick(this,'#3b82f6')" title="#3b82f6" aria-label="Blue 500" aria-pressed="true"></button>
+          <button class="dot" style="background:#6366f1" onclick="pick(this,'#6366f1')" title="#6366f1" aria-label="Indigo 500"></button>
+          <button class="dot" style="background:#8b5cf6" onclick="pick(this,'#8b5cf6')" title="#8b5cf6" aria-label="Violet 500"></button>
+          <button class="dot" style="background:#a855f7" onclick="pick(this,'#a855f7')" title="#a855f7" aria-label="Purple 500"></button>
+          <button class="dot" style="background:#d946ef" onclick="pick(this,'#d946ef')" title="#d946ef" aria-label="Fuchsia 500"></button>
+          <button class="dot" style="background:#ec4899" onclick="pick(this,'#ec4899')" title="#ec4899" aria-label="Pink 500"></button>
+          <button class="dot" style="background:#f43f5e" onclick="pick(this,'#f43f5e')" title="#f43f5e" aria-label="Rose 500"></button>
+          <button class="dot" style="background:#78716c" onclick="pick(this,'#78716c')" title="#78716c" aria-label="Stone 500"></button>
+
+          <div class="dot-sep"></div>
+
+          <!-- Add custom -->
+          <button class="dot-add" id="addBtn" onclick="toggleHexRow()" title="Custom color" aria-label="Custom color">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Hex input row (hidden by default) -->
+        <div class="hex-row" id="hexRow">
+          <div class="hex-pill">
+            <span class="hex-pill-hash">#</span>
+            <input type="text" class="hex-pill-input" id="hexIn" placeholder="3B82F6" maxlength="6"
+              spellcheck="false" aria-label="Hex color" oninput="hexTyped(this)">
+            <button class="hex-apply" title="Apply" aria-label="Apply color">
+              <!-- Check icon -->
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+          </div>
+          <button class="hex-eye" title="Eyedropper" aria-label="Pick from screen">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>
+              <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8 1-1z"/>
+            </svg>
+          </button>
+        </div>
+
+      </div><!-- .cp -->
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <!-- Highlight color mock -->
+    <button class="tb-btn" title="Highlight color" aria-label="Highlight color">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>
+      </svg>
+    </button>
+    <button class="tb-btn" title="Remove formatting" aria-label="Remove formatting">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Faux canvas (shows selected color on text) -->
+  <div class="faux-canvas">
+    <div class="faux-slide" id="slide" style="background:transparent;box-shadow:none;display:flex;align-items:center;justify-content:center;">
+      <span id="sampleText" style="font-size:36px;font-weight:800;color:#3b82f6;letter-spacing:-0.03em;transition:color var(--ds-motion-base)">Aa</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function togglePicker() {
+    var p = document.getElementById('picker'), b = document.getElementById('trig');
+    var o = p.classList.contains('open');
+    p.classList.toggle('open', !o); b.classList.toggle('open', !o);
+  }
+  function pick(el, hex) {
+    document.querySelectorAll('.dot.sel').forEach(function(s){ s.classList.remove('sel'); s.removeAttribute('aria-pressed'); });
+    el.classList.add('sel'); el.setAttribute('aria-pressed','true');
+    document.getElementById('colorBar').style.background = hex;
+    document.getElementById('sampleText').style.color = hex;
+  }
+  function pickNone() {
+    document.querySelectorAll('.dot.sel').forEach(function(s){ s.classList.remove('sel'); s.removeAttribute('aria-pressed'); });
+    document.getElementById('colorBar').style.background = 'transparent';
+    document.getElementById('sampleText').style.color = 'transparent';
+  }
+  function toggleHexRow() {
+    var row = document.getElementById('hexRow');
+    row.classList.toggle('open');
+    if (row.classList.contains('open')) document.getElementById('hexIn').focus();
+  }
+  function hexTyped(inp) {
+    var val = '#' + inp.value;
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      document.getElementById('colorBar').style.background = val;
+      document.getElementById('sampleText').style.color = val;
+    }
+  }
+</script>
+</body>
+</html>

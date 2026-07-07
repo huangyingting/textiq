@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modal · 02 Compact Alert</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+  /* ── Spec header ──────────────────────────────────────────────────── */
+  .spec {
+    padding: 12px 20px 10px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface); flex-shrink: 0;
+  }
+  .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 700px; }
+  .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+  .spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle-btn {
+    padding: 4px 10px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border: 1px solid var(--ds-accent-border); font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .toggle-btn:hover { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+
+  /* ── Stage ────────────────────────────────────────────────────────── */
+  .stage { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+
+  /* Faux editor */
+  .faux-editor { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .faux-toolbar {
+    height: 40px; flex-shrink: 0; background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    display: flex; align-items: center; gap: 6px; padding: 0 14px; filter: blur(0.4px);
+  }
+  .faux-logo { width: 20px; height: 20px; background: var(--ds-accent); border-radius: 4px; }
+  .faux-sep { width: 1px; height: 18px; background: var(--ds-border-subtle); margin: 0 4px; }
+  .faux-tab { height: 24px; border-radius: var(--ds-radius-sm); background: var(--ds-surface-sunken); }
+  .faux-workspace { flex: 1; display: flex; min-height: 0; }
+  .faux-filmstrip {
+    width: 80px; flex-shrink: 0; background: var(--ds-surface-sunken);
+    border-right: 1px solid var(--ds-border-subtle);
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; filter: blur(0.4px);
+  }
+  .faux-thumb {
+    width: 64px; height: 36px; border-radius: 4px;
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    box-shadow: var(--ds-shadow-raised); position: relative; overflow: hidden; flex-shrink: 0;
+  }
+  .faux-thumb.active { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .thumb-line { position: absolute; height: 4px; border-radius: 2px; background: var(--ds-surface-sunken); }
+  .faux-canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center; filter: blur(0.4px);
+  }
+  .faux-slide {
+    width: 380px; height: 214px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay);
+    padding: 20px; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+  }
+  .slide-h { height: 15px; border-radius: 3px; background: var(--ds-surface-sunken); }
+  .slide-l { height: 8px; border-radius: 2px; background: var(--ds-surface-sunken); }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: absolute; inset: 0;
+    background: var(--ds-backdrop-strong);
+    backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    transition: opacity var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  /* Compact alert panel */
+  .modal {
+    background: var(--ds-surface-overlay);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-xl);
+    box-shadow: var(--ds-shadow-popover);
+    width: 100%; max-width: 348px;
+    display: flex; flex-direction: column;
+    font-family: var(--ds-font-sans);
+    overflow: hidden;
+  }
+
+  /* Danger strip at top */
+  .danger-strip {
+    height: 3px;
+    background: var(--ds-danger);
+    flex-shrink: 0;
+  }
+
+  /* Header: centered icon + close X top-right */
+  .modal-header {
+    position: relative;
+    padding: 20px 16px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    text-align: center;
+  }
+  .modal-icon-wrap {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--ds-danger-surface);
+    border: 1.5px solid var(--ds-danger-border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-danger-text);
+  }
+  .modal-close {
+    position: absolute; top: 10px; right: 12px;
+    width: 26px; height: 26px; border-radius: var(--ds-radius-sm);
+    border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .modal-close:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .modal-close:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .modal-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--ds-text-primary); }
+  .modal-desc { margin: 4px 0 0; font-size: 12px; color: var(--ds-text-secondary); line-height: 1.55; }
+
+  /* Affected list */
+  .modal-body { padding: 12px 16px 14px; }
+  .affected-list {
+    margin: 0; padding: 0; list-style: none;
+    border: 1px solid var(--ds-danger-border);
+    border-radius: var(--ds-radius-md);
+    background: var(--ds-danger-surface);
+    overflow: hidden;
+  }
+  .affected-list li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; font-size: 11.5px; color: var(--ds-danger-text);
+    border-bottom: 1px solid var(--ds-danger-border);
+  }
+  .affected-list li:last-child { border-bottom: none; }
+  .slide-num {
+    font-size: 10px; font-weight: 700; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--ds-danger); color: var(--ds-text-on-accent);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .slide-name { flex: 1; font-weight: 500; color: var(--ds-danger-text); }
+  .slide-note { font-size: 10px; color: var(--ds-danger-text); opacity: 0.7; }
+
+  /* Warning note */
+  .warn-note {
+    margin-top: 8px; padding: 6px 10px;
+    border-radius: var(--ds-radius-md);
+    background: var(--ds-danger-surface);
+    border: 1px solid var(--ds-danger-border);
+    font-size: 11px; color: var(--ds-danger-text);
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.45;
+  }
+  .warn-note svg { flex-shrink: 0; margin-top: 1px; }
+
+  /* Footer: full-width stacked buttons */
+  .modal-footer {
+    padding: 0 16px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .btn {
+    padding: 9px 16px; border-radius: var(--ds-radius-md);
+    font-size: 13px; font-weight: 600; font-family: var(--ds-font-sans);
+    cursor: pointer; border: none; display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; transition: all var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .btn-danger { background: var(--ds-danger); color: var(--ds-text-on-accent); }
+  .btn-danger:hover { background: var(--ds-danger-hover); }
+  .btn-ghost {
+    background: transparent; color: var(--ds-text-secondary);
+    border: 1px solid var(--ds-border-strong);
+  }
+  .btn-ghost:hover { background: var(--ds-state-hover); }
+</style>
+</head>
+<body>
+
+<div class="spec">
+  <div class="spec-row">
+    <div>
+      <h1>02 · Compact Alert — Destructive Confirm</h1>
+      <p>Ultra-compact alert shell (max 348 px) built for single-focus, high-consequence decisions. A strong backdrop and prominent danger icon stop the user before they commit.</p>
+    </div>
+    <button class="toggle-btn" id="toggleBtn">Hide dialog</button>
+  </div>
+  <ul>
+    <li>Danger accent strip at panel top-edge signals severity before any text is read</li>
+    <li>Centered icon + title pattern puts the consequence in visual focus, not the metadata</li>
+    <li>Affected items listed with danger surface card — the full blast radius is always visible</li>
+    <li>Full-width stacked buttons ensure large touch targets; primary is bottom so it's thumb-reachable</li>
+    <li>Strong backdrop (--ds-backdrop-strong) + blur isolates the decision from the editor context</li>
+  </ul>
+</div>
+
+<div class="stage">
+  <!-- Faux editor -->
+  <div class="faux-editor">
+    <div class="faux-toolbar">
+      <div class="faux-logo"></div>
+      <div class="faux-sep"></div>
+      <div class="faux-tab" style="width:52px;"></div>
+      <div class="faux-tab" style="width:44px;"></div>
+      <div style="flex:1;"></div>
+      <div style="width:72px;height:26px;border-radius:var(--ds-radius-pill);background:var(--ds-accent);"></div>
+    </div>
+    <div class="faux-workspace">
+      <div class="faux-filmstrip">
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:38px;"></div>
+        </div>
+        <div class="faux-thumb active">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:32px;"></div>
+        </div>
+        <div class="faux-thumb active" style="border-color:var(--ds-danger);box-shadow:0 0 0 2px var(--ds-danger-border);">
+          <div class="thumb-line" style="top:8px;left:6px;width:44px;background:var(--ds-error-surface);"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:28px;background:var(--ds-error-surface);"></div>
+        </div>
+        <div class="faux-thumb" style="border-color:var(--ds-danger);box-shadow:0 0 0 2px var(--ds-danger-border);">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;background:var(--ds-error-surface);"></div>
+        </div>
+        <div class="faux-thumb" style="border-color:var(--ds-danger);box-shadow:0 0 0 2px var(--ds-danger-border);">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;background:var(--ds-error-surface);"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:35px;background:var(--ds-error-surface);"></div>
+        </div>
+      </div>
+      <div class="faux-canvas-area">
+        <div class="faux-slide">
+          <div class="slide-h" style="width:60%;"></div>
+          <div class="slide-l" style="width:82%;"></div>
+          <div class="slide-l" style="width:68%;"></div>
+          <div class="slide-l" style="width:75%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backdrop + modal -->
+  <div class="modal-overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg02-title">
+
+      <div class="danger-strip"></div>
+
+      <div class="modal-header">
+        <button class="modal-close" aria-label="Close dialog" id="closeBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="modal-icon-wrap">
+          <!-- Trash2 icon -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <h2 class="modal-title" id="dlg02-title">Delete 3 slides?</h2>
+        <p class="modal-desc">This will permanently remove the selected slides and all their content. This action cannot be undone.</p>
+      </div>
+
+      <div class="modal-body">
+        <ul class="affected-list">
+          <li>
+            <span class="slide-num">3</span>
+            <span class="slide-name">Q3 Revenue Breakdown</span>
+            <span class="slide-note">8 elements</span>
+          </li>
+          <li>
+            <span class="slide-num">4</span>
+            <span class="slide-name">Market Opportunity</span>
+            <span class="slide-note">5 elements</span>
+          </li>
+          <li>
+            <span class="slide-num">5</span>
+            <span class="slide-name">Competitive Landscape</span>
+            <span class="slide-note">11 elements</span>
+          </li>
+        </ul>
+        <div class="warn-note">
+          <!-- AlertTriangle icon -->
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Any linked elements referencing these slides will show broken references.
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-danger">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Delete 3 slides
+        </button>
+        <button class="btn btn-ghost">Cancel</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const overlay = document.getElementById('overlay');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  toggleBtn.addEventListener('click', () => {
+    const hidden = overlay.classList.toggle('hidden');
+    toggleBtn.textContent = hidden ? 'Show dialog' : 'Hide dialog';
+  });
+  closeBtn.addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    toggleBtn.textContent = 'Show dialog';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>01 · Rounded Pill Overlay — Context Toolbar</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    /* ── Spec Header ────────────────────────────────────────────── */
+    .spec-header {
+      padding: 24px 32px 20px;
+      border-bottom: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface);
+    }
+    .spec-header h1 { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec-header p  { margin: 0 0 10px; font-size: 13px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 640px; }
+    .spec-features  { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+    .spec-features li {
+      font-size: 11px; color: var(--ds-text-secondary);
+      background: var(--ds-surface-sunken); border-radius: var(--ds-radius-pill);
+      padding: 2px 10px; border: 1px solid var(--ds-border-subtle);
+    }
+
+    /* ── Stage ──────────────────────────────────────────────────── */
+    .stage {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 520px; padding: 48px;
+      background: var(--ds-surface-base);
+    }
+
+    /* ── Slide canvas ───────────────────────────────────────────── */
+    .slide-canvas {
+      position: relative;
+      width: 720px; height: 405px;
+      background: var(--ds-surface);
+      border-radius: var(--ds-radius-lg);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+      overflow: visible;
+    }
+
+    /* Decorative slide content */
+    .slide-title  { position: absolute; top: 60px; left: 80px; font-size: 22px; font-weight: 700; color: var(--ds-text-primary); }
+    .slide-body   { position: absolute; top: 110px; left: 80px; font-size: 14px; color: var(--ds-text-secondary); line-height: 1.6; max-width: 400px; }
+
+    /* ── Selected element ───────────────────────────────────────── */
+    .selected-box {
+      position: absolute;
+      top: 54px; left: 72px;
+      width: 368px; height: 100px;
+      border: 1.5px dashed var(--ds-accent);
+      border-radius: 3px;
+    }
+    /* Selection handles */
+    .handle {
+      position: absolute; width: 8px; height: 8px;
+      background: var(--ds-surface); border: 1.5px solid var(--ds-accent);
+      border-radius: 2px;
+    }
+    .handle-tl { top: -5px; left: -5px; }
+    .handle-tr { top: -5px; right: -5px; }
+    .handle-bl { bottom: -5px; left: -5px; }
+    .handle-br { bottom: -5px; right: -5px; }
+    .handle-tm { top: -5px; left: 50%; transform: translateX(-50%); }
+    .handle-bm { bottom: -5px; left: 50%; transform: translateX(-50%); }
+    .handle-ml { top: 50%; left: -5px; transform: translateY(-50%); }
+    .handle-mr { top: 50%; right: -5px; transform: translateY(-50%); }
+
+    /* ── Toolbar ────────────────────────────────────────────────── */
+    .toolbar-anchor {
+      position: absolute;
+      /* center above selected-box (left:72 + width:368/2 = 256) */
+      left: 256px; top: 4px;
+      transform: translate(-50%, -100%);
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    .toolbar {
+      display: flex; align-items: center; gap: 2px;
+      padding: 4px 6px;
+      background: var(--ds-surface-overlay);
+      border-radius: var(--ds-radius-pill);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-overlay);
+      white-space: nowrap;
+    }
+
+    /* Caret pointing down */
+    .toolbar-caret {
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--ds-surface-overlay);
+      filter: drop-shadow(0 1px 0 var(--ds-border-subtle));
+    }
+
+    /* ── Toolbar Buttons ────────────────────────────────────────── */
+    .tbtn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border: none; background: transparent; cursor: pointer;
+      border-radius: var(--ds-radius-pill);
+      color: var(--ds-text-secondary);
+      font-size: 11px; font-family: var(--ds-font-sans);
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard),
+                  color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .tbtn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .tbtn:focus-visible {
+      outline: 2px solid var(--ds-focus-ring);
+      outline-offset: 1px;
+    }
+    .tbtn.active {
+      background: var(--ds-state-selected);
+      color: var(--ds-accent);
+    }
+    .tbtn svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Divider */
+    .divider {
+      width: 1px; height: 16px; flex-shrink: 0;
+      background: var(--ds-border-subtle);
+      margin: 0 2px;
+    }
+
+    /* Text role select */
+    .trole {
+      height: 28px; padding: 0 6px;
+      background: transparent; border: none; cursor: pointer;
+      font-size: 11px; font-weight: 500; font-family: var(--ds-font-sans);
+      color: var(--ds-text-secondary);
+      border-radius: var(--ds-radius-pill);
+      outline: none;
+      transition: background var(--ds-motion-fast);
+    }
+    .trole:hover { background: var(--ds-state-hover); }
+    .trole:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    /* Color swatch */
+    .color-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border: none; background: transparent; cursor: pointer;
+      border-radius: var(--ds-radius-pill);
+      padding: 0;
+    }
+    .color-btn:hover { background: var(--ds-state-hover); }
+    .color-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid var(--ds-border-strong);
+    }
+
+    /* Font size stepper */
+    .size-group {
+      display: inline-flex; align-items: center; gap: 1px;
+      background: transparent;
+    }
+    .size-val {
+      font-size: 11px; color: var(--ds-text-secondary); min-width: 24px; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Variant tabs */
+    .variants {
+      display: flex; gap: 8px; padding: 16px 48px 0;
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .vtab {
+      padding: 6px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+      border: none; background: transparent; border-bottom: 2px solid transparent;
+      color: var(--ds-text-muted); font-family: var(--ds-font-sans);
+      transition: all var(--ds-motion-fast);
+    }
+    .vtab.active { color: var(--ds-accent); border-bottom-color: var(--ds-accent); }
+    .vtab:hover { color: var(--ds-text-secondary); }
+
+    /* Shape variant toolbar */
+    .toolbar-shape-anchor {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -160%);
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .selected-shape {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px; height: 100px;
+      border: 1.5px dashed var(--ds-accent);
+      border-radius: var(--ds-radius-md);
+    }
+    .slide-section { display: none; }
+    .slide-section.active { display: flex; flex-direction: column; }
+  </style>
+</head>
+<body>
+
+<!-- ══ Spec Header ══════════════════════════════════════════════ -->
+<div class="spec-header">
+  <h1>01 · Rounded Pill Overlay</h1>
+  <p>Classic elevated pill floating above the selection — airy, approachable, softly shadowed. The pill shape reads unmistakably as a transient overlay and avoids harsh corners that feel anchored rather than floating.</p>
+  <ul class="spec-features">
+    <li>Full pill border-radius on container</li>
+    <li>var(--ds-shadow-overlay) elevation</li>
+    <li>Pill-shaped button hover states</li>
+    <li>Subtle caret connector pointing to selection</li>
+    <li>3 selection modes: TEXT / SHAPE / SLIDE</li>
+  </ul>
+</div>
+
+<!-- ══ Variant Tabs ═════════════════════════════════════════════ -->
+<div class="variants" role="tablist" aria-label="Selection mode preview">
+  <button class="vtab active" role="tab" aria-selected="true" onclick="showSection('text',this)">TEXT selection</button>
+  <button class="vtab" role="tab" aria-selected="false" onclick="showSection('shape',this)">SHAPE selection</button>
+  <button class="vtab" role="tab" aria-selected="false" onclick="showSection('slide',this)">SLIDE selection</button>
+</div>
+
+<!-- ══ TEXT Stage ════════════════════════════════════════════════ -->
+<div class="stage slide-section active" id="sec-text">
+  <div class="slide-canvas" aria-label="Slide canvas">
+
+    <span class="slide-title">Heading text block</span>
+    <span class="slide-body">This is a body text paragraph on the slide that has been selected by the user. The context toolbar floats above.</span>
+
+    <!-- Selected element -->
+    <div class="selected-box" role="presentation">
+      <div class="handle handle-tl"></div><div class="handle handle-tr"></div>
+      <div class="handle handle-bl"></div><div class="handle handle-br"></div>
+      <div class="handle handle-tm"></div><div class="handle handle-bm"></div>
+      <div class="handle handle-ml"></div><div class="handle handle-mr"></div>
+    </div>
+
+    <!-- Floating Toolbar -->
+    <div class="toolbar-anchor">
+      <div class="toolbar" role="toolbar" aria-label="Context toolbar — text selection">
+
+        <!-- B / I / U / S -->
+        <button class="tbtn active" aria-label="Bold" aria-pressed="true" title="Bold">
+          <svg viewBox="0 0 24 24"><path d="M6 12h8a4 4 0 0 0 0-8H6v8zm0 0h9a4 4 0 0 1 0 8H6v-8z"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Italic" aria-pressed="false" title="Italic">
+          <svg viewBox="0 0 24 24"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Underline" aria-pressed="false" title="Underline">
+          <svg viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 12 0V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Strikethrough" aria-pressed="false" title="Strikethrough">
+          <svg viewBox="0 0 24 24"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
+        </button>
+
+        <div class="divider" role="separator"></div>
+
+        <!-- Text role -->
+        <select class="trole" aria-label="Text role" title="Text role">
+          <option value="title">H1</option>
+          <option value="subtitle">H2</option>
+          <option value="body" selected>Body</option>
+          <option value="quote">Quote</option>
+          <option value="caption">Caption</option>
+          <option value="kicker">Kicker</option>
+          <option value="metric">Metric</option>
+        </select>
+
+        <div class="divider" role="separator"></div>
+
+        <!-- Font size stepper -->
+        <div class="size-group" role="group" aria-label="Font size">
+          <button class="tbtn" aria-label="Decrease font size" title="Decrease">
+            <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <span class="size-val" aria-live="polite">18</span>
+          <button class="tbtn" aria-label="Increase font size" title="Increase">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+
+        <div class="divider" role="separator"></div>
+
+        <!-- Lists -->
+        <button class="tbtn" aria-label="Bullet list" title="Bullet list">
+          <svg viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Numbered list" title="Numbered list">
+          <svg viewBox="0 0 24 24"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Outdent list" title="Outdent">
+          <svg viewBox="0 0 24 24"><polyline points="11 8 7 12 11 16"/><line x1="21" y1="12" x2="7" y2="12"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Indent list" title="Indent">
+          <svg viewBox="0 0 24 24"><polyline points="13 8 17 12 13 16"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+
+        <div class="divider" role="separator"></div>
+
+        <!-- Align -->
+        <button class="tbtn" aria-label="Align left" title="Align left">
+          <svg viewBox="0 0 24 24"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Align center" title="Align center">
+          <svg viewBox="0 0 24 24"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="19" y1="18" x2="5" y2="18"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Align right" title="Align right">
+          <svg viewBox="0 0 24 24"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+        </button>
+
+        <div class="divider" role="separator"></div>
+
+        <!-- Text color -->
+        <button class="color-btn" aria-label="Text color" title="Text color">
+          <div class="color-dot" style="background:#172033;"></div>
+        </button>
+
+        <!-- Link -->
+        <button class="tbtn" aria-label="Insert link" title="Link">
+          <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </button>
+
+        <!-- Overflow -->
+        <button class="tbtn" aria-label="More options" title="More options">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-caret" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SHAPE Stage ════════════════════════════════════════════════ -->
+<div class="stage slide-section" id="sec-shape">
+  <div class="slide-canvas" aria-label="Slide canvas — shape selected">
+
+    <!-- Shape -->
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:100px;background:var(--ds-accent-surface);border-radius:var(--ds-radius-md);"></div>
+    <div class="selected-shape" role="presentation">
+      <div class="handle handle-tl"></div><div class="handle handle-tr"></div>
+      <div class="handle handle-bl"></div><div class="handle handle-br"></div>
+    </div>
+
+    <!-- Shape toolbar -->
+    <div class="toolbar-shape-anchor">
+      <div class="toolbar" role="toolbar" aria-label="Context toolbar — shape selection">
+        <!-- Fill color -->
+        <button class="color-btn" aria-label="Fill color" title="Fill color">
+          <div class="color-dot" style="background:var(--ds-accent-surface);"></div>
+        </button>
+        <!-- Stroke color -->
+        <button class="color-btn" aria-label="Stroke color" title="Stroke color">
+          <div class="color-dot" style="background:var(--ds-accent);"></div>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Opacity -->
+        <span style="font-size:11px;color:var(--ds-text-secondary);padding:0 4px;white-space:nowrap;">100%</span>
+        <div class="divider" role="separator"></div>
+        <!-- Rotate -->
+        <button class="tbtn" aria-label="Rotate left 15°" title="Rotate left">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Rotate right 15°" title="Rotate right">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Bring to front / Send to back -->
+        <button class="tbtn" aria-label="Bring to front" title="Bring to front">
+          <svg viewBox="0 0 24 24"><rect x="8" y="8" width="10" height="10" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Send to back" title="Send to back">
+          <svg viewBox="0 0 24 24"><rect x="2" y="2" width="10" height="10" rx="2"/><path d="M12 12h10v10H12z" stroke-dasharray="2 2"/></svg>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Lock -->
+        <button class="tbtn" aria-label="Lock" title="Lock">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </button>
+        <!-- Group -->
+        <button class="tbtn" aria-label="Group" title="Group">
+          <svg viewBox="0 0 24 24"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="8" height="8" rx="1"/></svg>
+        </button>
+        <!-- Delete -->
+        <button class="tbtn" aria-label="Delete" title="Delete" style="color:var(--ds-danger);">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-caret" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE Stage ════════════════════════════════════════════════ -->
+<div class="stage slide-section" id="sec-slide">
+  <div class="slide-canvas" aria-label="Slide canvas — slide selected" style="outline:2px solid var(--ds-accent);outline-offset:3px;">
+
+    <span class="slide-title">Slide 2 of 8</span>
+    <span class="slide-body">Click on the slide background to select the slide and reveal slide-level controls above.</span>
+
+    <!-- Slide toolbar at top-center of canvas -->
+    <div style="position:absolute;top:-52px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;">
+      <div class="toolbar" role="toolbar" aria-label="Context toolbar — slide selection">
+        <!-- Slide BG color -->
+        <button class="color-btn" aria-label="Slide background color" title="Slide background">
+          <div class="color-dot" style="background:var(--ds-surface);"></div>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Add slide -->
+        <button class="tbtn" aria-label="Add slide" title="Add slide">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Insert: Text, Image, Shape, Table -->
+        <button class="tbtn" aria-label="Insert text" title="Insert text">
+          <svg viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Insert image" title="Insert image">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Insert shape" title="Insert shape">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Insert table" title="Insert table">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
+        <div class="divider" role="separator"></div>
+        <!-- Duplicate / Delete slide -->
+        <button class="tbtn" aria-label="Duplicate slide" title="Duplicate slide">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="tbtn" aria-label="Delete slide" title="Delete slide" style="color:var(--ds-danger);">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-caret" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showSection(id, btn) {
+  document.querySelectorAll('.slide-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.vtab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+  document.getElementById('sec-' + id).classList.add('active');
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected','true');
+}
+// Toggle active on tbtn click (demo)
+document.querySelectorAll('.tbtn[aria-pressed]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const pressed = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', String(!pressed));
+    btn.classList.toggle('active', !pressed);
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Context Toolbar — Design Exploration Gallery</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body { background: var(--ds-surface-base); color: var(--ds-text-primary); min-height: 100vh; }
+
+    /* ── Page header ────────────────────────────────────────────── */
+    .page-header {
+      padding: 32px 40px 24px;
+      background: var(--ds-surface);
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .page-header h1 {
+      margin: 0 0 6px; font-size: 22px; font-weight: 800;
+      color: var(--ds-text-primary); letter-spacing: -0.02em;
+    }
+    .page-header p {
+      margin: 0; font-size: 14px; color: var(--ds-text-secondary); max-width: 600px; line-height: 1.6;
+    }
+    .page-meta {
+      display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .page-meta span {
+      font-size: 11px; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill); padding: 2px 10px;
+    }
+
+    /* ── Gallery grid ───────────────────────────────────────────── */
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+      gap: 24px;
+      padding: 32px 40px;
+    }
+
+    /* ── Card ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--ds-surface);
+      border-radius: var(--ds-radius-xl);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+                  transform var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      transform: translateY(-2px);
+    }
+
+    /* Card header */
+    .card-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .card-num {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--ds-accent); background: var(--ds-accent-subtle);
+      border: 1px solid var(--ds-accent-border);
+      border-radius: var(--ds-radius-pill); padding: 2px 10px; white-space: nowrap; flex-shrink: 0;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; color: var(--ds-text-primary);
+      margin: 0; line-height: 1.3;
+    }
+    .card-desc {
+      font-size: 12px; color: var(--ds-text-secondary); margin: 4px 0 0;
+      line-height: 1.5;
+    }
+    .card-header-text { flex: 1; }
+
+    /* Preview iframe */
+    .card-preview {
+      width: 100%;
+      height: 300px;
+      border: none;
+      display: block;
+      background: var(--ds-surface-base);
+      pointer-events: none; /* gallery view — not interactive */
+    }
+
+    /* Card footer */
+    .card-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-base);
+    }
+    .card-features {
+      display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0;
+    }
+    .card-features li {
+      font-size: 10px; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border-radius: var(--ds-radius-pill);
+      padding: 1px 7px; border: 1px solid var(--ds-border-subtle);
+    }
+    .open-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 14px;
+      background: var(--ds-accent); color: var(--ds-accent-contrast);
+      border: none; border-radius: var(--ds-radius-md);
+      font-size: 12px; font-weight: 600; font-family: var(--ds-font-sans);
+      text-decoration: none; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: background var(--ds-motion-fast);
+    }
+    .open-link:hover { background: var(--ds-accent-hover); }
+    .open-link:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+    .open-link svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+    /* Legend section */
+    .legend {
+      padding: 24px 40px;
+      border-top: 1px solid var(--ds-border-subtle);
+    }
+    .legend h2 { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--ds-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+    .legend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .legend-item { font-size: 12px; color: var(--ds-text-secondary); }
+    .legend-item strong { color: var(--ds-text-primary); display: block; margin-bottom: 2px; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Context / Popover Toolbar — Design Exploration</h1>
+  <p>6 distinct visual directions for the floating context toolbar that appears above a selection on the TextIQ presentation canvas. Each design is fully self-contained and browser-openable. Controls grounded in the live <code>floating-toolbar.tsx</code> source.</p>
+  <div class="page-meta">
+    <span>6 design directions</span>
+    <span>TEXT · SHAPE · SLIDE selection modes</span>
+    <span>var(--ds-*) tokens throughout</span>
+    <span>Plain HTML + CSS · No frameworks</span>
+    <span>Inline Lucide-style SVG icons</span>
+  </div>
+</header>
+
+<main class="gallery" role="main">
+
+  <!-- 01 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Rounded Pill Overlay</p>
+        <p class="card-desc">Classic elevated pill floating above selection — airy, approachable, softly shadowed with a caret connector.</p>
+      </div>
+      <span class="card-num">01</span>
+    </div>
+    <iframe class="card-preview" src="01-rounded-pill-overlay.html" title="Preview: 01 Rounded Pill Overlay" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>pill radius</li>
+        <li>shadow-overlay</li>
+        <li>pill buttons</li>
+        <li>caret connector</li>
+      </ul>
+      <a class="open-link" href="01-rounded-pill-overlay.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Segmented Cluster</p>
+        <p class="card-desc">Controls organized into recessed segment trays (surface-sunken) with visible grouping — formatting, size, lists, align.</p>
+      </div>
+      <span class="card-num">02</span>
+    </div>
+    <iframe class="card-preview" src="02-segmented-cluster.html" title="Preview: 02 Segmented Cluster" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>recessed trays</li>
+        <li>raised hover</li>
+        <li>logical groups</li>
+        <li>inset border</li>
+      </ul>
+      <a class="open-link" href="02-segmented-cluster.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 03 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Ultra-Compact Mono</p>
+        <p class="card-desc">Minimum footprint — 24 px buttons, hairline border, mono typeface, stroke-width 1.5 icons. For dense canvas workflows.</p>
+      </div>
+      <span class="card-num">03</span>
+    </div>
+    <iframe class="card-preview" src="03-ultra-compact-mono.html" title="Preview: 03 Ultra-Compact Mono" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>24 px buttons</li>
+        <li>mono font</li>
+        <li>stroke 1.5 icons</li>
+        <li>hairline border</li>
+      </ul>
+      <a class="open-link" href="03-ultra-compact-mono.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 04 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Tactile Raised Keys</p>
+        <p class="card-desc">Each button is a subtly raised keycap. Hover lifts it (translateY −1 px + stronger shadow); pressing pushes it down.</p>
+      </div>
+      <span class="card-num">04</span>
+    </div>
+    <iframe class="card-preview" src="04-tactile-raised-keys.html" title="Preview: 04 Tactile Raised Keys" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>sunken tray</li>
+        <li>raised keycap shadow</li>
+        <li>hover lift</li>
+        <li>press-down effect</li>
+      </ul>
+      <a class="open-link" href="04-tactile-raised-keys.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 05 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Adaptive Two-Row</p>
+        <p class="card-desc">Primary row shows high-frequency controls. A chevron expands a second sunken drawer for lists, indent, link, and overflow.</p>
+      </div>
+      <span class="card-num">05</span>
+    </div>
+    <iframe class="card-preview" src="05-adaptive-two-row.html" title="Preview: 05 Adaptive Two-Row" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>two-row drawer</li>
+        <li>chevron expand</li>
+        <li>max-height transition</li>
+        <li>sunken row 2</li>
+      </ul>
+      <a class="open-link" href="05-adaptive-two-row.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 06 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">Contextual Accent</p>
+        <p class="card-desc">Active toggles use solid accent fill. Role selector is always accent-forward. Left-side stripe signals the selection context mode.</p>
+      </div>
+      <span class="card-num">06</span>
+    </div>
+    <iframe class="card-preview" src="06-contextual-accent.html" title="Preview: 06 Contextual Accent" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>accent-fill active</li>
+        <li>accent role selector</li>
+        <li>left stripe per mode</li>
+        <li>accent caret tip</li>
+      </ul>
+      <a class="open-link" href="06-contextual-accent.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+</main>
+
+<section class="legend" aria-label="Design token reference">
+  <h2>Token Reference</h2>
+  <div class="legend-grid">
+    <div class="legend-item"><strong>--ds-surface-overlay</strong> White floating surface</div>
+    <div class="legend-item"><strong>--ds-surface-sunken</strong> Recessed tray / row 2 background</div>
+    <div class="legend-item"><strong>--ds-shadow-overlay</strong> Primary elevation shadow</div>
+    <div class="legend-item"><strong>--ds-accent</strong> Indigo brand accent (#4f46e5)</div>
+    <div class="legend-item"><strong>--ds-state-hover</strong> Ghost hover background</div>
+    <div class="legend-item"><strong>--ds-state-selected</strong> Tinted toggle active state</div>
+    <div class="legend-item"><strong>--ds-radius-pill</strong> Full pill border-radius</div>
+    <div class="legend-item"><strong>--ds-radius-lg / md</strong> Container / button radii</div>
+    <div class="legend-item"><strong>--ds-border-subtle</strong> Hairline separator</div>
+    <div class="legend-item"><strong>--ds-focus-ring</strong> Keyboard focus outline</div>
+    <div class="legend-item"><strong>--ds-motion-fast</strong> 120 ms button transitions</div>
+    <div class="legend-item"><strong>--ds-motion-base</strong> 180 ms drawer transitions</div>
+  </div>
+</section>
+
+</body>
+</html>

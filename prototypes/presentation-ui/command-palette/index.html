@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Command Palette — TextIQ Design Explorations</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    body { background: var(--ds-surface-base); color: var(--ds-text-primary); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 72px; }
+
+    .hero { margin-bottom: 8px; }
+    .eyebrow {
+      display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--ds-accent-text);
+      background: var(--ds-accent-surface); border: 1px solid var(--ds-accent-border);
+      padding: 4px 10px; border-radius: var(--ds-radius-pill); margin-bottom: 16px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+    .hero p.lede { margin: 0; font-size: 14.5px; color: var(--ds-text-secondary); max-width: 68ch; line-height: 1.55; }
+
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 6px; }
+    .stat {
+      display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--ds-text-muted);
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md); padding: 8px 12px;
+    }
+    .stat b { font-size: 15px; color: var(--ds-text-primary); font-weight: 700; }
+
+    .howto {
+      margin: 20px 0 32px; font-size: 13px; color: var(--ds-text-secondary);
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-left: 3px solid var(--ds-accent); border-radius: var(--ds-radius-md);
+      padding: 12px 16px; line-height: 1.55;
+    }
+    .howto code { font-family: var(--ds-font-mono); font-size: 12px; background: var(--ds-surface-sunken); padding: 1px 6px; border-radius: var(--ds-radius-sm); }
+
+    /* ── Grid ────────────────────────────────────────────── */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; }
+
+    .card {
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl); overflow: hidden;
+      box-shadow: var(--ds-shadow-raised);
+      display: flex; flex-direction: column;
+      transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+                  transform var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .card:hover { box-shadow: var(--ds-shadow-overlay); transform: translateY(-2px); }
+
+    /* iframe preview thumbnail */
+    .card-preview {
+      position: relative; height: 190px; overflow: hidden;
+      background: var(--ds-surface-sunken);
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .card-preview iframe {
+      width: 100%; height: 100%; border: none;
+      pointer-events: none;
+      /* scale down to show a portion of the full page */
+    }
+    .card-preview-overlay {
+      position: absolute; inset: 0;
+      background: transparent;
+    }
+
+    .card-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .num-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 20px; font-size: 10.5px; font-weight: 700;
+      color: var(--ds-text-muted); background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm);
+    }
+    .card-head h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; flex: 1; }
+    .open-link {
+      font-size: 12px; font-weight: 600; color: var(--ds-accent-text);
+      text-decoration: none; white-space: nowrap; flex-shrink: 0;
+    }
+    .open-link:hover { text-decoration: underline; }
+
+    .card-desc { margin: 0 0 12px; font-size: 12.5px; color: var(--ds-text-secondary); line-height: 1.5; flex: 1; }
+
+    .card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag {
+      font-size: 10.5px; font-weight: 600; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      padding: 2px 8px; border-radius: var(--ds-radius-pill);
+    }
+
+    /* ── Token audit strip ───────────────────────────────── */
+    .audit {
+      margin: 36px 0 0; background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl); padding: 20px 24px;
+    }
+    .audit h2 { margin: 0 0 12px; font-size: 14px; font-weight: 700; }
+    .token-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .token-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md); padding: 5px 10px;
+      font-size: 11px; font-family: var(--ds-font-mono); color: var(--ds-text-secondary);
+    }
+    .token-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--ds-border-subtle); flex-shrink: 0; }
+
+    footer {
+      margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--ds-border-subtle);
+      font-size: 12px; color: var(--ds-text-muted); display: flex; flex-wrap: wrap; gap: 16px;
+    }
+    footer a { color: var(--ds-accent-text); text-decoration: none; font-weight: 600; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="hero">
+      <span class="eyebrow">TextIQ · Command Palette · Round 2</span>
+      <h1>Command Palette (⌘K) — 6 Design Directions</h1>
+      <p class="lede">Six distinct, compact, modern approaches to the shared Command Palette of the TextIQ presentation editor. Each solution is a self-contained HTML file grounded in <code>src/components/presentation/slide-command-palette.tsx</code> and the <code>SlideCommandPaletteCommand</code> shape. All share one source of truth — <code>../design-tokens.css</code>.</p>
+    </div>
+
+    <div class="meta">
+      <span class="stat"><b>6</b> directions</span>
+      <span class="stat"><b>0</b> CDN / frameworks</span>
+      <span class="stat">Tokens from <b>design-tokens.css</b></span>
+      <span class="stat">Grounded in <b>slide-command-palette.tsx</b></span>
+    </div>
+
+    <p class="howto">Open any card below directly in your browser — no build step, no network required. Each file renders the palette centered over a dimmed mock slide editor. Type <code>zzz</code> in any search box to trigger the empty / no-results state. Each file has a spec header (rationale + 3–5 bullet points) above the demo.</p>
+
+    <section class="grid">
+
+      <!-- 01 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="01-spotlight-centered.html" title="Spotlight Centered preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">01</span>
+            <h2>Spotlight Centered</h2>
+            <a class="open-link" href="01-spotlight-centered.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">macOS Spotlight–inspired floating panel. Large 560 px panel with 32×32 icon boxes, accent-colored left border on the active row, and a sunken footer legend strip.</p>
+          <div class="card-tags">
+            <span class="tag">560 px</span>
+            <span class="tag">Icon boxes</span>
+            <span class="tag">Left accent bar</span>
+            <span class="tag">Enter chip</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 02 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="02-compact-list.html" title="Compact List preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">02</span>
+            <h2>Compact List</h2>
+            <a class="open-link" href="02-compact-list.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">VS Code–style ultra-dense 32 px rows with section pill and shortcut chip tightly right-aligned. Up to 10 commands visible before scrolling.</p>
+          <div class="card-tags">
+            <span class="tag">32 px rows</span>
+            <span class="tag">Section pill</span>
+            <span class="tag">Dense</span>
+            <span class="tag">Power users</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 03 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="03-grouped-categories.html" title="Grouped Categories preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">03</span>
+            <h2>Grouped Categories</h2>
+            <a class="open-link" href="03-grouped-categories.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">Linear Doc–style palette with sticky section headers (Deck, Export, Insert, Inspector). All-caps group labels with count badges orient users by workflow area.</p>
+          <div class="card-tags">
+            <span class="tag">Section headers</span>
+            <span class="tag">Count badges</span>
+            <span class="tag">Grouped</span>
+            <span class="tag">Workflow scan</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 04 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="04-two-pane-preview.html" title="Two-Pane Preview preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">04</span>
+            <h2>Two-Pane Preview</h2>
+            <a class="open-link" href="04-two-pane-preview.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">Raycast-style split palette. Left scrollable list (240 px) + right detail pane with icon, description, section badge, shortcut, and a Run button.</p>
+          <div class="card-tags">
+            <span class="tag">680 px</span>
+            <span class="tag">Split layout</span>
+            <span class="tag">Detail pane</span>
+            <span class="tag">Run button</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 05 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="05-minimal-flat.html" title="Minimal Flat preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">05</span>
+            <h2>Minimal Flat</h2>
+            <a class="open-link" href="05-minimal-flat.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">Borderless, airy, typography-first palette. Semantic-color accent dots replace icon boxes. 40 px rows, 14 px labels, pure shadow elevation. No section pills in the list.</p>
+          <div class="card-tags">
+            <span class="tag">Borderless</span>
+            <span class="tag">Accent dots</span>
+            <span class="tag">Airy</span>
+            <span class="tag">Shadow-only elevation</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 06 -->
+      <article class="card">
+        <div class="card-preview">
+          <iframe src="06-keyboard-forward.html" title="Keyboard Forward preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+          <div class="card-preview-overlay"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <span class="num-badge">06</span>
+            <h2>Keyboard Forward</h2>
+            <a class="open-link" href="06-keyboard-forward.html">Open &rarr;</a>
+          </div>
+          <p class="card-desc">Shortcut-first 4-column grid: shortcut column (96 px, right-aligned) · icon · label · section. A "Shortcuts only" filter tab surfaces keyboard-navigable commands instantly.</p>
+          <div class="card-tags">
+            <span class="tag">Grid layout</span>
+            <span class="tag">Shortcut-first</span>
+            <span class="tag">Filter tabs</span>
+            <span class="tag">Mono kbd chips</span>
+          </div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- Token audit -->
+    <div class="audit">
+      <h2>Design token usage across all 6 files</h2>
+      <div class="token-grid">
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-backdrop)"></span>--ds-backdrop</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-surface-overlay)"></span>--ds-surface-overlay</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-surface-raised)"></span>--ds-surface-raised</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-surface-sunken)"></span>--ds-surface-sunken</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-border-subtle);border-color:var(--ds-border-strong)"></span>--ds-border-subtle</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-shadow-overlay)"></span>--ds-shadow-overlay</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-accent)"></span>--ds-accent</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-accent-surface)"></span>--ds-accent-surface</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-accent-subtle)"></span>--ds-accent-subtle</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-accent-text)"></span>--ds-accent-text</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-state-selected)"></span>--ds-state-selected</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-state-hover)"></span>--ds-state-hover</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-text-primary)"></span>--ds-text-primary</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-text-secondary)"></span>--ds-text-secondary</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-text-muted)"></span>--ds-text-muted</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-focus-ring)"></span>--ds-focus-ring</div>
+        <div class="token-chip"><span class="token-swatch" style="background:var(--ds-radius-lg) transparent"></span>--ds-radius-lg</div>
+        <div class="token-chip"><span class="token-swatch" style="background:transparent"></span>--ds-font-mono</div>
+        <div class="token-chip"><span class="token-swatch" style="background:transparent"></span>--ds-space-1 … --ds-space-5</div>
+        <div class="token-chip"><span class="token-swatch" style="background:transparent"></span>--ds-motion-fast</div>
+      </div>
+    </div>
+
+    <footer>
+      <span>&copy; 2026 TextIQ — design explorations only, no production code.</span>
+      <a href="../index.html">&larr; All component galleries</a>
+    </footer>
+  </main>
+</body>
+</html>

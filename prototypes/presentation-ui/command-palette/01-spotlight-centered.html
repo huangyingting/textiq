@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>01 — Spotlight Centered · TextIQ Command Palette</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+    /* ── Spec strip ─────────────────────────────────────── */
+    .spec-strip {
+      flex-shrink: 0; padding: 14px 20px 12px;
+      background: var(--ds-surface); border-bottom: 2px solid var(--ds-border-subtle);
+    }
+    .spec-strip h1 { margin: 0 0 5px; font-size: 13px; font-weight: 700; color: var(--ds-text-primary); letter-spacing: -.01em; }
+    .spec-strip p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; }
+    .spec-strip ul { margin: 0; padding-left: 16px; }
+    .spec-strip li { font-size: 11px; color: var(--ds-text-muted); line-height: 1.65; }
+
+    /* ── Demo frame ─────────────────────────────────────── */
+    .demo-frame {
+      flex: 1; position: relative; overflow: hidden;
+      background: var(--ds-surface-sunken);
+      display: flex; align-items: flex-start; justify-content: center;
+    }
+    /* fake slide editor bg */
+    .editor-bg {
+      position: absolute; inset: 0;
+      background: var(--ds-surface-base);
+      display: flex; flex-direction: column;
+    }
+    .editor-topbar {
+      height: 44px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; padding: 0 16px; gap: 8px;
+    }
+    .fake-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ds-border-subtle); }
+    .fake-dot.red { background: #ff5f57; } .fake-dot.yellow { background: #febc2e; } .fake-dot.green { background: #28c840; }
+    .fake-title { flex: 1; text-align: center; font-size: 11px; color: var(--ds-text-muted); font-weight: 500; }
+    .editor-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .fake-slide {
+      aspect-ratio: 16/9; width: min(520px, 75vw);
+      background: var(--ds-surface); border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-raised); border: 1px solid var(--ds-border-subtle);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    }
+    .fake-slide-title { font-size: 18px; font-weight: 700; color: var(--ds-text-primary); opacity: 0.35; }
+    .fake-slide-sub { font-size: 12px; color: var(--ds-text-muted); opacity: 0.4; }
+
+    /* ── Backdrop + Palette container ────────────────────── */
+    .backdrop {
+      position: absolute; inset: 0;
+      background: var(--ds-backdrop);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 72px;
+    }
+
+    /* ── Palette ─────────────────────────────────────────── */
+    .palette {
+      width: 560px; max-width: calc(100vw - 32px);
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-overlay);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Search header ───────────────────────────────────── */
+    .search-header {
+      padding: var(--ds-space-3) var(--ds-space-4);
+      border-bottom: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; gap: var(--ds-space-3);
+    }
+    .search-icon { color: var(--ds-text-muted); flex-shrink: 0; display: flex; }
+    .search-input {
+      flex: 1; border: none; background: transparent; outline: none;
+      font-size: 16px; font-family: var(--ds-font-sans); color: var(--ds-text-primary);
+      font-weight: 500; min-width: 0;
+    }
+    .search-input::placeholder { color: var(--ds-text-muted); font-weight: 400; }
+    .search-hint {
+      display: flex; align-items: center; gap: 4px;
+      flex-shrink: 0;
+    }
+    .search-hint-icon {
+      width: 22px; height: 22px; border-radius: var(--ds-radius-sm);
+      background: var(--ds-accent-surface); color: var(--ds-accent-text);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .search-hint-key {
+      font-size: 11px; font-weight: 700; color: var(--ds-accent-text);
+      background: var(--ds-accent-surface); border: 1px solid var(--ds-accent-border);
+      padding: 2px 6px; border-radius: var(--ds-radius-sm); font-family: var(--ds-font-mono);
+    }
+    .close-btn {
+      width: 26px; height: 26px; border-radius: var(--ds-radius-sm);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-text-muted); cursor: pointer; flex-shrink: 0;
+    }
+    .close-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+
+    /* ── Results ─────────────────────────────────────────── */
+    .results { padding: var(--ds-space-2); max-height: 380px; overflow-y: auto; }
+    .results::-webkit-scrollbar { width: 6px; }
+    .results::-webkit-scrollbar-thumb { background: var(--ds-border-subtle); border-radius: 3px; }
+
+    .result-row {
+      display: flex; align-items: center; gap: var(--ds-space-3);
+      padding: var(--ds-space-2) var(--ds-space-3);
+      border-radius: var(--ds-radius-md);
+      cursor: pointer;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+      position: relative;
+    }
+    .result-row:hover { background: var(--ds-state-hover); }
+    .result-row.active {
+      background: var(--ds-state-selected);
+      border-left: 3px solid var(--ds-accent);
+      padding-left: calc(var(--ds-space-3) - 3px);
+    }
+    .result-row.disabled { opacity: 0.42; cursor: not-allowed; }
+
+    /* icon box */
+    .row-icon-box {
+      width: 32px; height: 32px; border-radius: var(--ds-radius-md);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-text-muted); flex-shrink: 0;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard),
+                  color var(--ds-motion-fast) var(--ds-ease-standard),
+                  border-color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .result-row.active .row-icon-box {
+      background: var(--ds-accent-surface); border-color: var(--ds-accent-border);
+      color: var(--ds-accent-text);
+    }
+
+    .row-body { flex: 1; min-width: 0; }
+    .row-label {
+      font-size: 13.5px; font-weight: 600; color: var(--ds-text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+    .result-row:not(.active) .row-label { color: var(--ds-text-secondary); }
+    .row-section {
+      font-size: 11px; color: var(--ds-text-muted); margin-top: 1px; line-height: 1;
+    }
+
+    .row-meta { display: flex; align-items: center; gap: var(--ds-space-2); flex-shrink: 0; }
+    .kbd {
+      display: inline-flex; align-items: center; gap: 2px;
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm); padding: 2px 6px;
+      font-size: 10.5px; font-family: var(--ds-font-mono); color: var(--ds-text-muted);
+      white-space: nowrap; line-height: 1.4;
+    }
+    .enter-chip {
+      width: 22px; height: 22px; border-radius: var(--ds-radius-sm);
+      background: var(--ds-accent); display: flex; align-items: center; justify-content: center;
+      color: var(--ds-accent-contrast);
+    }
+
+    /* ── Divider ─────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--ds-border-subtle); margin: var(--ds-space-1) var(--ds-space-3); }
+
+    /* ── Empty state ─────────────────────────────────────── */
+    .empty-state {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      padding: 36px 24px; gap: 10px; text-align: center;
+    }
+    .empty-state.show { display: flex; }
+    .empty-icon { color: var(--ds-text-muted); opacity: 0.4; }
+    .empty-title { font-size: 14px; font-weight: 600; color: var(--ds-text-muted); margin: 0; }
+    .empty-sub { font-size: 12px; color: var(--ds-text-muted); margin: 0; opacity: 0.75; }
+
+    /* ── Footer ─────────────────────────────────────────────*/
+    .palette-footer {
+      padding: var(--ds-space-2) var(--ds-space-4);
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; gap: var(--ds-space-4);
+      background: var(--ds-surface-sunken);
+    }
+    .legend-item { display: flex; align-items: center; gap: var(--ds-space-1); font-size: 11px; color: var(--ds-text-muted); }
+    .legend-item .kbd { font-size: 10px; padding: 1px 5px; }
+    .legend-sep { flex: 1; }
+    .results-count { font-size: 11px; color: var(--ds-text-muted); }
+  </style>
+</head>
+<body>
+  <div class="spec-strip">
+    <h1>01 — Spotlight Centered</h1>
+    <p>macOS Spotlight–inspired floating panel: a full-width search bar backed by icon-box rows. Generous spacing and the accent-filled left border make the active selection unmistakable at a glance.</p>
+    <ul>
+      <li>560 px centered panel with <code>--ds-surface-overlay</code> base and <code>--ds-shadow-overlay</code>.</li>
+      <li>32×32 icon boxes: sunken bg at rest, <code>--ds-accent-surface</code> + accent border when active.</li>
+      <li>Active row: <code>--ds-state-selected</code> fill + 3 px <code>--ds-accent</code> left bar; enter chip turns accent-filled.</li>
+      <li>Row shows label + muted section sub-label; shortcuts appear as <code>--ds-font-mono</code> kbd chips on right.</li>
+      <li>Empty state with muted icon + copy; footer legend anchored to sunken strip.</li>
+    </ul>
+  </div>
+  <div class="demo-frame">
+    <!-- fake editor background -->
+    <div class="editor-bg">
+      <div class="editor-topbar">
+        <div class="fake-dot red"></div>
+        <div class="fake-dot yellow"></div>
+        <div class="fake-dot green"></div>
+        <span class="fake-title">Untitled Deck — TextIQ</span>
+      </div>
+      <div class="editor-body">
+        <div class="fake-slide">
+          <div class="fake-slide-title">Quarterly Review</div>
+          <div class="fake-slide-sub">Click to add subtitle</div>
+        </div>
+      </div>
+    </div>
+    <!-- backdrop + palette -->
+    <div class="backdrop">
+      <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <!-- search -->
+        <div class="search-header">
+          <div class="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <input class="search-input" type="text" placeholder="Search commands, panels, inserts, export…" aria-label="Search commands" id="s01" autocomplete="off" />
+          <div class="search-hint">
+            <div class="search-hint-icon">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></svg>
+            </div>
+            <span class="search-hint-key">K</span>
+          </div>
+          <button class="close-btn" aria-label="Close palette">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- results -->
+        <div class="results" id="results01" role="listbox" aria-label="Commands">
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Save now</div><div class="row-section">Deck</div></div>
+            <div class="row-meta"><span class="kbd">⌘S</span></div>
+          </div>
+
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Undo</div><div class="row-section">Deck</div></div>
+            <div class="row-meta"><span class="kbd">⌘Z</span></div>
+          </div>
+
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Present slides</div><div class="row-section">Deck</div></div>
+            <div class="row-meta"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="result-row active" role="option" aria-selected="true">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Export PDF</div><div class="row-section">Export</div></div>
+            <div class="row-meta">
+              <div class="enter-chip" aria-label="Press Enter to run">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Export PPTX</div><div class="row-section">Export</div></div>
+            <div class="row-meta"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Insert image</div><div class="row-section">Insert</div></div>
+            <div class="row-meta"></div>
+          </div>
+
+          <div class="result-row" role="option" aria-selected="false">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Open text panel</div><div class="row-section">Inspector</div></div>
+            <div class="row-meta"></div>
+          </div>
+
+          <div class="result-row disabled" role="option" aria-selected="false" aria-disabled="true">
+            <div class="row-icon-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            </div>
+            <div class="row-body"><div class="row-label">Duplicate slide</div><div class="row-section">Slide · No active slide</div></div>
+            <div class="row-meta"></div>
+          </div>
+        </div>
+
+        <!-- empty state (hidden by default, toggle via script) -->
+        <div class="empty-state" id="empty01" role="status" aria-live="polite">
+          <div class="empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <p class="empty-title">No commands match</p>
+          <p class="empty-sub">Try a different keyword — e.g. "export", "undo", "text"</p>
+        </div>
+
+        <!-- footer -->
+        <div class="palette-footer">
+          <span class="legend-item"><span class="kbd">↑</span><span class="kbd">↓</span> navigate</span>
+          <span class="legend-item"><span class="kbd">↵</span> run</span>
+          <span class="legend-item"><span class="kbd">esc</span> close</span>
+          <span class="legend-sep"></span>
+          <span class="results-count">8 commands</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const input = document.getElementById('s01');
+    const results = document.getElementById('results01');
+    const empty = document.getElementById('empty01');
+    input.addEventListener('input', () => {
+      const v = input.value.trim();
+      if (v === 'zzz') { results.style.display = 'none'; empty.classList.add('show'); }
+      else { results.style.display = ''; empty.classList.remove('show'); }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 — Two-Tier Context Bar · TextIQ Toolbar</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+    /* ── Spec strip ─────────────────────────────────────── */
+    .spec-strip {
+      flex-shrink: 0; padding: 14px 20px 12px;
+      background: var(--ds-surface); border-bottom: 2px solid var(--ds-border-subtle);
+    }
+    .spec-strip h1 { margin: 0 0 5px; font-size: 13px; font-weight: 700; color: var(--ds-text-primary); letter-spacing: -.01em; }
+    .spec-strip p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; }
+    .spec-strip ul { margin: 0; padding-left: 16px; }
+    .spec-strip li { font-size: 11px; color: var(--ds-text-muted); line-height: 1.65; }
+
+    /* ── Demo frame ─────────────────────────────────────── */
+    .demo-frame { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Primary bar (top tier) ──────────────────────────── */
+    .primary-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; height: 38px; flex-shrink: 0;
+      background: var(--ds-surface);
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+
+    /* ── Secondary bar (bottom tier — editor controls) ─── */
+    .secondary-bar {
+      display: flex; align-items: center; gap: 4px;
+      padding: 0 12px; height: 34px; flex-shrink: 0;
+      background: var(--ds-surface-sunken);
+      border-bottom: 1px solid var(--ds-border-subtle);
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .secondary-bar::-webkit-scrollbar { display: none; }
+
+    /* ── Primary bar — left: identity ────────────────────── */
+    .identity {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .deck-icon {
+      width: 20px; height: 20px;
+      background: var(--ds-accent-surface); border-radius: var(--ds-radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-accent-text); flex-shrink: 0;
+    }
+    .deck-title {
+      font-size: 12px; font-weight: 600; color: var(--ds-text-primary);
+      letter-spacing: -.01em; white-space: nowrap;
+    }
+    .save-status {
+      font-size: 10px; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken);
+      border-radius: var(--ds-radius-pill); padding: 1px 7px;
+      white-space: nowrap;
+    }
+
+    /* ── Primary bar — right: publish actions ────────────── */
+    .primary-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+    /* Primary bar: ghost icon button */
+    .p-icon-btn {
+      width: 28px; height: 28px; border: none; background: transparent;
+      color: var(--ds-text-muted); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: var(--ds-radius-sm); transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard); outline: none; flex-shrink: 0;
+    }
+    .p-icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .p-icon-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+    .p-icon-btn:disabled { opacity: 0.38; pointer-events: none; }
+
+    /* Primary bar: accent filled */
+    .p-btn-accent {
+      height: 28px; border: none; background: var(--ds-accent);
+      color: var(--ds-text-on-accent); font-size: 11px;
+      font-family: var(--ds-font-sans); font-weight: 600;
+      cursor: pointer; border-radius: var(--ds-radius-sm); flex-shrink: 0;
+      padding: 0 11px; white-space: nowrap; outline: none;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .p-btn-accent:hover { background: var(--ds-accent-hover); }
+    .p-btn-accent:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+    /* Primary bar: outlined secondary */
+    .p-btn {
+      height: 28px; border: 1px solid var(--ds-border-subtle); background: var(--ds-surface);
+      color: var(--ds-text-secondary); font-size: 11px;
+      font-family: var(--ds-font-sans); font-weight: 500;
+      cursor: pointer; border-radius: var(--ds-radius-sm); flex-shrink: 0;
+      padding: 0 10px; white-space: nowrap; outline: none;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard), border-color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .p-btn:hover { background: var(--ds-state-hover); border-color: var(--ds-border-strong); color: var(--ds-text-primary); }
+    .p-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    .p-divider { width: 1px; height: 16px; background: var(--ds-border-subtle); flex-shrink: 0; margin: 0 4px; }
+
+    /* ── Secondary bar controls (compact) ───────────────── */
+    .sec-group { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
+    .sec-divider { width: 1px; height: 14px; background: var(--ds-border-subtle); flex-shrink: 0; margin: 0 5px; opacity: .8; }
+
+    .s-btn, .s-icon-btn {
+      height: 26px; border: none; background: transparent;
+      color: var(--ds-text-secondary); font-size: 11px;
+      font-family: var(--ds-font-sans); font-weight: 500; cursor: pointer;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard);
+      outline: none; display: inline-flex; align-items: center; gap: 3px;
+      border-radius: var(--ds-radius-sm); flex-shrink: 0; white-space: nowrap; padding: 0 7px;
+    }
+    .s-icon-btn { width: 26px; padding: 0; justify-content: center; color: var(--ds-text-muted); }
+    .s-btn:hover, .s-icon-btn:hover { background: rgba(23,32,51,.08); color: var(--ds-text-primary); }
+    .s-btn:focus-visible, .s-icon-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+    .s-btn.active, .s-icon-btn.active { background: var(--ds-accent-surface); color: var(--ds-accent-text); }
+    .s-btn:disabled, .s-icon-btn:disabled { opacity: 0.38; pointer-events: none; }
+
+    .s-sel {
+      height: 26px; border: none; background: transparent;
+      color: var(--ds-text-secondary); font-size: 11px;
+      font-family: var(--ds-font-sans); font-weight: 500;
+      border-radius: var(--ds-radius-sm); cursor: pointer;
+      padding: 0 16px 0 7px; flex-shrink: 0;
+      -webkit-appearance: none; appearance: none; outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' stroke='%23738091' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 3px center;
+    }
+    .s-sel:hover { background-color: rgba(23,32,51,.08); color: var(--ds-text-primary); }
+    .s-sel:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    /* Context mode pill (shows which mode the secondary bar serves) */
+    .context-pill {
+      font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--ds-accent-text); background: var(--ds-accent-surface);
+      border-radius: var(--ds-radius-pill); padding: 1px 7px;
+      white-space: nowrap; flex-shrink: 0; margin-right: 4px;
+    }
+
+    /* Badge */
+    .badge-wrap { position: relative; display: inline-flex; }
+    .badge {
+      position: absolute; top: -2px; right: -4px;
+      background: var(--ds-warning-surface); color: var(--ds-warning-text);
+      font-size: 8.5px; font-weight: 700; padding: 0 3px;
+      border-radius: 999px; line-height: 13px; pointer-events: none;
+    }
+
+    /* ── Canvas ──────────────────────────────────────────── */
+    .canvas {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      background: var(--ds-surface-base); padding: 24px;
+    }
+    .slide-hint {
+      aspect-ratio: 16/9; width: min(640px, 80vw);
+      background: var(--ds-surface); border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-overlay); border: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-text-muted); font-size: 12px; letter-spacing: .03em;
+    }
+  </style>
+</head>
+<body>
+  <div class="spec-strip">
+    <h1>06 — Two-Tier Context Bar</h1>
+    <p>A slim primary row carries identity + publishing actions; a secondary sunken row carries all contextual editor controls. The two tiers have distinct visual weight and purpose.</p>
+    <ul>
+      <li>Primary row (38 px, white): deck title, save status, undo/redo, Present/Share/Export/Close</li>
+      <li>Secondary row (34 px, <code>--ds-surface-sunken</code>): mode-labelled context pill + all editor controls</li>
+      <li>Clear tier separation: primary is always visible, secondary swaps contextually by editing mode</li>
+      <li>Total chrome height 72 px — generous but clearly two distinct layers</li>
+    </ul>
+  </div>
+
+  <div class="demo-frame">
+
+    <!-- ── PRIMARY BAR ── -->
+    <header role="banner" aria-label="Deck header" class="primary-bar">
+
+      <!-- Left: identity -->
+      <div class="identity">
+        <div class="deck-icon" aria-hidden="true">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <span class="deck-title">Q3 Strategy</span>
+        <span class="save-status" aria-live="polite">Saved</span>
+      </div>
+
+      <!-- Right: actions -->
+      <nav role="toolbar" aria-label="Primary deck actions" class="primary-actions">
+        <button type="button" aria-label="More deck commands" aria-haspopup="menu" class="p-icon-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+        <button type="button" aria-label="Command palette (⌘K)" class="p-icon-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+        </button>
+        <button type="button" aria-label="Keyboard shortcuts" class="p-icon-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+        </button>
+
+        <div class="p-divider" aria-hidden="true"></div>
+
+        <button type="button" aria-label="Undo" class="p-icon-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+        </button>
+        <!-- Redo DISABLED -->
+        <button type="button" aria-label="Redo" disabled class="p-icon-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
+        </button>
+
+        <div class="p-divider" aria-hidden="true"></div>
+
+        <!-- Present — accent filled -->
+        <button type="button" aria-label="Present slides" class="p-btn-accent">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polygon points="10,8 10,14 15,11" fill="currentColor" stroke="none"/></svg>
+          Present
+        </button>
+
+        <!-- Share — outlined -->
+        <button type="button" aria-label="Share slides" class="p-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share
+        </button>
+
+        <!-- Export — outlined -->
+        <button type="button" aria-label="Export slides" aria-haspopup="menu" class="p-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+          Export
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <div class="p-divider" aria-hidden="true"></div>
+
+        <button type="button" aria-label="Close slide editor" class="p-icon-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </nav>
+    </header>
+
+    <!-- ── SECONDARY BAR (editor controls) ── -->
+    <div role="toolbar" aria-label="Editor controls" class="secondary-bar">
+
+      <!-- Context mode pill -->
+      <span class="context-pill" aria-label="Current mode: Slide">Slide</span>
+
+      <!-- Deck setup group -->
+      <div role="group" aria-label="Deck setup" class="sec-group">
+        <select aria-label="Deck theme" class="s-sel">
+          <option>Aurora</option><option>Cascade</option>
+        </select>
+        <button type="button" aria-label="Author brand kit" class="s-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r="1" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+          Brand kit
+        </button>
+        <select aria-label="Slide ratio" class="s-sel">
+          <option>16:9</option><option>4:3</option><option>1:1</option>
+        </select>
+        <button type="button" aria-label="Deck chrome" aria-haspopup="dialog" class="s-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+          Chrome
+        </button>
+      </div>
+
+      <div class="sec-divider" aria-hidden="true"></div>
+
+      <!-- Snap + guides group -->
+      <div role="group" aria-label="Snap and guides" class="sec-group">
+        <!-- Snap ACTIVE -->
+        <button type="button" aria-label="Toggle snap to guides" aria-pressed="true" class="s-btn active">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          Snap
+        </button>
+        <button type="button" aria-label="Toggle grid" aria-pressed="false" class="s-icon-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        <button type="button" aria-label="Toggle rulers" aria-pressed="false" class="s-icon-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 8.7 8.7 21.3c-1 1-2.5 1-3.4 0l-2.6-2.6c-1-1-1-2.5 0-3.4L15.3 2.7c1-1 2.5-1 3.4 0l2.6 2.6c1 1 1 2.5 0 3.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/></svg>
+        </button>
+        <!-- Guides ACTIVE -->
+        <button type="button" aria-label="Toggle custom guides" aria-pressed="true" class="s-icon-btn active">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="21"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+        </button>
+      </div>
+
+      <div class="sec-divider" aria-hidden="true"></div>
+
+      <!-- Source group -->
+      <div role="group" aria-label="Document source" class="sec-group">
+        <div class="badge-wrap">
+          <button type="button" aria-label="Document source" aria-haspopup="menu" class="s-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+            Source
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="badge" aria-label="2 items need review">2</span>
+        </div>
+        <button type="button" aria-label="Regenerate deck from document" class="s-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          Rebuild
+        </button>
+      </div>
+
+      <!-- Save (in secondary so it's near the editor controls) -->
+      <div class="sec-divider" aria-hidden="true"></div>
+      <button type="button" aria-label="Save now" class="s-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save now
+      </button>
+    </div>
+
+    <div class="canvas" aria-hidden="true">
+      <div class="slide-hint">Slide canvas</div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('[aria-pressed]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pressed = btn.getAttribute('aria-pressed') === 'true';
+        btn.setAttribute('aria-pressed', String(!pressed));
+        btn.classList.toggle('active', !pressed);
+      });
+    });
+  </script>
+</body>
+</html>

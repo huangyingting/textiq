@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>01 · Compact List — Dropdown / Select</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    /* ── Spec Header ─────────────────────────────────────────────── */
+    .spec {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface);
+    }
+    .spec h1 { margin: 0 0 5px; font-size: 16px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec p  { margin: 0 0 10px; font-size: 12.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 580px; }
+    .spec ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 5px; }
+    .spec ul li {
+      font-size: 11px; color: var(--ds-text-secondary);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill); padding: 2px 9px;
+    }
+
+    /* ── Stage ───────────────────────────────────────────────────── */
+    .stage {
+      display: flex; align-items: flex-start; justify-content: center;
+      min-height: 520px; padding: 48px 40px;
+      background: var(--ds-surface-base);
+    }
+
+    /* ── Demo wrapper ────────────────────────────────────────────── */
+    .demo { display: inline-flex; flex-direction: column; gap: 2px; position: relative; }
+
+    /* Faux inspector row */
+    .toolbar-row {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px;
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .label-muted { font-size: 11px; color: var(--ds-text-muted); white-space: nowrap; }
+
+    /* ── Ghost trigger ───────────────────────────────────────────── */
+    .trigger {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 26px; padding: 0 8px;
+      font-size: 12px; font-weight: 500; font-family: var(--ds-font-sans);
+      color: var(--ds-text-primary);
+      background: transparent; border: none; border-radius: var(--ds-radius-sm);
+      cursor: pointer;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .trigger:hover  { background: var(--ds-state-hover); }
+    .trigger.open   { background: var(--ds-state-active); }
+    .trigger .chevron { color: var(--ds-text-muted); }
+
+    /* ── Menu panel ──────────────────────────────────────────────── */
+    .menu {
+      width: 214px;
+      background: var(--ds-surface-raised);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-popover);
+      padding: 4px;
+      /* show open by default in the mockup */
+    }
+    .menu[hidden] { display: none; }
+
+    /* ── Items ───────────────────────────────────────────────────── */
+    .item {
+      display: flex; align-items: center; gap: 6px;
+      height: 28px; padding: 0 6px 0 4px;
+      font-size: 12px; font-family: var(--ds-font-sans);
+      color: var(--ds-text-primary);
+      border-radius: var(--ds-radius-sm);
+      cursor: pointer; user-select: none;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .item:hover     { background: var(--ds-state-hover); }
+    .item.selected  { background: var(--ds-state-selected); }
+    .item.disabled  { color: var(--ds-text-muted); opacity: 0.5; cursor: default; pointer-events: none; }
+    .item.destructive { color: var(--ds-danger-text); }
+    .item.destructive:hover { background: var(--ds-danger-surface); }
+
+    /* Fixed check column */
+    .check-col {
+      width: 16px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-accent);
+    }
+
+    /* Label */
+    .item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Trailing shortcut chip */
+    .shortcut {
+      font-family: var(--ds-font-mono); font-size: 10px;
+      color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm); padding: 1px 5px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* Submenu arrow */
+    .sub-arrow { color: var(--ds-text-muted); flex-shrink: 0; margin-left: auto; }
+
+    /* Separator */
+    .sep { height: 1px; background: var(--ds-border-subtle); margin: 3px 0; }
+
+    /* Section header */
+    .section-label {
+      padding: 4px 8px 2px;
+      font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--ds-text-muted);
+      user-select: none;
+    }
+
+    svg.icon {
+      display: block; flex-shrink: 0;
+      stroke: currentColor; stroke-width: 2; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+  </style>
+</head>
+<body>
+  <div class="spec">
+    <h1>01 · Compact List</h1>
+    <p>
+      The densest, most minimal direction — icon-free rows at 28 px, driven purely by
+      typography and a fixed check-mark column. Ideal for toolbar selects and inspector
+      panels where horizontal space is precious.
+    </p>
+    <ul>
+      <li>Ghost trigger (borderless, 26 px)</li>
+      <li>28 px item rows — densest usable touch target</li>
+      <li>Fixed 16 px check column — selected row only</li>
+      <li>Trailing shortcut kbd chip (mono font, --ds-radius-sm)</li>
+      <li>Section labels · separator · submenu chevron · disabled item</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <div class="demo">
+      <!-- Faux toolbar strip holding the trigger -->
+      <div class="toolbar-row">
+        <span class="label-muted">Style</span>
+        <button
+          class="trigger open"
+          id="trig01"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded="true"
+          onclick="toggleMenu('menu01','trig01')"
+        >
+          Heading 2
+          <svg class="icon chevron" viewBox="0 0 24 24" width="11" height="11">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Dropdown menu -->
+      <div class="menu" id="menu01" role="listbox" aria-label="Text style">
+
+        <div class="section-label">Headings</div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="check-col"></span>
+          <span class="item-label">Heading 1</span>
+          <span class="shortcut">⌘1</span>
+        </div>
+
+        <!-- Selected item -->
+        <div class="item selected" role="option" aria-selected="true">
+          <span class="check-col">
+            <svg class="icon" viewBox="0 0 24 24" width="12" height="12" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </span>
+          <span class="item-label">Heading 2</span>
+          <span class="shortcut">⌘2</span>
+        </div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="check-col"></span>
+          <span class="item-label">Heading 3</span>
+          <span class="shortcut">⌘3</span>
+        </div>
+
+        <div class="sep" role="separator"></div>
+        <div class="section-label">Body</div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="check-col"></span>
+          <span class="item-label">Body Text</span>
+        </div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="check-col"></span>
+          <span class="item-label">Caption</span>
+        </div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="check-col"></span>
+          <span class="item-label">Quote</span>
+        </div>
+
+        <div class="sep" role="separator"></div>
+
+        <!-- Submenu item -->
+        <div class="item" role="option" aria-selected="false" aria-haspopup="true">
+          <span class="check-col"></span>
+          <span class="item-label">More styles</span>
+          <svg class="icon sub-arrow" viewBox="0 0 24 24" width="11" height="11">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+
+        <!-- Disabled item -->
+        <div class="item disabled" role="option" aria-disabled="true">
+          <span class="check-col"></span>
+          <span class="item-label">Custom style…</span>
+        </div>
+
+      </div><!-- /menu -->
+    </div><!-- /demo -->
+  </div><!-- /stage -->
+
+  <script>
+    function toggleMenu(menuId, trigId) {
+      const m = document.getElementById(menuId);
+      const t = document.getElementById(trigId);
+      const wasOpen = !m.hidden;
+      m.hidden = wasOpen;
+      t.setAttribute('aria-expanded', String(!wasOpen));
+      t.classList.toggle('open', !wasOpen);
+    }
+  </script>
+</body>
+</html>

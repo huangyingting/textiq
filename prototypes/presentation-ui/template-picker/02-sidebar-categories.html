@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>02 Sidebar Categories — Template Picker · TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /*
+      Direction 02 · SIDEBAR CATEGORIES
+      Rationale: Classic two-pane nav — narrow left sidebar lists all 8
+      groups as persistent nav items; the right pane shows only the selected
+      group's templates in a 2-column grid. Reduces cognitive load by
+      hiding irrelevant templates.
+
+      • Attached inspector panel style — no dimming, slides in from right
+      • Left sidebar: group icon + label list, active state = accent surface
+      • Right pane: group headline + compact 2-col template grid
+      • Search at top of right pane
+      • Author Brand Kit pinned to sidebar footer
+    */
+
+    body { margin:0; background:var(--ds-surface-base); font-family:var(--ds-font-sans); display:flex; flex-direction:column; min-height:100vh; }
+
+    /* ── Spec header ────────────────────────────────────────────────── */
+    .spec { padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle); background: var(--ds-surface); flex-shrink: 0; }
+    .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 720px; }
+    .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+    /* ── Stage ──────────────────────────────────────────────────────── */
+    .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+    /* Faux editor canvas */
+    .editor-bg {
+      width:100%; height:100%;
+      background:
+        linear-gradient(var(--ds-border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--ds-border-subtle) 1px, transparent 1px);
+      background-size:32px 32px;
+      background-color:var(--ds-surface-sunken);
+      display:flex; align-items:stretch; justify-content:flex-end;
+    }
+
+    /* Panel */
+    .panel {
+      width:420px;
+      background:var(--ds-surface);
+      border-left:1px solid var(--ds-border-subtle);
+      box-shadow:var(--ds-shadow-overlay);
+      display:flex; flex-direction:column;
+      height:100%; overflow:hidden;
+    }
+
+    /* Panel header */
+    .panel-header {
+      flex-shrink:0;
+      padding:13px 14px 12px;
+      border-bottom:1px solid var(--ds-border-subtle);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .panel-title {
+      margin:0; font-size:13px; font-weight:700;
+      color:var(--ds-text-primary); letter-spacing:-.01em;
+    }
+    .panel-header-actions { display:flex; gap:5px; align-items:center; }
+
+    .btn-close {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:26px; height:26px;
+      border:none; background:transparent; border-radius:var(--ds-radius-md);
+      color:var(--ds-text-muted); cursor:pointer;
+    }
+    .btn-close:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+
+    /* Two-pane body */
+    .panel-body {
+      flex:1; display:flex; min-height:0; overflow:hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width:110px; flex-shrink:0;
+      border-right:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-sunken);
+      display:flex; flex-direction:column;
+      overflow-y:auto; overflow-x:hidden;
+      padding:8px 0;
+    }
+    .sidebar::-webkit-scrollbar { display:none; }
+
+    .group-nav-item {
+      display:flex; flex-direction:column; align-items:center;
+      gap:4px;
+      padding:8px 6px;
+      cursor:pointer;
+      border:none; background:transparent; width:100%;
+      border-radius:0;
+      color:var(--ds-text-secondary);
+      text-align:center;
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+      position:relative;
+    }
+    .group-nav-item:hover {
+      background:var(--ds-state-hover);
+      color:var(--ds-text-primary);
+    }
+    .group-nav-item.active {
+      background:var(--ds-state-selected);
+      color:var(--ds-accent-text);
+    }
+    .group-nav-item.active::before {
+      content:'';
+      position:absolute; left:0; top:8px; bottom:8px;
+      width:2.5px;
+      background:var(--ds-accent);
+      border-radius:0 2px 2px 0;
+    }
+    .group-icon {
+      width:22px; height:22px;
+      background:var(--ds-surface);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-sm);
+      display:flex; align-items:center; justify-content:center;
+      font-size:11px; flex-shrink:0;
+    }
+    .group-nav-item.active .group-icon {
+      background:var(--ds-accent-surface);
+      border-color:var(--ds-accent-border);
+    }
+    .group-nav-label {
+      font-size:10px; font-weight:600; letter-spacing:.01em;
+    }
+    .sidebar-footer {
+      padding:8px 6px 10px;
+      border-top:1px solid var(--ds-border-subtle);
+      margin-top:auto;
+    }
+    .btn-brand-kit-sidebar {
+      width:100%;
+      display:flex; flex-direction:column; align-items:center; gap:3px;
+      padding:7px 4px;
+      background:var(--ds-accent-surface);
+      border:1px solid var(--ds-accent-border);
+      border-radius:var(--ds-radius-md);
+      color:var(--ds-accent-text); cursor:pointer;
+      font-size:9.5px; font-weight:600; text-align:center;
+      transition:background var(--ds-motion-fast);
+    }
+    .btn-brand-kit-sidebar:hover {
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      border-color:var(--ds-accent);
+    }
+
+    /* ── Right pane ── */
+    .content-pane {
+      flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden;
+    }
+    .content-pane-header {
+      flex-shrink:0;
+      padding:10px 12px 9px;
+      border-bottom:1px solid var(--ds-border-subtle);
+    }
+    .group-headline {
+      margin:0 0 8px;
+      font-size:12px; font-weight:700;
+      color:var(--ds-text-primary); letter-spacing:-.01em;
+      display:flex; align-items:center; gap:6px;
+    }
+    .group-headline-badge {
+      font-size:9.5px; font-weight:600; padding:2px 7px;
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+      border:1px solid var(--ds-accent-border);
+      border-radius:var(--ds-radius-pill);
+    }
+    .search-wrap { position:relative; }
+    .search-icon {
+      position:absolute; left:8px; top:50%; transform:translateY(-50%);
+      color:var(--ds-text-muted); pointer-events:none; display:flex; align-items:center;
+    }
+    .search-input {
+      width:100%; padding:5px 8px 5px 27px;
+      font-size:11.5px; font-family:var(--ds-font-sans);
+      color:var(--ds-text-primary);
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      outline:none;
+    }
+    .search-input:focus { border-color:var(--ds-focus-ring); }
+
+    /* Template grid */
+    .tpl-scroll { flex:1; overflow-y:auto; padding:10px 12px; }
+    .tpl-scroll::-webkit-scrollbar { width:3px; }
+    .tpl-scroll::-webkit-scrollbar-thumb { background:var(--ds-border-strong); border-radius:3px; }
+
+    .tpl-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+    .tpl-card {
+      background:var(--ds-surface-raised);
+      border:1.5px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      padding:8px; cursor:pointer;
+      transition:border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+      position:relative;
+    }
+    .tpl-card:hover {
+      border-color:var(--ds-border-strong);
+      background:var(--ds-state-hover);
+    }
+    .tpl-card.selected {
+      border-color:var(--ds-accent-border);
+      box-shadow:0 0 0 2px var(--ds-focus-ring);
+      background:var(--ds-accent-surface);
+    }
+    .selected-badge {
+      display:none;
+      position:absolute; top:4px; right:4px;
+      width:14px; height:14px;
+      background:var(--ds-accent); border-radius:50%;
+      align-items:center; justify-content:center;
+      color:var(--ds-text-on-accent);
+    }
+    .tpl-card.selected .selected-badge { display:flex; }
+
+    /* Wireframe thumb */
+    .thumb {
+      width:100%; aspect-ratio:16/9;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-sm);
+      position:relative; overflow:hidden; margin-bottom:6px;
+    }
+    .wf-title { position:absolute; left:5px; right:12px; top:5px; height:4px; border-radius:2px; background:var(--ds-border-strong); opacity:.65; }
+    .wf-line { position:absolute; height:2px; border-radius:1px; background:var(--ds-border-strong); opacity:.25; }
+    .wf-block { position:absolute; border-radius:2px; background:var(--ds-surface); border:1px solid var(--ds-border-subtle); }
+    .wf-accent { position:absolute; border-radius:2px; background:var(--ds-accent-subtle); border:1px solid var(--ds-accent-border); }
+    .wf-img { position:absolute; border-radius:2px; background:var(--ds-surface-sunken); border:1.5px dashed var(--ds-border-strong); opacity:.55; }
+
+    .tpl-name {
+      font-size:11px; font-weight:600;
+      color:var(--ds-text-primary); margin:0 0 3px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .tpl-intent {
+      font-size:9.5px; color:var(--ds-text-muted); margin:0 0 5px;
+      overflow:hidden; text-overflow:ellipsis; display:-webkit-box;
+      -webkit-line-clamp:2; -webkit-box-orient:vertical;
+      line-height:1.35;
+    }
+    .tpl-layouts { display:flex; flex-wrap:wrap; gap:3px; }
+    .layout-pill {
+      font-size:9px; font-weight:500;
+      padding:2px 6px;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-pill);
+      color:var(--ds-text-muted); cursor:pointer;
+      transition:all var(--ds-motion-fast);
+    }
+    .layout-pill:hover {
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+      border-color:var(--ds-accent-border);
+    }
+    .layout-pill.active {
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      border-color:var(--ds-accent);
+    }
+
+    /* Panel footer */
+    .panel-footer {
+      flex-shrink:0;
+      padding:9px 12px;
+      border-top:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-sunken);
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .footer-info { font-size:11px; color:var(--ds-text-muted); }
+    .btn-insert {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:6px 14px; font-size:12px; font-weight:600;
+      color:var(--ds-text-on-accent);
+      background:var(--ds-accent); border:none;
+      border-radius:var(--ds-radius-md); cursor:pointer;
+      transition:background var(--ds-motion-fast);
+    }
+    .btn-insert:hover { background:var(--ds-accent-hover); }
+  </style>
+</head>
+<body>
+
+<div class="spec">
+  <h1>02 · Sidebar Categories</h1>
+  <p>Right-attached inspector panel replaces the full-screen dialog — left vertical group nav plus right card grid keeps context visible without a disruptive overlay.</p>
+  <ul>
+    <li>Attached panel slides in from the right — no backdrop dimming, editor stays readable</li>
+    <li>Left sidebar: compact group-icon + label list; active item gets accent surface highlight</li>
+    <li>Right pane: group headline + 2-column template card grid with search at top</li>
+    <li>Author Brand Kit pinned to sidebar footer for instant brand-consistent access</li>
+    <li>Panel width fixed at 420 px — wide enough for 2-col grid, narrow enough to keep slides visible</li>
+  </ul>
+</div>
+<div class="stage">
+
+<div class="editor-bg">
+  <!-- Inspector Panel -->
+  <aside class="panel" role="complementary" aria-label="Add slide template picker">
+
+    <!-- Panel header -->
+    <div class="panel-header">
+      <h2 class="panel-title">
+        <svg style="display:inline;vertical-align:-2px;margin-right:5px" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Add Slide
+      </h2>
+      <div class="panel-header-actions">
+        <button class="btn-close" aria-label="Close" type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Two-pane body -->
+    <div class="panel-body">
+
+      <!-- Sidebar nav -->
+      <nav class="sidebar" aria-label="Template groups">
+        <button class="group-nav-item" data-group="orient" type="button">
+          <span class="group-icon">🧭</span>
+          <span class="group-nav-label">Orient</span>
+        </button>
+        <button class="group-nav-item active" data-group="explain" type="button">
+          <span class="group-icon" style="background:var(--ds-accent-surface);border-color:var(--ds-accent-border);">💡</span>
+          <span class="group-nav-label">Explain</span>
+        </button>
+        <button class="group-nav-item" data-group="compare" type="button">
+          <span class="group-icon">⚖️</span>
+          <span class="group-nav-label">Compare</span>
+        </button>
+        <button class="group-nav-item" data-group="prove" type="button">
+          <span class="group-icon">📊</span>
+          <span class="group-nav-label">Prove</span>
+        </button>
+        <button class="group-nav-item" data-group="sequence" type="button">
+          <span class="group-icon">🔢</span>
+          <span class="group-nav-label">Sequence</span>
+        </button>
+        <button class="group-nav-item" data-group="decision" type="button">
+          <span class="group-icon">🎯</span>
+          <span class="group-nav-label">Decide</span>
+        </button>
+        <button class="group-nav-item" data-group="commercial" type="button">
+          <span class="group-icon">💼</span>
+          <span class="group-nav-label">Commercial</span>
+        </button>
+        <button class="group-nav-item" data-group="closing" type="button">
+          <span class="group-icon">🏁</span>
+          <span class="group-nav-label">Close</span>
+        </button>
+        <div class="sidebar-footer">
+          <button class="btn-brand-kit-sidebar" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            Brand kit
+          </button>
+        </div>
+      </nav>
+
+      <!-- Right pane: Explain group -->
+      <div class="content-pane">
+        <div class="content-pane-header">
+          <h3 class="group-headline">
+            Explain
+            <span class="group-headline-badge">4 templates</span>
+          </h3>
+          <div class="search-wrap">
+            <span class="search-icon">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input class="search-input" type="search" placeholder="Filter…">
+          </div>
+        </div>
+        <div class="tpl-scroll">
+          <div class="tpl-grid">
+
+            <!-- Content -->
+            <div class="tpl-card selected">
+              <span class="selected-badge" aria-hidden="true">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+              <div class="thumb">
+                <div class="wf-title"></div>
+                <div class="wf-line" style="left:5px;right:10px;top:13px;"></div>
+                <div class="wf-line" style="left:5px;right:18px;top:17px;"></div>
+                <div class="wf-line" style="left:5px;right:12px;top:21px;"></div>
+                <div class="wf-line" style="left:5px;right:22px;top:25px;"></div>
+                <div class="wf-line" style="left:5px;right:14px;top:29px;"></div>
+              </div>
+              <p class="tpl-name">Content</p>
+              <p class="tpl-intent">Title + body text, bullets, or narrative prose</p>
+              <div class="tpl-layouts">
+                <button class="layout-pill active">default</button>
+                <button class="layout-pill">dense</button>
+                <button class="layout-pill">airy</button>
+              </div>
+            </div>
+
+            <!-- Detail -->
+            <div class="tpl-card">
+              <div class="thumb">
+                <div class="wf-title"></div>
+                <div class="wf-img" style="right:4px;top:3px;width:40%;bottom:4px;"></div>
+                <div class="wf-line" style="left:5px;right:44%;top:13px;"></div>
+                <div class="wf-line" style="left:5px;right:48%;top:17px;"></div>
+                <div class="wf-line" style="left:5px;right:44%;top:21px;"></div>
+              </div>
+              <p class="tpl-name">Detail</p>
+              <p class="tpl-intent">Body + supporting visual side-by-side</p>
+              <div class="tpl-layouts">
+                <button class="layout-pill">default</button>
+                <button class="layout-pill">airy</button>
+              </div>
+            </div>
+
+            <!-- Executive Summary -->
+            <div class="tpl-card">
+              <div class="thumb">
+                <div class="wf-accent" style="left:4px;top:3px;right:4px;height:10px;opacity:.4;"></div>
+                <div class="wf-line" style="left:7px;right:12px;top:17px;"></div>
+                <div class="wf-line" style="left:7px;right:20px;top:21px;"></div>
+                <div class="wf-line" style="left:7px;right:16px;top:25px;"></div>
+              </div>
+              <p class="tpl-name">Exec. Summary</p>
+              <p class="tpl-intent">High-level takeaways for executives</p>
+              <div class="tpl-layouts">
+                <button class="layout-pill">default</button>
+              </div>
+            </div>
+
+            <!-- Quote -->
+            <div class="tpl-card">
+              <div class="thumb">
+                <div class="wf-accent" style="left:8px;right:8px;top:6px;bottom:6px;opacity:.15;border-radius:3px;"></div>
+                <div class="wf-title" style="left:12px;right:12px;top:13px;height:5px;opacity:.55;"></div>
+                <div class="wf-line" style="left:16px;right:16px;top:21px;"></div>
+                <div class="wf-line" style="left:16px;right:24px;top:25px;"></div>
+              </div>
+              <p class="tpl-name">Quote</p>
+              <p class="tpl-intent">Pull quote with attribution</p>
+              <div class="tpl-layouts">
+                <button class="layout-pill">airy</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="panel-footer">
+          <span class="footer-info">Content · default · balanced</span>
+          <button class="btn-insert" type="button">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Insert
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /panel-body -->
+  </aside>
+</div>
+</div><!-- /stage -->
+
+<script>
+  document.querySelectorAll('.group-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.group-nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.tpl-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    });
+  });
+  document.querySelectorAll('.layout-pill').forEach(pill => {
+    pill.addEventListener('click', e => {
+      e.stopPropagation();
+      const parent = pill.closest('.tpl-layouts');
+      parent.querySelectorAll('.layout-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

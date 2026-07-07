@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>02 — Spectrum + Swatches | Color Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ── Specimen scaffold ──────────────────────────────────────────────── */
+    body { padding: 32px; min-height: 100vh; background: var(--ds-surface-base); }
+    .spec-header {
+      max-width: 720px; margin: 0 auto 36px;
+      border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 20px;
+    }
+    .spec-header h1 { font-size: 17px; font-weight: 700; color: var(--ds-text-primary); margin: 0 0 6px; letter-spacing: -0.01em; }
+    .spec-header p { font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 10px; line-height: 1.65; max-width: 600px; }
+    .spec-header ul { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--ds-text-muted); line-height: 1.9; }
+
+    /* ── Demo stage ─────────────────────────────────────────────────────── */
+    .demo-area { max-width: 720px; margin: 0 auto; display: flex; align-items: flex-start; gap: 40px; }
+    .faux-canvas {
+      flex: 1; min-height: 280px;
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .faux-slide {
+      width: 140px; height: 90px; border-radius: var(--ds-radius-md);
+      background: #3b82f6; box-shadow: var(--ds-shadow-overlay);
+      transition: background var(--ds-motion-base);
+    }
+
+    /* Inspector */
+    .inspector {
+      width: 224px; flex-shrink: 0; position: relative;
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-raised); overflow: visible;
+    }
+    .inspector-hd {
+      padding: 7px 12px 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .i-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; gap: 8px; }
+    .i-row + .i-row { border-top: 1px solid var(--ds-border-subtle); }
+    .i-label { font-size: 12px; color: var(--ds-text-secondary); flex: 1; }
+    .i-muted { font-size: 12px; color: var(--ds-text-muted); }
+
+    /* Trigger */
+    .color-trigger {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 26px; padding: 0 7px 0 4px;
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md);
+      background: var(--ds-surface); cursor: pointer;
+      font-size: 11px; color: var(--ds-text-primary); font-family: var(--ds-font-mono);
+      transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .color-trigger.open { border-color: var(--ds-focus-ring); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+    .ct-chip {
+      display: block; width: 16px; height: 16px;
+      border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-subtle);
+      flex-shrink: 0; transition: background var(--ds-motion-fast);
+    }
+    .trigger-wrap { position: relative; }
+
+    /* ── Spectrum + Swatches Popover ────────────────────────────────────── */
+    .cp {
+      position: absolute; top: calc(100% + 6px); right: 0; width: 220px;
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-popover);
+      overflow: hidden;
+      display: none; flex-direction: column;
+      z-index: 300;
+    }
+    .cp.open { display: flex; }
+
+    /* ── Hue gradient strip ──────────────────────────────────────────────── */
+    .hue-strip {
+      height: 10px; width: 100%; flex-shrink: 0;
+      background: linear-gradient(90deg,
+        #ff0000 0%, #ffff00 16.6%, #00ff00 33.3%,
+        #00ffff 50%, #0000ff 66.6%, #ff00ff 83.3%, #ff0000 100%);
+      position: relative; cursor: crosshair;
+    }
+    .hue-thumb {
+      position: absolute; top: -2px;
+      width: 14px; height: 14px;
+      border-radius: var(--ds-radius-pill);
+      border: 2px solid var(--ds-surface-overlay);
+      box-shadow: var(--ds-shadow-raised);
+      background: #3b82f6;
+      pointer-events: none;
+      left: calc(60% - 7px);
+      transition: left var(--ds-motion-fast);
+    }
+
+    /* ── Saturation-Value square ─────────────────────────────────────────── */
+    .sv-square {
+      width: 100%; height: 100px; flex-shrink: 0;
+      position: relative; cursor: crosshair; overflow: hidden;
+      background: #3b82f6;
+    }
+    .sv-white-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, #fff, transparent);
+    }
+    .sv-black-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(0deg, #000, transparent);
+    }
+    .sv-thumb {
+      position: absolute; width: 12px; height: 12px;
+      border-radius: var(--ds-radius-pill);
+      border: 2px solid var(--ds-inverse-text);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.3), var(--ds-shadow-raised);
+      pointer-events: none;
+      left: calc(70% - 6px); top: calc(35% - 6px);
+      background: #3b82f6;
+      transition: left var(--ds-motion-fast), top var(--ds-motion-fast);
+    }
+
+    /* ── Alpha slider ────────────────────────────────────────────────────── */
+    .alpha-strip {
+      height: 8px; margin: 0 var(--ds-space-2);
+      border-radius: var(--ds-radius-pill);
+      position: relative; cursor: crosshair;
+      background: linear-gradient(90deg, transparent, #3b82f6),
+                  repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 0 / 8px 8px;
+      overflow: hidden;
+    }
+    .alpha-strip-fill {
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, #3b82f6);
+      border-radius: var(--ds-radius-pill);
+    }
+    .alpha-thumb {
+      position: absolute; top: -4px;
+      width: 16px; height: 16px;
+      border-radius: var(--ds-radius-pill);
+      border: 2px solid var(--ds-surface-overlay);
+      box-shadow: var(--ds-shadow-raised);
+      background: #3b82f6;
+      pointer-events: none;
+      left: calc(100% - 16px);
+    }
+
+    /* ── Presets row ─────────────────────────────────────────────────────── */
+    .inner { padding: var(--ds-space-2); display: flex; flex-direction: column; gap: var(--ds-space-2); }
+    .sec-label {
+      font-size: 10px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ds-text-muted); padding: 0 2px;
+    }
+    .preset-row { display: flex; gap: var(--ds-space-1); flex-wrap: wrap; }
+
+    /* Swatches – fill is CONTENT (hex), ring is CHROME (token) */
+    .sw {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px;
+      border-radius: var(--ds-radius-sm);
+      border: 1px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative; flex-shrink: 0;
+      transition: transform 80ms, box-shadow 100ms;
+    }
+    .sw:hover { transform: scale(1.15); z-index: 1; }
+    .sw.sel {
+      border-color: transparent;
+      box-shadow: 0 0 0 1.5px var(--ds-surface-overlay), 0 0 0 3.5px var(--ds-focus-ring);
+    }
+    .sw.sel::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='%23fff' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+    }
+
+    /* ── Hex row ─────────────────────────────────────────────────────────── */
+    .hex-row { display: flex; align-items: center; gap: var(--ds-space-1); }
+
+    /* Current color preview (large) */
+    .color-preview-big {
+      width: 32px; height: 32px;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle);
+      flex-shrink: 0; background: #3b82f6;
+      transition: background var(--ds-motion-fast);
+    }
+
+    .hex-input {
+      flex: 1; height: 28px; padding: 0 7px;
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm);
+      background: var(--ds-surface-sunken);
+      color: var(--ds-text-primary);
+      font-family: var(--ds-font-mono); font-size: 11px;
+      outline: none;
+      transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .hex-input:focus { border-color: var(--ds-focus-ring); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm);
+      background: var(--ds-surface); color: var(--ds-text-muted);
+      cursor: pointer; flex-shrink: 0; padding: 0;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+
+    .cp-hr { height: 1px; background: var(--ds-border-subtle); }
+  </style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>02 — Spectrum + Swatches</h1>
+  <p>A hue-rainbow strip plus saturation/value square at the top lets users define any custom color visually, while a compact two-row preset palette below speeds up common choices. No tabs needed — both workflows coexist in one compact panel.</p>
+  <ul>
+    <li>Full-width hue strip (CSS gradient) with thumb indicator; SV square shows hue-tinted white→black gradient</li>
+    <li>Alpha slider beneath the gradient area; large current-color chip reflects all changes in real-time</li>
+    <li>Compact 20px preset swatches from DEFAULT_SWATCH_PRESETS in a wrapping flex row</li>
+    <li>Selected swatch: <code>--ds-focus-ring</code> ring, white checkmark with drop-shadow</li>
+    <li>Hex input on <code>--ds-surface-sunken</code> + eyedropper complete the custom-color workflow</li>
+  </ul>
+</div>
+
+<div class="demo-area">
+  <div class="faux-canvas">
+    <div class="faux-slide" id="slide"></div>
+  </div>
+
+  <div class="inspector">
+    <div class="inspector-hd">Appearance</div>
+    <div class="i-row">
+      <span class="i-label">Fill</span>
+      <div class="trigger-wrap" id="wrap">
+        <button class="color-trigger open" id="trig" onclick="togglePicker()">
+          <span class="ct-chip" id="chip" style="background:#3b82f6"></span>
+          <span id="trig-hex">#3B82F6</span>
+        </button>
+
+        <!-- ── Spectrum Popover ── -->
+        <div class="cp open" id="picker">
+
+          <!-- Hue strip -->
+          <div class="hue-strip" id="hueStrip" onclick="hueClick(event)">
+            <div class="hue-thumb" id="hueThumb"></div>
+          </div>
+
+          <!-- SV square -->
+          <div class="sv-square" id="svSquare" onclick="svClick(event)">
+            <div class="sv-white-overlay"></div>
+            <div class="sv-black-overlay"></div>
+            <div class="sv-thumb" id="svThumb"></div>
+          </div>
+
+          <div class="inner">
+            <!-- Alpha -->
+            <div class="alpha-strip" id="alphaStrip" onclick="alphaClick(event)">
+              <div class="alpha-strip-fill" id="alphaFill"></div>
+              <div class="alpha-thumb" id="alphaThumb"></div>
+            </div>
+
+            <div class="cp-hr"></div>
+
+            <!-- Hex + preview + eyedropper -->
+            <div class="hex-row">
+              <div class="color-preview-big" id="preview"></div>
+              <input type="text" class="hex-input" id="hexIn" value="#3B82F6" maxlength="7"
+                spellcheck="false" aria-label="Hex color" oninput="hexTyped(this)">
+              <button class="icon-btn" title="Eyedropper" aria-label="Pick from screen">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>
+                  <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8 1-1z"/>
+                </svg>
+              </button>
+            </div>
+
+            <div class="cp-hr"></div>
+
+            <!-- Preset swatches -->
+            <div class="sec-label">Presets</div>
+            <div class="preset-row">
+              <button class="sw" style="background:#ffffff" onclick="pick(this,'#ffffff')" title="#ffffff" aria-label="White"></button>
+              <button class="sw" style="background:#f1f5f9" onclick="pick(this,'#f1f5f9')" title="#f1f5f9" aria-label="Slate 100"></button>
+              <button class="sw" style="background:#cbd5e1" onclick="pick(this,'#cbd5e1')" title="#cbd5e1" aria-label="Slate 300"></button>
+              <button class="sw" style="background:#64748b" onclick="pick(this,'#64748b')" title="#64748b" aria-label="Slate 500"></button>
+              <button class="sw" style="background:#1e293b" onclick="pick(this,'#1e293b')" title="#1e293b" aria-label="Slate 800"></button>
+              <button class="sw" style="background:#000000" onclick="pick(this,'#000000')" title="#000000" aria-label="Black"></button>
+              <button class="sw" style="background:#ef4444" onclick="pick(this,'#ef4444')" title="#ef4444" aria-label="Red 500"></button>
+              <button class="sw" style="background:#f97316" onclick="pick(this,'#f97316')" title="#f97316" aria-label="Orange 500"></button>
+              <button class="sw" style="background:#f59e0b" onclick="pick(this,'#f59e0b')" title="#f59e0b" aria-label="Amber 400"></button>
+              <button class="sw" style="background:#eab308" onclick="pick(this,'#eab308')" title="#eab308" aria-label="Yellow 500"></button>
+              <button class="sw" style="background:#84cc16" onclick="pick(this,'#84cc16')" title="#84cc16" aria-label="Lime 400"></button>
+              <button class="sw" style="background:#22c55e" onclick="pick(this,'#22c55e')" title="#22c55e" aria-label="Green 500"></button>
+              <button class="sw" style="background:#10b981" onclick="pick(this,'#10b981')" title="#10b981" aria-label="Emerald 500"></button>
+              <button class="sw" style="background:#14b8a6" onclick="pick(this,'#14b8a6')" title="#14b8a6" aria-label="Teal 500"></button>
+              <button class="sw" style="background:#06b6d4" onclick="pick(this,'#06b6d4')" title="#06b6d4" aria-label="Cyan 500"></button>
+              <button class="sw" style="background:#0ea5e9" onclick="pick(this,'#0ea5e9')" title="#0ea5e9" aria-label="Sky 500"></button>
+              <button class="sw sel" style="background:#3b82f6" onclick="pick(this,'#3b82f6')" title="#3b82f6" aria-label="Blue 500" aria-pressed="true"></button>
+              <button class="sw" style="background:#6366f1" onclick="pick(this,'#6366f1')" title="#6366f1" aria-label="Indigo 500"></button>
+              <button class="sw" style="background:#8b5cf6" onclick="pick(this,'#8b5cf6')" title="#8b5cf6" aria-label="Violet 500"></button>
+              <button class="sw" style="background:#a855f7" onclick="pick(this,'#a855f7')" title="#a855f7" aria-label="Purple 500"></button>
+              <button class="sw" style="background:#d946ef" onclick="pick(this,'#d946ef')" title="#d946ef" aria-label="Fuchsia 500"></button>
+              <button class="sw" style="background:#ec4899" onclick="pick(this,'#ec4899')" title="#ec4899" aria-label="Pink 500"></button>
+              <button class="sw" style="background:#f43f5e" onclick="pick(this,'#f43f5e')" title="#f43f5e" aria-label="Rose 500"></button>
+              <button class="sw" style="background:#78716c" onclick="pick(this,'#78716c')" title="#78716c" aria-label="Stone 500"></button>
+            </div>
+          </div>
+        </div><!-- .cp -->
+      </div>
+    </div>
+    <div class="i-row">
+      <span class="i-label">Stroke</span><span class="i-muted">None</span>
+    </div>
+    <div class="i-row">
+      <span class="i-label">Opacity</span><span class="i-muted">100%</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  function togglePicker() {
+    var p = document.getElementById('picker');
+    var b = document.getElementById('trig');
+    var o = p.classList.contains('open');
+    p.classList.toggle('open', !o);
+    b.classList.toggle('open', !o);
+  }
+  function applyColor(hex) {
+    document.getElementById('chip').style.background = hex;
+    document.getElementById('chip').style.backgroundImage = '';
+    document.getElementById('trig-hex').textContent = hex.toUpperCase();
+    document.getElementById('hexIn').value = hex.toUpperCase();
+    document.getElementById('preview').style.background = hex;
+    document.getElementById('slide').style.background = hex;
+    document.getElementById('alphaFill').style.background = 'linear-gradient(90deg, transparent, ' + hex + ')';
+    document.getElementById('alphaThumb').style.background = hex;
+  }
+  function pick(el, hex) {
+    document.querySelectorAll('.sw.sel').forEach(function(s){ s.classList.remove('sel'); s.removeAttribute('aria-pressed'); });
+    el.classList.add('sel'); el.setAttribute('aria-pressed','true');
+    applyColor(hex);
+  }
+  function hexTyped(inp) {
+    if (/^#[0-9a-fA-F]{6}$/.test(inp.value)) applyColor(inp.value);
+  }
+  function hueClick(e) {
+    var rect = e.currentTarget.getBoundingClientRect();
+    var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    document.getElementById('hueThumb').style.left = 'calc(' + (pct*100) + '% - 7px)';
+  }
+  function svClick(e) {
+    var rect = e.currentTarget.getBoundingClientRect();
+    var px = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    var py = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    document.getElementById('svThumb').style.left = 'calc(' + (px*100) + '% - 6px)';
+    document.getElementById('svThumb').style.top = 'calc(' + (py*100) + '% - 6px)';
+  }
+  function alphaClick(e) {
+    var rect = e.currentTarget.getBoundingClientRect();
+    var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    document.getElementById('alphaThumb').style.left = 'calc(' + (pct*100) + '% - 8px)';
+  }
+  // Init
+  applyColor('#3b82f6');
+</script>
+</body>
+</html>

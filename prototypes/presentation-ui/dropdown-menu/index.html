@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dropdown / Select / Context Menu — Design Exploration Gallery</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    body {
+      background: var(--ds-surface-base);
+      color: var(--ds-text-primary);
+      min-height: 100vh;
+    }
+
+    /* ── Page header ────────────────────────────────────────────── */
+    .page-header {
+      padding: 32px 40px 24px;
+      background: var(--ds-surface);
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .page-header h1 {
+      margin: 0 0 6px;
+      font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+      color: var(--ds-text-primary);
+    }
+    .page-header p {
+      margin: 0;
+      font-size: 14px; color: var(--ds-text-secondary);
+      max-width: 640px; line-height: 1.6;
+    }
+    .page-meta {
+      display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .page-meta span {
+      font-size: 11px; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill); padding: 3px 10px;
+    }
+
+    /* ── Gallery grid ───────────────────────────────────────────── */
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+      gap: 24px;
+      padding: 32px 40px;
+    }
+
+    /* ── Card ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--ds-surface);
+      border-radius: var(--ds-radius-xl);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+                  transform var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      transform: translateY(-2px);
+    }
+
+    /* Card header */
+    .card-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .card-num {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--ds-accent); background: var(--ds-accent-subtle);
+      border: 1px solid var(--ds-accent-border);
+      border-radius: var(--ds-radius-pill); padding: 2px 10px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; color: var(--ds-text-primary);
+      margin: 0; line-height: 1.3;
+    }
+    .card-desc {
+      font-size: 12px; color: var(--ds-text-secondary); margin: 4px 0 0;
+      line-height: 1.5;
+    }
+    .card-header-text { flex: 1; }
+
+    /* Preview iframe */
+    .card-preview {
+      width: 100%;
+      height: 320px;
+      border: none;
+      display: block;
+      background: var(--ds-surface-base);
+      pointer-events: none;
+    }
+
+    /* Card footer */
+    .card-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-base);
+    }
+    .card-features {
+      display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0;
+    }
+    .card-features li {
+      font-size: 10px; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border-radius: var(--ds-radius-pill);
+      padding: 1px 7px; border: 1px solid var(--ds-border-subtle);
+    }
+    .open-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 14px;
+      background: var(--ds-accent); color: var(--ds-accent-contrast);
+      border: none; border-radius: var(--ds-radius-md);
+      font-size: 12px; font-weight: 600; font-family: var(--ds-font-sans);
+      text-decoration: none; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .open-link:hover { background: var(--ds-accent-hover); }
+    .open-link:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+    .open-link svg {
+      width: 12px; height: 12px; stroke: currentColor; stroke-width: 2.5; fill: none;
+      stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+    }
+
+    /* ── Legend ─────────────────────────────────────────────────── */
+    .legend {
+      padding: 24px 40px 40px;
+      border-top: 1px solid var(--ds-border-subtle);
+    }
+    .legend h2 {
+      margin: 0 0 12px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--ds-text-secondary);
+    }
+    .legend-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
+    }
+    .legend-item { font-size: 12px; color: var(--ds-text-secondary); }
+    .legend-item code {
+      font-family: var(--ds-font-mono); font-size: 11px;
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm); padding: 1px 5px;
+      display: block; margin-top: 2px; color: var(--ds-text-primary);
+    }
+  </style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Dropdown / Select / Context Menu — Design Exploration</h1>
+  <p>
+    Six distinct visual directions for the shared dropdown, select, and context menu surface
+    in the TextIQ presentation editor. Each design is self-contained and browser-openable,
+    grounded in <code>select-menu.tsx</code> and <code>stage-context-menu.tsx</code>.
+  </p>
+  <div class="page-meta">
+    <span>6 design directions</span>
+    <span>var(--ds-*) tokens throughout</span>
+    <span>Plain HTML + CSS · No frameworks</span>
+    <span>Inline Lucide-style SVG icons</span>
+    <span>Full anatomy demonstrated</span>
+  </div>
+</header>
+
+<main class="gallery" role="main">
+
+  <!-- 01 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">01 · Compact List</p>
+        <p class="card-desc">
+          Densest direction — 28 px icon-free rows with a fixed check column, trailing
+          shortcut kbd chips, and a ghost trigger. Ideal for toolbar and inspector selects.
+        </p>
+      </div>
+      <span class="card-num">01</span>
+    </div>
+    <iframe class="card-preview" src="01-compact-list.html"
+      title="Preview: 01 Compact List" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>28 px rows</li>
+        <li>check column</li>
+        <li>shortcut kbd</li>
+        <li>section labels</li>
+        <li>ghost trigger</li>
+      </ul>
+      <a class="open-link" href="01-compact-list.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">02 · Icon-Leading</p>
+        <p class="card-desc">
+          Every item carries a 14 px leading icon. Selected row swaps its icon for an
+          accent check. Field-style bordered trigger with focus ring.
+        </p>
+      </div>
+      <span class="card-num">02</span>
+    </div>
+    <iframe class="card-preview" src="02-icon-leading.html"
+      title="Preview: 02 Icon-Leading" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>leading icons</li>
+        <li>icon → check swap</li>
+        <li>field trigger</li>
+        <li>focus ring</li>
+        <li>submenu arrow</li>
+      </ul>
+      <a class="open-link" href="02-icon-leading.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 03 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">03 · Sectioned Labels</p>
+        <p class="card-desc">
+          Items grouped in named sections with inline hairline dividers. Three sections —
+          Align, Distribute, Arrange — plus a count badge and submenu indicator.
+        </p>
+      </div>
+      <span class="card-num">03</span>
+    </div>
+    <iframe class="card-preview" src="03-sectioned-labels.html"
+      title="Preview: 03 Sectioned Labels" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>inline section headers</li>
+        <li>hairline rule</li>
+        <li>count badge</li>
+        <li>3 sections</li>
+        <li>disabled item</li>
+      </ul>
+      <a class="open-link" href="03-sectioned-labels.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 04 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">04 · Rich Description</p>
+        <p class="card-desc">
+          Two-line items — bold label + muted description — matching
+          <code>SelectMenuOption.description</code>. 46 px rows with icon swatch tiles.
+          Ideal for template or layout pickers.
+        </p>
+      </div>
+      <span class="card-num">04</span>
+    </div>
+    <iframe class="card-preview" src="04-rich-description.html"
+      title="Preview: 04 Rich Description" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>46 px rows</li>
+        <li>icon swatch tile</li>
+        <li>description line</li>
+        <li>trailing check</li>
+        <li>field trigger</li>
+      </ul>
+      <a class="open-link" href="04-rich-description.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 05 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">05 · Context Menu Dense</p>
+        <p class="card-desc">
+          Full right-click context menu anchored to a mock canvas element, grounded in
+          <code>StageNodeContextMenu</code>. Complete anatomy: layer select, clipboard,
+          Order submenu, Lock/Hide, destructive Delete.
+        </p>
+      </div>
+      <span class="card-num">05</span>
+    </div>
+    <iframe class="card-preview" src="05-context-menu-dense.html"
+      title="Preview: 05 Context Menu Dense" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>right-click anchor</li>
+        <li>layer section</li>
+        <li>shortcut hints</li>
+        <li>Order submenu</li>
+        <li>destructive Delete</li>
+      </ul>
+      <a class="open-link" href="05-context-menu-dense.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- 06 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <p class="card-title">06 · Elevated Rounded</p>
+        <p class="card-desc">
+          Maximum elevation — <code>--ds-radius-xl</code> panel, deep popover shadow,
+          34 px rows, sunken section-band headers. Trigger pill gets an accent tint on open.
+          The softest, most modern direction.
+        </p>
+      </div>
+      <span class="card-num">06</span>
+    </div>
+    <iframe class="card-preview" src="06-elevated-rounded.html"
+      title="Preview: 06 Elevated Rounded" aria-hidden="true" loading="lazy"></iframe>
+    <div class="card-footer">
+      <ul class="card-features">
+        <li>radius-xl panel</li>
+        <li>shadow-popover</li>
+        <li>34 px rows</li>
+        <li>section-band header</li>
+        <li>accent pill trigger</li>
+      </ul>
+      <a class="open-link" href="06-elevated-rounded.html" target="_blank" rel="noopener">
+        Open
+        <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+
+</main>
+
+<section class="legend" aria-label="Design token reference">
+  <h2>Token reference</h2>
+  <div class="legend-grid">
+    <div class="legend-item">Menu panel surface
+      <code>--ds-surface-raised / --ds-surface-overlay</code>
+    </div>
+    <div class="legend-item">Panel border
+      <code>--ds-border-subtle</code>
+    </div>
+    <div class="legend-item">Panel shadow
+      <code>--ds-shadow-popover / --ds-shadow-overlay</code>
+    </div>
+    <div class="legend-item">Panel radius
+      <code>--ds-radius-md / --ds-radius-lg / --ds-radius-xl</code>
+    </div>
+    <div class="legend-item">Item hover
+      <code>--ds-state-hover</code>
+    </div>
+    <div class="legend-item">Item selected bg
+      <code>--ds-state-selected</code>
+    </div>
+    <div class="legend-item">Check icon colour
+      <code>--ds-accent</code>
+    </div>
+    <div class="legend-item">Disabled text
+      <code>--ds-text-muted (opacity 0.45)</code>
+    </div>
+    <div class="legend-item">Destructive text
+      <code>--ds-danger-text</code>
+    </div>
+    <div class="legend-item">Destructive hover
+      <code>--ds-danger-surface</code>
+    </div>
+    <div class="legend-item">Shortcut kbd font
+      <code>--ds-font-mono</code>
+    </div>
+    <div class="legend-item">Section label
+      <code>--ds-text-muted (uppercase)</code>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

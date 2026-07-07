@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>06 Filmstrip Rows — Template Picker · TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /*
+      Direction 06 · FILMSTRIP ROWS
+      Rationale: Familiar horizontal-scroll filmstrip per group — each of the
+      8 groups occupies one labeled row. Templates scroll right within their
+      row; no vertical scroll is needed to see all groups. Scales well as the
+      template library grows. Inspired by streaming-service browse UX.
+
+      • Tall modal dialog over dimmed editor — fixed height, no outer scroll
+      • 8 labeled rows, each a horizontal filmstrip of template cards
+      • Cards show 16:9 wireframe + name below; selected = accent ring
+      • Scroll indicators (fade gradient) at row edges
+      • Search + density control in the header bar
+      • Author Brand Kit button in header
+    */
+
+    body { margin:0; background:var(--ds-surface-base); font-family:var(--ds-font-sans); display:flex; flex-direction:column; min-height:100vh; }
+
+    /* ── Spec header ────────────────────────────────────────────────── */
+    .spec { padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle); background: var(--ds-surface); flex-shrink: 0; }
+    .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 720px; }
+    .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+    /* ── Stage ──────────────────────────────────────────────────────── */
+    .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+    .editor-shell {
+      width:100%; height:100%;
+      background:var(--ds-surface-sunken);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .backdrop {
+      position:absolute; inset:0; background:var(--ds-backdrop);
+      display:flex; align-items:center; justify-content:center;
+    }
+
+    /* Dialog */
+    .dialog {
+      width:680px; height:560px;
+      background:var(--ds-surface);
+      border-radius:var(--ds-radius-lg);
+      box-shadow:var(--ds-shadow-overlay);
+      border:1px solid var(--ds-border-subtle);
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+
+    /* Header */
+    .dialog-header {
+      flex-shrink:0; padding:12px 16px 11px;
+      border-bottom:1px solid var(--ds-border-subtle);
+      display:flex; align-items:center; gap:10px;
+    }
+    .dialog-title {
+      font-size:13px; font-weight:700; color:var(--ds-text-primary);
+      letter-spacing:-.01em; margin:0; flex:1;
+    }
+    .search-wrap { position:relative; width:175px; }
+    .search-icon {
+      position:absolute; left:8px; top:50%; transform:translateY(-50%);
+      color:var(--ds-text-muted); pointer-events:none; display:flex;
+    }
+    .search-input {
+      width:100%; padding:5px 8px 5px 27px; font-size:11.5px;
+      font-family:var(--ds-font-sans);
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle); border-radius:var(--ds-radius-md);
+      color:var(--ds-text-primary); outline:none;
+    }
+    .search-input:focus { border-color:var(--ds-focus-ring); }
+    .seg-ctrl {
+      display:flex; gap:2px;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md); padding:2px;
+      flex-shrink:0;
+    }
+    .seg-btn {
+      padding:3px 8px; font-size:10.5px; font-weight:600;
+      border:none; background:transparent;
+      border-radius:calc(var(--ds-radius-md) - 2px);
+      color:var(--ds-text-muted); cursor:pointer;
+      transition:all var(--ds-motion-fast);
+    }
+    .seg-btn.active {
+      background:var(--ds-surface); color:var(--ds-text-primary);
+      box-shadow:var(--ds-shadow-raised);
+    }
+    .btn-brand {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:5px 10px; font-size:11px; font-weight:600;
+      color:var(--ds-accent-text); background:var(--ds-accent-surface);
+      border:1px solid var(--ds-accent-border); border-radius:var(--ds-radius-md);
+      cursor:pointer; flex-shrink:0;
+    }
+    .btn-brand:hover { background:var(--ds-accent); color:var(--ds-text-on-accent); border-color:var(--ds-accent); }
+    .btn-close {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:26px; height:26px; border:none; background:transparent;
+      border-radius:var(--ds-radius-md); color:var(--ds-text-muted); cursor:pointer;
+    }
+    .btn-close:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+
+    /* Body — scrollable list of filmstrip rows */
+    .dialog-body { flex:1; overflow-y:auto; }
+    .dialog-body::-webkit-scrollbar { width:4px; }
+    .dialog-body::-webkit-scrollbar-thumb { background:var(--ds-border-strong); border-radius:4px; }
+
+    /* Filmstrip row */
+    .row {
+      border-bottom:1px solid var(--ds-border-subtle);
+      padding:10px 0 10px;
+    }
+    .row:last-child { border-bottom:none; }
+
+    .row-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 16px; margin-bottom:8px;
+    }
+    .row-label {
+      font-size:10px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--ds-text-muted);
+      display:flex; align-items:center; gap:6px;
+    }
+    .row-count {
+      font-size:9px; font-weight:600;
+      padding:1.5px 6px;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-pill);
+      color:var(--ds-text-muted);
+    }
+    .row-scroll-hint {
+      font-size:10px; color:var(--ds-text-muted);
+      display:flex; align-items:center; gap:3px;
+    }
+
+    /* Filmstrip scroll container */
+    .filmstrip-wrap { position:relative; }
+    .filmstrip {
+      display:flex; gap:8px;
+      padding:0 16px;
+      overflow-x:auto;
+      scrollbar-width:none;
+    }
+    .filmstrip::-webkit-scrollbar { display:none; }
+
+    /* Right fade */
+    .filmstrip-wrap::after {
+      content:'';
+      position:absolute; right:0; top:0; bottom:0; width:32px;
+      background:linear-gradient(to right, transparent, var(--ds-surface));
+      pointer-events:none;
+    }
+
+    /* Template card */
+    .tpl-card {
+      flex-shrink:0; width:108px;
+      background:var(--ds-surface-raised);
+      border:1.5px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-md);
+      padding:6px 6px 5px;
+      cursor:pointer; position:relative;
+      transition:border-color var(--ds-motion-fast), background var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .tpl-card:hover {
+      border-color:var(--ds-border-strong);
+      background:var(--ds-state-hover);
+    }
+    .tpl-card.selected {
+      border-color:var(--ds-accent-border);
+      box-shadow:0 0 0 2.5px var(--ds-focus-ring);
+      background:var(--ds-accent-surface);
+    }
+    .sel-check {
+      display:none; position:absolute; top:4px; right:4px;
+      width:14px; height:14px;
+      background:var(--ds-accent); border-radius:50%;
+      align-items:center; justify-content:center;
+      color:var(--ds-text-on-accent);
+    }
+    .tpl-card.selected .sel-check { display:flex; }
+
+    /* 16:9 wireframe thumb */
+    .thumb {
+      width:100%; aspect-ratio:16/9;
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-sm);
+      position:relative; overflow:hidden; margin-bottom:5px;
+    }
+    .wft { position:absolute; border-radius:2px; background:var(--ds-border-strong); }
+    .wfl { position:absolute; height:2px; border-radius:1px; background:var(--ds-border-strong); opacity:.25; }
+    .wfb { position:absolute; border-radius:2.5px; background:var(--ds-surface); border:1px solid var(--ds-border-subtle); }
+    .wfa { position:absolute; border-radius:2.5px; background:var(--ds-accent-subtle); border:1px solid var(--ds-accent-border); }
+    .wfi { position:absolute; border-radius:2.5px; background:var(--ds-surface-sunken); border:1.5px dashed var(--ds-border-strong); opacity:.5; }
+
+    .tpl-name {
+      font-size:10.5px; font-weight:600; color:var(--ds-text-primary);
+      display:block; text-align:center;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .tpl-card.selected .tpl-name { color:var(--ds-accent-text); }
+    .tpl-variant {
+      font-size:9px; color:var(--ds-text-muted);
+      display:block; text-align:center; margin-top:2px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    /* Footer */
+    .dialog-footer {
+      flex-shrink:0; padding:10px 16px;
+      border-top:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-sunken);
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .footer-sel {
+      font-size:11.5px; color:var(--ds-text-primary); font-weight:600;
+    }
+    .footer-sel span {
+      font-weight:400; color:var(--ds-text-muted); font-size:11px;
+    }
+    .btn-insert {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:6px 16px; font-size:12.5px; font-weight:600;
+      color:var(--ds-text-on-accent); background:var(--ds-accent);
+      border:none; border-radius:var(--ds-radius-md); cursor:pointer;
+    }
+    .btn-insert:hover { background:var(--ds-accent-hover); }
+  </style>
+</head>
+<body>
+
+<div class="spec">
+  <h1>06 · Filmstrip Rows</h1>
+  <p>One horizontal scrollable filmstrip row per template group delivers a streaming-service browse feel — all 8 groups visible at once without vertical scroll.</p>
+  <ul>
+    <li>Tall modal dialog over dimmed editor — fixed height with no outer scroll</li>
+    <li>Eight labeled rows, each a horizontally scrollable filmstrip of template cards</li>
+    <li>Cards show a 16:9 wireframe thumbnail with the template name below; selected card gets accent ring</li>
+    <li>Edge fade gradients (CSS mask) signal scrollable overflow within each row</li>
+    <li>Search + density segmented control in the header; Author Brand Kit button alongside</li>
+  </ul>
+</div>
+<div class="stage">
+
+<div class="editor-shell">
+<div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+  <div class="dialog">
+
+    <!-- Header -->
+    <div class="dialog-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ds-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <h2 class="dialog-title" id="dlg-title">Add Slide</h2>
+      <div class="search-wrap">
+        <span class="search-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input class="search-input" type="search" placeholder="Filter templates…">
+      </div>
+      <div class="seg-ctrl">
+        <button class="seg-btn active">All</button>
+        <button class="seg-btn">Dense</button>
+        <button class="seg-btn">Airy</button>
+      </div>
+      <button class="btn-brand" type="button">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+        Brand kit
+      </button>
+      <button class="btn-close" type="button" aria-label="Close">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Filmstrip rows -->
+    <div class="dialog-body">
+
+      <!-- Orient -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            Orient
+            <span class="row-count">3</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <!-- Cover -->
+            <div class="tpl-card selected" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfa" style="left:5px;right:5px;top:3px;bottom:10px;opacity:.25;"></div>
+                <div class="wft" style="left:12px;right:12px;top:10px;height:5px;opacity:.65;"></div>
+                <div class="wfl" style="left:16px;right:16px;top:18px;"></div>
+                <div class="wfa" style="left:30px;right:30px;bottom:4px;height:4px;border-radius:9px;opacity:.6;"></div>
+              </div>
+              <span class="tpl-name">Cover</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <!-- Agenda -->
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:5px;top:12px;bottom:5px;"></div>
+                <div class="wfl" style="left:8px;right:14px;top:15px;"></div>
+                <div class="wfl" style="left:8px;right:20px;top:19px;"></div>
+                <div class="wfl" style="left:8px;right:16px;top:23px;"></div>
+                <div class="wfl" style="left:8px;right:24px;top:27px;"></div>
+              </div>
+              <span class="tpl-name">Agenda</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <!-- Section -->
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfa" style="left:5px;top:5px;width:3px;bottom:5px;opacity:.8;border-radius:2px;"></div>
+                <div class="wft" style="left:12px;right:10px;top:12px;height:6px;opacity:.65;"></div>
+                <div class="wfl" style="left:12px;right:20px;top:22px;"></div>
+              </div>
+              <span class="tpl-name">Section</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <!-- Exec Summary -->
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfa" style="left:5px;right:5px;top:4px;height:8px;opacity:.4;"></div>
+                <div class="wfl" style="left:7px;right:10px;top:16px;"></div>
+                <div class="wfl" style="left:7px;right:16px;top:20px;"></div>
+                <div class="wfl" style="left:7px;right:12px;top:24px;"></div>
+              </div>
+              <span class="tpl-name">Exec. Summ.</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explain -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Explain
+            <span class="row-count">4</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:20px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfa" style="left:5px;top:4px;width:2.5px;bottom:5px;opacity:.7;border-radius:2px;"></div>
+                <div class="wfl" style="left:10px;right:8px;top:12px;"></div>
+                <div class="wfl" style="left:10px;right:14px;top:16px;"></div>
+                <div class="wfl" style="left:10px;right:10px;top:20px;"></div>
+                <div class="wfl" style="left:10px;right:18px;top:24px;"></div>
+              </div>
+              <span class="tpl-name">Content</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:40%;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfi" style="right:5px;top:4px;width:40%;bottom:5px;"></div>
+                <div class="wfl" style="left:5px;right:44%;top:13px;"></div>
+                <div class="wfl" style="left:5px;right:48%;top:17px;"></div>
+                <div class="wfl" style="left:5px;right:44%;top:21px;"></div>
+              </div>
+              <span class="tpl-name">Detail</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfa" style="left:8px;right:8px;top:5px;bottom:8px;opacity:.15;"></div>
+                <div class="wft" style="left:12px;right:12px;top:11px;height:5px;opacity:.55;"></div>
+                <div class="wfl" style="left:16px;right:16px;top:19px;"></div>
+                <div class="wfl" style="left:16px;right:22px;top:23px;"></div>
+              </div>
+              <span class="tpl-name">Quote</span>
+              <span class="tpl-variant">airy · visual</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compare -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Compare
+            <span class="row-count">2</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:52%;top:12px;bottom:5px;"></div>
+                <div class="wfb" style="left:52%;right:5px;top:12px;bottom:5px;"></div>
+                <div class="wfl" style="left:7px;right:56%;top:15px;"></div>
+                <div class="wfl" style="left:54%;right:7px;top:15px;"></div>
+              </div>
+              <span class="tpl-name">Comparison</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;">
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                  <div class="wfa" style="position:relative;border-radius:2px;opacity:.4;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Matrix</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prove -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Prove
+            <span class="row-count">4</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfa" style="left:20px;right:20px;top:12px;height:14px;opacity:.5;"></div>
+                <div class="wfl" style="left:24px;right:24px;top:29px;"></div>
+              </div>
+              <span class="tpl-name">Big Stat</span>
+              <span class="tpl-variant">airy · visual</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:flex;gap:3px;">
+                  <div class="wfa" style="position:relative;flex:1;border-radius:2px;opacity:.4;"></div>
+                  <div class="wfa" style="position:relative;flex:1;border-radius:2px;opacity:.4;"></div>
+                  <div class="wfa" style="position:relative;flex:1;border-radius:2px;opacity:.4;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Metric Row</span>
+              <span class="tpl-variant">default · data</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:5px;top:12px;height:22px;"></div>
+                <div class="wfl" style="left:8px;right:14px;top:15px;"></div>
+                <div class="wfl" style="left:8px;right:20px;top:19px;"></div>
+                <div class="wfl" style="left:8px;right:16px;top:23px;"></div>
+              </div>
+              <span class="tpl-name">Evidence</span>
+              <span class="tpl-variant">default · data</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:grid;grid-template-rows:repeat(4,1fr);gap:1px;">
+                  <div class="wfa" style="position:relative;border-radius:2px;opacity:.4;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Table</span>
+              <span class="tpl-variant">dense · data</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sequence -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            Sequence
+            <span class="row-count">3</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:13px;bottom:8px;display:flex;align-items:center;gap:3px;">
+                  <div class="wfa" style="position:relative;width:16px;height:16px;border-radius:50%;opacity:.5;flex-shrink:0;"></div>
+                  <div style="flex:1;height:1.5px;background:var(--ds-border-strong);opacity:.3;"></div>
+                  <div class="wfb" style="position:relative;width:16px;height:16px;border-radius:50%;flex-shrink:0;"></div>
+                  <div style="flex:1;height:1.5px;background:var(--ds-border-strong);opacity:.3;"></div>
+                  <div class="wfb" style="position:relative;width:16px;height:16px;border-radius:50%;flex-shrink:0;"></div>
+                  <div style="flex:1;height:1.5px;background:var(--ds-border-strong);opacity:.3;"></div>
+                  <div class="wfb" style="position:relative;width:16px;height:16px;border-radius:50%;flex-shrink:0;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Process</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:13px;bottom:5px;">
+                  <div style="position:absolute;left:0;right:0;top:8px;height:1.5px;background:var(--ds-accent-border);opacity:.7;"></div>
+                  <div class="wfa" style="left:5px;top:4px;width:7px;height:8px;border-radius:2px;opacity:.6;"></div>
+                  <div class="wfb" style="left:25px;top:4px;width:7px;height:8px;border-radius:2px;"></div>
+                  <div class="wfb" style="left:45px;top:4px;width:7px;height:8px;border-radius:2px;"></div>
+                  <div class="wfb" style="left:65px;top:4px;width:7px;height:8px;border-radius:2px;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Timeline</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:5px;top:12px;height:6px;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:21px;bottom:5px;display:flex;flex-direction:column;gap:2px;">
+                  <div class="wfa" style="position:relative;height:5px;border-radius:2px;width:65%;opacity:.5;"></div>
+                  <div class="wfb" style="position:relative;height:5px;border-radius:2px;width:80%;"></div>
+                  <div class="wfb" style="position:relative;height:5px;border-radius:2px;width:45%;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Roadmap</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Decide -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h13l4-3.5-4-3.5z"/><path d="M12 12v7"/><path d="M12 19H9"/><path d="M12 19h3"/></svg>
+            Decide
+            <span class="row-count">3</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfa" style="left:5px;right:5px;top:12px;height:9px;opacity:.4;"></div>
+                <div class="wfl" style="left:8px;right:14px;top:25px;"></div>
+                <div class="wfl" style="left:8px;right:20px;top:29px;"></div>
+              </div>
+              <span class="tpl-name">Recommendation</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;">
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                  <div class="wfa" style="position:relative;border-radius:2px;opacity:.4;"></div>
+                  <div class="wfb" style="position:relative;border-radius:2px;"></div>
+                </div>
+              </div>
+              <span class="tpl-name">Framework</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:5px;top:12px;height:8px;"></div>
+                <div class="wfl" style="left:8px;right:8px;top:23px;"></div>
+                <div class="wfl" style="left:8px;right:14px;top:27px;"></div>
+              </div>
+              <span class="tpl-name">Risks</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Commercial -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Commercial
+            <span class="row-count">4</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:flex;gap:2px;">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:1.5px;">
+                    <div class="wfb" style="position:relative;flex:1;border-radius:2px;"></div>
+                    <div class="wfa" style="position:relative;height:7px;border-radius:2px;opacity:.6;"></div>
+                  </div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:1.5px;">
+                    <div class="wfb" style="position:relative;flex:1;border-radius:2px;"></div>
+                    <div class="wfb" style="position:relative;height:7px;border-radius:2px;"></div>
+                  </div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:1.5px;">
+                    <div class="wfb" style="position:relative;flex:1;border-radius:2px;"></div>
+                    <div class="wfb" style="position:relative;height:7px;border-radius:2px;"></div>
+                  </div>
+                </div>
+              </div>
+              <span class="tpl-name">Pricing</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfi" style="left:5px;top:12px;width:38%;bottom:5px;"></div>
+                <div class="wfl" style="left:46%;right:5px;top:15px;"></div>
+                <div class="wfl" style="left:46%;right:10px;top:19px;"></div>
+                <div class="wfl" style="left:46%;right:7px;top:23px;"></div>
+              </div>
+              <span class="tpl-name">Case Study</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div style="position:absolute;left:5px;right:5px;top:12px;bottom:5px;display:flex;gap:3px;align-items:flex-end;">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;align-items:center;">
+                    <div class="wfi" style="position:relative;width:18px;height:18px;border-radius:50%;opacity:.8;"></div>
+                    <div class="wfl" style="position:relative;width:100%;height:2px;opacity:.3;"></div>
+                  </div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;align-items:center;">
+                    <div class="wfi" style="position:relative;width:18px;height:18px;border-radius:50%;opacity:.8;"></div>
+                    <div class="wfl" style="position:relative;width:100%;height:2px;opacity:.3;"></div>
+                  </div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;align-items:center;">
+                    <div class="wfi" style="position:relative;width:18px;height:18px;border-radius:50%;opacity:.8;"></div>
+                    <div class="wfl" style="position:relative;width:100%;height:2px;opacity:.3;"></div>
+                  </div>
+                </div>
+              </div>
+              <span class="tpl-name">Team</span>
+              <span class="tpl-variant">default · balanced</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Close -->
+      <div class="row">
+        <div class="row-header">
+          <span class="row-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            Close
+            <span class="row-count">3</span>
+          </span>
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip">
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfa" style="left:5px;right:5px;top:4px;bottom:12px;opacity:.2;"></div>
+                <div class="wft" style="left:14px;right:14px;top:12px;height:5px;opacity:.65;"></div>
+                <div class="wfl" style="left:20px;right:20px;top:21px;"></div>
+                <div class="wfa" style="left:28px;right:28px;bottom:4px;height:5px;border-radius:9px;opacity:.6;"></div>
+              </div>
+              <span class="tpl-name">Closing</span>
+              <span class="tpl-variant">airy · visual</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wft" style="left:5px;right:24px;top:4px;height:4px;opacity:.65;"></div>
+                <div class="wfb" style="left:5px;right:5px;top:12px;bottom:5px;"></div>
+                <div class="wfl" style="left:8px;right:18px;top:15px;"></div>
+                <div class="wfl" style="left:8px;right:12px;top:19px;"></div>
+                <div class="wfl" style="left:8px;right:22px;top:23px;"></div>
+                <div class="wfl" style="left:8px;right:16px;top:27px;"></div>
+              </div>
+              <span class="tpl-name">Appendix</span>
+              <span class="tpl-variant">dense · data</span>
+            </div>
+            <div class="tpl-card" role="button" tabindex="0">
+              <span class="sel-check" aria-hidden="true"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <div class="thumb">
+                <div class="wfi" style="left:5px;right:5px;top:4px;bottom:12px;"></div>
+                <div class="wfl" style="left:16px;right:16px;bottom:6px;"></div>
+              </div>
+              <span class="tpl-name">Visual Focus</span>
+              <span class="tpl-variant">airy · visual</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /dialog-body -->
+
+    <!-- Footer -->
+    <div class="dialog-footer">
+      <div>
+        <div class="footer-sel">Cover <span>· default · balanced · Orient</span></div>
+      </div>
+      <button class="btn-insert" type="button">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Insert slide
+      </button>
+    </div>
+
+  </div>
+</div>
+</div>
+</div><!-- /stage -->
+
+<script>
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.tpl-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const name = card.querySelector('.tpl-name')?.textContent ?? '';
+      const variant = card.querySelector('.tpl-variant')?.textContent ?? '';
+      document.querySelector('.footer-sel').innerHTML = `${name} <span>· ${variant}</span>`;
+    });
+  });
+</script>
+</body>
+</html>

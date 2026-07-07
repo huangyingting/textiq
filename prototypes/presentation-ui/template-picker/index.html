@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Add-Slide Template Picker — 6 Design Directions · TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    body { margin:0; padding:0; background:var(--ds-surface-base); }
+
+    /* ── Page header ── */
+    .page-header {
+      background:var(--ds-surface);
+      border-bottom:1px solid var(--ds-border-subtle);
+      padding:20px 32px 18px;
+    }
+    .page-header-inner {
+      max-width:1400px; margin:0 auto;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:24px;
+    }
+    .page-logo {
+      display:flex; align-items:center; gap:10px; margin-bottom:10px;
+    }
+    .logo-mark {
+      display:flex; align-items:center; justify-content:center;
+      width:32px; height:32px;
+      background:var(--ds-accent); border-radius:var(--ds-radius-md);
+      color:var(--ds-text-on-accent);
+    }
+    .logo-name {
+      font-size:15px; font-weight:700; color:var(--ds-text-primary);
+      letter-spacing:-.01em;
+    }
+    .page-header h1 {
+      margin:0 0 4px; font-size:22px; font-weight:800; letter-spacing:-.02em;
+      color:var(--ds-text-primary); line-height:1.2;
+    }
+    .page-header p {
+      margin:0; font-size:13px; color:var(--ds-text-secondary); line-height:1.5;
+    }
+    .page-meta {
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px;
+    }
+    .meta-chip {
+      font-size:11px; font-weight:600; padding:3px 10px;
+      border-radius:var(--ds-radius-pill);
+      background:var(--ds-surface-sunken); color:var(--ds-text-muted);
+      border:1px solid var(--ds-border-subtle);
+    }
+    .meta-chip.accent {
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+      border-color:var(--ds-accent-border);
+    }
+
+    /* ── Gallery grid ── */
+    .gallery {
+      max-width:1400px; margin:0 auto;
+      padding:28px 32px 48px;
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(380px, 1fr));
+      gap:24px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background:var(--ds-surface);
+      border-radius:var(--ds-radius-xl);
+      border:1px solid var(--ds-border-subtle);
+      overflow:hidden;
+      display:flex; flex-direction:column;
+      transition:box-shadow var(--ds-motion-base), border-color var(--ds-motion-base);
+    }
+    .card:hover {
+      box-shadow:var(--ds-shadow-overlay);
+      border-color:var(--ds-border-strong);
+    }
+    .card-preview {
+      width:100%; height:260px;
+      border:none; border-bottom:1px solid var(--ds-border-subtle);
+      display:block; background:var(--ds-surface-sunken);
+    }
+    .card-body {
+      padding:16px 18px 18px;
+      flex:1; display:flex; flex-direction:column; gap:8px;
+    }
+    .card-number {
+      font-size:10.5px; font-weight:700;
+      color:var(--ds-text-muted);
+      letter-spacing:.06em; text-transform:uppercase;
+    }
+    .card-title {
+      margin:0; font-size:15px; font-weight:700; color:var(--ds-text-primary);
+      letter-spacing:-.01em; line-height:1.25;
+    }
+    .card-desc {
+      margin:0; font-size:12.5px; color:var(--ds-text-secondary); line-height:1.5;
+    }
+    .card-features {
+      margin:0; padding:0; list-style:none;
+      display:flex; flex-wrap:wrap; gap:5px; margin-top:4px;
+    }
+    .card-feature {
+      font-size:10.5px; padding:2px 8px;
+      background:var(--ds-surface-sunken); color:var(--ds-text-muted);
+      border-radius:var(--ds-radius-pill);
+      border:1px solid var(--ds-border-subtle);
+    }
+    .card-footer {
+      padding:12px 18px;
+      border-top:1px solid var(--ds-border-subtle);
+      display:flex; align-items:center; justify-content:flex-end;
+    }
+    .open-link {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:12px; font-weight:600;
+      color:var(--ds-accent-text); text-decoration:none;
+      padding:6px 14px;
+      border:1px solid var(--ds-accent-border);
+      background:var(--ds-accent-surface);
+      border-radius:var(--ds-radius-pill);
+      transition:background var(--ds-motion-fast), border-color var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .open-link:hover {
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      border-color:var(--ds-accent);
+    }
+    .open-link:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:2px; }
+    .card-badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:24px; height:24px; border-radius:50%;
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      font-size:11px; font-weight:800; flex-shrink:0;
+    }
+
+    /* ── Page footer ── */
+    .page-footer {
+      text-align:center; padding:24px 32px;
+      border-top:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface);
+    }
+    .page-footer p { margin:0; font-size:12px; color:var(--ds-text-muted); }
+  </style>
+</head>
+<body>
+
+<!-- Page header -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div>
+      <div class="page-logo">
+        <div class="logo-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </div>
+        <span class="logo-name">TextIQ</span>
+      </div>
+      <h1>Add-Slide Template Picker — Design Exploration</h1>
+      <p>6 distinct visual directions for the shared <strong>add-slide template picker (slide layout gallery)</strong> in the TextIQ presentation editor.<br>
+         Static HTML/CSS mockups · var(--ds-*) tokens only · No CDN · Inline SVG icons · Wireframe thumbnails.</p>
+      <div class="page-meta">
+        <span class="meta-chip accent">6 directions</span>
+        <span class="meta-chip">var(--ds-*) tokens</span>
+        <span class="meta-chip">Inline SVG icons</span>
+        <span class="meta-chip">8 groups shown</span>
+        <span class="meta-chip">Wireframe thumbnails</span>
+        <span class="meta-chip">Selected + hover states</span>
+        <span class="meta-chip">Round 2</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Gallery -->
+<main>
+  <div class="gallery" role="list" aria-label="Design direction cards">
+
+    <!-- 01 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="01-category-grid.html"
+              title="Preview of 01 Category Grid" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">1</span>
+          <span class="card-number">Direction 01</span>
+        </div>
+        <h2 class="card-title">Category Grid</h2>
+        <p class="card-desc">All 8 groups visible at once in a continuous scrollable dialog. 3-column thumbnail grid per group with sticky section headers, search + density chips, and footer insert CTA.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">Modal dialog + backdrop</li>
+          <li class="card-feature">3-col thumbnail grid</li>
+          <li class="card-feature">Search + density chips</li>
+          <li class="card-feature">Accent ring selected state</li>
+          <li class="card-feature">Author brand kit header</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="01-category-grid.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- 02 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="02-sidebar-categories.html"
+              title="Preview of 02 Sidebar Categories" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">2</span>
+          <span class="card-number">Direction 02</span>
+        </div>
+        <h2 class="card-title">Sidebar Categories</h2>
+        <p class="card-desc">Two-pane inspector panel with a persistent left sidebar listing all 8 groups. Right pane shows only the active group's templates, reducing cognitive load.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">Right-attached panel</li>
+          <li class="card-feature">Vertical group nav</li>
+          <li class="card-feature">2-col card grid</li>
+          <li class="card-feature">Layout pills per card</li>
+          <li class="card-feature">Brand kit in sidebar footer</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="02-sidebar-categories.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- 03 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="03-tabbed-groups.html"
+              title="Preview of 03 Tabbed Groups" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">3</span>
+          <span class="card-number">Direction 03</span>
+        </div>
+        <h2 class="card-title">Tabbed Groups</h2>
+        <p class="card-desc">Horizontal scrollable tab strip for all 8 groups atop a deep template grid. Density segmented control flanks the tabs. Clean properties-panel feel.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">Horizontal tab strip</li>
+          <li class="card-feature">Accent underline active tab</li>
+          <li class="card-feature">Segmented density control</li>
+          <li class="card-feature">3-col card grid</li>
+          <li class="card-feature">Brand kit in header</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="03-tabbed-groups.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- 04 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="04-large-preview-list.html"
+              title="Preview of 04 Large Preview List" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">4</span>
+          <span class="card-number">Direction 04</span>
+        </div>
+        <h2 class="card-title">Large Preview List</h2>
+        <p class="card-desc">Master/detail layout — scrollable grouped name list on the left; large 16:9 wireframe preview + layout variant cards on the right. Confidence-first picker.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">Master/detail dialog</li>
+          <li class="card-feature">Large 16:9 wireframe</li>
+          <li class="card-feature">Layout variant grid</li>
+          <li class="card-feature">Grouped name list</li>
+          <li class="card-feature">Brand kit in header</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="04-large-preview-list.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- 05 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="05-compact-tiles.html"
+              title="Preview of 05 Compact Tiles" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">5</span>
+          <span class="card-number">Direction 05</span>
+        </div>
+        <h2 class="card-title">Compact Tiles</h2>
+        <p class="card-desc">Speed-optimised popover with an arrow anchor. Ultra-dense 4-column wireframe-only tile grid. All templates fit without scrolling. Power-user quick-pick.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">Popover with arrow</li>
+          <li class="card-feature">4-col ultra-dense grid</li>
+          <li class="card-feature">Group hairline dividers</li>
+          <li class="card-feature">Tile name + check badge</li>
+          <li class="card-feature">Brand kit icon button footer</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="05-compact-tiles.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- 06 -->
+    <article class="card" role="listitem">
+      <iframe class="card-preview" src="06-filmstrip-rows.html"
+              title="Preview of 06 Filmstrip Rows" loading="lazy"
+              sandbox="allow-same-origin allow-scripts"></iframe>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span class="card-badge" aria-hidden="true">6</span>
+          <span class="card-number">Direction 06</span>
+        </div>
+        <h2 class="card-title">Filmstrip Rows</h2>
+        <p class="card-desc">Each group is a horizontally-scrollable filmstrip row with a group label. Browse-by-row UX inspired by streaming apps. Scales as the template library grows.</p>
+        <ul class="card-features" aria-label="Features">
+          <li class="card-feature">8 horizontal filmstrip rows</li>
+          <li class="card-feature">Per-row scroll + fade edge</li>
+          <li class="card-feature">108px card thumbnails</li>
+          <li class="card-feature">Accent ring selected</li>
+          <li class="card-feature">Brand kit + density control</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <a class="open-link" href="06-filmstrip-rows.html" target="_blank" rel="noopener">
+          Open full size
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </article>
+
+  </div>
+</main>
+
+<footer class="page-footer">
+  <p>TextIQ · Add-Slide Template Picker Design Exploration · Round 2 · 6 directions · var(--ds-*) tokens only · No CDN, no build</p>
+</footer>
+
+</body>
+</html>

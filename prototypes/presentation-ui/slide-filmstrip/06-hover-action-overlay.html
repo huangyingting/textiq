@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>06 — Hover Action Overlay · TextIQ Filmstrip</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ── Layout ── */
+    body { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+    .spec {
+      padding:14px 24px 12px; flex-shrink:0;
+      background:var(--ds-surface); border-bottom:1px solid var(--ds-border-subtle);
+    }
+    .spec-tag { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+    .spec-badge {
+      font-size:10.5px; font-weight:700; padding:2px 9px;
+      border-radius:var(--ds-radius-pill);
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+    }
+    .spec-name { font-size:13px; font-weight:700; color:var(--ds-text-primary); }
+    .spec h1 { margin:0 0 4px; font-size:13px; font-weight:600; color:var(--ds-text-primary); }
+    .spec p  { margin:0 0 6px; font-size:12px; color:var(--ds-text-secondary); line-height:1.45; max-width:680px; }
+    .spec ul { margin:0; padding-left:16px; }
+    .spec li { font-size:11.5px; color:var(--ds-text-muted); line-height:1.65; }
+
+    /* ── Editor preview ── */
+    .preview { flex:1; display:flex; flex-direction:column; min-height:0; }
+    .canvas-area {
+      flex:1; min-height:0;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--ds-surface-base); padding:28px 24px 16px;
+    }
+    .canvas-slide {
+      width:100%; max-width:560px; aspect-ratio:16/9;
+      background:var(--ds-surface); border-radius:var(--ds-radius-md);
+      box-shadow:var(--ds-shadow-overlay); overflow:hidden; position:relative;
+    }
+    .cs-inner { position:absolute; inset:0; padding:7% 8% 9%; display:flex; flex-direction:column; }
+    .cs-title { height:11%; width:52%; background:rgba(23,32,51,.1); border-radius:3px; margin-bottom:5%; flex-shrink:0; }
+    .cs-bars  { display:flex; align-items:flex-end; gap:2.5%; flex:1; }
+    .cs-bar   { flex:1; border-radius:3px 3px 0 0; }
+    .cb1 { height:63%; background:var(--ds-accent); opacity:.38; }
+    .cb2 { height:87%; background:var(--ds-accent); opacity:.55; }
+    .cb3 { height:49%; background:var(--ds-accent); opacity:.38; }
+    .cb4 { height:73%; background:var(--ds-accent); opacity:.46; }
+    .cb5 { height:41%; background:var(--ds-accent); opacity:.32; }
+
+    /* ── Filmstrip rail ── */
+    .filmstrip {
+      flex-shrink:0; display:flex; align-items:stretch;
+      background:var(--ds-surface); border-top:1px solid var(--ds-border-subtle);
+    }
+    .filmstrip-body {
+      flex:1; overflow:hidden;
+      /* Extra height: overlay bar pops ABOVE the card, needs headroom */
+      max-height:108px;
+      transition:max-height var(--ds-motion-base) var(--ds-ease-standard),
+                 opacity var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .filmstrip.collapsed .filmstrip-body { max-height:0; opacity:0; }
+    .filmstrip-scroll {
+      display:flex; align-items:flex-end;
+      gap:6px;
+      /* Top padding gives the overlay bar room above the card */
+      padding:28px 12px 10px;
+      overflow-x:auto; overflow-y:visible;
+      height:104px; list-style:none; margin:0;
+      scrollbar-width:thin; scrollbar-color:var(--ds-border-subtle) transparent;
+    }
+    .filmstrip-scroll:focus { outline:none; }
+    .filmstrip-toggle {
+      flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      width:40px; background:none; border:none; border-left:1px solid var(--ds-border-subtle);
+      cursor:pointer; color:var(--ds-text-muted);
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .filmstrip-toggle:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+    .filmstrip-toggle:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:-3px; }
+    .filmstrip.collapsed .filmstrip-toggle svg { transform:rotate(180deg); }
+
+    /* ── Slide card ── */
+    .slide-item {
+      position:relative; flex-shrink:0; list-style:none;
+      /* Allow the floating overlay to appear above */
+      overflow:visible;
+    }
+    .slide-btn {
+      display:block; border:none; padding:0; cursor:pointer; background:transparent;
+      border-radius:var(--ds-radius-sm);
+    }
+    .slide-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:3px; }
+
+    /* Resting state: very clean — just thumbnail, no border chrome */
+    .thumb-frame {
+      width:128px; aspect-ratio:16/9;
+      border-radius:var(--ds-radius-sm); overflow:hidden; position:relative;
+      background:#fff;
+      border:1.5px solid var(--ds-border-subtle);
+      transition:border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast),
+                 transform var(--ds-motion-fast);
+    }
+    .slide-item:hover .thumb-frame {
+      border-color:var(--ds-border-strong);
+      box-shadow:var(--ds-shadow-raised);
+    }
+    .slide-item.active .thumb-frame {
+      border:2px solid var(--ds-accent);
+      box-shadow:0 0 0 3px var(--ds-accent-subtle);
+    }
+    .slide-item.demo-hover .thumb-frame {
+      border-color:var(--ds-border-strong); box-shadow:var(--ds-shadow-raised);
+    }
+
+    /* Number badge — minimal in resting state */
+    .slide-num {
+      position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:18px; height:16px; padding:0 4px;
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      border-radius:var(--ds-radius-pill);
+      font-size:9.5px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums;
+      pointer-events:none; user-select:none;
+    }
+
+    /* ── Floating overlay action bar — appears ABOVE the card on hover ── */
+    .slide-overlay {
+      position:absolute;
+      /* Position above the card thumbnail */
+      bottom:calc(100% + 5px); /* 100% of thumb-frame height + gap */
+      left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:1px;
+      background:var(--ds-surface);
+      border:1px solid var(--ds-border-subtle);
+      border-radius:var(--ds-radius-pill);
+      padding:3px 5px;
+      box-shadow:var(--ds-shadow-popover);
+      white-space:nowrap;
+      opacity:0; pointer-events:none;
+      transition:opacity var(--ds-motion-fast), transform var(--ds-motion-fast);
+      transform:translateX(-50%) translateY(4px);
+      z-index:10;
+    }
+    .slide-item:hover .slide-overlay,
+    .slide-item.demo-hover .slide-overlay,
+    .slide-item:focus-within .slide-overlay {
+      opacity:1; pointer-events:auto;
+      transform:translateX(-50%) translateY(0);
+    }
+
+    /* Overlay divider */
+    .ov-sep {
+      width:1px; height:14px; background:var(--ds-border-subtle); margin:0 2px;
+    }
+
+    /* Overlay buttons */
+    .ov-btn {
+      display:flex; align-items:center; justify-content:center;
+      width:26px; height:26px; border-radius:var(--ds-radius-pill);
+      border:none; background:transparent;
+      color:var(--ds-text-muted); cursor:pointer;
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .ov-btn:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+    .ov-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:2px; }
+
+    /* Drag handle in overlay */
+    .ov-drag { cursor:grab; }
+    .ov-drag:active { cursor:grabbing; }
+
+    /* Add slide */
+    .add-slide-btn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:52px; height:72px; flex-shrink:0;
+      border:1.5px dashed var(--ds-border-subtle); background:transparent; cursor:pointer;
+      border-radius:var(--ds-radius-sm); color:var(--ds-text-muted); gap:3px;
+      transition:border-color var(--ds-motion-fast), color var(--ds-motion-fast),
+                 background var(--ds-motion-fast);
+    }
+    .add-slide-btn:hover {
+      border-color:var(--ds-accent-border); color:var(--ds-accent-text);
+      background:var(--ds-accent-subtle);
+    }
+    .add-slide-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:2px; }
+    .add-slide-btn span { font-size:10px; font-weight:500; }
+
+    /* ── Thumbnail placeholders ── */
+    .tpl {
+      position:absolute; inset:0; background:#fff;
+      display:flex; flex-direction:column; padding:7% 6%; overflow:hidden;
+    }
+    .tpl.center { justify-content:center; align-items:center; }
+    .tpl-h  { height:14%; background:rgba(23,32,51,.13); border-radius:2px; margin-bottom:7%; flex-shrink:0; }
+    .tpl.center .tpl-h { width:68%; height:16%; align-self:center; margin-bottom:8%; }
+    .tpl-ln { height:7%; background:rgba(23,32,51,.06); border-radius:2px; flex-shrink:0; margin-bottom:4%; }
+    .tpl-ln.w80 { width:80%; } .tpl-ln.w65 { width:65%; } .tpl-ln.w50 { width:50%; }
+    .tpl.center .tpl-ln { align-self:center; }
+    .tpl-bars  { display:flex; align-items:flex-end; gap:2.5%; flex:1; }
+    .tpl-bar   { flex:1; border-radius:1px 1px 0 0; }
+    .tb1 { height:68%; background:var(--ds-accent); opacity:.42; }
+    .tb2 { height:90%; background:var(--ds-accent); opacity:.58; }
+    .tb3 { height:52%; background:var(--ds-accent); opacity:.42; }
+    .tb4 { height:76%; background:var(--ds-accent); opacity:.48; }
+    .tb5 { height:44%; background:var(--ds-accent); opacity:.36; }
+    .tpl-cols { display:flex; gap:5%; flex:1; }
+    .tpl-img  { width:42%; background:var(--ds-surface-sunken); border-radius:2px; flex-shrink:0; }
+    .tpl-col  { flex:1; display:flex; flex-direction:column; gap:7%; padding-top:1%; }
+    .tpl-lx   { height:9%; background:rgba(23,32,51,.06); border-radius:2px; }
+    .tpl-qwrap { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5%; padding:0 4%; }
+    .tpl-qmark { height:15%; width:22%; background:var(--ds-accent-surface); border-radius:2px; }
+    .tpl-ql   { height:8%; background:rgba(23,32,51,.07); border-radius:2px; }
+    .tpl-ql.w90 { width:90%; } .tpl-ql.w70 { width:70%; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Spec Header ═══ -->
+<header class="spec" role="banner">
+  <div class="spec-tag">
+    <span class="spec-badge">06 / 06</span>
+    <span class="spec-name">Hover Action Overlay</span>
+  </div>
+  <h1>Pristine resting state; per-slide actions materialise as a floating pill bar above the card on hover.</h1>
+  <p>Zero-chrome at rest — just thumbnails and number badges. Hover reveals a polished floating action bar (drag handle · duplicate · delete) that pops up with a subtle entrance. Maximum focus on slide content.</p>
+  <ul>
+    <li>Resting: only thumbnail + accent number badge — no visible buttons, no crowding</li>
+    <li>Hover: pill-shaped overlay bar floats above card with popover shadow, entrance translateY(–4 px) + opacity transition</li>
+    <li>Bar contains: ⠿ drag handle · divider · copy · trash — compact 26 px icon targets, pill border-radius</li>
+    <li>Filmstrip has extra top-padding so the floating bar has room; overflow-y:visible ensures nothing clips</li>
+  </ul>
+</header>
+
+<div class="preview">
+  <div class="canvas-area" aria-hidden="true">
+    <div class="canvas-slide" role="img" aria-label="Slide 3 – active, chart">
+      <div class="cs-inner">
+        <div class="cs-title"></div>
+        <div class="cs-bars">
+          <div class="cs-bar cb1"></div><div class="cs-bar cb2"></div>
+          <div class="cs-bar cb3"></div><div class="cs-bar cb4"></div>
+          <div class="cs-bar cb5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="filmstrip" id="filmstrip" aria-label="Slide filmstrip">
+    <div class="filmstrip-body" id="filmstrip-body">
+      <ol class="filmstrip-scroll" aria-label="Slides" tabindex="0">
+
+        <!-- Slide 1 -->
+        <li class="slide-item" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 1">
+            <div class="thumb-frame">
+              <div class="tpl center"><div class="tpl-h"></div><div class="tpl-ln w50"></div></div>
+              <span class="slide-num" aria-hidden="true">1</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 1 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 1" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 1" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 1" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Slide 2 -->
+        <li class="slide-item" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 2">
+            <div class="thumb-frame">
+              <div class="tpl"><div class="tpl-h"></div><div class="tpl-ln"></div><div class="tpl-ln w80"></div><div class="tpl-ln w65"></div></div>
+              <span class="slide-num" aria-hidden="true">2</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 2 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 2" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 2" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 2" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Slide 3 ACTIVE -->
+        <li class="slide-item active" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 3" aria-current="true">
+            <div class="thumb-frame">
+              <div class="tpl"><div class="tpl-h"></div><div class="tpl-bars"><div class="tpl-bar tb1"></div><div class="tpl-bar tb2"></div><div class="tpl-bar tb3"></div><div class="tpl-bar tb4"></div><div class="tpl-bar tb5"></div></div></div>
+              <span class="slide-num" aria-hidden="true">3</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 3 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 3" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 3" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 3" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Slide 4 -->
+        <li class="slide-item" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 4">
+            <div class="thumb-frame">
+              <div class="tpl"><div class="tpl-h"></div><div class="tpl-cols"><div class="tpl-img"></div><div class="tpl-col"><div class="tpl-lx"></div><div class="tpl-lx"></div><div class="tpl-lx"></div></div></div></div>
+              <span class="slide-num" aria-hidden="true">4</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 4 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 4" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 4" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 4" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Slide 5 -->
+        <li class="slide-item" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 5">
+            <div class="thumb-frame">
+              <div class="tpl"><div class="tpl-qwrap"><div class="tpl-qmark"></div><div class="tpl-ql w90"></div><div class="tpl-ql w70"></div></div></div>
+              <span class="slide-num" aria-hidden="true">5</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 5 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 5" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 5" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 5" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Slide 6 HOVER DEMO — overlay bar visible -->
+        <li class="slide-item demo-hover" role="none">
+          <button class="slide-btn" type="button" aria-label="Go to slide 6">
+            <div class="thumb-frame">
+              <div class="tpl"><div class="tpl-h"></div><div class="tpl-ln"></div><div class="tpl-ln w80"></div></div>
+              <span class="slide-num" aria-hidden="true">6</span>
+            </div>
+          </button>
+          <div class="slide-overlay" role="toolbar" aria-label="Slide 6 actions">
+            <button class="ov-btn ov-drag" type="button" aria-label="Drag to reorder slide 6" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button>
+            <div class="ov-sep" aria-hidden="true"></div>
+            <button class="ov-btn" type="button" aria-label="Duplicate slide 6" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="ov-btn" type="button" aria-label="Delete slide 6" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </li>
+
+        <!-- Add slide -->
+        <li role="none">
+          <button class="add-slide-btn" type="button" aria-label="Add slide">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add</span>
+          </button>
+        </li>
+      </ol>
+    </div>
+
+    <button class="filmstrip-toggle" id="toggle-btn" type="button"
+            aria-label="Collapse filmstrip" aria-expanded="true" aria-controls="filmstrip-body">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+    </button>
+  </nav>
+</div>
+
+<script>
+const filmstrip = document.getElementById('filmstrip');
+const toggleBtn = document.getElementById('toggle-btn');
+let collapsed = false;
+toggleBtn.addEventListener('click', () => {
+  collapsed = !collapsed;
+  filmstrip.classList.toggle('collapsed', collapsed);
+  toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  toggleBtn.setAttribute('aria-label', collapsed ? 'Expand filmstrip' : 'Collapse filmstrip');
+});
+</script>
+</body>
+</html>

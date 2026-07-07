@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>05 — Edge Docked Rail · TextIQ Present HUD</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      height: 100%; margin: 0; display: flex; flex-direction: column;
+      font-family: var(--ds-font-sans);
+    }
+
+    /* ── Spec strip ──────────────────────────────────────── */
+    .spec-strip {
+      flex-shrink: 0; padding: 14px 20px 12px;
+      background: var(--ds-surface); border-bottom: 2px solid var(--ds-border-subtle);
+    }
+    .spec-strip h1 { margin: 0 0 5px; font-size: 13px; font-weight: 700; color: var(--ds-text-primary); letter-spacing: -.01em; }
+    .spec-strip p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; }
+    .spec-strip ul { margin: 0; padding-left: 16px; }
+    .spec-strip li { font-size: 11px; color: var(--ds-text-muted); line-height: 1.65; }
+
+    /* ── Stage ──────────────────────────────────────────── */
+    .stage {
+      flex: 1; position: relative; overflow: hidden;
+      background: var(--ds-stage);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Mock slide ─────────────────────────────────────── */
+    .slide-mock {
+      aspect-ratio: 16/9; width: min(72%, 820px);
+      background: #0c1225; border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-overlay);
+      position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: flex-start;
+      padding: 40px 56px;
+    }
+    /* Gradient mesh background for slide artwork */
+    .slide-mock::before {
+      content: ''; position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 80% at 80% 50%, rgba(16,185,129,.12) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 60% at 20% 80%, rgba(79,70,229,.14) 0%, transparent 60%);
+    }
+    .slide-content { position: relative; z-index: 1; max-width: 55%; }
+    .slide-eyebrow {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      color: #34d399; margin: 0 0 12px;
+    }
+    .slide-title {
+      font-size: clamp(18px, 2.6vw, 28px); font-weight: 800; letter-spacing: -.025em;
+      color: #f0fdf4; line-height: 1.15; margin: 0 0 12px;
+    }
+    .slide-bullets {
+      list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+    }
+    .slide-bullets li {
+      display: flex; align-items: center; gap: 7px;
+      font-size: clamp(9px, 1.1vw, 11px); color: #6ee7b7;
+    }
+    .slide-bullets li::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: #34d399; flex-shrink: 0;
+    }
+
+    /* ── Right edge rail ────────────────────────────────── */
+    .rail {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 48px;
+      background: var(--ds-stage-panel);
+      border-left: 1px solid var(--ds-stage-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0;
+      gap: 2px;
+      overflow: hidden;
+    }
+
+    /* ── Rail button ────────────────────────────────────── */
+    .rbtn {
+      position: relative;
+      width: 36px; height: 36px;
+      border: none; background: transparent;
+      color: var(--ds-inverse-muted);
+      border-radius: var(--ds-radius-md);
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard),
+                  color var(--ds-motion-fast) var(--ds-ease-standard);
+      outline: none;
+    }
+    .rbtn:hover { background: var(--ds-inverse-state-hover); color: var(--ds-inverse-text); }
+    .rbtn:focus-visible { outline: 2px solid var(--ds-inverse-focus); outline-offset: 1px; }
+    .rbtn.active { color: var(--ds-accent); background: var(--ds-accent-border); }
+    .rbtn-exit:hover { color: var(--ds-danger); background: var(--ds-danger-border); }
+
+    /* Label tooltip that slides in from the right */
+    .rbtn-label {
+      position: absolute; right: calc(100% + 8px);
+      background: var(--ds-inverse-surface);
+      border: 1px solid var(--ds-inverse-border-subtle);
+      border-radius: var(--ds-radius-md);
+      padding: 4px 10px; font-size: 10.5px; font-weight: 600;
+      color: var(--ds-inverse-text); white-space: nowrap;
+      box-shadow: var(--ds-shadow-raised);
+      opacity: 0; pointer-events: none;
+      transform: translateX(6px);
+      transition: opacity var(--ds-motion-fast) var(--ds-ease-standard),
+                  transform var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .rbtn:hover .rbtn-label {
+      opacity: 1; transform: translateX(0);
+    }
+
+    /* Nav arrows (pair) — top of rail */
+    .rbtn-nav {
+      background: var(--ds-inverse-control);
+      border: 1px solid var(--ds-inverse-border-subtle);
+      color: var(--ds-inverse-text);
+    }
+    .rbtn-nav:hover { background: var(--ds-inverse-control-hover); }
+
+    /* Rail divider */
+    .rail-div {
+      width: 24px; height: 1px; background: var(--ds-stage-border);
+      margin: 4px 0; flex-shrink: 0;
+    }
+
+    /* ── Slide counter chip in rail ─────────────────────── */
+    .rail-counter {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1px; padding: 6px 0; flex-shrink: 0;
+    }
+    .rail-counter-num {
+      font-size: 12px; font-weight: 700; color: var(--ds-stage-text);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .rail-counter-sep {
+      font-size: 8px; color: var(--ds-stage-muted); line-height: 1;
+    }
+    .rail-counter-total {
+      font-size: 10px; font-weight: 600; color: var(--ds-stage-muted);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+
+    /* ── Timer at bottom of rail ─────────────────────────── */
+    .rail-timer {
+      margin-top: auto;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 2px; padding: 8px 0;
+      border-top: 1px solid var(--ds-stage-border); width: 100%;
+      flex-shrink: 0;
+    }
+    .rail-timer-label {
+      font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--ds-stage-muted);
+    }
+    .rail-timer-time {
+      font-size: 11px; font-weight: 700; color: var(--ds-stage-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Vertical progress bar on rail edge ──────────────── */
+    .rail-progress {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+      background: var(--ds-stage-border);
+    }
+    .rail-progress-fill {
+      position: absolute; bottom: 0; left: 0; width: 100%;
+      height: 29.2%; /* 7/24 — going bottom-up for "fill up" metaphor */
+      background: var(--ds-accent);
+      border-radius: var(--ds-radius-pill) var(--ds-radius-pill) 0 0;
+      transition: height var(--ds-motion-base) var(--ds-ease-standard);
+    }
+  </style>
+</head>
+<body>
+  <div class="spec-strip">
+    <h1>05 — Edge Docked Rail</h1>
+    <p>A 48 px wide vertical icon strip pinned to the right stage edge — zero horizontal footprint, maximum slide real estate, with a vertical progress bar running along its inner border.</p>
+    <ul>
+      <li>All presenter controls live in a 48 px rail using <code>--ds-stage-panel</code> so it reads as a native part of the dark stage rather than an overlay</li>
+      <li>Tooltips slide in from the left on <code>:hover</code> — labels are always present in the DOM but visually hidden until needed</li>
+      <li>Nav arrows sit at the top; timer and slide counter anchor the bottom — mirrors a physical teleprompter layout</li>
+      <li>A 2 px vertical progress bar on the inner edge of the rail fills from the bottom up, matching a physical "how far along" metaphor</li>
+      <li>Rail takes zero horizontal slide space; the slide mock fills the rest of the stage edge-to-edge beside it</li>
+    </ul>
+  </div>
+
+  <div class="stage" role="main" aria-label="Presentation stage">
+
+    <!-- Mock slide — fills stage minus the 48px rail -->
+    <div class="slide-mock" style="margin-right: 48px; width: min(78%, 860px);" aria-hidden="true">
+      <div class="slide-content">
+        <p class="slide-eyebrow">Product Vision</p>
+        <h2 class="slide-title">Building the Future<br>of Presentation</h2>
+        <ul class="slide-bullets">
+          <li>AI-native authoring engine</li>
+          <li>Collaborative real-time editing</li>
+          <li>Cross-platform delivery pipeline</li>
+          <li>Analytics and engagement insights</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Right-edge rail -->
+    <aside class="rail" role="toolbar" aria-label="Presenter controls">
+
+      <!-- Vertical progress bar -->
+      <div class="rail-progress" aria-hidden="true">
+        <div class="rail-progress-fill"></div>
+      </div>
+
+      <!-- Navigation arrows -->
+      <button type="button" class="rbtn rbtn-nav" aria-label="Previous slide" title="Previous (←)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        <span class="rbtn-label">Prev</span>
+      </button>
+      <button type="button" class="rbtn rbtn-nav" aria-label="Next slide" title="Next (→)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="rbtn-label">Next</span>
+      </button>
+
+      <div class="rail-div" aria-hidden="true"></div>
+
+      <!-- Slide counter -->
+      <div class="rail-counter" aria-label="Slide 7 of 24">
+        <span class="rail-counter-num">7</span>
+        <span class="rail-counter-sep">of</span>
+        <span class="rail-counter-total">24</span>
+      </div>
+
+      <div class="rail-div" aria-hidden="true"></div>
+
+      <!-- Presenter tools -->
+      <button type="button" class="rbtn" aria-label="Speaker notes" title="Notes (N)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="10" y1="12" x2="16" y2="12"/><line x1="10" y1="16" x2="16" y2="16"/></svg>
+        <span class="rbtn-label">Notes</span>
+      </button>
+      <button type="button" class="rbtn active" aria-label="Slide overview" aria-pressed="true" title="Overview (O)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="rbtn-label">Overview</span>
+      </button>
+      <button type="button" class="rbtn" aria-label="Toggle fullscreen" title="Fullscreen (F)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <span class="rbtn-label">Fullscreen</span>
+      </button>
+      <button type="button" class="rbtn" aria-label="Keyboard shortcuts" title="Shortcuts (?)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/><path d="M8 16h8"/></svg>
+        <span class="rbtn-label">Shortcuts</span>
+      </button>
+      <button type="button" class="rbtn rbtn-exit" aria-label="Exit presentation" title="Exit (Esc)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        <span class="rbtn-label">Exit</span>
+      </button>
+
+      <!-- Timer (anchored to bottom) -->
+      <div class="rail-timer" role="timer" aria-label="Elapsed 12 minutes 47 seconds">
+        <span class="rail-timer-label">time</span>
+        <span class="rail-timer-time">12:47</span>
+      </div>
+
+    </aside>
+  </div>
+</body>
+</html>

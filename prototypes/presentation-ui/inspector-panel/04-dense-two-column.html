@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inspector · 04 Dense Two-Column</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--ds-surface-base); }
+
+  .spec-header {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface);
+  }
+  .spec-header h1 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec-header p  { margin: 0 0 8px; font-size: 12px; color: var(--ds-text-secondary); }
+  .spec-header ul { margin: 0; padding: 0 0 0 16px; font-size: 11px; color: var(--ds-text-muted); }
+  .spec-header ul li { margin-bottom: 2px; }
+
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .canvas-slide {
+    width: 480px; height: 270px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-lg); box-shadow: var(--ds-shadow-overlay);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted); font-size: 12px;
+  }
+
+  .inspector {
+    width: 320px; flex-shrink: 0; display: flex; flex-direction: column;
+    height: 100%; background: var(--ds-surface);
+    border-left: 1px solid var(--ds-border-subtle); overflow: hidden;
+  }
+
+  .id-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px 9px; border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .id-label {
+    font-size: 12px; font-weight: 600; color: var(--ds-text-primary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .id-sep { color: var(--ds-text-muted); font-weight: 400; }
+  .layers-pill {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: var(--ds-radius-pill);
+    border: 1px solid var(--ds-accent-border);
+    background: var(--ds-accent); color: var(--ds-text-on-accent); cursor: pointer;
+  }
+  .layers-pill:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+  .tab-strip {
+    display: flex; padding: 0 8px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    flex-shrink: 0; overflow-x: auto; scrollbar-width: none;
+  }
+  .tab-strip::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 7px 10px 6px; font-size: 11px; font-weight: 500;
+    color: var(--ds-text-muted); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--ds-text-primary); }
+  .tab-btn.active { color: var(--ds-accent-text); border-bottom-color: var(--ds-accent); }
+  .tab-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; border-radius: 2px; }
+
+  .panel-body {
+    flex: 1; overflow-y: auto; min-height: 0;
+    scrollbar-width: thin; scrollbar-color: var(--ds-border-strong) transparent;
+  }
+
+  .section { padding: 8px 12px 10px; }
+  .section + .section { border-top: 1px solid var(--ds-border-subtle); }
+  .section-title {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ds-text-muted); margin: 0 0 6px;
+  }
+
+  /* DENSE 2-col select grid */
+  .col2-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    margin-bottom: 4px;
+  }
+  .col2-cell label {
+    font-size: 10px; color: var(--ds-text-muted);
+    display: block; margin-bottom: 2px;
+  }
+  .col2-cell select, .col2-cell input {
+    width: 100%; height: 24px; padding: 0 6px;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); outline: none; font-family: inherit;
+  }
+  .col2-cell select:focus, .col2-cell input:focus {
+    border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-border);
+  }
+
+  /* Full-width select */
+  .full-row { margin-bottom: 4px; }
+  .full-row label { font-size: 10px; color: var(--ds-text-muted); display: block; margin-bottom: 2px; }
+  .full-row select {
+    width: 100%; height: 24px; padding: 0 6px;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); outline: none; font-family: inherit;
+  }
+  .full-row select:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-border); }
+
+  /* Inline slider row */
+  .slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .slider-label { font-size: 10px; color: var(--ds-text-muted); flex-shrink: 0; min-width: 44px; }
+  input[type="range"] { flex: 1; height: 3px; accent-color: var(--ds-accent); cursor: pointer; }
+  .slider-val { font-size: 11px; color: var(--ds-text-secondary); min-width: 28px; text-align: right; }
+
+  /* 4-col tight geometry: X Y W H all in one row each labelled above */
+  .geo-4col {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-bottom: 4px;
+  }
+  .geo-cell label { font-size: 9px; color: var(--ds-text-muted); display: block; margin-bottom: 1px; }
+  .geo-cell input {
+    width: 100%; height: 22px; padding: 0 4px; text-align: center;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); outline: none; font-family: inherit;
+  }
+  .geo-cell input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+
+  /* Rot + Layer in 2 col */
+  .rot-z {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 4px;
+  }
+  .rot-z label { font-size: 10px; color: var(--ds-text-muted); display: block; margin-bottom: 2px; }
+  .rot-z input {
+    width: 100%; height: 22px; padding: 0 4px; text-align: center;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); outline: none; font-family: inherit;
+  }
+
+  /* Color row */
+  .color-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .color-cell { display: flex; flex-direction: column; gap: 2px; }
+  .color-cell label { font-size: 10px; color: var(--ds-text-muted); }
+  .color-swatch-row { display: flex; align-items: center; gap: 4px; }
+  .swatch { width: 18px; height: 18px; border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-strong); cursor: pointer; flex-shrink: 0; }
+  .swatch-hex { font-size: 10px; color: var(--ds-text-secondary); font-family: var(--ds-font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Icon buttons */
+  .icon-btn {
+    width: 20px; height: 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    color: var(--ds-text-muted); border-radius: var(--ds-radius-sm);
+    transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+  }
+  .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .icon-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+  /* Typography row – 3-col: family full-width, then size+weight 2-col */
+  .typo-size-weight { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .typo-size-weight label { font-size: 10px; color: var(--ds-text-muted); display: block; margin-bottom: 2px; }
+  .typo-size-weight select, .typo-size-weight input {
+    width: 100%; height: 24px; padding: 0 6px;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); outline: none; font-family: inherit;
+  }
+
+  /* Align + toggle row */
+  .align-toggle { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+  .align-btn {
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); cursor: pointer; color: var(--ds-text-muted);
+  }
+  .align-btn.active { background: var(--ds-accent-surface); border-color: var(--ds-accent-border); color: var(--ds-accent-text); }
+  .align-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+  .toggle { position: relative; width: 28px; height: 14px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: var(--ds-border-strong); border-radius: var(--ds-radius-pill); cursor: pointer; transition: background var(--ds-motion-fast); }
+  .toggle input:checked + .toggle-track { background: var(--ds-accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: #fff; border-radius: 50%; transition: left var(--ds-motion-fast); pointer-events: none; }
+  .toggle input:checked ~ .toggle-thumb { left: 16px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 24px; margin-bottom: 3px; }
+
+  /* Layer rows compact */
+  .layer-row {
+    display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 2px;
+    border-radius: var(--ds-radius-sm); transition: background var(--ds-motion-fast);
+  }
+  .layer-row:hover { background: var(--ds-state-hover); }
+  .layer-row.selected { background: var(--ds-state-selected); }
+  .layer-name { flex: 1; font-size: 11px; color: var(--ds-text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .layer-badge { font-size: 9px; color: var(--ds-text-muted); background: var(--ds-surface-sunken); padding: 1px 4px; border-radius: var(--ds-radius-pill); }
+</style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>04 · Dense Two-Column</h1>
+  <p>Maximally compact: all four geometry fields (X Y W H) appear in a single 4-column row; template controls in 2-col grid; fewer pixels per section.</p>
+  <ul>
+    <li>X, Y, W, H in a 4-col grid (one row) — saves ~40px vs stacked pairs</li>
+    <li>Template selects in 2-col: Tone/Density, Emphasis/Decoration side-by-side</li>
+    <li>Row height 22–24px; labels 9–10px; section title at 10px</li>
+    <li>Still accessible: all labels associated to inputs via htmlFor / label</li>
+  </ul>
+</div>
+
+<div class="layout">
+  <div class="canvas-area">
+    <div class="canvas-slide">Slide Canvas</div>
+  </div>
+
+  <aside class="inspector" role="complementary" aria-label="Properties inspector">
+
+    <div class="id-header">
+      <div class="id-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+        Text <span class="id-sep">·</span> Title
+      </div>
+      <button class="layers-pill" aria-pressed="true" aria-label="Toggle layers panel">Layers</button>
+    </div>
+
+    <div class="tab-strip" role="tablist" aria-label="Inspector tabs">
+      <button class="tab-btn active" role="tab" aria-selected="true">Slide</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Content</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Style</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Arrange</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Layers</button>
+    </div>
+
+    <div class="panel-body" role="tabpanel">
+
+      <!-- TEMPLATE section — 2-col grid -->
+      <section class="section">
+        <h2 class="section-title">Template</h2>
+        <div class="col2-grid">
+          <div class="col2-cell"><label for="d-tone">Tone</label><select id="d-tone" aria-label="Tone"><option>confident</option><option>neutral</option><option>warm</option><option>urgent</option></select></div>
+          <div class="col2-cell"><label for="d-density">Density</label><select id="d-density" aria-label="Density"><option>normal</option><option>airy</option><option>dense</option></select></div>
+          <div class="col2-cell"><label for="d-emphasis">Emphasis</label><select id="d-emphasis" aria-label="Emphasis"><option>title</option><option>balanced</option><option>data</option></select></div>
+          <div class="col2-cell"><label for="d-deco">Decoration</label><select id="d-deco" aria-label="Decoration"><option>subtle</option><option>none</option><option>expressive</option></select></div>
+        </div>
+        <div class="full-row">
+          <label for="d-chrome">Chrome</label>
+          <select id="d-chrome"><option>default</option><option>minimal</option><option>none</option></select>
+        </div>
+      </section>
+
+      <!-- GEOMETRY section — 4-col row -->
+      <section class="section">
+        <h2 class="section-title">Geometry</h2>
+        <div class="geo-4col">
+          <div class="geo-cell"><label for="d-x">X</label><input id="d-x" type="number" value="12.5" step="0.5" /></div>
+          <div class="geo-cell"><label for="d-y">Y</label><input id="d-y" type="number" value="8.0" step="0.5" /></div>
+          <div class="geo-cell"><label for="d-w">W</label><input id="d-w" type="number" value="75.0" step="0.5" /></div>
+          <div class="geo-cell"><label for="d-h">H</label><input id="d-h" type="number" value="22.0" step="0.5" /></div>
+        </div>
+        <div class="rot-z">
+          <div><label for="d-rot">Rotation °</label><input id="d-rot" type="number" value="0" step="1" /></div>
+          <div><label for="d-layer">Layer</label><input id="d-layer" type="number" value="3" step="1" /></div>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Opacity</span>
+          <input type="range" min="0" max="100" value="100" aria-label="Opacity" />
+          <span class="slider-val">100%</span>
+        </div>
+      </section>
+
+      <!-- FILL & STROKE section — 2-col swatches -->
+      <section class="section">
+        <h2 class="section-title">Fill &amp; Stroke</h2>
+        <div class="color-pair">
+          <div class="color-cell">
+            <label>Fill</label>
+            <div class="color-swatch-row">
+              <div class="swatch" style="background:#4f46e5;" aria-label="Fill color"></div>
+              <span class="swatch-hex">#4F46E5</span>
+            </div>
+          </div>
+          <div class="color-cell">
+            <label>Stroke</label>
+            <div class="color-swatch-row">
+              <div class="swatch" style="background:#172033;" aria-label="Stroke color"></div>
+              <span class="swatch-hex">#172033</span>
+            </div>
+          </div>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Stroke W</span>
+          <input type="range" min="0" max="10" value="1" aria-label="Stroke width" />
+          <span class="slider-val">1 pt</span>
+        </div>
+      </section>
+
+      <!-- TYPOGRAPHY section — 2-col size+weight -->
+      <section class="section">
+        <h2 class="section-title">Typography</h2>
+        <div class="full-row">
+          <label for="d-font">Family</label>
+          <select id="d-font"><option>Inter (Theme)</option><option>Georgia</option><option>Menlo</option></select>
+        </div>
+        <div class="typo-size-weight">
+          <div><label for="d-size">Size pt</label><input id="d-size" type="number" value="24" step="1" /></div>
+          <div><label for="d-weight">Weight</label><select id="d-weight"><option>Bold</option><option>Semibold</option><option>Regular</option></select></div>
+        </div>
+        <div class="align-toggle">
+          <button class="align-btn active" aria-label="Align left" aria-pressed="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+          <button class="align-btn" aria-label="Align center" aria-pressed="false"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="5" y1="18" x2="19" y2="18"/></svg></button>
+          <button class="align-btn" aria-label="Align right" aria-pressed="false"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+        </div>
+      </section>
+
+      <!-- EFFECTS section — compact toggles + sliders -->
+      <section class="section">
+        <h2 class="section-title">Effects</h2>
+        <div class="toggle-row">
+          <span style="font-size:11px;color:var(--ds-text-muted);">Drop shadow</span>
+          <label class="toggle"><input type="checkbox" checked aria-label="Toggle drop shadow" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+        <div class="slider-row" style="padding-left:8px;">
+          <span class="slider-label">Blur</span>
+          <input type="range" min="0" max="40" value="18" aria-label="Shadow blur" />
+          <span class="slider-val">18</span>
+        </div>
+        <div class="toggle-row">
+          <span style="font-size:11px;color:var(--ds-text-muted);">Background blur</span>
+          <label class="toggle"><input type="checkbox" aria-label="Toggle background blur" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+      </section>
+
+      <!-- LAYERS section — compact rows -->
+      <section class="section">
+        <h2 class="section-title">Layers</h2>
+        <div role="list">
+          <div class="layer-row selected" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Title Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Subtitle Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Background Image</span>
+            <span class="layer-badge">Theme</span>
+            <button class="icon-btn" aria-label="Hidden" style="color:var(--ds-text-primary)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+            <button class="icon-btn" aria-label="Locked" style="color:var(--ds-accent)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.5"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+</body>
+</html>

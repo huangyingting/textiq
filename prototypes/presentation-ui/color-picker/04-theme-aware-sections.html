@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>04 — Theme-Aware Sections | Color Picker</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ── Specimen scaffold ──────────────────────────────────────────────── */
+    body { padding: 32px; min-height: 100vh; background: var(--ds-surface-base); }
+    .spec-header {
+      max-width: 720px; margin: 0 auto 36px;
+      border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 20px;
+    }
+    .spec-header h1 { font-size: 17px; font-weight: 700; color: var(--ds-text-primary); margin: 0 0 6px; letter-spacing: -0.01em; }
+    .spec-header p { font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 10px; line-height: 1.65; max-width: 600px; }
+    .spec-header ul { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--ds-text-muted); line-height: 1.9; }
+
+    /* ── Demo stage ─────────────────────────────────────────────────────── */
+    .demo-area { max-width: 720px; margin: 0 auto; display: flex; align-items: flex-start; gap: 40px; }
+    .faux-canvas {
+      flex: 1; min-height: 340px;
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg); display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .faux-slide {
+      width: 140px; height: 90px; border-radius: var(--ds-radius-md);
+      background: #4f46e5; box-shadow: var(--ds-shadow-overlay); transition: background var(--ds-motion-base);
+    }
+    .inspector {
+      width: 224px; flex-shrink: 0; position: relative;
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg); box-shadow: var(--ds-shadow-raised); overflow: visible;
+    }
+    .inspector-hd {
+      padding: 7px 12px 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .i-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; gap: 8px; }
+    .i-row + .i-row { border-top: 1px solid var(--ds-border-subtle); }
+    .i-label { font-size: 12px; color: var(--ds-text-secondary); flex: 1; }
+    .i-muted { font-size: 12px; color: var(--ds-text-muted); }
+
+    /* Trigger */
+    .color-trigger {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 26px; padding: 0 7px 0 4px;
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-md);
+      background: var(--ds-surface); cursor: pointer;
+      font-size: 11px; color: var(--ds-text-primary); font-family: var(--ds-font-mono);
+      transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .color-trigger.open { border-color: var(--ds-focus-ring); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+    .ct-chip {
+      display: block; width: 16px; height: 16px;
+      border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-subtle);
+      flex-shrink: 0; transition: background var(--ds-motion-fast);
+    }
+    .trigger-wrap { position: relative; }
+
+    /* ── Theme-Aware Popover ─────────────────────────────────────────────── */
+    .cp {
+      position: absolute; top: calc(100% + 6px); right: 0; width: 220px;
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-popover);
+      display: none; flex-direction: column;
+      z-index: 300; overflow: hidden;
+    }
+    .cp.open { display: flex; }
+
+    /* Section block */
+    .section {
+      display: flex; flex-direction: column; gap: var(--ds-space-1);
+      padding: 8px 10px;
+    }
+    .section + .section { border-top: 1px solid var(--ds-border-subtle); }
+
+    /* Section header (collapsible affordance) */
+    .section-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .section-hd:hover .sec-label { color: var(--ds-text-secondary); }
+    .sec-label {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--ds-text-muted);
+      transition: color var(--ds-motion-fast);
+    }
+    .chevron {
+      color: var(--ds-text-muted);
+      transition: transform var(--ds-motion-fast);
+      flex-shrink: 0;
+    }
+    .section.collapsed .chevron { transform: rotate(-90deg); }
+    .section-body { display: flex; flex-direction: column; gap: var(--ds-space-1); }
+    .section.collapsed .section-body { display: none; }
+
+    /* ── Theme Palette – larger swatches (lg=28px) ───────────────────────── */
+    .theme-row {
+      display: flex; gap: var(--ds-space-1); align-items: flex-end;
+    }
+    /* Theme swatch with label below */
+    .theme-sw-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
+    }
+    .theme-sw {
+      width: 100%; aspect-ratio: 1;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform 80ms, box-shadow 100ms;
+    }
+    .theme-sw:hover { transform: scale(1.08); z-index: 1; }
+    .theme-sw.sel {
+      border-color: transparent;
+      box-shadow: 0 0 0 1.5px var(--ds-surface-overlay), 0 0 0 3.5px var(--ds-focus-ring);
+    }
+    .theme-sw.sel::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='%23fff' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 10px 10px no-repeat;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+    }
+    .theme-name {
+      font-size: 9px; color: var(--ds-text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%; text-align: center;
+    }
+
+    /* ── Standard grid – 6 columns ───────────────────────────────────────── */
+    .std-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--ds-space-1);
+    }
+    .sw {
+      width: 100%; aspect-ratio: 1; min-width: 0;
+      border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform 80ms, box-shadow 100ms;
+    }
+    .sw:hover { transform: scale(1.15); z-index: 1; }
+    .sw.sel {
+      border-color: transparent;
+      box-shadow: 0 0 0 1.5px var(--ds-surface-overlay), 0 0 0 3.5px var(--ds-focus-ring);
+    }
+    .sw.sel::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='%23fff' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+    }
+
+    /* ── Recent row ──────────────────────────────────────────────────────── */
+    .recent-row { display: flex; gap: var(--ds-space-1); }
+    .sw-sm {
+      width: 24px; height: 24px; flex-shrink: 0;
+      border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-subtle);
+      cursor: pointer; padding: 0; position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform 80ms, box-shadow 100ms;
+    }
+    .sw-sm:hover { transform: scale(1.1); z-index: 1; }
+    .sw-sm.sel {
+      border-color: transparent;
+      box-shadow: 0 0 0 1.5px var(--ds-surface-overlay), 0 0 0 3.5px var(--ds-focus-ring);
+    }
+    .sw-sm.sel::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='%23fff' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+    }
+
+    /* ── Custom hex input row ────────────────────────────────────────────── */
+    .hex-row { display: flex; align-items: center; gap: var(--ds-space-1); }
+    .hex-input {
+      flex: 1; height: 26px; padding: 0 7px;
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm);
+      background: var(--ds-surface-sunken); color: var(--ds-text-primary);
+      font-family: var(--ds-font-mono); font-size: 11px; outline: none;
+      transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .hex-input:focus { border-color: var(--ds-focus-ring); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px;
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm);
+      background: var(--ds-surface); color: var(--ds-text-muted);
+      cursor: pointer; flex-shrink: 0; padding: 0;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .none-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px;
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm);
+      background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 8px 8px;
+      cursor: pointer; flex-shrink: 0; padding: 0; position: relative; overflow: hidden;
+    }
+    .none-btn::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 42%, rgba(239,68,68,.8) 42% 58%, transparent 58%);
+    }
+    .none-btn:hover { opacity: .75; }
+  </style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>04 — Theme-Aware Sections</h1>
+  <p>Three collapsible sections mirror how a slide template thinks: the active document's <em>Theme</em> palette surfaces first with larger swatches and role labels (Primary, Background…), then the full Standard preset grid, then Recent used colors. The hierarchy matches how users actually pick colors.</p>
+  <ul>
+    <li><strong>Theme section</strong> sits above Standard — larger 28px swatches with role names ("Primary", "Bg", "Text", "Accent", "Alt")</li>
+    <li>Each section collapses with a chevron — Standard defaults open, Recent closed; Theme always open</li>
+    <li>Standard section: full 4×6 grid of DEFAULT_SWATCH_PRESETS with selected ring + checkmark</li>
+    <li>Recent row: 6 recently-used swatches for quick repeat access</li>
+    <li>Custom section: hex input on <code>--ds-surface-sunken</code> + eyedropper + none/transparent button</li>
+  </ul>
+</div>
+
+<div class="demo-area">
+  <div class="faux-canvas">
+    <div class="faux-slide" id="slide"></div>
+  </div>
+
+  <div class="inspector">
+    <div class="inspector-hd">Appearance</div>
+    <div class="i-row">
+      <span class="i-label">Fill</span>
+      <div class="trigger-wrap">
+        <button class="color-trigger open" id="trig" onclick="togglePicker()">
+          <span class="ct-chip" id="chip" style="background:#4f46e5"></span>
+          <span id="trig-hex">#4F46E5</span>
+        </button>
+
+        <!-- ── Theme-Aware Popover ── -->
+        <div class="cp open" id="picker">
+
+          <!-- SECTION: Theme palette (always open, no collapse) -->
+          <div class="section">
+            <div class="section-hd" onclick="toggleSection(this.closest('.section'))">
+              <span class="sec-label">
+                <!-- Palette icon -->
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+                  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+                  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+                  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+                </svg>
+                Theme
+              </span>
+              <svg class="chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="section-body">
+              <!-- Theme palette: Primary, BG, Text, Accent, Alt — CONTENT colors hardcoded -->
+              <div class="theme-row">
+                <div class="theme-sw-wrap">
+                  <button class="theme-sw sel" style="background:#4f46e5" onclick="pick(this,'#4f46e5')" title="#4f46e5" aria-label="Primary" aria-pressed="true"></button>
+                  <span class="theme-name">Primary</span>
+                </div>
+                <div class="theme-sw-wrap">
+                  <button class="theme-sw" style="background:#f8fafc" onclick="pick(this,'#f8fafc')" title="#f8fafc" aria-label="Background"></button>
+                  <span class="theme-name">Bg</span>
+                </div>
+                <div class="theme-sw-wrap">
+                  <button class="theme-sw" style="background:#1e293b" onclick="pick(this,'#1e293b')" title="#1e293b" aria-label="Text"></button>
+                  <span class="theme-name">Text</span>
+                </div>
+                <div class="theme-sw-wrap">
+                  <button class="theme-sw" style="background:#f59e0b" onclick="pick(this,'#f59e0b')" title="#f59e0b" aria-label="Accent"></button>
+                  <span class="theme-name">Accent</span>
+                </div>
+                <div class="theme-sw-wrap">
+                  <button class="theme-sw" style="background:#0ea5e9" onclick="pick(this,'#0ea5e9')" title="#0ea5e9" aria-label="Alt"></button>
+                  <span class="theme-name">Alt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Standard (collapsible, default open) -->
+          <div class="section" id="standardSection">
+            <div class="section-hd" onclick="toggleSection(this.closest('.section'))">
+              <span class="sec-label">Standard</span>
+              <svg class="chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="section-body">
+              <div class="std-grid">
+                <button class="sw" style="background:#ffffff" onclick="pick(this,'#ffffff')" title="#ffffff" aria-label="White"></button>
+                <button class="sw" style="background:#f1f5f9" onclick="pick(this,'#f1f5f9')" title="#f1f5f9" aria-label="Slate 100"></button>
+                <button class="sw" style="background:#cbd5e1" onclick="pick(this,'#cbd5e1')" title="#cbd5e1" aria-label="Slate 300"></button>
+                <button class="sw" style="background:#64748b" onclick="pick(this,'#64748b')" title="#64748b" aria-label="Slate 500"></button>
+                <button class="sw" style="background:#1e293b" onclick="pick(this,'#1e293b')" title="#1e293b" aria-label="Slate 800"></button>
+                <button class="sw" style="background:#000000" onclick="pick(this,'#000000')" title="#000000" aria-label="Black"></button>
+                <button class="sw" style="background:#ef4444" onclick="pick(this,'#ef4444')" title="#ef4444" aria-label="Red 500"></button>
+                <button class="sw" style="background:#f97316" onclick="pick(this,'#f97316')" title="#f97316" aria-label="Orange 500"></button>
+                <button class="sw" style="background:#f59e0b" onclick="pick(this,'#f59e0b')" title="#f59e0b" aria-label="Amber 400"></button>
+                <button class="sw" style="background:#eab308" onclick="pick(this,'#eab308')" title="#eab308" aria-label="Yellow 500"></button>
+                <button class="sw" style="background:#84cc16" onclick="pick(this,'#84cc16')" title="#84cc16" aria-label="Lime 400"></button>
+                <button class="sw" style="background:#22c55e" onclick="pick(this,'#22c55e')" title="#22c55e" aria-label="Green 500"></button>
+                <button class="sw" style="background:#10b981" onclick="pick(this,'#10b981')" title="#10b981" aria-label="Emerald 500"></button>
+                <button class="sw" style="background:#14b8a6" onclick="pick(this,'#14b8a6')" title="#14b8a6" aria-label="Teal 500"></button>
+                <button class="sw" style="background:#06b6d4" onclick="pick(this,'#06b6d4')" title="#06b6d4" aria-label="Cyan 500"></button>
+                <button class="sw" style="background:#0ea5e9" onclick="pick(this,'#0ea5e9')" title="#0ea5e9" aria-label="Sky 500"></button>
+                <button class="sw" style="background:#3b82f6" onclick="pick(this,'#3b82f6')" title="#3b82f6" aria-label="Blue 500"></button>
+                <button class="sw" style="background:#6366f1" onclick="pick(this,'#6366f1')" title="#6366f1" aria-label="Indigo 500"></button>
+                <button class="sw" style="background:#8b5cf6" onclick="pick(this,'#8b5cf6')" title="#8b5cf6" aria-label="Violet 500"></button>
+                <button class="sw" style="background:#a855f7" onclick="pick(this,'#a855f7')" title="#a855f7" aria-label="Purple 500"></button>
+                <button class="sw" style="background:#d946ef" onclick="pick(this,'#d946ef')" title="#d946ef" aria-label="Fuchsia 500"></button>
+                <button class="sw" style="background:#ec4899" onclick="pick(this,'#ec4899')" title="#ec4899" aria-label="Pink 500"></button>
+                <button class="sw" style="background:#f43f5e" onclick="pick(this,'#f43f5e')" title="#f43f5e" aria-label="Rose 500"></button>
+                <button class="sw" style="background:#78716c" onclick="pick(this,'#78716c')" title="#78716c" aria-label="Stone 500"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Recent (collapsible) -->
+          <div class="section">
+            <div class="section-hd" onclick="toggleSection(this.closest('.section'))">
+              <span class="sec-label">Recent</span>
+              <svg class="chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="section-body">
+              <div class="recent-row">
+                <button class="sw-sm" style="background:#3b82f6" onclick="pick(this,'#3b82f6')" title="#3b82f6" aria-label="Blue 500"></button>
+                <button class="sw-sm" style="background:#f59e0b" onclick="pick(this,'#f59e0b')" title="#f59e0b" aria-label="Amber 400"></button>
+                <button class="sw-sm" style="background:#22c55e" onclick="pick(this,'#22c55e')" title="#22c55e" aria-label="Green 500"></button>
+                <button class="sw-sm" style="background:#ec4899" onclick="pick(this,'#ec4899')" title="#ec4899" aria-label="Pink 500"></button>
+                <button class="sw-sm" style="background:#1e293b" onclick="pick(this,'#1e293b')" title="#1e293b" aria-label="Slate 800"></button>
+                <button class="sw-sm" style="background:#f97316" onclick="pick(this,'#f97316')" title="#f97316" aria-label="Orange 500"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Custom hex -->
+          <div class="section">
+            <div class="section-hd" onclick="toggleSection(this.closest('.section'))">
+              <span class="sec-label">Custom</span>
+              <svg class="chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="section-body">
+              <div class="hex-row">
+                <button class="none-btn" onclick="pickNone()" title="No fill" aria-label="No fill"></button>
+                <input type="text" class="hex-input" id="hexIn" value="#4F46E5" maxlength="7"
+                  spellcheck="false" aria-label="Hex color" oninput="hexTyped(this)">
+                <button class="icon-btn" title="Eyedropper" aria-label="Pick from screen">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>
+                    <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8 1-1z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- .cp -->
+      </div>
+    </div>
+    <div class="i-row">
+      <span class="i-label">Stroke</span><span class="i-muted">None</span>
+    </div>
+    <div class="i-row">
+      <span class="i-label">Opacity</span><span class="i-muted">100%</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  function togglePicker() {
+    var p = document.getElementById('picker'), b = document.getElementById('trig');
+    var o = p.classList.contains('open');
+    p.classList.toggle('open', !o); b.classList.toggle('open', !o);
+  }
+  function toggleSection(sec) {
+    sec.classList.toggle('collapsed');
+  }
+  function pick(el, hex) {
+    document.querySelectorAll('.sw.sel, .sw-sm.sel, .theme-sw.sel').forEach(function(s){
+      s.classList.remove('sel'); s.removeAttribute('aria-pressed');
+    });
+    el.classList.add('sel'); el.setAttribute('aria-pressed','true');
+    var upper = hex.toUpperCase();
+    document.getElementById('chip').style.background = hex;
+    document.getElementById('chip').style.backgroundImage = '';
+    document.getElementById('trig-hex').textContent = upper;
+    document.getElementById('hexIn').value = upper;
+    document.getElementById('slide').style.background = hex;
+  }
+  function pickNone() {
+    document.querySelectorAll('.sw.sel, .sw-sm.sel, .theme-sw.sel').forEach(function(s){
+      s.classList.remove('sel'); s.removeAttribute('aria-pressed');
+    });
+    var chip = document.getElementById('chip');
+    chip.style.background = 'repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%)';
+    chip.style.backgroundSize = '8px 8px';
+    document.getElementById('trig-hex').textContent = 'None';
+    document.getElementById('hexIn').value = '';
+    document.getElementById('slide').style.background = 'transparent';
+  }
+  function hexTyped(inp) {
+    if (/^#[0-9a-fA-F]{6}$/.test(inp.value)) {
+      document.getElementById('chip').style.background = inp.value;
+      document.getElementById('chip').style.backgroundImage = '';
+      document.getElementById('trig-hex').textContent = inp.value.toUpperCase();
+      document.getElementById('slide').style.background = inp.value;
+    }
+  }
+</script>
+</body>
+</html>

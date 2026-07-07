@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inspector Panel Design Gallery · TextIQ</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { min-height: 100%; margin: 0; background: var(--ds-surface-base); }
+
+  /* ── Page header ──────────────────────────────────────────────────── */
+  .page-header {
+    background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    padding: 24px 32px 20px;
+  }
+  .page-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--ds-text-primary); }
+  .page-header p  { margin: 0; font-size: 13px; color: var(--ds-text-secondary); max-width: 640px; line-height: 1.6; }
+  .page-meta {
+    display: flex; align-items: center; gap: 12px; margin-top: 12px;
+    font-size: 11px; color: var(--ds-text-muted);
+  }
+  .page-meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* ── Gallery grid ─────────────────────────────────────────────────── */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+    padding: 24px 32px 32px;
+    max-width: 1440px;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-xl);
+    box-shadow: var(--ds-shadow-raised);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard), transform var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .card:hover {
+    box-shadow: var(--ds-shadow-overlay);
+    transform: translateY(-2px);
+  }
+
+  /* iframe preview */
+  .preview-wrap {
+    position: relative;
+    height: 280px;
+    background: var(--ds-surface-sunken);
+    overflow: hidden;
+    border-bottom: 1px solid var(--ds-border-subtle);
+  }
+  .preview-wrap iframe {
+    width: 100%; height: 100%; border: none;
+    pointer-events: none;
+    transform-origin: top left;
+  }
+
+  /* Card body */
+  .card-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+  .card-num {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--ds-accent-text); background: var(--ds-accent-surface);
+    border: 1px solid var(--ds-accent-border);
+    padding: 2px 7px; border-radius: var(--ds-radius-pill);
+    display: inline-block; margin-bottom: 6px; text-transform: uppercase;
+  }
+  .card-title { margin: 0 0 5px; font-size: 14px; font-weight: 600; color: var(--ds-text-primary); }
+  .card-desc { margin: 0 0 10px; font-size: 12px; color: var(--ds-text-secondary); line-height: 1.55; flex: 1; }
+
+  /* Feature bullets */
+  .features { margin: 0 0 14px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .features li {
+    font-size: 11px; color: var(--ds-text-muted);
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;
+  }
+  .features li::before { content: "—"; color: var(--ds-accent); flex-shrink: 0; margin-top: 0; }
+
+  /* Open button */
+  .open-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent); color: var(--ds-text-on-accent);
+    font-size: 12px; font-weight: 600; text-decoration: none;
+    border: none; cursor: pointer;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    align-self: flex-start;
+  }
+  .open-btn:hover { background: var(--ds-accent-hover); }
+  .open-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .open-btn svg { flex-shrink: 0; }
+
+  /* Footer */
+  .page-footer {
+    padding: 16px 32px;
+    border-top: 1px solid var(--ds-border-subtle);
+    font-size: 11px; color: var(--ds-text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Right Inspector Panel · Design Exploration</h1>
+  <p>Six distinct visual directions for the TextIQ presentation editor's right-side properties panel. All mockups are static HTML using shared <code>design-tokens.css</code> — no frameworks, no CDNs, no build step.</p>
+  <div class="page-meta">
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+      6 variants
+    </span>
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      var(--ds-*) tokens only
+    </span>
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Static mockups · design/inspector-panel/
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="gallery">
+
+    <!-- 01 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="01-flat-sectioned-scroll.html" title="Preview: 01 Flat Sectioned Scroll" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">01</span>
+        <h2 class="card-title">Flat Sectioned Scroll</h2>
+        <p class="card-desc">Clean flat layout with hairline dividers between sections. Comfortable row height with muted left-aligned labels.</p>
+        <ul class="features">
+          <li>Single-column stacked rows; 2-col grid for X/Y/W/H</li>
+          <li>Hairline border-top separates every section — no shadows</li>
+          <li>Active tab uses underline indicator in accent color</li>
+        </ul>
+        <a class="open-btn" href="01-flat-sectioned-scroll.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 02 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="02-collapsible-accordion.html" title="Preview: 02 Collapsible Accordion" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">02</span>
+        <h2 class="card-title">Collapsible Accordion</h2>
+        <p class="card-desc">Each section is an expandable accordion — users collapse rarely-used groups to reduce scroll distance.</p>
+        <ul class="features">
+          <li>Chevron rotates on open/close with CSS transition</li>
+          <li>Template, Geometry, Style open by default; Effects &amp; Layers closed</li>
+          <li>Tiny JS syncs aria-expanded with &lt;details&gt; open state</li>
+        </ul>
+        <a class="open-btn" href="02-collapsible-accordion.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 03 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="03-card-grouped.html" title="Preview: 03 Card Grouped" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">03</span>
+        <h2 class="card-title">Card Grouped</h2>
+        <p class="card-desc">Sections as subtly raised cards floating on a sunken panel background — clear grouping without hard dividers.</p>
+        <ul class="features">
+          <li>Panel: ds-surface-sunken; cards: ds-surface + ds-shadow-raised</li>
+          <li>Rounded corners (ds-radius-lg) on every card</li>
+          <li>Inputs use sunken fill to visually recede into the card</li>
+        </ul>
+        <a class="open-btn" href="03-card-grouped.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 04 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="04-dense-two-column.html" title="Preview: 04 Dense Two-Column" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">04</span>
+        <h2 class="card-title">Dense Two-Column</h2>
+        <p class="card-desc">Maximally compact — X/Y/W/H in a 4-column row; template controls in 2-col grids; ~40% shorter than variant 01.</p>
+        <ul class="features">
+          <li>4-col geometry row eliminates two rows vs stacked pairs</li>
+          <li>Template selects in 2-col grid: Tone/Density, Emphasis/Decoration</li>
+          <li>22–24px row height; 9–10px sub-labels</li>
+        </ul>
+        <a class="open-btn" href="04-dense-two-column.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 05 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="05-segmented-header-tabs.html" title="Preview: 05 Segmented Header Tabs" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">05</span>
+        <h2 class="card-title">Segmented Header Tabs</h2>
+        <p class="card-desc">Pill-track segmented control replaces the underline tab strip; a persistent section subnav lets users jump to any anchor.</p>
+        <ul class="features">
+          <li>Uses ds-segment-track / ds-segment-thumb tokens for the recessed pill</li>
+          <li>Section subnav (TMPL · GEO · FILL · TYPE · EFX · LYR) smooth-scrolls</li>
+          <li>Raised thumb shadow distinguishes active segment without color alone</li>
+        </ul>
+        <a class="open-btn" href="05-segmented-header-tabs.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 06 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="06-inline-label-rows.html" title="Preview: 06 Inline Label Rows" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">06</span>
+        <h2 class="card-title">Inline Label Rows</h2>
+        <p class="card-desc">Labels in a fixed 86px left column beside controls — eliminates stacked label-then-input for the highest density of all variants.</p>
+        <ul class="features">
+          <li>Fixed 86px label column ensures perfect vertical alignment throughout</li>
+          <li>Position (X+Y) and Size (W+H) each fit in one row as labeled pairs</li>
+          <li>24–26px rows; no wasted vertical space between label and input</li>
+        </ul>
+        <a class="open-btn" href="06-inline-label-rows.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+  </div>
+</main>
+
+<footer class="page-footer">
+  TextIQ · design/inspector-panel/ · All tokens from design-tokens.css · Plain HTML + CSS, no frameworks
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Color Picker / Swatch Popover — Design Language Gallery</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    body {
+      padding: 40px 32px;
+      min-height: 100vh;
+      background: var(--ds-surface-base);
+    }
+
+    .gallery-header {
+      max-width: 960px;
+      margin: 0 auto 48px;
+    }
+    .gallery-header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--ds-text-primary);
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .gallery-header p {
+      font-size: 14px;
+      color: var(--ds-text-secondary);
+      max-width: 600px;
+      line-height: 1.65;
+      margin: 0;
+    }
+    .gallery-header .meta {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--ds-text-muted);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .gallery-header .meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Breadcrumb back link */
+    .back-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; color: var(--ds-text-muted); text-decoration: none;
+      margin-bottom: 20px;
+      transition: color var(--ds-motion-fast);
+    }
+    .back-link:hover { color: var(--ds-text-secondary); }
+
+    /* Grid */
+    .grid {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 24px;
+    }
+
+    /* Card */
+    .card {
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl);
+      background: var(--ds-surface);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--ds-shadow-raised);
+      transition: box-shadow 160ms, border-color 160ms;
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      border-color: var(--ds-border-strong);
+    }
+
+    /* Preview frame */
+    .card-preview {
+      position: relative;
+      height: 240px;
+      overflow: hidden;
+      border-bottom: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-base);
+    }
+    .card-preview iframe {
+      width: 160%;
+      height: 160%;
+      border: none;
+      transform: scale(0.625);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .card-number {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--ds-text-muted);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ds-text-primary);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--ds-text-secondary);
+      line-height: 1.6;
+      margin: 0;
+      flex: 1;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 99px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--ds-text-muted);
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    .card-footer {
+      padding: 12px 18px 14px;
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 12px;
+      border-radius: var(--ds-radius-md);
+      background: var(--ds-accent);
+      color: var(--ds-text-on-accent);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 120ms;
+      border: none;
+      cursor: pointer;
+    }
+    .open-link:hover { background: var(--ds-accent-hover); }
+    .open-link:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+
+    .lang-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--ds-text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Per-card accent numbers */
+    .card:nth-child(1) .card-number { color: #4f46e5; }
+    .card:nth-child(2) .card-number { color: #0ea5e9; }
+    .card:nth-child(3) .card-number { color: #10b981; }
+    .card:nth-child(4) .card-number { color: #f59e0b; }
+    .card:nth-child(5) .card-number { color: #8b5cf6; }
+    .card:nth-child(6) .card-number { color: #ec4899; }
+
+    /* Tinted preview backgrounds per card */
+    .card:nth-child(2) .card-preview {
+      background: linear-gradient(135deg, rgba(14,165,233,.08) 0%, var(--ds-surface-base) 60%);
+    }
+    .card:nth-child(4) .card-preview {
+      background: linear-gradient(135deg, rgba(79,70,229,.08) 0%, var(--ds-surface-base) 60%);
+    }
+    .card:nth-child(5) .card-preview {
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 20%, rgba(139,92,246,.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 80% 70%, rgba(236,72,153,.09) 0%, transparent 60%),
+        var(--ds-surface-base);
+    }
+    .card:nth-child(6) .card-preview {
+      background: var(--ds-surface-sunken);
+    }
+
+    svg { display: inline-block; vertical-align: middle; }
+  </style>
+</head>
+<body>
+
+  <div class="gallery-header">
+    <a href="../index.html" class="back-link">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      All galleries
+    </a>
+    <h1>Color Picker / Swatch Popover</h1>
+    <p>Six distinct visual directions for the shared color picker and swatch popover used throughout the TextIQ presentation editor. All render the same 24 DEFAULT_SWATCH_PRESETS and use identical <code>var(--ds-*)</code> chrome tokens.</p>
+    <div class="meta">
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        6 directions
+      </span>
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Static HTML — offline, no CDN
+      </span>
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Chrome tokens: design-tokens.css
+      </span>
+      <span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+        Swatch fills: hardcoded DEFAULT_SWATCH_PRESETS hex
+      </span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 01 Swatch Grid Classic -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="01-swatch-grid-classic.html" title="01 Swatch Grid Classic preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">01</div>
+        <h2 class="card-title">Swatch Grid Classic</h2>
+        <p class="card-desc">The canonical inspector-panel layout: Recent row + 4×6 Standard grid + None/Hex/Eyedropper action bar. Dense, functional, immediately familiar — the reference design.</p>
+        <div class="card-tags">
+          <span class="tag">6-col grid</span>
+          <span class="tag">recent row</span>
+          <span class="tag">selected ring</span>
+          <span class="tag">hex input</span>
+          <span class="tag">eyedropper</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">swatch-grid-classic</span>
+        <a href="01-swatch-grid-classic.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 02 Spectrum + Swatches -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="02-spectrum-plus-swatches.html" title="02 Spectrum + Swatches preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">02</div>
+        <h2 class="card-title">Spectrum + Swatches</h2>
+        <p class="card-desc">Hue rainbow strip + saturation/value gradient square + alpha slider at top, compact preset pool below. Custom and preset workflows coexist without tabs.</p>
+        <div class="card-tags">
+          <span class="tag">hue strip</span>
+          <span class="tag">SV square</span>
+          <span class="tag">alpha slider</span>
+          <span class="tag">preset pool</span>
+          <span class="tag">no tabs</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">spectrum-plus-swatches</span>
+        <a href="02-spectrum-plus-swatches.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 03 Compact Row -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="03-compact-row.html" title="03 Compact Row preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">03</div>
+        <h2 class="card-title">Compact Row</h2>
+        <p class="card-desc">Maximum density: 8×3 grid of 20px mini-swatches with near-zero gap. A single utility bar holds the transparent swatch, hex input, eyedropper, and add-custom — everything in a tiny footprint.</p>
+        <div class="card-tags">
+          <span class="tag">8×3 dense</span>
+          <span class="tag">20px sw-sm</span>
+          <span class="tag">utility bar</span>
+          <span class="tag">none swatch</span>
+          <span class="tag">ultra-compact</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">compact-row</span>
+        <a href="03-compact-row.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 04 Theme-Aware Sections -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="04-theme-aware-sections.html" title="04 Theme-Aware Sections preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">04</div>
+        <h2 class="card-title">Theme-Aware Sections</h2>
+        <p class="card-desc">Three collapsible sections mirror document structure: Theme palette (larger swatches + role labels: Primary, Bg, Text, Accent) above Standard presets, then Recent, then Custom hex input.</p>
+        <div class="card-tags">
+          <span class="tag">theme section</span>
+          <span class="tag">role labels</span>
+          <span class="tag">collapsible</span>
+          <span class="tag">hierarchy</span>
+          <span class="tag">chevron toggle</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">theme-aware-sections</span>
+        <a href="04-theme-aware-sections.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 05 Large Preview + Inputs -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="05-large-preview-inputs.html" title="05 Large Preview + Inputs preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">05</div>
+        <h2 class="card-title">Large Preview + Inputs</h2>
+        <p class="card-desc">Power-user, Figma-style: 52×52 color chip + hex field (with # prefix + copy) + R/G/B channel inputs take center stage. Preset swatches are secondary, shown in a compact wrap below the divider.</p>
+        <div class="card-tags">
+          <span class="tag">big preview</span>
+          <span class="tag">RGB inputs</span>
+          <span class="tag">hex + copy</span>
+          <span class="tag">eyedropper row</span>
+          <span class="tag">inputs-first</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">large-preview-inputs</span>
+        <a href="05-large-preview-inputs.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 06 Minimal Dots -->
+    <div class="card">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="06-minimal-dots.html" title="06 Minimal Dots preview" tabindex="-1" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <div class="card-number">06</div>
+        <h2 class="card-title">Minimal Dots</h2>
+        <p class="card-desc">An ultra-compact pill strip of 18px circle dots designed for inline toolbars. No panel chrome, no labels — just dots. Selected dot carries accent ring. "+" expands an inline hex input row within the same pill.</p>
+        <div class="card-tags">
+          <span class="tag">pill shape</span>
+          <span class="tag">18px dots</span>
+          <span class="tag">toolbar-native</span>
+          <span class="tag">inline hex expand</span>
+          <span class="tag">no panel</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="lang-badge">minimal-dots</span>
+        <a href="06-minimal-dots.html" class="open-link" target="_blank">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

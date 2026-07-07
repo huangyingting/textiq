@@ -1,0 +1,192 @@
+/* =============================================================================
+   TextIQ presentation UI — shared design tokens for HTML design mockups
+   -----------------------------------------------------------------------------
+   Verbatim extraction of the `--ds-*` application-chrome tokens from
+   src/app/globals.css (:root, light mode) plus the fullscreen "stage" tokens
+   used by present mode. Every mockup in /design links this file so that all
+   solutions share ONE source of truth for color, surface, radius, elevation,
+   spacing and motion — exactly matching the real product chrome.
+
+   Usage in a mockup:  <link rel="stylesheet" href="../design-tokens.css" />
+   Reference tokens with:  color: var(--ds-text-primary);
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  color: var(--ds-text-primary);
+  background: var(--ds-surface-base);
+}
+
+/* Font stacks exposed as tokens for mockups that need serif / mono samples */
+:root {
+  --ds-font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --ds-font-serif: Georgia, Times, "Times New Roman", serif;
+  --ds-font-mono: Menlo, "Courier New", Courier, monospace;
+}
+
+:root {
+  color-scheme: light;
+  --background: #f8fafc;
+  --foreground: #172033;
+
+  /*
+   * Design-system chrome tokens (`--ds-*`) — light mode.
+   *
+   * One semantic layer for app chrome AND editor controls (floating toolbar,
+   * insert menu, gutter buttons, visual-card surfaces). These are intentionally
+   * SEPARATE from visual-content theming (src/lib/visual/themes.ts) and from the
+  * reading typography (.ds-prose uses the same app font and material tokens).
+  * Theme values live in data-theme overrides below; anything that uses these
+  * tokens flips automatically without mode-specific utilities.
+   */
+
+  /* Surfaces */
+  --ds-surface-base: var(--background);
+  --ds-surface: #ffffff;
+  --ds-surface-raised: #ffffff;
+  --ds-surface-overlay: #ffffff;
+  --ds-surface-sunken: #eef3f8;
+  --ds-surface-chrome: rgba(255, 255, 255, 0.82);
+  --ds-surface-glass: rgba(255, 255, 255, 0.88);
+
+  /* Text (all ≥4.5:1 on their intended surface) */
+  --ds-text-primary: #172033;
+  --ds-text-secondary: #4d5b6a;
+  --ds-text-muted: #738091;
+  --ds-text-on-accent: #ffffff;
+
+  /* Borders */
+  --ds-border-subtle: rgba(23, 32, 51, 0.1);
+  --ds-border-strong: rgba(23, 32, 51, 0.18);
+
+  /* Accent — defaults to the app's existing indigo brand */
+  --ds-accent: #4f46e5;
+  --ds-accent-hover: #4338ca;
+  --ds-accent-contrast: #ffffff;
+  --ds-accent-fill: var(--ds-accent);
+  --ds-accent-surface: #eef2ff;
+  --ds-accent-subtle: #f5f3ff;
+  --ds-accent-border: rgba(79, 70, 229, 0.24);
+  --ds-accent-text: #4338ca;
+
+  /* Semantic status colors */
+  --ds-success: #6f9f1d;
+  --ds-success-surface: #f1f8e8;
+  --ds-success-border: rgba(111, 159, 29, 0.28);
+  --ds-success-text: #4d7c0f;
+  --ds-warning: #b7791f;
+  --ds-warning-surface: #fff7ed;
+  --ds-warning-border: rgba(183, 121, 31, 0.3);
+  --ds-warning-text: #b45309;
+  --ds-danger: #dc2626;
+  --ds-danger-hover: #b91c1c;
+  --ds-danger-surface: #fef2f2;
+  --ds-danger-border: rgba(220, 38, 38, 0.28);
+  --ds-danger-text: #b91c1c;
+  --ds-error-surface: var(--ds-danger-surface);
+  --ds-error-text: var(--ds-danger-text);
+
+  /* Backdrops, inverse overlays, and fullscreen presentation stage chrome */
+  --ds-backdrop: rgba(0, 0, 0, 0.4);
+  --ds-backdrop-strong: rgba(0, 0, 0, 0.8);
+  --ds-inverse-surface: #0a0a0a;
+  --ds-inverse-surface-muted: rgba(0, 0, 0, 0.5);
+  --ds-inverse-control: rgba(0, 0, 0, 0.4);
+  --ds-inverse-control-hover: rgba(0, 0, 0, 0.6);
+  --ds-inverse-text: #ffffff;
+  --ds-inverse-muted: rgba(255, 255, 255, 0.7);
+  --ds-inverse-subtle: rgba(255, 255, 255, 0.6);
+  --ds-inverse-border-subtle: rgba(255, 255, 255, 0.1);
+  --ds-inverse-state-hover: rgba(255, 255, 255, 0.1);
+  --ds-inverse-focus: rgba(255, 255, 255, 0.5);
+  --ds-stage: #09090b;
+  --ds-stage-panel: #18181b;
+  --ds-stage-panel-muted: rgba(24, 24, 27, 0.6);
+  --ds-stage-border: #27272a;
+  --ds-stage-text: #d4d4d8;
+  --ds-stage-muted: #71717a;
+  --ds-present-loading: #0f1117;
+
+  /* Solid controls use the product accent, not black chrome. */
+  --ds-control: var(--ds-accent);
+  --ds-control-hover: var(--ds-accent-hover);
+  --ds-control-text: var(--ds-text-on-accent);
+
+  /* Interaction-state overlays */
+  --ds-state-hover: rgba(23, 32, 51, 0.06);
+  --ds-state-active: rgba(23, 32, 51, 0.1);
+  --ds-state-selected: rgba(79, 70, 229, 0.11);
+
+  /* SegmentedControl: recessed track + raised active thumb (used by the
+     ContextPopover type switcher and theme-first restyle controls) */
+  --ds-segment-track: var(--ds-surface-sunken);
+  --ds-segment-thumb: var(--ds-surface-raised);
+
+  /* Focus ring */
+  --ds-focus-ring: var(--ds-accent);
+  --ds-focus-offset: var(--ds-surface-base);
+
+  /* Radii scale */
+  --ds-radius-sm: 0.375rem; /* 6px */
+  --ds-radius-md: 0.5rem; /* 8px */
+  --ds-radius-lg: 0.625rem; /* 10px */
+  --ds-radius-xl: 0.75rem; /* 12px */
+  --ds-radius-pill: 9999px;
+
+  /* Elevation (transient → anchored) */
+  --ds-shadow-flat: none;
+  --ds-shadow-raised:
+    0 1px 2px rgb(15 23 42 / 0.06), 0 1px 1px rgb(15 23 42 / 0.04);
+  --ds-shadow-overlay:
+    0 18px 40px -28px rgb(15 23 42 / 0.45),
+    0 8px 18px -14px rgb(15 23 42 / 0.18);
+  --ds-shadow-popover:
+    0 24px 60px -34px rgb(15 23 42 / 0.5),
+    0 10px 22px -16px rgb(15 23 42 / 0.22);
+  /* Laser-pointer glow rings used in present-mode */
+  --ds-shadow-laser-indicator: 0 0 0 4px rgba(248, 113, 113, 0.25);
+  --ds-shadow-laser-cursor: 0 0 0 6px rgba(239, 68, 68, 0.25);
+
+  /* Spacing scale (consumed via arbitrary values, kept out of @theme so it
+     doesn't override Tailwind's default spacing multiplier) */
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 0.75rem;
+  --ds-space-4: 1rem;
+  --ds-space-5: 1.5rem;
+  --ds-space-6: 2rem;
+
+  /* Motion */
+  --ds-motion-fast: 120ms;
+  --ds-motion-base: 180ms;
+  --ds-motion-slow: 240ms;
+  --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Mobile viewport contract */
+  --tiq-viewport-height: 100dvh;
+  --tiq-viewport-width: 100vw;
+  --tiq-viewport-offset-top: 0px;
+  --tiq-viewport-offset-left: 0px;
+  --tiq-safe-area-top: env(safe-area-inset-top, 0px);
+  --tiq-safe-area-right: env(safe-area-inset-right, 0px);
+  --tiq-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --tiq-safe-area-left: env(safe-area-inset-left, 0px);
+  --tiq-touch-target-min: 44px;
+}
+

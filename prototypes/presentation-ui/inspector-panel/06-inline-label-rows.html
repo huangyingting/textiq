@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inspector · 06 Inline Label Rows</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--ds-surface-base); }
+
+  .spec-header {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface);
+  }
+  .spec-header h1 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec-header p  { margin: 0 0 8px; font-size: 12px; color: var(--ds-text-secondary); }
+  .spec-header ul { margin: 0; padding: 0 0 0 16px; font-size: 11px; color: var(--ds-text-muted); }
+  .spec-header ul li { margin-bottom: 2px; }
+
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .canvas-slide {
+    width: 480px; height: 270px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-lg); box-shadow: var(--ds-shadow-overlay);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted); font-size: 12px;
+  }
+
+  .inspector {
+    width: 320px; flex-shrink: 0; display: flex; flex-direction: column;
+    height: 100%; background: var(--ds-surface);
+    border-left: 1px solid var(--ds-border-subtle); overflow: hidden;
+  }
+
+  .id-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px 9px; border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .id-label {
+    font-size: 12px; font-weight: 600; color: var(--ds-text-primary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .id-sep { color: var(--ds-text-muted); font-weight: 400; }
+  .layers-pill {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: var(--ds-radius-pill);
+    border: 1px solid var(--ds-border-strong);
+    background: transparent; color: var(--ds-text-secondary); cursor: pointer;
+  }
+  .layers-pill:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+  .tab-strip {
+    display: flex; padding: 0 8px;
+    border-bottom: 1px solid var(--ds-border-subtle);
+    flex-shrink: 0; overflow-x: auto; scrollbar-width: none;
+  }
+  .tab-strip::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 7px 10px 6px; font-size: 11px; font-weight: 500;
+    color: var(--ds-text-muted); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--ds-text-primary); }
+  .tab-btn.active { color: var(--ds-accent-text); border-bottom-color: var(--ds-accent); }
+  .tab-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; border-radius: 2px; }
+
+  .panel-body {
+    flex: 1; overflow-y: auto; min-height: 0;
+    scrollbar-width: thin; scrollbar-color: var(--ds-border-strong) transparent;
+  }
+
+  /* Section */
+  .section { padding: 8px 12px 10px; }
+  .section + .section { border-top: 1px solid var(--ds-border-subtle); }
+  .section-title {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ds-text-muted); margin: 0 0 6px;
+  }
+
+  /* ── INLINE LABEL ROW ─────────────────────────────────────────────
+     Label occupies a fixed left column; control fills the right.
+     This is the KEY visual difference vs all other variants.
+  ─────────────────────────────────────────────────────────────────── */
+  .row {
+    display: flex; align-items: center;
+    min-height: 26px; gap: 0;
+    margin-bottom: 3px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  .row-label {
+    flex: 0 0 86px; /* fixed left column */
+    font-size: 11px; color: var(--ds-text-muted);
+    padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-control { flex: 1; min-width: 0; }
+
+  /* Default control styles */
+  .row-control select,
+  .row-control input[type="number"],
+  .row-control input[type="text"] {
+    width: 100%; height: 24px; padding: 0 7px;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-md); outline: none; font-family: inherit;
+    transition: border-color var(--ds-motion-fast);
+  }
+  .row-control select:focus,
+  .row-control input:focus {
+    border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-border);
+  }
+
+  /* Inline slider */
+  .row-control input[type="range"] {
+    height: 3px; accent-color: var(--ds-accent); cursor: pointer;
+    width: 100%;
+  }
+  .range-wrap { display: flex; align-items: center; gap: 6px; }
+  .range-val { font-size: 11px; color: var(--ds-text-secondary); min-width: 28px; text-align: right; flex-shrink: 0; }
+
+  /* Color swatch inline */
+  .swatch-inline { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 18px; height: 18px; border-radius: var(--ds-radius-sm); border: 1px solid var(--ds-border-strong); cursor: pointer; flex-shrink: 0; }
+  .swatch-hex { font-size: 11px; color: var(--ds-text-secondary); font-family: var(--ds-font-mono); }
+
+  /* Toggle inline */
+  .toggle { position: relative; width: 30px; height: 16px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: var(--ds-border-strong); border-radius: var(--ds-radius-pill); cursor: pointer; transition: background var(--ds-motion-fast); }
+  .toggle input:checked + .toggle-track { background: var(--ds-accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: left var(--ds-motion-fast); pointer-events: none; }
+  .toggle input:checked ~ .toggle-thumb { left: 16px; }
+
+  /* Align buttons inline */
+  .align-group { display: flex; gap: 3px; }
+  .align-btn { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm); cursor: pointer; color: var(--ds-text-muted); }
+  .align-btn.active { background: var(--ds-accent-surface); border-color: var(--ds-accent-border); color: var(--ds-accent-text); }
+  .align-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+  /* Geometry — compact num inputs side-by-side in right column */
+  .num-pair { display: flex; gap: 4px; }
+  .num-pair input {
+    flex: 1; height: 24px; padding: 0 4px; text-align: center;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-md); outline: none; font-family: inherit;
+  }
+  .num-pair input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-border); }
+  .num-pair .sub-label { font-size: 9px; color: var(--ds-text-muted); text-align: center; display: block; margin-bottom: 1px; }
+
+  /* Label above pair */
+  .pair-wrap { flex: 1; }
+  .num-pair-labeled { display: flex; gap: 4px; }
+  .num-pair-labeled .nc { flex: 1; display: flex; flex-direction: column; }
+  .num-pair-labeled .nc label { font-size: 9px; color: var(--ds-text-muted); display: block; margin-bottom: 1px; }
+  .num-pair-labeled .nc input {
+    height: 24px; padding: 0 4px; text-align: center;
+    font-size: 11px; color: var(--ds-text-primary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-md); outline: none; font-family: inherit; width: 100%;
+  }
+  .num-pair-labeled .nc input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+
+  /* Icon buttons */
+  .icon-btn {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    color: var(--ds-text-muted); border-radius: var(--ds-radius-sm);
+    transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+  }
+  .icon-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .icon-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+  /* Layer rows — inline layout too */
+  .layer-row {
+    display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px;
+    border-radius: var(--ds-radius-sm); transition: background var(--ds-motion-fast);
+  }
+  .layer-row:hover { background: var(--ds-state-hover); }
+  .layer-row.selected { background: var(--ds-state-selected); }
+  .layer-name { flex: 1; font-size: 11px; color: var(--ds-text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .layer-badge { font-size: 9px; color: var(--ds-text-muted); background: var(--ds-surface-sunken); padding: 1px 5px; border-radius: var(--ds-radius-pill); }
+</style>
+</head>
+<body>
+
+<div class="spec-header">
+  <h1>06 · Inline Label Rows</h1>
+  <p>Labels sit in a fixed 86px left column beside their controls — eliminating the stacked label-then-input pattern for maximum vertical compactness.</p>
+  <ul>
+    <li>Fixed 86px label column ensures perfect alignment across all rows</li>
+    <li>X/Y and W/H each appear as labeled pairs in a single row — 50% fewer rows vs stacked</li>
+    <li>No section header margin wasted on vertical space; rows are 24–26px</li>
+    <li>Highest information density of all six variants while remaining legible</li>
+  </ul>
+</div>
+
+<div class="layout">
+  <div class="canvas-area">
+    <div class="canvas-slide">Slide Canvas</div>
+  </div>
+
+  <aside class="inspector" role="complementary" aria-label="Properties inspector">
+
+    <div class="id-header">
+      <div class="id-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+        Text <span class="id-sep">·</span> Title
+      </div>
+      <button class="layers-pill" aria-pressed="false" aria-label="Toggle layers panel">Layers</button>
+    </div>
+
+    <div class="tab-strip" role="tablist" aria-label="Inspector tabs">
+      <button class="tab-btn active" role="tab" aria-selected="true">Slide</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Content</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Style</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Arrange</button>
+      <button class="tab-btn" role="tab" aria-selected="false">Layers</button>
+    </div>
+
+    <div class="panel-body" role="tabpanel">
+
+      <!-- TEMPLATE — inline rows -->
+      <section class="section">
+        <h2 class="section-title">Template</h2>
+
+        <div class="row">
+          <label class="row-label" for="f-tone">Tone</label>
+          <div class="row-control">
+            <select id="f-tone"><option>confident</option><option>neutral</option><option>warm</option><option>urgent</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-density">Density</label>
+          <div class="row-control">
+            <select id="f-density"><option>normal</option><option>airy</option><option>dense</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-emphasis">Emphasis</label>
+          <div class="row-control">
+            <select id="f-emphasis"><option>title</option><option>balanced</option><option>data</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-deco">Decoration</label>
+          <div class="row-control">
+            <select id="f-deco"><option>subtle</option><option>none</option><option>expressive</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-chrome">Chrome</label>
+          <div class="row-control">
+            <select id="f-chrome"><option>default</option><option>minimal</option><option>none</option></select>
+          </div>
+        </div>
+      </section>
+
+      <!-- GEOMETRY — inline rows with paired inputs -->
+      <section class="section">
+        <h2 class="section-title">Geometry</h2>
+
+        <div class="row">
+          <span class="row-label">Position</span>
+          <div class="row-control">
+            <div class="num-pair-labeled">
+              <div class="nc"><label for="f-x">X</label><input id="f-x" type="number" value="12.5" step="0.5" /></div>
+              <div class="nc"><label for="f-y">Y</label><input id="f-y" type="number" value="8.0" step="0.5" /></div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Size</span>
+          <div class="row-control">
+            <div class="num-pair-labeled">
+              <div class="nc"><label for="f-w">W</label><input id="f-w" type="number" value="75.0" step="0.5" /></div>
+              <div class="nc"><label for="f-h">H</label><input id="f-h" type="number" value="22.0" step="0.5" /></div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Rotation °</span>
+          <div class="row-control">
+            <input type="number" value="0" step="1" aria-label="Rotation" />
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Opacity</span>
+          <div class="row-control">
+            <div class="range-wrap">
+              <input type="range" min="0" max="100" value="100" aria-label="Opacity" />
+              <span class="range-val">100%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FILL & STROKE — inline rows -->
+      <section class="section">
+        <h2 class="section-title">Fill &amp; Stroke</h2>
+
+        <div class="row">
+          <span class="row-label">Fill</span>
+          <div class="row-control">
+            <div class="swatch-inline">
+              <div class="swatch" style="background:#4f46e5;" aria-label="Fill color"></div>
+              <span class="swatch-hex">#4F46E5</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Stroke color</span>
+          <div class="row-control">
+            <div class="swatch-inline">
+              <div class="swatch" style="background:#172033;" aria-label="Stroke color"></div>
+              <span class="swatch-hex">#172033</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-sw">Stroke width</label>
+          <div class="row-control">
+            <input id="f-sw" type="number" value="1" min="0" step="0.5" />
+          </div>
+        </div>
+      </section>
+
+      <!-- TYPOGRAPHY — inline rows -->
+      <section class="section">
+        <h2 class="section-title">Typography</h2>
+
+        <div class="row">
+          <label class="row-label" for="f-font">Family</label>
+          <div class="row-control">
+            <select id="f-font"><option>Inter (Theme)</option><option>Georgia</option><option>Menlo</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-size">Size pt</label>
+          <div class="row-control">
+            <input id="f-size" type="number" value="24" step="1" />
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="f-wt">Weight</label>
+          <div class="row-control">
+            <select id="f-wt"><option>Bold</option><option>Semibold</option><option>Regular</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Align</span>
+          <div class="row-control">
+            <div class="align-group" role="group" aria-label="Text alignment">
+              <button class="align-btn active" aria-label="Left" aria-pressed="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+              <button class="align-btn" aria-label="Center" aria-pressed="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="5" y1="18" x2="19" y2="18"/></svg></button>
+              <button class="align-btn" aria-label="Right" aria-pressed="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EFFECTS — inline rows -->
+      <section class="section">
+        <h2 class="section-title">Effects</h2>
+
+        <div class="row">
+          <span class="row-label">Drop shadow</span>
+          <div class="row-control" style="display:flex;align-items:center;">
+            <label class="toggle" aria-label="Toggle drop shadow"><input type="checkbox" checked /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Shadow blur</span>
+          <div class="row-control">
+            <div class="range-wrap">
+              <input type="range" min="0" max="40" value="18" aria-label="Shadow blur" />
+              <span class="range-val">18</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">BG blur</span>
+          <div class="row-control" style="display:flex;align-items:center;">
+            <label class="toggle" aria-label="Toggle background blur"><input type="checkbox" /><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- LAYERS — inline label format too -->
+      <section class="section">
+        <h2 class="section-title">Layers</h2>
+        <div role="list">
+          <div class="layer-row selected" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Title Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Subtitle Text</span>
+            <span class="layer-badge">User</span>
+            <button class="icon-btn" aria-label="Visibility"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="icon-btn" aria-label="Lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          </div>
+          <div class="layer-row" role="listitem">
+            <button class="icon-btn" aria-label="Drag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></svg></button>
+            <span class="layer-name">Background Image</span>
+            <span class="layer-badge">Theme</span>
+            <button class="icon-btn" aria-label="Hidden" style="color:var(--ds-text-primary)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+            <button class="icon-btn" aria-label="Locked" style="color:var(--ds-accent)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.5"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+</body>
+</html>

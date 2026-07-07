@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>01 — Floating Bottom Bar · TextIQ Present HUD</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      height: 100%; margin: 0; display: flex; flex-direction: column;
+      font-family: var(--ds-font-sans);
+    }
+
+    /* ── Spec strip ──────────────────────────────────────── */
+    .spec-strip {
+      flex-shrink: 0; padding: 14px 20px 12px;
+      background: var(--ds-surface); border-bottom: 2px solid var(--ds-border-subtle);
+    }
+    .spec-strip h1 { margin: 0 0 5px; font-size: 13px; font-weight: 700; color: var(--ds-text-primary); letter-spacing: -.01em; }
+    .spec-strip p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; }
+    .spec-strip ul { margin: 0; padding-left: 16px; }
+    .spec-strip li { font-size: 11px; color: var(--ds-text-muted); line-height: 1.65; }
+
+    /* ── Stage ──────────────────────────────────────────── */
+    .stage {
+      flex: 1; position: relative; overflow: hidden;
+      background: var(--ds-stage);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Mock slide content ─────────────────────────────── */
+    .slide-mock {
+      aspect-ratio: 16/9; width: min(70%, 820px);
+      background: #1a1a2e; border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-overlay);
+      display: flex; flex-direction: column;
+      align-items: flex-start; justify-content: center;
+      padding: 48px 56px; position: relative; overflow: hidden;
+    }
+    .slide-mock::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #4f46e5, #7c3aed, #06b6d4);
+    }
+    .slide-mock-accent {
+      position: absolute; right: -40px; bottom: -40px;
+      width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(79,70,229,.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .slide-eyebrow {
+      font-size: 10px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: #818cf8; margin: 0 0 14px;
+    }
+    .slide-title {
+      font-size: clamp(18px, 2.8vw, 30px); font-weight: 700; letter-spacing: -.02em;
+      color: #f8fafc; line-height: 1.2; margin: 0 0 12px;
+    }
+    .slide-body {
+      font-size: clamp(11px, 1.4vw, 14px); color: #94a3b8; line-height: 1.65; margin: 0;
+      max-width: 55%;
+    }
+    .slide-slide-num {
+      position: absolute; bottom: 16px; right: 20px;
+      font-size: 10px; color: rgba(255,255,255,0.2); font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Stage progress bar ─────────────────────────────── */
+    .stage-progress {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: var(--ds-inverse-border-subtle);
+    }
+    .stage-progress-fill {
+      height: 100%; width: 29.2%; /* 7 of 24 */
+      background: var(--ds-accent);
+      transition: width var(--ds-motion-base) var(--ds-ease-standard);
+    }
+
+    /* ── Floating HUD pill ──────────────────────────────── */
+    .hud {
+      position: absolute; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: 2px;
+      background: var(--ds-inverse-surface);
+      border: 1px solid var(--ds-inverse-border-subtle);
+      border-radius: var(--ds-radius-pill);
+      padding: 5px 6px;
+      box-shadow: var(--ds-shadow-overlay);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      white-space: nowrap;
+    }
+    .hud-div {
+      width: 1px; height: 18px;
+      background: var(--ds-inverse-border-subtle);
+      margin: 0 4px; flex-shrink: 0;
+    }
+
+    /* ── HUD base button ────────────────────────────────── */
+    .hbtn {
+      width: 30px; height: 30px;
+      border: none; background: transparent;
+      color: var(--ds-inverse-muted);
+      border-radius: var(--ds-radius-pill);
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard),
+                  color var(--ds-motion-fast) var(--ds-ease-standard);
+      outline: none;
+    }
+    .hbtn:hover { background: var(--ds-inverse-state-hover); color: var(--ds-inverse-text); }
+    .hbtn:focus-visible { outline: 2px solid var(--ds-inverse-focus); outline-offset: 1px; }
+    .hbtn.active { color: var(--ds-accent); background: var(--ds-accent-border); }
+    .hbtn-exit:hover { color: var(--ds-danger); background: var(--ds-danger-border); }
+
+    /* ── Nav buttons — slightly raised ─────────────────── */
+    .hbtn-nav {
+      background: var(--ds-inverse-control);
+      border: 1px solid var(--ds-inverse-border-subtle);
+      color: var(--ds-inverse-text);
+      border-radius: var(--ds-radius-pill);
+    }
+    .hbtn-nav:hover {
+      background: var(--ds-inverse-control-hover);
+      color: var(--ds-inverse-text);
+    }
+
+    /* ── Counter ────────────────────────────────────────── */
+    .hud-counter {
+      font-size: 12px; font-weight: 600;
+      color: var(--ds-inverse-text);
+      font-variant-numeric: tabular-nums;
+      min-width: 42px; text-align: center;
+      padding: 0 2px; flex-shrink: 0;
+    }
+
+    /* ── Timer chip ─────────────────────────────────────── */
+    .hud-timer {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--ds-inverse-control);
+      border: 1px solid var(--ds-inverse-border-subtle);
+      border-radius: var(--ds-radius-pill);
+      padding: 4px 10px 4px 8px;
+      font-size: 11.5px; font-weight: 600;
+      color: var(--ds-inverse-text);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .hud-timer svg { color: var(--ds-inverse-muted); flex-shrink: 0; }
+    .hud-timer-label { color: var(--ds-inverse-muted); font-size: 10px; font-weight: 500; letter-spacing: .03em; }
+  </style>
+</head>
+<body>
+  <div class="spec-strip">
+    <h1>01 — Floating Bottom Bar</h1>
+    <p>A compact pill-shaped HUD centred 20 px above the stage floor — stays weightless above the slide, fades into the dark stage on idle, never obscures content.</p>
+    <ul>
+      <li>Single pill surface with <code>--ds-inverse-surface</code> + 24 px backdrop-blur — recedes on the dark stage without competing with slide content</li>
+      <li>Nav arrows get a raised <code>--ds-inverse-control</code> chip to signal primary navigation action; icon-only utility tools stay ghost</li>
+      <li>Timer is self-contained in a bordered chip for instant scannability at a glance during the talk</li>
+      <li>Thin 2 px accent progress bar runs the full width at the absolute stage floor — minimal but always present</li>
+      <li>Exit adopts a warm red hover tint to signal destructive intent without polluting the resting state</li>
+    </ul>
+  </div>
+
+  <div class="stage" role="main" aria-label="Presentation stage">
+
+    <!-- Mock slide -->
+    <div class="slide-mock" aria-hidden="true">
+      <div class="slide-mock-accent"></div>
+      <p class="slide-eyebrow">Q3 2026 · Strategy</p>
+      <h2 class="slide-title">Product Roadmap &amp;<br>Growth Initiatives</h2>
+      <p class="slide-body">Accelerating TextIQ through real-time AI collaboration and seamless cross-platform presentation delivery.</p>
+      <span class="slide-slide-num">Slide 7</span>
+    </div>
+
+    <!-- Floating HUD -->
+    <nav class="hud" role="toolbar" aria-label="Presenter controls">
+
+      <!-- Navigation cluster -->
+      <button type="button" class="hbtn hbtn-nav" aria-label="Previous slide" title="Previous (←)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="hud-counter" aria-label="Slide 7 of 24">7 / 24</span>
+      <button type="button" class="hbtn hbtn-nav" aria-label="Next slide" title="Next (→)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      <div class="hud-div" aria-hidden="true"></div>
+
+      <!-- Presenter tools -->
+      <button type="button" class="hbtn" aria-label="Speaker notes" title="Notes (N)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="10" y1="12" x2="16" y2="12"/><line x1="10" y1="16" x2="16" y2="16"/></svg>
+      </button>
+      <button type="button" class="hbtn active" aria-label="Slide overview" aria-pressed="true" title="Overview (O)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </button>
+      <button type="button" class="hbtn" aria-label="Toggle fullscreen" title="Fullscreen (F)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+
+      <div class="hud-div" aria-hidden="true"></div>
+
+      <!-- Timer chip -->
+      <div class="hud-timer" role="timer" aria-label="Elapsed time 12 minutes 47 seconds">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="hud-timer-label">Timer</span>
+        12:47
+      </div>
+
+      <div class="hud-div" aria-hidden="true"></div>
+
+      <!-- Utility -->
+      <button type="button" class="hbtn" aria-label="Keyboard shortcuts" title="Shortcuts (?)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/><path d="M8 16h8"/></svg>
+      </button>
+      <button type="button" class="hbtn hbtn-exit" aria-label="Exit presentation" title="Exit (Esc)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </nav>
+
+    <!-- Stage-floor progress bar -->
+    <div class="stage-progress" aria-hidden="true">
+      <div class="stage-progress-fill"></div>
+    </div>
+  </div>
+</body>
+</html>

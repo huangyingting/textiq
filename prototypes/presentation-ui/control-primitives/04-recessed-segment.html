@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>04 — Recessed Segment | Control Primitives</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    body { padding: 32px; min-height: 100vh; background: var(--ds-surface-base); }
+    .spec-header { max-width: 720px; margin: 0 auto 40px; border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 24px; }
+    .spec-header h1 { font-size: 18px; font-weight: 700; color: var(--ds-text-primary); margin: 0 0 6px; letter-spacing: -0.01em; }
+    .spec-header p { font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 12px; line-height: 1.6; }
+    .spec-header ul { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--ds-text-muted); line-height: 1.8; }
+    .sheet { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+    .section { display: flex; flex-direction: column; gap: 14px; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 6px; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .label { font-size: 10px; color: var(--ds-text-muted); white-space: nowrap; }
+    svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+    .ic { width: 14px; height: 14px; }
+    .ic-sm { width: 12px; height: 12px; }
+
+    /* ─── 04 RECESSED SEGMENT language ─────────────────────────────── */
+    /*
+       Everything looks set into a sunken track.
+       Active = raised thumb popping out of the recess.
+       Base surface is var(--ds-surface-sunken), active is var(--ds-surface-raised).
+    */
+    .rs-ctrl {
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--ds-font-sans); font-size: 12px; font-weight: 500;
+      height: 28px; border-radius: var(--ds-radius-md);
+      cursor: pointer; user-select: none;
+      padding: 0 10px; gap: 6px; white-space: nowrap;
+      transition: background 120ms, box-shadow 120ms, color 120ms;
+    }
+    .rs-ctrl:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .rs-ctrl:disabled, .rs-ctrl.is-disabled { opacity: .4; pointer-events: none; }
+
+    /* Toolbar button: sits in a sunken track, active thumb pops up */
+    .rs-toolbar-btn {
+      background: transparent; color: var(--ds-text-muted);
+      border: 1px solid transparent;
+      box-shadow: none;
+    }
+    .rs-toolbar-btn:hover, .rs-toolbar-btn.is-hover {
+      color: var(--ds-text-primary);
+      background: rgba(255,255,255,.5);
+    }
+    .rs-toolbar-btn.is-active {
+      background: var(--ds-surface-raised);
+      color: var(--ds-accent-text);
+      border-color: var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+    }
+
+    /* Toolbar row container (the "track") */
+    .rs-track {
+      display: inline-flex; align-items: center; gap: 1px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      padding: 2px;
+      box-shadow: inset 0 1px 3px rgba(15,23,42,.08);
+    }
+
+    /* Icon button */
+    .rs-icon-btn {
+      width: 28px; height: 28px; padding: 0;
+      border: 1px solid transparent; background: transparent; color: var(--ds-text-muted);
+      box-shadow: none;
+    }
+    .rs-icon-btn:hover, .rs-icon-btn.is-hover {
+      background: rgba(255,255,255,.5); color: var(--ds-text-primary);
+    }
+    .rs-icon-btn.is-active {
+      background: var(--ds-surface-raised);
+      border-color: var(--ds-border-subtle);
+      color: var(--ds-accent-text);
+      box-shadow: var(--ds-shadow-raised);
+    }
+
+    /* Standalone variant buttons (not in a track) */
+    .rs-btn-primary {
+      background: var(--ds-accent); color: var(--ds-text-on-accent);
+      border: 1px solid transparent;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 1px 3px rgba(79,70,229,.35);
+    }
+    .rs-btn-primary:hover { background: var(--ds-accent-hover); }
+    .rs-btn-secondary {
+      background: var(--ds-surface-raised); color: var(--ds-text-primary);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .rs-btn-secondary:hover { box-shadow: 0 2px 6px rgba(15,23,42,.1); }
+    .rs-btn-ghost {
+      background: transparent; color: var(--ds-text-muted);
+      border: 1px solid transparent;
+    }
+    .rs-btn-ghost:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .rs-btn-danger {
+      background: var(--ds-danger); color: var(--ds-text-on-accent);
+      border: 1px solid transparent;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1px 3px rgba(220,38,38,.3);
+    }
+
+    /* Segmented control — the signature element */
+    .rs-seg {
+      display: inline-flex; gap: 1px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      padding: 2px;
+      box-shadow: inset 0 1px 3px rgba(15,23,42,.08);
+    }
+    .rs-seg-item {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      height: 24px; padding: 0 10px; font-size: 12px; font-weight: 500;
+      border: 1px solid transparent; background: transparent; color: var(--ds-text-muted);
+      cursor: pointer; border-radius: calc(var(--ds-radius-lg) - 2px);
+      transition: background 120ms, color 120ms, box-shadow 120ms, border-color 120ms;
+      font-family: var(--ds-font-sans);
+    }
+    .rs-seg-item:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 1px; }
+    .rs-seg-item.is-active {
+      background: var(--ds-surface-raised);
+      border-color: var(--ds-border-subtle);
+      color: var(--ds-accent-text);
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .rs-seg-item:hover:not(.is-active) { color: var(--ds-text-primary); background: rgba(255,255,255,.4); }
+
+    /* Tabs */
+    .rs-tablist { display: flex; border-bottom: 1px solid var(--ds-border-subtle); }
+    .rs-tab {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 0 10px; height: 30px; font-size: 12px; font-weight: 500;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--ds-text-muted); border-bottom: 2px solid transparent;
+      margin-bottom: -1px; transition: all 120ms;
+      font-family: var(--ds-font-sans);
+    }
+    .rs-tab:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: -1px; }
+    .rs-tab.is-active {
+      color: var(--ds-accent-text); border-bottom-color: var(--ds-accent);
+      background: var(--ds-accent-subtle);
+      border-top-left-radius: var(--ds-radius-sm); border-top-right-radius: var(--ds-radius-sm);
+    }
+
+    /* Select trigger */
+    .rs-select-trigger {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 28px; padding: 0 8px;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-sunken);
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.06);
+      color: var(--ds-text-primary); font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: var(--ds-font-sans); min-width: 120px;
+    }
+    .rs-select-trigger:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .rs-select-trigger .chevron { margin-left: auto; color: var(--ds-text-muted); }
+
+    /* Menu */
+    .rs-menu {
+      background: var(--ds-surface-overlay); padding: 4px;
+      min-width: 160px; border-radius: var(--ds-radius-lg);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-overlay);
+    }
+    .rs-menu-item {
+      display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+      border-radius: var(--ds-radius-sm); font-size: 12px; cursor: pointer;
+      color: var(--ds-text-secondary); font-family: var(--ds-font-sans);
+    }
+    .rs-menu-item:hover, .rs-menu-item.is-active { background: var(--ds-surface-sunken); color: var(--ds-text-primary); }
+    .rs-menu-item .shortcut { margin-left: auto; font-size: 11px; color: var(--ds-text-muted); }
+    .rs-menu-item.is-selected { font-weight: 600; color: var(--ds-text-primary); }
+    .rs-menu-divider { height: 1px; background: var(--ds-border-subtle); margin: 3px 0; }
+
+    /* Color swatch */
+    .rs-swatch {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: var(--ds-radius-md);
+      border: 1px solid rgba(0,0,0,.08); cursor: pointer;
+      box-shadow: inset 0 1px 1px rgba(0,0,0,.08);
+      transition: box-shadow 120ms;
+    }
+    .rs-swatch:hover { box-shadow: var(--ds-shadow-raised); }
+    .rs-swatch.is-selected { box-shadow: 0 0 0 2px var(--ds-accent), 0 0 0 4px var(--ds-surface-base); }
+    .rs-swatch:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .rs-color-trigger {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 28px; padding: 0 8px;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-sunken);
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.06);
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--ds-text-secondary);
+      font-family: var(--ds-font-sans);
+    }
+    .rs-color-dot { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.1); }
+
+    /* Switch */
+    .rs-switch-track {
+      position: relative; width: 36px; height: 20px; border-radius: 99px;
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-sunken);
+      box-shadow: inset 0 2px 3px rgba(15,23,42,.1);
+      transition: background 150ms; cursor: pointer;
+      flex-shrink: 0; font-size: 0; padding: 0;
+    }
+    .rs-switch-track:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .rs-switch-track.is-on { background: var(--ds-accent); border-color: var(--ds-accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 1px 3px rgba(79,70,229,.3); }
+    .rs-switch-thumb {
+      position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--ds-surface-raised);
+      box-shadow: var(--ds-shadow-raised);
+      transition: transform 150ms;
+    }
+    .rs-switch-track.is-on .rs-switch-thumb { transform: translateX(16px); }
+
+    /* Tooltip */
+    .rs-tooltip-wrap { position: relative; display: inline-block; }
+    .rs-tooltip {
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--ds-surface-raised);
+      border: 1px solid var(--ds-border-subtle);
+      box-shadow: var(--ds-shadow-raised);
+      border-radius: var(--ds-radius-md); padding: 4px 8px; font-size: 11px;
+      font-family: var(--ds-font-sans); color: var(--ds-text-primary);
+      white-space: nowrap; pointer-events: none; z-index: 10;
+    }
+
+    /* Divider */
+    .rs-divider-v { width: 1px; height: 20px; background: var(--ds-border-subtle); margin: 0 2px; flex-shrink: 0; }
+    .rs-divider-h { height: 1px; width: 100%; background: var(--ds-border-subtle); margin: 4px 0; }
+
+    /* Toolbar group */
+    .rs-toolbar-group {
+      display: inline-flex; align-items: center; gap: 2px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl);
+      padding: 3px 5px;
+      box-shadow: inset 0 1px 3px rgba(15,23,42,.08);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="spec-header">
+    <h1>04 — Recessed Segment</h1>
+    <p>Controls are set into sunken tracks (var(--ds-surface-sunken) with inset shadow). The active state "pops" a thumb out of the recess — raised white card + drop shadow. Every interactive group looks like a physical slot.</p>
+    <ul>
+      <li>Track: var(--ds-surface-sunken) + inset 0 1px 3px (inward shadow)</li>
+      <li>Active thumb: var(--ds-surface-raised) + var(--ds-shadow-raised) — pops out of track</li>
+      <li>Segmented control is the primary paradigm; all groups use the track idiom</li>
+      <li>Switch: deeply recessed off-state; raised accent for on</li>
+      <li>Inputs / triggers: sunken with inset shadow for "form field" feel</li>
+    </ul>
+  </div>
+
+  <div class="sheet">
+
+    <!-- Toolbar buttons (inside track) -->
+    <div class="section">
+      <div class="section-title">Toolbar Button (icon + label) — shown in track</div>
+      <div class="rs-track">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="rs-ctrl rs-toolbar-btn" aria-label="Bold">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="rs-ctrl rs-toolbar-btn is-hover">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="rs-ctrl rs-toolbar-btn is-active" aria-pressed="true">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="rs-ctrl rs-toolbar-btn" disabled>
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+        </div>
+      </div>
+      <div class="row" style="gap:48px;margin-top:-2px">
+        <span class="label">Default</span>
+        <span class="label">Hover</span>
+        <span class="label">Active</span>
+        <span class="label">Disabled</span>
+      </div>
+    </div>
+
+    <!-- Icon buttons -->
+    <div class="section">
+      <div class="section-title">Icon Button</div>
+      <div class="rs-track" style="gap:2px">
+        <button class="rs-ctrl rs-icon-btn" aria-label="Align left"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+        <button class="rs-ctrl rs-icon-btn is-hover" aria-label="Align center"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="20" y1="18" x2="4" y2="18"/></svg></button>
+        <button class="rs-ctrl rs-icon-btn is-active" aria-label="Align right" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg></button>
+        <button class="rs-ctrl rs-icon-btn" disabled aria-label="Image"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>
+      </div>
+      <div class="row" style="gap:36px;margin-top:-2px">
+        <span class="label">Default</span><span class="label">Hover</span><span class="label">Active</span><span class="label">Disabled</span>
+      </div>
+    </div>
+
+    <!-- Button variants -->
+    <div class="section">
+      <div class="section-title">Button Variants (standalone)</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><button class="rs-ctrl rs-btn-primary"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Slide</button><span class="label">Primary</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><button class="rs-ctrl rs-btn-secondary">Duplicate</button><span class="label">Secondary</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><button class="rs-ctrl rs-btn-ghost">Cancel</button><span class="label">Ghost</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><button class="rs-ctrl rs-btn-danger">Delete</button><span class="label">Danger</span></div>
+      </div>
+    </div>
+
+    <!-- Segmented control -->
+    <div class="section">
+      <div class="section-title">Segmented Control (the hero atom)</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="rs-seg" role="radiogroup" aria-label="Alignment">
+            <button class="rs-seg-item" role="radio" aria-checked="false">Left</button>
+            <button class="rs-seg-item is-active" role="radio" aria-checked="true">Center</button>
+            <button class="rs-seg-item" role="radio" aria-checked="false">Right</button>
+          </div>
+          <span class="label">3-segment, center popped</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="rs-seg" role="radiogroup" aria-label="View mode">
+            <button class="rs-seg-item is-active" role="radio" aria-checked="true">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              Edit
+            </button>
+            <button class="rs-seg-item" role="radio" aria-checked="false">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Preview
+            </button>
+          </div>
+          <span class="label">2-segment icons</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="section">
+      <div class="section-title">Tabs</div>
+      <div class="rs-tablist" role="tablist" aria-label="Inspector panels" style="width:360px">
+        <button class="rs-tab is-active" role="tab" aria-selected="true">Style</button>
+        <button class="rs-tab" role="tab" aria-selected="false">Animate</button>
+        <button class="rs-tab" role="tab" aria-selected="false">Layout</button>
+      </div>
+    </div>
+
+    <!-- Select dropdown -->
+    <div class="section">
+      <div class="section-title">Select Dropdown</div>
+      <div class="row" style="align-items:flex-start;gap:32px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="rs-select-trigger" aria-haspopup="listbox" aria-label="Font family">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            Inter
+            <svg class="ic-sm chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <span class="label">Sunken trigger</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <ul class="rs-menu" role="listbox" aria-label="Font family">
+            <li class="rs-menu-item is-selected" role="option" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Inter</li>
+            <li class="rs-menu-item is-active" role="option"><span style="width:14px;height:14px;display:inline-block"></span>Geist Sans</li>
+            <li class="rs-menu-item" role="option"><span style="width:14px;height:14px;display:inline-block"></span>DM Sans</li>
+            <li class="rs-menu-item" role="option"><span style="width:14px;height:14px;display:inline-block"></span>Georgia</li>
+          </ul>
+          <span class="label">Open menu</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popover / command menu -->
+    <div class="section">
+      <div class="section-title">Popover / Command Menu</div>
+      <div style="display:flex;gap:20px;align-items:flex-start">
+        <ul class="rs-menu" role="menu" aria-label="Insert" style="width:220px">
+          <li class="rs-menu-item" role="menuitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Insert Image<span class="shortcut">⌘I</span></li>
+          <li class="rs-menu-item is-active" role="menuitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Insert Link<span class="shortcut">⌘K</span></li>
+          <li class="rs-menu-divider" role="separator"></li>
+          <li class="rs-menu-item" role="menuitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Slide<span class="shortcut">⌘⏎</span></li>
+          <li class="rs-menu-item" role="menuitem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Find &amp; Replace<span class="shortcut">⌘H</span></li>
+        </ul>
+        <span class="label" style="margin-top:6px">Hover = sunken highlight</span>
+      </div>
+    </div>
+
+    <!-- Color swatch + picker trigger -->
+    <div class="section">
+      <div class="section-title">Color Swatch &amp; Picker Trigger</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:180px">
+            <button class="rs-swatch" aria-label="White" style="background:#ffffff"></button>
+            <button class="rs-swatch is-selected" aria-label="Indigo" aria-pressed="true" style="background:#4f46e5"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-6.5"/></svg></button>
+            <button class="rs-swatch" aria-label="Red" style="background:#ef4444"></button>
+            <button class="rs-swatch" aria-label="Amber" style="background:#f59e0b"></button>
+            <button class="rs-swatch" aria-label="Emerald" style="background:#22c55e"></button>
+            <button class="rs-swatch" aria-label="Slate" style="background:#64748b"></button>
+          </div>
+          <span class="label">Swatches (recessed feel)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="rs-color-trigger" aria-label="Text color">
+            <div class="rs-color-dot" style="background:#4f46e5;border-color:var(--ds-accent-border)"></div>
+            Text color
+            <svg class="ic-sm" style="margin-left:auto;color:var(--ds-text-muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <span class="label">Sunken picker trigger</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Switch -->
+    <div class="section">
+      <div class="section-title">Switch / Toggle</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ds-text-secondary);font-family:var(--ds-font-sans)">
+            <button class="rs-switch-track is-on" role="switch" aria-checked="true" aria-label="Dark bg" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))"><span class="rs-switch-thumb"></span></button>
+            Dark background
+          </div>
+          <span class="label">On (raised accent)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ds-text-secondary);font-family:var(--ds-font-sans)">
+            <button class="rs-switch-track" role="switch" aria-checked="false" aria-label="Grid" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))"><span class="rs-switch-thumb"></span></button>
+            Show grid
+          </div>
+          <span class="label">Off (deep recess)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="section">
+      <div class="section-title">Tooltip</div>
+      <div class="row">
+        <div class="rs-tooltip-wrap">
+          <button class="rs-ctrl rs-icon-btn is-active" style="background:var(--ds-surface-raised);box-shadow:var(--ds-shadow-raised)" aria-label="Image" aria-describedby="tip-rs">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <span id="tip-rs" role="tooltip" class="rs-tooltip">Insert image — raised surface tooltip</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dividers -->
+    <div class="section">
+      <div class="section-title">Divider</div>
+      <div class="row" style="align-items:flex-start;gap:40px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;height:28px;gap:4px">
+            <div class="rs-track">
+              <button class="rs-ctrl rs-icon-btn" aria-label="Bold"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></button>
+            </div>
+            <div class="rs-divider-v" role="separator" aria-orientation="vertical"></div>
+            <div class="rs-track">
+              <button class="rs-ctrl rs-icon-btn" aria-label="Italic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+            </div>
+          </div>
+          <span class="label">Vertical (between tracks)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;width:140px">
+          <div style="font-size:11px;color:var(--ds-text-secondary);padding:4px 0;font-family:var(--ds-font-sans)">Font</div>
+          <div class="rs-divider-h" role="separator"></div>
+          <div style="font-size:11px;color:var(--ds-text-secondary);padding:4px 0;font-family:var(--ds-font-sans)">Size</div>
+          <span class="label">Horizontal (panel)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assembled toolbar group -->
+    <div class="section">
+      <div class="section-title">Assembled Toolbar Group</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="rs-toolbar-group" role="toolbar" aria-label="Text formatting">
+          <button class="rs-select-trigger" style="min-width:80px;height:24px;font-size:11px;box-shadow:none;background:transparent;border-color:transparent" aria-label="Font">
+            Inter <svg class="ic-sm" style="color:var(--ds-text-muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="rs-divider-v"></div>
+          <button class="rs-ctrl rs-toolbar-btn is-active" style="height:26px" aria-label="Bold" aria-pressed="true">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+          </button>
+          <button class="rs-ctrl rs-icon-btn" style="height:26px;width:26px" aria-label="Italic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+          <div class="rs-divider-v"></div>
+          <button class="rs-swatch" style="width:20px;height:20px;background:#4f46e5" aria-label="Color"></button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="rs-seg" role="radiogroup" aria-label="Alignment">
+            <button class="rs-seg-item" role="radio" aria-checked="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+            <button class="rs-seg-item is-active" role="radio" aria-checked="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="20" y1="18" x2="4" y2="18"/></svg></button>
+            <button class="rs-seg-item" role="radio" aria-checked="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg></button>
+          </div>
+          <button class="rs-switch-track is-on" role="switch" aria-checked="true" aria-label="Snap" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))"><span class="rs-switch-thumb"></span></button>
+          <span style="font-size:11px;color:var(--ds-text-muted);font-family:var(--ds-font-sans)">Snap</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

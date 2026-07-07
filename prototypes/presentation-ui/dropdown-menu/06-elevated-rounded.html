@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>06 · Elevated Rounded — Dropdown / Select</title>
+  <link rel="stylesheet" href="../design-tokens.css" />
+  <style>
+    /* ── Spec Header ─────────────────────────────────────────────── */
+    .spec {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface);
+    }
+    .spec h1 { margin: 0 0 5px; font-size: 16px; font-weight: 700; color: var(--ds-text-primary); }
+    .spec p  { margin: 0 0 10px; font-size: 12.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 580px; }
+    .spec ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 5px; }
+    .spec ul li {
+      font-size: 11px; color: var(--ds-text-secondary);
+      background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill); padding: 2px 9px;
+    }
+
+    /* ── Stage ───────────────────────────────────────────────────── */
+    .stage {
+      display: flex; align-items: flex-start; justify-content: center;
+      min-height: 560px; padding: 48px 40px;
+      background: var(--ds-surface-base);
+    }
+
+    /* ── Demo column ─────────────────────────────────────────────── */
+    .demo { display: flex; flex-direction: column; gap: 0; width: 260px; }
+
+    /* Top faux toolbar strip */
+    .toolbar-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 10px;
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-raised);
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+    .bar-label { font-size: 11px; color: var(--ds-text-muted); font-weight: 500; }
+
+    /* ── Ghost trigger (pill-shaped, accent underline on open) ───── */
+    .trigger {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 0 10px; height: 30px;
+      font-size: 12.5px; font-weight: 600; font-family: var(--ds-font-sans);
+      color: var(--ds-text-primary);
+      background: var(--ds-surface-raised);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      box-shadow: var(--ds-shadow-raised);
+      cursor: pointer;
+      transition: box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
+                  border-color var(--ds-motion-fast) var(--ds-ease-standard),
+                  background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .trigger:hover { border-color: var(--ds-accent-border); background: var(--ds-accent-subtle); }
+    .trigger.open  {
+      border-color: var(--ds-accent-border);
+      background: var(--ds-accent-subtle);
+      box-shadow: var(--ds-shadow-raised), 0 0 0 2px var(--ds-accent-border);
+      color: var(--ds-accent-text);
+    }
+    .trigger.open .chevron { color: var(--ds-accent); }
+    .chevron { color: var(--ds-text-muted); }
+
+    /* ── Elevated menu panel ─────────────────────────────────────── */
+    .menu {
+      width: 260px;
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl);            /* extra round */
+      box-shadow: var(--ds-shadow-popover);
+      padding: 6px;
+      margin-top: 6px;
+      /* Subtle top gradient band to reinforce depth */
+      background-image: linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.0) 0px,
+        rgba(255,255,255,0.0) 100%
+      );
+    }
+    .menu[hidden] { display: none; }
+
+    /* ── Section gradient header ─────────────────────────────────── */
+    .section-band {
+      border-radius: var(--ds-radius-md);
+      padding: 4px 8px 3px;
+      background: var(--ds-surface-sunken);
+      margin-bottom: 3px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .section-band-icon { color: var(--ds-text-muted); flex-shrink: 0; }
+    .section-band-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--ds-text-muted);
+    }
+
+    /* ── Items (generous padding, rounded) ───────────────────────── */
+    .item {
+      display: flex; align-items: center; gap: 10px;
+      height: 34px; padding: 0 10px;
+      font-size: 13px; font-weight: 500; font-family: var(--ds-font-sans);
+      color: var(--ds-text-primary);
+      border-radius: var(--ds-radius-md);
+      cursor: pointer; user-select: none;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .item:hover    { background: var(--ds-state-hover); }
+    .item.selected {
+      background: var(--ds-state-selected);
+      color: var(--ds-accent-text);
+    }
+    .item.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+    .item.destructive { color: var(--ds-danger-text); }
+    .item.destructive:hover { background: var(--ds-danger-surface); }
+
+    /* Icon zone */
+    .item-icon {
+      width: 18px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ds-text-muted);
+    }
+    .item.selected .item-icon { color: var(--ds-accent); }
+    .item.destructive .item-icon { color: var(--ds-danger-text); }
+
+    /* Label */
+    .item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Trailing hint / shortcut */
+    .hint {
+      font-family: var(--ds-font-mono); font-size: 10px;
+      color: var(--ds-text-muted); flex-shrink: 0; white-space: nowrap;
+    }
+
+    /* Submenu arrow */
+    .sub-arrow { color: var(--ds-text-muted); flex-shrink: 0; margin-left: auto; }
+
+    /* Separator */
+    .sep { height: 1px; background: var(--ds-border-subtle); margin: 5px 4px; }
+
+    svg.icon {
+      display: block;
+      stroke: currentColor; stroke-width: 2; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+  </style>
+</head>
+<body>
+  <div class="spec">
+    <h1>06 · Elevated Rounded</h1>
+    <p>
+      Maximum visual elevation — extra-large radius (<code>--ds-radius-xl</code>), deeper
+      popover shadow, 34 px rows with generous horizontal padding. A sunken band header
+      replaces plain text labels. Trigger pill gets an accent tint on open. The softest,
+      most approachable direction in the set.
+    </p>
+    <ul>
+      <li>Panel: --ds-radius-xl + --ds-shadow-popover (deepest shadow)</li>
+      <li>Trigger pill: accent-subtle tint + 2 px focus ring on open</li>
+      <li>34 px item rows — comfortable desktop spacing</li>
+      <li>Sunken section-band header (icon + uppercase label)</li>
+      <li>Selected item: accent text + accent check icon · destructive Delete · disabled row</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <div class="demo">
+      <!-- Faux toolbar with trigger -->
+      <div class="toolbar-bar">
+        <span class="bar-label">Font</span>
+        <button
+          class="trigger open"
+          id="trig06"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded="true"
+          onclick="toggleMenu('menu06','trig06')"
+        >
+          Inter
+          <svg class="icon chevron" viewBox="0 0 24 24" width="12" height="12">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Elevated menu -->
+      <div class="menu" id="menu06" role="listbox" aria-label="Font family">
+
+        <!-- Section: Sans-serif -->
+        <div class="section-band">
+          <svg class="icon section-band-icon" viewBox="0 0 24 24" width="12" height="12">
+            <polyline points="4 7 4 4 20 4 20 7"/>
+            <line x1="9" y1="20" x2="15" y2="20"/>
+            <line x1="12" y1="4" x2="12" y2="20"/>
+          </svg>
+          <span class="section-band-label">Sans-serif</span>
+        </div>
+
+        <!-- Selected: Inter -->
+        <div class="item selected" role="option" aria-selected="true">
+          <span class="item-icon">
+            <svg class="icon" viewBox="0 0 24 24" width="13" height="13" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </span>
+          <span class="item-label">Inter</span>
+          <span class="hint">⌘F</span>
+        </div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="item-icon"></span>
+          <span class="item-label">DM Sans</span>
+        </div>
+        <div class="item" role="option" aria-selected="false">
+          <span class="item-icon"></span>
+          <span class="item-label">Plus Jakarta Sans</span>
+        </div>
+
+        <div class="sep" role="separator"></div>
+
+        <!-- Section: Serif -->
+        <div class="section-band">
+          <svg class="icon section-band-icon" viewBox="0 0 24 24" width="12" height="12">
+            <line x1="4" y1="4" x2="4" y2="20"/>
+            <line x1="4" y1="4" x2="2" y2="4"/><line x1="4" y1="4" x2="6" y2="4"/>
+            <line x1="4" y1="12" x2="10" y2="12"/>
+            <path d="M10 4 L18 20"/>
+            <path d="M18 20 L20 20 M16 20 L18 20"/>
+          </svg>
+          <span class="section-band-label">Serif</span>
+        </div>
+
+        <div class="item" role="option" aria-selected="false">
+          <span class="item-icon"></span>
+          <span class="item-label">Playfair Display</span>
+        </div>
+        <div class="item" role="option" aria-selected="false">
+          <span class="item-icon"></span>
+          <span class="item-label">Lora</span>
+        </div>
+
+        <div class="sep" role="separator"></div>
+
+        <!-- Submenu: More fonts -->
+        <div class="item" role="option" aria-selected="false" aria-haspopup="true">
+          <span class="item-icon">
+            <svg class="icon" viewBox="0 0 24 24" width="13" height="13">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <span class="item-label">Browse all fonts…</span>
+          <svg class="icon sub-arrow" viewBox="0 0 24 24" width="11" height="11">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+
+        <!-- Disabled -->
+        <div class="item disabled" role="option" aria-disabled="true">
+          <span class="item-icon">
+            <svg class="icon" viewBox="0 0 24 24" width="13" height="13">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <span class="item-label">Upload custom font…</span>
+        </div>
+
+        <div class="sep" role="separator"></div>
+
+        <!-- Destructive -->
+        <div class="item destructive" role="option" aria-selected="false">
+          <span class="item-icon">
+            <svg class="icon" viewBox="0 0 24 24" width="13" height="13">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </span>
+          <span class="item-label">Remove font override</span>
+        </div>
+
+      </div><!-- /menu -->
+    </div><!-- /demo -->
+  </div><!-- /stage -->
+
+  <script>
+    function toggleMenu(menuId, trigId) {
+      const m = document.getElementById(menuId);
+      const t = document.getElementById(trigId);
+      const wasOpen = !m.hidden;
+      m.hidden = wasOpen;
+      t.setAttribute('aria-expanded', String(!wasOpen));
+      t.classList.toggle('open', !wasOpen);
+    }
+  </script>
+</body>
+</html>

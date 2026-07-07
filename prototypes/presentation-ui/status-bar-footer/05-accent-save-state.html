@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>05 · Accent Save State — TextIQ Status Bar</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    body { display: flex; flex-direction: column; background: var(--ds-surface-base); }
+
+    .spec-header { flex: 0 0 auto; padding: 11px 18px 10px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border-strong); }
+    .spec-header h1 { font-size: 13px; font-weight: 700; margin: 0 0 3px; color: var(--ds-text-primary); letter-spacing: -0.01em; }
+    .spec-header .rationale { font-size: 11.5px; color: var(--ds-text-secondary); margin: 0 0 7px; line-height: 1.5; max-width: 680px; }
+    .spec-header .features { display: flex; flex-wrap: wrap; gap: 10px 18px; list-style: none; margin: 0; padding: 0; }
+    .spec-header .features li { font-size: 10.5px; color: var(--ds-text-muted); display: flex; align-items: center; gap: 5px; }
+    .spec-header .features li::before { content: "·"; color: var(--ds-accent); font-size: 14px; }
+
+    .editor-wrap { flex: 1 1 0; min-height: 0; display: flex; }
+    .editor-shell { flex: 1; display: flex; min-height: 0; }
+    .filmstrip { width: 78px; flex-shrink: 0; background: var(--ds-surface); border-right: 1px solid var(--ds-border-subtle); padding: 6px 5px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+    .thumb { aspect-ratio: 16/9; background: var(--ds-surface-sunken); border: 1px solid var(--ds-border-subtle); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8.5px; color: var(--ds-text-muted); }
+    .thumb.active { border-color: var(--ds-accent-border); background: var(--ds-accent-surface); color: var(--ds-accent-text); font-weight: 600; }
+    .editor-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--ds-surface-base); }
+    .canvas-slide { width: 100%; max-width: 440px; aspect-ratio: 16/9; background: var(--ds-surface); border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ds-text-muted); }
+
+    /* ======================================
+       05 · ACCENT SAVE STATE
+       Save status is the visual focal point — given an accent-tinted treatment.
+       Presence avatars are prominent and colorful. All other controls recede.
+       ====================================== */
+    .status-bar {
+      flex: 0 0 32px;
+      background: var(--ds-surface);
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center;
+      padding: 0 10px; gap: 8px;
+      font-size: 11px; color: var(--ds-text-muted);
+      font-family: var(--ds-font-sans);
+    }
+    .z-left { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
+    .z-right { display: flex; align-items: center; flex-shrink: 0; gap: 5px; }
+    .vsep { width: 1px; height: 12px; background: var(--ds-border-subtle); flex-shrink: 0; }
+
+    /* Subdued buttons — everything muted to let save state shine */
+    .sb-btn {
+      all: unset;
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 0 6px; height: 22px;
+      font-size: 11px; color: var(--ds-text-muted);
+      cursor: pointer; border-radius: var(--ds-radius-sm);
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .sb-btn:hover { color: var(--ds-text-secondary); background: var(--ds-state-hover); }
+    .sb-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+    .sb-btn[aria-pressed="true"] { color: var(--ds-text-secondary); background: var(--ds-surface-sunken); }
+
+    .sb-text { font-size: 11px; color: var(--ds-text-muted); padding: 0 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+    /* Diagnostics and source: subdued */
+    .diag-btn, .src-btn {
+      all: unset;
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 0 5px; height: 22px;
+      font-size: 11px; color: var(--ds-text-muted);
+      border-radius: var(--ds-radius-sm); cursor: pointer;
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .diag-btn:hover { background: var(--ds-warning-surface); color: var(--ds-warning-text); }
+    .src-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-secondary); }
+    .diag-btn:focus-visible, .src-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    /* Zoom: muted, plain */
+    .zoom-grp { display: inline-flex; align-items: center; gap: 0; }
+    .zoom-val-btn {
+      all: unset;
+      display: inline-flex; align-items: center; gap: 2px;
+      padding: 0 5px; height: 22px;
+      font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ds-text-muted);
+      cursor: pointer; border-radius: var(--ds-radius-sm);
+      transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .zoom-val-btn:hover { background: var(--ds-state-hover); color: var(--ds-text-secondary); }
+    .zoom-val-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+    /* ============================
+       THE ACCENT FOCAL POINT: Save status
+       ============================ */
+    .save-focal {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; height: 24px;
+      border-radius: var(--ds-radius-md);
+      font-size: 11px; font-weight: 600;
+      transition: background var(--ds-motion-base), color var(--ds-motion-base), box-shadow var(--ds-motion-base);
+    }
+    /* Saved — accent indigo */
+    .save-focal.saved {
+      background: var(--ds-accent-surface);
+      color: var(--ds-accent-text);
+      border: 1px solid var(--ds-accent-border);
+    }
+    /* Saving — neutral, animated ring */
+    .save-focal.saving {
+      background: var(--ds-surface-sunken);
+      color: var(--ds-text-secondary);
+      border: 1px solid var(--ds-border-subtle);
+    }
+    /* Unsaved — warm amber */
+    .save-focal.unsaved {
+      background: var(--ds-warning-surface);
+      color: var(--ds-warning-text);
+      border: 1px solid var(--ds-warning-border);
+    }
+    /* Error — danger red */
+    .save-focal.error {
+      background: var(--ds-danger-surface);
+      color: var(--ds-danger-text);
+      border: 1px solid var(--ds-danger-border);
+    }
+
+    .save-focal-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .save-focal.saved .save-focal-dot { background: var(--ds-accent); }
+    .save-focal.saving .save-focal-dot { background: var(--ds-text-muted); animation: blink 1.4s ease-in-out infinite; }
+    .save-focal.unsaved .save-focal-dot { background: var(--ds-warning); }
+    .save-focal.error .save-focal-dot { background: var(--ds-danger); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+    /* ============================
+       PRESENCE: prominent, colored
+       ============================ */
+    .presence { display: inline-flex; align-items: center; gap: 0; }
+    .av {
+      width: 22px; height: 22px; border-radius: 50%;
+      font-size: 8.5px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--ds-surface);
+      box-shadow: 0 0 0 1px var(--ds-border-subtle);
+      cursor: default;
+      transition: transform var(--ds-motion-fast);
+    }
+    .av:hover { transform: scale(1.15); z-index: 10; position: relative; }
+    .av + .av { margin-left: -6px; }
+    .av-1 { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+    .av-2 { background: var(--ds-success); color: var(--ds-text-on-accent); }
+    .av-3 { background: var(--ds-warning); color: var(--ds-text-on-accent); }
+
+    /* Zoom dropdown */
+    .zoom-wrap { position: relative; }
+    .zoom-menu {
+      position: absolute; bottom: calc(100% + 4px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--ds-surface-overlay);
+      border: 1px solid var(--ds-border-strong);
+      border-radius: var(--ds-radius-md);
+      box-shadow: var(--ds-shadow-popover);
+      padding: 4px; min-width: 80px;
+      display: none; flex-direction: column; gap: 1px; z-index: 200;
+    }
+    .zoom-menu.open { display: flex; }
+    .zoom-menu button { all: unset; padding: 4px 10px; font-size: 11.5px; border-radius: var(--ds-radius-sm); cursor: pointer; color: var(--ds-text-secondary); text-align: center; transition: background var(--ds-motion-fast), color var(--ds-motion-fast); }
+    .zoom-menu button:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .zoom-menu button.current { color: var(--ds-accent-text); font-weight: 600; background: var(--ds-accent-surface); }
+    .zoom-menu .menu-sep { border: none; border-top: 1px solid var(--ds-border-subtle); margin: 2px 0; }
+
+    /* === STATE PANEL === */
+    .state-panel { flex: 0 0 auto; background: var(--ds-surface); border-top: 1px solid var(--ds-border-strong); padding: 8px 16px 10px; }
+    .state-panel h2 { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ds-text-muted); margin: 0 0 7px; }
+    .state-rows { display: flex; flex-direction: column; gap: 5px; }
+    .state-row { display: flex; align-items: center; gap: 8px; }
+    .state-lbl { font-size: 10px; color: var(--ds-text-muted); font-weight: 500; width: 110px; flex-shrink: 0; }
+    .state-strip {
+      flex: 1; height: 30px;
+      background: var(--ds-surface); border: 1px solid var(--ds-border-subtle); border-radius: 3px;
+      display: flex; align-items: center; padding: 0 10px; gap: 8px;
+      font-size: 11px;
+    }
+    .state-strip .sr { margin-left: auto; }
+  </style>
+</head>
+<body>
+  <header class="spec-header" role="banner">
+    <h1>05 · Accent Save State</h1>
+    <p class="rationale">Save status is the clear visual focal point — a distinct filled chip that shifts color and content to reflect the document state. Collaboration presence avatars are large and colorful. Everything else stays muted.</p>
+    <ul class="features">
+      <li>Save chip: accent indigo (Saved) → amber (Unsaved) → red (Error) — always visible</li>
+      <li>Presence avatars: 22px solid-color circles, scale on hover, overlap with white ring</li>
+      <li>All other controls (zoom, toggles, diagnostics) use muted text — visual hierarchy is intentional</li>
+      <li>Save chip has semantic border + background shift; no icon dependency</li>
+    </ul>
+  </header>
+
+  <div class="editor-wrap">
+    <div class="editor-shell">
+      <aside class="filmstrip" aria-label="Slide filmstrip">
+        <div class="thumb">1</div>
+        <div class="thumb">2</div>
+        <div class="thumb active">3</div>
+        <div class="thumb">4</div>
+        <div class="thumb">5</div>
+        <div class="thumb">6</div>
+      </aside>
+      <div class="editor-main">
+        <main class="canvas-area" aria-label="Slide canvas">
+          <div class="canvas-slide">Slide 3 of 12</div>
+        </main>
+        <footer class="status-bar" role="contentinfo" aria-label="Slide editor status bar">
+          <div class="z-left">
+            <button class="sb-btn" aria-pressed="true" aria-label="Hide slide thumbnails">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M3 9h6"/><path d="M3 15h6"/></svg>
+              Slides
+            </button>
+            <button class="sb-btn" aria-pressed="false" aria-label="Show speaker notes">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
+              Notes
+            </button>
+            <div class="vsep" aria-hidden="true"></div>
+            <span class="sb-text" aria-label="Slide 3 of 12">Slide 3 / 12</span>
+            <div class="vsep" aria-hidden="true"></div>
+            <span class="sb-text">1 object selected</span>
+          </div>
+          <div class="z-right">
+            <!-- Diagnostics and source — muted -->
+            <button class="diag-btn" aria-label="3 diagnostics — open review">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              3
+            </button>
+            <button class="src-btn" aria-label="2 source links — review">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              2
+            </button>
+            <div class="vsep" aria-hidden="true"></div>
+            <!-- Zoom — muted -->
+            <div class="zoom-grp zoom-wrap" role="group" aria-label="Zoom control">
+              <button class="sb-btn" aria-label="Zoom out" style="padding:0 4px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="zoom-val-btn" id="zoom-btn-05" aria-haspopup="menu" aria-expanded="false" aria-label="Set zoom, currently 100%">
+                100%
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <button class="sb-btn" aria-label="Zoom in" style="padding:0 4px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              </button>
+              <div class="zoom-menu" id="zoom-menu-05" role="menu" aria-label="Zoom presets">
+                <button role="menuitemradio" aria-checked="false">200%</button>
+                <button role="menuitemradio" aria-checked="false">150%</button>
+                <button role="menuitemradio" aria-checked="false">125%</button>
+                <button role="menuitemradio" aria-checked="true" class="current">100%</button>
+                <button role="menuitemradio" aria-checked="false">75%</button>
+                <button role="menuitemradio" aria-checked="false">50%</button>
+                <button role="menuitemradio" aria-checked="false">25%</button>
+                <hr class="menu-sep" aria-hidden="true">
+                <button role="menuitem">Fit</button>
+              </div>
+            </div>
+            <div class="vsep" aria-hidden="true"></div>
+            <!-- ★ FOCAL POINT: Save state chip ★ -->
+            <span class="save-focal saved" role="status" aria-live="polite" aria-atomic="true" aria-label="Saved">
+              <span class="save-focal-dot" aria-hidden="true"></span>
+              Saved
+            </span>
+            <!-- Prominent presence -->
+            <div class="presence" aria-label="2 collaborators: JS and MK">
+              <span class="av av-1" title="JS — viewing Slide 3">JS</span>
+              <span class="av av-2" title="MK — on Slide 7">MK</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <section class="state-panel" aria-label="Save state variations">
+    <h2>Save state variations — accent focal chip</h2>
+    <div class="state-rows">
+      <div class="state-row">
+        <span class="state-lbl">● Saved</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted)">Slide 3 / 12 · 1 object selected</span>
+          <div class="sr"><span class="save-focal saved"><span class="save-focal-dot"></span>Saved</span></div>
+        </div>
+      </div>
+      <div class="state-row">
+        <span class="state-lbl">◌ Saving…</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted)">Slide 3 / 12 · 1 object selected</span>
+          <div class="sr"><span class="save-focal saving"><span class="save-focal-dot"></span>Saving…</span></div>
+        </div>
+      </div>
+      <div class="state-row">
+        <span class="state-lbl">● Unsaved changes</span>
+        <div class="state-strip">
+          <span style="color:var(--ds-text-muted)">Slide 3 / 12 · 1 object selected</span>
+          <div class="sr"><span class="save-focal unsaved"><span class="save-focal-dot"></span>Unsaved changes</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const btn05 = document.getElementById('zoom-btn-05');
+    const menu05 = document.getElementById('zoom-menu-05');
+    btn05.addEventListener('click', () => {
+      const open = menu05.classList.toggle('open');
+      btn05.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => {
+      if (!btn05.contains(e.target) && !menu05.contains(e.target)) {
+        menu05.classList.remove('open');
+        btn05.setAttribute('aria-expanded', 'false');
+      }
+    });
+  </script>
+</body>
+</html>

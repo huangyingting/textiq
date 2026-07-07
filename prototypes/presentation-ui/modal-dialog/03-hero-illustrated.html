@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modal · 03 Hero Illustrated</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+  /* ── Spec header ──────────────────────────────────────────────────── */
+  .spec {
+    padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface); flex-shrink: 0;
+  }
+  .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 700px; }
+  .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+  .spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle-btn {
+    padding: 4px 10px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border: 1px solid var(--ds-accent-border); font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .toggle-btn:hover { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+
+  /* ── Stage ────────────────────────────────────────────────────────── */
+  .stage { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+
+  /* Faux editor */
+  .faux-editor { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .faux-toolbar {
+    height: 40px; flex-shrink: 0; background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    display: flex; align-items: center; gap: 6px; padding: 0 14px; filter: blur(0.4px);
+  }
+  .faux-logo { width: 20px; height: 20px; background: var(--ds-accent); border-radius: 4px; }
+  .faux-sep { width: 1px; height: 18px; background: var(--ds-border-subtle); margin: 0 4px; }
+  .faux-tab { height: 24px; border-radius: var(--ds-radius-sm); background: var(--ds-surface-sunken); }
+  .faux-workspace { flex: 1; display: flex; min-height: 0; }
+  .faux-filmstrip {
+    width: 80px; flex-shrink: 0; background: var(--ds-surface-sunken);
+    border-right: 1px solid var(--ds-border-subtle);
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; filter: blur(0.4px);
+  }
+  .faux-thumb {
+    width: 64px; height: 36px; border-radius: 4px; background: var(--ds-surface);
+    border: 1px solid var(--ds-border-subtle); box-shadow: var(--ds-shadow-raised);
+    position: relative; overflow: hidden; flex-shrink: 0;
+  }
+  .faux-thumb.active { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .thumb-line { position: absolute; height: 4px; border-radius: 2px; background: var(--ds-surface-sunken); }
+  .faux-canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center; filter: blur(0.4px);
+  }
+  .faux-slide {
+    width: 380px; height: 214px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay);
+    padding: 20px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .slide-h { height: 14px; border-radius: 3px; background: var(--ds-surface-sunken); }
+  .slide-l { height: 8px; border-radius: 2px; background: var(--ds-surface-sunken); }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: absolute; inset: 0; background: var(--ds-backdrop);
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    transition: opacity var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  /* Hero panel */
+  .modal {
+    background: var(--ds-surface-overlay);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-xl);
+    box-shadow: var(--ds-shadow-popover);
+    width: 100%; max-width: 460px;
+    display: flex; flex-direction: column;
+    font-family: var(--ds-font-sans); overflow: hidden;
+  }
+
+  /* Hero header band */
+  .hero-band {
+    position: relative;
+    background: linear-gradient(135deg, var(--ds-accent) 0%, #7c3aed 60%, #a855f7 100%);
+    padding: 20px 16px 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    overflow: hidden;
+  }
+  /* Decorative circles */
+  .hero-band::before {
+    content: '';
+    position: absolute; top: -20px; right: -20px;
+    width: 100px; height: 100px; border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    pointer-events: none;
+  }
+  .hero-band::after {
+    content: '';
+    position: absolute; bottom: -30px; left: 60px;
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+  .hero-top-row { display: flex; align-items: flex-start; justify-content: space-between; }
+  .hero-icon {
+    width: 40px; height: 40px; border-radius: var(--ds-radius-lg);
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.24);
+    display: flex; align-items: center; justify-content: center; color: var(--ds-inverse-text);
+    flex-shrink: 0;
+  }
+  .hero-close {
+    width: 26px; height: 26px; border-radius: var(--ds-radius-sm);
+    border: none; background: rgba(255,255,255,0.14); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-inverse-text);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    flex-shrink: 0;
+  }
+  .hero-close:hover { background: rgba(255,255,255,0.25); }
+  .hero-close:focus-visible { outline: 2px solid rgba(255,255,255,0.5); outline-offset: 2px; }
+  .hero-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--ds-inverse-text); line-height: 1.2; }
+  .hero-subtitle { margin: 0; font-size: 12px; color: var(--ds-inverse-muted); line-height: 1.45; }
+
+  /* Body */
+  .modal-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* URL share row */
+  .field-label { font-size: 10.5px; font-weight: 600; color: var(--ds-text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; }
+  .url-row {
+    display: flex; align-items: center;
+    border: 1px solid var(--ds-border-strong);
+    border-radius: var(--ds-radius-md); overflow: hidden;
+    background: var(--ds-surface-sunken);
+  }
+  .url-input {
+    flex: 1; border: none; background: transparent; outline: none;
+    padding: 7px 10px; font-size: 11.5px; font-family: var(--ds-font-mono);
+    color: var(--ds-text-secondary); min-width: 0;
+  }
+  .url-copy {
+    padding: 6px 12px; border: none; border-left: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface); cursor: pointer;
+    font-size: 11px; font-weight: 600; color: var(--ds-accent-text);
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .url-copy:hover { background: var(--ds-accent-surface); }
+
+  /* Permission row */
+  .perm-row { display: flex; gap: 6px; }
+  .perm-pill {
+    flex: 1; padding: 7px 10px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-subtle); cursor: pointer;
+    font-size: 11.5px; font-weight: 500; text-align: center;
+    background: var(--ds-surface-raised); color: var(--ds-text-secondary);
+    font-family: var(--ds-font-sans);
+    transition: all var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .perm-pill:hover { border-color: var(--ds-accent-border); background: var(--ds-accent-surface); }
+  .perm-pill.active {
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border-color: var(--ds-accent-border); font-weight: 600;
+  }
+  .perm-sub { font-size: 9.5px; color: var(--ds-text-muted); font-weight: 400; display: block; margin-top: 1px; }
+
+  /* Divider */
+  .divider { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--ds-text-muted); }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--ds-border-subtle); }
+
+  /* Invite input */
+  .invite-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .invite-input {
+    flex: 1; padding: 7px 10px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-strong);
+    background: var(--ds-surface); outline: none;
+    font-size: 12px; font-family: var(--ds-font-sans);
+    color: var(--ds-text-primary);
+  }
+  .invite-input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .invite-input::placeholder { color: var(--ds-text-muted); }
+  .invite-btn {
+    padding: 7px 12px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent); color: var(--ds-text-on-accent);
+    border: none; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    flex-shrink: 0;
+  }
+  .invite-btn:hover { background: var(--ds-accent-hover); }
+
+  /* Footer */
+  .modal-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-top: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .footer-info { font-size: 11px; color: var(--ds-text-muted); display: flex; align-items: center; gap: 5px; }
+  .btn {
+    padding: 7px 16px; border-radius: var(--ds-radius-pill);
+    font-size: 12px; font-weight: 600; font-family: var(--ds-font-sans);
+    cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 5px;
+    transition: all var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .btn-ghost { background: transparent; color: var(--ds-text-secondary); border: 1px solid var(--ds-border-strong); }
+  .btn-ghost:hover { background: var(--ds-state-hover); }
+  .btn-primary { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+  .btn-primary:hover { background: var(--ds-accent-hover); }
+</style>
+</head>
+<body>
+
+<div class="spec">
+  <div class="spec-row">
+    <div>
+      <h1>03 · Hero Illustrated — Share & Publish</h1>
+      <p>A chromatic gradient header band establishes strong visual hierarchy and emotional brand tone — ideal for high-value dialogs where context needs a bold anchor before the form.</p>
+    </div>
+    <button class="toggle-btn" id="toggleBtn">Hide dialog</button>
+  </div>
+  <ul>
+    <li>Gradient hero band (accent → purple) carries the icon, title, and subtitle against a rich backdrop</li>
+    <li>Semi-transparent close button and icon badge use rgba tints so they don't clash with the gradient</li>
+    <li>Permission pills (View / Comment / Edit) replace radio buttons — tappable with active accent fill</li>
+    <li>Divider "or invite by email" section keeps the two collaboration flows visually separated</li>
+    <li>Footer-left info note balances the action buttons; monospace URL field signals "copyable" content</li>
+  </ul>
+</div>
+
+<div class="stage">
+  <!-- Faux editor -->
+  <div class="faux-editor">
+    <div class="faux-toolbar">
+      <div class="faux-logo"></div>
+      <div class="faux-sep"></div>
+      <div class="faux-tab" style="width:52px;"></div>
+      <div class="faux-tab" style="width:44px;"></div>
+      <div style="flex:1;"></div>
+      <div style="width:72px;height:26px;border-radius:var(--ds-radius-pill);background:var(--ds-accent);"></div>
+    </div>
+    <div class="faux-workspace">
+      <div class="faux-filmstrip">
+        <div class="faux-thumb active">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:38px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:32px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;width:44px;"></div>
+        </div>
+      </div>
+      <div class="faux-canvas-area">
+        <div class="faux-slide">
+          <div class="slide-h" style="width:55%;"></div>
+          <div class="slide-l" style="width:80%;"></div>
+          <div class="slide-l" style="width:65%;"></div>
+          <div class="slide-l" style="width:72%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backdrop + modal -->
+  <div class="modal-overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg03-title">
+
+      <!-- Hero band -->
+      <div class="hero-band">
+        <div class="hero-top-row">
+          <div class="hero-icon">
+            <!-- Share/Users icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          </div>
+          <button class="hero-close" aria-label="Close dialog" id="closeBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <h2 class="hero-title" id="dlg03-title">Share this presentation</h2>
+        <p class="hero-subtitle">Anyone with the link can access · 3 collaborators invited</p>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        <!-- Link sharing -->
+        <div>
+          <div class="field-label">Shareable link</div>
+          <div class="url-row">
+            <input class="url-input" type="text" value="https://textiq.app/p/q3-revenue-deck-2024" readonly aria-label="Share URL" />
+            <button class="url-copy">
+              <!-- Copy icon -->
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <!-- Permissions -->
+        <div>
+          <div class="field-label">Link permission</div>
+          <div class="perm-row">
+            <button class="perm-pill active">
+              View only
+              <span class="perm-sub">Read access</span>
+            </button>
+            <button class="perm-pill">
+              Comment
+              <span class="perm-sub">View + comments</span>
+            </button>
+            <button class="perm-pill">
+              Edit
+              <span class="perm-sub">Full access</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="divider">or invite by email</div>
+
+        <!-- Email invite -->
+        <div class="invite-row">
+          <input class="invite-input" type="email" placeholder="colleague@company.com" aria-label="Invite by email" />
+          <button class="invite-btn">Invite</button>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer">
+        <span class="footer-info">
+          <!-- Info icon -->
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          Expires in 30 days
+        </span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost">Done</button>
+          <button class="btn btn-primary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            Publish
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const overlay = document.getElementById('overlay');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const permPills = document.querySelectorAll('.perm-pill');
+  toggleBtn.addEventListener('click', () => {
+    const hidden = overlay.classList.toggle('hidden');
+    toggleBtn.textContent = hidden ? 'Show dialog' : 'Hide dialog';
+  });
+  closeBtn.addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    toggleBtn.textContent = 'Show dialog';
+  });
+  permPills.forEach(p => p.addEventListener('click', () => {
+    permPills.forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+  }));
+</script>
+</body>
+</html>

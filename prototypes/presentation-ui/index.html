@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TextIQ — Presentation UI Design Explorations</title>
+<link rel="stylesheet" href="design-tokens.css" />
+<style>
+  body { background: var(--ds-surface-base); color: var(--ds-text-primary); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 72px; }
+  .hero { margin-bottom: 8px; }
+  .eyebrow {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ds-accent-text);
+    background: var(--ds-accent-surface); border: 1px solid var(--ds-accent-border);
+    padding: 4px 10px; border-radius: var(--ds-radius-pill); margin-bottom: 16px;
+  }
+  .hero h1 { margin: 0 0 10px; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+  .hero p.lede { margin: 0; font-size: 15px; color: var(--ds-text-secondary); max-width: 68ch; line-height: 1.5; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 6px; }
+  .stat {
+    display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--ds-text-muted);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-md); padding: 8px 12px;
+  }
+  .stat b { font-size: 15px; color: var(--ds-text-primary); font-weight: 700; }
+  .howto {
+    margin: 20px 0 30px; font-size: 13px; color: var(--ds-text-secondary);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-left: 3px solid var(--ds-accent); border-radius: var(--ds-radius-md);
+    padding: 12px 16px; line-height: 1.55;
+  }
+  .howto code { font-family: var(--ds-font-mono); font-size: 12px; background: var(--ds-surface-sunken);
+    padding: 1px 6px; border-radius: var(--ds-radius-sm); }
+  .section-label { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ds-text-secondary);
+    display: flex; align-items: center; gap: 12px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--ds-border-subtle); }
+  .section-label i { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0;
+    font-size: 12px; color: var(--ds-text-muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-xl); padding: 18px 18px 16px; box-shadow: var(--ds-shadow-raised);
+    transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+      transform var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .card:hover { box-shadow: var(--ds-shadow-overlay); transform: translateY(-2px); }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .card-head h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .gallery-link { font-size: 12px; font-weight: 600; color: var(--ds-accent-text); text-decoration: none; white-space: nowrap; }
+  .gallery-link:hover { text-decoration: underline; }
+  .card-desc { margin: 8px 0 6px; font-size: 12.5px; color: var(--ds-text-secondary); line-height: 1.5; }
+  .card-src { margin: 0 0 14px; font-size: 11px; color: var(--ds-text-muted); }
+  .card-src code { font-family: var(--ds-font-mono); font-size: 10.5px; }
+  .chips { display: flex; flex-direction: column; gap: 6px; }
+  .chip {
+    display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 500;
+    color: var(--ds-text-primary); text-decoration: none;
+    background: var(--ds-surface-sunken); border: 1px solid transparent;
+    border-radius: var(--ds-radius-md); padding: 7px 10px;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard),
+      border-color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .chip:hover { background: var(--ds-accent-surface); border-color: var(--ds-accent-border); color: var(--ds-accent-text); }
+  .chip:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .chip-num {
+    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 20px;
+    font-size: 10.5px; font-weight: 700; color: var(--ds-text-muted);
+    background: var(--ds-surface); border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm); flex-shrink: 0;
+  }
+  footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--ds-border-subtle);
+    font-size: 12px; color: var(--ds-text-muted); display: flex; flex-wrap: wrap; gap: 16px; }
+  footer a { color: var(--ds-accent-text); text-decoration: none; font-weight: 600; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="hero">
+      <span class="eyebrow">TextIQ · Presentation UI</span>
+      <h1>Presentation UI Design Explorations</h1>
+      <p class="lede">Twelve shared presentation-editor components, each explored as six distinct modern directions.
+        Every mockup is a self-contained HTML file that shares one source of truth — the product's
+        <code>--ds-*</code> design tokens — so the options are directly comparable and on-brand.</p>
+    </div>
+
+    <div class="meta">
+      <span class="stat"><b>12</b> shared components</span>
+      <span class="stat"><b>72</b> design solutions</span>
+      <span class="stat"><b>6</b> directions each</span>
+      <span class="stat">Tokens from <b>globals.css</b></span>
+    </div>
+
+    <p class="howto">Open any tile below in your browser — no build step, no network needed. Each tile is a full-page
+      mockup with a spec header and the component rendered in a realistic editor context. Use each component's
+      <b>Open gallery</b> link for a side-by-side iframe comparison of its six directions.</p>
+
+    <section class="grid">
+      <div class="section-label">Round 1 — Editor Chrome <i>the always-visible frame</i></div>
+      <article class="card">
+        <header class="card-head">
+          <h2>Top Deck Toolbar</h2>
+          <a class="gallery-link" href="top-toolbar/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The app-chrome bar of grouped deck controls, document source, and deck actions.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/toolbar/deck-toolbar.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="top-toolbar/01-unified-glass-bar.html"><span class="chip-num">01</span>Unified Glass Bar</a>
+          <a class="chip" href="top-toolbar/02-grouped-segment-rail.html"><span class="chip-num">02</span>Grouped Segment Rail</a>
+          <a class="chip" href="top-toolbar/03-floating-capsule-toolbar.html"><span class="chip-num">03</span>Floating Capsule Toolbar</a>
+          <a class="chip" href="top-toolbar/04-compact-icon-dense.html"><span class="chip-num">04</span>Compact Icon-Dense</a>
+          <a class="chip" href="top-toolbar/05-editorial-contrast.html"><span class="chip-num">05</span>Editorial Contrast</a>
+          <a class="chip" href="top-toolbar/06-two-tier-context-bar.html"><span class="chip-num">06</span>Two-Tier Context Bar</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Context / Popover Toolbar</h2>
+          <a class="gallery-link" href="context-toolbar/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The floating toolbar that appears above the current selection — text, shape, image, slide, table.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/toolbar/floating-toolbar.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="context-toolbar/01-rounded-pill-overlay.html"><span class="chip-num">01</span>Rounded Pill Overlay</a>
+          <a class="chip" href="context-toolbar/02-segmented-cluster.html"><span class="chip-num">02</span>Segmented Cluster</a>
+          <a class="chip" href="context-toolbar/03-ultra-compact-mono.html"><span class="chip-num">03</span>Ultra-Compact Mono</a>
+          <a class="chip" href="context-toolbar/04-tactile-raised-keys.html"><span class="chip-num">04</span>Tactile Raised Keys</a>
+          <a class="chip" href="context-toolbar/05-adaptive-two-row.html"><span class="chip-num">05</span>Adaptive Two-Row</a>
+          <a class="chip" href="context-toolbar/06-contextual-accent.html"><span class="chip-num">06</span>Contextual Accent</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Right Inspector Panel</h2>
+          <a class="gallery-link" href="inspector-panel/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The 320px properties rail: identity header, tabs, and compact sectioned property groups.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/inspector/inspector-shell.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="inspector-panel/01-flat-sectioned-scroll.html"><span class="chip-num">01</span>Flat Sectioned Scroll</a>
+          <a class="chip" href="inspector-panel/02-collapsible-accordion.html"><span class="chip-num">02</span>Collapsible Accordion</a>
+          <a class="chip" href="inspector-panel/03-card-grouped.html"><span class="chip-num">03</span>Card-Grouped</a>
+          <a class="chip" href="inspector-panel/04-dense-two-column.html"><span class="chip-num">04</span>Dense Two-Column</a>
+          <a class="chip" href="inspector-panel/05-segmented-header-tabs.html"><span class="chip-num">05</span>Segmented Header Tabs</a>
+          <a class="chip" href="inspector-panel/06-inline-label-rows.html"><span class="chip-num">06</span>Inline Label Rows</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Slide Filmstrip</h2>
+          <a class="gallery-link" href="slide-filmstrip/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The bottom horizontal slide-navigation rail: thumbnails, reorder, add, and per-slide actions.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/filmstrip/filmstrip.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="slide-filmstrip/01-classic-thumb-rail.html"><span class="chip-num">01</span>Classic Thumb Rail</a>
+          <a class="chip" href="slide-filmstrip/02-compact-numbered-chips.html"><span class="chip-num">02</span>Compact Numbered Chips</a>
+          <a class="chip" href="slide-filmstrip/03-elevated-carousel.html"><span class="chip-num">03</span>Elevated Carousel</a>
+          <a class="chip" href="slide-filmstrip/04-outline-minimal.html"><span class="chip-num">04</span>Outline Minimal</a>
+          <a class="chip" href="slide-filmstrip/05-grouped-sections.html"><span class="chip-num">05</span>Grouped Sections</a>
+          <a class="chip" href="slide-filmstrip/06-hover-action-overlay.html"><span class="chip-num">06</span>Hover Action Overlay</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Status Bar / Footer</h2>
+          <a class="gallery-link" href="status-bar-footer/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The slim bottom status line: slide position, zoom, save state, diagnostics, and presence.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/slide-editor-footer.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="status-bar-footer/01-minimal-statusline.html"><span class="chip-num">01</span>Minimal Statusline</a>
+          <a class="chip" href="status-bar-footer/02-pill-zoom-control.html"><span class="chip-num">02</span>Pill Zoom Control</a>
+          <a class="chip" href="status-bar-footer/03-segmented-clusters.html"><span class="chip-num">03</span>Segmented Clusters</a>
+          <a class="chip" href="status-bar-footer/04-icon-forward-compact.html"><span class="chip-num">04</span>Icon-Forward Compact</a>
+          <a class="chip" href="status-bar-footer/05-accent-save-state.html"><span class="chip-num">05</span>Accent Save-State</a>
+          <a class="chip" href="status-bar-footer/06-two-zone-balanced.html"><span class="chip-num">06</span>Two-Zone Balanced</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Shared Control Primitives</h2>
+          <a class="gallery-link" href="control-primitives/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The atom kit — buttons, segmented, tabs, menus, swatches, switches — as six cohesive control languages.</p>
+        <p class="card-src">Redesigns <code>src/components/ui/*.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="control-primitives/01-flat-outline.html"><span class="chip-num">01</span>Flat Outline</a>
+          <a class="chip" href="control-primitives/02-soft-raised.html"><span class="chip-num">02</span>Soft Raised</a>
+          <a class="chip" href="control-primitives/03-pill-capsule.html"><span class="chip-num">03</span>Pill Capsule</a>
+          <a class="chip" href="control-primitives/04-recessed-segment.html"><span class="chip-num">04</span>Recessed Segment</a>
+          <a class="chip" href="control-primitives/05-glass-translucent.html"><span class="chip-num">05</span>Glass Translucent</a>
+          <a class="chip" href="control-primitives/06-high-contrast-mono.html"><span class="chip-num">06</span>High-Contrast Mono</a>
+        </div>
+      </article>
+
+      <div class="section-label">Round 2 — Overlays, Menus &amp; Pickers <i>the on-demand surfaces</i></div>
+      <article class="card">
+        <header class="card-head">
+          <h2>Present-Mode Toolbar</h2>
+          <a class="gallery-link" href="present-mode-toolbar/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The fullscreen presenter HUD over the dark stage: nav, counter, timer, next-slide preview, overview, and exit.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/present-mode/presenter-tools.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="present-mode-toolbar/01-floating-bottom-bar.html"><span class="chip-num">01</span>Floating Bottom Bar</a>
+          <a class="chip" href="present-mode-toolbar/02-corner-cluster.html"><span class="chip-num">02</span>Corner Cluster</a>
+          <a class="chip" href="present-mode-toolbar/03-glass-hud.html"><span class="chip-num">03</span>Glass HUD</a>
+          <a class="chip" href="present-mode-toolbar/04-presenter-console.html"><span class="chip-num">04</span>Presenter Console</a>
+          <a class="chip" href="present-mode-toolbar/05-edge-docked-rail.html"><span class="chip-num">05</span>Edge-Docked Rail</a>
+          <a class="chip" href="present-mode-toolbar/06-minimal-progress.html"><span class="chip-num">06</span>Minimal Progress</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Modal Dialog</h2>
+          <a class="gallery-link" href="modal-dialog/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The dialog shell behind confirms, export preflight, share, and recovery — header, body, and action footer.</p>
+        <p class="card-src">Redesigns <code>src/components/ui/dialog.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="modal-dialog/01-centered-classic.html"><span class="chip-num">01</span>Centered Classic</a>
+          <a class="chip" href="modal-dialog/02-compact-alert.html"><span class="chip-num">02</span>Compact Alert</a>
+          <a class="chip" href="modal-dialog/03-hero-illustrated.html"><span class="chip-num">03</span>Hero Illustrated</a>
+          <a class="chip" href="modal-dialog/04-toolbar-footer-checklist.html"><span class="chip-num">04</span>Toolbar-Footer Checklist</a>
+          <a class="chip" href="modal-dialog/05-side-drawer.html"><span class="chip-num">05</span>Side Drawer</a>
+          <a class="chip" href="modal-dialog/06-bottom-sheet.html"><span class="chip-num">06</span>Bottom Sheet</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Command Palette</h2>
+          <a class="gallery-link" href="command-palette/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The &#8984;K launcher: searchable command list with icons, categories, shortcut hints, and keyboard nav.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/slide-command-palette.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="command-palette/01-spotlight-centered.html"><span class="chip-num">01</span>Spotlight Centered</a>
+          <a class="chip" href="command-palette/02-compact-list.html"><span class="chip-num">02</span>Compact List</a>
+          <a class="chip" href="command-palette/03-grouped-categories.html"><span class="chip-num">03</span>Grouped Categories</a>
+          <a class="chip" href="command-palette/04-two-pane-preview.html"><span class="chip-num">04</span>Two-Pane Preview</a>
+          <a class="chip" href="command-palette/05-minimal-flat.html"><span class="chip-num">05</span>Minimal Flat</a>
+          <a class="chip" href="command-palette/06-keyboard-forward.html"><span class="chip-num">06</span>Keyboard-Forward</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Dropdown / Context Menu</h2>
+          <a class="gallery-link" href="dropdown-menu/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">Select and right-click menus: icon rows, shortcuts, section labels, submenus, and destructive actions.</p>
+        <p class="card-src">Redesigns <code>src/components/ui/select-menu.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="dropdown-menu/01-compact-list.html"><span class="chip-num">01</span>Compact List</a>
+          <a class="chip" href="dropdown-menu/02-icon-leading.html"><span class="chip-num">02</span>Icon-Leading</a>
+          <a class="chip" href="dropdown-menu/03-sectioned-labels.html"><span class="chip-num">03</span>Sectioned Labels</a>
+          <a class="chip" href="dropdown-menu/04-rich-description.html"><span class="chip-num">04</span>Rich Description</a>
+          <a class="chip" href="dropdown-menu/05-context-menu-dense.html"><span class="chip-num">05</span>Context-Menu Dense</a>
+          <a class="chip" href="dropdown-menu/06-elevated-rounded.html"><span class="chip-num">06</span>Elevated Rounded</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Color Picker</h2>
+          <a class="gallery-link" href="color-picker/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The swatch/color popover: preset grid, custom hex, recent colors, theme palette, and eyedropper.</p>
+        <p class="card-src">Redesigns <code>src/components/ui/color-picker.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="color-picker/01-swatch-grid-classic.html"><span class="chip-num">01</span>Swatch Grid Classic</a>
+          <a class="chip" href="color-picker/02-spectrum-plus-swatches.html"><span class="chip-num">02</span>Spectrum + Swatches</a>
+          <a class="chip" href="color-picker/03-compact-row.html"><span class="chip-num">03</span>Compact Row</a>
+          <a class="chip" href="color-picker/04-theme-aware-sections.html"><span class="chip-num">04</span>Theme-Aware Sections</a>
+          <a class="chip" href="color-picker/05-large-preview-inputs.html"><span class="chip-num">05</span>Large Preview Inputs</a>
+          <a class="chip" href="color-picker/06-minimal-dots.html"><span class="chip-num">06</span>Minimal Dots</a>
+        </div>
+      </article>
+      <article class="card">
+        <header class="card-head">
+          <h2>Template Picker</h2>
+          <a class="gallery-link" href="template-picker/index.html">Open gallery &rarr;</a>
+        </header>
+        <p class="card-desc">The add-slide layout gallery: eight semantic groups of slide-layout thumbnails with a brand-kit affordance.</p>
+        <p class="card-src">Redesigns <code>src/components/presentation/add-slide-template-picker.tsx</code></p>
+        <div class="chips">
+          <a class="chip" href="template-picker/01-category-grid.html"><span class="chip-num">01</span>Category Grid</a>
+          <a class="chip" href="template-picker/02-sidebar-categories.html"><span class="chip-num">02</span>Sidebar Categories</a>
+          <a class="chip" href="template-picker/03-tabbed-groups.html"><span class="chip-num">03</span>Tabbed Groups</a>
+          <a class="chip" href="template-picker/04-large-preview-list.html"><span class="chip-num">04</span>Large Preview List</a>
+          <a class="chip" href="template-picker/05-compact-tiles.html"><span class="chip-num">05</span>Compact Tiles</a>
+          <a class="chip" href="template-picker/06-filmstrip-rows.html"><span class="chip-num">06</span>Filmstrip Rows</a>
+        </div>
+      </article>
+    </section>
+
+    <footer>
+      <span>Generated 2026-07-07T00:35:23+00:00 · Round&nbsp;2 added 2026-07-07T01:23:18+00:00 · requested by Switch</span>
+      <a href="REVIEW.md">Design review &amp; recommendations →</a>
+      <a href="design-tokens.css">Shared design tokens →</a>
+      <a href="README.md">README →</a>
+    </footer>
+  </main>
+</body>
+</html>

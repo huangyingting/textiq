@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status Bar / Footer — Design Gallery — TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* === GALLERY PAGE === */
+    html, body {
+      min-height: 100%;
+      background: var(--ds-surface-base);
+    }
+    body {
+      display: flex; flex-direction: column;
+      padding: 0; margin: 0;
+    }
+
+    /* Page header */
+    .gallery-header {
+      background: var(--ds-surface);
+      border-bottom: 1px solid var(--ds-border-strong);
+      padding: 20px 28px 18px;
+    }
+    .gallery-header h1 {
+      font-size: 18px; font-weight: 700; margin: 0 0 5px;
+      color: var(--ds-text-primary); letter-spacing: -0.02em;
+    }
+    .gallery-header .subtitle {
+      font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 14px; line-height: 1.5;
+    }
+    .meta-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .meta-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 9px; height: 22px;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-pill);
+      font-size: 11px; color: var(--ds-text-secondary); font-weight: 500;
+    }
+    .meta-chip svg { color: var(--ds-text-muted); }
+
+    /* Grid */
+    .gallery-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+      gap: 20px;
+      padding: 24px 28px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      box-shadow: var(--ds-shadow-raised);
+      transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+                  border-color var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      border-color: var(--ds-border-strong);
+    }
+
+    /* Card iframe preview */
+    .card-preview {
+      position: relative;
+      width: 100%;
+      padding-top: 40%; /* ~16:6 ratio for a slim editor view */
+      background: var(--ds-surface-base);
+      border-bottom: 1px solid var(--ds-border-subtle);
+      overflow: hidden;
+    }
+    .card-preview iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 200%; height: 200%;
+      border: none;
+      transform: scale(0.5);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 14px 16px 12px;
+      flex: 1; display: flex; flex-direction: column; gap: 6px;
+    }
+    .card-num {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      color: var(--ds-accent-text); text-transform: uppercase;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; color: var(--ds-text-primary);
+      letter-spacing: -0.01em; margin: 0;
+    }
+    .card-desc {
+      font-size: 12px; color: var(--ds-text-secondary); line-height: 1.5; margin: 0;
+    }
+    .card-feats {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;
+    }
+    .card-feat {
+      display: inline-flex; align-items: center;
+      padding: 1px 7px; height: 18px;
+      background: var(--ds-surface-sunken);
+      border-radius: var(--ds-radius-pill);
+      font-size: 10px; color: var(--ds-text-muted); font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Card footer */
+    .card-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--ds-border-subtle);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; height: 28px;
+      background: var(--ds-accent);
+      color: var(--ds-accent-contrast);
+      border-radius: var(--ds-radius-md);
+      font-size: 12px; font-weight: 600;
+      text-decoration: none;
+      transition: background var(--ds-motion-fast);
+    }
+    .card-link:hover { background: var(--ds-accent-hover); }
+    .card-link:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+    .card-link svg { flex-shrink: 0; }
+
+    .card-file {
+      font-size: 10.5px; color: var(--ds-text-muted);
+      font-family: var(--ds-font-mono);
+    }
+
+    /* Page footer */
+    .gallery-footer {
+      padding: 16px 28px;
+      border-top: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .gallery-footer p {
+      font-size: 11px; color: var(--ds-text-muted); margin: 0;
+    }
+    .gallery-footer .token-ref {
+      font-size: 11px; color: var(--ds-text-muted);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .gallery-footer .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ds-success); flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="gallery-header" role="banner">
+    <h1>Status Bar / Footer — Design Gallery</h1>
+    <p class="subtitle">
+      6 distinct visual directions for the slide editor's slim bottom status bar.<br>
+      Each file is fully self-contained and browser-openable. All colors use <code>var(--ds-*)</code> tokens from <code>../design-tokens.css</code>.
+    </p>
+    <div class="meta-chips">
+      <span class="meta-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Static HTML + CSS
+      </span>
+      <span class="meta-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        No build · No CDN
+      </span>
+      <span class="meta-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        Inline SVG icons
+      </span>
+      <span class="meta-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+        aria roles + focus rings
+      </span>
+      <span class="meta-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Save state variations
+      </span>
+    </div>
+  </header>
+
+  <main class="gallery-grid" role="main" aria-label="Design concept cards">
+
+    <!-- Card 01 -->
+    <article class="card" aria-labelledby="card-title-01">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="01-minimal-statusline.html" title="Preview of 01 Minimal Statusline" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">01</span>
+        <h2 class="card-title" id="card-title-01">Minimal Statusline</h2>
+        <p class="card-desc">A quiet, information-dense single line that recedes into the chrome. Controls are invisible until hovered, reducing cognitive load to near zero.</p>
+        <div class="card-feats">
+          <span class="card-feat">hairline separators</span>
+          <span class="card-feat">no button backgrounds</span>
+          <span class="card-feat">5 px save dot</span>
+          <span class="card-feat">28 px height</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">01-minimal-statusline.html</span>
+        <a href="01-minimal-statusline.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- Card 02 -->
+    <article class="card" aria-labelledby="card-title-02">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="02-pill-zoom-control.html" title="Preview of 02 Pill Zoom Control" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">02</span>
+        <h2 class="card-title" id="card-title-02">Pill Zoom Control</h2>
+        <p class="card-desc">Key controls rendered as small tactile pill-shaped widgets. The connected zoom pill (−/value/+) and colored save pill are the primary focal points.</p>
+        <div class="card-feats">
+          <span class="card-feat">connected zoom pill</span>
+          <span class="card-feat">colored save pill</span>
+          <span class="card-feat">toggle pills</span>
+          <span class="card-feat">interactive zoom menu</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">02-pill-zoom-control.html</span>
+        <a href="02-pill-zoom-control.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- Card 03 -->
+    <article class="card" aria-labelledby="card-title-03">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="03-segmented-clusters.html" title="Preview of 03 Segmented Clusters" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">03</span>
+        <h2 class="card-title" id="card-title-03">Segmented Clusters</h2>
+        <p class="card-desc">Controls grouped into three discrete raised cluster cards — context, zoom, and status — floating on a recessed tray. Clear functional boundaries.</p>
+        <div class="card-feats">
+          <span class="card-feat">3 cluster cards</span>
+          <span class="card-feat">sunken tray background</span>
+          <span class="card-feat">ds-shadow-raised</span>
+          <span class="card-feat">34 px height</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">03-segmented-clusters.html</span>
+        <a href="03-segmented-clusters.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- Card 04 -->
+    <article class="card" aria-labelledby="card-title-04">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="04-icon-forward-compact.html" title="Preview of 04 Icon-Forward Compact" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">04</span>
+        <h2 class="card-title" id="card-title-04">Icon-Forward Compact</h2>
+        <p class="card-desc">Maximum density: 26 px bar, icons-first with badge counts, text labels on hover via CSS tooltips. For power users who know every control by position.</p>
+        <div class="card-feats">
+          <span class="card-feat">26 px height</span>
+          <span class="card-feat">badge chips</span>
+          <span class="card-feat">CSS hover tooltips</span>
+          <span class="card-feat">8 px save ring</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">04-icon-forward-compact.html</span>
+        <a href="04-icon-forward-compact.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- Card 05 -->
+    <article class="card" aria-labelledby="card-title-05">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="05-accent-save-state.html" title="Preview of 05 Accent Save State" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">05</span>
+        <h2 class="card-title" id="card-title-05">Accent Save State</h2>
+        <p class="card-desc">Save status is the clear visual focal point — an accent-tinted chip that shifts color with document state. Presence avatars are large, colorful, and prominent.</p>
+        <div class="card-feats">
+          <span class="card-feat">accent save chip</span>
+          <span class="card-feat">semantic color shifts</span>
+          <span class="card-feat">22 px presence avatars</span>
+          <span class="card-feat">muted secondary controls</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">05-accent-save-state.html</span>
+        <a href="05-accent-save-state.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+    <!-- Card 06 -->
+    <article class="card" aria-labelledby="card-title-06">
+      <div class="card-preview" aria-hidden="true">
+        <iframe src="06-two-zone-balanced.html" title="Preview of 06 Two-Zone Balanced" loading="lazy" tabindex="-1"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">06</span>
+        <h2 class="card-title" id="card-title-06">Two-Zone Balanced</h2>
+        <p class="card-desc">CSS grid 1fr/auto/1fr gives equal visual weight to left context and right controls. A faint center tick anchors the balance point. Clean and readable.</p>
+        <div class="card-feats">
+          <span class="card-feat">1fr / auto / 1fr grid</span>
+          <span class="card-feat">center tick divider</span>
+          <span class="card-feat">sunken zoom pair</span>
+          <span class="card-feat">interactive zoom menu</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">06-two-zone-balanced.html</span>
+        <a href="06-two-zone-balanced.html" class="card-link" target="_blank" rel="noopener">
+          Open
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+        </a>
+      </div>
+    </article>
+
+  </main>
+
+  <footer class="gallery-footer" role="contentinfo">
+    <p>TextIQ · Status Bar / Footer design exploration · 6 directions · design/status-bar-footer/</p>
+    <div class="token-ref">
+      <span class="dot" aria-hidden="true"></span>
+      All colors: <code>var(--ds-*)</code> from <code>../design-tokens.css</code>
+    </div>
+  </footer>
+</body>
+</html>

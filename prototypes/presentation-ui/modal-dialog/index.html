@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modal Dialog Shell · Design Gallery · TextIQ</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { min-height: 100%; margin: 0; background: var(--ds-surface-base); }
+
+  /* ── Page header ──────────────────────────────────────────────────── */
+  .page-header {
+    background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    padding: 24px 32px 20px;
+  }
+  .page-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--ds-text-primary); }
+  .page-header p  { margin: 0; font-size: 13px; color: var(--ds-text-secondary); max-width: 680px; line-height: 1.6; }
+  .page-meta {
+    display: flex; align-items: center; gap: 12px; margin-top: 12px;
+    font-size: 11px; color: var(--ds-text-muted);
+  }
+  .page-meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* ── Gallery grid ─────────────────────────────────────────────────── */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 20px;
+    padding: 24px 32px 32px;
+    max-width: 1440px;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-xl);
+    box-shadow: var(--ds-shadow-raised);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard), transform var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .card:hover {
+    box-shadow: var(--ds-shadow-overlay);
+    transform: translateY(-2px);
+  }
+
+  /* iframe preview */
+  .preview-wrap {
+    position: relative; height: 300px;
+    background: var(--ds-surface-sunken);
+    overflow: hidden;
+    border-bottom: 1px solid var(--ds-border-subtle);
+  }
+  .preview-wrap iframe {
+    width: 100%; height: 100%; border: none;
+    pointer-events: none;
+    transform-origin: top left;
+  }
+
+  /* Card body */
+  .card-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+  .card-num {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--ds-accent-text); background: var(--ds-accent-surface);
+    border: 1px solid var(--ds-accent-border);
+    padding: 2px 7px; border-radius: var(--ds-radius-pill);
+    display: inline-block; margin-bottom: 6px; text-transform: uppercase;
+  }
+  .card-title { margin: 0 0 5px; font-size: 14px; font-weight: 600; color: var(--ds-text-primary); }
+  .card-desc { margin: 0 0 10px; font-size: 12px; color: var(--ds-text-secondary); line-height: 1.55; flex: 1; }
+
+  /* Feature bullets */
+  .features { margin: 0 0 14px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .features li {
+    font-size: 11px; color: var(--ds-text-muted);
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;
+  }
+  .features li::before { content: "—"; color: var(--ds-accent); flex-shrink: 0; }
+
+  /* Open button */
+  .open-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent); color: var(--ds-text-on-accent);
+    font-size: 12px; font-weight: 600; text-decoration: none;
+    border: none; cursor: pointer;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    align-self: flex-start;
+  }
+  .open-btn:hover { background: var(--ds-accent-hover); }
+  .open-btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .open-btn svg { flex-shrink: 0; }
+
+  /* Footer */
+  .page-footer {
+    padding: 16px 32px;
+    border-top: 1px solid var(--ds-border-subtle);
+    font-size: 11px; color: var(--ds-text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Modal Dialog Shell · Design Exploration</h1>
+  <p>Six distinct modal directions for the TextIQ presentation editor: centered classic, compact alert, hero illustrated, toolbar-footer checklist, side drawer, and bottom sheet. All mockups are self-contained HTML using shared <code>design-tokens.css</code> — no frameworks, no CDNs, no build step.</p>
+  <div class="page-meta">
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+      6 variants
+    </span>
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      var(--ds-*) tokens only
+    </span>
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Static mockups · design/modal-dialog/
+    </span>
+    <span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      Round 2 · export preflight + destructive confirm + share + recovery
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="gallery">
+
+    <!-- 01 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="01-centered-classic.html" title="Preview: 01 Centered Classic" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">01</span>
+        <h2 class="card-title">Centered Classic</h2>
+        <p class="card-desc">The canonical centered-card shell over a dimmed, blurred editor. Export Preflight content: icon badge header, scrollable checklist body with pass/warn badges, footer with Cancel + Export.</p>
+        <ul class="features">
+          <li>Header: icon badge + title + subtitle + X close; body scrolls independently of footer</li>
+          <li>Checklist rows carry pass / warn status badges in semantic token colors</li>
+          <li>Footer: ghost Cancel + pill-shape primary Export; max-w 440 px</li>
+        </ul>
+        <a class="open-btn" href="01-centered-classic.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 02 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="02-compact-alert.html" title="Preview: 02 Compact Alert" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">02</span>
+        <h2 class="card-title">Compact Alert</h2>
+        <p class="card-desc">Ultra-compact destructive confirm (max 348 px). Danger accent strip at top, centered Trash2 icon, "Delete 3 slides?" title, affected slides listed in a danger surface card, full-width stacked buttons.</p>
+        <ul class="features">
+          <li>Danger strip + strong backdrop signal severity before any text is read</li>
+          <li>Centered icon + title pattern keeps the consequence in visual focus</li>
+          <li>Full-width stacked buttons: Delete (danger) above Cancel — thumb-reachable on mobile</li>
+        </ul>
+        <a class="open-btn" href="02-compact-alert.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 03 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="03-hero-illustrated.html" title="Preview: 03 Hero Illustrated" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">03</span>
+        <h2 class="card-title">Hero Illustrated</h2>
+        <p class="card-desc">Gradient hero header band (accent → purple) establishes strong visual hierarchy. Share dialog content: URL copy row, permission pill-picker, email invite field, footer with info note + Publish.</p>
+        <ul class="features">
+          <li>Gradient hero band with decorative circles; semi-transparent close button tinted for contrast</li>
+          <li>Permission pills (View / Comment / Edit) replace radio buttons — tap-friendly active fill</li>
+          <li>Monospace URL input signals "copyable"; one-click copy button anchored in-row</li>
+        </ul>
+        <a class="open-btn" href="03-hero-illustrated.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 04 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="04-toolbar-footer-checklist.html" title="Preview: 04 Toolbar Footer Checklist" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">04</span>
+        <h2 class="card-title">Toolbar Footer Checklist</h2>
+        <p class="card-desc">Export Preflight with extended detail. Breadcrumb header, 4-cell summary stat strip (Passed / Warnings / Errors / Fallback tiers), grid-aligned checklist, split footer with icon toolbar + actions.</p>
+        <ul class="features">
+          <li>Summary stat cells give instant at-a-glance status before scanning the detail list</li>
+          <li>Grid-column checklist (icon · name+note · target · badge) aligns all columns perfectly</li>
+          <li>Sunken footer background separates toolbar (settings, info, refresh) from Cancel + Export CTA</li>
+        </ul>
+        <a class="open-btn" href="04-toolbar-footer-checklist.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 05 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="05-side-drawer.html" title="Preview: 05 Side Drawer" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">05</span>
+        <h2 class="card-title">Side Drawer</h2>
+        <p class="card-desc">Full-height right-edge drawer (320 px) for Presentation Properties. Stat cards row, name input, description textarea with char count, tag chip picker, visibility toggles. Slide canvas stays visible.</p>
+        <ul class="features">
+          <li>320 px right panel leaves slide canvas and film-strip partially visible behind backdrop</li>
+          <li>Interactive toggle switches, removable tag chips, and focused text inputs in the body</li>
+          <li>Sticky header + footer; body scrolls independently with all fields accessible</li>
+        </ul>
+        <a class="open-btn" href="05-side-drawer.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+    <!-- 06 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="06-bottom-sheet.html" title="Preview: 06 Bottom Sheet" loading="lazy"></iframe>
+      </div>
+      <div class="card-body">
+        <span class="card-num">06</span>
+        <h2 class="card-title">Bottom Sheet</h2>
+        <p class="card-desc">Anchored bottom sheet for conflict / unsaved-changes recovery. Drag handle, warning callout with revision detail, three recoverable-action cards (Keep / Discard / Dismiss), timestamp footer.</p>
+        <ul class="features">
+          <li>Slide canvas stays visible above the sheet — context informs the recovery decision</li>
+          <li>Option cards carry icon badges, full descriptions, and risk badges (Recommended / Loses edits)</li>
+          <li>Rounded top corners (--ds-radius-xl) only; bottom edge flush with viewport</li>
+        </ul>
+        <a class="open-btn" href="06-bottom-sheet.html" target="_blank">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in new tab
+        </a>
+      </div>
+    </article>
+
+  </div>
+</main>
+
+<footer class="page-footer">
+  TextIQ · design/modal-dialog/ · Round 2 design exploration · All chrome tokens from design-tokens.css · Plain HTML + CSS, no frameworks, no CDN
+</footer>
+
+</body>
+</html>

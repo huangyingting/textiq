@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modal · 05 Side Drawer</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  html, body { height: 100%; margin: 0; display: flex; flex-direction: column; }
+
+  /* ── Spec header ──────────────────────────────────────────────────── */
+  .spec {
+    padding: 12px 20px 10px; border-bottom: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface); flex-shrink: 0;
+  }
+  .spec h1 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--ds-text-primary); }
+  .spec p  { margin: 0 0 6px; font-size: 11.5px; color: var(--ds-text-secondary); line-height: 1.5; max-width: 700px; }
+  .spec ul { margin: 0; padding: 0 0 0 14px; font-size: 11px; color: var(--ds-text-muted); display: flex; flex-direction: column; gap: 2px; }
+  .spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle-btn {
+    padding: 4px 10px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border: 1px solid var(--ds-accent-border); font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: var(--ds-font-sans);
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .toggle-btn:hover { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+
+  /* ── Stage ────────────────────────────────────────────────────────── */
+  .stage { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+
+  .faux-editor { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .faux-toolbar {
+    height: 40px; flex-shrink: 0; background: var(--ds-surface);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  }
+  .faux-logo { width: 20px; height: 20px; background: var(--ds-accent); border-radius: 4px; }
+  .faux-sep { width: 1px; height: 18px; background: var(--ds-border-subtle); margin: 0 4px; }
+  .faux-tab { height: 24px; border-radius: var(--ds-radius-sm); background: var(--ds-surface-sunken); }
+  .faux-workspace { flex: 1; display: flex; min-height: 0; }
+  .faux-filmstrip {
+    width: 80px; flex-shrink: 0; background: var(--ds-surface-sunken);
+    border-right: 1px solid var(--ds-border-subtle);
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 8px;
+  }
+  .faux-thumb {
+    width: 64px; height: 36px; border-radius: 4px; background: var(--ds-surface);
+    border: 1px solid var(--ds-border-subtle); box-shadow: var(--ds-shadow-raised);
+    position: relative; overflow: hidden; flex-shrink: 0;
+  }
+  .faux-thumb.active { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .thumb-line { position: absolute; height: 4px; border-radius: 2px; background: var(--ds-surface-sunken); }
+  .faux-canvas-area {
+    flex: 1; background: var(--ds-surface-sunken);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .faux-slide {
+    width: 300px; height: 169px; background: var(--ds-surface);
+    border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-overlay);
+    padding: 18px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .slide-h { height: 13px; border-radius: 3px; background: var(--ds-surface-sunken); }
+  .slide-l { height: 7px; border-radius: 2px; background: var(--ds-surface-sunken); }
+
+  /* Backdrop (partial — just a tint, editor still visible) */
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: var(--ds-backdrop);
+    transition: opacity var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .modal-backdrop.hidden { opacity: 0; pointer-events: none; }
+
+  /* Drawer panel — full height, right edge */
+  .drawer {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: 320px;
+    background: var(--ds-surface-overlay);
+    border-left: 1px solid var(--ds-border-subtle);
+    box-shadow: var(--ds-shadow-popover);
+    display: flex; flex-direction: column;
+    font-family: var(--ds-font-sans);
+    transition: transform var(--ds-motion-base) var(--ds-ease-standard);
+  }
+  .drawer.hidden { transform: translateX(100%); }
+
+  /* Drawer header */
+  .drawer-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px 11px;
+    border-bottom: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .drawer-icon {
+    width: 28px; height: 28px; border-radius: var(--ds-radius-md);
+    background: var(--ds-accent-surface);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-accent-text); flex-shrink: 0;
+  }
+  .drawer-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--ds-text-primary); }
+  .drawer-close {
+    width: 26px; height: 26px; border-radius: var(--ds-radius-sm);
+    border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ds-text-muted); flex-shrink: 0;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard), color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .drawer-close:hover { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+  .drawer-close:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
+  /* Scrollable body */
+  .drawer-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+  /* Form elements */
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field-label { font-size: 11px; font-weight: 600; color: var(--ds-text-secondary); }
+  .field-label span { font-weight: 400; color: var(--ds-text-muted); font-size: 10.5px; margin-left: 4px; }
+  .field-input {
+    padding: 7px 10px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-strong);
+    background: var(--ds-surface); outline: none;
+    font-size: 13px; font-family: var(--ds-font-sans);
+    color: var(--ds-text-primary); width: 100%; box-sizing: border-box;
+    transition: border-color var(--ds-motion-fast) var(--ds-ease-standard), box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .field-input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .field-textarea {
+    padding: 7px 10px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-strong);
+    background: var(--ds-surface); outline: none;
+    font-size: 12.5px; font-family: var(--ds-font-sans);
+    color: var(--ds-text-primary); width: 100%; box-sizing: border-box;
+    resize: none; min-height: 64px; line-height: 1.5;
+    transition: border-color var(--ds-motion-fast) var(--ds-ease-standard), box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .field-textarea:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-border); }
+  .char-count { font-size: 10px; color: var(--ds-text-muted); text-align: right; margin-top: -2px; }
+
+  /* Tags */
+  .tags-wrap {
+    display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+    padding: 6px 8px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-strong); background: var(--ds-surface);
+    min-height: 36px; cursor: text;
+  }
+  .tag {
+    display: flex; align-items: center; gap: 4px;
+    padding: 2px 8px 2px 9px; border-radius: var(--ds-radius-pill);
+    background: var(--ds-accent-surface); color: var(--ds-accent-text);
+    border: 1px solid var(--ds-accent-border); font-size: 11px; font-weight: 500;
+  }
+  .tag-x {
+    width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;
+    border: none; background: none; cursor: pointer; color: var(--ds-accent-text); opacity: 0.6; padding: 0;
+  }
+  .tag-x:hover { opacity: 1; }
+  .tags-input {
+    border: none; outline: none; font-size: 12px; font-family: var(--ds-font-sans);
+    color: var(--ds-text-primary); background: transparent; min-width: 80px;
+    flex: 1;
+  }
+  .tags-input::placeholder { color: var(--ds-text-muted); }
+
+  /* Toggle switch row */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-subtle); background: var(--ds-surface-raised);
+  }
+  .toggle-info { display: flex; flex-direction: column; gap: 1px; }
+  .toggle-label { font-size: 12.5px; font-weight: 500; color: var(--ds-text-primary); }
+  .toggle-hint { font-size: 11px; color: var(--ds-text-muted); }
+  .switch {
+    width: 36px; height: 20px; border-radius: var(--ds-radius-pill);
+    background: var(--ds-border-strong); cursor: pointer; position: relative;
+    border: none; flex-shrink: 0;
+    transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .switch.on { background: var(--ds-accent); }
+  .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--ds-surface-overlay);
+    box-shadow: var(--ds-shadow-raised);
+    transition: transform var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .switch.on::after { transform: translateX(16px); }
+
+  /* Section divider */
+  .section-divider {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ds-text-muted);
+  }
+  .section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--ds-border-subtle); }
+
+  /* Stats row */
+  .stats-row { display: flex; gap: 8px; }
+  .stat-card {
+    flex: 1; padding: 8px 10px; border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-subtle); background: var(--ds-surface-raised);
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .stat-val { font-size: 16px; font-weight: 700; color: var(--ds-text-primary); }
+  .stat-label { font-size: 10px; color: var(--ds-text-muted); }
+
+  /* Drawer footer */
+  .drawer-footer {
+    display: flex; justify-content: flex-end; gap: 6px;
+    padding: 10px 14px; border-top: 1px solid var(--ds-border-subtle); flex-shrink: 0;
+  }
+  .btn {
+    padding: 7px 16px; border-radius: var(--ds-radius-pill);
+    font-size: 12px; font-weight: 600; font-family: var(--ds-font-sans);
+    cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 5px;
+    transition: all var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+  .btn:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  .btn-ghost { background: transparent; color: var(--ds-text-secondary); border: 1px solid var(--ds-border-strong); }
+  .btn-ghost:hover { background: var(--ds-state-hover); }
+  .btn-primary { background: var(--ds-accent); color: var(--ds-text-on-accent); }
+  .btn-primary:hover { background: var(--ds-accent-hover); }
+</style>
+</head>
+<body>
+
+<div class="spec">
+  <div class="spec-row">
+    <div>
+      <h1>05 · Side Drawer — Presentation Properties</h1>
+      <p>Full-height right-edge drawer eliminates vertical centering constraints — ideal for form-heavy dialogs that need generous real estate without completely occluding the slide canvas.</p>
+    </div>
+    <button class="toggle-btn" id="toggleBtn">Hide drawer</button>
+  </div>
+  <ul>
+    <li>320 px right panel leaves the slide canvas (and slide film-strip) partially visible behind the backdrop</li>
+    <li>Header icon badge + title + X close mirrors the centered modal shell for consistency</li>
+    <li>Scrollable body with stacked fields: input, textarea, tag-pill chips, and a toggle switch row</li>
+    <li>Stat cards (slides, words, last saved) surface metadata above the form for quick reference</li>
+    <li>Sticky footer with Cancel / Save ensures CTAs never scroll out of reach in long forms</li>
+  </ul>
+</div>
+
+<div class="stage">
+  <!-- Faux editor (NOT blurred for side drawer — visible canvas behind) -->
+  <div class="faux-editor">
+    <div class="faux-toolbar">
+      <div class="faux-logo"></div>
+      <div class="faux-sep"></div>
+      <div class="faux-tab" style="width:52px;"></div>
+      <div class="faux-tab" style="width:44px;"></div>
+      <div style="flex:1;"></div>
+      <div style="width:72px;height:26px;border-radius:var(--ds-radius-pill);background:var(--ds-accent);"></div>
+    </div>
+    <div class="faux-workspace">
+      <div class="faux-filmstrip">
+        <div class="faux-thumb active">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:38px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;right:6px;"></div>
+          <div class="thumb-line" style="top:18px;left:6px;width:32px;"></div>
+        </div>
+        <div class="faux-thumb">
+          <div class="thumb-line" style="top:8px;left:6px;width:44px;"></div>
+        </div>
+      </div>
+      <div class="faux-canvas-area">
+        <div class="faux-slide">
+          <div class="slide-h" style="width:55%;"></div>
+          <div class="slide-l" style="width:80%;"></div>
+          <div class="slide-l" style="width:65%;"></div>
+          <div class="slide-l" style="width:72%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backdrop -->
+  <div class="modal-backdrop" id="backdrop"></div>
+
+  <!-- Drawer panel -->
+  <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dlg05-title">
+
+    <div class="drawer-header">
+      <div class="drawer-icon">
+        <!-- File/Settings icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      <span class="drawer-title" id="dlg05-title">Presentation Properties</span>
+      <button class="drawer-close" aria-label="Close drawer" id="closeBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-val">14</span>
+          <span class="stat-label">Slides</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-val">2.4k</span>
+          <span class="stat-label">Words</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-val">2m ago</span>
+          <span class="stat-label">Saved</span>
+        </div>
+      </div>
+
+      <div class="section-divider">Details</div>
+
+      <!-- Name field -->
+      <div class="field">
+        <label class="field-label" for="pres-name">Presentation name <span>(required)</span></label>
+        <input class="field-input" id="pres-name" type="text" value="Q3 Revenue · Investor Update 2024" />
+      </div>
+
+      <!-- Description -->
+      <div class="field">
+        <label class="field-label" for="pres-desc">Description <span>(optional)</span></label>
+        <textarea class="field-textarea" id="pres-desc" placeholder="Brief summary of this deck's purpose…">Quarterly update for Series B investors covering revenue, growth metrics, and roadmap priorities for Q3 2024.</textarea>
+        <div class="char-count">221 / 500</div>
+      </div>
+
+      <!-- Tags -->
+      <div class="field">
+        <div class="field-label">Tags</div>
+        <div class="tags-wrap">
+          <span class="tag">
+            investor
+            <button class="tag-x" aria-label="Remove tag">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </span>
+          <span class="tag">
+            q3
+            <button class="tag-x" aria-label="Remove tag">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </span>
+          <span class="tag">
+            finance
+            <button class="tag-x" aria-label="Remove tag">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </span>
+          <input class="tags-input" type="text" placeholder="Add tag…" aria-label="Add tag" />
+        </div>
+      </div>
+
+      <div class="section-divider">Visibility</div>
+
+      <!-- Toggle rows -->
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Public link enabled</span>
+          <span class="toggle-hint">Anyone with the link can view</span>
+        </div>
+        <button class="switch on" id="switch1" aria-label="Toggle public link" aria-pressed="true"></button>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Indexed in workspace</span>
+          <span class="toggle-hint">Appears in team search results</span>
+        </div>
+        <button class="switch" id="switch2" aria-label="Toggle indexing" aria-pressed="false"></button>
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-primary">Save changes</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const backdrop = document.getElementById('backdrop');
+  const drawer = document.getElementById('drawer');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const closeBtn = document.getElementById('closeBtn');
+
+  function hide() {
+    backdrop.classList.add('hidden');
+    drawer.classList.add('hidden');
+    toggleBtn.textContent = 'Show drawer';
+  }
+  function show() {
+    backdrop.classList.remove('hidden');
+    drawer.classList.remove('hidden');
+    toggleBtn.textContent = 'Hide drawer';
+  }
+
+  toggleBtn.addEventListener('click', () => drawer.classList.contains('hidden') ? show() : hide());
+  closeBtn.addEventListener('click', hide);
+  backdrop.addEventListener('click', hide);
+
+  document.querySelectorAll('.switch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      const on = sw.classList.toggle('on');
+      sw.setAttribute('aria-pressed', on.toString());
+    });
+  });
+</script>
+</body>
+</html>

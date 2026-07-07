@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>05 — Grouped Sections · TextIQ Filmstrip</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ── Layout ── */
+    body { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+    .spec {
+      padding:14px 24px 12px; flex-shrink:0;
+      background:var(--ds-surface); border-bottom:1px solid var(--ds-border-subtle);
+    }
+    .spec-tag { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+    .spec-badge {
+      font-size:10.5px; font-weight:700; padding:2px 9px;
+      border-radius:var(--ds-radius-pill);
+      background:var(--ds-accent-surface); color:var(--ds-accent-text);
+    }
+    .spec-name { font-size:13px; font-weight:700; color:var(--ds-text-primary); }
+    .spec h1 { margin:0 0 4px; font-size:13px; font-weight:600; color:var(--ds-text-primary); }
+    .spec p  { margin:0 0 6px; font-size:12px; color:var(--ds-text-secondary); line-height:1.45; max-width:680px; }
+    .spec ul { margin:0; padding-left:16px; }
+    .spec li { font-size:11.5px; color:var(--ds-text-muted); line-height:1.65; }
+
+    /* ── Editor preview ── */
+    .preview { flex:1; display:flex; flex-direction:column; min-height:0; }
+    .canvas-area {
+      flex:1; min-height:0;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--ds-surface-base); padding:28px 24px 16px;
+    }
+    .canvas-slide {
+      width:100%; max-width:560px; aspect-ratio:16/9;
+      background:var(--ds-surface); border-radius:var(--ds-radius-md);
+      box-shadow:var(--ds-shadow-overlay); overflow:hidden; position:relative;
+    }
+    .cs-inner { position:absolute; inset:0; padding:7% 8% 9%; display:flex; flex-direction:column; }
+    .cs-title { height:11%; width:52%; background:rgba(23,32,51,.1); border-radius:3px; margin-bottom:5%; flex-shrink:0; }
+    .cs-bars  { display:flex; align-items:flex-end; gap:2.5%; flex:1; }
+    .cs-bar   { flex:1; border-radius:3px 3px 0 0; }
+    .cb1 { height:63%; background:var(--ds-accent); opacity:.38; }
+    .cb2 { height:87%; background:var(--ds-accent); opacity:.55; }
+    .cb3 { height:49%; background:var(--ds-accent); opacity:.38; }
+    .cb4 { height:73%; background:var(--ds-accent); opacity:.46; }
+    .cb5 { height:41%; background:var(--ds-accent); opacity:.32; }
+
+    /* ── Filmstrip rail ── */
+    .filmstrip {
+      flex-shrink:0; display:flex; align-items:stretch;
+      background:var(--ds-surface); border-top:1px solid var(--ds-border-subtle);
+    }
+    .filmstrip-body {
+      flex:1; overflow:hidden;
+      max-height:98px;
+      transition:max-height var(--ds-motion-base) var(--ds-ease-standard),
+                 opacity var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .filmstrip.collapsed .filmstrip-body { max-height:0; opacity:0; }
+    .filmstrip-scroll {
+      display:flex; align-items:center;
+      gap:0; padding:8px 12px;
+      overflow-x:auto; height:94px; list-style:none; margin:0;
+      scrollbar-width:thin; scrollbar-color:var(--ds-border-subtle) transparent;
+    }
+    .filmstrip-scroll:focus { outline:none; }
+    .filmstrip-toggle {
+      flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      width:40px; background:none; border:none; border-left:1px solid var(--ds-border-subtle);
+      cursor:pointer; color:var(--ds-text-muted);
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .filmstrip-toggle:hover { background:var(--ds-state-hover); color:var(--ds-text-primary); }
+    .filmstrip-toggle:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:-3px; }
+    .filmstrip.collapsed .filmstrip-toggle svg { transform:rotate(180deg); }
+
+    /* ── Section divider chip ── */
+    .section-divider {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      flex-shrink:0; list-style:none;
+      padding:0 6px;
+      gap:4px;
+    }
+    .section-chip {
+      writing-mode:vertical-rl; text-orientation:mixed;
+      font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+      color:var(--ds-text-muted);
+      padding:6px 4px;
+      border-radius:var(--ds-radius-pill);
+      background:var(--ds-surface-sunken);
+      border:1px solid var(--ds-border-subtle);
+      white-space:nowrap;
+      user-select:none;
+    }
+    /* Active section chip (the one whose group contains slide 3) */
+    .section-divider.active-section .section-chip {
+      background:var(--ds-accent-surface);
+      color:var(--ds-accent-text);
+      border-color:var(--ds-accent-border);
+    }
+
+    /* Slide group — flex row with a bit of left gap after divider */
+    .slide-group {
+      display:flex; align-items:center; gap:5px;
+      padding:0 5px;
+      flex-shrink:0; list-style:none;
+    }
+    .slide-group:first-child { padding-left:0; }
+
+    /* ── Slide card ── */
+    .slide-item { position:relative; flex-shrink:0; list-style:none; }
+    .slide-btn {
+      display:block; border:none; padding:0; cursor:pointer; background:transparent;
+      border-radius:var(--ds-radius-sm);
+    }
+    .slide-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:3px; }
+
+    .thumb-frame {
+      width:120px; aspect-ratio:16/9;
+      border-radius:var(--ds-radius-sm); overflow:hidden; position:relative;
+      border:1.5px solid var(--ds-border-subtle); background:#fff;
+      transition:border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+    }
+    .slide-item:hover .thumb-frame { border-color:var(--ds-border-strong); }
+    .slide-item.active .thumb-frame {
+      border:2px solid var(--ds-accent);
+      box-shadow:0 0 0 3px var(--ds-accent-subtle), var(--ds-shadow-raised);
+    }
+    .slide-item.demo-hover .thumb-frame { border-color:var(--ds-border-strong); box-shadow:var(--ds-shadow-raised); }
+
+    .slide-num {
+      position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:18px; height:16px; padding:0 4px;
+      background:var(--ds-accent); color:var(--ds-text-on-accent);
+      border-radius:var(--ds-radius-pill);
+      font-size:9.5px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums;
+      pointer-events:none; user-select:none;
+    }
+
+    /* Action overlay */
+    .slide-actions {
+      position:absolute; top:3px; right:3px;
+      display:flex; gap:2px; align-items:center;
+      opacity:0; pointer-events:none;
+      transition:opacity var(--ds-motion-fast);
+    }
+    .slide-item:hover .slide-actions,
+    .slide-item.demo-hover .slide-actions,
+    .slide-item:focus-within .slide-actions { opacity:1; pointer-events:auto; }
+    .action-btn {
+      display:flex; align-items:center; justify-content:center;
+      width:22px; height:22px; border-radius:50%;
+      border:1px solid var(--ds-border-subtle);
+      background:var(--ds-surface-glass); backdrop-filter:blur(6px);
+      color:var(--ds-text-muted); cursor:pointer;
+      box-shadow:0 1px 2px rgba(0,0,0,.08);
+      transition:background var(--ds-motion-fast), color var(--ds-motion-fast);
+    }
+    .action-btn:hover { background:var(--ds-surface); color:var(--ds-text-primary); }
+    .action-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:2px; }
+
+    /* Add slide */
+    .add-slide-btn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:48px; height:67px; flex-shrink:0;
+      border:1.5px dashed var(--ds-border-subtle); background:transparent; cursor:pointer;
+      border-radius:var(--ds-radius-sm); color:var(--ds-text-muted); gap:3px;
+      margin-left:6px;
+      transition:border-color var(--ds-motion-fast), color var(--ds-motion-fast),
+                 background var(--ds-motion-fast);
+    }
+    .add-slide-btn:hover {
+      border-color:var(--ds-accent-border); color:var(--ds-accent-text);
+      background:var(--ds-accent-subtle);
+    }
+    .add-slide-btn:focus-visible { outline:2px solid var(--ds-focus-ring); outline-offset:2px; }
+    .add-slide-btn span { font-size:10px; font-weight:500; }
+
+    /* ── Thumbnail placeholders ── */
+    .tpl {
+      position:absolute; inset:0; background:#fff;
+      display:flex; flex-direction:column; padding:7% 6%; overflow:hidden;
+    }
+    .tpl.center { justify-content:center; align-items:center; }
+    .tpl-h  { height:14%; background:rgba(23,32,51,.13); border-radius:2px; margin-bottom:7%; flex-shrink:0; }
+    .tpl.center .tpl-h { width:68%; height:16%; align-self:center; margin-bottom:8%; }
+    .tpl-ln { height:7%; background:rgba(23,32,51,.06); border-radius:2px; flex-shrink:0; margin-bottom:4%; }
+    .tpl-ln.w80 { width:80%; } .tpl-ln.w65 { width:65%; } .tpl-ln.w50 { width:50%; }
+    .tpl.center .tpl-ln { align-self:center; }
+    .tpl-bars  { display:flex; align-items:flex-end; gap:2.5%; flex:1; }
+    .tpl-bar   { flex:1; border-radius:1px 1px 0 0; }
+    .tb1 { height:68%; background:var(--ds-accent); opacity:.42; }
+    .tb2 { height:90%; background:var(--ds-accent); opacity:.58; }
+    .tb3 { height:52%; background:var(--ds-accent); opacity:.42; }
+    .tb4 { height:76%; background:var(--ds-accent); opacity:.48; }
+    .tb5 { height:44%; background:var(--ds-accent); opacity:.36; }
+    .tpl-cols { display:flex; gap:5%; flex:1; }
+    .tpl-img  { width:42%; background:var(--ds-surface-sunken); border-radius:2px; flex-shrink:0; }
+    .tpl-col  { flex:1; display:flex; flex-direction:column; gap:7%; padding-top:1%; }
+    .tpl-lx   { height:9%; background:rgba(23,32,51,.06); border-radius:2px; }
+    .tpl-qwrap { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5%; padding:0 4%; }
+    .tpl-qmark { height:15%; width:22%; background:var(--ds-accent-surface); border-radius:2px; }
+    .tpl-ql   { height:8%; background:rgba(23,32,51,.07); border-radius:2px; }
+    .tpl-ql.w90 { width:90%; } .tpl-ql.w70 { width:70%; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Spec Header ═══ -->
+<header class="spec" role="banner">
+  <div class="spec-tag">
+    <span class="spec-badge">05 / 06</span>
+    <span class="spec-name">Grouped Sections</span>
+  </div>
+  <h1>Section divider chips between slide groups give long decks hierarchical structure at a glance.</h1>
+  <p>Vertical rotated chips ("Intro", "Body", "Close") act as in-rail chapter markers, letting users jump by section not just by number. Active section chip highlights in accent.</p>
+  <ul>
+    <li>Section chips: vertical writing-mode pill, 9 px uppercase label, sunken surface / accent tint for active section</li>
+    <li>Slide cards: 120 px wide, same ring/shadow active treatment as Classic — groups reinforce, not replace</li>
+    <li>Groups: Intro (1–2) · Body (3–5, contains active) · Close (6) — dividers are list items, screenreader-labelled</li>
+    <li>Add slide at the end of the last group; collapse toggle at far right</li>
+  </ul>
+</header>
+
+<div class="preview">
+  <div class="canvas-area" aria-hidden="true">
+    <div class="canvas-slide" role="img" aria-label="Slide 3 – active, chart">
+      <div class="cs-inner">
+        <div class="cs-title"></div>
+        <div class="cs-bars">
+          <div class="cs-bar cb1"></div><div class="cs-bar cb2"></div>
+          <div class="cs-bar cb3"></div><div class="cs-bar cb4"></div>
+          <div class="cs-bar cb5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="filmstrip" id="filmstrip" aria-label="Slide filmstrip">
+    <div class="filmstrip-body" id="filmstrip-body">
+      <ol class="filmstrip-scroll" aria-label="Slides" tabindex="0">
+
+        <!-- ── Section: Intro ── -->
+        <li class="section-divider" role="none" aria-label="Section: Intro">
+          <div class="section-chip" aria-hidden="true">Intro</div>
+        </li>
+        <li class="slide-group" role="none">
+          <!-- S1 -->
+          <div class="slide-item" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 1, Intro section">
+              <div class="thumb-frame">
+                <div class="tpl center"><div class="tpl-h"></div><div class="tpl-ln w50"></div></div>
+                <span class="slide-num" aria-hidden="true">1</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 1" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 1" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+          <!-- S2 -->
+          <div class="slide-item" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 2, Intro section">
+              <div class="thumb-frame">
+                <div class="tpl"><div class="tpl-h"></div><div class="tpl-ln"></div><div class="tpl-ln w80"></div><div class="tpl-ln w65"></div></div>
+                <span class="slide-num" aria-hidden="true">2</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 2" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 2" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+        </li>
+
+        <!-- ── Section: Body (active section) ── -->
+        <li class="section-divider active-section" role="none" aria-label="Section: Body (current)">
+          <div class="section-chip" aria-hidden="true">Body</div>
+        </li>
+        <li class="slide-group" role="none">
+          <!-- S3 ACTIVE -->
+          <div class="slide-item active" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 3, Body section" aria-current="true">
+              <div class="thumb-frame">
+                <div class="tpl"><div class="tpl-h"></div><div class="tpl-bars"><div class="tpl-bar tb1"></div><div class="tpl-bar tb2"></div><div class="tpl-bar tb3"></div><div class="tpl-bar tb4"></div><div class="tpl-bar tb5"></div></div></div>
+                <span class="slide-num" aria-hidden="true">3</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 3" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 3" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+          <!-- S4 -->
+          <div class="slide-item" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 4, Body section">
+              <div class="thumb-frame">
+                <div class="tpl"><div class="tpl-h"></div><div class="tpl-cols"><div class="tpl-img"></div><div class="tpl-col"><div class="tpl-lx"></div><div class="tpl-lx"></div><div class="tpl-lx"></div></div></div></div>
+                <span class="slide-num" aria-hidden="true">4</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 4" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 4" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+          <!-- S5 HOVER DEMO -->
+          <div class="slide-item demo-hover" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 5, Body section">
+              <div class="thumb-frame">
+                <div class="tpl"><div class="tpl-qwrap"><div class="tpl-qmark"></div><div class="tpl-ql w90"></div><div class="tpl-ql w70"></div></div></div>
+                <span class="slide-num" aria-hidden="true">5</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 5" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 5" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+        </li>
+
+        <!-- ── Section: Close ── -->
+        <li class="section-divider" role="none" aria-label="Section: Close">
+          <div class="section-chip" aria-hidden="true">Close</div>
+        </li>
+        <li class="slide-group" role="none">
+          <!-- S6 -->
+          <div class="slide-item" role="none">
+            <button class="slide-btn" type="button" aria-label="Go to slide 6, Close section">
+              <div class="thumb-frame">
+                <div class="tpl center"><div class="tpl-h"></div><div class="tpl-ln w50"></div></div>
+                <span class="slide-num" aria-hidden="true">6</span>
+              </div>
+            </button>
+            <div class="slide-actions" aria-hidden="true">
+              <button class="action-btn" type="button" aria-label="Duplicate slide 6" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button class="action-btn" type="button" aria-label="Delete slide 6" tabindex="-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>
+        </li>
+
+        <!-- Add slide -->
+        <li role="none">
+          <button class="add-slide-btn" type="button" aria-label="Add slide">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add</span>
+          </button>
+        </li>
+      </ol>
+    </div>
+
+    <button class="filmstrip-toggle" id="toggle-btn" type="button"
+            aria-label="Collapse filmstrip" aria-expanded="true" aria-controls="filmstrip-body">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+    </button>
+  </nav>
+</div>
+
+<script>
+const filmstrip = document.getElementById('filmstrip');
+const toggleBtn = document.getElementById('toggle-btn');
+let collapsed = false;
+toggleBtn.addEventListener('click', () => {
+  collapsed = !collapsed;
+  filmstrip.classList.toggle('collapsed', collapsed);
+  toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  toggleBtn.setAttribute('aria-label', collapsed ? 'Expand filmstrip' : 'Collapse filmstrip');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Present-Mode Toolbar — Design Exploration · TextIQ</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background: var(--ds-surface-base);
+      color: var(--ds-text-primary);
+      font-family: var(--ds-font-sans);
+    }
+
+    /* ── Page header ────────────────────────────────────── */
+    .page-header {
+      background: var(--ds-surface);
+      border-bottom: 1px solid var(--ds-border-subtle);
+      padding: 28px 32px 22px;
+    }
+    .page-header-inner {
+      max-width: 1200px; margin: 0 auto;
+    }
+    .page-eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ds-accent-text);
+      margin: 0 0 8px;
+    }
+    .page-title {
+      font-size: 22px; font-weight: 700; letter-spacing: -.02em;
+      color: var(--ds-text-primary); margin: 0 0 8px;
+    }
+    .page-desc {
+      font-size: 13px; color: var(--ds-text-secondary); line-height: 1.6;
+      margin: 0; max-width: 680px;
+    }
+    .page-meta {
+      margin-top: 14px;
+      display: flex; align-items: center; gap: 16px;
+      font-size: 11px; color: var(--ds-text-muted);
+    }
+    .page-meta-chip {
+      background: var(--ds-surface-sunken); border-radius: var(--ds-radius-pill);
+      padding: 2px 10px;
+    }
+
+    /* ── Grid ───────────────────────────────────────────── */
+    .gallery {
+      max-width: 1200px; margin: 32px auto; padding: 0 32px 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+      gap: 24px;
+    }
+
+    /* ── Card ───────────────────────────────────────────── */
+    .card {
+      background: var(--ds-surface);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-xl);
+      overflow: hidden;
+      box-shadow: var(--ds-shadow-raised);
+      display: flex; flex-direction: column;
+      transition: box-shadow var(--ds-motion-base) var(--ds-ease-standard),
+                  border-color var(--ds-motion-base) var(--ds-ease-standard);
+    }
+    .card:hover {
+      box-shadow: var(--ds-shadow-overlay);
+      border-color: var(--ds-border-strong);
+    }
+
+    /* Preview iframe */
+    .preview-wrap {
+      position: relative; width: 100%; height: 220px;
+      background: var(--ds-surface-base); overflow: hidden;
+      border-bottom: 1px solid var(--ds-border-subtle);
+    }
+    .preview-wrap iframe {
+      width: 100%; height: 100%;
+      border: none;
+      transform-origin: top left;
+      pointer-events: none;
+    }
+    .preview-overlay {
+      position: absolute; inset: 0;
+      background: transparent;
+      cursor: default;
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 16px 18px 18px; flex: 1;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .card-number {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--ds-text-muted);
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; letter-spacing: -.01em;
+      color: var(--ds-text-primary); margin: 0;
+    }
+    .card-desc {
+      font-size: 12px; color: var(--ds-text-secondary); line-height: 1.6;
+      margin: 0; flex: 1;
+    }
+    .card-tags {
+      display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px;
+    }
+    .tag {
+      font-size: 10px; font-weight: 500; color: var(--ds-text-muted);
+      background: var(--ds-surface-sunken); border-radius: var(--ds-radius-pill);
+      padding: 1px 8px;
+    }
+
+    /* Card footer */
+    .card-footer {
+      padding: 0 18px 14px;
+      display: flex; align-items: center; justify-content: flex-end;
+    }
+    .open-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11.5px; font-weight: 600; color: var(--ds-accent-text);
+      text-decoration: none; border-radius: var(--ds-radius-sm);
+      padding: 4px 8px; margin: -4px -8px;
+      transition: background var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+    .open-link:hover { background: var(--ds-accent-subtle); }
+    .open-link:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <div class="page-header-inner">
+      <p class="page-eyebrow">TextIQ · Design Exploration · Round 2</p>
+      <h1 class="page-title">Present-Mode Presenter Toolbar / HUD</h1>
+      <p class="page-desc">
+        Six distinct HUD directions for the TextIQ fullscreen presentation stage. Each solution is grounded in the real <code>presenter-tools.tsx</code> control set (prev/next, counter, timer, notes, overview, fullscreen, shortcuts, exit) and renders against a realistic dark stage mock.
+      </p>
+      <div class="page-meta">
+        <span class="page-meta-chip">6 directions</span>
+        <span class="page-meta-chip">Vanilla HTML/CSS</span>
+        <span class="page-meta-chip">design-tokens.css</span>
+        <span class="page-meta-chip">Inverse + Stage token families</span>
+        <span>Round 1 siblings: top-toolbar · context-toolbar · inspector-panel · slide-filmstrip · status-bar-footer · control-primitives</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="gallery">
+
+    <!-- 01 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="01-floating-bottom-bar.html" title="Preview of 01 — Floating Bottom Bar" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">01 of 06</span>
+        <h2 class="card-title">Floating Bottom Bar</h2>
+        <p class="card-desc">A single pill-shaped HUD centred 20 px above the stage floor. Nav arrows get a raised chip; timer is a bordered sub-chip; a 2 px accent progress bar runs the full stage width at the floor.</p>
+        <div class="card-tags">
+          <span class="tag">pill HUD</span>
+          <span class="tag">backdrop-blur</span>
+          <span class="tag">centred</span>
+          <span class="tag">progress bar</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="01-floating-bottom-bar.html" class="open-link" aria-label="Open 01 — Floating Bottom Bar in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+    <!-- 02 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="02-corner-cluster.html" title="Preview of 02 — Corner Cluster" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">02 of 06</span>
+        <h2 class="card-title">Corner Cluster</h2>
+        <p class="card-desc">Three independent glass capsules in separate corners. Nav + counter (bottom-left), tools + exit (bottom-right), timer + fullscreen (top-right), laser indicator (top-left). Each concern is fully isolated.</p>
+        <div class="card-tags">
+          <span class="tag">corner anchoring</span>
+          <span class="tag">isolated clusters</span>
+          <span class="tag">laser indicator</span>
+          <span class="tag">separated concerns</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="02-corner-cluster.html" class="open-link" aria-label="Open 02 — Corner Cluster in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+    <!-- 03 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="03-glass-hud.html" title="Preview of 03 — Glass HUD" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">03 of 06</span>
+        <h2 class="card-title">Glass HUD</h2>
+        <p class="card-desc">Full-width translucent band docked to the stage floor. A 2 px accent progress line crowns the band. Centre zone displays 24 slide dots — done/current/future states. Three-zone left-to-right layout.</p>
+        <div class="card-tags">
+          <span class="tag">full-width band</span>
+          <span class="tag">slide dots</span>
+          <span class="tag">3-zone layout</span>
+          <span class="tag">edge-to-edge</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="03-glass-hud.html" class="open-link" aria-label="Open 03 — Glass HUD in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+    <!-- 04 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="04-presenter-console.html" title="Preview of 04 — Presenter Console" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">04 of 06</span>
+        <h2 class="card-title">Presenter Console</h2>
+        <p class="card-desc">Keynote-style dual-view: main slide left (60%), dedicated console panel right with next-slide preview, speaker notes, large timer, and progress. Zero overlay chrome on the current slide.</p>
+        <div class="card-tags">
+          <span class="tag">split-pane</span>
+          <span class="tag">speaker notes</span>
+          <span class="tag">next-slide preview</span>
+          <span class="tag">stage-panel tokens</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="04-presenter-console.html" class="open-link" aria-label="Open 04 — Presenter Console in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+    <!-- 05 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="05-edge-docked-rail.html" title="Preview of 05 — Edge Docked Rail" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">05 of 06</span>
+        <h2 class="card-title">Edge Docked Rail</h2>
+        <p class="card-desc">48 px vertical icon strip pinned to the right stage edge. All controls stacked vertically; tooltip labels slide left on hover. Vertical progress bar on the inner edge fills bottom-up.</p>
+        <div class="card-tags">
+          <span class="tag">vertical rail</span>
+          <span class="tag">48 px wide</span>
+          <span class="tag">hover tooltips</span>
+          <span class="tag">vertical progress</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="05-edge-docked-rail.html" class="open-link" aria-label="Open 05 — Edge Docked Rail in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+    <!-- 06 -->
+    <article class="card">
+      <div class="preview-wrap">
+        <iframe src="06-minimal-progress.html" title="Preview of 06 — Minimal Progress" loading="lazy" aria-hidden="true"></iframe>
+        <div class="preview-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="card-body">
+        <span class="card-number">06 of 06</span>
+        <h2 class="card-title">Minimal Progress</h2>
+        <p class="card-desc">Cinema-minimal: resting state shows only a 3 px progress bar and a ghost slide counter. The full pill HUD fades up from below when the presenter enters the bottom hover zone.</p>
+        <div class="card-tags">
+          <span class="tag">ghost controls</span>
+          <span class="tag">hover reveal</span>
+          <span class="tag">cinematic</span>
+          <span class="tag">fade transition</span>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <a href="06-minimal-progress.html" class="open-link" aria-label="Open 06 — Minimal Progress in full">
+          Open
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        </a>
+      </footer>
+    </article>
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>02 — Soft Raised | Control Primitives</title>
+  <link rel="stylesheet" href="../design-tokens.css">
+  <style>
+    /* ─── Specimen scaffold ─────────────────────────────────────────── */
+    body { padding: 32px; min-height: 100vh; background: var(--ds-surface-base); }
+    .spec-header { max-width: 720px; margin: 0 auto 40px; border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 24px; }
+    .spec-header h1 { font-size: 18px; font-weight: 700; color: var(--ds-text-primary); margin: 0 0 6px; letter-spacing: -0.01em; }
+    .spec-header p { font-size: 13px; color: var(--ds-text-secondary); margin: 0 0 12px; line-height: 1.6; }
+    .spec-header ul { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--ds-text-muted); line-height: 1.8; }
+    .sheet { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+    .section { display: flex; flex-direction: column; gap: 14px; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ds-text-muted); border-bottom: 1px solid var(--ds-border-subtle); padding-bottom: 6px; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .label { font-size: 10px; color: var(--ds-text-muted); white-space: nowrap; }
+    svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+    .ic { width: 14px; height: 14px; }
+    .ic-sm { width: 12px; height: 12px; }
+
+    /* ─── 02 SOFT RAISED language ───────────────────────────────────── */
+    /* Palette: white raised surfaces with drop shadows; no harsh borders */
+    .sr-ctrl {
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--ds-font-sans); font-size: 12px; font-weight: 500;
+      height: 28px; border-radius: var(--ds-radius-md);
+      cursor: pointer; user-select: none;
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-raised);
+      color: var(--ds-text-primary);
+      padding: 0 10px; gap: 6px; white-space: nowrap;
+      box-shadow: var(--ds-shadow-raised);
+      transition: box-shadow 140ms var(--ds-ease-standard), background 140ms, transform 60ms;
+    }
+    .sr-ctrl:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .sr-ctrl:disabled, .sr-ctrl.is-disabled { opacity: .4; pointer-events: none; box-shadow: none; }
+
+    /* Toolbar button (icon+label) */
+    .sr-toolbar-btn { }
+    .sr-toolbar-btn:hover, .sr-toolbar-btn.is-hover {
+      box-shadow: 0 2px 6px rgb(15 23 42/.12), 0 1px 2px rgb(15 23 42/.08);
+      background: var(--ds-surface-raised);
+    }
+    .sr-toolbar-btn.is-active {
+      background: var(--ds-accent-surface);
+      border-color: var(--ds-accent-border);
+      color: var(--ds-accent-text);
+      box-shadow: inset 0 1px 2px rgba(79,70,229,.12), 0 0 0 1px var(--ds-accent-border);
+    }
+
+    /* Icon button */
+    .sr-icon-btn { width: 28px; padding: 0; color: var(--ds-text-muted); }
+    .sr-icon-btn:hover, .sr-icon-btn.is-hover {
+      box-shadow: 0 2px 6px rgb(15 23 42/.12), 0 1px 2px rgb(15 23 42/.08);
+      color: var(--ds-text-primary);
+    }
+    .sr-icon-btn.is-active {
+      background: var(--ds-accent); border-color: transparent;
+      color: var(--ds-text-on-accent);
+      box-shadow: 0 1px 3px rgba(79,70,229,.4);
+    }
+
+    /* Variant buttons */
+    .sr-btn-primary {
+      background: var(--ds-accent); color: var(--ds-text-on-accent);
+      border-color: transparent;
+      box-shadow: 0 2px 6px rgba(79,70,229,.35), 0 1px 2px rgba(79,70,229,.2);
+    }
+    .sr-btn-primary:hover, .sr-btn-primary.is-hover {
+      background: var(--ds-accent-hover);
+      box-shadow: 0 4px 10px rgba(79,70,229,.4), 0 2px 4px rgba(79,70,229,.25);
+    }
+    .sr-btn-secondary { }
+    .sr-btn-secondary:hover, .sr-btn-secondary.is-hover {
+      box-shadow: 0 2px 6px rgb(15 23 42/.12), 0 1px 2px rgb(15 23 42/.08);
+    }
+    .sr-btn-ghost {
+      border-color: transparent; background: transparent; box-shadow: none;
+      color: var(--ds-text-muted);
+    }
+    .sr-btn-ghost:hover, .sr-btn-ghost.is-hover {
+      background: var(--ds-state-hover); color: var(--ds-text-primary);
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .sr-btn-danger {
+      background: var(--ds-danger); color: var(--ds-text-on-accent);
+      border-color: transparent;
+      box-shadow: 0 2px 6px rgba(220,38,38,.3), 0 1px 2px rgba(220,38,38,.18);
+    }
+
+    /* Segmented control */
+    .sr-seg {
+      display: inline-flex; gap: 0;
+      border-radius: var(--ds-radius-lg); overflow: hidden;
+      background: var(--ds-surface-sunken);
+      border: 1px solid var(--ds-border-subtle);
+      padding: 2px;
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.06);
+    }
+    .sr-seg-item {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      height: 24px; padding: 0 10px; font-size: 12px; font-weight: 500;
+      border: none; background: transparent; color: var(--ds-text-muted);
+      cursor: pointer; border-radius: calc(var(--ds-radius-lg) - 2px);
+      transition: box-shadow 120ms, background 120ms, color 120ms;
+      font-family: var(--ds-font-sans);
+    }
+    .sr-seg-item:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 1px; }
+    .sr-seg-item.is-active {
+      background: var(--ds-surface-raised); color: var(--ds-text-primary);
+      box-shadow: var(--ds-shadow-raised);
+      border: 1px solid rgba(15,23,42,.06);
+    }
+    .sr-seg-item:hover:not(.is-active) { color: var(--ds-text-primary); background: rgba(255,255,255,.5); }
+
+    /* Tabs */
+    .sr-tablist { display: flex; border-bottom: 1px solid var(--ds-border-subtle); }
+    .sr-tab {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 0 10px; height: 30px; font-size: 12px; font-weight: 500;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--ds-text-muted); border-bottom: 2px solid transparent;
+      margin-bottom: -1px; transition: color 120ms, border-color 120ms;
+      font-family: var(--ds-font-sans);
+    }
+    .sr-tab:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: -1px; }
+    .sr-tab.is-active {
+      color: var(--ds-accent-text); border-bottom-color: var(--ds-accent);
+      background: linear-gradient(to bottom, transparent, var(--ds-accent-surface)/40%);
+    }
+    .sr-tab:hover:not(.is-active) { color: var(--ds-text-primary); }
+
+    /* Select trigger */
+    .sr-select-trigger {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 28px; padding: 0 8px;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-raised);
+      color: var(--ds-text-primary); font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: var(--ds-font-sans); min-width: 120px;
+      box-shadow: var(--ds-shadow-raised);
+    }
+    .sr-select-trigger:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .sr-select-trigger .chevron { margin-left: auto; color: var(--ds-text-muted); }
+
+    /* Menu */
+    .sr-menu {
+      border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-lg);
+      background: var(--ds-surface-overlay); padding: 4px;
+      min-width: 160px;
+      box-shadow: var(--ds-shadow-popover);
+    }
+    .sr-menu-item {
+      display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+      border-radius: var(--ds-radius-sm); font-size: 12px; cursor: pointer;
+      color: var(--ds-text-secondary); font-family: var(--ds-font-sans);
+      transition: background 100ms;
+    }
+    .sr-menu-item:hover, .sr-menu-item.is-active { background: var(--ds-state-hover); color: var(--ds-text-primary); }
+    .sr-menu-item .shortcut { margin-left: auto; font-size: 11px; color: var(--ds-text-muted); }
+    .sr-menu-item.is-selected { font-weight: 600; color: var(--ds-text-primary); }
+    .sr-menu-divider { height: 1px; background: var(--ds-border-subtle); margin: 3px 0; }
+
+    /* Color swatch */
+    .sr-swatch {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: var(--ds-radius-md);
+      border: 1px solid rgba(0,0,0,.08); cursor: pointer;
+      box-shadow: var(--ds-shadow-raised);
+      transition: box-shadow 120ms;
+    }
+    .sr-swatch:hover { box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+    .sr-swatch.is-selected { box-shadow: 0 0 0 2px var(--ds-accent), 0 0 0 4px var(--ds-surface-base), 0 2px 6px rgba(0,0,0,.14); }
+    .sr-swatch:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .sr-color-trigger {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 28px; padding: 0 8px;
+      border-radius: var(--ds-radius-md);
+      border: 1px solid var(--ds-border-subtle); background: var(--ds-surface-raised);
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--ds-text-secondary);
+      font-family: var(--ds-font-sans); box-shadow: var(--ds-shadow-raised);
+    }
+    .sr-color-dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,.1); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+
+    /* Switch */
+    .sr-switch-track {
+      position: relative; width: 36px; height: 20px; border-radius: 99px;
+      border: 1px solid var(--ds-border-subtle);
+      background: var(--ds-surface-sunken);
+      box-shadow: inset 0 1px 3px rgba(15,23,42,.1);
+      transition: background 150ms, border-color 150ms; cursor: pointer;
+      flex-shrink: 0; font-size: 0; padding: 0;
+    }
+    .sr-switch-track:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+    .sr-switch-track.is-on {
+      background: var(--ds-accent); border-color: var(--ds-accent);
+      box-shadow: 0 1px 4px rgba(79,70,229,.35);
+    }
+    .sr-switch-thumb {
+      position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--ds-surface-raised);
+      box-shadow: 0 1px 3px rgba(0,0,0,.2), 0 1px 2px rgba(0,0,0,.12);
+      transition: transform 150ms;
+    }
+    .sr-switch-track.is-on .sr-switch-thumb { transform: translateX(16px); }
+
+    /* Tooltip */
+    .sr-tooltip-wrap { position: relative; display: inline-block; }
+    .sr-tooltip {
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--ds-surface-overlay); border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-sm); padding: 4px 8px; font-size: 11px;
+      font-family: var(--ds-font-sans); color: var(--ds-text-primary);
+      white-space: nowrap; pointer-events: none;
+      box-shadow: var(--ds-shadow-popover);
+      z-index: 10;
+    }
+
+    /* Divider */
+    .sr-divider-v { width: 1px; height: 20px; background: var(--ds-border-subtle); margin: 0 2px; flex-shrink: 0; }
+    .sr-divider-h { height: 1px; width: 100%; background: var(--ds-border-subtle); margin: 4px 0; }
+
+    /* Toolbar group */
+    .sr-toolbar-group {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: var(--ds-surface-chrome);
+      border: 1px solid var(--ds-border-subtle);
+      border-radius: var(--ds-radius-lg); padding: 4px 6px;
+      box-shadow: var(--ds-shadow-overlay);
+      backdrop-filter: blur(8px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="spec-header">
+    <h1>02 — Soft Raised</h1>
+    <p>Every control sits on a white raised card with a gentle drop shadow. Depth is implied through light rather than borders — surfaces feel like physical keys with tactile, clicky hover feedback.</p>
+    <ul>
+      <li>All surfaces: var(--ds-surface-raised) + var(--ds-shadow-raised) at rest</li>
+      <li>Hover: shadow deepens (0 2px 6px), surface stays white</li>
+      <li>Active: accent fill + colored shadow glow; icon buttons go fully filled</li>
+      <li>Segmented track: inset shadow (sunken) + raised white thumb on selection</li>
+      <li>Switch: inset shadow off, accent glow on</li>
+    </ul>
+  </div>
+
+  <div class="sheet">
+
+    <!-- Toolbar buttons -->
+    <div class="section">
+      <div class="section-title">Toolbar Button (icon + label)</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-toolbar-btn" aria-label="Bold">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+          <span class="label">Default</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-toolbar-btn is-hover">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+          <span class="label">Hover</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-toolbar-btn is-active" aria-pressed="true">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+          <span class="label">Active</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-toolbar-btn" disabled>
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+            Bold
+          </button>
+          <span class="label">Disabled</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Icon buttons -->
+    <div class="section">
+      <div class="section-title">Icon Button</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-icon-btn" aria-label="Align left"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+          <span class="label">Default</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-icon-btn is-hover" aria-label="Align center"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="20" y1="18" x2="4" y2="18"/></svg></button>
+          <span class="label">Hover</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-icon-btn is-active" aria-label="Align right" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg></button>
+          <span class="label">Active</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-icon-btn" disabled aria-label="Insert image"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>
+          <span class="label">Disabled</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Button variants -->
+    <div class="section">
+      <div class="section-title">Button Variants</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-btn-primary"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Slide</button>
+          <span class="label">Primary</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-btn-secondary">Duplicate</button>
+          <span class="label">Secondary</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-btn-ghost">Cancel</button>
+          <span class="label">Ghost</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <button class="sr-ctrl sr-btn-danger">Delete</button>
+          <span class="label">Danger</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segmented control -->
+    <div class="section">
+      <div class="section-title">Segmented Control</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="sr-seg" role="radiogroup" aria-label="Alignment">
+            <button class="sr-seg-item" role="radio" aria-checked="false">Left</button>
+            <button class="sr-seg-item is-active" role="radio" aria-checked="true">Center</button>
+            <button class="sr-seg-item" role="radio" aria-checked="false">Right</button>
+          </div>
+          <span class="label">3-segment, center selected</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="sr-seg" role="radiogroup" aria-label="View mode">
+            <button class="sr-seg-item is-active" role="radio" aria-checked="true">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              Edit
+            </button>
+            <button class="sr-seg-item" role="radio" aria-checked="false">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Preview
+            </button>
+          </div>
+          <span class="label">2-segment with icons</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="section">
+      <div class="section-title">Tabs</div>
+      <div class="sr-tablist" role="tablist" aria-label="Inspector panels" style="width:360px">
+        <button class="sr-tab is-active" role="tab" aria-selected="true">Style</button>
+        <button class="sr-tab" role="tab" aria-selected="false">Animate</button>
+        <button class="sr-tab" role="tab" aria-selected="false">Layout</button>
+      </div>
+    </div>
+
+    <!-- Select dropdown -->
+    <div class="section">
+      <div class="section-title">Select Dropdown</div>
+      <div class="row" style="align-items:flex-start;gap:32px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="sr-select-trigger" aria-haspopup="listbox" aria-label="Font family">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            Inter
+            <svg class="ic-sm chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <span class="label">Closed trigger</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <ul class="sr-menu" role="listbox" aria-label="Font family">
+            <li class="sr-menu-item is-selected" role="option" aria-selected="true">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Inter
+            </li>
+            <li class="sr-menu-item is-active" role="option"><span style="width:14px;height:14px;display:inline-block"></span>Geist Sans</li>
+            <li class="sr-menu-item" role="option"><span style="width:14px;height:14px;display:inline-block"></span>DM Sans</li>
+            <li class="sr-menu-item" role="option"><span style="width:14px;height:14px;display:inline-block"></span>Georgia</li>
+          </ul>
+          <span class="label">Open menu</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popover / command menu -->
+    <div class="section">
+      <div class="section-title">Popover / Command Menu</div>
+      <div style="display:flex;gap:20px;align-items:flex-start">
+        <ul class="sr-menu" role="menu" aria-label="Insert" style="width:220px">
+          <li class="sr-menu-item" role="menuitem">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Insert Image<span class="shortcut">⌘I</span>
+          </li>
+          <li class="sr-menu-item is-active" role="menuitem">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Insert Link<span class="shortcut">⌘K</span>
+          </li>
+          <li class="sr-menu-divider" role="separator"></li>
+          <li class="sr-menu-item" role="menuitem">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Slide<span class="shortcut">⌘⏎</span>
+          </li>
+          <li class="sr-menu-item" role="menuitem">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Find &amp; Replace<span class="shortcut">⌘H</span>
+          </li>
+        </ul>
+        <span class="label" style="margin-top:6px">Deep popover shadow<br>hover = Insert Link</span>
+      </div>
+    </div>
+
+    <!-- Color swatch + picker trigger -->
+    <div class="section">
+      <div class="section-title">Color Swatch &amp; Picker Trigger</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:180px">
+            <button class="sr-swatch" aria-label="White" style="background:#ffffff"></button>
+            <button class="sr-swatch is-selected" aria-label="Indigo" aria-pressed="true" style="background:#4f46e5">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-6.5"/></svg>
+            </button>
+            <button class="sr-swatch" aria-label="Red" style="background:#ef4444"></button>
+            <button class="sr-swatch" aria-label="Amber" style="background:#f59e0b"></button>
+            <button class="sr-swatch" aria-label="Emerald" style="background:#22c55e"></button>
+            <button class="sr-swatch" aria-label="Slate" style="background:#64748b"></button>
+          </div>
+          <span class="label">Swatches (raised, indigo selected)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="sr-color-trigger" aria-label="Text color">
+            <div class="sr-color-dot" style="background:#4f46e5;border-color:var(--ds-accent-border)"></div>
+            Text color
+            <svg class="ic-sm" style="margin-left:auto;color:var(--ds-text-muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <span class="label">Color picker trigger</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Switch -->
+    <div class="section">
+      <div class="section-title">Switch / Toggle</div>
+      <div class="row">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ds-text-secondary);font-family:var(--ds-font-sans)">
+            <button class="sr-switch-track is-on" role="switch" aria-checked="true" aria-label="Dark background" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))">
+              <span class="sr-switch-thumb"></span>
+            </button>
+            Dark background
+          </div>
+          <span class="label">On (accent glow)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ds-text-secondary);font-family:var(--ds-font-sans)">
+            <button class="sr-switch-track" role="switch" aria-checked="false" aria-label="Show grid" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))">
+              <span class="sr-switch-thumb"></span>
+            </button>
+            Show grid
+          </div>
+          <span class="label">Off (inset sunken)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="section">
+      <div class="section-title">Tooltip</div>
+      <div class="row">
+        <div class="sr-tooltip-wrap">
+          <button class="sr-ctrl sr-icon-btn" aria-label="Insert image" aria-describedby="tip-sr">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <span id="tip-sr" role="tooltip" class="sr-tooltip">Insert image <kbd style="font-family:inherit;border:1px solid var(--ds-border-subtle);border-radius:3px;padding:0 3px;font-size:10px;box-shadow:var(--ds-shadow-raised)">⌘⇧I</kbd></span>
+        </div>
+        <span class="label">Tooltip: deep overlay shadow</span>
+      </div>
+    </div>
+
+    <!-- Dividers -->
+    <div class="section">
+      <div class="section-title">Divider</div>
+      <div class="row" style="align-items:flex-start;gap:40px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;height:28px;gap:4px">
+            <button class="sr-ctrl sr-icon-btn" aria-label="Bold"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></button>
+            <div class="sr-divider-v" role="separator" aria-orientation="vertical"></div>
+            <button class="sr-ctrl sr-icon-btn" aria-label="Italic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+          </div>
+          <span class="label">Vertical (toolbar)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;width:140px">
+          <div style="font-size:11px;color:var(--ds-text-secondary);padding:4px 0;font-family:var(--ds-font-sans)">Font</div>
+          <div class="sr-divider-h" role="separator"></div>
+          <div style="font-size:11px;color:var(--ds-text-secondary);padding:4px 0;font-family:var(--ds-font-sans)">Size</div>
+          <span class="label">Horizontal (panel)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assembled toolbar group -->
+    <div class="section">
+      <div class="section-title">Assembled Toolbar Group</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="sr-toolbar-group" role="toolbar" aria-label="Text formatting">
+          <button class="sr-select-trigger" style="min-width:80px;height:24px;font-size:11px;box-shadow:none;border-color:transparent;background:transparent" aria-label="Font">
+            Inter <svg class="ic-sm" style="color:var(--ds-text-muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="sr-divider-v"></div>
+          <button class="sr-ctrl sr-toolbar-btn is-active" style="height:26px" aria-label="Bold" aria-pressed="true">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+          </button>
+          <button class="sr-ctrl sr-icon-btn" style="height:26px;width:26px" aria-label="Italic">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+          </button>
+          <button class="sr-ctrl sr-icon-btn" style="height:26px;width:26px" aria-label="Underline">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0 0 12 0V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+          </button>
+          <div class="sr-divider-v"></div>
+          <button class="sr-swatch" style="width:20px;height:20px;border-radius:4px;background:#4f46e5" aria-label="Color"></button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="sr-seg" role="radiogroup" aria-label="Alignment">
+            <button class="sr-seg-item" role="radio" aria-checked="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+            <button class="sr-seg-item is-active" role="radio" aria-checked="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="20" y1="18" x2="4" y2="18"/></svg></button>
+            <button class="sr-seg-item" role="radio" aria-checked="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg></button>
+          </div>
+          <button class="sr-switch-track is-on" role="switch" aria-checked="true" aria-label="Snap" onclick="this.classList.toggle('is-on');this.setAttribute('aria-checked',this.classList.contains('is-on'))"><span class="sr-switch-thumb"></span></button>
+          <span style="font-size:11px;color:var(--ds-text-muted);font-family:var(--ds-font-sans)">Snap</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
