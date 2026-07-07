@@ -7,6 +7,7 @@ import {
 } from "@/lib/presentation/stage-guides";
 
 import {
+  DEFAULT_PRECISION_GUIDE_PREFERENCES,
   normalizePrecisionGuidePreferences,
   readPrecisionGuidePreferences,
   writePrecisionGuidePreferences,
@@ -28,9 +29,7 @@ export function usePrecisionGuides(
   setStageAnnouncement: (announcement: string) => void,
 ) {
   const [precisionGuides, setPrecisionGuides] =
-    useState<PrecisionGuidePreferences>(() =>
-      readPrecisionGuidePreferences(documentId),
-    );
+    useState<PrecisionGuidePreferences>(DEFAULT_PRECISION_GUIDE_PREFERENCES);
 
   useEffect(() => {
     let canceled = false;

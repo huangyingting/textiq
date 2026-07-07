@@ -6,6 +6,11 @@ const source = readFileSync(
   new URL("./slide-editor.tsx", import.meta.url),
   "utf8",
 );
+const topToolbarSource = readFileSync(
+  new URL("./slide-editor-top-toolbar.tsx", import.meta.url),
+  "utf8",
+);
+const editorAndToolbarSource = `${source}\n${topToolbarSource}`;
 const sourceReviewController = readFileSync(
   new URL("./use-source-review-controller.ts", import.meta.url),
   "utf8",
@@ -13,9 +18,15 @@ const sourceReviewController = readFileSync(
 
 describe("SlideEditor document-source command surface", () => {
   test("renders document-source command controls", () => {
-    assert.equal(source.includes('aria-label="Document source"'), true);
-    assert.equal(source.includes("Refresh all source links"), true);
-    assert.equal(source.includes("From document"), true);
+    assert.equal(
+      editorAndToolbarSource.includes('aria-label="Document source"'),
+      true,
+    );
+    assert.equal(
+      editorAndToolbarSource.includes("Refresh all source links"),
+      true,
+    );
+    assert.equal(editorAndToolbarSource.includes("From document"), true);
   });
 
   test("wires document source block insertion commands", () => {

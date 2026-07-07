@@ -16,7 +16,6 @@ import {
   useState,
   type JSX,
   type KeyboardEvent,
-  type RefObject,
   type ReactNode,
 } from "react";
 import {
@@ -24,14 +23,11 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
-  BringToFront,
   Copy,
   Crop,
   Ellipsis,
   Group,
   EyeOff,
-  FileText,
-  Image as ImageIcon,
   IndentDecrease,
   IndentIncrease,
   Italic,
@@ -44,13 +40,8 @@ import {
   RotateCcw,
   RotateCw,
   Scissors,
-  SendToBack,
-  Spline,
-  Square,
   Strikethrough,
-  Table2,
   Trash2,
-  Type as TypeIcon,
   Underline,
   Ungroup,
   Unlock,
@@ -62,10 +53,8 @@ import type {
   StyleObject,
   StylePatch,
 } from "@/lib/presentation/style-schema";
-import { ColorPicker } from "@/components/ui/color-picker";
 import { FloatingSurface } from "@/components/ui/floating-surface";
 import { Popover } from "@/components/ui/popover";
-import { Tooltip } from "@/components/ui/tooltip";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import {
   dispatchInlineTextCommand,
@@ -85,6 +74,15 @@ import {
   isMenuCommandNavigationKey,
   moveMenuCommandFocus,
 } from "@/lib/a11y/menu-command-semantics";
+import {
+  ContextToolbarColorInput,
+  ContextToolbarDivider,
+  ContextToolbarButton,
+  ContextToolbarNumberInput,
+  ContextToolbarSelect,
+  renderContextToolbarLayerIcon,
+  renderContextToolbarInsertIcon,
+} from "./context-toolbar-primitives";
 
 const TOOLBAR_GAP = 12;
 const EDGE_INSET = 8;
@@ -252,86 +250,6 @@ export function buildContextToolbarReorderActions({
   });
 }
 
-function renderSlideToolInsertIcon(key: SlideToolInsertActionKey) {
-  switch (key) {
-    case "text":
-      return <TypeIcon size={13} aria-hidden />;
-    case "shape":
-      return <Square size={13} aria-hidden />;
-    case "image":
-      return <ImageIcon size={13} aria-hidden />;
-    case "visual":
-      return <FileText size={13} aria-hidden />;
-    case "connector":
-      return <Spline size={13} aria-hidden />;
-    case "table":
-      return <Table2 size={13} aria-hidden />;
-  }
-}
-
-function renderContextToolbarReorderIcon(key: ContextToolbarReorderActionKey) {
-  switch (key) {
-    case "forward":
-      return <BringToFront size={13} aria-hidden />;
-    case "backward":
-      return <SendToBack size={13} aria-hidden />;
-    case "front":
-      return "TF";
-    case "back":
-      return "TB";
-  }
-}
-
-interface TBtnProps {
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  buttonRef?: RefObject<HTMLButtonElement | null>;
-  hasPopup?: "menu" | "dialog";
-  expanded?: boolean;
-  controls?: string;
-}
-
-function TBtn({
-  label,
-  active,
-  disabled,
-  onClick,
-  children,
-  buttonRef,
-  hasPopup,
-  expanded,
-  controls,
-}: TBtnProps) {
-  return (
-    <Tooltip label={label} delay={250}>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-pressed={active}
-        aria-haspopup={hasPopup}
-        aria-expanded={hasPopup ? expanded : undefined}
-        aria-controls={controls}
-        disabled={disabled}
-        onClick={onClick}
-        className={cx(
-          "flex h-7 w-7 items-center justify-center rounded-[var(--ds-radius-sm,6px)] text-ds-text-secondary transition-colors",
-          "hover:bg-ds-state-hover hover:text-ds-text-primary",
-          "disabled:pointer-events-none disabled:opacity-40",
-          active && "bg-ds-accent-surface text-ds-accent-text",
-          FOCUS_RING,
-        )}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
-}
-
 function InlineTextCommandButton({
   label,
   command,
@@ -348,108 +266,13 @@ function InlineTextCommandButton({
     isInlineEditing,
   );
   return (
-    <TBtn
+    <ContextToolbarButton
       label={label}
       disabled={!enabled}
       onClick={() => dispatchInlineTextCommand({ command })}
     >
       {children}
-    </TBtn>
-  );
-}
-
-function Divider() {
-  return <div aria-hidden className="mx-1 h-4 w-px bg-ds-border-subtle" />;
-}
-
-function ColorInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <ColorPicker
-      color={value}
-      onChange={onChange}
-      aria-label={label}
-      size="sm"
-      triggerChrome="swatch"
-      layer="tooltip"
-      preserveSelection
-    />
-  );
-}
-
-function ToolbarSelect({
-  label,
-  value,
-  onChange,
-  children,
-  width = "w-20",
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: ReactNode;
-  width?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="flex items-center gap-1 text-[11px] text-ds-text-muted">
-      <span className="sr-only">{label}</span>
-      <select
-        aria-label={label}
-        title={label}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        className={cx(
-          "h-7 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle bg-ds-surface px-1.5 text-[11px] text-ds-text-secondary outline-none",
-          width,
-          FOCUS_RING,
-        )}
-      >
-        {children}
-      </select>
-    </label>
-  );
-}
-
-function ToolbarNumber({
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <input
-      type="number"
-      aria-label={label}
-      title={label}
-      value={Number.isFinite(value) ? value : 0}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(event) => onChange(Number(event.currentTarget.value))}
-      className={cx(
-        "h-7 w-14 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle bg-ds-surface px-1.5 text-[11px] text-ds-text-secondary outline-none",
-        FOCUS_RING,
-      )}
-    />
+    </ContextToolbarButton>
   );
 }
 
@@ -532,22 +355,7 @@ export function seedContextToolbarStyles(
   };
 }
 
-/*! node:coverage ignore next 36 -- Browser DOM measurement helpers require a live stage DOM. */
-function getSelectionRect(selectedIds: string[]): DOMRect | null {
-  if (typeof document === "undefined" || selectedIds.length === 0) return null;
-  const rects: DOMRect[] = [];
-  for (const id of selectedIds) {
-    const el = document.querySelector(`[data-node-id="${id}"]`);
-    if (el) rects.push(el.getBoundingClientRect());
-  }
-  if (rects.length === 0) return null;
-  const left = Math.min(...rects.map((r) => r.left));
-  const top = Math.min(...rects.map((r) => r.top));
-  const right = Math.max(...rects.map((r) => r.right));
-  const bottom = Math.max(...rects.map((r) => r.bottom));
-  return new DOMRect(left, top, right - left, bottom - top);
-}
-
+/*! node:coverage ignore next 19 -- Browser DOM measurement helpers require a live stage DOM. */
 function getSlideAnchorRect(): DOMRect | null {
   const frame = getSlideAnchorElement();
   return frame?.getBoundingClientRect() ?? null;
@@ -1095,18 +903,18 @@ export function ContextToolbar({
 
   function updateToolbarPosition() {
     if (!visible) return;
-    const targetRect = getSelectionRect(selectedIds) ?? getSlideAnchorRect();
+    // All context toolbars (text, shape, element, and slide selection) anchor to
+    // the slide frame's top-center — the slide-selection toolbar position — so
+    // the toolbar sits in one stable, predictable place regardless of selection.
+    const targetRect = getSlideAnchorRect();
     if (!targetRect) return;
     const toolbarEl = toolbarRef.current;
     const toolbarWidth = toolbarEl?.offsetWidth ?? 320;
-    const toolbarHeight = toolbarEl?.offsetHeight ?? 36;
     const left = Math.max(
       EDGE_INSET,
       targetRect.left + targetRect.width / 2 - toolbarWidth / 2,
     );
-    const top = showSlideTools
-      ? targetRect.top + TOOLBAR_GAP
-      : targetRect.top - TOOLBAR_GAP - toolbarHeight;
+    const top = targetRect.top + TOOLBAR_GAP;
     if (
       prevPositionRef.current.top !== top ||
       prevPositionRef.current.left !== left
@@ -1308,20 +1116,21 @@ export function ContextToolbar({
       aria-label="Context toolbar"
       layer="tooltip"
       elevation="overlay"
+      radius="sm"
       closeOnClickAway={false}
       closeOnEscape={false}
       keepSelection
       clampToViewport
-      className="flex max-w-[calc(100vw-16px)] items-center gap-0.5 overflow-x-auto px-1.5 py-1"
+      className="flex max-w-[calc(100vw-16px)] items-center gap-px overflow-x-auto border-ds-border-strong bg-ds-surface-overlay px-1 py-0.5 font-mono [&_svg]:h-3 [&_svg]:w-3 [&_svg]:[stroke-width:1.5]"
     >
       <div
         ref={toolbarRef}
-        className="flex items-center gap-0.5"
+        className="flex items-center gap-px"
         onKeyDown={handleToolbarKeyDown}
       >
         {showSlideTools ? (
           <>
-            <ColorInput
+            <ContextToolbarColorInput
               label="Slide background"
               value={slideBackgroundColor}
               onChange={(color) =>
@@ -1331,24 +1140,32 @@ export function ContextToolbar({
                 })
               }
             />
-            <Divider />
-            <TBtn label="Add slide" onClick={() => onInsertSlide?.()}>
+            <ContextToolbarDivider />
+            <ContextToolbarButton
+              label="Add slide"
+              onClick={() => onInsertSlide?.()}
+            >
               <Plus size={13} aria-hidden />
-            </TBtn>
-            {slideToolInsertActions.length > 0 ? <Divider /> : null}
+            </ContextToolbarButton>
+            {slideToolInsertActions.length > 0 ? (
+              <ContextToolbarDivider />
+            ) : null}
             {slideToolInsertActions.map((action) => (
-              <TBtn
+              <ContextToolbarButton
                 key={action.key}
                 label={action.label}
                 onClick={() => action.onClick()}
               >
-                {renderSlideToolInsertIcon(action.key)}
-              </TBtn>
+                {renderContextToolbarInsertIcon(action.key)}
+              </ContextToolbarButton>
             ))}
-            <TBtn label="Duplicate slide" onClick={() => onDuplicateSlide?.()}>
+            <ContextToolbarButton
+              label="Duplicate slide"
+              onClick={() => onDuplicateSlide?.()}
+            >
               <Copy size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Delete slide"
               disabled={!canDeleteSlide || !onDeleteSlide}
               onClick={() =>
@@ -1359,42 +1176,42 @@ export function ContextToolbar({
               }
             >
               <Trash2 size={13} aria-hidden />
-            </TBtn>
+            </ContextToolbarButton>
           </>
         ) : null}
 
         {showTextGroup ? (
           <>
-            <TBtn
+            <ContextToolbarButton
               label="Bold"
               active={!isInlineEditing && textStyle?.weight === 700}
               onClick={() => runTextCommand("bold")}
             >
               <Bold size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Italic"
               active={!isInlineEditing && textStyle?.italic === true}
               onClick={() => runTextCommand("italic")}
             >
               <Italic size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Underline"
               active={!isInlineEditing && textStyle?.underline === true}
               onClick={() => runTextCommand("underline")}
             >
               <Underline size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Strikethrough"
               active={!isInlineEditing && textStyle?.strikethrough === true}
               onClick={() => runTextCommand("strikethrough")}
             >
               <Strikethrough size={13} aria-hidden />
-            </TBtn>
-            <Divider />
-            <ToolbarSelect
+            </ContextToolbarButton>
+            <ContextToolbarDivider />
+            <ContextToolbarSelect
               label="Text role"
               value={selectedTextRole}
               disabled={!selectedNode || !onUpdateSelectedAttributes}
@@ -1413,7 +1230,7 @@ export function ContextToolbar({
               <option value="caption">Caption</option>
               <option value="kicker">Kicker</option>
               <option value="metric">Metric</option>
-            </ToolbarSelect>
+            </ContextToolbarSelect>
             <InlineTextCommandButton
               label="Bullet list"
               command="bullet-list"
@@ -1442,25 +1259,31 @@ export function ContextToolbar({
             >
               <IndentIncrease size={13} aria-hidden />
             </InlineTextCommandButton>
-            <Divider />
-            <TBtn label="Align left" onClick={() => updateTextAlign("left")}>
+            <ContextToolbarDivider />
+            <ContextToolbarButton
+              label="Align left"
+              onClick={() => updateTextAlign("left")}
+            >
               <AlignLeft size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Align center"
               onClick={() => updateTextAlign("center")}
             >
               <AlignCenter size={13} aria-hidden />
-            </TBtn>
-            <TBtn label="Align right" onClick={() => updateTextAlign("right")}>
+            </ContextToolbarButton>
+            <ContextToolbarButton
+              label="Align right"
+              onClick={() => updateTextAlign("right")}
+            >
               <AlignRight size={13} aria-hidden />
-            </TBtn>
-            <ColorInput
+            </ContextToolbarButton>
+            <ContextToolbarColorInput
               label="Text color"
               value={textColor}
               onChange={updateTextColor}
             />
-            <ToolbarNumber
+            <ContextToolbarNumberInput
               label="Font size"
               value={fontSize}
               min={4}
@@ -1473,13 +1296,13 @@ export function ContextToolbar({
               portal
               align="center"
               trigger={
-                <TBtn
+                <ContextToolbarButton
                   label="Link"
                   disabled={!linkCommandEnabled}
                   onClick={() => setLinkOpen((open) => !open)}
                 >
                   <Link size={13} aria-hidden />
-                </TBtn>
+                </ContextToolbarButton>
               }
               className="w-64 p-2"
               aria-label="Add link"
@@ -1532,8 +1355,8 @@ export function ContextToolbar({
 
         {!isInlineEditing && selectedNode?.type === "shape" ? (
           <>
-            {showTextGroup ? <Divider /> : null}
-            <ColorInput
+            {showTextGroup ? <ContextToolbarDivider /> : null}
+            <ContextToolbarColorInput
               label="Fill color"
               value={fillColor}
               onChange={(color) =>
@@ -1542,7 +1365,7 @@ export function ContextToolbar({
                 })
               }
             />
-            <ColorInput
+            <ContextToolbarColorInput
               label="Border color"
               value={shapeStrokeColor}
               onChange={(color) =>
@@ -1554,7 +1377,7 @@ export function ContextToolbar({
                 })
               }
             />
-            <ToolbarNumber
+            <ContextToolbarNumberInput
               label="Opacity"
               value={Math.round(opacity * 100)}
               min={0}
@@ -1571,14 +1394,14 @@ export function ContextToolbar({
 
         {!isInlineEditing && selectedNode?.type === "image" ? (
           <>
-            <TBtn
+            <ContextToolbarButton
               label="Replace image"
               onClick={() => onReplaceImage?.()}
               disabled={onReplaceImage === undefined}
             >
               <Replace size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Crop image"
               active={selectedNode.content.crop !== undefined}
               onClick={() =>
@@ -1590,8 +1413,8 @@ export function ContextToolbar({
               }
             >
               <Crop size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Reset crop"
               disabled={!selectedNode.content.crop}
               onClick={() =>
@@ -1599,8 +1422,8 @@ export function ContextToolbar({
               }
             >
               <RotateCcw size={13} aria-hidden />
-            </TBtn>
-            <ToolbarSelect
+            </ContextToolbarButton>
+            <ContextToolbarSelect
               label="Image fit"
               value={selectedNode.content.fit ?? "cover"}
               onChange={(fit) =>
@@ -1614,8 +1437,8 @@ export function ContextToolbar({
               <option value="cover">Cover</option>
               <option value="fill">Fill</option>
               <option value="none">None</option>
-            </ToolbarSelect>
-            <ToolbarNumber
+            </ContextToolbarSelect>
+            <ContextToolbarNumberInput
               label="Opacity"
               value={Math.round(opacity * 100)}
               min={0}
@@ -1632,14 +1455,14 @@ export function ContextToolbar({
 
         {!isInlineEditing && selectedNode?.type === "visual" ? (
           <>
-            <TBtn
+            <ContextToolbarButton
               label="Replace visual"
               onClick={() => onReplaceVisual?.()}
               disabled={onReplaceVisual === undefined}
             >
               <Replace size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Transparent background"
               active={selectedNode.content.transparentBackground === true}
               onClick={() =>
@@ -1650,8 +1473,8 @@ export function ContextToolbar({
               }
             >
               BG
-            </TBtn>
-            <ToolbarSelect
+            </ContextToolbarButton>
+            <ContextToolbarSelect
               label="Visual theme"
               value={selectedNode.localStyle?.visual?.styleThemeId ?? "default"}
               onChange={(styleThemeId) =>
@@ -1667,13 +1490,13 @@ export function ContextToolbar({
               <option value="accent">Accent</option>
               <option value="muted">Muted</option>
               <option value="contrast">Contrast</option>
-            </ToolbarSelect>
+            </ContextToolbarSelect>
           </>
         ) : null}
 
         {!isInlineEditing && selectedNode?.type === "connector" ? (
           <>
-            <ToolbarSelect
+            <ContextToolbarSelect
               label="Connector routing"
               value={selectedNode.content.routing ?? "straight"}
               onChange={(routing) =>
@@ -1686,8 +1509,8 @@ export function ContextToolbar({
               <option value="straight">Straight</option>
               <option value="curved">Curved</option>
               <option value="elbow">Step</option>
-            </ToolbarSelect>
-            <ColorInput
+            </ContextToolbarSelect>
+            <ContextToolbarColorInput
               label="Line color"
               value={connectorStrokeColor}
               onChange={(color) =>
@@ -1698,7 +1521,7 @@ export function ContextToolbar({
                 })
               }
             />
-            <ToolbarNumber
+            <ContextToolbarNumberInput
               label="Line width"
               value={connectorStrokeWidth}
               min={0.5}
@@ -1712,7 +1535,7 @@ export function ContextToolbar({
                 })
               }
             />
-            <ToolbarSelect
+            <ContextToolbarSelect
               label="Start arrow"
               value={styleSeed.connectorStartArrow}
               onChange={(startArrow) =>
@@ -1728,8 +1551,8 @@ export function ContextToolbar({
               <option value="none">Start: none</option>
               <option value="arrow">Start: arrow</option>
               <option value="filled">Start: filled</option>
-            </ToolbarSelect>
-            <ToolbarSelect
+            </ContextToolbarSelect>
+            <ContextToolbarSelect
               label="End arrow"
               value={styleSeed.connectorEndArrow}
               onChange={(endArrow) =>
@@ -1745,36 +1568,36 @@ export function ContextToolbar({
               <option value="none">End: none</option>
               <option value="arrow">End: arrow</option>
               <option value="filled">End: filled</option>
-            </ToolbarSelect>
+            </ContextToolbarSelect>
           </>
         ) : null}
 
         {!isInlineEditing && selectedNode?.type === "table" ? (
           <>
-            <TBtn
+            <ContextToolbarButton
               label="Edit table cells"
               onClick={() => onEnterTableEdit?.()}
               disabled={onEnterTableEdit === undefined}
             >
               Edit
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Insert row"
               onClick={() =>
                 onUpdateSelectedContent?.(tableWithAddedRow(selectedNode))
               }
             >
               +R
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Insert column"
               onClick={() =>
                 onUpdateSelectedContent?.(tableWithAddedColumn(selectedNode))
               }
             >
               +C
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Delete row"
               disabled={selectedNode.content.rows.length <= 1}
               onClick={() =>
@@ -1782,8 +1605,8 @@ export function ContextToolbar({
               }
             >
               -R
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Delete column"
               disabled={selectedNode.content.columns.length <= 1}
               onClick={() =>
@@ -1793,8 +1616,8 @@ export function ContextToolbar({
               }
             >
               -C
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Toggle header row"
               active={selectedNode.content.header === true}
               onClick={() =>
@@ -1805,16 +1628,16 @@ export function ContextToolbar({
               }
             >
               H
-            </TBtn>
+            </ContextToolbarButton>
           </>
         ) : null}
 
         {showArrangeGroup && selectedIds.length > 0 ? (
           <>
-            <Divider />
+            <ContextToolbarDivider />
             {!isMultiSelect && selectedNode?.type !== "connector" ? (
               <>
-                <TBtn
+                <ContextToolbarButton
                   label="Rotate left 15°"
                   onClick={() =>
                     routeContextToolbarRotation({
@@ -1825,8 +1648,8 @@ export function ContextToolbar({
                   }
                 >
                   <RotateCcw size={13} aria-hidden />
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Rotate right 15°"
                   onClick={() =>
                     routeContextToolbarRotation({
@@ -1837,12 +1660,12 @@ export function ContextToolbar({
                   }
                 >
                   <RotateCw size={13} aria-hidden />
-                </TBtn>
+                </ContextToolbarButton>
               </>
             ) : null}
             {isMultiSelect ? (
               <>
-                <TBtn
+                <ContextToolbarButton
                   label={currentObjectAlignCommandDescriptor("left").label}
                   onClick={() =>
                     routeContextToolbarAlign({
@@ -1852,8 +1675,8 @@ export function ContextToolbar({
                   }
                 >
                   <AlignLeft size={13} aria-hidden />
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label={currentObjectAlignCommandDescriptor("center").label}
                   onClick={() =>
                     routeContextToolbarAlign({
@@ -1863,8 +1686,8 @@ export function ContextToolbar({
                   }
                 >
                   <AlignCenter size={13} aria-hidden />
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label={currentObjectAlignCommandDescriptor("right").label}
                   onClick={() =>
                     routeContextToolbarAlign({
@@ -1874,8 +1697,8 @@ export function ContextToolbar({
                   }
                 >
                   <AlignRight size={13} aria-hidden />
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Distribute horizontally"
                   disabled={selectedIds.length < 3}
                   onClick={() =>
@@ -1886,8 +1709,8 @@ export function ContextToolbar({
                   }
                 >
                   DH
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Distribute vertically"
                   disabled={selectedIds.length < 3}
                   onClick={() =>
@@ -1898,8 +1721,8 @@ export function ContextToolbar({
                   }
                 >
                   DV
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Match width"
                   onClick={() =>
                     routeContextToolbarMatchSize({
@@ -1909,8 +1732,8 @@ export function ContextToolbar({
                   }
                 >
                   MW
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Match height"
                   onClick={() =>
                     routeContextToolbarMatchSize({
@@ -1920,8 +1743,8 @@ export function ContextToolbar({
                   }
                 >
                   MH
-                </TBtn>
-                <TBtn
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label={selectedNode?.type === "group" ? "Ungroup" : "Group"}
                   onClick={selectedNode?.type === "group" ? onUngroup : onGroup}
                   disabled={
@@ -1933,53 +1756,53 @@ export function ContextToolbar({
                   ) : (
                     <Group size={13} aria-hidden />
                   )}
-                </TBtn>
+                </ContextToolbarButton>
               </>
             ) : null}
 
             {!isMultiSelect ? (
               <>
                 {contextToolbarReorderActions.map((action) => (
-                  <TBtn
+                  <ContextToolbarButton
                     key={action.commandId}
                     label={action.label}
                     onClick={() => action.onClick()}
                   >
-                    {renderContextToolbarReorderIcon(action.key)}
-                  </TBtn>
+                    {renderContextToolbarLayerIcon(action.key)}
+                  </ContextToolbarButton>
                 ))}
               </>
             ) : null}
 
-            <Divider />
-            <TBtn
+            <ContextToolbarDivider />
+            <ContextToolbarButton
               label="Cut"
               onClick={onCut}
               disabled={selectedIds.length === 0}
             >
               <Scissors size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Duplicate"
               onClick={onDuplicate}
               disabled={selectedIds.length === 0}
             >
               <Copy size={13} aria-hidden />
-            </TBtn>
-            <TBtn
+            </ContextToolbarButton>
+            <ContextToolbarButton
               label="Delete"
               onClick={onDelete}
               disabled={selectedIds.length === 0}
             >
               <Trash2 size={13} aria-hidden />
-            </TBtn>
+            </ContextToolbarButton>
             <Popover
               open={moreOpen}
               onClose={() => setMoreOpen(false)}
               portal
               align="center"
               trigger={
-                <TBtn
+                <ContextToolbarButton
                   label="More"
                   buttonRef={moreMenuTriggerRef}
                   hasPopup="menu"
@@ -1988,7 +1811,7 @@ export function ContextToolbar({
                   onClick={() => setMoreOpen((open) => !open)}
                 >
                   <Ellipsis size={13} aria-hidden />
-                </TBtn>
+                </ContextToolbarButton>
               }
               className="min-w-36 py-1"
               aria-label="More object actions"
@@ -2040,7 +1863,7 @@ export function ContextToolbar({
 
         {isDecorationSelected && !isInlineEditing ? (
           <>
-            <Divider />
+            <ContextToolbarDivider />
             <span className="px-1.5 text-[11px] text-ds-text-muted">
               Theme decoration
             </span>

@@ -16,35 +16,37 @@ and pointer state rules, see
 
 ## Source Files
 
-| Area                | Source                                                                                                                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Route page          | [`src/app/app/documents/[id]/slides/page.tsx`](../../src/app/app/documents/%5Bid%5D/slides/page.tsx)                                           |
-| Route controller    | [`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.tsx) |
-| Editor shell        | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                                           |
-| Deck toolbar        | [`src/components/presentation/toolbar/deck-toolbar.tsx`](../../src/components/presentation/toolbar/deck-toolbar.tsx)                           |
-| Read-only canvas    | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                                           |
-| Node renderer       | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)                             |
-| Inspector           | [`src/components/presentation/inspector/inspector-shell.tsx`](../../src/components/presentation/inspector/inspector-shell.tsx)                 |
-| Inspector panels    | [`src/components/presentation/inspector/`](../../src/components/presentation/inspector/)                                                       |
-| Context toolbar     | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)                     |
-| Command palette     | [`src/components/presentation/slide-command-palette.tsx`](../../src/components/presentation/slide-command-palette.tsx)                         |
-| Filmstrip           | [`src/components/presentation/filmstrip/filmstrip.tsx`](../../src/components/presentation/filmstrip/filmstrip.tsx)                             |
-| Stage state         | [`src/components/presentation/use-stage-interaction-controller.ts`](../../src/components/presentation/use-stage-interaction-controller.ts)     |
-| Stage targeting     | [`src/components/presentation/stage-targeting.ts`](../../src/components/presentation/stage-targeting.ts)                                       |
-| Stage pointer       | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts)                 |
-| Stage keyboard      | [`src/components/presentation/stage-keyboard-interactions.ts`](../../src/components/presentation/stage-keyboard-interactions.ts)               |
-| Stage fit           | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                                 |
-| Stage chrome        | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                                           |
-| Stage guides        | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                                           |
-| Selection geometry  | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                                               |
-| Deck commands       | [`src/lib/presentation/editor-commands.ts`](../../src/lib/presentation/editor-commands.ts)                                                     |
-| Document derivation | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)                                             |
-| Source links        | [`src/lib/presentation/source-links.ts`](../../src/lib/presentation/source-links.ts)                                                           |
-| Presence state      | [`src/lib/presentation/slide-editor-collaboration-state.ts`](../../src/lib/presentation/slide-editor-collaboration-state.ts)                   |
-| Open/save state     | [`src/components/editor/use-slide-editor-open.ts`](../../src/components/editor/use-slide-editor-open.ts)                                       |
-| Autosave scheduler  | [`src/lib/presentation/slide-autosave-scheduler.ts`](../../src/lib/presentation/slide-autosave-scheduler.ts)                                   |
-| Autosave queue      | [`src/lib/presentation/resilient-autosave-queue.ts`](../../src/lib/presentation/resilient-autosave-queue.ts)                                   |
-| Clipboard payloads  | [`src/lib/presentation/clipboard/node-payload.ts`](../../src/lib/presentation/clipboard/node-payload.ts)                                       |
+| Area                | Source                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Route page          | [`src/app/app/documents/[id]/slides/page.tsx`](../../src/app/app/documents/%5Bid%5D/slides/page.tsx)                                             |
+| Route controller    | [`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.tsx)   |
+| Editor shell        | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                                             |
+| Top toolbar         | [`src/components/presentation/slide-editor-top-toolbar.tsx`](../../src/components/presentation/slide-editor-top-toolbar.tsx)                     |
+| Deck toolbar        | [`src/components/presentation/toolbar/deck-toolbar.tsx`](../../src/components/presentation/toolbar/deck-toolbar.tsx)                             |
+| Read-only canvas    | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                                             |
+| Node renderer       | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)                               |
+| Inspector           | [`src/components/presentation/inspector/inspector-shell.tsx`](../../src/components/presentation/inspector/inspector-shell.tsx)                   |
+| Inspector panels    | [`src/components/presentation/inspector/`](../../src/components/presentation/inspector/)                                                         |
+| Context toolbar     | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)                       |
+| Context controls    | [`src/components/presentation/toolbar/context-toolbar-primitives.tsx`](../../src/components/presentation/toolbar/context-toolbar-primitives.tsx) |
+| Command palette     | [`src/components/presentation/slide-command-palette.tsx`](../../src/components/presentation/slide-command-palette.tsx)                           |
+| Filmstrip           | [`src/components/presentation/filmstrip/filmstrip.tsx`](../../src/components/presentation/filmstrip/filmstrip.tsx)                               |
+| Stage state         | [`src/components/presentation/use-stage-interaction-controller.ts`](../../src/components/presentation/use-stage-interaction-controller.ts)       |
+| Stage targeting     | [`src/components/presentation/stage-targeting.ts`](../../src/components/presentation/stage-targeting.ts)                                         |
+| Stage pointer       | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts)                   |
+| Stage keyboard      | [`src/components/presentation/stage-keyboard-interactions.ts`](../../src/components/presentation/stage-keyboard-interactions.ts)                 |
+| Stage fit           | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                                   |
+| Stage chrome        | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                                             |
+| Stage guides        | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                                             |
+| Selection geometry  | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                                                 |
+| Deck commands       | [`src/lib/presentation/editor-commands.ts`](../../src/lib/presentation/editor-commands.ts)                                                       |
+| Document derivation | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)                                               |
+| Source links        | [`src/lib/presentation/source-links.ts`](../../src/lib/presentation/source-links.ts)                                                             |
+| Presence state      | [`src/lib/presentation/slide-editor-collaboration-state.ts`](../../src/lib/presentation/slide-editor-collaboration-state.ts)                     |
+| Open/save state     | [`src/components/editor/use-slide-editor-open.ts`](../../src/components/editor/use-slide-editor-open.ts)                                         |
+| Autosave scheduler  | [`src/lib/presentation/slide-autosave-scheduler.ts`](../../src/lib/presentation/slide-autosave-scheduler.ts)                                     |
+| Autosave queue      | [`src/lib/presentation/resilient-autosave-queue.ts`](../../src/lib/presentation/resilient-autosave-queue.ts)                                     |
+| Clipboard payloads  | [`src/lib/presentation/clipboard/node-payload.ts`](../../src/lib/presentation/clipboard/node-payload.ts)                                         |
 
 ## Ownership Model
 
@@ -376,9 +378,10 @@ document blocks or document id, those values are passed by `SlideEditor`.
 
 ## Popover Runtime
 
-The canvas popover is anchored to the current object: the selected union bbox for
-node selections and the slide top edge when the slide is current. Text edit
-mode keeps the popover anchored to the text bbox and hides object actions so a
+The canvas popover always anchors to the slide frame's top-center — the same
+position the slide-selection toolbar uses — so the context toolbar sits in one
+stable, predictable place regardless of what is selected (text, shape, element,
+or slide). Text edit mode keeps the same anchor and hides object actions so a
 caret edit cannot accidentally delete or reorder the whole node.
 
 Single-node popovers expose frequent kind-specific verbs: text styling and

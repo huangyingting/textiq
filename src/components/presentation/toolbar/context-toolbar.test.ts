@@ -86,11 +86,11 @@ function expandToolbarTree(
   if (
     typeof element.type === "function" &&
     [
-      "TBtn",
-      "Divider",
-      "ColorInput",
-      "ToolbarSelect",
-      "ToolbarNumber",
+      "ContextToolbarButton",
+      "ContextToolbarDivider",
+      "ContextToolbarColorInput",
+      "ContextToolbarSelect",
+      "ContextToolbarNumberInput",
     ].includes(element.type.name)
   ) {
     expandToolbarTree(

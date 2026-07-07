@@ -350,16 +350,16 @@ function valueForNumber(label: string) {
 function exerciseToolbarTree(tree: ReactNode) {
   const labels: string[] = [];
   const privateToolbarComponents = new Set([
-    "TBtn",
-    "Divider",
-    "ColorInput",
-    "ToolbarSelect",
-    "ToolbarNumber",
+    "ContextToolbarButton",
+    "ContextToolbarDivider",
+    "ContextToolbarColorInput",
+    "ContextToolbarSelect",
+    "ContextToolbarNumberInput",
   ]);
 
   for (const colorInput of findAll(
     tree,
-    (element) => componentName(element) === "ColorInput",
+    (element) => componentName(element) === "ContextToolbarColorInput",
   )) {
     labels.push(String(colorInput.props.label));
     (colorInput.props.onChange as (value: string) => void)("#abcdef");
@@ -367,7 +367,7 @@ function exerciseToolbarTree(tree: ReactNode) {
 
   for (const select of findAll(
     tree,
-    (element) => componentName(element) === "ToolbarSelect",
+    (element) => componentName(element) === "ContextToolbarSelect",
   )) {
     const label = String(select.props.label);
     labels.push(label);
@@ -376,7 +376,7 @@ function exerciseToolbarTree(tree: ReactNode) {
 
   for (const numberInput of findAll(
     tree,
-    (element) => componentName(element) === "ToolbarNumber",
+    (element) => componentName(element) === "ContextToolbarNumberInput",
   )) {
     const label = String(numberInput.props.label);
     labels.push(label);
@@ -387,7 +387,7 @@ function exerciseToolbarTree(tree: ReactNode) {
 
   for (const button of findAll(
     tree,
-    (element) => componentName(element) === "TBtn",
+    (element) => componentName(element) === "ContextToolbarButton",
   )) {
     const label = String(button.props.label);
     labels.push(label);

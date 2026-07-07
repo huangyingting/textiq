@@ -5,6 +5,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import type { PresentationExportPreflightResult } from "@/lib/presentation/export-preflight";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
 import { SlideEditor } from "./slide-editor";
+import { SlideEditorTopToolbar } from "./slide-editor-top-toolbar";
 import {
   buildDeck,
   buildImageNode,
@@ -55,6 +56,17 @@ function findRequiredElement(
   return element;
 }
 
+function renderTopToolbar(root: ReactNode): ReactNode {
+  const toolbar = findRequiredElement(
+    root,
+    (element) => element.type === SlideEditorTopToolbar,
+    "expected top toolbar",
+  );
+  return SlideEditorTopToolbar(
+    toolbar.props as unknown as Parameters<typeof SlideEditorTopToolbar>[0],
+  );
+}
+
 describe("SlideEditor export preflight", () => {
   test("blocks PDF download behind a fatal format preflight", () => {
     const deck = buildDeck([
@@ -84,7 +96,7 @@ describe("SlideEditor export preflight", () => {
     );
 
     const requestPdfExport = findRequiredElement(
-      tree,
+      renderTopToolbar(tree),
       (element) =>
         element.type === "button" &&
         element.props["aria-label"] === "Export PDF",
@@ -163,7 +175,7 @@ describe("SlideEditor export preflight", () => {
     );
 
     const requestPptxExport = findRequiredElement(
-      tree,
+      renderTopToolbar(tree),
       (element) =>
         element.type === "button" &&
         element.props["aria-label"] === "Export PPTX",

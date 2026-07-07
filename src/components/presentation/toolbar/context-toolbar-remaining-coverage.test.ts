@@ -382,7 +382,7 @@ test("ContextToolbar remaining render branches include disabled slide delete, hi
   const slideDelete = findAll(
     slideToolbar,
     (element) =>
-      componentName(element) === "TBtn" &&
+      componentName(element) === "ContextToolbarButton" &&
       element.props.label === "Delete slide",
   )[0];
   assert.equal(slideDelete.props.disabled, true);
@@ -406,7 +406,7 @@ test("ContextToolbar remaining render branches include disabled slide delete, hi
     findAll(
       hiddenToolbar,
       (element) =>
-        componentName(element) === "TBtn" &&
+        componentName(element) === "ContextToolbarButton" &&
         element.props.label === "Add slide",
     ).length,
     0,
@@ -427,7 +427,8 @@ test("ContextToolbar remaining render branches include disabled slide delete, hi
   const resetCrop = findAll(
     imageToolbar,
     (element) =>
-      componentName(element) === "TBtn" && element.props.label === "Reset crop",
+      componentName(element) === "ContextToolbarButton" &&
+      element.props.label === "Reset crop",
   )[0];
   assert.equal(resetCrop.props.disabled, true);
 });

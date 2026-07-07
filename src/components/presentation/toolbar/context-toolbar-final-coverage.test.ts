@@ -493,31 +493,32 @@ test("ContextToolbar final geometry, observers, keyboard navigation, and menu co
   const alignLeft = findAll(
     tree,
     (element) =>
-      componentName(element) === "TBtn" && element.props.label === "Align left",
+      componentName(element) === "ContextToolbarButton" &&
+      element.props.label === "Align left",
   )[0];
   (alignLeft.props.onClick as () => void)();
   const connectorRouting = findAll(
     tree,
     (element) =>
-      componentName(element) === "ToolbarSelect" &&
+      componentName(element) === "ContextToolbarSelect" &&
       element.props.label === "Connector routing",
   )[0];
   const lineColor = findAll(
     tree,
     (element) =>
-      componentName(element) === "ColorInput" &&
+      componentName(element) === "ContextToolbarColorInput" &&
       element.props.label === "Line color",
   )[0];
   const lineWidth = findAll(
     tree,
     (element) =>
-      componentName(element) === "ToolbarNumber" &&
+      componentName(element) === "ContextToolbarNumberInput" &&
       element.props.label === "Line width",
   )[0];
   const endArrow = findAll(
     tree,
     (element) =>
-      componentName(element) === "ToolbarSelect" &&
+      componentName(element) === "ContextToolbarSelect" &&
       element.props.label === "End arrow",
   )[0];
   (connectorRouting.props.onChange as (value: string) => void)("curved");
@@ -575,14 +576,14 @@ test("ContextToolbar final slide, table, image, connector, and decoration branch
   const deleteSlide = findAll(
     slideTree,
     (element) =>
-      componentName(element) === "TBtn" &&
+      componentName(element) === "ContextToolbarButton" &&
       element.props.label === "Delete slide",
   )[0];
   assert.equal(deleteSlide.props.disabled, true);
   const slideBackground = findAll(
     slideTree,
     (element) =>
-      componentName(element) === "ColorInput" &&
+      componentName(element) === "ContextToolbarColorInput" &&
       element.props.label === "Slide background",
   )[0];
   (slideBackground.props.onChange as (value: string) => void)("#111827");
@@ -593,7 +594,7 @@ test("ContextToolbar final slide, table, image, connector, and decoration branch
   );
   for (const button of findAll(
     tableTree,
-    (element) => componentName(element) === "TBtn",
+    (element) => componentName(element) === "ContextToolbarButton",
   )) {
     if (button.props.disabled !== true) {
       (button.props.onClick as () => void)();
