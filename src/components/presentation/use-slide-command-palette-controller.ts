@@ -15,7 +15,6 @@ import {
   availablePanels,
   type InspectorPanelId,
 } from "@/lib/presentation/inspector-panel-ui";
-import type { CurrentObjectReorderMode } from "@/lib/presentation/current-object-command-descriptors";
 
 import type {
   SelectionAlignMode,
@@ -74,7 +73,6 @@ export interface SlideCommandPaletteControllerArgs {
   handleAlignSelection: (mode: SelectionAlignMode) => void;
   handleDistributeSelection: (mode: SelectionDistributeMode) => void;
   handleMatchSize: (mode: SelectionMatchSizeMode) => void;
-  handleReorderSelection: (mode: CurrentObjectReorderMode) => void;
   handleGroupSelection: () => void;
   handleUngroupSelection: () => void;
   handleDuplicateSelection: () => void;
@@ -167,13 +165,6 @@ export function useSlideCommandPaletteController(
       );
       return;
     }
-    if (commandId.startsWith("selection.reorder-")) {
-      args.handleReorderSelection(
-        commandId.replace("selection.reorder-", "") as CurrentObjectReorderMode,
-      );
-      return;
-    }
-
     switch (commandId) {
       case "slide.insert":
         args.handleInsertSlide();

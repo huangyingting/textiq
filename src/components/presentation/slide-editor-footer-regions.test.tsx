@@ -277,7 +277,7 @@ describe("SlideEditorFooter", () => {
 describe("SlideEditor regions", () => {
   test("renders desktop, closed mobile, and open mobile inspector states", () => {
     const shell = () => <div>Inspector shell</div>;
-    assert.match(
+    assert.doesNotMatch(
       renderToStaticMarkup(
         <SlideEditorInspectorRegion
           isDesktopInspectorViewport
@@ -290,17 +290,18 @@ describe("SlideEditor regions", () => {
       ),
       /Inspector shell/,
     );
-    assert.ok(
-      collectElements(
-        SlideEditorInspectorRegion({
-          isDesktopInspectorViewport: true,
-          activeSlide: deckFixture().slides[0],
-          inspectorSheetOpen: false,
-          onOpenMobileInspector: () => undefined,
-          onCloseMobileInspector: () => undefined,
-          renderInspectorShell: shell,
-        }),
-      ).some((element) => element.props.children),
+    assert.match(
+      renderToStaticMarkup(
+        <SlideEditorInspectorRegion
+          isDesktopInspectorViewport
+          activeSlide={deckFixture().slides[0]}
+          inspectorSheetOpen
+          onOpenMobileInspector={() => undefined}
+          onCloseMobileInspector={() => undefined}
+          renderInspectorShell={shell}
+        />,
+      ),
+      /Inspector shell/,
     );
     assert.equal(
       renderToStaticMarkup(

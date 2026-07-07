@@ -376,6 +376,7 @@ function createRecorder() {
     align: [] as string[],
     distribute: [] as string[],
     matchSize: [] as string[],
+    panels: [] as string[],
   };
 }
 
@@ -433,6 +434,7 @@ function toolbarProps(
     canDeleteSlide: true,
     onDetachDecoration: () => recorder.actions.push("detach"),
     onRequestStageFocus: () => recorder.actions.push("focus-stage"),
+    onOpenInspectorPanel: (panel) => recorder.panels.push(panel),
     ...overrides,
   };
 }
@@ -444,17 +446,14 @@ test("ContextToolbar final geometry, observers, keyboard navigation, and menu co
     fakeElement({ focusLog }),
     fakeElement({ focusLog }),
   ];
-  const menuItems = [fakeElement({ focusLog }), fakeElement({ focusLog })];
   const toolbarNode = fakeElement({ width: 280, height: 32, query: controls });
-  const moreMenu = fakeElement({ query: menuItems });
-  const moreTrigger = fakeElement({ focusLog });
   const { observed } = installDom({ activeElement: controls[1] });
   const recorder = createRecorder();
 
   const tree = withFakeReact(
     {
       states: [{ top: -1000, left: -1000 }, false, "https://", true],
-      refs: [toolbarNode, moreMenu, moreTrigger],
+      refs: [toolbarNode],
       runEffects: true,
     },
     (setters) => {
@@ -482,15 +481,6 @@ test("ContextToolbar final geometry, observers, keyboard navigation, and menu co
   );
   (toolbarDiv.props.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
 
-  const menuDiv = findAll(
-    tree,
-    (element) =>
-      element.type === "div" && element.props.id === "final-toolbar-1",
-  )[0];
-  (menuDiv.props.onKeyDown as (event: unknown) => void)(
-    keyEvent("ArrowDown", menuItems[0]),
-  );
-  (menuDiv.props.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
   const alignLeft = findAll(
     tree,
     (element) =>
@@ -527,7 +517,7 @@ test("ContextToolbar final geometry, observers, keyboard navigation, and menu co
   (lineWidth.props.onChange as (value: number) => void)(4);
   (endArrow.props.onChange as (value: string) => void)("none");
 
-  assert.ok(focusLog.length >= 5);
+  assert.ok(focusLog.length >= 3);
   assert.ok(observed.includes("resize"));
   assert.ok(observed.includes("mutation"));
   assert.ok(recorder.align.includes("left"));
@@ -574,13 +564,6 @@ test("ContextToolbar final slide, table, image, connector, and decoration branch
         }),
       ),
   );
-  const deleteSlide = findAll(
-    slideTree,
-    (element) =>
-      componentName(element) === "ContextToolbarButton" &&
-      element.props.label === "Delete slide",
-  )[0];
-  assert.equal(deleteSlide.props.disabled, true);
   const slideBackground = findAll(
     slideTree,
     (element) =>
@@ -651,7 +634,11 @@ test("ContextToolbar final slide, table, image, connector, and decoration branch
   });
 
   const decorationTree = withFakeReact(
-    { refs: [fakeElement(), fakeElement(), fakeElement()], runEffects: true },
+    {
+      states: [{ top: -1000, left: -1000 }, false, "https://", true],
+      refs: [fakeElement(), fakeElement(), fakeElement()],
+      runEffects: true,
+    },
     () =>
       ContextToolbar(
         toolbarProps(buildShapeNode({ id: "node-a" }), recorder, {
@@ -659,14 +646,16 @@ test("ContextToolbar final slide, table, image, connector, and decoration branch
         }),
       ),
   );
-  const detach = findAll(
+  const inspectorButton = findAll(
     decorationTree,
-    (element) => element.type === "button" && textContent(element) === "Detach",
+    (element) =>
+      componentName(element) === "ContextToolbarButton" &&
+      element.props.label === "Open Generated element inspector",
   )[0];
-  (detach.props.onClick as () => void)();
+  (inspectorButton.props.onClick as () => void)();
 
   assert.ok(recorder.actions.includes("reset-crop"));
-  assert.ok(recorder.actions.includes("detach"));
+  assert.ok(recorder.panels.includes("decoration"));
   assert.ok(recorder.content.some((patch) => "crop" in patch));
   assert.ok(recorder.content.some((patch) => patch.fit === "none"));
   assert.ok(recorder.content.some((patch) => patch.routing === "curved"));
@@ -706,8 +695,6 @@ test("ContextToolbar From document insert menu opens, navigates, and inserts", (
   const focusLog: string[] = [];
   const menuItems = [fakeElement({ focusLog }), fakeElement({ focusLog })];
   const toolbarNode = fakeElement({ width: 280, height: 32 });
-  const moreMenu = fakeElement();
-  const moreTrigger = fakeElement({ focusLog });
   const fromDocMenu = fakeElement({ query: menuItems });
   const fromDocTrigger = fakeElement({ focusLog });
   installDom();
@@ -720,8 +707,8 @@ test("ContextToolbar From document insert menu opens, navigates, and inserts", (
 
   const tree = withFakeReact(
     {
-      states: [{ top: -1000, left: -1000 }, false, "https://", false, true],
-      refs: [toolbarNode, moreMenu, moreTrigger, fromDocMenu, fromDocTrigger],
+      states: [{ top: -1000, left: -1000 }, false, "https://", true],
+      refs: [toolbarNode, fromDocMenu, fromDocTrigger],
       runEffects: true,
     },
     () =>
@@ -745,7 +732,7 @@ test("ContextToolbar From document insert menu opens, navigates, and inserts", (
   const menuDiv = findAll(
     tree,
     (element) =>
-      element.type === "div" && element.props.id === "final-toolbar-2",
+      element.type === "div" && element.props.id === "final-toolbar-1",
   )[0];
   assert.ok(menuDiv);
   (menuDiv.props.onKeyDown as (event: unknown) => void)(

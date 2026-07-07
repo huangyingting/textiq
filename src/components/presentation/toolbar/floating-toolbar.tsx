@@ -23,11 +23,8 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
-  Copy,
   Crop,
   Ellipsis,
-  Group,
-  EyeOff,
   FileText,
   IndentDecrease,
   IndentIncrease,
@@ -35,20 +32,17 @@ import {
   Link,
   List,
   ListOrdered,
-  Lock,
-  Plus,
-  Replace,
   RotateCcw,
   RotateCw,
-  Scissors,
   Strikethrough,
-  Trash2,
   Underline,
-  Ungroup,
-  Unlock,
 } from "lucide-react";
 
 import type { SlideChildNode } from "@/lib/presentation/schema";
+import {
+  defaultPanelForNode,
+  type InspectorPanelId,
+} from "@/lib/presentation/inspector-panel-ui";
 import type {
   ImageFitMode,
   StyleObject,
@@ -56,7 +50,6 @@ import type {
 } from "@/lib/presentation/style-schema";
 import { FloatingSurface } from "@/components/ui/floating-surface";
 import { Popover } from "@/components/ui/popover";
-import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import {
   dispatchInlineTextCommand,
   type InlineTextCommandName,
@@ -64,11 +57,8 @@ import {
 import {
   CURRENT_OBJECT_INSERT_NODE_COMMAND_DESCRIPTORS,
   currentObjectAlignCommandDescriptor,
-  currentObjectReorderCommandDescriptor,
   type CurrentObjectInsertNodeCommandId,
   type CurrentObjectInsertNodeKind,
-  type CurrentObjectReorderCommandId,
-  type CurrentObjectReorderMode,
 } from "@/lib/presentation/current-object-command-descriptors";
 import {
   sourceBlockKindLabel,
@@ -85,7 +75,6 @@ import {
   ContextToolbarButton,
   ContextToolbarNumberInput,
   ContextToolbarSelect,
-  renderContextToolbarLayerIcon,
   renderContextToolbarInsertIcon,
 } from "./context-toolbar-primitives";
 
@@ -99,6 +88,37 @@ const INLINE_ONLY_TEXT_COMMANDS = new Set<InlineTextCommandName>([
   "link",
   "unlink",
 ]);
+
+function contextToolbarMenuLabel({
+  selectedNode,
+  selectedIds,
+  isDecorationSelected,
+}: {
+  selectedNode: SlideChildNode | undefined;
+  selectedIds: readonly string[];
+  isDecorationSelected: boolean;
+}): string {
+  if (isDecorationSelected) return "Generated element menu";
+  if (selectedIds.length > 1) return "Selection menu";
+  switch (selectedNode?.type) {
+    case "text":
+      return "Text menu";
+    case "shape":
+      return "Shape menu";
+    case "image":
+      return "Image menu";
+    case "visual":
+      return "Visual menu";
+    case "connector":
+      return "Connector menu";
+    case "table":
+      return "Table menu";
+    case "group":
+      return "Group menu";
+    default:
+      return "Object menu";
+  }
+}
 const CONTEXT_TOOLBAR_TEXT_ROLES = [
   "title",
   "subtitle",
@@ -136,14 +156,6 @@ export type SelectionMatchSizeMode = "width" | "height" | "both";
 
 type TableNode = Extract<SlideChildNode, { type: "table" }>;
 type SlideToolInsertActionKey = CurrentObjectInsertNodeKind;
-type ContextToolbarReorderActionKey = CurrentObjectReorderMode;
-
-const CONTEXT_TOOLBAR_REORDER_MODES = [
-  "forward",
-  "backward",
-  "front",
-  "back",
-] as const satisfies readonly CurrentObjectReorderMode[];
 
 export function isContextToolbarInlineTextCommandEnabled(
   command: InlineTextCommandName,
@@ -216,43 +228,6 @@ export function buildSlideToolInsertActions({
       return [action];
     },
   );
-}
-
-interface ContextToolbarReorderCallbacks {
-  onBringForward: () => void;
-  onSendBackward: () => void;
-  onBringToFront?: () => void;
-  onSendToBack?: () => void;
-}
-
-interface ContextToolbarReorderAction {
-  key: ContextToolbarReorderActionKey;
-  commandId: CurrentObjectReorderCommandId;
-  label: string;
-  onClick: () => void;
-}
-
-export function buildContextToolbarReorderActions({
-  onBringForward,
-  onSendBackward,
-  onBringToFront,
-  onSendToBack,
-}: ContextToolbarReorderCallbacks): ContextToolbarReorderAction[] {
-  const handlers: Record<ContextToolbarReorderActionKey, () => void> = {
-    forward: onBringForward,
-    backward: onSendBackward,
-    front: () => onBringToFront?.(),
-    back: () => onSendToBack?.(),
-  };
-  return CONTEXT_TOOLBAR_REORDER_MODES.map((mode) => {
-    const descriptor = currentObjectReorderCommandDescriptor(mode);
-    return {
-      key: mode,
-      commandId: descriptor.id,
-      label: descriptor.label,
-      onClick: handlers[mode],
-    };
-  });
 }
 
 function InlineTextCommandButton({
@@ -780,13 +755,13 @@ export interface ContextToolbarProps {
   isInlineEditing: boolean;
   isDragging: boolean;
   isDecorationSelected: boolean;
-  onDelete: () => void;
-  onCut: () => void;
-  onDuplicate: () => void;
-  onGroup: () => void;
-  onUngroup: () => void;
-  onBringForward: () => void;
-  onSendBackward: () => void;
+  onDelete?: () => void;
+  onCut?: () => void;
+  onDuplicate?: () => void;
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  onBringForward?: () => void;
+  onSendBackward?: () => void;
   onBringToFront?: () => void;
   onSendToBack?: () => void;
   onAlignSelection?: (mode: SelectionAlignMode) => void;
@@ -820,6 +795,8 @@ export interface ContextToolbarProps {
   canDeleteSlide?: boolean;
   onDetachDecoration?: () => void;
   onRequestStageFocus?: () => void;
+  onOpenInspectorPanel?: (panel: InspectorPanelId) => void;
+  hasDiagnostics?: boolean;
 }
 
 export function restoreFocusAfterContextToolbarEscape(
@@ -841,29 +818,16 @@ export function ContextToolbar({
   isInlineEditing,
   isDragging,
   isDecorationSelected,
-  onDelete,
-  onCut,
-  onDuplicate,
-  onGroup,
-  onUngroup,
-  onBringForward,
-  onSendBackward,
-  onBringToFront,
-  onSendToBack,
   onAlignSelection,
   onDistributeSelection,
   onMatchSize,
   onUpdateSelectedContent,
   onUpdateSelectedLayout,
   onUpdateSelectedLocalStyle,
-  onUpdateSelectedAttributes,
-  onReplaceImage,
-  onReplaceVisual,
   onResetImageCrop,
   onEnterTableEdit,
   slideBackgroundColor = "#ffffff",
   onUpdateSlideLocalStyle,
-  onInsertSlide,
   onInsertText,
   onInsertShape,
   onInsertImage,
@@ -872,20 +836,13 @@ export function ContextToolbar({
   onInsertTable,
   documentInsertBlocks,
   onInsertDocumentSourceBlock,
-  onDuplicateSlide,
-  onDeleteSlide,
-  canDeleteSlide = true,
-  onDetachDecoration,
   onRequestStageFocus,
+  onOpenInspectorPanel,
 }: ContextToolbarProps): JSX.Element | null {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ top: -1000, left: -1000 });
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState("https://");
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreMenuId = useId();
-  const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const moreMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [fromDocOpen, setFromDocOpen] = useState(false);
   const fromDocMenuId = useId();
   const fromDocMenuRef = useRef<HTMLDivElement | null>(null);
@@ -900,18 +857,10 @@ export function ContextToolbar({
     onInsertConnector,
     onInsertTable,
   });
-  const contextToolbarReorderActions = buildContextToolbarReorderActions({
-    onBringForward,
-    onSendBackward,
-    onBringToFront,
-    onSendToBack,
-  });
   const showSlideTools =
     selectedIds.length === 0 &&
     !isInlineEditing &&
-    Boolean(
-      onUpdateSlideLocalStyle || onInsertSlide || slideToolInsertActions.length,
-    );
+    Boolean(onUpdateSlideLocalStyle || slideToolInsertActions.length);
   const visible = !isDragging && (selectedIds.length > 0 || showSlideTools);
 
   function updateToolbarPosition() {
@@ -995,25 +944,26 @@ export function ContextToolbar({
   }, [visible, selectedIds, showSlideTools]);
 
   useEffect(() => {
-    if (!moreOpen) return;
-    focusFirstMenuCommand(moreMenuRef.current);
-  }, [moreOpen]);
-
-  useEffect(() => {
     if (!fromDocOpen) return;
     focusFirstMenuCommand(fromDocMenuRef.current);
   }, [fromDocOpen]);
 
   const nodeType = selectedNode?.type;
-  const showTextGroup =
-    isInlineEditing ||
-    nodeType === "text" ||
-    (nodeType === "shape" && !isMultiSelect);
+  const showTextGroup = isInlineEditing || nodeType === "text";
   const showArrangeGroup = !isInlineEditing && !isDecorationSelected;
   const linkCommandEnabled = isContextToolbarInlineTextCommandEnabled(
     "link",
     isInlineEditing,
   );
+  const moreMenuLabel = contextToolbarMenuLabel({
+    selectedNode,
+    selectedIds,
+    isDecorationSelected,
+  });
+  const showMoreMenu =
+    !isInlineEditing &&
+    onOpenInspectorPanel !== undefined &&
+    (selectedIds.length > 0 || showSlideTools);
 
   const styleSeed = seedContextToolbarStyles(
     selectedNode,
@@ -1029,7 +979,9 @@ export function ContextToolbar({
   const fontSize = styleSeed.fontSize;
   const opacity = styleSeed.opacity;
   const rotation = selectedNode?.layout?.rotation ?? 0;
-  const selectedTextRole = resolveContextToolbarTextRole(selectedNode?.role);
+  const inspectorPanel = isMultiSelect
+    ? "arrange"
+    : defaultPanelForNode(selectedNode ?? null, isDecorationSelected);
 
   function runTextCommand(command: ContextToolbarTextCommand) {
     routeContextToolbarTextCommand({
@@ -1058,11 +1010,6 @@ export function ContextToolbar({
       isInlineEditing,
       onUpdateSelectedLocalStyle,
     });
-  }
-
-  function closeMoreMenuAndRestoreFocus() {
-    setMoreOpen(false);
-    moreMenuTriggerRef.current?.focus();
   }
 
   function handleToolbarKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -1103,26 +1050,6 @@ export function ContextToolbar({
             : (currentIndex + direction + controls.length) % controls.length;
     controls[nextIndex]?.focus();
     event.preventDefault();
-  }
-
-  function handleMoreMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeMoreMenuAndRestoreFocus();
-      return;
-    }
-    if (!isMenuCommandNavigationKey(event.key)) return;
-    if (
-      moveMenuCommandFocus({
-        container: moreMenuRef.current,
-        key: event.key,
-        currentTarget: event.target,
-      })
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
   }
 
   function closeFromDocMenuAndRestoreFocus() {
@@ -1183,13 +1110,6 @@ export function ContextToolbar({
                 })
               }
             />
-            <ContextToolbarDivider />
-            <ContextToolbarButton
-              label="Add slide"
-              onClick={() => onInsertSlide?.()}
-            >
-              <Plus size={13} aria-hidden />
-            </ContextToolbarButton>
             {slideToolInsertActions.length > 0 ? (
               <ContextToolbarDivider />
             ) : null}
@@ -1254,24 +1174,6 @@ export function ContextToolbar({
                 </div>
               </Popover>
             ) : null}
-            <ContextToolbarButton
-              label="Duplicate slide"
-              onClick={() => onDuplicateSlide?.()}
-            >
-              <Copy size={13} aria-hidden />
-            </ContextToolbarButton>
-            <ContextToolbarButton
-              label="Delete slide"
-              disabled={!canDeleteSlide || !onDeleteSlide}
-              onClick={() =>
-                routeContextToolbarDeleteSlide({
-                  canDeleteSlide,
-                  onDeleteSlide,
-                })
-              }
-            >
-              <Trash2 size={13} aria-hidden />
-            </ContextToolbarButton>
           </>
         ) : null}
 
@@ -1305,55 +1207,39 @@ export function ContextToolbar({
             >
               <Strikethrough size={13} aria-hidden />
             </ContextToolbarButton>
-            <ContextToolbarDivider />
-            <ContextToolbarSelect
-              label="Text role"
-              value={selectedTextRole}
-              disabled={!selectedNode || !onUpdateSelectedAttributes}
-              onChange={(role) =>
-                routeContextToolbarTextRoleChange({
-                  role,
-                  onUpdateSelectedAttributes,
-                  onUpdateSelectedLocalStyle,
-                })
-              }
-            >
-              <option value="title">H1</option>
-              <option value="subtitle">H2</option>
-              <option value="body">Body</option>
-              <option value="quote">Quote</option>
-              <option value="caption">Caption</option>
-              <option value="kicker">Kicker</option>
-              <option value="metric">Metric</option>
-            </ContextToolbarSelect>
-            <InlineTextCommandButton
-              label="Bullet list"
-              command="bullet-list"
-              isInlineEditing={isInlineEditing}
-            >
-              <List size={13} aria-hidden />
-            </InlineTextCommandButton>
-            <InlineTextCommandButton
-              label="Numbered list"
-              command="numbered-list"
-              isInlineEditing={isInlineEditing}
-            >
-              <ListOrdered size={13} aria-hidden />
-            </InlineTextCommandButton>
-            <InlineTextCommandButton
-              label="Outdent list"
-              command="outdent-list"
-              isInlineEditing={isInlineEditing}
-            >
-              <IndentDecrease size={13} aria-hidden />
-            </InlineTextCommandButton>
-            <InlineTextCommandButton
-              label="Indent list"
-              command="indent-list"
-              isInlineEditing={isInlineEditing}
-            >
-              <IndentIncrease size={13} aria-hidden />
-            </InlineTextCommandButton>
+            {isInlineEditing ? (
+              <>
+                <ContextToolbarDivider />
+                <InlineTextCommandButton
+                  label="Bullet list"
+                  command="bullet-list"
+                  isInlineEditing={isInlineEditing}
+                >
+                  <List size={13} aria-hidden />
+                </InlineTextCommandButton>
+                <InlineTextCommandButton
+                  label="Numbered list"
+                  command="numbered-list"
+                  isInlineEditing={isInlineEditing}
+                >
+                  <ListOrdered size={13} aria-hidden />
+                </InlineTextCommandButton>
+                <InlineTextCommandButton
+                  label="Outdent list"
+                  command="outdent-list"
+                  isInlineEditing={isInlineEditing}
+                >
+                  <IndentDecrease size={13} aria-hidden />
+                </InlineTextCommandButton>
+                <InlineTextCommandButton
+                  label="Indent list"
+                  command="indent-list"
+                  isInlineEditing={isInlineEditing}
+                >
+                  <IndentIncrease size={13} aria-hidden />
+                </InlineTextCommandButton>
+              </>
+            ) : null}
             <ContextToolbarDivider />
             <ContextToolbarButton
               label="Align left"
@@ -1385,66 +1271,71 @@ export function ContextToolbar({
               max={160}
               onChange={updateFontSize}
             />
-            <Popover
-              open={linkCommandEnabled && linkOpen}
-              onClose={() => setLinkOpen(false)}
-              portal
-              align="center"
-              trigger={
-                <ContextToolbarButton
-                  label="Link"
-                  disabled={!linkCommandEnabled}
-                  onClick={() => setLinkOpen((open) => !open)}
-                >
-                  <Link size={13} aria-hidden />
-                </ContextToolbarButton>
-              }
-              className="w-64 p-2"
-              aria-label="Add link"
-            >
-              <form
-                className="flex flex-col gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!linkCommandEnabled) return;
-                  const url = linkDraft.trim();
-                  if (url) {
-                    dispatchInlineTextCommand({ command: "link", value: url });
-                    setLinkOpen(false);
-                  }
-                }}
+            {isInlineEditing ? (
+              <Popover
+                open={linkCommandEnabled && linkOpen}
+                onClose={() => setLinkOpen(false)}
+                portal
+                align="center"
+                trigger={
+                  <ContextToolbarButton
+                    label="Link"
+                    disabled={!linkCommandEnabled}
+                    onClick={() => setLinkOpen((open) => !open)}
+                  >
+                    <Link size={13} aria-hidden />
+                  </ContextToolbarButton>
+                }
+                className="w-64 p-2"
+                aria-label="Add link"
               >
-                <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-                  URL
-                  <input
-                    value={linkDraft}
-                    onChange={(event) =>
-                      setLinkDraft(event.currentTarget.value)
-                    }
-                    className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none focus:border-ds-accent focus:ring-2 focus:ring-ds-focus-ring/20"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={!linkCommandEnabled}
-                  className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
-                >
-                  Apply link
-                </button>
-                <button
-                  type="button"
-                  disabled={!linkCommandEnabled}
-                  onClick={() => {
+                <form
+                  className="flex flex-col gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
                     if (!linkCommandEnabled) return;
-                    dispatchInlineTextCommand({ command: "unlink" });
-                    setLinkOpen(false);
+                    const url = linkDraft.trim();
+                    if (url) {
+                      dispatchInlineTextCommand({
+                        command: "link",
+                        value: url,
+                      });
+                      setLinkOpen(false);
+                    }
                   }}
-                  className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
                 >
-                  Remove link
-                </button>
-              </form>
-            </Popover>
+                  <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+                    URL
+                    <input
+                      value={linkDraft}
+                      onChange={(event) =>
+                        setLinkDraft(event.currentTarget.value)
+                      }
+                      className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none focus:border-ds-accent focus:ring-2 focus:ring-ds-focus-ring/20"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!linkCommandEnabled}
+                    className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
+                  >
+                    Apply link
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!linkCommandEnabled}
+                    onClick={() => {
+                      if (!linkCommandEnabled) return;
+                      dispatchInlineTextCommand({ command: "unlink" });
+                      setLinkOpen(false);
+                    }}
+                    className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
+                  >
+                    Remove link
+                  </button>
+                </form>
+              </Popover>
+            ) : null}
           </>
         ) : null}
 
@@ -1473,6 +1364,21 @@ export function ContextToolbar({
               }
             />
             <ContextToolbarNumberInput
+              label="Border width"
+              value={shapeStrokeWidth}
+              min={0}
+              max={24}
+              step={0.5}
+              onChange={(widthPt) =>
+                onUpdateSelectedLocalStyle?.({
+                  stroke: {
+                    color: shapeStrokeColor,
+                    widthPt,
+                  },
+                })
+              }
+            />
+            <ContextToolbarNumberInput
               label="Opacity"
               value={Math.round(opacity * 100)}
               min={0}
@@ -1489,13 +1395,6 @@ export function ContextToolbar({
 
         {!isInlineEditing && selectedNode?.type === "image" ? (
           <>
-            <ContextToolbarButton
-              label="Replace image"
-              onClick={() => onReplaceImage?.()}
-              disabled={onReplaceImage === undefined}
-            >
-              <Replace size={13} aria-hidden />
-            </ContextToolbarButton>
             <ContextToolbarButton
               label="Crop image"
               active={selectedNode.content.crop !== undefined}
@@ -1551,13 +1450,6 @@ export function ContextToolbar({
         {!isInlineEditing && selectedNode?.type === "visual" ? (
           <>
             <ContextToolbarButton
-              label="Replace visual"
-              onClick={() => onReplaceVisual?.()}
-              disabled={onReplaceVisual === undefined}
-            >
-              <Replace size={13} aria-hidden />
-            </ContextToolbarButton>
-            <ContextToolbarButton
               label="Transparent background"
               active={selectedNode.content.transparentBackground === true}
               onClick={() =>
@@ -1569,23 +1461,6 @@ export function ContextToolbar({
             >
               BG
             </ContextToolbarButton>
-            <ContextToolbarSelect
-              label="Visual theme"
-              value={selectedNode.localStyle?.visual?.styleThemeId ?? "default"}
-              onChange={(styleThemeId) =>
-                routeContextToolbarVisualThemeChange({
-                  selectedNode,
-                  styleThemeId,
-                  onUpdateSelectedLocalStyle,
-                })
-              }
-              width="w-24"
-            >
-              <option value="default">Default</option>
-              <option value="accent">Accent</option>
-              <option value="muted">Muted</option>
-              <option value="contrast">Contrast</option>
-            </ContextToolbarSelect>
           </>
         ) : null}
 
@@ -1794,6 +1669,39 @@ export function ContextToolbar({
                   <AlignRight size={13} aria-hidden />
                 </ContextToolbarButton>
                 <ContextToolbarButton
+                  label={currentObjectAlignCommandDescriptor("top").label}
+                  onClick={() =>
+                    routeContextToolbarAlign({
+                      mode: "top",
+                      onAlignSelection,
+                    })
+                  }
+                >
+                  AT
+                </ContextToolbarButton>
+                <ContextToolbarButton
+                  label={currentObjectAlignCommandDescriptor("middle").label}
+                  onClick={() =>
+                    routeContextToolbarAlign({
+                      mode: "middle",
+                      onAlignSelection,
+                    })
+                  }
+                >
+                  AM
+                </ContextToolbarButton>
+                <ContextToolbarButton
+                  label={currentObjectAlignCommandDescriptor("bottom").label}
+                  onClick={() =>
+                    routeContextToolbarAlign({
+                      mode: "bottom",
+                      onAlignSelection,
+                    })
+                  }
+                >
+                  AB
+                </ContextToolbarButton>
+                <ContextToolbarButton
                   label="Distribute horizontally"
                   disabled={selectedIds.length < 3}
                   onClick={() =>
@@ -1840,119 +1748,18 @@ export function ContextToolbar({
                   MH
                 </ContextToolbarButton>
                 <ContextToolbarButton
-                  label={selectedNode?.type === "group" ? "Ungroup" : "Group"}
-                  onClick={selectedNode?.type === "group" ? onUngroup : onGroup}
-                  disabled={
-                    selectedIds.length < 2 && selectedNode?.type !== "group"
+                  label="Match size"
+                  onClick={() =>
+                    routeContextToolbarMatchSize({
+                      mode: "both",
+                      onMatchSize,
+                    })
                   }
                 >
-                  {selectedNode?.type === "group" ? (
-                    <Ungroup size={13} aria-hidden />
-                  ) : (
-                    <Group size={13} aria-hidden />
-                  )}
+                  MB
                 </ContextToolbarButton>
               </>
             ) : null}
-
-            {!isMultiSelect ? (
-              <>
-                {contextToolbarReorderActions.map((action) => (
-                  <ContextToolbarButton
-                    key={action.commandId}
-                    label={action.label}
-                    onClick={() => action.onClick()}
-                  >
-                    {renderContextToolbarLayerIcon(action.key)}
-                  </ContextToolbarButton>
-                ))}
-              </>
-            ) : null}
-
-            <ContextToolbarDivider />
-            <ContextToolbarButton
-              label="Cut"
-              onClick={onCut}
-              disabled={selectedIds.length === 0}
-            >
-              <Scissors size={13} aria-hidden />
-            </ContextToolbarButton>
-            <ContextToolbarButton
-              label="Duplicate"
-              onClick={onDuplicate}
-              disabled={selectedIds.length === 0}
-            >
-              <Copy size={13} aria-hidden />
-            </ContextToolbarButton>
-            <ContextToolbarButton
-              label="Delete"
-              onClick={onDelete}
-              disabled={selectedIds.length === 0}
-            >
-              <Trash2 size={13} aria-hidden />
-            </ContextToolbarButton>
-            <Popover
-              open={moreOpen}
-              onClose={() => setMoreOpen(false)}
-              portal
-              align="center"
-              trigger={
-                <ContextToolbarButton
-                  label="More"
-                  buttonRef={moreMenuTriggerRef}
-                  hasPopup="menu"
-                  expanded={moreOpen}
-                  controls={moreOpen ? moreMenuId : undefined}
-                  onClick={() => setMoreOpen((open) => !open)}
-                >
-                  <Ellipsis size={13} aria-hidden />
-                </ContextToolbarButton>
-              }
-              className="min-w-36 py-1"
-              aria-label="More object actions"
-              role="menu"
-            >
-              <div
-                ref={moreMenuRef}
-                id={moreMenuId}
-                className="flex flex-col"
-                onKeyDown={handleMoreMenuKeyDown}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    routeContextToolbarLockToggle({
-                      selectedNode,
-                      onUpdateSelectedAttributes,
-                    });
-                    closeMoreMenuAndRestoreFocus();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
-                >
-                  {selectedNode?.locked ? (
-                    <Unlock size={12} aria-hidden />
-                  ) : (
-                    <Lock size={12} aria-hidden />
-                  )}
-                  {selectedNode?.locked ? "Unlock" : "Lock"}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    routeContextToolbarHideSelection({
-                      onUpdateSelectedAttributes,
-                    });
-                    closeMoreMenuAndRestoreFocus();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
-                >
-                  <EyeOff size={12} aria-hidden />
-                  Hide
-                </button>
-              </div>
-            </Popover>
           </>
         ) : null}
 
@@ -1962,19 +1769,18 @@ export function ContextToolbar({
             <span className="px-1.5 text-[11px] text-ds-text-muted">
               Theme decoration
             </span>
-            <button
-              type="button"
-              className={cx(
-                "h-6 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle px-2 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-state-hover",
-                FOCUS_RING,
-              )}
-              onClick={() =>
-                routeContextToolbarDetachDecoration({ onDetachDecoration })
-              }
-              aria-label="Detach from theme"
+          </>
+        ) : null}
+
+        {showMoreMenu ? (
+          <>
+            <ContextToolbarDivider />
+            <ContextToolbarButton
+              label={`Open ${moreMenuLabel.replace(" menu", "")} inspector`}
+              onClick={() => onOpenInspectorPanel?.(inspectorPanel)}
             >
-              Detach
-            </button>
+              <Ellipsis size={13} aria-hidden />
+            </ContextToolbarButton>
           </>
         ) : null}
       </div>

@@ -10,33 +10,21 @@ import {
   stageScrollContentStyle,
 } from "./slide-editor-stage-fit";
 
-test("editor stage fit reserves desktop inspector overlay space", () => {
+test("editor stage fit uses the provided viewport without inspector overlay reservation", () => {
   const deck = buildMinimalDeck();
-  const mobileFit = canvasStageFit(
-    deck,
-    100,
-    { width: 1200, height: 700 },
-    false,
-  );
-  const desktopFit = canvasStageFit(
-    deck,
-    100,
-    { width: 1200, height: 700 },
-    true,
-  );
+  const fit = canvasStageFit(deck, 100, { width: 1200, height: 700 });
 
   assert.equal(canvasAspectRatio(deck), 16 / 9);
-  assert.ok(desktopFit.frame.width < mobileFit.frame.width);
-  assert.deepEqual(canvasFrameStyle(desktopFit), {
+  assert.deepEqual(canvasFrameStyle(fit), {
     position: "absolute",
-    left: desktopFit.frame.left,
-    top: desktopFit.frame.top,
-    width: desktopFit.frame.width,
-    height: desktopFit.frame.height,
+    left: fit.frame.left,
+    top: fit.frame.top,
+    width: fit.frame.width,
+    height: fit.frame.height,
   });
-  assert.deepEqual(stageScrollContentStyle(desktopFit), {
+  assert.deepEqual(stageScrollContentStyle(fit), {
     position: "relative",
-    width: desktopFit.scrollContentSize.width,
-    height: desktopFit.scrollContentSize.height,
+    width: fit.scrollContentSize.width,
+    height: fit.scrollContentSize.height,
   });
 });

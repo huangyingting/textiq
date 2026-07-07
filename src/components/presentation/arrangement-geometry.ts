@@ -1,4 +1,5 @@
 import type { LayoutBox, SlideChildNode } from "@/lib/presentation/schema";
+import { layerBandForNodeType } from "@/lib/presentation/layer-bands";
 
 export type ArrangementAlignMode =
   | "left"
@@ -63,17 +64,21 @@ export function buildLayerReorderPatches(
   nodeId: string,
   targetIndex: number,
 ): Map<string, Partial<LayoutBox>> {
-  const layers = flattenLayerNodes(nodes)
-    .filter((node) => node.layout !== undefined)
-    .sort((a, b) => (b.layout?.zIndex ?? 0) - (a.layout?.zIndex ?? 0));
-  const moving = layers.find((node) => node.id === nodeId);
+  const allLayers = flattenLayerNodes(nodes).filter(
+    (node) => node.layout !== undefined,
+  );
+  const moving = allLayers.find((node) => node.id === nodeId);
   if (!moving) return new Map();
+  const bandStart = layerBandForNodeType(moving.type);
+  const layers = allLayers
+    .filter((node) => layerBandForNodeType(node.type) === bandStart)
+    .sort((a, b) => (b.layout?.zIndex ?? 0) - (a.layout?.zIndex ?? 0));
   const reordered = layers.filter((node) => node.id !== nodeId);
   const insertIndex = Math.max(0, Math.min(targetIndex, reordered.length));
   reordered.splice(insertIndex, 0, moving);
   const patches = new Map<string, Partial<LayoutBox>>();
   reordered.forEach((node, index) => {
-    patches.set(node.id, { zIndex: reordered.length - index });
+    patches.set(node.id, { zIndex: bandStart + reordered.length - index });
   });
   return patches;
 }

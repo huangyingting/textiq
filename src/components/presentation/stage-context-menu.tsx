@@ -3,15 +3,15 @@
 import { useEffect, useRef, type JSX } from "react";
 import { createPortal } from "react-dom";
 import {
-  BringToFront,
+  ChevronRight,
   ClipboardPaste,
   Copy,
-  Edit3,
+  Eye,
+  EyeOff,
   Group,
   Layers,
   Lock,
   Scissors,
-  SendToBack,
   Trash2,
   Ungroup,
   Unlock,
@@ -24,7 +24,7 @@ import {
   isMenuCommandNavigationKey,
   moveMenuCommandFocus,
 } from "@/lib/a11y/menu-command-semantics";
-import { cx, MENU_CHROME, MENU_ITEM } from "@/components/ui/tokens";
+import { cx, MENU_CHROME } from "@/components/ui/tokens";
 
 export function stageNodeMenuLabel(node: SlideChildNode): string {
   if (node.name) return node.name;
@@ -49,15 +49,13 @@ export function StageNodeContextMenu({
   canUngroup,
   onClose,
   onSelectCandidate,
-  onEdit,
   onDuplicate,
   onCopy,
   onCut,
   onPaste,
   onDelete,
-  onBringToFront,
-  onSendToBack,
   onToggleLock,
+  onToggleHidden,
   onDetachConnectorFrom,
   onDetachConnectorTo,
   onGroup,
@@ -73,15 +71,13 @@ export function StageNodeContextMenu({
   canUngroup: boolean;
   onClose: () => void;
   onSelectCandidate: (nodeId: string) => void;
-  onEdit: () => void;
   onDuplicate: () => void;
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
   onDelete: () => void;
-  onBringToFront: () => void;
-  onSendToBack: () => void;
   onToggleLock: () => void;
+  onToggleHidden: () => void;
   onDetachConnectorFrom: () => void;
   onDetachConnectorTo: () => void;
   onGroup: () => void;
@@ -105,12 +101,10 @@ export function StageNodeContextMenu({
 
   if (typeof document === "undefined") return null;
 
-  const menuWidth = 224;
+  const menuWidth = 320;
   const left = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8));
-  const top = Math.max(8, Math.min(y, window.innerHeight - 320));
+  const top = Math.max(8, Math.min(y, window.innerHeight - 560));
   const layerCandidates = candidates.length > 1 ? candidates : [];
-  const editable =
-    node.type === "text" || node.type === "shape" || node.type === "table";
   const run = (action: () => void) => () => {
     action();
     onClose();
@@ -119,7 +113,7 @@ export function StageNodeContextMenu({
     label: string,
     icon: LucideIcon,
     onSelect: () => void,
-    options: { disabled?: boolean } = {},
+    options: { disabled?: boolean; shortcut?: string } = {},
   ) => {
     const Icon = icon;
     return (
@@ -128,11 +122,18 @@ export function StageNodeContextMenu({
         role="menuitem"
         tabIndex={-1}
         disabled={options.disabled}
-        className={cx(MENU_ITEM, options.disabled ? "opacity-40" : undefined)}
+        className={cx(
+          "flex min-h-11 w-full items-center gap-3 rounded-ds-md px-3 py-2 text-left text-[13px] font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover disabled:pointer-events-none disabled:text-ds-text-muted disabled:opacity-45",
+        )}
         onClick={run(onSelect)}
       >
-        <Icon size={14} aria-hidden="true" className="mr-2 shrink-0" />
+        <Icon size={20} aria-hidden="true" className="shrink-0" />
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {options.shortcut ? (
+          <span className="shrink-0 rounded-ds-md bg-ds-surface-sunken px-2 py-1 font-mono text-[11px] font-normal text-ds-text-secondary">
+            {options.shortcut}
+          </span>
+        ) : null}
       </button>
     );
   };
@@ -161,13 +162,16 @@ export function StageNodeContextMenu({
         });
       }}
       style={{ position: "fixed", left, top }}
-      className={cx("z-dropdown w-56 p-1", MENU_CHROME)}
+      className={cx(
+        "z-dropdown w-80 max-w-[calc(100vw-16px)] p-1.5",
+        MENU_CHROME,
+      )}
       role="menu"
       aria-label="Node actions"
     >
       {layerCandidates.length > 0 ? (
         <>
-          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ds-text-muted">
+          <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-ds-text-muted">
             Select layer
           </div>
           {layerCandidates.map((candidate) => (
@@ -176,41 +180,54 @@ export function StageNodeContextMenu({
               type="button"
               role="menuitem"
               tabIndex={-1}
-              className={MENU_ITEM}
+              className="flex min-h-11 w-full items-center gap-3 rounded-ds-md px-3 py-2 text-left text-[13px] font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover"
               onClick={run(() => onSelectCandidate(candidate.id))}
             >
-              <Layers size={14} aria-hidden="true" className="mr-2 shrink-0" />
+              <Layers size={20} aria-hidden="true" className="shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left">
                 {stageNodeMenuLabel(candidate)}
               </span>
               {candidate.id === node.id ? (
-                <span className="ml-2 text-[10px] text-ds-text-muted">
-                  Current
-                </span>
-              ) : null}
+                <span className="text-[11px] text-ds-text-muted">Current</span>
+              ) : (
+                <ChevronRight
+                  size={16}
+                  aria-hidden="true"
+                  className="text-ds-text-muted"
+                />
+              )}
             </button>
           ))}
           <div className="my-1 h-px bg-ds-border-subtle" aria-hidden="true" />
         </>
       ) : null}
-      {editable
-        ? item(
-            node.type === "table" ? "Edit table" : "Edit text",
-            Edit3,
-            onEdit,
-          )
-        : null}
-      {item("Duplicate", Copy, onDuplicate)}
-      {item("Copy", Copy, onCopy, { disabled: selectedCount === 0 })}
-      {item("Cut", Scissors, onCut, { disabled: selectedCount === 0 })}
-      {item("Paste", ClipboardPaste, onPaste, { disabled: !canPaste })}
+      {item("Copy", Copy, onCopy, {
+        disabled: selectedCount === 0,
+        shortcut: "Ctrl+C",
+      })}
+      {item("Cut", Scissors, onCut, {
+        disabled: selectedCount === 0,
+        shortcut: "Ctrl+X",
+      })}
+      {item("Paste", ClipboardPaste, onPaste, {
+        disabled: !canPaste,
+        shortcut: "Ctrl+V",
+      })}
+      {item("Duplicate", Copy, onDuplicate, { shortcut: "Ctrl+D" })}
+      {item("Delete", Trash2, onDelete, {
+        disabled: selectedCount === 0,
+        shortcut: "Delete",
+      })}
       <div className="my-1 h-px bg-ds-border-subtle" aria-hidden="true" />
-      {item("Bring to front", BringToFront, onBringToFront)}
-      {item("Send to back", SendToBack, onSendToBack)}
       {item(
         node.locked ? "Unlock" : "Lock",
         node.locked ? Unlock : Lock,
         onToggleLock,
+      )}
+      {item(
+        node.hidden ? "Show" : "Hide",
+        node.hidden ? Eye : EyeOff,
+        onToggleHidden,
       )}
       {node.type === "connector" &&
       (node.content.from.kind === "node" || node.content.to.kind === "node") ? (
@@ -226,8 +243,6 @@ export function StageNodeContextMenu({
       ) : null}
       {canGroup ? item("Group", Group, onGroup) : null}
       {canUngroup ? item("Ungroup", Ungroup, onUngroup) : null}
-      <div className="my-1 h-px bg-ds-border-subtle" aria-hidden="true" />
-      {item("Delete", Trash2, onDelete, { disabled: selectedCount === 0 })}
     </div>,
     document.body,
   );

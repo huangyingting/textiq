@@ -270,6 +270,7 @@ function createRecorder() {
     align: [] as string[],
     distribute: [] as string[],
     matchSize: [] as string[],
+    panels: [] as string[],
   };
 }
 
@@ -320,6 +321,7 @@ function toolbarProps(
     canDeleteSlide: true,
     onDetachDecoration: () => recorder.actions.push("detach-decoration"),
     onRequestStageFocus: () => recorder.actions.push("focus-stage"),
+    onOpenInspectorPanel: (panel) => recorder.panels.push(panel),
     ...overrides,
   };
 }
@@ -491,10 +493,12 @@ test("ContextToolbar render branches route slide, text, shape, image, visual, co
         }),
         recorder,
       ),
+      states: [{ top: 1, left: 2 }, false, "https://", true],
     },
     {
       name: "visual",
       props: toolbarProps(buildVisualNode({ id: "visual-1" }), recorder),
+      states: [{ top: 1, left: 2 }, false, "https://", true],
     },
     {
       name: "connector",
@@ -515,6 +519,7 @@ test("ContextToolbar render branches route slide, text, shape, image, visual, co
       props: toolbarProps(buildShapeNode({ id: "shape-5" }), recorder, {
         isDecorationSelected: true,
       }),
+      states: [{ top: 1, left: 2 }, false, "https://", true],
     },
     {
       name: "more menu open",
@@ -540,17 +545,17 @@ test("ContextToolbar render branches route slide, text, shape, image, visual, co
   assert.ok(labelsByCase.get("inline text link")?.includes("Link"));
   assert.ok(labelsByCase.get("shape")?.includes("Fill color"));
   assert.ok(labelsByCase.get("image")?.includes("Image fit"));
-  assert.ok(labelsByCase.get("visual")?.includes("Visual theme"));
+  assert.ok(labelsByCase.get("visual")?.includes("Transparent background"));
   assert.ok(labelsByCase.get("connector")?.includes("Line width"));
   assert.ok(labelsByCase.get("table")?.includes("Insert column"));
   assert.ok(labelsByCase.get("multi")?.includes("Distribute horizontally"));
-  assert.ok(labelsByCase.get("decoration")?.includes("Detach from theme"));
+  assert.ok(
+    labelsByCase
+      .get("decoration")
+      ?.includes("Open Generated element inspector"),
+  );
 
-  assert.ok(recorder.actions.includes("insert-slide"));
-  assert.ok(recorder.actions.includes("replace-image"));
-  assert.ok(recorder.actions.includes("replace-visual"));
   assert.ok(recorder.actions.includes("edit-table"));
-  assert.ok(recorder.actions.includes("detach-decoration"));
   assert.ok(recorder.align.includes("left"));
   assert.ok(recorder.distribute.includes("horizontal"));
   assert.ok(recorder.matchSize.includes("width"));
@@ -559,8 +564,8 @@ test("ContextToolbar render branches route slide, text, shape, image, visual, co
   assert.ok(recorder.content.some((patch) => "rows" in patch));
   assert.ok(recorder.localStyle.some((patch) => patch.text !== undefined));
   assert.ok(recorder.localStyle.some((patch) => patch.connector !== undefined));
-  assert.ok(recorder.attributes.some((patch) => patch.role === "caption"));
-  assert.ok(recorder.attributes.some((patch) => patch.hidden === true));
+  assert.ok(recorder.panels.includes("shape"));
+  assert.ok(recorder.panels.includes("decoration"));
   assert.ok(recorder.slideStyle.length >= 1);
   assert.ok(
     commandEvents.some((entry) =>

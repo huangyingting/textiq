@@ -11,6 +11,7 @@
  */
 
 import { useId, useState, type JSX, type ReactNode } from "react";
+import { X } from "lucide-react";
 
 import type {
   SlideChildNode,
@@ -43,11 +44,7 @@ import {
   resolveInspectorPanelContinuity,
   type InspectorPanelId,
 } from "@/lib/presentation/inspector-panel-ui";
-import {
-  currentObjectAlignCommandDescriptor,
-  currentObjectReorderCommandDescriptor,
-  type CurrentObjectReorderMode,
-} from "@/lib/presentation/current-object-command-descriptors";
+import { currentObjectAlignCommandDescriptor } from "@/lib/presentation/current-object-command-descriptors";
 
 import { cx } from "@/components/ui/tokens";
 import type {
@@ -68,13 +65,6 @@ import { NodeSourcePanel } from "./node-source-panel";
 import { SlideControlsPanel } from "./slide-controls-panel";
 import { SlideSettingsPanel } from "./slide-settings-panel";
 import { StyleBindingPanel } from "./style-binding-panel";
-
-const INSPECTOR_REORDER_MODES = [
-  "front",
-  "back",
-  "forward",
-  "backward",
-] as const satisfies readonly CurrentObjectReorderMode[];
 
 const DEFAULT_GLOW_COLOR = "#4f46e5";
 const DEFAULT_SHADOW_COLOR = "#000000";
@@ -201,7 +191,6 @@ function MultiArrangePanel({
   onMatchSize,
   onGroupSelection,
   onUngroupSelection,
-  onReorderSelection,
 }: {
   selectedCount: number;
   onAlignSelection: (mode: SelectionAlignMode) => void;
@@ -209,7 +198,6 @@ function MultiArrangePanel({
   onMatchSize: (mode: SelectionMatchSizeMode) => void;
   onGroupSelection: () => void;
   onUngroupSelection: () => void;
-  onReorderSelection: (kind: CurrentObjectReorderMode) => void;
 }) {
   return (
     <PanelSection>
@@ -263,17 +251,6 @@ function MultiArrangePanel({
         <div className="grid grid-cols-2 gap-1.5">
           <ActionButton onClick={onGroupSelection}>Group</ActionButton>
           <ActionButton onClick={onUngroupSelection}>Ungroup</ActionButton>
-          {INSPECTOR_REORDER_MODES.map((mode) => {
-            const descriptor = currentObjectReorderCommandDescriptor(mode);
-            return (
-              <ActionButton
-                key={descriptor.id}
-                onClick={() => onReorderSelection(mode)}
-              >
-                {descriptor.shortLabel}
-              </ActionButton>
-            );
-          })}
         </div>
       </section>
     </PanelSection>
@@ -282,10 +259,8 @@ function MultiArrangePanel({
 
 function SingleArrangePanel({
   onAlignSelection,
-  onReorderSelection,
 }: {
   onAlignSelection: (mode: SelectionAlignMode) => void;
-  onReorderSelection: (kind: CurrentObjectReorderMode) => void;
 }) {
   return (
     <section className="flex flex-col gap-3 px-3 py-2.5">
@@ -311,19 +286,6 @@ function SingleArrangePanel({
         <ActionButton onClick={() => onAlignSelection("bottom")}>
           {currentObjectAlignCommandDescriptor("bottom").shortLabel}
         </ActionButton>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {INSPECTOR_REORDER_MODES.map((mode) => {
-          const descriptor = currentObjectReorderCommandDescriptor(mode);
-          return (
-            <ActionButton
-              key={descriptor.id}
-              onClick={() => onReorderSelection(mode)}
-            >
-              {descriptor.inspectorSingleLabel}
-            </ActionButton>
-          );
-        })}
       </div>
     </section>
   );
@@ -887,7 +849,6 @@ export interface InspectorShellProps {
   onMatchSize: (mode: SelectionMatchSizeMode) => void;
   onGroupSelection: () => void;
   onUngroupSelection: () => void;
-  onReorderSelection: (kind: CurrentObjectReorderMode) => void;
 
   // Layers
   onSelectLayer: (nodeId: string) => void;
@@ -916,6 +877,7 @@ export interface InspectorShellProps {
   selectionMode: "normal" | "layers";
   onToggleSelectionMode: () => void;
   initialPanel?: InspectorPanelId;
+  onClose?: () => void;
 }
 
 export function InspectorShell({
@@ -957,7 +919,6 @@ export function InspectorShell({
   onMatchSize,
   onGroupSelection,
   onUngroupSelection,
-  onReorderSelection,
   onSelectLayer,
   onUpdateLayer,
   onReorderLayer,
@@ -970,6 +931,7 @@ export function InspectorShell({
   selectionMode,
   onToggleSelectionMode,
   initialPanel,
+  onClose,
 }: InspectorShellProps): JSX.Element {
   const nodeForRouting = isDecorationSelected ? null : (selectedNode ?? null);
   const multiSelect = selectedIds.length > 1;
@@ -1029,17 +991,29 @@ export function InspectorShell({
       className="relative z-panel flex h-full w-80 shrink-0 flex-col overflow-hidden bg-ds-surface"
     >
       {/* Identity header */}
-      <div className="flex items-center justify-between border-b border-ds-border-subtle px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-ds-border-subtle px-3 py-2">
         <span className="truncate text-xs font-medium text-ds-text-primary">
           {identityLabel}
         </span>
-        <InspectorPanelSelect
-          id={inspectorPanelSelectId}
-          panels={panels}
-          value={effectivePanel}
-          diagnosticsCount={diagnostics.length}
-          onChange={handlePanelSelect}
-        />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <InspectorPanelSelect
+            id={inspectorPanelSelectId}
+            panels={panels}
+            value={effectivePanel}
+            diagnosticsCount={diagnostics.length}
+            onChange={handlePanelSelect}
+          />
+          {onClose ? (
+            <button
+              type="button"
+              aria-label="Close inspector"
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-ds-sm text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Panel content */}
@@ -1202,7 +1176,6 @@ export function InspectorShell({
             onMatchSize={onMatchSize}
             onGroupSelection={onGroupSelection}
             onUngroupSelection={onUngroupSelection}
-            onReorderSelection={onReorderSelection}
           />
         )}
 
@@ -1217,10 +1190,7 @@ export function InspectorShell({
                   onResetToTheme={onResetToTheme}
                 />
               </div>
-              <SingleArrangePanel
-                onAlignSelection={onAlignSelection}
-                onReorderSelection={onReorderSelection}
-              />
+              <SingleArrangePanel onAlignSelection={onAlignSelection} />
               <NodeGeometryPanel
                 node={selectedNode}
                 onUpdateLayout={

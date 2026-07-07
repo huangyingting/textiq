@@ -139,13 +139,6 @@ export function NodeGeometryPanel({
           step={1}
           onChange={(rotation) => onUpdateLayout({ rotation })}
         />
-        <NumberField
-          id="presentation-node-z"
-          label="Layer"
-          value={layout.zIndex}
-          step={1}
-          onChange={(zIndex) => onUpdateLayout({ zIndex: Math.trunc(zIndex) })}
-        />
       </div>
       <div className="mt-1 flex items-center gap-4 text-xs text-ds-text-secondary">
         <label className="flex items-center gap-1.5">

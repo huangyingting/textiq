@@ -367,26 +367,9 @@ test("context toolbar table helpers keep single-row tables stable and expand mul
   assert.equal(tableWithDeletedLastColumn(single).columns.length, 1);
 });
 
-test("ContextToolbar remaining render branches include disabled slide delete, hidden slide tools, and menu labels", () => {
+test("ContextToolbar remaining render branches include hidden slide tools and menu labels", () => {
   installDom();
   const recorder = createRecorder();
-  const slideToolbar = withFakeReact([], () =>
-    ContextToolbar(
-      toolbarProps(undefined, recorder, {
-        selectedIds: [],
-        canDeleteSlide: false,
-        onDeleteSlide: undefined,
-      }),
-    ),
-  );
-  const slideDelete = findAll(
-    slideToolbar,
-    (element) =>
-      componentName(element) === "ContextToolbarButton" &&
-      element.props.label === "Delete slide",
-  )[0];
-  assert.equal(slideDelete.props.disabled, true);
-
   const hiddenToolbar = withFakeReact([], () =>
     ContextToolbar(
       toolbarProps(undefined, recorder, {

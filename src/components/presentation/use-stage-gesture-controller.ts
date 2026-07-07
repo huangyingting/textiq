@@ -42,7 +42,6 @@ import {
   applyKeyboardRotation,
   keyboardRotationDelta,
 } from "@/lib/presentation/canvas-keyboard-rotate";
-import { canvasArrangeShortcutKind } from "@/lib/shortcuts/canvas-runtime";
 
 import { collectSelectedLayoutEntries } from "./arrangement-geometry";
 import { clipboardShortcutActionFromKey } from "./clipboard-shortcuts";
@@ -231,9 +230,6 @@ export interface StageGestureControllerArgs {
   handleEnterTableEdit: (nodeId?: string) => void;
   handleGroupSelection: () => void;
   handlePasteNodes: () => void;
-  handleReorderSelection: (
-    kind: "forward" | "backward" | "front" | "back",
-  ) => void;
   handleUngroupSelection: () => void;
   isInlineEditableNode: (
     node: SlideChildNode,
@@ -369,7 +365,6 @@ export function useStageGestureController(
     handleEnterTableEdit,
     handleGroupSelection,
     handlePasteNodes,
-    handleReorderSelection,
     handleUngroupSelection,
     isInlineEditableNode,
     initialCaretFromNodeClick,
@@ -1645,13 +1640,6 @@ export function useStageGestureController(
         setSelection((s) => setSelectedNodeIds(s, result.duplicatedIds));
         focusSelectedNodeSoon(result.duplicatedIds[0]);
       }
-      event.preventDefault();
-      return;
-    }
-
-    const arrangeKind = canvasArrangeShortcutKind(event);
-    if (arrangeKind) {
-      handleReorderSelection(arrangeKind);
       event.preventDefault();
       return;
     }

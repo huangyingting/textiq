@@ -60,8 +60,8 @@ export function SlideEditorInspectorRegion({
 
   return (
     <>
-      {isDesktopInspectorViewport ? (
-        <div className="absolute bottom-4 right-4 top-4 z-panel hidden w-80 overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay shadow-ds-overlay lg:flex">
+      {isDesktopInspectorViewport && inspectorSheetOpen && activeSlide ? (
+        <div className="relative z-panel hidden h-full w-80 shrink-0 overflow-hidden border-l border-ds-border-subtle bg-ds-surface lg:flex">
           {renderInspectorShell()}
         </div>
       ) : null}

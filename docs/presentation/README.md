@@ -11,16 +11,17 @@ These documents describe the runtime presentation layer: the slide editor UI,
 stage interactions, present mode, and export pipeline. They sit between the
 persisted deck contract and the React components that render/edit slides.
 
-| Document                                                   | Type         | Scope                                                                                                                         |
-| ---------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| [slide-editor.md](slide-editor.md)                         | Architecture | Slide editor runtime, stage/inspector boundaries, autosave, source links, and presence.                                       |
-| [autosave-and-commands.md](autosave-and-commands.md)       | Architecture | Slide editor autosave, durable queued snapshots, optimistic save conflicts, and deck command execution.                       |
-| [slide-stage-interactions.md](slide-stage-interactions.md) | Design       | Stage hit-testing, preselection, selection, drag, edit, keyboard, connector, and overlap behavior.                            |
-| [theme-packages.md](theme-packages.md)                     | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                                              |
-| [assets.md](assets.md)                                     | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                                                 |
-| [rendering-and-export.md](rendering-and-export.md)         | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.                                      |
-| [test-strategy-plan.md](test-strategy-plan.md)             | Plan         | Remaining P1 work to retire hook-dispatcher based presentation tests.                                                         |
-| [pptx-fidelity-plan.md](pptx-fidelity-plan.md)             | Plan         | Ranked PPTX export fidelity strategy for gradients, pattern/image fills, effects, curved connectors, and visual placeholders. |
+| Document                                                             | Type         | Scope                                                                                                                         |
+| -------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| [slide-editor.md](slide-editor.md)                                   | Architecture | Slide editor runtime, stage/inspector boundaries, autosave, source links, and presence.                                       |
+| [slide-editor-editing-surfaces.md](slide-editor-editing-surfaces.md) | Design       | Popover toolbar, right inspector panel, right-click menu, and type-banded layer ownership rules.                              |
+| [autosave-and-commands.md](autosave-and-commands.md)                 | Architecture | Slide editor autosave, durable queued snapshots, optimistic save conflicts, and deck command execution.                       |
+| [slide-stage-interactions.md](slide-stage-interactions.md)           | Design       | Stage hit-testing, preselection, selection, drag, edit, keyboard, connector, and overlap behavior.                            |
+| [theme-packages.md](theme-packages.md)                               | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                                              |
+| [assets.md](assets.md)                                               | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                                                 |
+| [rendering-and-export.md](rendering-and-export.md)                   | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.                                      |
+| [test-strategy-plan.md](test-strategy-plan.md)                       | Plan         | Remaining P1 work to retire hook-dispatcher based presentation tests.                                                         |
+| [pptx-fidelity-plan.md](pptx-fidelity-plan.md)                       | Plan         | Ranked PPTX export fidelity strategy for gradients, pattern/image fills, effects, curved connectors, and visual placeholders. |
 
 Future presentation work should live in this directory as `*-plan.md` and must
 separate current behavior from target behavior, phases, and acceptance checks.

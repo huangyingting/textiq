@@ -216,10 +216,10 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(source.includes("onInsertTable={handleInsertTable}"), true);
   });
 
-  test("passes delete availability to the current-object context toolbar", () => {
+  test("keeps slide deletion out of the current-object context toolbar", () => {
     assert.equal(
       source.includes("canDeleteSlide={deck.slides.length > 1}"),
-      true,
+      false,
     );
   });
 

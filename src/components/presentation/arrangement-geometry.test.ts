@@ -160,7 +160,7 @@ test("buildMatchSizeSelectionPatches supports width, height, and both modes", ()
   assert.equal(patchFrame(both, "c").h, 20);
 });
 
-test("buildLayerReorderPatches flattens groups and reassigns z-indexes", () => {
+test("buildLayerReorderPatches flattens groups and reassigns z-indexes within the node type band", () => {
   const nodes: SlideChildNode[] = [
     textNode("a", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 1 }),
     textNode("b", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 2 }),
@@ -170,10 +170,10 @@ test("buildLayerReorderPatches flattens groups and reassigns z-indexes", () => {
   ];
 
   const patches = buildLayerReorderPatches(nodes, "b", 0);
-  assert.equal(patches.get("b")?.zIndex, 4);
-  assert.equal(patches.get("group")?.zIndex, 3);
-  assert.equal(patches.get("group-child")?.zIndex, 2);
-  assert.equal(patches.get("a")?.zIndex, 1);
+  assert.equal(patches.get("b")?.zIndex, 4003);
+  assert.equal(patches.get("group-child")?.zIndex, 4002);
+  assert.equal(patches.get("a")?.zIndex, 4001);
+  assert.equal(patches.has("group"), false);
 });
 
 test("buildZOrderSelectionOperations computes forward/backward/front/back moves", () => {

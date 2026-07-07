@@ -48,7 +48,6 @@ function controllerArgs(
     handleAlignSelection: () => undefined,
     handleDistributeSelection: () => undefined,
     handleMatchSize: () => undefined,
-    handleReorderSelection: () => undefined,
     handleGroupSelection: () => undefined,
     handleUngroupSelection: () => undefined,
     handleDuplicateSelection: () => undefined,

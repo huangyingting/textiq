@@ -256,7 +256,6 @@ function renderInspector({
       onMatchSize: noop,
       onGroupSelection: noop,
       onUngroupSelection: noop,
-      onReorderSelection: noop,
       onSelectLayer: noop,
       onUpdateLayer: noop,
       onReorderLayer: noop,
@@ -378,7 +377,7 @@ describe("InspectorShell render affordances", () => {
     assert.equal(emptyHtml, "");
   });
 
-  test("single selection arrange panel exposes align and z-order controls", () => {
+  test("single selection arrange panel exposes align controls without z-order controls", () => {
     const html = renderInspector({
       initialPanel: "arrange",
       selectedNode: textNode,
@@ -386,8 +385,8 @@ describe("InspectorShell render affordances", () => {
 
     assert.match(html, />Arrange</);
     assert.match(html, />Center</);
-    assert.match(html, />Bring front</);
-    assert.match(html, />Backward</);
+    assert.doesNotMatch(html, />Bring front</);
+    assert.doesNotMatch(html, />Backward</);
   });
 
   test("slide panel renders template, controls, settings, and source fields", () => {

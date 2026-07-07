@@ -1,5 +1,4 @@
 export {
-  buildContextToolbarReorderActions,
   buildSlideToolInsertActions,
   ContextToolbar,
   contextToolbarTextRoleFontSizePt,

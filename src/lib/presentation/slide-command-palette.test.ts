@@ -146,8 +146,10 @@ describe("resolveSlideCommandPaletteCommands", () => {
     });
 
     assert.equal(
-      command(textEditing, "selection.reorder-forward").disabledReasonCode,
-      "requires-finished-editing",
+      resolveSlideCommandPaletteCommands(textEditing).some(
+        (entry) => entry.id === "selection.reorder-forward",
+      ),
+      false,
     );
     assert.equal(command(textEditing, "text.bold").disabledReason, undefined);
     assert.equal(

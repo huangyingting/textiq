@@ -361,7 +361,6 @@ function shellProps(
     onMatchSize: noop,
     onGroupSelection: noop,
     onUngroupSelection: noop,
-    onReorderSelection: noop,
     onSelectLayer: noop,
     onUpdateLayer: noop,
     onReorderLayer: noop,

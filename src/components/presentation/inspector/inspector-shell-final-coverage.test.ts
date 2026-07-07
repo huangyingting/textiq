@@ -16,7 +16,6 @@ import type { SourceBlockIndexEntry } from "@/lib/presentation/block-index";
 import type { NodeSourceMetadata, SlideNode } from "@/lib/presentation/schema";
 import type { SourceLinkClassification } from "@/lib/presentation/source-links";
 import type { StyleBinding, StylePatch } from "@/lib/presentation/style-schema";
-import { currentObjectReorderCommandDescriptor } from "@/lib/presentation/current-object-command-descriptors";
 
 import { InspectorShell, type InspectorShellProps } from "./inspector-shell";
 import {
@@ -272,7 +271,6 @@ function propsFor(
     onMatchSize: (mode) => recorder.matchSize.push(mode),
     onGroupSelection: () => recorder.actions.push("group"),
     onUngroupSelection: () => recorder.actions.push("ungroup"),
-    onReorderSelection: (kind) => recorder.actions.push(`reorder-${kind}`),
     onSelectLayer: (nodeId) => recorder.selectedLayers.push(nodeId),
     onUpdateLayer: (...args) => recorder.layerUpdates.push(args),
     onReorderLayer: (...args) => recorder.layerMoves.push(args),
@@ -352,9 +350,8 @@ test("InspectorShell final panel select, notes, decoration, and fallback panels 
   assert.ok(recorder.actions.includes("detach"));
 });
 
-test("InspectorShell final arrange panels exercise align, distribute, match size, and reorder actions", () => {
+test("InspectorShell final arrange panels exercise align, distribute, match size, and grouping actions", () => {
   const recorder = createRecorder();
-  const reorderModes = ["front", "back", "forward", "backward"] as const;
   const multi = renderInspector(recorder, {
     selectedNode: textNode,
     selectedIds: ["text-1", "image-1", "shape-1"],
@@ -374,9 +371,6 @@ test("InspectorShell final arrange panels exercise align, distribute, match size
     "Match both",
     "Group",
     "Ungroup",
-    ...reorderModes.map(
-      (mode) => currentObjectReorderCommandDescriptor(mode).shortLabel,
-    ),
   ]);
 
   const disabledMulti = renderInspector(recorder, {
@@ -396,13 +390,7 @@ test("InspectorShell final arrange panels exercise align, distribute, match size
     selectedIds: [textNode.id],
     initialPanel: "arrange",
   });
-  clickButtons(
-    single,
-    reorderModes.map(
-      (mode) =>
-        currentObjectReorderCommandDescriptor(mode).inspectorSingleLabel,
-    ),
-  );
+  assert.equal(textContent(single).includes("Bring front"), false);
 
   assert.deepEqual(recorder.align.slice(0, 6), [
     "left",
@@ -415,8 +403,6 @@ test("InspectorShell final arrange panels exercise align, distribute, match size
   assert.deepEqual(recorder.distribute, ["horizontal", "vertical"]);
   assert.deepEqual(recorder.matchSize, ["width", "height", "both"]);
   assert.ok(recorder.actions.includes("group"));
-  assert.ok(recorder.actions.includes("reorder-front"));
-  assert.ok(recorder.actions.includes("reorder-backward"));
 });
 
 test("InspectorShell final adjust and effects panels emit image and style patches", () => {

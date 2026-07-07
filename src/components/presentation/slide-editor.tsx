@@ -709,7 +709,7 @@ export function SlideEditor({
 
   function openInspectorPanel(panel: InspectorPanelId) {
     requestInspectorPanel(panel);
-    if (isMobileInspectorViewport()) setInspectorSheetOpen(true);
+    setInspectorSheetOpen(true);
   }
 
   function closeMobileInspector() {
@@ -720,10 +720,7 @@ export function SlideEditor({
     setSelection(createSelectionState(selection.mode));
     exitInlineEdit();
     requestInspectorPanel("notes");
-    if (isMobileInspectorViewport()) {
-      setInspectorSheetOpen(true);
-      return;
-    }
+    setInspectorSheetOpen(true);
   }
 
   useEffect(() => {
@@ -1907,7 +1904,6 @@ export function SlideEditor({
     handleAlignSelection,
     handleDistributeSelection,
     handleMatchSize,
-    handleReorderSelection,
     handleDiagnosticNavigate,
     handleDiagnosticAction,
     handleDetachDecoration,
@@ -1985,7 +1981,6 @@ export function SlideEditor({
     handleEnterTableEdit,
     handleGroupSelection,
     handlePasteNodes,
-    handleReorderSelection,
     handleUngroupSelection,
     isInlineEditableNode,
     initialCaretFromNodeClick,
@@ -2018,12 +2013,7 @@ export function SlideEditor({
     semanticTargetFromHits,
   });
 
-  const stageFit = canvasStageFit(
-    deck,
-    stageZoomPercent,
-    stageViewportSize,
-    isDesktopInspectorViewport,
-  );
+  const stageFit = canvasStageFit(deck, stageZoomPercent, stageViewportSize);
   const stageFrameStyle = canvasFrameStyle(stageFit);
   const stageScrollStyle = stageScrollContentStyle(stageFit);
   const currentCanvasFormat: "16:9" | "4:3" | "square" =
@@ -2109,7 +2099,6 @@ export function SlideEditor({
     handleAlignSelection,
     handleDistributeSelection,
     handleMatchSize,
-    handleReorderSelection,
     handleGroupSelection,
     handleUngroupSelection,
     handleDuplicateSelection,
@@ -2189,7 +2178,6 @@ export function SlideEditor({
       onMatchSize={handleMatchSize}
       onGroupSelection={handleGroupSelection}
       onUngroupSelection={handleUngroupSelection}
-      onReorderSelection={handleReorderSelection}
       onSelectLayer={handleSelectLayer}
       onUpdateLayer={handleUpdateLayer}
       onReorderLayer={handleReorderLayer}
@@ -2201,6 +2189,7 @@ export function SlideEditor({
       onReapplyTemplate={handleReapplyTemplate}
       selectionMode={selection.mode}
       onToggleSelectionMode={toggleSelectionMode}
+      onClose={closeMobileInspector}
     />
   );
 
@@ -2403,14 +2392,14 @@ export function SlideEditor({
       {/* ------------------------------------------------------------------ */}
       {/* Editor surface (stage + inspector — rail moved to bottom filmstrip)  */}
       {/* ------------------------------------------------------------------ */}
-      <div className="relative isolate min-h-0 flex-1 overflow-hidden bg-ds-surface-recessed">
+      <div className="relative isolate flex min-h-0 flex-1 overflow-hidden bg-ds-surface-recessed">
         {/* ------------------------------------------------------------------ */}
         {/* Main Stage                                                          */}
         {/* ------------------------------------------------------------------ */}
         <div
           data-slide-stage-shell="true"
           data-slide-toolbar-anchor="true"
-          className="relative h-full min-w-0 overflow-hidden bg-ds-surface-recessed"
+          className="relative h-full min-w-0 flex-1 overflow-hidden bg-ds-surface-recessed"
           onClick={handleStageClick}
           onContextMenu={handleStageContextMenu}
           onDoubleClick={handleStageDoubleClick}
@@ -2471,28 +2460,19 @@ export function SlideEditor({
                       applyActiveGroupContext(nodeId);
                       focusSelectedNodeSoon(nodeId);
                     }}
-                    onEdit={() => {
-                      if (contextNode.type === "table") {
-                        handleEnterTableEdit(contextNode.id);
-                        return;
-                      }
-                      if (isInlineEditableNode(contextNode)) {
-                        setSelection((s) =>
-                          setSelectedNodeIds(s, [contextNode.id]),
-                        );
-                        enterInlineEdit(contextNode.id);
-                      }
-                    }}
                     onDuplicate={handleDuplicateSelection}
                     onCopy={handleCopyNodes}
                     onCut={handleCutNodes}
                     onPaste={handlePasteNodes}
                     onDelete={handleDeleteSelection}
-                    onBringToFront={() => handleReorderSelection("front")}
-                    onSendToBack={() => handleReorderSelection("back")}
                     onToggleLock={() =>
                       handleUpdateSelectedAttributes({
                         locked: contextNode.locked !== true,
+                      })
+                    }
+                    onToggleHidden={() =>
+                      handleUpdateSelectedAttributes({
+                        hidden: contextNode.hidden !== true,
                       })
                     }
                     onDetachConnectorFrom={() => {
@@ -2572,15 +2552,6 @@ export function SlideEditor({
               activeConnectorEndpoint !== null
             }
             isDecorationSelected={isDecorationSelected}
-            onDelete={handleDeleteSelection}
-            onCut={handleCutNodes}
-            onDuplicate={handleDuplicateSelection}
-            onGroup={handleGroupSelection}
-            onUngroup={handleUngroupSelection}
-            onBringForward={() => handleReorderSelection("forward")}
-            onSendBackward={() => handleReorderSelection("backward")}
-            onBringToFront={() => handleReorderSelection("front")}
-            onSendToBack={() => handleReorderSelection("back")}
             onAlignSelection={handleAlignSelection}
             onDistributeSelection={handleDistributeSelection}
             onMatchSize={handleMatchSize}
@@ -2594,7 +2565,6 @@ export function SlideEditor({
             onEnterTableEdit={() => handleEnterTableEdit()}
             slideBackgroundColor={activeSlideBackgroundColor}
             onUpdateSlideLocalStyle={handleUpdateSlideLocalStyle}
-            onInsertSlide={handleInsertSlide}
             onInsertText={handleInsertText}
             onInsertShape={handleInsertShape}
             onInsertImage={handleInsertImage}
@@ -2603,11 +2573,10 @@ export function SlideEditor({
             onInsertTable={handleInsertTable}
             documentInsertBlocks={documentInsertBlocks}
             onInsertDocumentSourceBlock={handleInsertDocumentSourceBlock}
-            onDuplicateSlide={handleDuplicateActiveSlide}
-            onDeleteSlide={handleDeleteActiveSlide}
-            canDeleteSlide={deck.slides.length > 1}
             onDetachDecoration={handleDetachDecoration}
             onRequestStageFocus={handleContextToolbarEscape}
+            onOpenInspectorPanel={openInspectorPanel}
+            hasDiagnostics={diagnostics.length > 0}
           />
 
           {activeSlideTree ? (
@@ -2789,7 +2758,7 @@ export function SlideEditor({
         <SlideEditorInspectorRegion
           isDesktopInspectorViewport={isDesktopInspectorViewport}
           activeSlide={activeSlide}
-          inspectorSheetOpen={effectiveInspectorSheetOpen}
+          inspectorSheetOpen={inspectorSheetOpen}
           onOpenMobileInspector={openMobileInspector}
           onCloseMobileInspector={closeMobileInspector}
           renderInspectorShell={renderInspectorShell}

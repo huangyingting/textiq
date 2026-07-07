@@ -394,7 +394,7 @@ describe("inspector panels render and wire controls", () => {
 
     assert.match(render(element), /Geometry/);
     assert.equal(empty, null);
-    assert.ok(invokeHandlers(element) >= 12);
+    assert.ok(invokeHandlers(element) >= 11);
     assert.ok(
       layoutUpdates.some(
         (patch) =>
@@ -614,6 +614,12 @@ describe("inspector panels render and wire controls", () => {
           layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 2 },
         }),
         childNode({
+          id: "child-text-2",
+          type: "text",
+          content: { paragraphs: [{ id: "p2", text: "Second text" }] },
+          layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 3 },
+        }),
+        childNode({
           id: "child-image",
           type: "image",
           content: { assetId: "img-1", alt: "Nested image" },
@@ -648,7 +654,10 @@ describe("inspector panels render and wire controls", () => {
     );
 
     assert.match(html, /Group/);
+    assert.match(html, /Text/);
+    assert.match(html, /Media/);
     assert.match(html, /Nested text/);
+    assert.match(html, /Second text/);
     assert.match(html, /Nested image/);
     assert.match(html, /Move layer forward/);
     assert.match(html, /Move layer backward/);

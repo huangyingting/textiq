@@ -712,15 +712,13 @@ describe("source review and context menu render surfaces", () => {
         canUngroup: true,
         onClose: () => calls.push("close"),
         onSelectCandidate: (nodeId: string) => calls.push(`select:${nodeId}`),
-        onEdit: () => calls.push("edit"),
         onDuplicate: () => calls.push("duplicate"),
         onCopy: () => calls.push("copy"),
         onCut: () => calls.push("cut"),
         onPaste: () => calls.push("paste"),
         onDelete: () => calls.push("delete"),
-        onBringToFront: () => calls.push("front"),
-        onSendToBack: () => calls.push("back"),
         onToggleLock: () => calls.push("lock"),
+        onToggleHidden: () => calls.push("hidden"),
         onDetachConnectorFrom: () => calls.push("detach-from"),
         onDetachConnectorTo: () => calls.push("detach-to"),
         onGroup: () => calls.push("group"),
@@ -754,10 +752,13 @@ describe("source review and context menu render surfaces", () => {
       assert.equal(stageNodeMenuLabel(connectorNode), "Connector");
       assert.match(textHtml, /Select layer/);
       assert.match(textHtml, /Current/);
-      assert.match(textHtml, /left:88/);
+      assert.match(textHtml, /left:8/);
+      assert.match(textHtml, /Ctrl\+C/);
       assert.match(connectorHtml, /Unlock/);
+      assert.match(connectorHtml, /Hide/);
       assert.match(connectorHtml, /Detach start/);
       assert.ok(calls.includes("detach-from"));
+      assert.ok(calls.includes("hidden"));
       assert.ok(calls.includes("prevent"));
       assert.ok(calls.filter((call) => call === "close").length >= 2);
     } finally {

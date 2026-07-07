@@ -4,7 +4,6 @@ import { afterEach, describe, test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import {
-  buildContextToolbarReorderActions,
   buildSlideToolInsertActions,
   ContextToolbar,
   contextToolbarTextRoleFontSizePt,
@@ -48,10 +47,7 @@ import {
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { SlideChildNode } from "@/lib/presentation/schema";
 import type { StyleObject } from "@/lib/presentation/style-schema";
-import {
-  CURRENT_OBJECT_INSERT_NODE_COMMAND_DESCRIPTORS,
-  currentObjectReorderCommandDescriptor,
-} from "@/lib/presentation/current-object-command-descriptors";
+import { CURRENT_OBJECT_INSERT_NODE_COMMAND_DESCRIPTORS } from "@/lib/presentation/current-object-command-descriptors";
 
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -138,6 +134,7 @@ function renderToolbar(
         onUpdateSelectedLayout: () => undefined,
         onUpdateSelectedLocalStyle: () => undefined,
         onUpdateSelectedAttributes: () => undefined,
+        onOpenInspectorPanel: () => undefined,
         ...overrides,
       }),
     ),
@@ -238,48 +235,6 @@ describe("buildSlideToolInsertActions", () => {
       "connector",
       "table",
     ]);
-  });
-});
-
-describe("buildContextToolbarReorderActions", () => {
-  test("returns current-object reorder actions in toolbar order", () => {
-    const actions = buildContextToolbarReorderActions({
-      onBringForward: () => undefined,
-      onSendBackward: () => undefined,
-      onBringToFront: () => undefined,
-      onSendToBack: () => undefined,
-    });
-
-    assert.deepEqual(
-      actions.map((action) => action.key),
-      ["forward", "backward", "front", "back"],
-    );
-    assert.deepEqual(
-      actions.map((action) => action.label),
-      ["Bring forward", "Send backward", "Bring to front", "Send to back"],
-    );
-    assert.deepEqual(
-      actions.map((action) => action.commandId),
-      actions.map(
-        (action) => currentObjectReorderCommandDescriptor(action.key).id,
-      ),
-    );
-  });
-
-  test("preserves callback wiring for z-order commands", () => {
-    const calls: string[] = [];
-    const actions = buildContextToolbarReorderActions({
-      onBringForward: () => calls.push("forward"),
-      onSendBackward: () => calls.push("backward"),
-      onBringToFront: () => calls.push("front"),
-      onSendToBack: () => calls.push("back"),
-    });
-
-    for (const action of actions) {
-      action.onClick();
-    }
-
-    assert.deepEqual(calls, ["forward", "backward", "front", "back"]);
   });
 });
 
@@ -519,7 +474,7 @@ describe("text role semantic persistence", () => {
     assert.equal(contextToolbarTextRoleFontSizePt("metric"), 40);
   });
 
-  test("routes text-role changes through node attributes and disables without selection", () => {
+  test("keeps text-role routing helper available while omitting the popover selector", () => {
     assert.equal(
       source.includes("onUpdateSelectedAttributes?.({ role });"),
       true,
@@ -528,42 +483,37 @@ describe("text role semantic persistence", () => {
       source.includes(
         "disabled={!selectedNode || !onUpdateSelectedAttributes}",
       ),
-      true,
+      false,
     );
   });
 });
 
 describe("context toolbar more-menu accessibility wiring", () => {
-  test("exposes the More trigger as a menu button", () => {
-    assert.equal(source.includes('hasPopup="menu"'), true);
-    assert.equal(source.includes("buttonRef={moreMenuTriggerRef}"), true);
+  test("exposes More as a single inspector opener", () => {
+    assert.equal(source.includes("moreMenuTriggerRef"), false);
     assert.equal(
-      source.includes("controls={moreOpen ? moreMenuId : undefined}"),
+      source.includes("onClick={() => onOpenInspectorPanel?.(inspectorPanel)}"),
       true,
     );
   });
 
   test("focuses and keyboard-navigates menu commands", () => {
     assert.equal(
-      source.includes("focusFirstMenuCommand(moreMenuRef.current)"),
+      source.includes("focusFirstMenuCommand(fromDocMenuRef.current)"),
       true,
     );
-    assert.equal(source.includes("onKeyDown={handleMoreMenuKeyDown}"), true);
+    assert.equal(source.includes("onKeyDown={handleFromDocMenuKeyDown}"), true);
     assert.equal(source.includes("moveMenuCommandFocus({"), true);
-    assert.equal(source.includes("closeMoreMenuAndRestoreFocus();"), true);
+    assert.equal(source.includes("closeFromDocMenuAndRestoreFocus();"), true);
   });
 });
 
 describe("slide delete affordance wiring", () => {
-  test("threads canDeleteSlide into the context-toolbar contract", () => {
+  test("keeps slide deletion out of the context-toolbar render path", () => {
     assert.equal(source.includes("canDeleteSlide?: boolean;"), true);
-    assert.equal(source.includes("canDeleteSlide = true,"), true);
-  });
-
-  test("disables Delete slide when deletion is unavailable", () => {
     assert.equal(
       source.includes("disabled={!canDeleteSlide || !onDeleteSlide}"),
-      true,
+      false,
     );
   });
 });
@@ -978,25 +928,24 @@ describe("ContextToolbar render branches", () => {
     });
 
     assert.ok(labels(elements).includes("Slide background"));
-    assert.ok(labels(elements).includes("Add slide"));
     assert.ok(labels(elements).includes("Insert connector"));
-    assert.ok(labels(elements).includes("Delete slide"));
+    assert.equal(labels(elements).includes("Add slide"), false);
+    assert.equal(labels(elements).includes("Delete slide"), false);
   });
 
-  test("renders text and shape controls for a selected shape", () => {
+  test("renders shape quick-property controls for a selected shape", () => {
     const elements = renderToolbar({});
     const renderedLabels = labels(elements);
 
-    assert.ok(renderedLabels.includes("Bold"));
-    assert.ok(renderedLabels.includes("Text role"));
-    assert.ok(renderedLabels.includes("Bullet list"));
-    assert.ok(renderedLabels.includes("Text color"));
+    assert.equal(renderedLabels.includes("Bold"), false);
+    assert.equal(renderedLabels.includes("Text role"), false);
+    assert.equal(renderedLabels.includes("Bullet list"), false);
     assert.ok(renderedLabels.includes("Fill color"));
     assert.ok(renderedLabels.includes("Border color"));
+    assert.ok(renderedLabels.includes("Border width"));
     assert.ok(renderedLabels.includes("Opacity"));
     assert.ok(renderedLabels.includes("Rotate left 15°"));
-    assert.ok(renderedLabels.includes("Bring to front"));
-    assert.ok(renderedLabels.includes("More"));
+    assert.ok(renderedLabels.includes("Open Shape inspector"));
   });
 
   test("renders media, visual, connector, table, multi-select, and decoration branches", () => {
@@ -1061,7 +1010,7 @@ describe("ContextToolbar render branches", () => {
           selectedNode: visualNode,
           onReplaceVisual: () => undefined,
         }),
-      ).includes("Visual theme"),
+      ).includes("Transparent background"),
     );
     assert.ok(
       labels(
@@ -1097,7 +1046,7 @@ describe("ContextToolbar render branches", () => {
           isDecorationSelected: true,
           onDetachDecoration: () => undefined,
         }),
-      ).includes("Detach from theme"),
+      ).includes("Open Generated element inspector"),
     );
     assert.ok(renderToolbar({ isDragging: true }).length > 0);
   });
@@ -1138,6 +1087,7 @@ describe("ContextToolbar render branches", () => {
       onDeleteSlide: () => calls.push("delete-slide"),
       onDetachDecoration: () => calls.push("detach"),
       onRequestStageFocus: () => calls.push("stage-focus"),
+      onOpenInspectorPanel: (panel: string) => calls.push(panel),
     };
     const variants = [
       renderToolbar({ selectedIds: [], selectedNode: undefined, ...callbacks }),
@@ -1221,8 +1171,9 @@ describe("ContextToolbar render branches", () => {
 
     for (const elements of variants) invokeToolbarControls(elements);
 
-    assert.ok(calls.includes("insert-slide"));
-    assert.ok(calls.includes("delete"));
+    assert.equal(calls.includes("insert-slide"), false);
+    assert.ok(calls.includes("slide"));
+    assert.ok(calls.includes("shape"));
     assert.ok(calls.length > 10);
   });
 });

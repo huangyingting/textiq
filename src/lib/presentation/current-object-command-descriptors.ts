@@ -335,64 +335,8 @@ export const CURRENT_OBJECT_ALIGN_COMMAND_DESCRIPTORS = [
 export type CurrentObjectAlignCommandId =
   (typeof CURRENT_OBJECT_ALIGN_COMMAND_DESCRIPTORS)[number]["id"];
 
-export const CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS = [
-  {
-    id: "selection.reorder-front",
-    family: "reorder-selection",
-    mode: "front",
-    label: "Bring to front",
-    shortLabel: "Front",
-    inspectorSingleLabel: "Bring front",
-    accessibilityLabel: "Bring selection to front",
-    liveMessage: "Selection brought to front.",
-    shortcut: "Ctrl+]",
-    currentObjects: NODE_AND_MULTI_OBJECTS,
-    owners: [...ARRANGE_OWNERS, KEYBOARD_SELECTION_OWNER],
-    disabledReasons: ["missing-selection", "missing-handler"],
-  },
-  {
-    id: "selection.reorder-back",
-    family: "reorder-selection",
-    mode: "back",
-    label: "Send to back",
-    shortLabel: "Back",
-    inspectorSingleLabel: "Send back",
-    accessibilityLabel: "Send selection to back",
-    liveMessage: "Selection sent to back.",
-    shortcut: "Ctrl+[",
-    currentObjects: NODE_AND_MULTI_OBJECTS,
-    owners: [...ARRANGE_OWNERS, KEYBOARD_SELECTION_OWNER],
-    disabledReasons: ["missing-selection", "missing-handler"],
-  },
-  {
-    id: "selection.reorder-forward",
-    family: "reorder-selection",
-    mode: "forward",
-    label: "Bring forward",
-    shortLabel: "Forward",
-    inspectorSingleLabel: "Forward",
-    accessibilityLabel: "Bring selection forward",
-    liveMessage: "Selection brought forward.",
-    shortcut: "]",
-    currentObjects: NODE_AND_MULTI_OBJECTS,
-    owners: [...ARRANGE_OWNERS, KEYBOARD_SELECTION_OWNER],
-    disabledReasons: ["missing-selection", "missing-handler"],
-  },
-  {
-    id: "selection.reorder-backward",
-    family: "reorder-selection",
-    mode: "backward",
-    label: "Send backward",
-    shortLabel: "Backward",
-    inspectorSingleLabel: "Backward",
-    accessibilityLabel: "Send selection backward",
-    liveMessage: "Selection sent backward.",
-    shortcut: "[",
-    currentObjects: NODE_AND_MULTI_OBJECTS,
-    owners: [...ARRANGE_OWNERS, KEYBOARD_SELECTION_OWNER],
-    disabledReasons: ["missing-selection", "missing-handler"],
-  },
-] as const satisfies readonly CurrentObjectReorderCommandDescriptor[];
+export const CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS =
+  [] as const satisfies readonly CurrentObjectReorderCommandDescriptor[];
 
 const CURRENT_OBJECT_BASE_COMMAND_DESCRIPTORS = [
   {
@@ -773,11 +717,7 @@ const CURRENT_OBJECT_ALIGN_DESCRIPTOR_BY_MODE = new Map<
 const CURRENT_OBJECT_REORDER_DESCRIPTOR_BY_MODE = new Map<
   CurrentObjectReorderMode,
   CurrentObjectReorderCommandDescriptor
->(
-  CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS.map(
-    (descriptor) => [descriptor.mode, descriptor] as const,
-  ),
-);
+>();
 
 const CURRENT_OBJECT_INSERT_NODE_DESCRIPTOR_BY_KIND = new Map<
   CurrentObjectInsertNodeKind,
