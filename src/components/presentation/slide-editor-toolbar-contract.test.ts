@@ -157,16 +157,6 @@ describe("SlideEditor toolbar command ownership", () => {
       true,
     );
     assert.equal(
-      precisionGuidesControlsSource.includes('label="Manage custom guides"'),
-      true,
-    );
-    assert.equal(
-      precisionGuidesControlsSource.includes(
-        'aria-label="Precision guide controls"',
-      ),
-      true,
-    );
-    assert.equal(
       precisionGuidesControlsSource.includes("data-precision-grid-overlay"),
       true,
     );

@@ -89,10 +89,10 @@ export function ContextToolbarButton({
         disabled={disabled}
         onClick={onClick}
         className={cx(
-          "flex h-6 w-6 items-center justify-center rounded-[var(--ds-radius-sm,6px)] text-ds-text-muted transition-colors",
+          "flex h-7 w-7 items-center justify-center rounded-ds-md text-ds-text-muted transition-colors",
           "hover:bg-ds-state-hover hover:text-ds-text-primary",
           "disabled:pointer-events-none disabled:opacity-40",
-          active && "bg-ds-accent-surface text-ds-accent-text",
+          active ? "bg-ds-accent-surface text-ds-accent-text" : undefined,
           FOCUS_RING,
         )}
       >
@@ -103,7 +103,7 @@ export function ContextToolbarButton({
 }
 
 export function ContextToolbarDivider() {
-  return <div aria-hidden className="mx-px h-3.5 w-px bg-ds-border-subtle" />;
+  return <div aria-hidden className="mx-1 h-5 w-px bg-ds-border-subtle" />;
 }
 
 export function ContextToolbarColorInput({
@@ -153,7 +153,7 @@ export function ContextToolbarSelect({
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.value)}
         className={cx(
-          "h-6 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle bg-ds-surface px-1.5 text-[11px] text-ds-text-secondary outline-none",
+          "h-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none",
           width,
           FOCUS_RING,
         )}
@@ -190,7 +190,7 @@ export function ContextToolbarNumberInput({
       step={step}
       onChange={(event) => onChange(Number(event.currentTarget.value))}
       className={cx(
-        "h-6 w-14 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle bg-ds-surface px-1.5 text-[11px] text-ds-text-secondary outline-none",
+        "h-7 w-14 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none",
         FOCUS_RING,
       )}
     />

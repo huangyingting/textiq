@@ -24,6 +24,8 @@ export type SelectMenuOption = {
   description?: ReactNode;
   icon?: ReactNode;
   disabled?: boolean;
+  /** Optional trailing keyboard-shortcut chip (compact-list spec). */
+  shortcut?: ReactNode;
 };
 
 export type SelectMenuProps = {
@@ -258,7 +260,7 @@ export function SelectMenu({
         variant === "field"
           ? "flex h-auto w-full items-center justify-between gap-1.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-[13px] font-normal text-ds-text-primary transition-colors hover:bg-ds-state-hover"
           : cx(
-              "inline-flex h-7 max-w-40 items-center gap-1.5 rounded-ds-sm px-1.5 font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+              "inline-flex h-7 max-w-40 items-center gap-1.5 rounded-ds-sm px-2 font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover aria-expanded:bg-ds-state-active",
               triggerTextClass,
             ),
         FOCUS_RING,
@@ -335,17 +337,28 @@ export function SelectMenu({
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => selectIndex(index)}
                       className={cx(
-                        "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-40",
+                        "flex min-h-7 w-full items-center gap-1.5 rounded-ds-sm py-1 pr-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-40",
+                        showCheck ? "pl-1" : "pl-2",
                         optionTextClass,
-                        activeOption
-                          ? "bg-ds-state-hover text-ds-text-primary"
-                          : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
                         selectedOption
-                          ? "font-semibold text-ds-text-primary"
-                          : undefined,
+                          ? "bg-ds-state-selected text-ds-text-primary"
+                          : activeOption
+                            ? "bg-ds-state-hover text-ds-text-primary"
+                            : "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
                         FOCUS_RING,
                       )}
                     >
+                      {showCheck ? (
+                        <span className="flex w-4 shrink-0 items-center justify-center text-ds-accent">
+                          {selectedOption ? (
+                            <Check
+                              size={12}
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </span>
+                      ) : null}
                       {option.icon ? (
                         <span className="shrink-0">{option.icon}</span>
                       ) : null}
@@ -362,12 +375,10 @@ export function SelectMenu({
                           </span>
                         ) : null}
                       </span>
-                      {showCheck && selectedOption ? (
-                        <Check
-                          size={14}
-                          aria-hidden="true"
-                          className="ml-2 shrink-0 text-ds-accent"
-                        />
+                      {option.shortcut ? (
+                        <span className="shrink-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-sunken px-[5px] py-px font-mono text-[10px] text-ds-text-muted">
+                          {option.shortcut}
+                        </span>
                       ) : null}
                     </button>
                   </li>

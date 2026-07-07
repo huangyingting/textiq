@@ -128,7 +128,12 @@ function DocumentTablePlugin({
 }) {
   const [editor] = useLexicalComposerContext();
 
-  useEffect(() => installTableObserverReadGuard(editor), [editor]);
+  // Installed permanently (never disposed): a leaked @lexical/table
+  // MutationObserver can fire against this editor after the plugin unmounts, so
+  // the read-guard must outlive the plugin. Idempotent per editor instance.
+  useEffect(() => {
+    installTableObserverReadGuard(editor);
+  }, [editor]);
 
   useEffect(() => {
     const hadHorizontalScroll = $isScrollableTablesActive(editor);

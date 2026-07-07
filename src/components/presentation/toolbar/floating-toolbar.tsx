@@ -1116,16 +1116,16 @@ export function ContextToolbar({
       aria-label="Context toolbar"
       layer="canvas"
       elevation="overlay"
-      radius="sm"
+      radius="md"
       closeOnClickAway={false}
       closeOnEscape={false}
       keepSelection
       clampToViewport
-      className="flex max-w-[calc(100vw-16px)] items-center gap-px overflow-x-auto border-ds-border-strong bg-ds-surface-overlay px-1 py-0.5 font-mono [&_svg]:h-3 [&_svg]:w-3 [&_svg]:[stroke-width:1.5]"
+      className="flex max-w-[calc(100vw-16px)] items-center gap-1 overflow-x-auto border-ds-border-subtle bg-ds-surface px-1.5 py-1 [&_svg]:h-3.5 [&_svg]:w-3.5"
     >
       <div
         ref={toolbarRef}
-        className="flex items-center gap-px"
+        className="flex items-center gap-1"
         onKeyDown={handleToolbarKeyDown}
       >
         {showSlideTools ? (

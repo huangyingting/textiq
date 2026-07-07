@@ -90,13 +90,13 @@ export const GUTTER_BUTTON = cx(
   FOCUS_RING,
 );
 
-/** Base inactive/active toolbar icon-button states. */
+/** Base inactive/active toolbar icon-button states (flat, borderless language). */
 export const TOOLBAR_BUTTON_CHROME = {
   active: "bg-ds-accent-surface text-ds-accent-text",
   subtle:
     "text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
   surface:
-    "border border-ds-border-subtle bg-ds-surface-raised text-ds-text-primary hover:bg-ds-state-hover active:bg-ds-state-active",
+    "text-ds-text-primary hover:bg-ds-state-hover active:bg-ds-state-active",
 } as const;
 
 /* node:coverage ignore next -- tsx maps the covered object close/comment to a non-runtime line. */

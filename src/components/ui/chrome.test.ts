@@ -90,7 +90,7 @@ test("ToolbarButton: supports text buttons, inactive tones, and custom type", ()
   assert.match(element.props.className, /h-9/);
   assert.match(element.props.className, /px-4/);
   assert.match(element.props.className, /rounded-\[var\(--ds-radius-pill/);
-  assert.match(element.props.className, /bg-ds-surface-raised/);
+  assert.match(element.props.className, /text-ds-text-primary/);
   assert.match(
     ToolbarButton({ shape: "md" }).props.className,
     /--ds-radius-md/,
@@ -326,7 +326,7 @@ test("UI token exports compose stable design-system classes", () => {
   assert.equal(CONTROL_TRANSITION, "transition-colors");
   assert.match(TOOLBAR_BUTTON_CHROME.active, /bg-ds-accent-surface/);
   assert.match(TOOLBAR_BUTTON_CHROME.subtle, /text-ds-text-secondary/);
-  assert.match(TOOLBAR_BUTTON_CHROME.surface, /border-ds-border-subtle/);
+  assert.match(TOOLBAR_BUTTON_CHROME.surface, /hover:bg-ds-state-hover/);
   assert.equal(cx("a", false, null, undefined, "b"), "a b");
   assert.equal(cx(), "");
 });

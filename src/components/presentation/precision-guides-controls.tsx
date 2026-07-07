@@ -1,62 +1,23 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
-import { Grid3x3, Plus, Ruler, Trash2 } from "lucide-react";
+import { Grid3x3, Ruler } from "lucide-react";
 
 import { STAGE_CHROME_Z_INDEX } from "@/lib/presentation/stage-chrome";
-import type { StageGuideInput } from "@/lib/presentation/stage-guides";
 
-import { Popover } from "@/components/ui/popover";
-import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import { DeckToolbarIconButton } from "./toolbar/deck-toolbar";
-import { useFocusFirstDescendantWhenOpen } from "./use-stage-focus-controller";
 import type { PrecisionGuidePreferences } from "./precision-guides-storage";
 
 const PRECISION_RULER_TICKS = [0, 25, 50, 75, 100] as const;
-
-export function formatGuidePosition(positionPct: number): string {
-  return Number.isInteger(positionPct)
-    ? String(positionPct)
-    : positionPct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-}
-
-export function guideAxisLabel(axis: StageGuideInput["axis"]): string {
-  return axis === "x" ? "vertical" : "horizontal";
-}
 
 export function PrecisionGuideToolbarControls({
   preferences,
   onToggleGrid,
   onToggleRulers,
-  onToggleGuides,
-  onAddGuide,
-  onRemoveGuide,
 }: {
   preferences: PrecisionGuidePreferences;
   onToggleGrid: () => void;
   onToggleRulers: () => void;
-  onToggleGuides: () => void;
-  onAddGuide: (axis: StageGuideInput["axis"], value: string) => void;
-  onRemoveGuide: (index: number) => void;
 }) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [verticalGuideInput, setVerticalGuideInput] = useState("50");
-  const [horizontalGuideInput, setHorizontalGuideInput] = useState("50");
-  const panelId = useId();
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useFocusFirstDescendantWhenOpen(panelOpen, panelRef);
-
-  function handleAddVerticalGuide(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onAddGuide("x", verticalGuideInput);
-  }
-
-  function handleAddHorizontalGuide(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onAddGuide("y", horizontalGuideInput);
-  }
-
   return (
     <>
       <DeckToolbarIconButton
@@ -79,171 +40,7 @@ export function PrecisionGuideToolbarControls({
       >
         <Ruler size={14} aria-hidden="true" />
       </DeckToolbarIconButton>
-      <Popover
-        open={panelOpen}
-        onClose={() => setPanelOpen(false)}
-        aria-label="Precision guide controls"
-        portal
-        className="w-80 p-3"
-        trigger={
-          <DeckToolbarIconButton
-            label="Manage custom guides"
-            tooltip="Manage custom guides"
-            active={panelOpen || preferences.guidesVisible}
-            hasPopup="dialog"
-            expanded={panelOpen}
-            controls={panelOpen ? panelId : undefined}
-            onClick={() => setPanelOpen((open) => !open)}
-          >
-            <Plus size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
-        }
-      >
-        <div
-          id={panelId}
-          ref={panelRef}
-          data-precision-guide-panel="true"
-          className="space-y-3 text-xs text-ds-text-primary"
-        >
-          <div>
-            <p className="font-semibold">Precision guides</p>
-            <p className="mt-1 text-ds-text-muted">
-              Positions use slide percent units and persist for this deck.
-            </p>
-          </div>
-          <div className="grid gap-2">
-            <PrecisionToggle
-              label="Show custom guides"
-              checked={preferences.guidesVisible}
-              onChange={onToggleGuides}
-            />
-            <PrecisionToggle
-              label="Show grid"
-              checked={preferences.gridVisible}
-              onChange={onToggleGrid}
-            />
-            <PrecisionToggle
-              label="Show rulers"
-              checked={preferences.rulersVisible}
-              onChange={onToggleRulers}
-            />
-          </div>
-          <GuideAddForm
-            label="Vertical guide (%)"
-            ariaLabel="Vertical guide position percent"
-            value={verticalGuideInput}
-            onValueChange={setVerticalGuideInput}
-            onSubmit={handleAddVerticalGuide}
-          />
-          <GuideAddForm
-            label="Horizontal guide (%)"
-            ariaLabel="Horizontal guide position percent"
-            value={horizontalGuideInput}
-            onValueChange={setHorizontalGuideInput}
-            onSubmit={handleAddHorizontalGuide}
-          />
-          <div>
-            <p className="font-medium">Custom guides</p>
-            {preferences.customGuides.length === 0 ? (
-              <p className="mt-1 text-ds-text-muted">No custom guides yet.</p>
-            ) : (
-              <ul className="mt-1 space-y-1" aria-label="Custom guides">
-                {preferences.customGuides.map((guide, index) => (
-                  <li
-                    key={`${guide.axis}-${guide.positionPct}-${index}`}
-                    className="flex items-center justify-between gap-2 rounded-ds-sm bg-ds-surface-subtle px-2 py-1"
-                  >
-                    <span>
-                      {guideAxisLabel(guide.axis)}{" "}
-                      {formatGuidePosition(guide.positionPct)}%
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${guideAxisLabel(
-                        guide.axis,
-                      )} guide at ${formatGuidePosition(guide.positionPct)}%`}
-                      onClick={() => onRemoveGuide(index)}
-                      className={cx(
-                        "rounded-ds-sm p-1 text-ds-text-muted hover:bg-ds-state-hover hover:text-ds-text-primary",
-                        FOCUS_RING,
-                      )}
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </Popover>
     </>
-  );
-}
-
-function PrecisionToggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <label className="flex items-center justify-between gap-3 rounded-ds-sm border border-ds-border-subtle px-2 py-1.5">
-      <span>{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className={cx("h-4 w-4", FOCUS_RING)}
-      />
-    </label>
-  );
-}
-
-function GuideAddForm({
-  label,
-  ariaLabel,
-  value,
-  onValueChange,
-  onSubmit,
-}: {
-  label: string;
-  ariaLabel: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form className="grid grid-cols-[1fr_auto] gap-2" onSubmit={onSubmit}>
-      <label className="grid gap-1">
-        <span className="font-medium">{label}</span>
-        <input
-          aria-label={ariaLabel}
-          type="number"
-          min="0"
-          max="100"
-          step="0.5"
-          value={value}
-          onChange={(event) => onValueChange(event.currentTarget.value)}
-          className={cx(
-            "h-8 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2",
-            FOCUS_RING,
-          )}
-        />
-      </label>
-      <button
-        type="submit"
-        className={cx(
-          "self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1.5 font-medium hover:bg-ds-state-hover",
-          FOCUS_RING,
-        )}
-      >
-        Add
-      </button>
-    </form>
   );
 }
 

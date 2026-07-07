@@ -605,14 +605,8 @@ export function SlideEditor({
     suppressNextStageClick,
     shouldSuppressStageClick,
   } = useStageInteractionController();
-  const {
-    precisionGuides,
-    togglePrecisionGrid,
-    togglePrecisionRulers,
-    toggleCustomGuidesVisible,
-    addCustomGuide,
-    removeCustomGuide,
-  } = usePrecisionGuides(documentId, setStageAnnouncement);
+  const { precisionGuides, togglePrecisionGrid, togglePrecisionRulers } =
+    usePrecisionGuides(documentId, setStageAnnouncement);
   const {
     focusGeometryRegistry,
     canvasElement,
@@ -2382,9 +2376,6 @@ export function SlideEditor({
         toggleSnapToGuides={toggleSnapToGuides}
         togglePrecisionGrid={togglePrecisionGrid}
         togglePrecisionRulers={togglePrecisionRulers}
-        toggleCustomGuidesVisible={toggleCustomGuidesVisible}
-        addCustomGuide={addCustomGuide}
-        removeCustomGuide={removeCustomGuide}
         setSourceMenuOpen={setSourceMenuOpen}
         handleSourceMenuKeyDown={handleSourceMenuKeyDown}
         handleSyncFromDocument={handleSyncFromDocument}

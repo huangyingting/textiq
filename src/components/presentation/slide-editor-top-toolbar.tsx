@@ -36,7 +36,15 @@ import type {
 import type { SourceReviewItem } from "@/lib/presentation/source-links";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import { Popover } from "@/components/ui/popover";
+import { SelectMenu } from "@/components/ui/select-menu";
+import type { SelectMenuOption } from "@/components/ui/select-menu";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
+
+const CANVAS_RATIO_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "16:9", label: "16:9" },
+  { value: "4:3", label: "4:3" },
+  { value: "square", label: "1:1" },
+];
 
 import { DeckChromePanel } from "./inspector";
 import type { PrecisionGuidePreferences } from "./precision-guides-storage";
@@ -104,13 +112,6 @@ export interface SlideEditorTopToolbarProps {
   toggleSnapToGuides: () => void;
   togglePrecisionGrid: () => void;
   togglePrecisionRulers: () => void;
-  toggleCustomGuidesVisible: () => void;
-  addCustomGuide: Parameters<
-    typeof PrecisionGuideToolbarControls
-  >[0]["onAddGuide"];
-  removeCustomGuide: Parameters<
-    typeof PrecisionGuideToolbarControls
-  >[0]["onRemoveGuide"];
   setSourceMenuOpen: Dispatch<SetStateAction<boolean>>;
   handleSourceMenuKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   handleSyncFromDocument: () => void;
@@ -187,9 +188,6 @@ export function SlideEditorTopToolbar({
   toggleSnapToGuides,
   togglePrecisionGrid,
   togglePrecisionRulers,
-  toggleCustomGuidesVisible,
-  addCustomGuide,
-  removeCustomGuide,
   setSourceMenuOpen,
   handleSourceMenuKeyDown,
   handleSyncFromDocument,
@@ -212,25 +210,18 @@ export function SlideEditorTopToolbar({
 }: SlideEditorTopToolbarProps) {
   return (
     <DeckToolbar>
+      <div aria-hidden="true" className="flex-1" />
       <DeckToolbarRow>
         <DeckToolbarGroup label="Deck setup">
-          <select
+          <SelectMenu
             aria-label="Deck theme"
             value={deck.theme.packageId}
-            onChange={(event) =>
-              handleThemePackageChange(event.currentTarget.value)
-            }
-            className={cx(
-              "h-[26px] max-w-36 shrink-0 rounded-ds-sm border-0 bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-state-hover",
-              FOCUS_RING,
-            )}
-          >
-            {themePackages.map((themePackageOption) => (
-              <option key={themePackageOption.id} value={themePackageOption.id}>
-                {themePackageOption.name}
-              </option>
-            ))}
-          </select>
+            onChange={handleThemePackageChange}
+            options={themePackages.map((themePackageOption) => ({
+              value: themePackageOption.id,
+              label: themePackageOption.name,
+            }))}
+          />
           <DeckToolbarIconButton
             label="Author brand kit"
             hasPopup="dialog"
@@ -240,23 +231,14 @@ export function SlideEditorTopToolbar({
           >
             <Palette size={14} aria-hidden="true" />
           </DeckToolbarIconButton>
-          <select
+          <SelectMenu
             aria-label="Slide ratio"
             value={currentCanvasFormat}
-            onChange={(event) =>
-              handleCanvasRatioChange(
-                event.currentTarget.value as "16:9" | "4:3" | "square",
-              )
+            onChange={(value) =>
+              handleCanvasRatioChange(value as "16:9" | "4:3" | "square")
             }
-            className={cx(
-              "h-[26px] shrink-0 rounded-ds-sm border-0 bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-state-hover",
-              FOCUS_RING,
-            )}
-          >
-            <option value="16:9">16:9</option>
-            <option value="4:3">4:3</option>
-            <option value="square">1:1</option>
-          </select>
+            options={CANVAS_RATIO_OPTIONS}
+          />
           <Popover
             open={deckChromeToolbarOpen}
             onClose={() => setDeckChromeToolbarOpen(false)}
@@ -302,9 +284,6 @@ export function SlideEditorTopToolbar({
             preferences={precisionGuides}
             onToggleGrid={togglePrecisionGrid}
             onToggleRulers={togglePrecisionRulers}
-            onToggleGuides={toggleCustomGuidesVisible}
-            onAddGuide={addCustomGuide}
-            onRemoveGuide={removeCustomGuide}
           />
         </DeckToolbarGroup>
 
@@ -328,7 +307,7 @@ export function SlideEditorTopToolbar({
                 aria-controls={sourceMenuOpen ? sourceMenuId : undefined}
                 onClick={() => setSourceMenuOpen((open) => !open)}
                 className={cx(
-                  "relative flex h-[26px] items-center gap-1 rounded-ds-sm bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  "relative flex h-7 items-center gap-1.5 rounded-ds-md px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
                   FOCUS_RING,
                 )}
               >
@@ -459,242 +438,244 @@ export function SlideEditorTopToolbar({
         </DeckToolbarGroup>
       </DeckToolbarRow>
 
-      <DeckToolbarGroup label="Deck actions" className="justify-end">
-        <Popover
-          open={compactToolbarMenuOpen}
-          onClose={() => setCompactToolbarMenuOpen(false)}
-          role="menu"
-          aria-label="More deck commands"
-          portal
-          className="w-64 p-2"
-          trigger={
-            <button
-              ref={compactToolbarMenuTriggerRef}
-              type="button"
-              aria-label="Open more deck commands"
-              aria-haspopup="menu"
-              aria-expanded={compactToolbarMenuOpen}
-              aria-controls={
-                compactToolbarMenuOpen ? compactToolbarMenuId : undefined
-              }
-              onClick={() => setCompactToolbarMenuOpen((open) => !open)}
-              className={cx(
-                "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-ds-sm bg-transparent text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <MoreHorizontal size={15} aria-hidden="true" />
-            </button>
-          }
-        >
-          <div
-            ref={compactToolbarMenuPanelRef}
-            id={compactToolbarMenuId}
-            className="space-y-1"
-            onKeyDown={handleCompactToolbarMenuKeyDown}
-          >
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Command palette"
-              onClick={() => {
-                setCommandPaletteOpen(true);
-                closeCompactToolbarMenuAndRestoreFocus();
-              }}
-              className={cx(
-                "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <CommandIcon size={14} aria-hidden="true" />
-              Command palette
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Keyboard shortcuts"
-              onClick={() => {
-                setShortcutHelpOpen(true);
-                closeCompactToolbarMenuAndRestoreFocus();
-              }}
-              className={cx(
-                "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <Keyboard size={14} aria-hidden="true" />
-              Keyboard shortcuts
-            </button>
-            {onSave ? (
+      <div className="flex flex-1 justify-end">
+        <DeckToolbarGroup label="Deck actions">
+          <Popover
+            open={compactToolbarMenuOpen}
+            onClose={() => setCompactToolbarMenuOpen(false)}
+            role="menu"
+            aria-label="More deck commands"
+            portal
+            className="w-64 p-2"
+            trigger={
               <button
+                ref={compactToolbarMenuTriggerRef}
                 type="button"
-                role="menuitem"
-                aria-label="Save now"
-                disabled={saveStatus === "saving"}
-                onClick={() => {
-                  void onSave(deck);
-                  closeCompactToolbarMenuAndRestoreFocus();
-                }}
+                aria-label="Open more deck commands"
+                aria-haspopup="menu"
+                aria-expanded={compactToolbarMenuOpen}
+                aria-controls={
+                  compactToolbarMenuOpen ? compactToolbarMenuId : undefined
+                }
+                onClick={() => setCompactToolbarMenuOpen((open) => !open)}
                 className={cx(
-                  "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-ds-md text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
                   FOCUS_RING,
                 )}
               >
-                <span>Save now</span>
+                <MoreHorizontal size={15} aria-hidden="true" />
+              </button>
+            }
+          >
+            <div
+              ref={compactToolbarMenuPanelRef}
+              id={compactToolbarMenuId}
+              className="space-y-1"
+              onKeyDown={handleCompactToolbarMenuKeyDown}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="Command palette"
+                onClick={() => {
+                  setCommandPaletteOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <CommandIcon size={14} aria-hidden="true" />
+                Command palette
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="Keyboard shortcuts"
+                onClick={() => {
+                  setShortcutHelpOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <Keyboard size={14} aria-hidden="true" />
+                Keyboard shortcuts
+              </button>
+              {onSave ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Save now"
+                  disabled={saveStatus === "saving"}
+                  onClick={() => {
+                    void onSave(deck);
+                    closeCompactToolbarMenuAndRestoreFocus();
+                  }}
+                  className={cx(
+                    "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
+                    FOCUS_RING,
+                  )}
+                >
+                  <span>Save now</span>
+                  <span className="text-[10px] text-ds-text-muted">
+                    {saveStatusLabel}
+                  </span>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setDeckDiagnosticsReviewOpen(true);
+                  closeCompactToolbarMenuAndRestoreFocus();
+                }}
+                className={cx(
+                  "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  FOCUS_RING,
+                )}
+              >
+                <span>Diagnostics</span>
                 <span className="text-[10px] text-ds-text-muted">
-                  {saveStatusLabel}
+                  {diagnosticsCount}
                 </span>
               </button>
-            ) : null}
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setDeckDiagnosticsReviewOpen(true);
-                closeCompactToolbarMenuAndRestoreFocus();
-              }}
-              className={cx(
-                "flex w-full items-center justify-between rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <span>Diagnostics</span>
-              <span className="text-[10px] text-ds-text-muted">
-                {diagnosticsCount}
-              </span>
-            </button>
-          </div>
-        </Popover>
-
-        <DeckToolbarDivider />
-
-        <DeckToolbarGroup label="Undo and redo">
-          <DeckToolbarIconButton
-            label="Undo"
-            disabled={!canUndo}
-            onClick={onUndo}
-          >
-            <Undo2 size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
-          <DeckToolbarIconButton
-            label="Redo"
-            disabled={!canRedo}
-            onClick={onRedo}
-          >
-            <Redo2 size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
-        </DeckToolbarGroup>
-
-        {onPresent ? (
-          <DeckToolbarIconButton
-            label="Present slides"
-            disabled={saveStatus === "saving"}
-            onClick={() =>
-              void handleRoundtripAction(
-                onPresent,
-                "Presentation route failed. Please try again.",
-              )
-            }
-          >
-            <MonitorPlay size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
-        ) : null}
-        {onShare ? (
-          <DeckToolbarIconButton
-            label="Share slides"
-            disabled={saveStatus === "saving"}
-            onClick={() =>
-              void handleRoundtripAction(
-                onShare,
-                "Share route failed. Please try again.",
-              )
-            }
-          >
-            <Share2 size={14} aria-hidden="true" />
-          </DeckToolbarIconButton>
-        ) : null}
-        {onExportPptx || onExportPdf || onExportPng ? (
-          <Popover
-            open={exportMenuOpen}
-            onClose={() => setExportMenuOpen(false)}
-            role="menu"
-            aria-label="Export slides"
-            placement="bottom"
-            align="end"
-            className="w-44 p-1"
-            trigger={
-              <DeckToolbarButton
-                label="Export slides"
-                onClick={() => setExportMenuOpen((open) => !open)}
-                className="font-semibold"
-              >
-                <FileDown size={14} aria-hidden="true" />
-                Export
-                <ChevronDown size={12} aria-hidden="true" />
-              </DeckToolbarButton>
-            }
-          >
-            <div id={exportMenuId} className="flex flex-col">
-              {onExportPptx ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Export PPTX"
-                  onClick={() => {
-                    handleExportRequest("pptx");
-                  }}
-                  className={cx(
-                    "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Export PPTX
-                </button>
-              ) : null}
-              {onExportPdf ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Export PDF"
-                  onClick={() => {
-                    handleExportRequest("pdf");
-                  }}
-                  className={cx(
-                    "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Export PDF
-                </button>
-              ) : null}
-              {onExportPng ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Export PNGs"
-                  onClick={() => {
-                    handleExportRequest("png");
-                  }}
-                  className={cx(
-                    "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
-                    FOCUS_RING,
-                  )}
-                >
-                  Export PNGs
-                </button>
-              ) : null}
             </div>
           </Popover>
-        ) : null}
-        {onClose ? (
-          <DeckToolbarIconButton
-            label="Close slide editor"
-            onClick={handleCloseRequest}
-          >
-            <X size={16} aria-hidden="true" />
-          </DeckToolbarIconButton>
-        ) : null}
-      </DeckToolbarGroup>
+
+          <DeckToolbarDivider />
+
+          <DeckToolbarGroup label="Undo and redo">
+            <DeckToolbarIconButton
+              label="Undo"
+              disabled={!canUndo}
+              onClick={onUndo}
+            >
+              <Undo2 size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+            <DeckToolbarIconButton
+              label="Redo"
+              disabled={!canRedo}
+              onClick={onRedo}
+            >
+              <Redo2 size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+          </DeckToolbarGroup>
+
+          {onPresent ? (
+            <DeckToolbarIconButton
+              label="Present slides"
+              disabled={saveStatus === "saving"}
+              onClick={() =>
+                void handleRoundtripAction(
+                  onPresent,
+                  "Presentation route failed. Please try again.",
+                )
+              }
+            >
+              <MonitorPlay size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+          ) : null}
+          {onShare ? (
+            <DeckToolbarIconButton
+              label="Share slides"
+              disabled={saveStatus === "saving"}
+              onClick={() =>
+                void handleRoundtripAction(
+                  onShare,
+                  "Share route failed. Please try again.",
+                )
+              }
+            >
+              <Share2 size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
+          ) : null}
+          {onExportPptx || onExportPdf || onExportPng ? (
+            <Popover
+              open={exportMenuOpen}
+              onClose={() => setExportMenuOpen(false)}
+              role="menu"
+              aria-label="Export slides"
+              placement="bottom"
+              align="end"
+              className="w-44 p-1"
+              trigger={
+                <DeckToolbarButton
+                  label="Export slides"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  className="font-semibold"
+                >
+                  <FileDown size={14} aria-hidden="true" />
+                  Export
+                  <ChevronDown size={12} aria-hidden="true" />
+                </DeckToolbarButton>
+              }
+            >
+              <div id={exportMenuId} className="flex flex-col">
+                {onExportPptx ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PPTX"
+                    onClick={() => {
+                      handleExportRequest("pptx");
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PPTX
+                  </button>
+                ) : null}
+                {onExportPdf ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PDF"
+                    onClick={() => {
+                      handleExportRequest("pdf");
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PDF
+                  </button>
+                ) : null}
+                {onExportPng ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Export PNGs"
+                    onClick={() => {
+                      handleExportRequest("png");
+                    }}
+                    className={cx(
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Export PNGs
+                  </button>
+                ) : null}
+              </div>
+            </Popover>
+          ) : null}
+          {onClose ? (
+            <DeckToolbarIconButton
+              label="Close slide editor"
+              onClick={handleCloseRequest}
+            >
+              <X size={16} aria-hidden="true" />
+            </DeckToolbarIconButton>
+          ) : null}
+        </DeckToolbarGroup>
+      </div>
     </DeckToolbar>
   );
 }

@@ -297,7 +297,7 @@ describe("SlideCanvas stage editing render affordances", () => {
     assert.match(html, /data-node-focused="true"/);
   });
 
-  test("applies focus-visible and reduced-motion guards to focusable stage nodes", () => {
+  test("keeps focusable stage nodes visually quiet", () => {
     const selection = setSelection(createSelectionState("normal"), [
       "locked",
       "group-1",
@@ -316,12 +316,14 @@ describe("SlideCanvas stage editing render affordances", () => {
 
     assert.match(
       html,
-      /data-node-id="locked"[^>]*class="[^"]*focus-visible:ring-ds-focus-ring[^"]*motion-reduce:transition-none/,
+      /data-node-id="locked"[^>]*class="[^"]*outline-none[^"]*motion-reduce:transition-none/,
     );
     assert.match(
       html,
-      /data-node-id="group-1"[^>]*class="[^"]*focus-visible:ring-ds-focus-ring[^"]*motion-reduce:transition-none/,
+      /data-node-id="group-1"[^>]*class="[^"]*outline-none[^"]*motion-reduce:transition-none/,
     );
+    assert.doesNotMatch(html, /data-node-id="locked"[^>]*focus-visible:ring/);
+    assert.doesNotMatch(html, /data-node-id="group-1"[^>]*focus-visible:ring/);
     assert.match(html, /data-node-id="locked"[^>]*aria-disabled="true"/);
   });
 

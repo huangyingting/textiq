@@ -42,12 +42,11 @@ function editorToolbarButtonClass({
   className?: string;
 } = {}) {
   return cx(
-    "inline-flex h-8 items-center justify-center gap-1.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-raised text-sm font-medium text-ds-text-primary shadow-ds-raised transition-colors hover:bg-ds-state-hover active:bg-ds-state-active disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex h-8 items-center justify-center gap-1.5 rounded-ds-md text-sm font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active disabled:cursor-not-allowed disabled:opacity-50",
     iconOnly
       ? "w-8 px-0"
       : "w-8 px-0 [[data-toolbar-labels='show']_&]:w-auto [[data-toolbar-labels='show']_&]:px-3",
-    active &&
-      "border-ds-accent-border bg-ds-accent-surface text-ds-accent-text",
+    active && "bg-ds-accent-surface text-ds-accent-text",
     FOCUS_RING,
     className,
   );

@@ -402,7 +402,7 @@ test("SelectMenu exposes selected state, keyboard navigation, disabled options, 
           anchor: "toolbar",
           options: [
             { value: "small", label: "Small", description: "Compact" },
-            { value: "medium", label: "Medium", icon: "M" },
+            { value: "medium", label: "Medium", icon: "M", shortcut: "⌘M" },
             { value: "large", label: "Large" },
             { value: "disabled", label: "Disabled", disabled: true },
           ],

@@ -36,10 +36,8 @@ import { tableCellEditableText } from "@/lib/presentation/table-cell-editing";
 import { truncateNarrationText } from "@/lib/presentation/a11y/node-narration";
 import { colorValueToCss, fillStyleToCss } from "./fill-style-css";
 
-const STAGE_NODE_FOCUS_VISIBLE_CHROME = cx(
-  FOCUS_RING,
-  "motion-reduce:transition-none",
-);
+const STAGE_NODE_FOCUS_VISIBLE_CHROME =
+  "outline-none motion-reduce:transition-none";
 const TABLE_CELL_FOCUS_VISIBLE_CHROME = cx(
   FOCUS_RING,
   "motion-reduce:transition-none",
