@@ -2854,7 +2854,7 @@ export function SlideEditor({
         </div>
 
         {/* ------------------------------------------------------------------ */}
-        {/* Inspector Panel (tab-routed)                                        */}
+        {/* Inspector Panel (panel-routed)                                      */}
         {/* ------------------------------------------------------------------ */}
         <SlideEditorInspectorRegion
           isDesktopInspectorViewport={isDesktopInspectorViewport}

@@ -34,6 +34,49 @@ export function diagnosticsSummary(count: number): string {
   return `${count} diagnostics`;
 }
 
+type SaveFocalVariant = "saved" | "progress" | "unsaved" | "error";
+
+/**
+ * Maps a {@link SaveStatus} to the accent-save-state focal chip variant: the
+ * footer's save status is the visual focal point, shifting color to reflect the
+ * document's persistence state.
+ */
+export function saveFocalVariant(status: SaveStatus): SaveFocalVariant {
+  switch (status) {
+    case "saved":
+      return "saved";
+    case "saving":
+    case "retrying":
+    case "queued":
+      return "progress";
+    case "pending":
+    case "offline":
+      return "unsaved";
+    case "conflict":
+    case "error":
+      return "error";
+  }
+}
+
+const SAVE_FOCAL_CHIP_BASE =
+  "inline-flex items-center gap-1.5 rounded-ds-md border px-2 py-0.5 text-[11px] font-semibold";
+
+const SAVE_FOCAL_CHIP: Record<SaveFocalVariant, string> = {
+  saved: "border-ds-accent-border bg-ds-accent-surface text-ds-accent-text",
+  progress:
+    "border-ds-border-subtle bg-ds-surface-sunken text-ds-text-secondary",
+  unsaved:
+    "border-ds-warning-border bg-ds-warning-surface text-ds-warning-text",
+  error: "border-ds-danger-border bg-ds-danger-surface text-ds-danger-text",
+};
+
+const SAVE_FOCAL_DOT: Record<SaveFocalVariant, string> = {
+  saved: "bg-ds-accent",
+  progress: "bg-ds-text-muted motion-safe:animate-pulse",
+  unsaved: "bg-ds-warning",
+  error: "bg-ds-danger",
+};
+
 export function presencePeerSummary(
   peer: SlidePresencePeer,
   deck: Deck,
@@ -439,12 +482,36 @@ export function SlideEditorFooter({
             type="button"
             onClick={() => void onSave(deck)}
             aria-label={saveStatusLabel}
-            className="text-ds-danger-text underline-offset-2 hover:underline"
+            className={cx(
+              SAVE_FOCAL_CHIP_BASE,
+              SAVE_FOCAL_CHIP.error,
+              "transition hover:opacity-90",
+              FOCUS_RING,
+            )}
           >
+            <span
+              aria-hidden="true"
+              className={cx("h-1.5 w-1.5 rounded-full", SAVE_FOCAL_DOT.error)}
+            />
             {saveStatusLabel}
           </button>
         ) : shouldShowSaveStatus ? (
-          <span role="status" aria-live="polite" aria-atomic="true">
+          <span
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className={cx(
+              SAVE_FOCAL_CHIP_BASE,
+              SAVE_FOCAL_CHIP[saveFocalVariant(saveStatus)],
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cx(
+                "h-1.5 w-1.5 rounded-full",
+                SAVE_FOCAL_DOT[saveFocalVariant(saveStatus)],
+              )}
+            />
             {saveStatusLabel}
           </span>
         ) : null}

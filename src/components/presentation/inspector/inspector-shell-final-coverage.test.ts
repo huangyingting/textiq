@@ -35,13 +35,13 @@ const functionComponentsToResolve = new Set([
   "NotesPanel",
   "DecorationPanel",
   "ActionButton",
+  "InspectorPanelSelect",
   "MultiArrangePanel",
   "SingleArrangePanel",
   "RangeField",
   "NumberField",
   "AdjustPanel",
   "EffectsPanel",
-  "Tabs",
   "LocalOverrideBadge",
   "NodeContentPanel",
   "LocalStylePanel",
@@ -313,18 +313,22 @@ function clickButtons(tree: ReactNode, labels: readonly string[]) {
   }
 }
 
-test("InspectorShell final tabs, notes, decoration, and fallback panels call safe handlers", () => {
+test("InspectorShell final panel select, notes, decoration, and fallback panels call safe handlers", () => {
   const recorder = createRecorder();
   const notes = renderInspector(recorder, { initialPanel: "notes" });
   const textarea = findAll(notes, (element) => element.type === "textarea")[0];
   (textarea.props.onChange as (event: unknown) => void)(
     changeEvent("Updated notes"),
   );
-  const layersToggle = findAll(
+  const panelSelect = findAll(
     notes,
-    (element) => textContent(element) === "Layers",
+    (element) =>
+      element.type === "select" &&
+      element.props["aria-label"] === "Inspector panel",
   )[0];
-  (layersToggle.props.onClick as () => void)();
+  (panelSelect.props.onChange as (event: unknown) => void)({
+    currentTarget: { value: "layers" },
+  });
 
   const fallback = renderInspector(recorder, {
     selectedNode: textNode,
@@ -422,7 +426,12 @@ test("InspectorShell final adjust and effects panels emit image and style patche
     selectedIds: [imageNode.id],
     initialPanel: "adjust",
   });
-  const fit = findAll(adjust, (element) => element.type === "select")[0];
+  const fit = findAll(
+    adjust,
+    (element) =>
+      element.type === "select" &&
+      element.props["aria-label"] !== "Inspector panel",
+  )[0];
   (fit.props.onChange as (event: unknown) => void)(changeEvent("fill"));
   for (const input of findAll(adjust, (element) => element.type === "input")) {
     if (input.props.type === "range" || input.props.type === "number") {
@@ -436,7 +445,12 @@ test("InspectorShell final adjust and effects panels emit image and style patche
     selectedIds: [glowShape.id],
     initialPanel: "effects",
   });
-  const selects = findAll(glowEffects, (element) => element.type === "select");
+  const selects = findAll(
+    glowEffects,
+    (element) =>
+      element.type === "select" &&
+      element.props["aria-label"] !== "Inspector panel",
+  );
   const effectSelect = selects[0];
   for (const value of ["blur", "glow", "glass", "none"]) {
     (effectSelect.props.onChange as (event: unknown) => void)(

@@ -13,7 +13,7 @@
  * - {@link NodeSourcePanel}    — source metadata controls.
  * - {@link LayersPanel}        — slide layer list controls.
  * - {@link EditorField}        — shared field, number, action, and menu primitives.
- * - {@link InspectorShell}     — tab strip + panel router for the full inspector.
+ * - {@link InspectorShell}     — panel selector + panel router for the full inspector.
  */
 
 export { StyleBindingPanel } from "./style-binding-panel";

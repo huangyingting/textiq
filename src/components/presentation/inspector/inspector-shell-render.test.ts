@@ -285,7 +285,8 @@ describe("InspectorShell render affordances", () => {
 
     assert.match(html, /Speaker Notes/);
     assert.match(html, /Speaker note text/);
-    assert.match(html, /aria-selected="true"/);
+    assert.match(html, /aria-label="Inspector panel"/);
+    assert.match(html, /<option value="notes" selected="">Notes<\/option>/);
   });
 
   test("incompatible initialPanel falls back to the multi-select arrange panel", () => {
@@ -299,7 +300,7 @@ describe("InspectorShell render affordances", () => {
     assert.doesNotMatch(html, /Content/);
   });
 
-  test("diagnostics tab displays a count badge", () => {
+  test("diagnostics panel option displays a count", () => {
     const html = renderInspector({
       diagnostics: [
         makeDiagnostic("missing-asset", "error", "Missing asset"),
@@ -312,7 +313,7 @@ describe("InspectorShell render affordances", () => {
     });
 
     assert.match(html, /Diagnostics/);
-    assert.match(html, /aria-label="2 diagnostics"/);
+    assert.match(html, /Diagnostics \(2\)/);
   });
 
   test("diagnostics panel sorts severities, labels actions, and hides info", () => {

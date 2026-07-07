@@ -1,17 +1,16 @@
 "use client";
 
 /**
- * InspectorShell — tab strip + panel router for the presentation inspector.
+ * InspectorShell — panel selector + panel router for the presentation inspector.
  *
  * Reads the available panels for the current selection type via
- * `availablePanels` from `inspector-panel-ui.ts` and renders a tab strip
- * above the active panel content.
+ * `availablePanels` from `inspector-panel-ui.ts` and renders the selected panel.
  *
  * When the selection changes, the shell preserves compatible panels and
  * replaces incompatible panels with the default panel for the new context.
  */
 
-import { useState, type JSX, type ReactNode } from "react";
+import { useId, useState, type JSX, type ReactNode } from "react";
 
 import type {
   SlideChildNode,
@@ -50,7 +49,6 @@ import {
   type CurrentObjectReorderMode,
 } from "@/lib/presentation/current-object-command-descriptors";
 
-import { Tabs } from "@/components/ui/tabs";
 import { cx } from "@/components/ui/tokens";
 import type {
   SelectionAlignMode,
@@ -60,6 +58,7 @@ import type {
 
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { DeckChromePanel } from "./deck-chrome-panel";
+import { InspectorPanelSelect } from "./inspector-panel-select";
 import { LayersPanel } from "./layers-panel";
 import { LocalOverrideBadge } from "./local-override-badge";
 import { LocalStylePanel } from "./local-style-panel";
@@ -998,25 +997,19 @@ export function InspectorShell({
     defaultPanel,
   });
 
-  const tabOptions = panels.map((p) => ({
-    value: p.id as string,
-    label: p.label,
-    badge:
-      p.id === "diagnostics" && diagnostics.length > 0 ? (
-        <span
-          aria-label={`${diagnostics.length} diagnostics`}
-          className="rounded-full bg-ds-danger-surface px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-ds-danger-text"
-        >
-          {diagnostics.length}
-        </span>
-      ) : undefined,
-  }));
-  const inspectorTabId = (panelId: string) =>
-    `presentation-inspector-tab-${panelId}`;
+  const inspectorPanelSelectId = useId();
   const inspectorPanelId = (panelId: string) =>
     `presentation-inspector-panel-${panelId}`;
 
-  // Identity label above the tab strip
+  function handlePanelSelect(panel: InspectorPanelId) {
+    setActivePanel(panel);
+    const nextLayersMode = panel === "layers";
+    if (nextLayersMode !== (selectionMode === "layers")) {
+      onToggleSelectionMode();
+    }
+  }
+
+  // Identity label next to the panel selector
   let identityLabel = "Inspector";
   if (isDecorationSelected) {
     identityLabel =
@@ -1040,39 +1033,20 @@ export function InspectorShell({
         <span className="truncate text-xs font-medium text-ds-text-primary">
           {identityLabel}
         </span>
-        <button
-          type="button"
-          onClick={onToggleSelectionMode}
-          className={cx(
-            "rounded-[var(--ds-radius-sm,6px)] px-2 py-0.5 text-[11px] font-medium transition-colors",
-            selectionMode === "layers"
-              ? "bg-ds-accent-surface text-ds-accent-text"
-              : "text-ds-text-muted hover:text-ds-text-secondary",
-          )}
-          aria-pressed={selectionMode === "layers"}
-        >
-          Layers
-        </button>
-      </div>
-
-      {/* Tab strip */}
-      {tabOptions.length > 1 && (
-        <Tabs
-          options={tabOptions as { value: string; label: string }[]}
+        <InspectorPanelSelect
+          id={inspectorPanelSelectId}
+          panels={panels}
           value={effectivePanel}
-          onChange={(v) => setActivePanel(v as InspectorPanelId)}
-          aria-label="Inspector panels"
-          size="sm"
-          getTabId={inspectorTabId}
-          getPanelId={inspectorPanelId}
+          diagnosticsCount={diagnostics.length}
+          onChange={handlePanelSelect}
         />
-      )}
+      </div>
 
       {/* Panel content */}
       <div
         id={inspectorPanelId(effectivePanel)}
         role="tabpanel"
-        aria-labelledby={inspectorTabId(effectivePanel)}
+        aria-labelledby={inspectorPanelSelectId}
         className="min-h-0 flex-1 overflow-y-auto"
       >
         {/* Slide panel */}

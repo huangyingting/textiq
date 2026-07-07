@@ -32,7 +32,7 @@ describe("SlideEditor save status announcements", () => {
 
     assert.match(
       html,
-      /<span role="status" aria-live="polite" aria-atomic="true">Saving…<\/span>/,
+      /<span role="status" aria-live="polite" aria-atomic="true" class="[^"]*bg-ds-surface-sunken[^"]*">[\s\S]*?Saving…<\/span>/,
     );
   });
 
