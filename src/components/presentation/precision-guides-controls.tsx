@@ -8,7 +8,7 @@ import type { StageGuideInput } from "@/lib/presentation/stage-guides";
 
 import { Popover } from "@/components/ui/popover";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
-import { DeckToolbarButton } from "./toolbar/deck-toolbar";
+import { DeckToolbarIconButton } from "./toolbar/deck-toolbar";
 import { useFocusFirstDescendantWhenOpen } from "./use-stage-focus-controller";
 import type { PrecisionGuidePreferences } from "./precision-guides-storage";
 
@@ -59,7 +59,7 @@ export function PrecisionGuideToolbarControls({
 
   return (
     <>
-      <DeckToolbarButton
+      <DeckToolbarIconButton
         label="Toggle grid overlay"
         tooltip={
           preferences.gridVisible
@@ -70,17 +70,15 @@ export function PrecisionGuideToolbarControls({
         onClick={onToggleGrid}
       >
         <Grid3x3 size={14} aria-hidden="true" />
-        Grid
-      </DeckToolbarButton>
-      <DeckToolbarButton
+      </DeckToolbarIconButton>
+      <DeckToolbarIconButton
         label="Toggle rulers"
         tooltip={preferences.rulersVisible ? "Rulers: shown" : "Rulers: hidden"}
         active={preferences.rulersVisible}
         onClick={onToggleRulers}
       >
         <Ruler size={14} aria-hidden="true" />
-        Rulers
-      </DeckToolbarButton>
+      </DeckToolbarIconButton>
       <Popover
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
@@ -88,7 +86,7 @@ export function PrecisionGuideToolbarControls({
         portal
         className="w-80 p-3"
         trigger={
-          <DeckToolbarButton
+          <DeckToolbarIconButton
             label="Manage custom guides"
             tooltip="Manage custom guides"
             active={panelOpen || preferences.guidesVisible}
@@ -98,8 +96,7 @@ export function PrecisionGuideToolbarControls({
             onClick={() => setPanelOpen((open) => !open)}
           >
             <Plus size={14} aria-hidden="true" />
-            Guides
-          </DeckToolbarButton>
+          </DeckToolbarIconButton>
         }
       >
         <div

@@ -172,9 +172,10 @@ directly.
 
 The top toolbar is a compact deck-level command surface. It does not own deck
 identity, routine save/diagnostic/presence state, or selected-object editing
-commands; those live in the bottom dock or current-object surfaces. It uses
-stable first-level text controls for deck setup and output, with icon buttons
-for compact route/actions:
+commands; those live in the bottom dock or current-object surfaces. It uses a
+compact icon-dense layout: the theme and ratio selects plus the Source and
+Export controls keep minimal labels for disambiguation, while every other
+control is an icon-only button:
 
 ```text
 Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Present | Share | Export PPTX | Close

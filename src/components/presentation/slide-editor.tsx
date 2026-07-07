@@ -41,13 +41,15 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  Box,
   ChevronDown,
   Command as CommandIcon,
   FileDown,
-  Grid3x3,
   Keyboard,
+  Magnet,
   MoreHorizontal,
   MonitorPlay,
+  Palette,
   Redo2,
   RefreshCw,
   Share2,
@@ -2369,7 +2371,7 @@ export function SlideEditor({
                 handleThemePackageChange(event.currentTarget.value)
               }
               className={cx(
-                "h-8 max-w-36 shrink-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary",
+                "h-[26px] max-w-36 shrink-0 rounded-ds-sm border-0 bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-state-hover",
                 FOCUS_RING,
               )}
             >
@@ -2382,15 +2384,15 @@ export function SlideEditor({
                 </option>
               ))}
             </select>
-            <DeckToolbarButton
+            <DeckToolbarIconButton
               label="Author brand kit"
               hasPopup="dialog"
               expanded={brandKitAuthoringOpen}
               active={brandKitAuthoringOpen}
               onClick={handleOpenBrandKitAuthoring}
             >
-              Brand kit
-            </DeckToolbarButton>
+              <Palette size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
             <select
               aria-label="Slide ratio"
               value={currentCanvasFormat}
@@ -2400,7 +2402,7 @@ export function SlideEditor({
                 )
               }
               className={cx(
-                "h-8 shrink-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary",
+                "h-[26px] shrink-0 rounded-ds-sm border-0 bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-state-hover",
                 FOCUS_RING,
               )}
             >
@@ -2415,15 +2417,15 @@ export function SlideEditor({
               portal
               className="max-h-[calc(100vh-6rem)] w-[22rem] overflow-y-auto p-0"
               trigger={
-                <DeckToolbarButton
+                <DeckToolbarIconButton
                   label="Deck chrome"
                   active={deckChromeToolbarOpen}
                   hasPopup="dialog"
                   expanded={deckChromeToolbarOpen}
                   onClick={() => setDeckChromeToolbarOpen((open) => !open)}
                 >
-                  Deck chrome
-                </DeckToolbarButton>
+                  <Box size={14} aria-hidden="true" />
+                </DeckToolbarIconButton>
               }
             >
               <div
@@ -2439,7 +2441,7 @@ export function SlideEditor({
                 />
               </div>
             </Popover>
-            <DeckToolbarButton
+            <DeckToolbarIconButton
               label="Toggle snap to guides"
               tooltip={
                 snapToGuides ? "Snap to guides: on" : "Snap to guides: off"
@@ -2447,9 +2449,8 @@ export function SlideEditor({
               active={snapToGuides}
               onClick={toggleSnapToGuides}
             >
-              <Grid3x3 size={14} aria-hidden="true" />
-              Snap
-            </DeckToolbarButton>
+              <Magnet size={14} aria-hidden="true" />
+            </DeckToolbarIconButton>
             <PrecisionGuideToolbarControls
               preferences={precisionGuides}
               onToggleGrid={togglePrecisionGrid}
@@ -2480,7 +2481,7 @@ export function SlideEditor({
                   aria-controls={sourceMenuOpen ? sourceMenuId : undefined}
                   onClick={() => setSourceMenuOpen((open) => !open)}
                   className={cx(
-                    "relative flex h-8 items-center gap-1 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2.5 text-xs font-medium text-ds-text-primary transition-colors hover:bg-ds-state-hover",
+                    "relative flex h-[26px] items-center gap-1 rounded-ds-sm bg-transparent px-1.5 text-[11px] font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
                     FOCUS_RING,
                   )}
                 >
@@ -2599,15 +2600,14 @@ export function SlideEditor({
               </div>
             </Popover>
             {onRegenerate ? (
-              <DeckToolbarButton
+              <DeckToolbarIconButton
                 label="Regenerate deck from document"
                 tooltip="Regenerate deck from document"
                 disabled={saveStatus === "saving"}
                 onClick={() => void handleRegenerate()}
               >
                 <RefreshCw size={14} aria-hidden="true" />
-                Rebuild
-              </DeckToolbarButton>
+              </DeckToolbarIconButton>
             ) : null}
           </DeckToolbarGroup>
         </DeckToolbarRow>
@@ -2632,7 +2632,7 @@ export function SlideEditor({
                 }
                 onClick={() => setCompactToolbarMenuOpen((open) => !open)}
                 className={cx(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-ds-md border border-ds-border-subtle bg-ds-surface text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                  "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-ds-sm bg-transparent text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
                   FOCUS_RING,
                 )}
               >

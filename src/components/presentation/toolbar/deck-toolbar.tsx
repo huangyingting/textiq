@@ -11,7 +11,7 @@ export function DeckToolbar({ children }: { children: ReactNode }) {
       role="toolbar"
       aria-label="Deck tools"
       data-slide-editor-chrome="true"
-      className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-border-subtle bg-ds-surface-chrome px-3 py-2 backdrop-blur"
+      className="flex h-10 shrink-0 items-center justify-between gap-1 border-b border-ds-border-subtle bg-ds-surface-chrome px-2 py-1 backdrop-blur"
     >
       {children}
     </header>
@@ -20,7 +20,7 @@ export function DeckToolbar({ children }: { children: ReactNode }) {
 
 export function DeckToolbarRow({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex min-w-0 items-center gap-px overflow-x-auto overflow-y-hidden overscroll-x-contain whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {children}
     </div>
   );
@@ -39,7 +39,7 @@ export function DeckToolbarGroup({
     <div
       role="group"
       aria-label={label}
-      className={cx("flex shrink-0 items-center gap-1.5", className)}
+      className={cx("flex shrink-0 items-center gap-px", className)}
     >
       {children}
     </div>
@@ -50,7 +50,7 @@ export function DeckToolbarDivider() {
   return (
     <div
       aria-hidden="true"
-      className="mx-1 hidden h-5 w-px shrink-0 bg-ds-border-subtle sm:block"
+      className="mx-[3px] h-3.5 w-px shrink-0 bg-ds-border-subtle opacity-70"
     />
   );
 }
@@ -90,10 +90,10 @@ export function DeckToolbarButton({
         disabled={disabled}
         onClick={onClick}
         className={cx(
-          "flex h-8 shrink-0 items-center gap-1.5 rounded-ds-sm border px-2.5 text-xs font-medium transition-colors disabled:opacity-40",
+          "flex h-[26px] shrink-0 items-center gap-1 rounded-ds-sm px-1.5 text-[11px] font-medium transition-colors disabled:opacity-40",
           active === true
-            ? "border-ds-accent-border bg-ds-accent-surface text-ds-accent-text"
-            : "border-ds-border-subtle bg-ds-surface text-ds-text-primary hover:bg-ds-state-hover",
+            ? "bg-ds-accent-surface text-ds-accent-text"
+            : "bg-transparent text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary",
           FOCUS_RING,
           className,
         )}
@@ -139,10 +139,10 @@ export function DeckToolbarIconButton({
         disabled={disabled}
         onClick={onClick}
         className={cx(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-ds-md border text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
+          "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-ds-sm text-ds-text-muted transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-40",
           active === true
-            ? "border-ds-accent-border bg-ds-accent-surface text-ds-accent-text"
-            : "border-ds-border-subtle bg-ds-surface",
+            ? "bg-ds-accent-surface text-ds-accent-text"
+            : "bg-transparent",
           FOCUS_RING,
           className,
         )}
