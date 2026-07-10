@@ -8,29 +8,20 @@ export type { ActionButtonProps, ActionIconButtonProps } from "./action-button";
 
 export {
   Card,
-  EmptyState,
   FieldRow,
   FormField,
-  IconActionCluster,
   Kbd,
-  MenuItem,
   PanelSurface,
   PopoverSection,
-  StatusPill,
   ToolbarButton,
   ToolbarMenuItem,
 } from "./chrome";
 export type {
   CardProps,
-  EmptyStateProps,
   FieldRowProps,
   FormFieldProps,
-  IconActionClusterProps,
-  MenuItemProps,
   PanelSurfaceProps,
   PopoverSectionProps,
-  StatusPillProps,
-  StatusPillTone,
   ToolbarButtonProps,
   ToolbarButtonShape,
   ToolbarButtonSize,
@@ -59,9 +50,6 @@ export { SelectMenu } from "./select-menu";
 export type { SelectMenuOption } from "./select-menu";
 
 export { Surface } from "./surface";
-
-export { Tabs } from "./tabs";
-export type { TabOption } from "./tabs";
 
 export { Swatch } from "./swatch";
 export type { SwatchSize } from "./swatch";

@@ -12,20 +12,15 @@ import {
   Card,
   ColorPicker,
   Dialog,
-  EmptyState,
   FieldRow,
   FormField,
-  IconActionCluster,
   Kbd,
-  MenuItem,
   ModalSurface,
   OverlayProvider,
   PanelSurface,
   PopoverSection,
   SegmentedControl,
   SelectMenu,
-  StatusPill,
-  Tabs,
   Tooltip,
   ToolbarButton,
   ToolbarMenuItem,
@@ -399,27 +394,7 @@ function attachButtonRefs(buttons: ElementLike[]) {
   }
 }
 
-test("chrome, tabs, dialog, and overlay provider primitives render remaining variants", () => {
-  const tabChanges: string[] = [];
-  const tabs = Tabs({
-    value: "three",
-    "aria-label": "Sections",
-    size: "sm",
-    getTabId: (value) => `tab-${value}`,
-    getPanelId: (value) => `panel-${value}`,
-    options: [
-      { value: "one", label: "One", icon: "①" },
-      { value: "two", label: "Two", badge: "2" },
-      { value: "three", label: "Three" },
-      { value: "four", label: "Four", disabled: true },
-      { value: "five", label: "Five" },
-    ],
-    onChange: (value) => tabChanges.push(value),
-  });
-  const tabButtons = findAll(tabs, (element) => element.type === "button");
-  (tabButtons[0]?.props.onClick as () => void)();
-  (tabButtons[3]?.props.onClick as () => void)();
-
+test("chrome, dialog, and overlay provider primitives render remaining variants", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       React.Fragment,
@@ -430,17 +405,7 @@ test("chrome, tabs, dialog, and overlay provider primitives render remaining var
         "Card",
       ),
       React.createElement(Card, { padding: "none" }, "Flat card"),
-      React.createElement(
-        EmptyState,
-        {
-          title: "Nothing here",
-          description: "Create something",
-          action: React.createElement("button", null, "Start"),
-        },
-        null,
-      ),
       React.createElement(Kbd, null, "⌘K"),
-      React.createElement(MenuItem, { inset: true }, "Indented item"),
       React.createElement(ToolbarMenuItem, { icon: "★" }, "Toolbar item"),
       React.createElement(
         FormField,
@@ -494,11 +459,6 @@ test("chrome, tabs, dialog, and overlay provider primitives render remaining var
         { label: "Field span" },
         React.createElement("input", null),
       ),
-      React.createElement(IconActionCluster, { bordered: false }, "Cluster"),
-      React.createElement(StatusPill, { tone: "success" }, "Success"),
-      React.createElement(StatusPill, { tone: "warning" }, "Warning"),
-      React.createElement(StatusPill, { tone: "danger" }, "Danger"),
-      tabs,
       Dialog({
         open: false,
         onClose: () => undefined,
@@ -525,11 +485,8 @@ test("chrome, tabs, dialog, and overlay provider primitives render remaining var
     },
   );
 
-  assert.match(html, /Nothing here/);
   assert.match(html, /Required/);
   assert.match(html, /Toolbar item/);
-  assert.match(html, /Success/);
-  assert.deepEqual(tabChanges, ["one"]);
   assert.equal(provider.topId, "first");
   assert.equal(provider.setters.length, 2);
 });

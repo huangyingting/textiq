@@ -5,15 +5,11 @@ import type { ReactElement } from "react";
 
 import {
   Card,
-  EmptyState,
   FieldRow,
   FormField,
-  IconActionCluster,
   Kbd,
-  MenuItem,
   PanelSurface,
   PopoverSection,
-  StatusPill,
   ToolbarButton,
 } from "./chrome";
 import {
@@ -178,34 +174,6 @@ test("FieldRow: omits optional hint and error nodes when unset", () => {
   assert.equal(error, null);
 });
 
-test("IconActionCluster: applies bordered cluster chrome by default", () => {
-  const element = IconActionCluster({ children: "buttons" });
-
-  assert.match(element.props.className, /rounded-ds-sm/);
-  assert.match(element.props.className, /border-ds-border-subtle/);
-});
-
-test("IconActionCluster: can render without border chrome", () => {
-  const element = IconActionCluster({ bordered: false, children: "buttons" });
-
-  assert.doesNotMatch(element.props.className, /border-ds-border-subtle/);
-});
-
-test("StatusPill: maps semantic tones to ds status tokens", () => {
-  const neutral = StatusPill({ children: "Idle" });
-  const accent = StatusPill({ tone: "accent", children: "New" });
-  const success = StatusPill({ tone: "success", children: "Saved" });
-  const warning = StatusPill({ tone: "warning", children: "Review" });
-  const element = StatusPill({ tone: "danger", children: "Error" });
-
-  assert.match(neutral.props.className, /bg-ds-surface-sunken/);
-  assert.match(accent.props.className, /bg-ds-accent-surface/);
-  assert.match(success.props.className, /bg-ds-success-surface/);
-  assert.match(warning.props.className, /bg-ds-warning-surface/);
-  assert.match(element.props.className, /bg-ds-danger-surface/);
-  assert.match(element.props.className, /text-ds-danger-text/);
-});
-
 test("GUTTER_BUTTON: lives in the owned UI token module", () => {
   assert.match(GUTTER_BUTTON, /h-9 w-9/);
   assert.match(GUTTER_BUTTON, /shadow-ds-raised/);
@@ -224,25 +192,19 @@ test("global chrome tokens include forced-colors and contrast overrides", () => 
   assert.match(css, /\.tiq-mobile-sheet/);
 });
 
-test("Card and EmptyState use DS chrome tokens", () => {
+test("Card uses DS chrome tokens", () => {
   const card = Card({ children: "body" });
-  const empty = EmptyState({
-    title: "No documents",
-    description: "Create one",
-  });
 
   assert.match(card.props.className, /bg-ds-surface-raised/);
   assert.match(card.props.className, /rounded-\[var\(--ds-radius-lg/);
-  assert.match(empty.props.className, /border-dashed/);
 });
 
-test("Card, EmptyState, and PanelSurface support optional chrome branches", () => {
+test("Card and PanelSurface support optional chrome branches", () => {
   const card = Card({
     elevation: "flat",
     padding: "none",
     className: "custom",
   });
-  const empty = EmptyState({ title: "Empty", action: "Create" });
   const panel = PanelSurface({
     bordered: false,
     elevation: "overlay",
@@ -254,19 +216,16 @@ test("Card, EmptyState, and PanelSurface support optional chrome branches", () =
   assert.match(card.props.className, /custom/);
   assert.match(Card({ padding: "sm" }).props.className, /p-3/);
   assert.match(Card({ padding: "lg" }).props.className, /p-6/);
-  assert.equal(empty.props.children[1], "Create");
   assert.doesNotMatch(panel.props.className, /border-ds-border-subtle/);
   assert.match(panel.props.className, /rounded-\[var\(--ds-radius-xl/);
   assert.match(panel.props.className, /p-3/);
 });
 
-test("Kbd and MenuItem expose keyboard/menu chrome", () => {
+test("Kbd exposes keyboard chrome", () => {
   const kbd = Kbd({ children: "⌘K" });
-  const item = MenuItem({ children: "Rename" });
 
   assert.equal(kbd.type, "kbd");
   assert.match(kbd.props.className, /bg-ds-surface-sunken/);
-  assert.match(item.props.className, /text-ds-text-secondary/);
 });
 
 test("FormField renders label, hint, and error semantics", () => {
