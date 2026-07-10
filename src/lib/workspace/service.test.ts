@@ -1,30 +1,75 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { createRequire } from "node:module";
+import { before, test } from "node:test";
+
+type ModuleHooks = {
+  registerHooks(hooks: {
+    resolve(
+      specifier: string,
+      context: unknown,
+      nextResolve: (specifier: string, context: unknown) => unknown,
+    ): unknown;
+    load(
+      url: string,
+      context: unknown,
+      nextLoad: (url: string, context: unknown) => unknown,
+    ): unknown;
+  }): void;
+};
+
+const { registerHooks } = createRequire(import.meta.url)(
+  "node:module",
+) as ModuleHooks;
+const serverOnlyStubUrl = "server-only:service-test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "server-only") {
+      return { url: serverOnlyStubUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url === serverOnlyStubUrl) {
+      return { format: "commonjs", source: "", shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
 
 import { DOCUMENT_LIST_LIMIT } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
-import {
-  MAX_INVITE_EXPIRY_DAYS,
-  MAX_INVITE_USES_LIMIT,
-  MAX_WORKSPACE_NAME_LENGTH,
-  assertInvitableWorkspaceRole,
-  createWorkspaceDocumentForUser,
-  createWorkspaceForUser,
-  createWorkspaceInviteLink,
-  deleteWorkspaceAndDetachDocuments,
-  getInviteLinkTarget,
-  getWorkspaceMemberRemovalTarget,
-  importWorkspaceDocumentForUser,
-  leaveWorkspaceForUser,
-  listWorkspaceDocumentsForUser,
-  normalizeInviteExpiry,
-  normalizeInviteMaxUses,
-  normalizeWorkspaceName,
-  removeWorkspaceMemberAndDetachDocuments,
-  renameWorkspaceRecord,
-  revokeWorkspaceInviteLink,
-  transferWorkspaceOwnership,
-} from "./service";
+
+type ServiceModule = typeof import("./service");
+let MAX_WORKSPACE_NAME_LENGTH: ServiceModule["MAX_WORKSPACE_NAME_LENGTH"];
+let createWorkspaceForUser: ServiceModule["createWorkspaceForUser"];
+let deleteWorkspaceAndDetachDocuments: ServiceModule["deleteWorkspaceAndDetachDocuments"];
+let getWorkspaceMemberRemovalTarget: ServiceModule["getWorkspaceMemberRemovalTarget"];
+let leaveWorkspaceForUser: ServiceModule["leaveWorkspaceForUser"];
+let listWorkspaceDocumentsForUser: ServiceModule["listWorkspaceDocumentsForUser"];
+let normalizeWorkspaceName: ServiceModule["normalizeWorkspaceName"];
+let removeWorkspaceMemberAndDetachDocuments: ServiceModule["removeWorkspaceMemberAndDetachDocuments"];
+let renameWorkspaceRecord: ServiceModule["renameWorkspaceRecord"];
+let transferWorkspaceOwnership: ServiceModule["transferWorkspaceOwnership"];
+let createWorkspaceDocumentForUser: ServiceModule["createWorkspaceDocumentForUser"];
+let importWorkspaceDocumentForUser: ServiceModule["importWorkspaceDocumentForUser"];
+
+before(async () => {
+  const mod = await import("./service");
+  MAX_WORKSPACE_NAME_LENGTH = mod.MAX_WORKSPACE_NAME_LENGTH;
+  createWorkspaceForUser = mod.createWorkspaceForUser;
+  deleteWorkspaceAndDetachDocuments = mod.deleteWorkspaceAndDetachDocuments;
+  getWorkspaceMemberRemovalTarget = mod.getWorkspaceMemberRemovalTarget;
+  leaveWorkspaceForUser = mod.leaveWorkspaceForUser;
+  listWorkspaceDocumentsForUser = mod.listWorkspaceDocumentsForUser;
+  normalizeWorkspaceName = mod.normalizeWorkspaceName;
+  removeWorkspaceMemberAndDetachDocuments =
+    mod.removeWorkspaceMemberAndDetachDocuments;
+  renameWorkspaceRecord = mod.renameWorkspaceRecord;
+  transferWorkspaceOwnership = mod.transferWorkspaceOwnership;
+  createWorkspaceDocumentForUser = mod.createWorkspaceDocumentForUser;
+  importWorkspaceDocumentForUser = mod.importWorkspaceDocumentForUser;
+});
 
 const NOW = new Date("2026-06-25T00:00:00Z");
 
@@ -45,38 +90,6 @@ function replacePrismaProperty(
   });
 }
 
-test("normalizeInviteExpiry returns null for omitted/null expiry", () => {
-  assert.equal(normalizeInviteExpiry(undefined, NOW), null);
-  assert.equal(normalizeInviteExpiry(null, NOW), null);
-});
-
-test("normalizeInviteExpiry computes expiry from the server clock", () => {
-  assert.equal(
-    normalizeInviteExpiry(2, NOW)?.toISOString(),
-    "2026-06-27T00:00:00.000Z",
-  );
-});
-
-test("normalizeInviteExpiry rejects invalid windows", () => {
-  for (const value of [0, -1, Number.NaN, MAX_INVITE_EXPIRY_DAYS + 1]) {
-    assert.throws(() => normalizeInviteExpiry(value, NOW), /Invalid invite/);
-  }
-});
-
-test("normalizeInviteMaxUses returns null for omitted/null caps", () => {
-  assert.equal(normalizeInviteMaxUses(undefined), null);
-  assert.equal(normalizeInviteMaxUses(null), null);
-});
-
-test("normalizeInviteMaxUses validates integer usage caps", () => {
-  assert.equal(normalizeInviteMaxUses(1), 1);
-  assert.equal(normalizeInviteMaxUses(MAX_INVITE_USES_LIMIT), 10_000);
-
-  for (const value of [0, -1, 1.5, MAX_INVITE_USES_LIMIT + 1]) {
-    assert.throws(() => normalizeInviteMaxUses(value), /Invalid invite/);
-  }
-});
-
 test("normalizeWorkspaceName trims, caps, and rejects empty names", () => {
   assert.equal(normalizeWorkspaceName("  Team  "), "Team");
   assert.equal(
@@ -84,44 +97,6 @@ test("normalizeWorkspaceName trims, caps, and rejects empty names", () => {
     MAX_WORKSPACE_NAME_LENGTH,
   );
   assert.throws(() => normalizeWorkspaceName("   "), /Workspace name/);
-});
-
-test("assertInvitableWorkspaceRole accepts only invite-grantable roles", () => {
-  assert.doesNotThrow(() => assertInvitableWorkspaceRole("EDITOR"));
-  assert.doesNotThrow(() => assertInvitableWorkspaceRole("VIEWER"));
-  assert.throws(() => assertInvitableWorkspaceRole("OWNER"), /Invalid invite/);
-});
-
-test("createWorkspaceInviteLink normalizes role, expiry, and usage limits before persisting", async (t) => {
-  replacePrismaProperty(t, "inviteLink", {
-    async create(args: { data: Record<string, unknown> }) {
-      assert.equal(args.data.workspaceId, "workspace-1");
-      assert.equal(args.data.role, "EDITOR");
-      assert.equal(args.data.createdById, "user-1");
-      assert.equal(args.data.maxUses, 5);
-      assert.ok(args.data.expiresAt instanceof Date);
-      return {
-        id: "invite-1",
-        token: args.data.token,
-        role: "EDITOR",
-        createdAt: NOW,
-        expiresAt: args.data.expiresAt,
-        maxUses: args.data.maxUses,
-        useCount: 0,
-      };
-    },
-  });
-
-  const invite = await createWorkspaceInviteLink({
-    workspaceId: "workspace-1",
-    role: "EDITOR",
-    createdById: "user-1",
-    options: { expiresInDays: 1, maxUses: 5 },
-  });
-
-  assert.equal(invite.id, "invite-1");
-  assert.equal(invite.role, "EDITOR");
-  assert.equal(invite.maxUses, 5);
 });
 
 test("workspace record helpers delegate sanitized data to prisma", async (t) => {
@@ -141,21 +116,6 @@ test("workspace record helpers delegate sanitized data to prisma", async (t) => 
       return {};
     },
   });
-  replacePrismaProperty(t, "inviteLink", {
-    async findFirst(args: { where: unknown }) {
-      calls.push("inviteLink.findFirst");
-      assert.deepEqual(args.where, { id: "invite-1" });
-      return { workspaceId: "workspace-1" };
-    },
-    async update(args: unknown) {
-      calls.push("inviteLink.update");
-      assert.deepEqual(args, {
-        where: { id: "invite-1" },
-        data: { isRevoked: true },
-      });
-      return {};
-    },
-  });
   replacePrismaProperty(t, "workspaceMember", {
     async findFirst(args: { where: unknown }) {
       calls.push("workspaceMember.findFirst");
@@ -167,10 +127,6 @@ test("workspace record helpers delegate sanitized data to prisma", async (t) => 
   assert.deepEqual(await createWorkspaceForUser("owner-1", " Team "), {
     id: "workspace-1",
   });
-  assert.deepEqual(await getInviteLinkTarget("invite-1"), {
-    workspaceId: "workspace-1",
-  });
-  await revokeWorkspaceInviteLink("invite-1");
   assert.deepEqual(await getWorkspaceMemberRemovalTarget("member-1"), {
     workspaceId: "workspace-1",
     userId: "user-1",
@@ -179,8 +135,6 @@ test("workspace record helpers delegate sanitized data to prisma", async (t) => 
 
   assert.deepEqual(calls, [
     "workspace.create",
-    "inviteLink.findFirst",
-    "inviteLink.update",
     "workspaceMember.findFirst",
     "workspace.update",
   ]);

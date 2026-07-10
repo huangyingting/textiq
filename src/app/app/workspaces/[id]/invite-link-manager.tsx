@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button, FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui";
 
-import type { InviteLink } from "@/lib/workspace/service";
+import type { InviteLink } from "@/lib/workspace/invite-types";
 
 import { createInviteLink, revokeInviteLink } from "./actions";
 
