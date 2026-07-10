@@ -2,7 +2,6 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
 } from "@/lib/ai/generate";
 import type {
   GenerationRouteErrorMapping,
@@ -17,7 +16,10 @@ import {
   type DetailLevel,
   type Orientation,
 } from "@/lib/ai/prompt";
-import { formatVisualInputTooLongError } from "@/lib/limits";
+import {
+  formatVisualInputTooLongError,
+  AI_GENERATION_INPUT_MAX_CHARS,
+} from "@/lib/limits";
 import { VISUAL_KINDS, isVisualKind } from "@/lib/visual/schema";
 import type { VisualKind } from "@/lib/visual/schema";
 
@@ -36,7 +38,7 @@ export function parseGeneratePayload(
   if (text.trim().length === 0) {
     return { ok: false, status: 400, message: "`text` is required." };
   }
-  if (text.length > MAX_INPUT_CHARS) {
+  if (text.length > AI_GENERATION_INPUT_MAX_CHARS) {
     return {
       ok: false,
       status: 413,

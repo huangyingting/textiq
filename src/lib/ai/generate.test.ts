@@ -5,12 +5,12 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
   MIN_CANDIDATES,
   coerceCandidates,
   extractJson,
   generateVisuals,
 } from "@/lib/ai/generate";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 import { VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 
 function visual(type = "flowchart") {
@@ -60,14 +60,17 @@ test("returns at least MIN_CANDIDATES validated visuals", async () => {
   }
 });
 
-test("rejects input longer than MAX_INPUT_CHARS before any LLM call", async () => {
+test("rejects input longer than AI_GENERATION_INPUT_MAX_CHARS before any LLM call", async () => {
   let called = false;
   const complete = async (): Promise<string> => {
     called = true;
     return payload(3);
   };
   await assert.rejects(
-    generateVisuals({ text: "x".repeat(MAX_INPUT_CHARS + 1) }, { complete }),
+    generateVisuals(
+      { text: "x".repeat(AI_GENERATION_INPUT_MAX_CHARS + 1) },
+      { complete },
+    ),
     (error) => error instanceof InputTooLongError,
   );
   assert.equal(
@@ -80,7 +83,7 @@ test("rejects input longer than MAX_INPUT_CHARS before any LLM call", async () =
 test("accepts input exactly at the limit", async () => {
   const { complete } = sequence([payload(3)]);
   const result = await generateVisuals(
-    { text: "y".repeat(MAX_INPUT_CHARS) },
+    { text: "y".repeat(AI_GENERATION_INPUT_MAX_CHARS) },
     { complete },
   );
   assert.ok(result.length >= MIN_CANDIDATES);

@@ -14,7 +14,7 @@
  *     inline `[visual: <id>]` reference markers,
  *   - build a VISUAL INVENTORY of `{ id, title, type, summary }` entries for the
  *     real document visual ids (in reading order, deduplicated),
- *   - truncate the serialised outline to {@link MAX_INPUT_CHARS} deterministically
+ *   - truncate the serialised outline to {@link AI_GENERATION_INPUT_MAX_CHARS} deterministically
  *     while always keeping the heading skeleton.
  *
  * Like its siblings under `@/lib/ai`, this module is intentionally free of any
@@ -25,7 +25,7 @@
 
 import type { DeckVisualInventoryItem } from "@/lib/ai/deck-generation-options";
 import {
-  AI_GENERATION_INPUT_MAX_CHARS as MAX_INPUT_CHARS,
+  AI_GENERATION_INPUT_MAX_CHARS,
   AI_VISUAL_INVENTORY_MAX_ITEMS,
 } from "@/lib/limits";
 import type { TextRun } from "@/lib/content/text-run";
@@ -39,7 +39,7 @@ import type { Visual } from "@/lib/visual/schema";
 /**
  * The compatibility outline source plus truncation metadata so callers (the
  * route, the UI) can notify the user when the document outline was
- * deterministically trimmed to fit {@link MAX_INPUT_CHARS}.
+ * deterministically trimmed to fit {@link AI_GENERATION_INPUT_MAX_CHARS}.
  */
 export interface DeckGenerationSource {
   outline: string;
@@ -149,7 +149,7 @@ interface BuiltOutline {
 
 /**
  * Folds the blocks into a single outline string no longer than
- * {@link MAX_INPUT_CHARS}. The heading skeleton is treated as mandatory
+ * {@link AI_GENERATION_INPUT_MAX_CHARS}. The heading skeleton is treated as mandatory
  * structure and reserved first; the remaining budget is then filled with DETAIL
  * blocks in reading order, so trailing detail is dropped first while every
  * heading survives (until headings alone would blow the budget, an extreme case
@@ -177,7 +177,7 @@ function buildOutline(blocks: ReadonlyArray<DocumentBlock>): BuiltOutline {
   for (const item of items) {
     if (item.heading) headingBudget += lineCost(item.line);
   }
-  const detailCap = Math.max(0, MAX_INPUT_CHARS - headingBudget);
+  const detailCap = Math.max(0, AI_GENERATION_INPUT_MAX_CHARS - headingBudget);
 
   const lines: string[] = [];
   let used = 0;
@@ -187,7 +187,7 @@ function buildOutline(blocks: ReadonlyArray<DocumentBlock>): BuiltOutline {
   for (const item of items) {
     const cost = lineCost(item.line);
     if (item.heading) {
-      if (used + cost <= MAX_INPUT_CHARS) {
+      if (used + cost <= AI_GENERATION_INPUT_MAX_CHARS) {
         lines.push(item.line);
         used += cost;
       } else {
@@ -195,7 +195,10 @@ function buildOutline(blocks: ReadonlyArray<DocumentBlock>): BuiltOutline {
       }
       continue;
     }
-    if (detailUsed + cost <= detailCap && used + cost <= MAX_INPUT_CHARS) {
+    if (
+      detailUsed + cost <= detailCap &&
+      used + cost <= AI_GENERATION_INPUT_MAX_CHARS
+    ) {
       lines.push(item.line);
       used += cost;
       detailUsed += cost;

@@ -3,7 +3,6 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
 } from "@/lib/ai/generate";
 import type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 import { ModelOutputBudgetError } from "@/lib/ai/generation-runner";
@@ -13,6 +12,7 @@ import {
   type PayloadParseResult,
 } from "@/lib/ai/generation-route";
 import {
+  AI_GENERATION_INPUT_MAX_CHARS,
   AI_OPTION_MAX_CHARS,
   formatAiOptionTooLongError,
   formatDeckInputTooLongError,
@@ -144,7 +144,7 @@ export function parseGenerateDeckPayload(
       status: 400,
       message: "`contentJson` does not contain any usable outline content.",
     };
-  if (outline.length > MAX_INPUT_CHARS) {
+  if (outline.length > AI_GENERATION_INPUT_MAX_CHARS) {
     return {
       ok: false,
       status: 413,
