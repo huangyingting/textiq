@@ -123,15 +123,26 @@ export async function revokeWorkspaceInviteLink(linkId: string): Promise<void> {
 class CapExhaustedSignal extends Error {}
 
 /**
+ * Private sentinel thrown when `workspaceMember.create` fails with P2002
+ * (unique constraint on `(workspaceId, userId)`). Thrown inside the
+ * transaction callback so the prior use-count increment is rolled back,
+ * then mapped to the typed `already-member` outcome in the outer catch.
+ */
+class AlreadyMemberSignal extends Error {}
+
+/**
  * Atomically accepts a workspace invite: re-verifies the usage cap with a
  * conditional `updateMany`, grants membership, and writes the audit row — all
  * in one transaction so a successful join is always fully recorded and races
  * cannot bypass `maxUses`.
  *
  * P2002 from the unique `(workspaceId, userId)` constraint on
- * `workspaceMember.create` escapes the transaction callback so the earlier
- * increment write is rolled back, then is converted outside the transaction
- * to the typed `already-member` outcome.
+ * `workspaceMember.create` is caught inside the transaction callback and
+ * converted to an `AlreadyMemberSignal`. This rejects the transaction so
+ * the prior use-count increment is rolled back, then the outer catch maps
+ * the signal to the typed `already-member` outcome. P2002 from any other
+ * Prisma call (e.g. `inviteLinkUse.create`) is not intercepted and
+ * propagates as an unhandled error.
  */
 export async function acceptWorkspaceInvite(
   input: AcceptInviteInput,
@@ -153,13 +164,23 @@ export async function acceptWorkspaceInvite(
         throw new CapExhaustedSignal();
       }
 
-      await tx.workspaceMember.create({
-        data: {
-          workspaceId: input.workspaceId,
-          userId: input.userId,
-          role: input.role,
-        },
-      });
+      try {
+        await tx.workspaceMember.create({
+          data: {
+            workspaceId: input.workspaceId,
+            userId: input.userId,
+            role: input.role,
+          },
+        });
+      } catch (memberErr) {
+        if (
+          memberErr instanceof Prisma.PrismaClientKnownRequestError &&
+          memberErr.code === "P2002"
+        ) {
+          throw new AlreadyMemberSignal();
+        }
+        throw memberErr;
+      }
 
       await tx.inviteLinkUse.create({
         data: {
@@ -175,10 +196,7 @@ export async function acceptWorkspaceInvite(
     if (err instanceof CapExhaustedSignal) {
       return { outcome: "cap-exhausted" };
     }
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    if (err instanceof AlreadyMemberSignal) {
       return { outcome: "already-member" };
     }
     throw err;

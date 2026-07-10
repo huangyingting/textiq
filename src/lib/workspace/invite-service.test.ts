@@ -428,3 +428,77 @@ test("acceptWorkspaceInvite rethrows non-P2002 errors unchanged", async (t) => {
     dbError,
   );
 });
+
+test("acceptWorkspaceInvite does not swallow P2002 from inviteLinkUse.create", async (t) => {
+  const p2002 = new Prisma.PrismaClientKnownRequestError(
+    "Unique constraint failed on inviteLinkUse",
+    { code: "P2002", clientVersion: "test" },
+  );
+
+  stubTransaction(t, {
+    inviteLink: {
+      async updateMany() {
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async create() {
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        throw p2002;
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      acceptWorkspaceInvite({
+        inviteLinkId: "link-1",
+        maxUses: 5,
+        workspaceId: "ws-1",
+        userId: "user-1",
+        role: "EDITOR",
+      }),
+    p2002,
+  );
+});
+
+test("acceptWorkspaceInvite does not swallow P2002 from inviteLink.updateMany", async (t) => {
+  const p2002 = new Prisma.PrismaClientKnownRequestError(
+    "Unique constraint failed on inviteLink",
+    { code: "P2002", clientVersion: "test" },
+  );
+
+  stubTransaction(t, {
+    inviteLink: {
+      async updateMany() {
+        throw p2002;
+      },
+    },
+    workspaceMember: {
+      async create() {
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        return {};
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      acceptWorkspaceInvite({
+        inviteLinkId: "link-1",
+        maxUses: null,
+        workspaceId: "ws-1",
+        userId: "user-1",
+        role: "EDITOR",
+      }),
+    p2002,
+  );
+});
