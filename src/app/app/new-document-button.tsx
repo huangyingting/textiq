@@ -119,11 +119,11 @@ function TemplatePicker({ onClose }: { onClose: () => void }) {
  */
 export function NewDocumentButton({
   className,
-  children = "New document",
+  children,
   enableShortcut = false,
 }: {
   className: string;
-  children?: React.ReactNode;
+  children: React.ReactNode;
   enableShortcut?: boolean;
 }) {
   const [open, setOpen] = useState(false);

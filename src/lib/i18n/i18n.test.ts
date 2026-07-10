@@ -80,6 +80,8 @@ test("getMessages objects expose all required keys", () => {
     "dashboard.title",
     "dashboard.subtitle",
     "dashboard.action.newDocument",
+    "languageSwitcher.label",
+    "languageSwitcher.selectLanguage",
   ] as const;
 
   for (const locale of SUPPORTED_LOCALES) {

@@ -16,7 +16,11 @@ import { useRef, useState, useTransition } from "react";
 import { MENU_CHROME, MENU_ITEM, cx } from "@/components/ui";
 import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
 import { setLocaleCookie } from "@/lib/i18n/actions";
-import { useLocale, useSetLocaleOptimistic } from "@/lib/i18n/locale-context";
+import {
+  useLocale,
+  useSetLocaleOptimistic,
+  useTranslation,
+} from "@/lib/i18n/locale-context";
 
 const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",
@@ -27,6 +31,7 @@ export function LanguageSwitcher() {
   const router = useRouter();
   const locale = useLocale();
   const setLocaleOptimistic = useSetLocaleOptimistic();
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,7 +55,7 @@ export function LanguageSwitcher() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Language: ${LOCALE_LABELS[locale]}`}
+        aria-label={`${t("languageSwitcher.label")}: ${LOCALE_LABELS[locale]}`}
         onClick={() => setOpen((v) => !v)}
         className="flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary"
       >
@@ -81,7 +86,7 @@ export function LanguageSwitcher() {
           />
           <ul
             role="listbox"
-            aria-label="Select language"
+            aria-label={t("languageSwitcher.selectLanguage")}
             className={cx(
               "absolute right-0 z-dropdown mt-1 min-w-[9rem]",
               MENU_CHROME,
