@@ -6,7 +6,7 @@
  * tested deterministically. The route handler wires in the real Azure client.
  *
  * Responsibilities:
- *   - reject empty input and input longer than {@link MAX_INPUT_CHARS} BEFORE
+ *   - reject empty input and input longer than {@link AI_GENERATION_INPUT_MAX_CHARS} BEFORE
  *     calling the model,
  *   - ask the model for `>= MIN_CANDIDATES` visuals,
  *   - tolerate code fences / surrounding prose when extracting JSON,
@@ -23,7 +23,7 @@ import {
 import {
   AI_GENERATION_INPUT_MAX_CHARS,
   formatVisualInputTooLongError,
-} from "@/lib/limits";
+} from "@/lib/limits/ai";
 import {
   safeParseVisual,
   type Visual,
@@ -33,9 +33,6 @@ import type { DetailLevel, Orientation } from "@/lib/ai/prompt";
 import { isPlainObject } from "@/lib/type-guards";
 
 export { extractJson, type CompleteFn } from "@/lib/ai/generation-runner";
-
-/** Maximum accepted input length; longer text is rejected before any LLM call. */
-export const MAX_INPUT_CHARS = AI_GENERATION_INPUT_MAX_CHARS;
 
 /** Minimum number of valid candidate visuals a generation must yield. */
 export const MIN_CANDIDATES = 3;
@@ -54,7 +51,7 @@ export class EmptyInputError extends Error {
   }
 }
 
-/** Thrown when the input text exceeds {@link MAX_INPUT_CHARS}. */
+/** Thrown when the input text exceeds {@link AI_GENERATION_INPUT_MAX_CHARS}. */
 export class InputTooLongError extends Error {
   readonly length: number;
   readonly limit: number;
@@ -62,7 +59,7 @@ export class InputTooLongError extends Error {
     super(formatVisualInputTooLongError(length));
     this.name = "InputTooLongError";
     this.length = length;
-    this.limit = MAX_INPUT_CHARS;
+    this.limit = AI_GENERATION_INPUT_MAX_CHARS;
   }
 }
 
@@ -121,7 +118,7 @@ function preferType(candidates: Visual[], type: VisualKind): Visual[] {
  * Turns text into `>= minCandidates` validated {@link Visual} candidates.
  *
  * @throws {EmptyInputError} when the text is blank.
- * @throws {InputTooLongError} when the text exceeds {@link MAX_INPUT_CHARS}.
+ * @throws {InputTooLongError} when the text exceeds {@link AI_GENERATION_INPUT_MAX_CHARS}.
  * @throws {GenerationError} when no valid set of candidates can be produced.
  */
 export async function generateVisuals(
@@ -132,7 +129,7 @@ export async function generateVisuals(
   if (!text) {
     throw new EmptyInputError();
   }
-  if (text.length > MAX_INPUT_CHARS) {
+  if (text.length > AI_GENERATION_INPUT_MAX_CHARS) {
     /* node:coverage ignore next */
     /* Oversized-input branch is asserted; tsx maps the throw tail as uncovered. */
     throw new InputTooLongError(text.length);

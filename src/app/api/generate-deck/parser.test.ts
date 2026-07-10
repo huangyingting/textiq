@@ -5,10 +5,12 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
 } from "@/lib/ai/generate";
 import { ModelOutputBudgetError } from "@/lib/ai/generation-runner";
-import { AI_OPTION_MAX_CHARS } from "@/lib/limits";
+import {
+  AI_GENERATION_INPUT_MAX_CHARS,
+  AI_OPTION_MAX_CHARS,
+} from "@/lib/limits";
 import {
   buildContentJson,
   buildParagraphNode,
@@ -177,7 +179,7 @@ test("mapGenerateDeckError maps input validation errors and ignores unknown erro
     status: 400,
     message: "Input text is required.",
   });
-  const tooLong = new InputTooLongError(MAX_INPUT_CHARS + 1);
+  const tooLong = new InputTooLongError(AI_GENERATION_INPUT_MAX_CHARS + 1);
   assert.deepEqual(mapGenerateDeckError(tooLong), {
     status: 413,
     message: tooLong.message,

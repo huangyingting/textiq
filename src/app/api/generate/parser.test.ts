@@ -5,9 +5,9 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
 } from "@/lib/ai/generate";
 import { ModelOutputBudgetError } from "@/lib/ai/generation-runner";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 
 import { mapGenerateError, parseGeneratePayload } from "./parser";
 
@@ -61,7 +61,10 @@ test("parseGeneratePayload preserves validation statuses", () => {
     status: 400,
     message: "`text` is required.",
   });
-  assertParseStatus({ text: "x".repeat(MAX_INPUT_CHARS + 1) }, 413);
+  assertParseStatus(
+    { text: "x".repeat(AI_GENERATION_INPUT_MAX_CHARS + 1) },
+    413,
+  );
   assertParseStatus({ text: "ok", type: "bad" }, 400);
 });
 
@@ -118,7 +121,7 @@ test("mapGenerateError maps input validation errors and ignores unknown errors",
     status: 400,
     message: "Input text is required.",
   });
-  const tooLong = new InputTooLongError(MAX_INPUT_CHARS + 1);
+  const tooLong = new InputTooLongError(AI_GENERATION_INPUT_MAX_CHARS + 1);
   assert.deepEqual(mapGenerateError(tooLong), {
     status: 413,
     message: tooLong.message,

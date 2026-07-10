@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-10"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -86,7 +86,7 @@ All parser output is normalized before returning to callers:
 - three or more consecutive newlines collapse to two newline characters (one
   blank line);
 - leading/trailing whitespace is trimmed;
-- text is truncated to `MAX_INPUT_CHARS`, preferring a newline boundary.
+- text is truncated to `AI_GENERATION_INPUT_MAX_CHARS`, preferring a newline boundary.
 
 An empty normalized result is rejected with `422` so callers never create a
 blank imported document accidentally.

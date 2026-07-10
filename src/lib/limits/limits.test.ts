@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  AI_GENERATION_INPUT_MAX_CHARS,
   BRAND_FONT_MAX_BYTES,
   BRAND_LOGO_MAX_BYTES,
   DECK_JSON_MAX_BYTES,
@@ -18,7 +17,6 @@ import {
   SLIDES_HARD_COUNT,
   TOTAL_IMAGE_BUDGET_BYTES,
 } from "@/lib/limits";
-import { MAX_INPUT_CHARS } from "@/lib/ai/generate";
 import { MAX_DECK_SLIDES } from "@/lib/ai/deck-generation-options";
 import { FONT_MAX_BYTES, LOGO_MAX_BYTES } from "@/lib/brand/upload";
 import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
@@ -35,7 +33,6 @@ import { MAX_UPLOAD_BYTES, maxBytesForMime } from "@/lib/import/validate";
 describe("central limits boundary", () => {
   test("high-traffic validators import the same central hard caps", () => {
     assert.equal(MAX_DECK_JSON_BYTES, DECK_JSON_MAX_BYTES);
-    assert.equal(MAX_INPUT_CHARS, AI_GENERATION_INPUT_MAX_CHARS);
     assert.equal(MAX_DECK_SLIDES, GENERATED_DECK_MAX_SLIDES);
 
     assert.equal(MAX_UPLOAD_BYTES, IMPORT_MAX_UPLOAD_BYTES);

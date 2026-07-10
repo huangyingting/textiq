@@ -13,9 +13,9 @@ import {
   EmptyInputError,
   GenerationError,
   InputTooLongError,
-  MAX_INPUT_CHARS,
   type CompleteFn,
 } from "@/lib/ai/generate";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 import { runGenerationAttempts } from "@/lib/ai/generation-runner";
 import {
   buildDeckGenerationSource,
@@ -96,7 +96,7 @@ export async function runDeckGeneration(
 
   const outline = source.outline.trim();
   if (!outline) throw new EmptyInputError();
-  if (outline.length > MAX_INPUT_CHARS) {
+  if (outline.length > AI_GENERATION_INPUT_MAX_CHARS) {
     throw new InputTooLongError(outline.length);
   }
 

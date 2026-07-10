@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { MAX_INPUT_CHARS } from "@/lib/ai/generate";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 import type { Visual } from "@/lib/visual/schema";
 import {
   FORMAT_BOLD,
@@ -211,7 +211,7 @@ test("inventory falls back to the embedded visual when the map lacks it", () => 
 // Huge document — truncation keeps headings under the budget
 // ---------------------------------------------------------------------------
 
-test("huge document is truncated to MAX_INPUT_CHARS while retaining headings", () => {
+test("huge document is truncated to AI_GENERATION_INPUT_MAX_CHARS while retaining headings", () => {
   const children: SerializedFixtureRootChild[] = [];
   const headingTexts: string[] = [];
   for (let i = 0; i < 200; i++) {
@@ -225,8 +225,8 @@ test("huge document is truncated to MAX_INPUT_CHARS while retaining headings", (
   const { outline, truncated } = buildDeckSource(state(children), visualMap());
 
   assert.ok(
-    outline.length <= MAX_INPUT_CHARS,
-    `outline length ${outline.length} exceeds ${MAX_INPUT_CHARS}`,
+    outline.length <= AI_GENERATION_INPUT_MAX_CHARS,
+    `outline length ${outline.length} exceeds ${AI_GENERATION_INPUT_MAX_CHARS}`,
   );
 
   assert.equal(truncated, true, "huge document must report truncated=true");
@@ -253,7 +253,7 @@ test("truncation is deterministic and never alters leading content", () => {
 
   assert.equal(a, b);
   assert.ok(a.startsWith("# Top\npara 0 "));
-  assert.ok(a.length <= MAX_INPUT_CHARS);
+  assert.ok(a.length <= AI_GENERATION_INPUT_MAX_CHARS);
 });
 
 test("small document reports truncated=false and keeps all content", () => {

@@ -7,12 +7,12 @@ import { GenerateTimeoutError } from "@/lib/ai/deadline";
 import { GenerationError } from "@/lib/ai/generate";
 import {
   createGenerationRouteHandler,
-  readJsonObject,
   type GenerationRouteConfig,
   type GenerationRouteDeps,
   type GenerationRouteRequest,
   type PayloadParseResult,
 } from "@/lib/ai/generation-route";
+import { readJsonObject } from "@/lib/api/route-adapters";
 import {
   ANON_COOKIE_NAME,
   newAnonState,
