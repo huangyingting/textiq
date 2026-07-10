@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-06-26"
+last_updated: "2026-07-10"
 description: "This document describes the central resource-limit inventory used by import, AI, deck persistence, assets, comments, workspaces, and performance budgets. Runtime environment variables are documented in runtime-config.md."
 ---
 
@@ -90,5 +90,5 @@ Callers keep user-facing error copy in the owning limit module, for example
 
 - [`src/lib/limits/limits.test.ts`](../../src/lib/limits/limits.test.ts)
 - [`src/lib/import/validate.test.ts`](../../src/lib/import/validate.test.ts)
-- [`src/lib/visual/export-preflight.test.ts`](../../src/lib/visual/export-preflight.test.ts)
+- [`src/lib/presentation/export-preflight.test.ts`](../../src/lib/presentation/export-preflight.test.ts)
 - [`src/lib/document/deck-cas-writer.test.ts`](../../src/lib/document/deck-cas-writer.test.ts)

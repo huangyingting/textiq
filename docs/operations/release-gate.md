@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-07-06"
+last_updated: "2026-07-10"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -166,7 +166,7 @@ The following subsystems have dedicated test files that must stay green:
 | Visual mirror diff (#448)            | `src/lib/visual/mirror-diff.test.ts`, `mirror-repair.test.ts`                                                                                                                           |
 | Command envelope (#436)              | `src/lib/commands/`, `src/lib/presentation/editor-commands*.test.ts`                                                                                                                    |
 | Deck save / conflict (#376)          | `src/lib/document/deck-cas-writer.test.ts`, `src/lib/presentation/slide-editor-collaboration-state.test.ts`                                                                             |
-| Export preflight (#416)              | `src/lib/visual/export-preflight.test.ts`                                                                                                                                               |
+| Export preflight (#416)              | `src/lib/presentation/export-preflight.test.ts`                                                                                                                                         |
 | Authorization                        | `src/lib/auth/document-permissions.test.ts`, `authz-regression.test.ts`                                                                                                                 |
 | API surface governance (#495)        | `src/app/api/api-route-security-matrix.test.ts`, `src/lib/api/errors.test.ts`, `src/lib/diagnostics/api-abuse.test.ts`, `src/app/api/slide-assets/[documentId]/[...path]/route.test.ts` |
 | Structured diagnostics (#460)        | `src/lib/diagnostics/error-codes.test.ts`                                                                                                                                               |
