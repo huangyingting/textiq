@@ -11,6 +11,7 @@ import {
   DOCUMENT_TITLE_MAX_LENGTH,
 } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
+import { type WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import {
   asWorkspaceRole,
   isInvitableWorkspaceRole,
@@ -39,17 +40,6 @@ export type InviteLinkTarget = {
 export type WorkspaceMemberRemovalTarget = {
   workspaceId: string;
   userId: string;
-};
-
-export type WorkspaceDocument = {
-  id: string;
-  title: string;
-  updatedAt: Date;
-};
-
-export type WorkspaceDocumentsResult = {
-  documents: WorkspaceDocument[];
-  hasMore: boolean;
 };
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
