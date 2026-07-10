@@ -31,6 +31,7 @@ export type TemplatePickerMessages = {
 
 export type LanguageSwitcherMessages = {
   "languageSwitcher.label": string;
+  "languageSwitcher.selectLanguage": string;
 };
 
 export type Messages = AppShellMessages &
@@ -94,9 +95,11 @@ const templatePickerMessages: Record<Locale, TemplatePickerMessages> = {
 const languageSwitcherMessages: Record<Locale, LanguageSwitcherMessages> = {
   en: {
     "languageSwitcher.label": "Language",
+    "languageSwitcher.selectLanguage": "Select language",
   },
   es: {
     "languageSwitcher.label": "Idioma",
+    "languageSwitcher.selectLanguage": "Seleccionar idioma",
   },
 };
 
