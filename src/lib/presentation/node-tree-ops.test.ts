@@ -377,9 +377,11 @@ test("mapNodes applies mapper to top-level and nested group nodes", () => {
   assert.equal(result[0]!.name, "mapped-root");
   assert.equal(result[1]!.name, "mapped-outer");
 
-  const outer = result[1] as GroupNode;
+  const outer = result[1]!;
+  if (outer.type !== "group") assert.fail("expected outer to be a group node");
   assert.equal(outer.children[0]!.name, "mapped-child");
-  const inner = outer.children[1] as GroupNode;
+  const inner = outer.children[1]!;
+  if (inner.type !== "group") assert.fail("expected inner to be a group node");
   assert.equal(inner.name, "mapped-inner");
   assert.equal(inner.children[0]!.name, "mapped-leaf");
 });
@@ -395,7 +397,9 @@ test("mapNodes recurses into transformed group children", () => {
       : { ...node, name: `mapped-${node.id}` },
   );
 
-  const renamed = result[0] as GroupNode;
+  const renamed = result[0]!;
+  if (renamed.type !== "group")
+    assert.fail("expected result[0] to be a group node");
   assert.equal(renamed.id, "g-renamed");
   // Children of the replacement group are also mapped
   assert.equal(renamed.children[0]!.name, "mapped-x");

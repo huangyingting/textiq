@@ -7,7 +7,11 @@ import {
   remapDeckSourceRefs,
 } from "./duplicate";
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
-import { CURRENT_DECK_SCHEMA_VERSION } from "./deck-schema";
+import type { CurrentDeck } from "./deck-schema";
+import {
+  CURRENT_DECK_SCHEMA_VERSION,
+  safeParseCurrentDeck,
+} from "./deck-schema";
 
 const sourceRef = {
   documentId: "source-doc",
@@ -279,7 +283,7 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
   );
 });
 
-function v7DeckWithSourceRefs() {
+function v7DeckWithSourceRefs(): CurrentDeck {
   return {
     schemaVersion: CURRENT_DECK_SCHEMA_VERSION,
     canvas: {
@@ -289,7 +293,7 @@ function v7DeckWithSourceRefs() {
       unit: "percent" as const,
     },
     theme: { packageId: "test" },
-    assets: { images: {} as Record<string, never> },
+    assets: { images: {} },
     slides: [
       {
         id: "slide-1",
@@ -343,15 +347,17 @@ function v7DeckWithSourceRefs() {
 }
 
 test("remapDeckSourceRefs remaps v7 deck node source refs including nested groups", () => {
-  type V7Deck = ReturnType<typeof v7DeckWithSourceRefs>;
-  const remapped = remapDeckSourceRefs(
-    v7DeckWithSourceRefs(),
-    "source-doc",
-    "copy-doc",
-    new Map([["old-bid", "new-bid"]]),
-  ) as V7Deck;
-
-  const children = remapped.slides[0]!.children;
+  const parsed = safeParseCurrentDeck(
+    remapDeckSourceRefs(
+      v7DeckWithSourceRefs(),
+      "source-doc",
+      "copy-doc",
+      new Map([["old-bid", "new-bid"]]),
+    ),
+  );
+  if (!parsed.success)
+    assert.fail(`expected parse to succeed: ${parsed.errors.join(", ")}`);
+  const children = parsed.data.slides[0]!.children;
 
   // Matching source-doc ref is remapped
   const linked = children[0]!.source;
@@ -366,23 +372,24 @@ test("remapDeckSourceRefs remaps v7 deck node source refs including nested group
 
   // Nested group children are also remapped
   const group = children[2]!;
-  assert.equal(group.type, "group");
-  const nested = (group as { type: "group"; children: typeof children })
-    .children[0]!.source;
+  if (group.type !== "group") assert.fail("expected group node");
+  const nested = group.children[0]!.source;
   assert.equal(nested?.documentId, "copy-doc");
   assert.equal(nested?.blockId, "new-bid");
 });
 
 test("remapDeckSourceRefs preserves v7 node source ref when block id was not regenerated", () => {
-  type V7Deck = ReturnType<typeof v7DeckWithSourceRefs>;
-  const remapped = remapDeckSourceRefs(
-    v7DeckWithSourceRefs(),
-    "source-doc",
-    "copy-doc",
-    new Map([["different-bid", "new-bid"]]),
-  ) as V7Deck;
-
-  const linked = remapped.slides[0]!.children[0]!.source;
+  const parsed = safeParseCurrentDeck(
+    remapDeckSourceRefs(
+      v7DeckWithSourceRefs(),
+      "source-doc",
+      "copy-doc",
+      new Map([["different-bid", "new-bid"]]),
+    ),
+  );
+  if (!parsed.success)
+    assert.fail(`expected parse to succeed: ${parsed.errors.join(", ")}`);
+  const linked = parsed.data.slides[0]!.children[0]!.source;
   assert.equal(linked?.documentId, "source-doc");
   assert.equal(linked?.blockId, "old-bid");
 });
