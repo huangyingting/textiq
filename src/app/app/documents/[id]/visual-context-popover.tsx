@@ -88,7 +88,7 @@ import {
   useHydrateBrandFont,
   useHydrateVisualNodeFonts,
 } from "@/lib/brand/font-hooks";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
 import { requestVisualCandidates } from "@/lib/visual/generate";
 

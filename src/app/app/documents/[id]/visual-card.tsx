@@ -31,7 +31,7 @@ import { useRegisterVisualSvg } from "@/components/editor/visual-svg-registry";
 import { useRightSurface } from "./right-surface-context";
 
 import { applyVisualCommand } from "@/lib/commands/visual-command-adapter";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import { useEditingSurface } from "./use-editing-surface";
 import { VisualContextPopover } from "./visual-context-popover";
 import { VisualEditor } from "./visual-editor";

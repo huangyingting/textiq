@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useVisualSvgRegistry } from "@/components/editor/visual-svg-registry";
 import { applyVisualCommand } from "@/lib/commands/visual-command-adapter";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import { BRAND_WEB_FONTS } from "@/lib/brand/schema";
 import type { BrandStyle } from "@/lib/brand/schema";
 import { applyBrand } from "@/lib/brand/transforms";

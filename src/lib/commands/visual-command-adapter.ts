@@ -9,12 +9,12 @@
  */
 
 import { CURRENT_COMMAND_SCHEMA_VERSION } from "./envelope-core";
-import {
-  executeVisualCommand,
-  type VisualCommand,
-  type VisualCommandPayload,
-  type VisualCommandResult,
-} from "@/lib/commands/visual-commands";
+import { executeVisualCommand } from "@/lib/commands/visual-commands";
+import type {
+  VisualCommand,
+  VisualCommandPayload,
+  VisualCommandResult,
+} from "@/lib/commands/visual-command-contracts";
 import type { Visual } from "@/lib/visual/schema";
 
 /**

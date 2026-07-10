@@ -10,7 +10,7 @@ import {
   type VisualCommandContext,
 } from "@/lib/commands/command-validation";
 import type { CommandEnvelope } from "@/lib/commands/command-envelope";
-import type { VisualCommand } from "@/lib/commands/visual-commands";
+import type { VisualCommand } from "@/lib/commands/visual-command-contracts";
 import type { SlideCommand } from "../document/deck-kernel/slide-commands";
 
 const ACTOR = { id: "user-1", sessionId: "session-1" };

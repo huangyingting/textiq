@@ -10,7 +10,7 @@ import {
 
 import { computeAnchoredPosition } from "@/lib/anchored-position";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import type { BrandStyle } from "@/lib/brand/schema";
 import { isCreditError, stampSourceText } from "@/lib/visual/generate";
 import { mergeVisualContent } from "@/lib/visual/transforms";

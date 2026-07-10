@@ -2,7 +2,7 @@ import { CURRENT_COMMAND_SCHEMA_VERSION } from "@/lib/commands/command-envelope"
 import type {
   VisualCommand,
   VisualCommandPayload,
-} from "@/lib/commands/visual-commands";
+} from "@/lib/commands/visual-command-contracts";
 
 /** Default actor used across command test fixtures. */
 export const FIXTURE_COMMAND_ACTOR = {

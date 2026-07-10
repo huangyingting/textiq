@@ -22,10 +22,12 @@ import {
   adaptVisualCommandResult,
   coalesceVisualCommands,
   executeVisualCommand,
-  type VisualCommand,
-  type VisualPatch,
-  type VisualSideEffect,
 } from "@/lib/commands/visual-commands";
+import type {
+  VisualCommand,
+  VisualPatch,
+  VisualSideEffect,
+} from "@/lib/commands/visual-command-contracts";
 import {
   coalesceCommands,
   executeCommand,
