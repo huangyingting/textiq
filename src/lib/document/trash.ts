@@ -65,6 +65,15 @@ export async function restoreDocumentFromTrash(
   });
 }
 
+export async function permanentDeleteDocument(
+  id: string,
+  db: TrashDb = prisma,
+): Promise<void> {
+  await db.document.deleteMany({
+    where: { id, deletedAt: { not: null } },
+  });
+}
+
 export type MaintenancePolicy = "dashboard-load";
 
 export type MaintenanceResult = {

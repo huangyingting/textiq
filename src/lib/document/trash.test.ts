@@ -5,6 +5,7 @@ import {
   softDeleteDocument,
   restoreDocumentFromTrash,
   listTrashDocumentsForUser,
+  permanentDeleteDocument,
 } from "@/lib/document/trash";
 import { SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
 
@@ -220,4 +221,43 @@ test("listTrashDocumentsForUser output shape has id, title, deletedAtMs, remaini
   assert.equal(typeof doc.remainingMs, "number");
   assert.equal(doc.deletedAtMs, deletedAt.getTime());
   assert.ok(doc.remainingMs > 0);
+});
+
+// ---------------------------------------------------------------------------
+// permanentDeleteDocument
+// ---------------------------------------------------------------------------
+
+test("permanentDeleteDocument calls deleteMany with the supplied id", async () => {
+  const calls: unknown[] = [];
+  const db = {
+    document: {
+      async deleteMany(args: unknown) {
+        calls.push(args);
+        return { count: 1 };
+      },
+    },
+  };
+
+  await permanentDeleteDocument("doc-perm", db as never);
+
+  assert.equal(calls.length, 1);
+  const call = calls[0] as { where: { id: string; deletedAt: { not: null } } };
+  assert.equal(call.where.id, "doc-perm");
+});
+
+test("permanentDeleteDocument guards with deletedAt: { not: null } safety check", async () => {
+  const calls: unknown[] = [];
+  const db = {
+    document: {
+      async deleteMany(args: unknown) {
+        calls.push(args);
+        return { count: 0 };
+      },
+    },
+  };
+
+  await permanentDeleteDocument("doc-live", db as never);
+
+  const call = calls[0] as { where: { id: string; deletedAt: unknown } };
+  assert.deepEqual(call.where.deletedAt, { not: null });
 });
