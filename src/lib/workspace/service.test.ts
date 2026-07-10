@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { DOCUMENT_LIST_LIMIT } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import {
   MAX_INVITE_EXPIRY_DAYS,
@@ -325,6 +326,20 @@ test("transferWorkspaceOwnership validates target membership before updating rol
     "workspace.update",
     { where: { id: "workspace-1" }, data: { ownerId: "user-2" } },
   ]);
+  assert.deepEqual(operations[1], [
+    "workspaceMember.delete",
+    { where: { id: "member-2" } },
+  ]);
+  assert.deepEqual(operations[2], [
+    "workspaceMember.upsert",
+    {
+      where: {
+        workspaceId_userId: { workspaceId: "workspace-1", userId: "owner-1" },
+      },
+      create: { workspaceId: "workspace-1", userId: "owner-1", role: "EDITOR" },
+      update: { role: "EDITOR" },
+    },
+  ]);
 });
 
 test("workspace document helpers require capabilities and map document rows", async (t) => {
@@ -408,4 +423,59 @@ test("workspace document helpers require capabilities and map document rows", as
     typeof (creates[1] as { data: { contentJson: unknown } }).data.contentJson,
     "object",
   );
+});
+
+test("listWorkspaceDocumentsForUser returns 200 items and hasMore:true when 201 rows exist", async (t) => {
+  const rows = Array.from({ length: DOCUMENT_LIST_LIMIT + 1 }, (_, i) => ({
+    id: `doc-${i}`,
+    title: `Document ${i}`,
+    updatedAt: NOW,
+  }));
+
+  replacePrismaProperty(t, "workspace", {
+    async findUnique() {
+      return { id: "workspace-1", ownerId: "user-1", members: [] };
+    },
+  });
+  replacePrismaProperty(t, "document", {
+    async findMany() {
+      return rows;
+    },
+  });
+
+  const result = await listWorkspaceDocumentsForUser("user-1", "workspace-1");
+
+  assert.equal(result.documents.length, DOCUMENT_LIST_LIMIT);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.documents[0].id, "doc-0");
+  assert.equal(
+    result.documents[DOCUMENT_LIST_LIMIT - 1].id,
+    `doc-${DOCUMENT_LIST_LIMIT - 1}`,
+  );
+});
+
+test("importWorkspaceDocumentForUser persists 'Imported document' for whitespace-only title", async (t) => {
+  const created: Array<{ data: { title: string } }> = [];
+
+  replacePrismaProperty(t, "workspace", {
+    async findUnique() {
+      return { id: "workspace-1", ownerId: "user-1", members: [] };
+    },
+  });
+  replacePrismaProperty(t, "document", {
+    async create(args: { data: { title: string } }) {
+      created.push(args);
+      return { id: "doc-1" };
+    },
+  });
+
+  await importWorkspaceDocumentForUser(
+    "user-1",
+    "workspace-1",
+    "# Content",
+    "   ",
+  );
+
+  assert.equal(created.length, 1);
+  assert.equal(created[0].data.title, "Imported document");
 });
