@@ -212,10 +212,9 @@ test("safeParseDeck rejects a custom template with non-array elements", () => {
     ],
   });
   assert.equal(result.success, false);
-  assert.match(
-    (result as { success: false; error: string }).error,
-    /elements.*must be an array/,
-  );
+  if (!result.success) {
+    assert.match(result.error, /elements.*must be an array/);
+  }
 });
 
 // ---------------------------------------------------------------------------
