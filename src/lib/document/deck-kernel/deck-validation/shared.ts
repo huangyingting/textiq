@@ -19,12 +19,6 @@ export class DeckValidationError extends Error {
   }
 }
 
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function rejectUnknownKeys(
   input: Record<string, unknown>,
   allowedKeys: readonly string[],

@@ -1,9 +1,11 @@
 import {
   isFiniteNumber,
-  isInteger,
   isNonEmptyString,
-  isOneOf,
   isPlainObject,
+} from "@/lib/type-guards";
+import {
+  isInteger,
+  isOneOf,
   isStringArray,
   pushUnknownKeyErrors,
   type CommandTarget,

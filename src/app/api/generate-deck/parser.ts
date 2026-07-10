@@ -7,8 +7,8 @@ import {
 } from "@/lib/ai/generate";
 import type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 import { ModelOutputBudgetError } from "@/lib/ai/generation-runner";
+import { isPlainObject } from "@/lib/type-guards";
 import {
-  isPlainObject,
   type GenerationRouteErrorMapping,
   type PayloadParseResult,
 } from "@/lib/ai/generation-route";

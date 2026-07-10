@@ -30,6 +30,7 @@ import {
   type VisualKind,
 } from "@/lib/visual/schema";
 import type { DetailLevel, Orientation } from "@/lib/ai/prompt";
+import { isPlainObject } from "@/lib/type-guards";
 
 export { extractJson, type CompleteFn } from "@/lib/ai/generation-runner";
 
@@ -98,10 +99,6 @@ export interface GenerateDeps {
   maxAttempts?: number;
   /** Minimum valid candidates required. Defaults to {@link MIN_CANDIDATES}. */
   minCandidates?: number;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Reads candidate visual objects from the current model response shape. */

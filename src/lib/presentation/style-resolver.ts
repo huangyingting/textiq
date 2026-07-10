@@ -18,14 +18,7 @@ import type { DeckThemeBinding } from "./schema";
 import type { PresentationDiagnostic } from "./diagnostics";
 import { DiagnosticCollector } from "./diagnostics";
 import { mergeStylePatchDeep } from "./style-patch-merge";
-
-// ---------------------------------------------------------------------------
-// Deep merge helpers
-// ---------------------------------------------------------------------------
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
+import { isPlainObject } from "@/lib/type-guards";
 
 // ---------------------------------------------------------------------------
 // Token resolution

@@ -30,6 +30,7 @@ import {
   /* node:coverage ignore next -- Type-only storage adapter import is erased at runtime. */
   type AssetOrphanStorage,
 } from "@/lib/assets/orphan-lifecycle";
+import { isPlainObject } from "@/lib/type-guards";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -307,7 +308,3 @@ export async function purgeExpiredAssets(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}

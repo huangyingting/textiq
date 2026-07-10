@@ -9,7 +9,8 @@ import {
   isTextAlign,
   type VisualNode,
 } from "@/lib/visual/schema-types";
-import { VisualValidationError, isPlainObject, numberField } from "./utils";
+import { isPlainObject } from "@/lib/type-guards";
+import { VisualValidationError, numberField } from "./utils";
 
 export function validateNode(input: unknown, index: number): VisualNode {
   const context = `nodes[${index}]`;

@@ -33,7 +33,6 @@ export type {
 export {
   isValidId,
   isNonEmptyAsciiString,
-  isFiniteNumber,
   isPositiveFinite,
   isHexColor,
   clamp,

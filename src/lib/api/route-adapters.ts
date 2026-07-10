@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isPlainObject } from "@/lib/type-guards";
 import { validationError } from "@/lib/api/errors";
 
 export interface JsonObjectRequest {
@@ -25,12 +26,6 @@ type BodyReadResult<T> =
   | { ok: false; response: NextResponse };
 
 const utf8Encoder = new TextEncoder();
-
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function requestContentLength(request: { headers?: Headers }): number | null {
   const raw = request.headers?.get("content-length")?.trim();

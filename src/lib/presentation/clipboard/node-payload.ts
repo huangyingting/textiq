@@ -1,5 +1,6 @@
 import { defaultImageNode, defaultTextNode } from "../node-asset-factories";
 import type { ImageNode, SlideChildNode, TextNode } from "../schema";
+import { isFiniteNumber } from "@/lib/type-guards";
 
 export const TEXTIQ_NODE_CLIPBOARD_MIME = "application/x-textiq-nodes+json";
 export const TEXTIQ_NODE_CLIPBOARD_VERSION = 1;
@@ -158,10 +159,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isStringEnum(

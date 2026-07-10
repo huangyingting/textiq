@@ -6,7 +6,8 @@ import {
   isLineStyle,
   type VisualEdge,
 } from "@/lib/visual/schema-types";
-import { VisualValidationError, isPlainObject, numberField } from "./utils";
+import { isPlainObject } from "@/lib/type-guards";
+import { VisualValidationError, numberField } from "./utils";
 
 export function validateEdge(
   input: unknown,
