@@ -6,6 +6,7 @@ import type {
   DocumentImportActionPort,
   ImportedDocumentPayload,
 } from "@/lib/action-ports";
+import { IMPORT_MAX_UPLOAD_BYTES } from "@/lib/limits/assets";
 import {
   bucketBytes,
   bucketDurationMs,
@@ -16,7 +17,6 @@ import {
 
 export const DOCUMENT_IMPORT_ACCEPT = ".md,.html,.htm,.docx,.pptx,.pdf";
 export const DOCUMENT_IMPORT_ACCEPT_LABEL = ".md, .html, .docx, .pptx, .pdf";
-const DOCUMENT_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 export const DOCUMENT_IMPORT_MAX_SIZE_LABEL = "20 MB";
 
 export type DocumentImportState =
@@ -81,7 +81,7 @@ export function useDocumentImportWorkflow({
     async (file: File) => {
       const fileType = classifyFileType(file);
       const fileSizeBucket = bucketBytes(file.size);
-      if (file.size > DOCUMENT_IMPORT_MAX_BYTES) {
+      if (file.size > IMPORT_MAX_UPLOAD_BYTES) {
         emitProductTelemetry("product.import.failed", {
           failureReason: "too_large",
           fileSizeBucket,
