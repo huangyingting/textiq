@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-05"
+last_updated: "2026-07-10"
 description: "This map ties the main code subsystems to their design documents. It is a coverage index, not a replacement for source, tests, or schemas."
 ---
 
@@ -37,7 +37,7 @@ coverage index, not a replacement for source, tests, or schemas.
 | UI primitives and app chrome   | `src/components/ui/`, `src/components/motion/`, `src/lib/app-shell/`                                                 | [design-system.md](design-system.md), [../editor/document-editor.md](../editor/document-editor.md)                                                           | Design, Architecture                 |
 | API helpers and social share   | `src/lib/api/`, `src/lib/share/`                                                                                     | [../security/api-route-security-matrix.md](../security/api-route-security-matrix.md), [../security/access-and-sharing.md](../security/access-and-sharing.md) | Contract, Security                   |
 | Comments and onboarding        | `src/lib/comments/`, `src/lib/onboarding/`, `src/app/app/documents/*comment*`                                        | [../editor/comments-and-anchors.md](../editor/comments-and-anchors.md), [../documents/](../documents/README.md)                                              | Architecture, Design                 |
-| Maintenance utilities          | `src/lib/maintenance.ts`, `src/lib/view-models/`, `src/lib/db/`                                                      | [../operations/](../operations/README.md), [../data-model/database-persistence.md](../data-model/database-persistence.md)                                    | Runbook, Architecture                |
+| Maintenance utilities          | `src/lib/maintenance.ts`, `src/lib/maintenance/`, `src/lib/view-models/`, `src/lib/db/`                              | [../operations/](../operations/README.md), [../data-model/database-persistence.md](../data-model/database-persistence.md)                                    | Runbook, Architecture                |
 
 ## Coverage Rule
 

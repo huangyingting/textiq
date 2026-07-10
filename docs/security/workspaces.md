@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-06-25"
+last_updated: "2026-07-10"
 description: "This document describes workspace ownership, membership, invite links, and how workspace roles feed document permissions."
 ---
 
@@ -12,16 +12,20 @@ workspace roles feed document permissions.
 
 ## Source Files
 
-| Area                          | Source                                                                                                                 |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Workspace list/create actions | [`src/app/app/workspaces/actions.ts`](../../src/app/app/workspaces/actions.ts)                                         |
-| Workspace detail actions      | [`src/app/app/workspaces/[id]/actions.ts`](../../src/app/app/workspaces/%5Bid%5D/actions.ts)                           |
-| Workspace role helpers        | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                                       |
-| Workspace service helpers     | [`src/lib/workspace/service.ts`](../../src/lib/workspace/service.ts)                                                   |
-| Workspace capability helpers  | [`src/lib/auth/workspace-capabilities.ts`](../../src/lib/auth/workspace-capabilities.ts)                               |
-| Document permissions          | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)                                   |
-| Invite UI                     | [`src/app/app/workspaces/[id]/invite-link-manager.tsx`](../../src/app/app/workspaces/%5Bid%5D/invite-link-manager.tsx) |
-| Members UI                    | [`src/app/app/workspaces/[id]/members-list.tsx`](../../src/app/app/workspaces/%5Bid%5D/members-list.tsx)               |
+| Area                              | Source                                                                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Workspace list/create actions     | [`src/app/app/workspaces/actions.ts`](../../src/app/app/workspaces/actions.ts)                                         |
+| Workspace detail actions          | [`src/app/app/workspaces/[id]/actions.ts`](../../src/app/app/workspaces/%5Bid%5D/actions.ts)                           |
+| Workspace role helpers            | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                                       |
+| Workspace service helpers         | [`src/lib/workspace/service.ts`](../../src/lib/workspace/service.ts)                                                   |
+| Workspace membership capabilities | [`src/lib/workspace/capabilities.ts`](../../src/lib/workspace/capabilities.ts)                                         |
+| Invite link service               | [`src/lib/workspace/invite-service.ts`](../../src/lib/workspace/invite-service.ts)                                     |
+| Invite link types                 | [`src/lib/workspace/invite-types.ts`](../../src/lib/workspace/invite-types.ts)                                         |
+| Workspace document types          | [`src/lib/workspace/document-types.ts`](../../src/lib/workspace/document-types.ts)                                     |
+| Workspace capability helpers      | [`src/lib/auth/workspace-capabilities.ts`](../../src/lib/auth/workspace-capabilities.ts)                               |
+| Document permissions              | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)                                   |
+| Invite UI                         | [`src/app/app/workspaces/[id]/invite-link-manager.tsx`](../../src/app/app/workspaces/%5Bid%5D/invite-link-manager.tsx) |
+| Members UI                        | [`src/app/app/workspaces/[id]/members-list.tsx`](../../src/app/app/workspaces/%5Bid%5D/members-list.tsx)               |
 
 ## Role Model
 
@@ -51,8 +55,10 @@ workspace rename, and workspace deletion.
 
 The workspace detail action module remains the adapter layer: it resolves the
 session, performs the capability check, and revalidates or redirects. Invite
-creation/revocation, member removal plus document handoff, rename normalization,
-and delete orchestration live in `src/lib/workspace/service.ts`.
+creation, revocation, and acceptance live in
+`src/lib/workspace/invite-service.ts`. Member removal plus document handoff,
+rename normalization, and delete orchestration live in
+`src/lib/workspace/service.ts`.
 
 ## Invite Links
 
@@ -101,6 +107,8 @@ semantics.
 ## Primary Tests
 
 - [`src/lib/workspace/service.test.ts`](../../src/lib/workspace/service.test.ts)
+- [`src/lib/workspace/capabilities.test.ts`](../../src/lib/workspace/capabilities.test.ts)
+- [`src/lib/workspace/invite-service.test.ts`](../../src/lib/workspace/invite-service.test.ts)
 - [`src/lib/auth/workspace-capabilities.test.ts`](../../src/lib/auth/workspace-capabilities.test.ts)
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
 - [`e2e/workspace/workspace.spec.ts`](../../e2e/workspace/workspace.spec.ts)
