@@ -224,7 +224,7 @@ export function createCommentService({
               .slice(0, COMMENT_ANCHOR_TEXT_MAX_LENGTH) ?? null)
           : null;
         const anchorNodeId =
-          anchorType === "visual"
+          anchorType === "visual" || anchorType === "table"
             ? (input.anchorNodeId?.slice(
                 0,
                 COMMENT_ANCHOR_NODE_ID_MAX_LENGTH,

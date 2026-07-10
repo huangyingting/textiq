@@ -294,7 +294,7 @@ model Comment {
   resolved       Boolean  @default(false)
   parentId       String?
   // Optional anchor tying a top-level comment to text or a visual element.
-  // anchorType: null (whole document) | "text" | "visual".
+  // anchorType: null (whole document) | "text" | "visual" | "table".
   anchorType     String?
   anchorText     String?
   anchorNodeId   String?
