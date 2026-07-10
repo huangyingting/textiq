@@ -13,6 +13,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { getTabbableElements } from "@/lib/a11y/tabbable";
+
 import { FloatingSurface } from "./floating-surface";
 import { Swatch, type SwatchSize } from "./swatch";
 import { Tooltip } from "./tooltip";
@@ -295,10 +297,10 @@ export function ColorPicker({
       if (event.key !== "Tab" || preserveSelection) {
         return;
       }
-      const focusables = contentRef.current?.querySelectorAll<HTMLElement>(
-        'button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusables || focusables.length === 0) {
+      const container = contentRef.current;
+      if (!container) return;
+      const focusables = getTabbableElements(container);
+      if (focusables.length === 0) {
         return;
       }
       const first = focusables[0];

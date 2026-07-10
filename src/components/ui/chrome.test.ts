@@ -17,11 +17,6 @@ import {
   ToolbarButton,
 } from "./chrome";
 import {
-  dialogReducer,
-  getTabbableElements,
-  nextFocusIndex,
-} from "./focus-helpers";
-import {
   CONTROL_TRANSITION,
   ELEVATION,
   EMPTY_STATE_CHROME,
@@ -36,10 +31,6 @@ import {
   TOOLBAR_BUTTON_CHROME,
   cx,
 } from "./tokens";
-
-function testElement(element: unknown): Element {
-  return element as unknown as Element;
-}
 
 type TestElementProps = {
   children?: unknown;
@@ -329,28 +320,4 @@ test("UI token exports compose stable design-system classes", () => {
   assert.match(TOOLBAR_BUTTON_CHROME.surface, /hover:bg-ds-state-hover/);
   assert.equal(cx("a", false, null, undefined, "b"), "a b");
   assert.equal(cx(), "");
-});
-
-test("focus helpers enumerate tabbable elements and wrap tab order", () => {
-  const first = testElement({ id: "first" });
-  const second = testElement({ id: "second" });
-  const container = {
-    querySelectorAll(selector: string) {
-      assert.match(selector, /tabindex/);
-      return [first, second];
-    },
-  };
-
-  assert.deepEqual(getTabbableElements(container), [first, second]);
-  assert.equal(nextFocusIndex(0, -1, false), -1);
-  assert.equal(nextFocusIndex(2, -1, false), 0);
-  assert.equal(nextFocusIndex(2, 1, false), 0);
-  assert.equal(nextFocusIndex(2, 0, true), 1);
-  assert.equal(nextFocusIndex(2, 1, true), 0);
-});
-
-test("dialogReducer applies open, close, and toggle actions", () => {
-  assert.equal(dialogReducer(false, { type: "open" }), true);
-  assert.equal(dialogReducer(true, { type: "close" }), false);
-  assert.equal(dialogReducer(false, { type: "toggle" }), true);
 });

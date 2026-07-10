@@ -53,6 +53,10 @@ type FakeElement = {
     right: number;
     bottom: number;
   };
+  tagName: string;
+  parentElement: null;
+  getAttribute: (name: string) => string | null;
+  hasAttribute: (name: string) => boolean;
 };
 
 const originalDocument = Object.getOwnPropertyDescriptor(
@@ -140,6 +144,10 @@ function fakeElement({
     closest: () => null,
     querySelectorAll: () => query,
     getBoundingClientRect: () => bounds,
+    tagName: "BUTTON",
+    parentElement: null,
+    getAttribute: () => null,
+    hasAttribute: () => false,
   };
 }
 

@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 import { DURATION, EASE } from "@/components/motion/tokens";
 import { useReducedMotion } from "@/components/motion/use-reduced-motion";
 
-import { getTabbableElements, nextFocusIndex } from "./focus-helpers";
+import { getTabbableElements, nextFocusIndex } from "@/lib/a11y/tabbable";
 import { cx, ELEVATION, RADIUS, SURFACE_BASE } from "./tokens";
 
 type OverlayEntry = {

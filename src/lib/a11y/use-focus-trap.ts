@@ -2,10 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const FOCUSABLE =
-  "a[href], area[href], input:not([disabled]), select:not([disabled])," +
-  " textarea:not([disabled]), button:not([disabled]), iframe, object, embed," +
-  ' [tabindex]:not([tabindex="-1"]), [contenteditable]:not([contenteditable="false"])';
+import { getTabbableElements } from "./tabbable";
 
 /**
  * Traps keyboard focus inside `containerRef` while it is mounted.
@@ -24,18 +21,12 @@ export function installFocusTrap(
 ): () => void {
   const previousFocus = getPreviousFocus();
 
-  function getFocusables(): HTMLElement[] {
-    return Array.from(trap.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (node) => !node.closest("[aria-hidden='true']"),
-    );
-  }
-
   // Move focus into the container.
-  (getFocusables()[0] ?? trap).focus();
+  (getTabbableElements(trap)[0] ?? trap).focus();
 
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key !== "Tab") return;
-    const els = getFocusables();
+    const els = getTabbableElements(trap);
     if (els.length === 0) {
       event.preventDefault();
       return;
