@@ -1,5 +1,6 @@
 import type { SourceRef } from "../deck-source-refs";
-import { DeckValidationError, isPlainObject } from "./shared";
+import { isPlainObject } from "@/lib/type-guards";
+import { DeckValidationError } from "./shared";
 
 const ISO_TIMESTAMP_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;

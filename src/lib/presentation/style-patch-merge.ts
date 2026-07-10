@@ -1,12 +1,9 @@
 import type { StyleObject, StylePatch } from "./style-schema";
+import { isPlainObject } from "@/lib/type-guards";
 
 type MergeStylePatchOptions = {
   skipUndefined?: boolean;
 };
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isDiscriminatedStyleUnion(value: Record<string, unknown>): boolean {
   return typeof value.type === "string" || typeof value.kind === "string";

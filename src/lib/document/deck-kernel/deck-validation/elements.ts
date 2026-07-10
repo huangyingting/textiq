@@ -31,6 +31,7 @@ import { GLASS_EFFECT_INTENSITIES } from "../deck-element-primitives";
 import { validateSourceRef } from "./source-refs";
 /* node:coverage disable */
 /* Import-list member rows are tsx source-map gaps; validation branches are tested below. */
+import { isPlainObject } from "@/lib/type-guards";
 import {
   CONNECTOR_ANCHORS,
   CONNECTOR_ARROWS,
@@ -42,7 +43,6 @@ import {
   VERTICAL_ALIGNS,
   type VerticalAlign,
   isHexColor,
-  isPlainObject,
   rejectUnknownKeys,
   validateFiniteNumber,
   validateOpacity,

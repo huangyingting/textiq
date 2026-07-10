@@ -73,14 +73,11 @@ export type ThemePackageValidationResult =
 import { DiagnosticCollector } from "./diagnostics";
 import { STYLE_REFS } from "./style-registry";
 import { SEMANTIC_TEMPLATE_KINDS } from "./template-registry";
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
+import {
+  isFiniteNumber,
+  isNonEmptyString,
+  isPlainObject,
+} from "@/lib/type-guards";
 
 function resolveTokenInValue(
   value: unknown,
@@ -204,10 +201,6 @@ const IMAGE_MIME_TYPES = [
   "image/svg+xml",
 ] as const;
 const FONT_STYLES = ["normal", "italic"] as const;
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 function validateKnownKeys(
   input: Record<string, unknown>,

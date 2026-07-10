@@ -57,7 +57,7 @@ import {
   validationError,
   type ApiErrorCode,
 } from "@/lib/api/errors";
-import { isPlainObject, readJsonObject } from "@/lib/api/route-adapters";
+import { readJsonObject } from "@/lib/api/route-adapters";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
@@ -228,7 +228,7 @@ const defaultDeps: GenerationRouteDeps = {
   logRouteDenial,
 };
 
-export { isPlainObject, readJsonObject };
+export { readJsonObject };
 
 function createAzureComplete(
   deps: Pick<

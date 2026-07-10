@@ -1,20 +1,12 @@
 /** Shared helpers for visual schema validation modules. */
 
+import { isFiniteNumber } from "@/lib/type-guards";
+
 export class VisualValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "VisualValidationError";
   }
-}
-
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 export function numberField(

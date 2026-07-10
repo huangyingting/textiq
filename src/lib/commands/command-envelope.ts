@@ -1,8 +1,5 @@
 export {
   CURRENT_COMMAND_SCHEMA_VERSION,
-  isPlainObject,
-  isNonEmptyString,
-  isFiniteNumber,
   isPositiveNumber,
   isInteger,
   isNonNegativeNumber,

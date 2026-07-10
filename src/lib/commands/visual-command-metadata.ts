@@ -1,9 +1,11 @@
 import {
   isFiniteNumber,
   isNonEmptyString,
+  isPlainObject,
+} from "@/lib/type-guards";
+import {
   isNonNegativeNumber,
   isOneOf,
-  isPlainObject,
   isPositiveNumber,
   pushUnknownKeyErrors,
 } from "./envelope-core";

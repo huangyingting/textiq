@@ -272,6 +272,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/right-surface-coordinator\.test\.ts$/,
       /^src\/lib\/slug\.test\.ts$/,
       /^src\/lib\/taxonomy\.test\.ts$/,
+      /^src\/lib\/type-guards\.test\.ts$/,
       /^src\/lib\/view-models\//,
       /^e2e\/public-render\/public-pages\.spec\.ts$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,

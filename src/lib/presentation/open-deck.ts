@@ -10,6 +10,7 @@
 import type { PresentationDiagnostic } from "./diagnostics";
 import { safeParseDeck } from "./validation";
 import { DECK_SCHEMA_VERSION, type Deck } from "./schema";
+import { isPlainObject } from "@/lib/type-guards";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -30,14 +31,6 @@ export type OpenDeckResult =
       errors?: string[];
       diagnostics: PresentationDiagnostic[];
     };
-
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
 
 // ---------------------------------------------------------------------------
 // Public API

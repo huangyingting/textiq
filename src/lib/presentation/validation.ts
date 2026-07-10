@@ -10,7 +10,8 @@
 
 import type { Deck } from "./schema";
 import { DECK_SCHEMA_VERSION } from "./schema";
-import { isValidId, isFiniteNumber, isPositiveFinite } from "./ids";
+import { isValidId, isPositiveFinite } from "./ids";
+import { isFiniteNumber, isPlainObject } from "@/lib/type-guards";
 import { isStyleRef } from "./style-registry";
 import { SEMANTIC_TEMPLATE_KINDS } from "./template-registry";
 
@@ -40,10 +41,6 @@ export function safeParseDeck(input: unknown): DeckParseResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function fail(errors: string[], msg: string): void {
   errors.push(msg);

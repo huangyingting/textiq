@@ -6,7 +6,7 @@ import {
   type ShadowEffect,
   type VisualEffect,
 } from "@/lib/visual/schema-types";
-import { isFiniteNumber, isPlainObject } from "./utils";
+import { isFiniteNumber, isPlainObject } from "@/lib/type-guards";
 
 export function parseEffect(item: unknown): VisualEffect | null {
   if (!isPlainObject(item)) return null;

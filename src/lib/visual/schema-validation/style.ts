@@ -2,7 +2,8 @@
 
 /* node:coverage ignore next -- type-bearing import is erased/mapped as uncovered by tsx. @preserve */
 import { DEFAULT_STYLE, type VisualStyle } from "@/lib/visual/schema-types";
-import { VisualValidationError, isFiniteNumber, isPlainObject } from "./utils";
+import { isFiniteNumber, isPlainObject } from "@/lib/type-guards";
+import { VisualValidationError } from "./utils";
 
 export function normalizeStyle(input: unknown): VisualStyle {
   if (input === undefined) {

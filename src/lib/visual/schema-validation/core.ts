@@ -14,7 +14,8 @@ import { parseVisualExportOptions } from "./export-options";
 import { validateNode } from "./nodes";
 import { normalizeStyle } from "./style";
 /* node:coverage ignore next -- tsx maps this covered utility import line as uncovered. */
-import { VisualValidationError, isPlainObject, numberField } from "./utils";
+import { isPlainObject } from "@/lib/type-guards";
+import { VisualValidationError, numberField } from "./utils";
 
 export function validateVisual(input: unknown): Visual {
   if (!isPlainObject(input)) {

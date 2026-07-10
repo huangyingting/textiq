@@ -11,12 +11,12 @@ import {
 } from "./elements";
 import {
   DeckValidationError,
-  isPlainObject,
   isSlideFormat,
   rejectUnknownKeys,
   validateFiniteNumber,
   validateOpacity,
 } from "./shared";
+import { isPlainObject } from "@/lib/type-guards";
 
 const DECK_KEYS = [
   "schemaVersion",

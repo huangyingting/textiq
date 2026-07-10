@@ -5,11 +5,8 @@ import {
   type ImageFitMode,
   type ImageMaskShape,
 } from "../deck-elements";
-import {
-  DeckValidationError,
-  isPlainObject,
-  validateUnitFraction,
-} from "./shared";
+import { DeckValidationError, validateUnitFraction } from "./shared";
+import { isPlainObject } from "@/lib/type-guards";
 
 export function validateImageFitMode(
   value: unknown,

@@ -1,3 +1,9 @@
+import {
+  isFiniteNumber,
+  isNonEmptyString,
+  isPlainObject,
+} from "@/lib/type-guards";
+
 export const CURRENT_COMMAND_SCHEMA_VERSION = 1 as const;
 
 const COMMAND_SOURCES = ["user", "ai", "sync", "replay"] as const;
@@ -49,20 +55,6 @@ export interface CommandEnvelope<P = unknown> {
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
-}
-
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-export function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 export function isPositiveNumber(value: unknown): value is number {
