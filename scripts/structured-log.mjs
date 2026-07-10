@@ -6,7 +6,7 @@
  */
 import redaction from "../src/lib/log-redaction-core.cjs";
 
-const { redactContext } = redaction;
+const { redactContext, sanitizeLogString } = redaction;
 
 function safeStringify(value) {
   try {
@@ -20,14 +20,17 @@ function normalizeError(error) {
   if (error instanceof Error) {
     return {
       errorName: error.name,
-      message: error.message,
-      ...(error.stack ? { stack: error.stack } : {}),
+      message: sanitizeLogString(error.message),
+      ...(error.stack ? { stack: sanitizeLogString(error.stack) } : {}),
     };
   }
   if (typeof error === "string") {
-    return { errorName: "Error", message: error };
+    return { errorName: "Error", message: sanitizeLogString(error) };
   }
-  return { errorName: "Error", message: safeStringify(error) };
+  return {
+    errorName: "Error",
+    message: sanitizeLogString(safeStringify(error)),
+  };
 }
 
 function emit(writer, record) {
