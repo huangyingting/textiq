@@ -10,7 +10,6 @@ import {
   cx,
   ELEVATION,
   FOCUS_RING,
-  MENU_ITEM,
   RADIUS,
   TOOLBAR_BUTTON_CHROME,
   type Elevation,
@@ -44,41 +43,6 @@ export function Card(props: CardProps) {
   );
 }
 
-export type EmptyStateProps = HTMLAttributes<HTMLDivElement> & {
-  title: ReactNode;
-  description?: ReactNode;
-  action?: ReactNode;
-};
-
-export function EmptyState({
-  title,
-  description,
-  action,
-  className,
-  ...rest
-}: EmptyStateProps) {
-  return (
-    <div
-      className={cx(
-        "flex flex-col items-center gap-3 border border-dashed border-ds-border-strong bg-ds-surface-raised p-8 text-center",
-        RADIUS.lg,
-        className,
-      )}
-      {...rest}
-    >
-      <div className="space-y-1">
-        <h2 className="text-base font-semibold text-ds-text-primary">
-          {title}
-        </h2>
-        {description ? (
-          <p className="text-sm text-ds-text-secondary">{description}</p>
-        ) : null}
-      </div>
-      {action}
-    </div>
-  );
-}
-
 export function Kbd({ className, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
     <kbd
@@ -86,20 +50,6 @@ export function Kbd({ className, ...rest }: HTMLAttributes<HTMLElement>) {
         "inline-flex min-w-5 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface-sunken px-1.5 py-0.5 font-sans text-[0.6875rem] font-medium text-ds-text-muted shadow-ds-flat",
         className,
       )}
-      {...rest}
-    />
-  );
-}
-
-export type MenuItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  inset?: boolean;
-};
-
-export function MenuItem({ inset, className, type, ...rest }: MenuItemProps) {
-  return (
-    <button
-      type={type ?? "button"}
-      className={cx(MENU_ITEM, inset && "pl-8", FOCUS_RING, className)}
       {...rest}
     />
   );
@@ -325,10 +275,6 @@ export type FieldRowProps = HTMLAttributes<HTMLDivElement> & {
   error?: ReactNode;
 };
 
-export type IconActionClusterProps = HTMLAttributes<HTMLDivElement> & {
-  bordered?: boolean;
-};
-
 export function FieldRow({
   label,
   htmlFor,
@@ -362,58 +308,5 @@ export function FieldRow({
     children,
     hintNode,
     errorNode,
-  );
-}
-export function IconActionCluster({
-  bordered = true,
-  className,
-  ...rest
-}: IconActionClusterProps) {
-  return (
-    <div
-      className={cx(
-        "flex items-center",
-        bordered &&
-          "overflow-hidden rounded-ds-sm border border-ds-border-subtle",
-        className,
-      )}
-      {...rest}
-    />
-  );
-}
-
-export type StatusPillTone =
-  | "neutral"
-  | "accent"
-  | "success"
-  | "warning"
-  | "danger";
-
-const STATUS_PILL_TONE: Record<StatusPillTone, string> = {
-  neutral: "bg-ds-surface-sunken text-ds-text-secondary",
-  accent: "bg-ds-accent-surface text-ds-accent-text",
-  success: "bg-ds-success-surface text-ds-success-text",
-  warning: "bg-ds-warning-surface text-ds-warning-text",
-  danger: "bg-ds-danger-surface text-ds-danger-text",
-};
-
-export type StatusPillProps = HTMLAttributes<HTMLSpanElement> & {
-  tone?: StatusPillTone;
-};
-
-export function StatusPill({
-  tone = "neutral",
-  className,
-  ...rest
-}: StatusPillProps) {
-  return (
-    <span
-      className={cx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        STATUS_PILL_TONE[tone],
-        className,
-      )}
-      {...rest}
-    />
   );
 }
