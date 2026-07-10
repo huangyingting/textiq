@@ -31,10 +31,6 @@ import {
   type AssetResolverStorage,
 } from "@/lib/slides/asset-resolver";
 import { buildDeckSpecs } from "../document/deck-kernel/export/deck-export";
-import {
-  fatalDiagnostics,
-  runExportPreflight,
-} from "@/lib/visual/export-preflight";
 import { buildSlide, makeMinimalDeck } from "@/test/builders/deck";
 
 // ---------------------------------------------------------------------------
@@ -289,15 +285,6 @@ describe("ServerAssetResolver: export behavior for missing image assets", () => 
     assert.equal(result.url, undefined);
   });
 
-  test("missing asset for export: preflight reports it as fatal", () => {
-    const deck = makeDeck([
-      makeSlide([imageEl({ src: "", assetId: undefined })]),
-    ]);
-    const result = runExportPreflight(deck, { target: "pptx" });
-    assert.ok(result.hasFatal, "export should be blocked for missing asset");
-    assert.equal(fatalDiagnostics(result)[0].code, "missing-asset");
-  });
-
   test("missing asset does not crash buildDeckSpecs (pure transform)", () => {
     // buildDeckSpecs itself should not throw — it produces ops without resolving
     // URLs at the pure stage.
@@ -370,27 +357,6 @@ describe("missing optional fonts do not crash render", () => {
       textOps.length,
       1,
       "text op must be present despite missing font",
-    );
-  });
-
-  test("runExportPreflight never throws for any well-formed deck", () => {
-    const complexDeck = makeDeck([
-      makeSlide(
-        [
-          textEl({ id: "t1" }),
-          bulletsEl({ id: "b1" }),
-          imageEl({ id: "i1" }),
-          imageEl({ id: "i2", src: "", assetId: undefined }),
-        ],
-        { id: "s1", index: 0 },
-      ),
-      makeSlide([], { id: "s2", index: 1 }),
-    ]);
-    assert.doesNotThrow(() =>
-      runExportPreflight(complexDeck, {
-        target: "pptx",
-        customFontFamilies: new Set(["SomeFont"]),
-      }),
     );
   });
 });

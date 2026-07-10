@@ -59,7 +59,7 @@ export const SLIDE_COUNT_LIMIT: LimitDefinition = {
   enforcement: "warning",
   warnAt: SLIDES_WARN_COUNT,
   diagnostic: { scope: "export.preflight", metric: "slideCount" },
-  source: "src/lib/visual/export-preflight.ts",
+  source: "src/lib/limits/deck.ts",
 };
 
 export const ELEMENTS_PER_SLIDE_LIMIT: LimitDefinition = {

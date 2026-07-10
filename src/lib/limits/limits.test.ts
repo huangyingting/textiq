@@ -15,6 +15,7 @@ import {
   MAX_IMAGE_UPLOAD_BYTES as CENTRAL_MAX_IMAGE_UPLOAD_BYTES,
   SLIDE_ASSET_MAX_BYTES,
   SLIDE_ASSET_MAX_DIMENSION_PX,
+  SLIDES_HARD_COUNT,
   TOTAL_IMAGE_BUDGET_BYTES,
 } from "@/lib/limits";
 import { MAX_INPUT_CHARS } from "@/lib/ai/generate";
@@ -29,12 +30,7 @@ import {
   ASSET_MAX_BYTES,
   ASSET_MAX_DIMENSION_PX,
 } from "@/lib/slides/asset-upload";
-import {
-  DEFAULT_MAX_SLIDES,
-  runExportPreflight,
-} from "@/lib/visual/export-preflight";
 import { MAX_UPLOAD_BYTES, maxBytesForMime } from "@/lib/import/validate";
-import type { Deck } from "../document/deck-kernel/deck";
 
 describe("central limits boundary", () => {
   test("high-traffic validators import the same central hard caps", () => {
@@ -57,7 +53,7 @@ describe("central limits boundary", () => {
     assert.equal(ASSET_MAX_BYTES, SLIDE_ASSET_MAX_BYTES);
     assert.equal(ASSET_MAX_DIMENSION_PX, SLIDE_ASSET_MAX_DIMENSION_PX);
 
-    assert.equal(DEFAULT_MAX_SLIDES, EXPORT_PREFLIGHT_MAX_SLIDES);
+    assert.equal(EXPORT_PREFLIGHT_MAX_SLIDES, SLIDES_HARD_COUNT);
     assert.equal(IMAGE_ELEMENT_BUDGET_BYTES, TOTAL_IMAGE_BUDGET_BYTES);
     assert.equal(MAX_IMAGE_UPLOAD_BYTES, CENTRAL_MAX_IMAGE_UPLOAD_BYTES);
     assert.equal(TOTAL_IMAGE_BUDGET_BYTES, INLINE_IMAGE_HARD_BYTES);
@@ -77,33 +73,5 @@ describe("central limits boundary", () => {
       assert.ok(limit.diagnostic.scope);
       assert.ok(limit.diagnostic.metric);
     }
-  });
-
-  test("export preflight attaches safe BUDGET_EXCEEDED metadata to advisory slide warnings", () => {
-    const deck = {
-      design: { themeId: "default" },
-      slides: Array.from({ length: DEFAULT_MAX_SLIDES + 1 }, (_, index) => ({
-        id: `slide-${index}`,
-        index,
-        title: `Slide ${index}`,
-        notes: "",
-        elements: [],
-      })),
-    } as Deck;
-
-    const result = runExportPreflight(deck, { target: "pptx" });
-    const oversized = result.diagnostics.find(
-      (diagnostic) => diagnostic.code === "oversized-deck",
-    );
-
-    assert.ok(oversized);
-    assert.equal(oversized.diagnostic?.code, "BUDGET_EXCEEDED");
-    assert.equal(oversized.diagnostic?.scope, "export.preflight");
-    assert.deepEqual(Object.keys(oversized.diagnostic?.meta ?? {}).sort(), [
-      "actual",
-      "budget",
-      "metric",
-    ]);
-    assert.equal(oversized.budget?.hardAt, DEFAULT_MAX_SLIDES);
   });
 });
