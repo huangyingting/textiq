@@ -34,6 +34,15 @@ const FORBID = denyAccess({
   concealResource: false,
 });
 
+const UNAUTH = denyAccess({
+  resource: { kind: "document" },
+  capability: "view",
+  reason: "unauthenticated",
+  status: 401,
+  safeMessage: "Authentication required.",
+  concealResource: false,
+});
+
 test("server-action adapter returns null for allow and safe errors for deny", () => {
   assert.equal(accessDecisionToServerActionError(ALLOW), null);
   const error = accessDecisionToServerActionError(PRIVACY_DENY);
@@ -74,6 +83,13 @@ test("API adapter preserves access-decision statuses and messages", async () => 
   assert.deepEqual(await forbidden?.json(), {
     error: "Only the workspace owner may perform this action.",
     code: "FORBIDDEN",
+  });
+
+  const unauthenticated = accessDecisionToApiResponse(UNAUTH);
+  assert.equal(unauthenticated?.status, 401);
+  assert.deepEqual(await unauthenticated?.json(), {
+    error: "Authentication required.",
+    code: "UNAUTHORIZED",
   });
 });
 
