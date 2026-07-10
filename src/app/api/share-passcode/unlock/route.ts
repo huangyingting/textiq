@@ -12,24 +12,13 @@ import {
   SHARE_PASSCODE_UNLOCK_MAX_AGE_SECONDS,
   createSharePasscodeUnlockToken,
   normalizeSharePasscode,
+  safeReturnPath,
   sharePasscodeCookieName,
   verifySharePasscode,
 } from "@/lib/share-passcode";
 
 function modeFromForm(value: FormDataEntryValue | null): ShareMode {
   return value === "embed" || value === "present" ? value : "view";
-}
-
-function safeReturnPath(value: FormDataEntryValue | null): string {
-  const raw = String(value ?? "");
-  if (
-    raw.startsWith("/share/") ||
-    raw.startsWith("/embed/") ||
-    raw.startsWith("/present/")
-  ) {
-    return raw;
-  }
-  return "/share";
 }
 
 function redirectWithStatus(
