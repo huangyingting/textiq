@@ -54,13 +54,6 @@ export function getUpgradeMessage(feature: EntitlementFeature): string {
   return FEATURE_UPGRADE_MESSAGES[feature];
 }
 
-export function canUseFeature(
-  plan: string | null | undefined,
-  feature: EntitlementFeature,
-): boolean {
-  return createEntitlementFacade(plan).can(feature);
-}
-
 export class EntitlementGateError extends Error {
   readonly feature: EntitlementFeature;
   readonly status = 403;
