@@ -8,7 +8,7 @@ import {
   mergeVisualCommands,
   validateVisualCommandPayload,
 } from "@/lib/commands/visual-command-metadata";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import { createBlankVisual } from "@/lib/visual/blank";
 import { makeVisualCommand } from "@/test/builders/commands";
 

@@ -25,7 +25,7 @@ import {
   toggleEdgeStyle,
 } from "@/lib/visual/transforms";
 import type { Visual, VisualEdge, VisualNode } from "@/lib/visual/schema";
-import type { VisualCommandPayload } from "@/lib/commands/visual-commands";
+import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 
 /** Pointer travel (px) under which a press counts as a click, not a drag. */
 const CLICK_THRESHOLD = 4;

@@ -15,10 +15,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  executeVisualCommand,
-  type VisualCommand,
-} from "@/lib/commands/visual-commands";
+import { executeVisualCommand } from "@/lib/commands/visual-commands";
+import type { VisualCommand } from "@/lib/commands/visual-command-contracts";
 import { createBlankVisual } from "@/lib/visual/blank";
 import { safeParseVisual, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 import type { Visual, VisualNode, VisualEdge } from "@/lib/visual/schema";
