@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { CommandTarget } from "@/lib/commands/envelope-core";
-import type { SlideCommand } from "@/lib/commands/deck-command-contracts";
+import type { SlideCommand } from "@/lib/document/deck-kernel/slide-commands";
 import {
   canCoalesceSlideCommands,
   getSlideCommandMetadata,

@@ -396,3 +396,49 @@ test("mixed command batches expose unified affected ids, patches, and side effec
   assert.deepEqual(applied.results[1]!.affectedIds.slideIds, ["s1"]);
   assert.equal(applied.results[1]!.coalesceKey, "title:s1");
 });
+
+test("masterId, templateId, and designOverrides survive adaptSlideCommandResult", () => {
+  const deck = makeDeck(["s1"]);
+
+  // masterId — SET_SLIDE_MASTER produces slideFields[slideId].masterId
+  const masterResult = executeCommand(deck, {
+    type: "SET_SLIDE_MASTER",
+    slideId: "s1",
+    masterId: "master-default",
+  });
+  assert.ok(masterResult.ok, "SET_SLIDE_MASTER should succeed");
+  const adaptedMaster = adaptSlideCommandResult(masterResult, {
+    documentId: DOC_ID,
+  });
+  assert.equal(
+    adaptedMaster.patches[0]?.slideFields?.["s1"]?.masterId,
+    "master-default",
+  );
+
+  // templateId — APPLY_SLIDE_TEMPLATE produces slideFields[slideId].templateId
+  const templateResult = executeCommand(deck, {
+    type: "APPLY_SLIDE_TEMPLATE",
+    slideId: "s1",
+    templateId: "blank",
+  });
+  assert.ok(templateResult.ok, "APPLY_SLIDE_TEMPLATE should succeed");
+  const adaptedTemplate = adaptSlideCommandResult(templateResult, {
+    documentId: DOC_ID,
+  });
+  assert.equal(
+    adaptedTemplate.patches[0]?.slideFields?.["s1"]?.templateId,
+    "blank",
+  );
+
+  // designOverrides — SET_SLIDE_BACKGROUND produces slideFields[slideId].designOverrides
+  const bgResult = executeCommand(deck, {
+    type: "SET_SLIDE_BACKGROUND",
+    slideId: "s1",
+    background: "#ff0000",
+  });
+  assert.ok(bgResult.ok, "SET_SLIDE_BACKGROUND should succeed");
+  const adaptedBg = adaptSlideCommandResult(bgResult, { documentId: DOC_ID });
+  assert.deepEqual(adaptedBg.patches[0]?.slideFields?.["s1"]?.designOverrides, {
+    background: { type: "solid", color: { value: "#ff0000" } },
+  });
+});
