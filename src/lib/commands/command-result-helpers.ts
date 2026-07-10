@@ -1,7 +1,7 @@
 import type {
   DeckPatch,
   CommandResult as SlideCommandResult,
-} from "@/lib/commands/deck-command-contracts";
+} from "@/lib/document/deck-kernel/slide-commands";
 import type { CommandTarget } from "./envelope-core";
 
 export interface CommandAffectedIds {
