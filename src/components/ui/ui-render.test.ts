@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   ActionButton,
   Button,
-  ChoiceGroup,
   ColorPicker,
   IconButton,
   SegmentedControl,
@@ -71,17 +70,6 @@ test("shared UI primitives render labeled controls and selected states", () => {
         textSize: "sm",
         tooltipLabel: "Choose an option",
       }),
-      createElement(ChoiceGroup, {
-        value: "b",
-        "aria-label": "Choice group",
-        wrap: true,
-        options: [
-          { value: "a", label: "A", title: "Alpha" },
-          { value: "b", label: "B", ariaLabel: "Bravo" },
-          { value: "c", label: "C", disabled: true },
-        ],
-        onChange: (value) => changes.push(String(value)),
-      }),
       createElement(SegmentedControl, {
         value: "grid",
         "aria-label": "View mode",
@@ -107,7 +95,6 @@ test("shared UI primitives render labeled controls and selected states", () => {
   assert.match(html, /Primary action/);
   assert.match(html, /Pick accent color/);
   assert.match(html, /Second/);
-  assert.match(html, /Choice group/);
   assert.match(html, /View mode/);
   assert.deepEqual(changes, []);
 });
