@@ -14,10 +14,11 @@ import {
   type EditorState,
 } from "lexical";
 import { Redo2, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { IconButton, Tooltip } from "@/components/ui";
 import { BLOCK_ID_REPAIR_TAG } from "@/lib/content";
+import { useIsMac } from "@/lib/shortcuts/use-is-mac";
 
 type JsonObject = { [key: string]: unknown };
 
@@ -102,24 +103,6 @@ function editorStateMatchesProtectedBaseline(
   initialStateJson: string | null,
 ): boolean {
   return matchesProtectedUndoBaseline(editorState.toJSON(), initialStateJson);
-}
-
-/**
- * Detects whether the current platform is macOS/iOS (SSR-safe).
- * Duplicated from `floating-text-toolbar.tsx` — kept local to avoid coupling.
- */
-function useIsMac(): boolean {
-  return useMemo(() => {
-    if (typeof navigator === "undefined") {
-      return false;
-    }
-    const platform =
-      (navigator as Navigator & { userAgentData?: { platform?: string } })
-        .userAgentData?.platform ??
-      navigator.platform ??
-      navigator.userAgent;
-    return /mac|iphone|ipad|ipod/i.test(platform);
-  }, []);
 }
 
 /**
