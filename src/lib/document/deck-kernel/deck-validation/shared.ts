@@ -76,7 +76,6 @@ export const SHAPE_KINDS: readonly ShapeKind[] = [
   "circle",
   "square",
 ];
-export { CONNECTOR_ANCHORS } from "../deck-element-primitives";
 /* node:coverage ignore next 4 */
 /* Literal tuple rows are asserted in schema tests; tsx keeps array member rows residual. */
 export const CONNECTOR_ROUTINGS: readonly ConnectorRouting[] = [
