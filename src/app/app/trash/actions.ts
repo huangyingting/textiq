@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireDocumentCapability } from "@/lib/auth/document-permissions";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { permanentDeleteDocument as deleteDocumentPermanently } from "@/lib/document/trash";
 
 /**
  * Permanently removes a single soft-deleted document (hard delete). Requires
@@ -25,9 +25,7 @@ export async function permanentDeleteDocument(id: string): Promise<void> {
     includeDeleted: true,
   });
 
-  await prisma.document.deleteMany({
-    where: { id, deletedAt: { not: null } },
-  });
+  await deleteDocumentPermanently(id);
 
   revalidatePath("/app/trash");
   revalidatePath("/app");
