@@ -1,9 +1,30 @@
 export class FocusTrapTestElement {
   focusCount = 0;
-  hiddenAncestor = false;
+  tagName: string;
+  parentElement: FocusTrapTestElement | null = null;
   listener?: (event: KeyboardEvent) => void;
+  private attrs: Record<string, string>;
 
-  constructor(private readonly focusables: FocusTrapTestElement[] = []) {}
+  constructor(
+    private readonly focusables: FocusTrapTestElement[] = [],
+    tagName = "BUTTON",
+    attrs: Record<string, string> = {},
+  ) {
+    this.tagName = tagName;
+    this.attrs = attrs;
+  }
+
+  /** Setting hiddenAncestor creates a synthetic hidden parent for filtering. */
+  set hiddenAncestor(value: boolean) {
+    if (value) {
+      const parent = new FocusTrapTestElement([], "DIV", {
+        "aria-hidden": "true",
+      });
+      this.parentElement = parent;
+    } else {
+      this.parentElement = null;
+    }
+  }
 
   focus(): void {
     this.focusCount += 1;
@@ -13,10 +34,21 @@ export class FocusTrapTestElement {
     });
   }
 
+  getAttribute(name: string): string | null {
+    return this.attrs[name] ?? null;
+  }
+
+  hasAttribute(name: string): boolean {
+    return name in this.attrs;
+  }
+
   closest(selector: string): FocusTrapTestElement | null {
-    return selector === "[aria-hidden='true']" && this.hiddenAncestor
-      ? this
-      : null;
+    if (selector === "[aria-hidden='true']" && this.parentElement) {
+      return this.parentElement.getAttribute("aria-hidden") === "true"
+        ? this
+        : null;
+    }
+    return null;
   }
 
   querySelectorAll(): FocusTrapTestElement[] {
