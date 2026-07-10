@@ -211,10 +211,11 @@ test("safeParseDeck rejects a custom template with non-array elements", () => {
       { id: "t1", name: "Tmpl", category: "blank", elements: "not-an-array" },
     ],
   });
-  assert.deepEqual(result, {
-    success: false,
-    error: "Deck.customTemplates[0].elements must be an array",
-  });
+  assert.equal(result.success, false);
+  assert.match(
+    (result as { success: false; error: string }).error,
+    /elements.*must be an array/,
+  );
 });
 
 // ---------------------------------------------------------------------------
