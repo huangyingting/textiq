@@ -9,6 +9,9 @@ import {
   type Slide,
   type SlideElement,
   type SourceRef,
+  type TableColumn,
+  type TableElement,
+  type TableRow,
   type TextElement,
   type TextElementStyle,
   type TextRun,
@@ -461,6 +464,46 @@ export function buildDeck(overrides: DeckBuilderOverrides = {}): Deck {
     slides: slides as Deck["slides"],
     ...(deckContentHash !== undefined ? { deckContentHash } : {}),
   } as Deck;
+}
+
+type TableElementOverrides = Partial<TableElement> & {
+  columns?: TableColumn[];
+  rows?: TableRow[];
+  header?: boolean;
+  caption?: string;
+};
+
+export function buildTableElement(
+  overrides: TableElementOverrides = {},
+): TableElement {
+  const columns: TableColumn[] = overrides.columns ?? [
+    { id: "col-1", label: "Column 1" },
+    { id: "col-2", label: "Column 2" },
+  ];
+  const rows: TableRow[] = overrides.rows ?? [
+    { id: "row-1", cells: columns.map(() => ({ text: "" })) },
+  ];
+  const content = overrides.content ?? {
+    kind: "table" as const,
+    columns,
+    rows,
+    ...(overrides.header !== undefined ? { header: overrides.header } : {}),
+    ...(overrides.caption !== undefined ? { caption: overrides.caption } : {}),
+  };
+  return {
+    id: overrides.id ?? "table-fixture",
+    kind: "table",
+    zIndex: overrides.zIndex ?? 3,
+    box: buildElementBox(overrides.box ?? { x: 10, y: 20, w: 80, h: 50 }),
+    content,
+    ...(overrides.role !== undefined ? { role: overrides.role } : {}),
+    ...(overrides.source !== undefined ? { source: overrides.source } : {}),
+    ...(overrides.opacity !== undefined ? { opacity: overrides.opacity } : {}),
+    ...(overrides.locked !== undefined ? { locked: overrides.locked } : {}),
+    ...(overrides.hidden !== undefined ? { hidden: overrides.hidden } : {}),
+    ...(overrides.name !== undefined ? { name: overrides.name } : {}),
+    ...(overrides.groupId !== undefined ? { groupId: overrides.groupId } : {}),
+  } as TableElement;
 }
 
 // ---------------------------------------------------------------------------
