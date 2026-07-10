@@ -4,11 +4,11 @@
  * - Collapses runs of more than two consecutive blank lines into two.
  * - Removes null bytes and other control characters (except newlines/tabs).
  * - Trims leading/trailing whitespace.
- * - Truncates to MAX_INPUT_CHARS so the content can immediately drive the AI
- *   generation flow without hitting the generate-route's own guard.
+ * - Truncates to AI_GENERATION_INPUT_MAX_CHARS so the content can immediately
+ *   drive the AI generation flow without hitting the generate-route's own guard.
  */
 
-import { MAX_INPUT_CHARS } from "@/lib/ai/generate";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 
 /**
  * Cleans and truncates extracted document text.
@@ -25,10 +25,10 @@ export function normalizeImportedText(raw: string): string {
 
   text = text.trim();
 
-  if (text.length > MAX_INPUT_CHARS) {
+  if (text.length > AI_GENERATION_INPUT_MAX_CHARS) {
     // Truncate at the last newline before the limit to avoid cutting mid-word.
-    const cutoff = text.lastIndexOf("\n", MAX_INPUT_CHARS);
-    text = text.slice(0, cutoff > 0 ? cutoff : MAX_INPUT_CHARS);
+    const cutoff = text.lastIndexOf("\n", AI_GENERATION_INPUT_MAX_CHARS);
+    text = text.slice(0, cutoff > 0 ? cutoff : AI_GENERATION_INPUT_MAX_CHARS);
   }
 
   return text;

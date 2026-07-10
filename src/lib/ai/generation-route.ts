@@ -25,6 +25,7 @@ import {
   type RateLimitStore,
 } from "@/lib/ai/quota";
 import type { ChatMessage } from "@/lib/ai/prompt";
+import { type CompleteFn } from "@/lib/ai/generation-runner";
 import { InsufficientCreditsError } from "@/lib/billing/credits";
 import {
   captureMeteredUsage,
@@ -60,8 +61,6 @@ import {
 import { readJsonObject } from "@/lib/api/route-adapters";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
-
-export type CompleteFn = (messages: ChatMessage[]) => Promise<string>;
 
 export interface GenerationRouteRequest {
   json(): Promise<unknown>;
@@ -227,8 +226,6 @@ const defaultDeps: GenerationRouteDeps = {
   logError,
   logRouteDenial,
 };
-
-export { readJsonObject };
 
 function createAzureComplete(
   deps: Pick<

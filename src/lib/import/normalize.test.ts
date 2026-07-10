@@ -43,10 +43,10 @@ test("normalizeImportedText returns empty string for blank input", () => {
   assert.equal(normalizeImportedText("\n\n\n"), "");
 });
 
-test("normalizeImportedText truncates at MAX_INPUT_CHARS", async () => {
-  // Import MAX_INPUT_CHARS dynamically to avoid pulling in all of the AI module's dependencies.
-  const { MAX_INPUT_CHARS } = await import("@/lib/ai/generate");
-  const overlong = "x".repeat(MAX_INPUT_CHARS + 5000);
+test("normalizeImportedText truncates at AI_GENERATION_INPUT_MAX_CHARS", async () => {
+  // Import AI_GENERATION_INPUT_MAX_CHARS dynamically from its canonical owner.
+  const { AI_GENERATION_INPUT_MAX_CHARS } = await import("@/lib/limits/ai");
+  const overlong = "x".repeat(AI_GENERATION_INPUT_MAX_CHARS + 5000);
   const result = normalizeImportedText(overlong);
-  assert.ok(result.length <= MAX_INPUT_CHARS);
+  assert.ok(result.length <= AI_GENERATION_INPUT_MAX_CHARS);
 });
