@@ -16,7 +16,7 @@ import type { Deck, SlideChildNode, SlideNode } from "./presentation/schema";
 import {
   resolveAnchorState,
   type SlideCommentAnchor,
-} from "./document/deck-kernel/slide-comment-anchors";
+} from "@/lib/comments/slide-comment-anchors";
 import type { DocumentBlock } from "./content";
 
 export type AnchorTargetStatus =

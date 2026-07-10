@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Deck, SlideChildNode, SlideNode } from "./presentation/schema";
 import { hashDocumentBlock } from "./presentation/document-block-hash";
-import type { SlideCommentAnchor } from "./document/deck-kernel/slide-comment-anchors";
+import type { SlideCommentAnchor } from "@/lib/comments/slide-comment-anchors";
 import {
   resolveBlockRef,
   resolveCommentAnchor,

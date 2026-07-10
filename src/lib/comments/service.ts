@@ -11,7 +11,6 @@ import {
 
 import {
   normalizeAnchorType,
-  slideAnchorFromRecord,
   slideAnchorToRecord,
   validateAnchorGeometry,
   validateElementId,
@@ -330,71 +329,6 @@ export function createCommentService({
     };
   }
 
-  async function floatCommentsOnSlideDelete(
-    documentId: string,
-    slideId: string,
-  ): Promise<void> {
-    await requireDocumentContext(documentId, "view");
-    await db.comment.updateMany({
-      where: { documentId, slideId },
-      data: { slideId: null, elementId: null, anchorGeometry: Prisma.DbNull },
-    });
-  }
-
-  async function floatCommentsOnElementDelete(
-    documentId: string,
-    slideId: string,
-    elementId: string,
-  ): Promise<void> {
-    await requireDocumentContext(documentId, "view");
-    await db.comment.updateMany({
-      where: { documentId, slideId, elementId },
-      data: { elementId: null },
-    });
-  }
-
-  async function getOrphanedCommentIds(
-    documentId: string,
-    deck: Deck,
-  ): Promise<string[]> {
-    await requireDocumentContext(documentId, "view");
-
-    const slideAnchoredComments = await db.comment.findMany({
-      where: { documentId, parentId: null, slideId: { not: null } },
-      select: {
-        id: true,
-        slideId: true,
-        elementId: true,
-        /*! node:coverage ignore next 3 -- orphaned-comment tests assert geometry selection; tsx maps the select-object tail as uncovered. */
-        anchorGeometry: true,
-      },
-    });
-
-    return slideAnchoredComments
-      .filter(
-        (comment) =>
-          resolveAnchorState(slideAnchorFromRecord(comment), deck) ===
-          "orphaned",
-      )
-      .map((comment) => comment.id);
-  }
-
-  async function floatOrphanedCommentsAfterRestore(
-    documentId: string,
-    deck: Deck,
-  ): Promise<{ floatedCount: number }> {
-    const orphanedIds = await getOrphanedCommentIds(documentId, deck);
-
-    if (orphanedIds.length > 0) {
-      await db.comment.updateMany({
-        where: { id: { in: orphanedIds } },
-        data: { slideId: null, elementId: null, anchorGeometry: Prisma.DbNull },
-      });
-    }
-
-    return { floatedCount: orphanedIds.length };
-  }
-
   async function getUnreadCommentCount(
     documentId: string,
     scope: UnreadCountScope = "all",
@@ -439,10 +373,6 @@ export function createCommentService({
     editComment,
     deleteComment,
     setCommentResolved,
-    floatCommentsOnSlideDelete,
-    floatCommentsOnElementDelete,
-    getOrphanedCommentIds,
-    floatOrphanedCommentsAfterRestore,
     getUnreadCommentCount,
     markDocumentCommentsRead,
   };
