@@ -226,3 +226,131 @@ test("logInfo swallows console serialization failures", () => {
     console.info = original;
   }
 });
+
+// --- issue-1833: embedded URL / Bearer redaction ---
+
+test("buildErrorLog redacts embedded https URL in Error message and stack", () => {
+  const err = new Error("request failed: https://api.example.com/secret-path");
+  err.stack =
+    "Error: request failed: https://api.example.com/secret-path\n    at Object.<anonymous> (app.js:1:1)";
+  const record = buildErrorLog("api.fetch", err);
+  assert.equal(
+    record.message,
+    REDACTED,
+    "embedded URL in message must be redacted",
+  );
+  assert.equal(
+    record.stack,
+    REDACTED,
+    "embedded URL in stack must be redacted",
+  );
+  assert.equal(record.errorName, "Error");
+});
+
+test("buildErrorLog redacts embedded Bearer token in Error message", () => {
+  const err = new Error("auth failed: Bearer synthetic-token-abc123");
+  const record = buildErrorLog("api.auth", err);
+  assert.equal(
+    record.message,
+    REDACTED,
+    "embedded Bearer in message must be redacted",
+  );
+  assert.equal(record.errorName, "Error");
+});
+
+test("buildErrorLog redacts embedded URL in direct string error", () => {
+  const record = buildErrorLog(
+    "api.fetch",
+    "upstream error: https://internal.example.com/api?key=val",
+  );
+  assert.equal(
+    record.message,
+    REDACTED,
+    "embedded URL in string error must be redacted",
+  );
+  assert.equal(record.errorName, "Error");
+});
+
+test("buildErrorLog redacts object error with embedded URL serialized by safeStringify", () => {
+  const record = buildErrorLog("api.fetch", {
+    code: 403,
+    endpoint: "https://api.example.com/data",
+  });
+  assert.equal(
+    record.message,
+    REDACTED,
+    "safeStringify output with embedded URL must be redacted",
+  );
+  assert.equal(record.errorName, "Error");
+});
+
+test("email, API-key-like, and card-like synthetic patterns remain redacted", () => {
+  const emailErr = buildErrorLog(
+    "api.auth",
+    new Error("user user@example.com submitted form"),
+  );
+  assert.equal(
+    emailErr.message,
+    REDACTED,
+    "email-embedded message must be redacted",
+  );
+
+  const keyErr = buildErrorLog(
+    "api.stripe",
+    new Error("rejected: sk_live_abc12345678"),
+  );
+  assert.equal(
+    keyErr.message,
+    REDACTED,
+    "api-key-embedded message must be redacted",
+  );
+
+  const cardErr = buildErrorLog(
+    "api.payment",
+    new Error("card 4111111111111111 declined"),
+  );
+  assert.equal(
+    cardErr.message,
+    REDACTED,
+    "card-number-embedded message must be redacted",
+  );
+});
+
+test("safe operational message remains byte-for-byte unchanged after sanitization", () => {
+  const record = buildErrorLog("db.query", new Error("document not found"));
+  assert.equal(record.message, "document not found");
+  assert.equal(record.errorName, "Error");
+  assert.equal(record.level, "error");
+  assert.equal(record.scope, "db.query");
+});
+
+test("errorName and output shape are preserved when message is redacted", () => {
+  const err = new TypeError("request failed: https://api.example.com/endpoint");
+  const record = buildErrorLog("api.request", err);
+  assert.equal(record.errorName, "TypeError");
+  assert.equal(record.level, "error");
+  assert.equal(record.message, REDACTED);
+  assert.equal(typeof record.timestamp, "string");
+  assert.equal(record.scope, "api.request");
+});
+
+test("context redaction detects embedded URL and Bearer values in string context fields", () => {
+  const record = buildErrorLog("api.request", new Error("request failed"), {
+    requestId: "req-safe-1",
+    safeLabel: "generation-failed",
+    endpoint: "service call to https://api.example.com/users",
+    callDescription: "received: Bearer synthetic-token-xyz123",
+  });
+  assert.equal(
+    record.endpoint,
+    REDACTED,
+    "context value with embedded URL must be redacted",
+  );
+  assert.equal(
+    record.callDescription,
+    REDACTED,
+    "context value with embedded Bearer must be redacted",
+  );
+  assert.equal(record.requestId, "req-safe-1");
+  assert.equal(record.safeLabel, "generation-failed");
+});

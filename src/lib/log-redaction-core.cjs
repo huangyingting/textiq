@@ -83,8 +83,11 @@ function isUnsafeLogString(value) {
   }
   return (
     /[^\s@]+@[^\s@]+\.[^\s@]+/.test(trimmed) ||
-    /^https?:\/\//i.test(trimmed) ||
-    /^bearer\s+/i.test(trimmed) ||
+    // Detect URLs embedded anywhere in the string (not only at the start).
+    /https?:\/\//i.test(trimmed) ||
+    // Detect HTTP Bearer tokens embedded anywhere; \b prevents matching
+    // mid-word and \S ensures at least one token character follows the space.
+    /\bbearer\s+\S/i.test(trimmed) ||
     /(?:\d[ -]*?){13,19}/.test(trimmed) ||
     /(?:sk|rk|pk|whsec|tok|seti|pi|cs)_[A-Za-z0-9_=-]{8,}/.test(trimmed)
   );
