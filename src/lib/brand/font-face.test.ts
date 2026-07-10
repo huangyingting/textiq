@@ -184,7 +184,7 @@ describe("font upload validation", () => {
     }
   });
 
-  it("rejects files exceeding FONT_MAX_BYTES", () => {
+  it("rejects files exceeding BRAND_FONT_MAX_BYTES", () => {
     const result = validateFontUpload(
       "font/woff2",
       "big.woff2",

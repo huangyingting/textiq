@@ -22,7 +22,7 @@ import {
   LocalAssetStorageAdapter,
   type AssetStorageAdapter,
 } from "@/lib/assets/storage";
-import { BRAND_MIME_TO_EXT as BRAND_ASSET_MIME_TO_EXT } from "@/lib/brand/asset-policy";
+import { BRAND_MIME_TO_EXT } from "@/lib/brand/asset-policy";
 
 // ---------------------------------------------------------------------------
 // MIME → extension
@@ -47,12 +47,7 @@ export function deriveBrandStorageKey(
   checksum: string,
   mimeType: string,
 ): string {
-  return deriveAssetStorageKey(
-    ownerId,
-    checksum,
-    mimeType,
-    BRAND_ASSET_MIME_TO_EXT,
-  );
+  return deriveAssetStorageKey(ownerId, checksum, mimeType, BRAND_MIME_TO_EXT);
 }
 
 // ---------------------------------------------------------------------------
