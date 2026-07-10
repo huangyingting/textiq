@@ -242,7 +242,6 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/api\//,
       /^src\/lib\/auth\/(?:authz|document-|page-route|workspace-)/,
       /^src\/lib\/invite-access\.test\.ts$/,
-      /^src\/lib\/rate-limit\.test\.ts$/,
       /^src\/lib\/rate-limit\/index\.test\.ts$/,
       /^src\/lib\/rate-limit\/core\.test\.ts$/,
       /^src\/lib\/security-audit\.test\.ts$/,
