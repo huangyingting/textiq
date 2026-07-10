@@ -10,7 +10,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   BottomSheetSurface,
   Card,
-  ChoiceGroup,
   ColorPicker,
   Dialog,
   EmptyState,
@@ -535,23 +534,12 @@ test("chrome, tabs, dialog, and overlay provider primitives render remaining var
   assert.equal(provider.setters.length, 2);
 });
 
-test("ChoiceGroup and SegmentedControl exercise disabled, wrap, icon-only, and roving keyboard branches", () => {
+test("SegmentedControl exercises disabled, icon-only, and roving keyboard branches", () => {
   const changes: string[] = [];
   const tree = withFakeReact({}, () =>
     React.createElement(
       React.Fragment,
       null,
-      ChoiceGroup({
-        value: "one",
-        "aria-label": "Numbers",
-        wrap: true,
-        options: [
-          { value: "one", label: "One", title: "First" },
-          { value: "two", label: "Two", disabled: true },
-          { value: "three", label: "Three", ariaLabel: "Third" },
-        ],
-        onChange: (value) => changes.push(String(value)),
-      }),
       SegmentedControl({
         value: "grid",
         "aria-label": "Views",
@@ -583,16 +571,6 @@ test("ChoiceGroup and SegmentedControl exercise disabled, wrap, icon-only, and r
   assert.ok(gridButton);
   assert.equal(textContent(iconOnly), "◎");
 
-  (byLabel.get("One")?.props.onKeyDown as (key: unknown) => void)(
-    event({ key: "ArrowLeft" }),
-  );
-  (byLabel.get("One")?.props.onKeyDown as (key: unknown) => void)(
-    event({ key: "PageDown" }),
-  );
-  (byLabel.get("Three")?.props.onKeyDown as (key: unknown) => void)(
-    event({ key: "Home" }),
-  );
-  (byLabel.get("Two")?.props.onClick as () => void)();
   (iconOnly.props.onClick as () => void)();
   (byLabel.get("List")?.props.onKeyDown as (key: unknown) => void)(
     event({ key: "End" }),
@@ -604,8 +582,6 @@ test("ChoiceGroup and SegmentedControl exercise disabled, wrap, icon-only, and r
     event({ key: "Escape" }),
   );
 
-  assert.ok(changes.includes("three"));
-  assert.ok(changes.includes("one"));
   assert.ok(changes.includes("map"));
 });
 

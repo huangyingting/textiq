@@ -40,9 +40,6 @@ export type {
 
 export { ColorPicker, DEFAULT_SWATCH_PRESETS } from "./color-picker";
 
-export { ChoiceGroup } from "./choice-group";
-export type { ChoiceGroupOption } from "./choice-group";
-
 export { Divider } from "./divider";
 
 export { Dialog } from "./dialog";
