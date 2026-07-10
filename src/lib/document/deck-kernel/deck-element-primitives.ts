@@ -4,6 +4,15 @@ export type ElementAlign = "left" | "center" | "right";
 
 export type ConnectorArrow = "none" | "arrow" | "filled";
 
+/** Canonical kernel anchor membership — order: center, top, bottom, left, right. */
+export const CONNECTOR_ANCHORS = [
+  "center",
+  "top",
+  "bottom",
+  "left",
+  "right",
+] as const;
+
 export const IMAGE_FIT_MODES = ["contain", "cover", "fill", "none"] as const;
 export type ImageFitMode = (typeof IMAGE_FIT_MODES)[number];
 

@@ -2,7 +2,6 @@ import { PRESENTATION_THEME_IDS, type PresentationThemeId } from "../deck-core";
 import type {
   ElementAlign,
   ShapeKind,
-  ConnectorAnchor,
   ConnectorArrow,
   ConnectorRouting,
   TextFitMode,
@@ -77,13 +76,7 @@ export const SHAPE_KINDS: readonly ShapeKind[] = [
   "circle",
   "square",
 ];
-export const CONNECTOR_ANCHORS: readonly ConnectorAnchor[] = [
-  "center",
-  "top",
-  "bottom",
-  "left",
-  "right",
-];
+export { CONNECTOR_ANCHORS } from "../deck-element-primitives";
 /* node:coverage ignore next 4 */
 /* Literal tuple rows are asserted in schema tests; tsx keeps array member rows residual. */
 export const CONNECTOR_ROUTINGS: readonly ConnectorRouting[] = [

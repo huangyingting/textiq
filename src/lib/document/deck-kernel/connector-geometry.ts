@@ -7,6 +7,7 @@ import type {
   ShapeElement,
   SlideElement,
 } from "./deck-elements";
+import { CONNECTOR_ANCHORS } from "./deck-element-primitives";
 
 export interface PointPct {
   x: number;
@@ -21,15 +22,6 @@ export interface ConnectorAnchorCandidate {
   distance: number;
   containsPoint: boolean;
 }
-
-/* node:coverage ignore next 7 -- Anchor constants are exercised through anchorPoint tests; tsx maps the array literal rows as residual. */
-export const CONNECTOR_ANCHORS: readonly ConnectorAnchor[] = [
-  "center",
-  "top",
-  "bottom",
-  "left",
-  "right",
-];
 
 export function anchorPoint(
   box: ElementBox,
