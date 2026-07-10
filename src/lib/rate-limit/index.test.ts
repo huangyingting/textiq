@@ -6,7 +6,7 @@ import {
   type RateLimitWindow,
   type RateLimitOptions,
   checkRateLimitWithStore,
-} from "@/lib/ai/quota";
+} from "@/lib/rate-limit/core";
 import {
   buildClientIpDiagnosticContext,
   getClientIp,

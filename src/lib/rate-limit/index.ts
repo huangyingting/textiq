@@ -1,8 +1,8 @@
 /* node:coverage disable */
 /**
  * Shared, server-side rate limiting primitives for the public `/api` routes
- * (#96). These build on the pure fixed-window limiter in `@/lib/ai/quota` and
- * add the request-facing concerns that the limiter itself stays agnostic of:
+ * (#96). These build on the pure fixed-window limiter in `@/lib/rate-limit/core`
+ * and add the request-facing concerns that the limiter itself stays agnostic of:
  *
  *  - Extracting a caller identity from proxy headers (`getClientIp`).
  *  - Hashing that identity so the persisted key never stores a raw IP
@@ -28,7 +28,7 @@ import {
   type RateLimitWindow,
   type RateLimitOptions,
   type RateLimitResult,
-} from "@/lib/ai/quota";
+} from "@/lib/rate-limit/core";
 import { logInfo } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 

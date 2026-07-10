@@ -4,7 +4,7 @@ import {
   type RateLimitResult,
   type RateLimitStore,
   type RateLimitWindow,
-} from "@/lib/ai/quota";
+} from "@/lib/rate-limit/core";
 import { auth as authEnv, readPositiveIntEnv } from "@/lib/env";
 import {
   type ClientIpOptions,
