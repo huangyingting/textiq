@@ -1,10 +1,49 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { acquirePurgeLock, INVITE_LINK_RETENTION_MS } from "@/lib/maintenance";
 import { prisma } from "@/lib/prisma";
-import { SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
+import { getTrashStatus, SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
 
 type TrashDb = Pick<typeof prisma, "document">;
 type MaintenanceDb = Pick<typeof prisma, "document" | "$executeRaw">;
+
+export type TrashDocument = {
+  id: string;
+  title: string;
+  deletedAtMs: number;
+  remainingMs: number;
+};
+
+/**
+ * Returns the current user's soft-deleted documents still within the recovery
+ * window, ordered by most recently deleted first.
+ *
+ * Only documents deleted within SOFT_DELETE_RETENTION_MS are returned.
+ * Documents past the window are excluded — they are purged opportunistically
+ * by the maintenance sweep on the next dashboard load.
+ */
+export async function listTrashDocumentsForUser(
+  userId: string,
+  db: TrashDb = prisma,
+  now: Date = new Date(),
+): Promise<TrashDocument[]> {
+  const cutoff = new Date(now.getTime() - SOFT_DELETE_RETENTION_MS);
+
+  const rows = await db.document.findMany({
+    where: {
+      ownerId: userId,
+      deletedAt: { not: null, gt: cutoff },
+    },
+    orderBy: { deletedAt: "desc" },
+    select: { id: true, title: true, deletedAt: true },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    deletedAtMs: row.deletedAt!.getTime(),
+    remainingMs: getTrashStatus(row.deletedAt, now)!.remainingMs,
+  }));
+}
 
 export async function softDeleteDocument(
   id: string,
