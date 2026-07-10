@@ -22,22 +22,11 @@ import {
   LocalAssetStorageAdapter,
   type AssetStorageAdapter,
 } from "@/lib/assets/storage";
-import { BRAND_MIME_TO_EXT as BRAND_ASSET_MIME_TO_EXT } from "@/lib/brand/asset-policy";
+import { BRAND_MIME_TO_EXT } from "@/lib/brand/asset-policy";
 
 // ---------------------------------------------------------------------------
 // MIME → extension
 // ---------------------------------------------------------------------------
-
-/**
- * Canonical mapping from accepted brand-asset MIME types to their storage file
- * extension. As with slide assets, the extension is derived from the VALIDATED
- * MIME type — never the user-supplied filename — to prevent extension spoofing.
- *
- * Covers logo image types (`@/lib/brand/upload` LOGO_ACCEPTED_TYPES) and font
- * types (FONT_ACCEPTED_TYPES). `application/octet-stream` is mapped to `bin`;
- * the served `Content-Type` always comes from the stored `Asset.mimeType`.
- */
-export { BRAND_MIME_TO_EXT } from "@/lib/brand/asset-policy";
 
 /**
  * Derives the canonical storage key for a brand asset:
@@ -58,12 +47,7 @@ export function deriveBrandStorageKey(
   checksum: string,
   mimeType: string,
 ): string {
-  return deriveAssetStorageKey(
-    ownerId,
-    checksum,
-    mimeType,
-    BRAND_ASSET_MIME_TO_EXT,
-  );
+  return deriveAssetStorageKey(ownerId, checksum, mimeType, BRAND_MIME_TO_EXT);
 }
 
 // ---------------------------------------------------------------------------

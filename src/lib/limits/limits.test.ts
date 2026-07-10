@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  BRAND_FONT_MAX_BYTES,
-  BRAND_LOGO_MAX_BYTES,
   DECK_JSON_MAX_BYTES,
   EXPORT_PREFLIGHT_MAX_SLIDES,
   GENERATED_DECK_MAX_SLIDES,
@@ -18,7 +16,6 @@ import {
   TOTAL_IMAGE_BUDGET_BYTES,
 } from "@/lib/limits";
 import { MAX_DECK_SLIDES } from "@/lib/ai/deck-generation-options";
-import { FONT_MAX_BYTES, LOGO_MAX_BYTES } from "@/lib/brand/upload";
 import { MAX_DECK_JSON_BYTES } from "@/lib/limits";
 import {
   MAX_IMAGE_UPLOAD_BYTES,
@@ -45,8 +42,6 @@ describe("central limits boundary", () => {
       IMPORT_MAX_BYTES_BY_MIME["application/pdf"],
     );
 
-    assert.equal(FONT_MAX_BYTES, BRAND_FONT_MAX_BYTES);
-    assert.equal(LOGO_MAX_BYTES, BRAND_LOGO_MAX_BYTES);
     assert.equal(ASSET_MAX_BYTES, SLIDE_ASSET_MAX_BYTES);
     assert.equal(ASSET_MAX_DIMENSION_PX, SLIDE_ASSET_MAX_DIMENSION_PX);
 

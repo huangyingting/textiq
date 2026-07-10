@@ -10,9 +10,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFontFaceCss, injectBrandFontFace } from "@/lib/brand/font-face";
+import { buildFontFaceCss } from "@/lib/assets/font-face-css";
+import { injectBrandFontFace } from "@/lib/brand/font-face";
 import { validateBrandInput } from "@/lib/brand/schema";
-import { validateFontUpload, FONT_MAX_BYTES } from "@/lib/brand/upload";
+import { validateFontUpload } from "@/lib/brand/upload";
+import { BRAND_FONT_MAX_BYTES } from "@/lib/limits";
 
 // ---------------------------------------------------------------------------
 // buildFontFaceCss — pure @font-face CSS generation
@@ -182,11 +184,11 @@ describe("font upload validation", () => {
     }
   });
 
-  it("rejects files exceeding FONT_MAX_BYTES", () => {
+  it("rejects files exceeding BRAND_FONT_MAX_BYTES", () => {
     const result = validateFontUpload(
       "font/woff2",
       "big.woff2",
-      FONT_MAX_BYTES + 1,
+      BRAND_FONT_MAX_BYTES + 1,
     );
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error.code, "file_too_large");

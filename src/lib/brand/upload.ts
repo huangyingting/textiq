@@ -14,11 +14,6 @@ import {
   BRAND_FONT_UPLOAD_POLICY,
   BRAND_LOGO_UPLOAD_POLICY,
 } from "@/lib/brand/asset-policy";
-/* node:coverage ignore next -- Limit constants are re-export facade data asserted by upload validation tests. */
-import { BRAND_FONT_MAX_BYTES, BRAND_LOGO_MAX_BYTES } from "@/lib/limits";
-
-export const FONT_MAX_BYTES = BRAND_FONT_MAX_BYTES;
-export const LOGO_MAX_BYTES = BRAND_LOGO_MAX_BYTES;
 
 /* node:coverage ignore start -- Upload error union is type-only; concrete validation behavior is asserted. */
 export type UploadError = Exclude<

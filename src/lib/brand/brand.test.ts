@@ -15,12 +15,8 @@ import {
   isBrandActive,
   brandPreviewStyle,
 } from "@/lib/brand/transforms";
-import {
-  validateFontUpload,
-  validateLogoUpload,
-  FONT_MAX_BYTES,
-  LOGO_MAX_BYTES,
-} from "@/lib/brand/upload";
+import { validateFontUpload, validateLogoUpload } from "@/lib/brand/upload";
+import { BRAND_FONT_MAX_BYTES, BRAND_LOGO_MAX_BYTES } from "@/lib/limits";
 import { DEFAULT_STYLE, type Visual } from "@/lib/visual/schema";
 
 // ---------------------------------------------------------------------------
@@ -259,7 +255,11 @@ describe("validateFontUpload", () => {
   });
 
   it("rejects oversized file", () => {
-    const r = validateFontUpload("font/woff2", "my.woff2", FONT_MAX_BYTES + 1);
+    const r = validateFontUpload(
+      "font/woff2",
+      "my.woff2",
+      BRAND_FONT_MAX_BYTES + 1,
+    );
     assert.equal(r.ok, false);
     if (!r.ok) assert.equal(r.error.code, "file_too_large");
   });
@@ -292,7 +292,11 @@ describe("validateLogoUpload", () => {
   });
 
   it("rejects oversized file", () => {
-    const r = validateLogoUpload("image/png", "logo.png", LOGO_MAX_BYTES + 1);
+    const r = validateLogoUpload(
+      "image/png",
+      "logo.png",
+      BRAND_LOGO_MAX_BYTES + 1,
+    );
     assert.equal(r.ok, false);
     if (!r.ok) assert.equal(r.error.code, "file_too_large");
   });

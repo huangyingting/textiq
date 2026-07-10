@@ -8,8 +8,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { decideBrandAssetAccess } from "@/lib/brand/asset-access";
+import { BRAND_MIME_TO_EXT } from "@/lib/brand/asset-policy";
 import {
-  BRAND_MIME_TO_EXT,
   deriveBrandStorageKey,
   resetBrandStorageAdapter,
   setBrandStorageAdapter,
