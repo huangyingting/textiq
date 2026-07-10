@@ -5,6 +5,7 @@ import {
   createSharePasscodeUnlockToken,
   isSharePasscodeUnlockTokenValid,
   normalizeSharePasscode,
+  safeReturnPath,
   sharePasscodeCookieName,
   validateSharePasscode,
 } from "./share-passcode";
@@ -80,4 +81,37 @@ test("share passcode unlock tokens expire and use per-share cookie names", () =>
     sharePasscodeCookieName("share-1!"),
     "textiq_share_unlock_share-1",
   );
+});
+
+test("safeReturnPath accepts allowed prefixes unchanged and falls back to /share", () => {
+  const accepted: Array<[FormDataEntryValue | null, string]> = [
+    ["/share/abc", "/share/abc"],
+    ["/embed/doc-1", "/embed/doc-1"],
+    ["/present/xyz", "/present/xyz"],
+    ["/share/abc?mode=embed&foo=bar", "/share/abc?mode=embed&foo=bar"],
+  ];
+  for (const [input, expected] of accepted) {
+    assert.equal(
+      safeReturnPath(input),
+      expected,
+      `expected "${expected}" for input "${String(input)}"`,
+    );
+  }
+
+  const fallback: Array<FormDataEntryValue | null> = [
+    "/app/evil",
+    "/shares/fake",
+    "//evil.example/x",
+    "https://evil.example",
+    "javascript:alert(1)",
+    "",
+    null,
+  ];
+  for (const input of fallback) {
+    assert.equal(
+      safeReturnPath(input),
+      "/share",
+      `expected "/share" fallback for input "${String(input)}"`,
+    );
+  }
 });

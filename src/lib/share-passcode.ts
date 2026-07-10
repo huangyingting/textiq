@@ -78,6 +78,18 @@ export function createSharePasscodeUnlockToken(input: {
   return `${TOKEN_VERSION}.${expiresAt}.${signature}`;
 }
 
+export function safeReturnPath(value: FormDataEntryValue | null): string {
+  const raw = String(value ?? "");
+  if (
+    raw.startsWith("/share/") ||
+    raw.startsWith("/embed/") ||
+    raw.startsWith("/present/")
+  ) {
+    return raw;
+  }
+  return "/share";
+}
+
 export function isSharePasscodeUnlockTokenValid(input: {
   token: string | null | undefined;
   shareId: string;
