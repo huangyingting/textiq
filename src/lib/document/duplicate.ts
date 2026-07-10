@@ -1,7 +1,15 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { regenerateBlockIds } from "@/lib/lexical/block-id";
-import { safeParseDeck } from "@/lib/document/deck-schema";
+import {
+  safeParseDeck,
+  safeParseCurrentDeck,
+} from "@/lib/document/deck-schema";
+import type {
+  CurrentDeck,
+  CurrentSlideChildNode,
+} from "@/lib/document/deck-schema";
 import type { Deck, SlideElement, SourceRef } from "@/lib/document/deck-model";
+import { mapNodes } from "@/lib/presentation/node-tree-ops";
 import { prisma } from "@/lib/prisma";
 
 const duplicateDocumentSourceSelect = {
@@ -72,6 +80,24 @@ function remapElementSourceRef(
     : { ...element, source: sourceRef };
 }
 
+function remapV7NodeSourceRef(
+  node: CurrentSlideChildNode,
+  sourceDocumentId: string,
+  targetDocumentId: string,
+  bidMap: Map<string, string>,
+): CurrentSlideChildNode {
+  const source = node.source;
+  if (source?.documentId !== sourceDocumentId) return node;
+  const { blockId } = source;
+  if (blockId === undefined) return node;
+  const newBlockId = bidMap.get(blockId);
+  if (!newBlockId) return node;
+  return {
+    ...node,
+    source: { ...source, documentId: targetDocumentId, blockId: newBlockId },
+  };
+}
+
 export function remapDeckSourceRefs(
   deckJson: unknown,
   sourceDocumentId: string,
@@ -79,6 +105,25 @@ export function remapDeckSourceRefs(
   bidMap: Map<string, string>,
 ): unknown {
   if (bidMap.size === 0) return deckJson;
+
+  const currentParsed = safeParseCurrentDeck(deckJson);
+  if (currentParsed.success) {
+    const deck: CurrentDeck = {
+      ...currentParsed.data,
+      slides: currentParsed.data.slides.map((slide) => ({
+        ...slide,
+        children: mapNodes(slide.children, (node) =>
+          remapV7NodeSourceRef(
+            node,
+            sourceDocumentId,
+            targetDocumentId,
+            bidMap,
+          ),
+        ),
+      })),
+    };
+    return deck;
+  }
 
   const parsed = safeParseDeck(deckJson);
   if (!parsed.success) return deckJson;

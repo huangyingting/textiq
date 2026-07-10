@@ -18,6 +18,7 @@ import {
   insertNodeAtPath,
   insertNodeRelativeTo,
   isAncestorOfNode,
+  mapNodes,
   nodesInLayerOrder,
   parentGroupIdForNode,
   parentPathForNode,
@@ -353,4 +354,52 @@ test("ungroups a nested group in place", () => {
     "b",
     "c",
   ]);
+});
+
+test("mapNodes applies mapper to top-level and nested group nodes", () => {
+  const visited: string[] = [];
+  const nodes = [
+    textNode("root"),
+    groupNode("outer", [
+      textNode("child"),
+      groupNode("inner", [textNode("leaf")]),
+    ]),
+  ];
+
+  const result = mapNodes(nodes, (node) => {
+    visited.push(node.id);
+    return { ...node, name: `mapped-${node.id}` };
+  });
+
+  // Pre-order: each node is mapped before its children are recursed into
+  assert.deepEqual(visited, ["root", "outer", "child", "inner", "leaf"]);
+
+  assert.equal(result[0]!.name, "mapped-root");
+  assert.equal(result[1]!.name, "mapped-outer");
+
+  const outer = result[1] as GroupNode;
+  assert.equal(outer.children[0]!.name, "mapped-child");
+  const inner = outer.children[1] as GroupNode;
+  assert.equal(inner.name, "mapped-inner");
+  assert.equal(inner.children[0]!.name, "mapped-leaf");
+});
+
+test("mapNodes recurses into transformed group children", () => {
+  // When the mapper replaces a group node entirely, the new group's children
+  // are still recursed, so descendants of the replacement are also mapped.
+  const nodes = [groupNode("g", [textNode("a"), textNode("b")]), textNode("c")];
+
+  const result = mapNodes(nodes, (node) =>
+    node.id === "g"
+      ? groupNode("g-renamed", [textNode("x"), textNode("y")])
+      : { ...node, name: `mapped-${node.id}` },
+  );
+
+  const renamed = result[0] as GroupNode;
+  assert.equal(renamed.id, "g-renamed");
+  // Children of the replacement group are also mapped
+  assert.equal(renamed.children[0]!.name, "mapped-x");
+  assert.equal(renamed.children[1]!.name, "mapped-y");
+  // Top-level leaf is also mapped
+  assert.equal(result[1]!.name, "mapped-c");
 });

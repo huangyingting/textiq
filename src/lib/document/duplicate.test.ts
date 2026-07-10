@@ -7,6 +7,7 @@ import {
   remapDeckSourceRefs,
 } from "./duplicate";
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
+import { CURRENT_DECK_SCHEMA_VERSION } from "./deck-schema";
 
 const sourceRef = {
   documentId: "source-doc",
@@ -276,4 +277,112 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
     deckUpdate.deckJson.slides[0].elements[0].source.blockId,
     newBid,
   );
+});
+
+function v7DeckWithSourceRefs() {
+  return {
+    schemaVersion: CURRENT_DECK_SCHEMA_VERSION,
+    canvas: {
+      format: "16:9" as const,
+      width: 100,
+      height: 56.25,
+      unit: "percent" as const,
+    },
+    theme: { packageId: "test" },
+    assets: { images: {} as Record<string, never> },
+    slides: [
+      {
+        id: "slide-1",
+        type: "slide" as const,
+        template: { kind: "content" as const },
+        children: [
+          {
+            id: "node-linked",
+            type: "text" as const,
+            content: { paragraphs: [{ id: "para-1", text: "" }] },
+            source: {
+              documentId: "source-doc",
+              blockId: "old-bid",
+              blockKind: "text" as const,
+              linkedAt: "2026-01-01T00:00:00.000Z",
+            },
+          },
+          {
+            id: "node-other-doc",
+            type: "text" as const,
+            content: { paragraphs: [{ id: "para-2", text: "" }] },
+            source: {
+              documentId: "other-doc",
+              blockId: "old-bid",
+              blockKind: "text" as const,
+              linkedAt: "2026-01-01T00:00:00.000Z",
+            },
+          },
+          {
+            id: "group-1",
+            type: "group" as const,
+            component: "custom" as const,
+            children: [
+              {
+                id: "nested-node",
+                type: "text" as const,
+                content: { paragraphs: [{ id: "para-3", text: "" }] },
+                source: {
+                  documentId: "source-doc",
+                  blockId: "old-bid",
+                  blockKind: "text" as const,
+                  linkedAt: "2026-01-01T00:00:00.000Z",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+test("remapDeckSourceRefs remaps v7 deck node source refs including nested groups", () => {
+  type V7Deck = ReturnType<typeof v7DeckWithSourceRefs>;
+  const remapped = remapDeckSourceRefs(
+    v7DeckWithSourceRefs(),
+    "source-doc",
+    "copy-doc",
+    new Map([["old-bid", "new-bid"]]),
+  ) as V7Deck;
+
+  const children = remapped.slides[0]!.children;
+
+  // Matching source-doc ref is remapped
+  const linked = children[0]!.source;
+  assert.equal(linked?.documentId, "copy-doc");
+  assert.equal(linked?.blockId, "new-bid");
+  assert.equal(linked?.blockKind, "text");
+
+  // Other-document ref is unchanged
+  const otherDoc = children[1]!.source;
+  assert.equal(otherDoc?.documentId, "other-doc");
+  assert.equal(otherDoc?.blockId, "old-bid");
+
+  // Nested group children are also remapped
+  const group = children[2]!;
+  assert.equal(group.type, "group");
+  const nested = (group as { type: "group"; children: typeof children })
+    .children[0]!.source;
+  assert.equal(nested?.documentId, "copy-doc");
+  assert.equal(nested?.blockId, "new-bid");
+});
+
+test("remapDeckSourceRefs preserves v7 node source ref when block id was not regenerated", () => {
+  type V7Deck = ReturnType<typeof v7DeckWithSourceRefs>;
+  const remapped = remapDeckSourceRefs(
+    v7DeckWithSourceRefs(),
+    "source-doc",
+    "copy-doc",
+    new Map([["different-bid", "new-bid"]]),
+  ) as V7Deck;
+
+  const linked = remapped.slides[0]!.children[0]!.source;
+  assert.equal(linked?.documentId, "source-doc");
+  assert.equal(linked?.blockId, "old-bid");
 });
