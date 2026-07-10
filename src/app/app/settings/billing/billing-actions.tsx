@@ -3,7 +3,24 @@
 import { useState, useTransition } from "react";
 
 import type { Plan } from "@/lib/billing/catalog";
+import { PLAN_CATALOG } from "@/lib/billing/catalog";
 import { changePlanAction, cancelSubscriptionAction } from "./actions";
+
+/**
+ * Compact credit-allowance + period label derived from catalog entitlements.
+ * Examples: "500 credits/week", "10k credits/mo".
+ * Uses explicit period checks so future catalog values (e.g. 14-day trials)
+ * produce a distinct label rather than silently inheriting "mo".
+ */
+function compactCreditPeriod(credits: number, periodDays: number): string {
+  const creditStr =
+    credits >= 1000 && credits % 1000 === 0
+      ? `${credits / 1000}k`
+      : String(credits);
+  const period =
+    periodDays === 7 ? "week" : periodDays === 30 ? "mo" : `${periodDays}d`;
+  return `${creditStr} credits/${period}`;
+}
 
 interface BillingActionsProps {
   currentPlan: Plan;
@@ -59,7 +76,7 @@ export function BillingActions({
         <PlanCard
           label="Free"
           price="Free"
-          description="500 credits/week · PNG &amp; PDF"
+          description={`${compactCreditPeriod(PLAN_CATALOG.free.entitlements.creditsPerPeriod, PLAN_CATALOG.free.entitlements.periodDays)} · PNG &amp; PDF`}
           isCurrent={currentPlan === "free"}
           onSelect={() => handleChange("free")}
           disabled={isPending || currentPlan === "free"}
@@ -67,7 +84,7 @@ export function BillingActions({
         <PlanCard
           label="Plus"
           price="$12/mo"
-          description="10k credits/mo · SVG &amp; PPTX · Brand Styles"
+          description={`${compactCreditPeriod(PLAN_CATALOG.plus.entitlements.creditsPerPeriod, PLAN_CATALOG.plus.entitlements.periodDays)} · SVG &amp; PPTX · Brand Styles`}
           isCurrent={currentPlan === "plus"}
           onSelect={() => handleChange("plus")}
           disabled={isPending || currentPlan === "plus"}
@@ -75,7 +92,7 @@ export function BillingActions({
         <PlanCard
           label="Pro"
           price="$29/mo"
-          description="30k credits/mo · SVG &amp; PPTX · Custom fonts"
+          description={`${compactCreditPeriod(PLAN_CATALOG.pro.entitlements.creditsPerPeriod, PLAN_CATALOG.pro.entitlements.periodDays)} · SVG &amp; PPTX · Custom fonts`}
           isCurrent={currentPlan === "pro"}
           onSelect={() => handleChange("pro")}
           disabled={isPending || currentPlan === "pro"}
