@@ -48,12 +48,6 @@ export interface PublicPresentationRecovery {
   fallback: "derived" | "none";
 }
 
-export function buildPublicPresentationModelAny(
-  document: PublicPresentationDocument,
-): PublicPresentationModel {
-  return buildPublicPresentationModel(document);
-}
-
 const PUBLIC_ASSET_ROUTE_PREFIX = "/api/slide-assets/";
 const URL_PARSE_BASE = "https://textiq.local";
 
