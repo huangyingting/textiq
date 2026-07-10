@@ -4,7 +4,6 @@ import { describe, it } from "node:test";
 import { prisma } from "@/lib/prisma";
 import {
   assertFeatureAllowed,
-  canUseFeature,
   createEntitlementFacade,
   EntitlementGateError,
   getUpgradeMessage,
@@ -41,7 +40,7 @@ describe("createEntitlementFacade", () => {
   });
 
   it("falls back to free entitlements for missing or unknown plans", () => {
-    assert.equal(canUseFeature(null, "pptxExport"), false);
+    assert.equal(createEntitlementFacade(null).can("pptxExport"), false);
     assert.equal(createEntitlementFacade("enterprise").plan, "free");
     assert.match(getUpgradeMessage("removeWatermark"), /Watermark removal/);
   });

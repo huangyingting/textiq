@@ -120,14 +120,3 @@ export function getEntitlements(
 ): PlanEntitlements {
   return getPlanCatalogEntry(plan).entitlements;
 }
-
-/**
- * Checks whether the given plan includes a specific entitlement feature.
- * Returns `false` for unrecognised plan values (safe default = free tier).
- */
-export function hasEntitlement<K extends keyof PlanEntitlements>(
-  plan: string | null | undefined,
-  feature: K,
-): boolean {
-  return Boolean(getEntitlements(plan)[feature]);
-}

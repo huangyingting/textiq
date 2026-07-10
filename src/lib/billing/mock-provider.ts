@@ -21,7 +21,7 @@ import {
   markSubscriptionCancelAtPeriodEnd,
 } from "@/lib/billing/service";
 import type { BillingProvider, ChangePlanResult } from "@/lib/billing/provider";
-import { isProductionEnv } from "@/lib/billing/provider";
+import { isProductionEnv } from "@/lib/billing/config";
 
 type MockBillingProviderDeps = {
   applyLocalPlanChange?: typeof applyLocalPlanChange;
