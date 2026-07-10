@@ -49,12 +49,6 @@ function stripTagsPreserveLines(html: string): string {
     .trim();
 }
 
-/** Decodes a string of HTML entities; used indirectly via `stripTags`. */
-function _noop(_: string): string {
-  return _;
-}
-void _noop;
-
 function splitHtmlRows(tableHtml: string): string[][] {
   const rows: string[][] = [];
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
