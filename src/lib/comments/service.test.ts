@@ -360,6 +360,22 @@ test("comment service creates replies and rejects missing parent comments", asyn
   );
 });
 
+test("comment service creates table anchor root comment persisting anchorNodeId and anchorText", async () => {
+  const db = new FakeDb();
+  const { service } = makeService(db, "author-1");
+
+  await service.createComment("doc-1", {
+    body: "Table anchor",
+    anchorType: "table",
+    anchorNodeId: "table-node-42",
+    anchorText: "Row 3",
+  });
+
+  assert.equal(db.comments[0].anchorType, "table");
+  assert.equal(db.comments[0].anchorNodeId, "table-node-42");
+  assert.equal(db.comments[0].anchorText, "Row 3");
+});
+
 test("comment service creates trimmed text and visual root comments", async () => {
   const db = new FakeDb();
   const { service } = makeService(db, "author-1");
