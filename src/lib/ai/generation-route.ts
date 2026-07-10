@@ -17,12 +17,10 @@ import {
 import {
   ANON_COOKIE_NAME,
   anonTrialLimit,
-  checkRateLimitWithStore,
   newAnonState,
   parseAnonCookie,
   signAnonState,
   type AnonState,
-  type RateLimitStore,
 } from "@/lib/ai/quota";
 import type { ChatMessage } from "@/lib/ai/prompt";
 import { type CompleteFn } from "@/lib/ai/generation-runner";
@@ -40,6 +38,10 @@ import { auth as authEnv } from "@/lib/env";
 import { logError } from "@/lib/log";
 import { AI_JSON_BODY_MAX_BYTES } from "@/lib/limits";
 import { prismaRateLimitStore, rateLimitSubject } from "@/lib/rate-limit";
+import {
+  checkRateLimitWithStore,
+  type RateLimitStore,
+} from "@/lib/rate-limit/core";
 import {
   checkIpRateLimit,
   abuseBudgetOptions,
