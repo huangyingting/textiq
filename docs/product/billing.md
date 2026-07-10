@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-06-26"
+last_updated: "2026-07-10"
 description: "This document describes plan entitlements, AI credit metering, usage-ledger idempotency, billing provider selection, and subscription state. Brand Studio design lives in brand-studio.md."
 ---
 
@@ -29,11 +29,11 @@ design lives in [brand-studio.md](brand-studio.md).
 
 Plans are defined by `PLAN_CATALOG` and `PLAN_ENTITLEMENTS`.
 
-| Plan   | Credits | Period  | Export/features                                           |
-| ------ | ------- | ------- | --------------------------------------------------------- |
-| `free` | 500     | 7 days  | PNG/PDF export, watermark present.                        |
-| `plus` | 10,000  | 30 days | SVG/PPTX export, brand styles, no watermark.              |
-| `pro`  | 30,000  | 30 days | Plus features, custom font upload, custom branding flags. |
+| Plan   | Credits | Period  | Export/features                              |
+| ------ | ------- | ------- | -------------------------------------------- |
+| `free` | 500     | 7 days  | PNG/PDF export, watermark present.           |
+| `plus` | 10,000  | 30 days | SVG/PPTX export, brand styles, no watermark. |
+| `pro`  | 30,000  | 30 days | Plus features and custom font upload.        |
 
 Unknown plan strings resolve to the free tier. Feature gates use the entitlement
 facade so UI and server actions can produce consistent allowed/upgrade-message

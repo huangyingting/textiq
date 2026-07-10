@@ -1,7 +1,7 @@
 ---
-Type: "plan"
-Status: "completed — hook-dispatcher harness retired"
-Last updated: "2026-07-04"
+type: "plan"
+status: "completed — hook-dispatcher harness retired"
+last_updated: "2026-07-10"
 description: "Completed P1 work retiring hook-dispatcher presentation tests in favor of controller, descriptor, component, or renderer coverage."
 ---
 

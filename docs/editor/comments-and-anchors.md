@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-06-29"
+last_updated: "2026-07-10"
 description: "This document describes comment threads and their document/slide anchors."
 ---
 
@@ -103,4 +103,3 @@ Unread helpers compute per-comment/thread read state for slide comment surfaces.
 - [`src/app/app/documents/[id]/slide-comment-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-permissions-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-permissions-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-unread.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-unread.test.ts)
-- [`src/lib/comments/anchors.test.ts`](../../src/lib/comments/anchors.test.ts)

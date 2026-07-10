@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-10"
 description: "These documents describe the runtime presentation layer: the slide editor UI, stage interactions, present mode, and export pipeline. They sit between the persisted deck contract and the React components that render/edit slides."
 ---
 
@@ -20,7 +20,7 @@ persisted deck contract and the React components that render/edit slides.
 | [theme-packages.md](theme-packages.md)                               | Contract     | Theme package catalog, apply behavior, template identity, and master boundaries.                                              |
 | [assets.md](assets.md)                                               | Architecture | Slide image upload, storage, protected serving, deck references, and cleanup.                                                 |
 | [rendering-and-export.md](rendering-and-export.md)                   | Architecture | Shared slide rendering, present/public viewers, export specs, and preflight diagnostics.                                      |
-| [test-strategy-plan.md](test-strategy-plan.md)                       | Plan         | Remaining P1 work to retire hook-dispatcher based presentation tests.                                                         |
+| [test-strategy-plan.md](test-strategy-plan.md)                       | Plan         | Completed P1 work retiring hook-dispatcher based presentation tests.                                                          |
 | [pptx-fidelity-plan.md](pptx-fidelity-plan.md)                       | Plan         | Ranked PPTX export fidelity strategy for gradients, pattern/image fills, effects, curved connectors, and visual placeholders. |
 
 Future presentation work should live in this directory as `*-plan.md` and must

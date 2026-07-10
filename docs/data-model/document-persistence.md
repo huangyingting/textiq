@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-10"
 description: "This document describes the service boundary that persists editable document state, rebuilds visual projections, writes decks, snapshots versions, restores versions, and reconciles document-to-deck dependencies. CRUD/listing behavior lives in ../documents/README.md; JSON schema contracts live in deck.md and visual-mirror.md."
 ---
 
@@ -39,15 +39,15 @@ only. Document text, prompts, cookies, and raw payloads are not logged.
 ## Lexical Save And Visual Mirror
 
 `atomicSaveDocumentLexical(documentId, parsedState, userId)` writes the current
-Lexical `contentJson`, derives plain text into `Document.content`, and rebuilds
-the `Visual` table in one Prisma transaction.
+Lexical `contentJson` and rebuilds the `Visual` table in one Prisma transaction.
+The deprecated `Document.content` plaintext column is no longer maintained and
+must not be used by new readers or writers.
 
 ```text
 parsed Lexical state
-  -> lexicalStateToPlainText(...).slice(DOCUMENT_CONTENT_MAX_LENGTH)
   -> snapshotDocumentVersion(...)
   -> transaction:
-       update Document.contentJson + content
+     update Document.contentJson
        mirrorVisualNodesInTx(...)
   -> safe structured mirror summary log
 ```
@@ -91,7 +91,8 @@ maximum. Snapshot failure never breaks the caller's save.
 1. Verify the version belongs to the requested document.
 2. Force a pre-restore snapshot labelled `Before restore`.
 3. Sanitize restored `deckJson` against restored content.
-4. Write restored `contentJson`, plain content, and deck.
+4. Write restored `contentJson` and deck; leave deprecated `Document.content`
+   untouched.
 5. Rebuild the visual mirror in the same transaction.
 6. Reconcile the deck again against actual DB visual rows.
 7. Revalidate public share, embed, and present cache paths.
@@ -125,7 +126,8 @@ invalidation.
 ## Invariants
 
 1. `contentJson` writes and visual mirror rebuilds are atomic.
-2. `Document.content` is a bounded plain-text projection of `contentJson`.
+2. `Document.content` is a deprecated, unmaintained column and is not a valid
+   content source.
 3. Deck writes must parse as the current deck schema and fit the deck JSON
    budget before persistence.
 4. Deck saves are guarded by revision-token compare-and-swap.

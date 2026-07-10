@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "accepted"
-last_updated: "2026-07-01"
+last_updated: "2026-07-10"
 description: "Date: 2026-06-23 Issue: #449 — Document the contentJson-to-Visual mirror contract Authors: Tank (Backend Dev)"
 ---
 
@@ -16,10 +16,11 @@ description: "Date: 2026-06-23 Issue: #449 — Document the contentJson-to-Visua
 ## Context
 
 The `Visual` table holds a database projection of every embedded visual block in
-a document's `contentJson`. This projection is what share pages, embed renders,
-deck/slide builders, and dashboard thumbnails read — none of them parse
-`contentJson` directly. To stay consistent, the projection must be rebuilt
-every time `contentJson` changes.
+a document's `contentJson`. Dashboard thumbnails read this projection, and
+schema audit and repair paths use it to detect or reconcile drift. Public
+share/embed/present rendering and deck derivation instead collect embedded
+visuals directly from `contentJson`. To keep projection consumers consistent,
+the table must be rebuilt every time `contentJson` changes.
 
 This document specifies the exact mapping (the "mirror contract") so that every
 feature reading or writing `Visual` rows can reason from the same mental model,
@@ -154,9 +155,8 @@ every save so production logs carry structured counts for debugging.
 
 `orderIndex` reflects strict document order (the depth-first traversal index at
 the time of the save). Two visuals with the same `orderIndex` cannot exist for
-the same document because each traversal position is unique. The sort order of
-`Visual` rows (e.g. for export or slide generation) is always ascending
-`orderIndex`.
+the same document because each traversal position is unique. Consumers that
+read multiple `Visual` rows sort them by ascending `orderIndex`.
 
 ---
 
