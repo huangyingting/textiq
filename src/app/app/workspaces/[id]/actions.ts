@@ -7,20 +7,24 @@ import { requireUser } from "@/lib/session";
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
 import {
   assertInvitableWorkspaceRole,
-  createWorkspaceDocumentForUser,
   createWorkspaceInviteLink,
-  deleteWorkspaceAndDetachDocuments,
   getInviteLinkTarget,
+  revokeWorkspaceInviteLink,
+} from "@/lib/workspace/invite-service";
+import type {
+  CreateInviteLinkOptions,
+  InviteLink,
+} from "@/lib/workspace/invite-types";
+import {
+  createWorkspaceDocumentForUser,
+  deleteWorkspaceAndDetachDocuments,
   getWorkspaceMemberRemovalTarget,
   importWorkspaceDocumentForUser,
   leaveWorkspaceForUser,
   listWorkspaceDocumentsForUser,
   removeWorkspaceMemberAndDetachDocuments,
   renameWorkspaceRecord,
-  revokeWorkspaceInviteLink,
   transferWorkspaceOwnership,
-  type CreateInviteLinkOptions,
-  type InviteLink,
 } from "@/lib/workspace/service";
 import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import type { WorkspaceRole } from "@/lib/workspace/roles";
