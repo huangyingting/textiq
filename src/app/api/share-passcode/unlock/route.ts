@@ -4,6 +4,7 @@ import { publicSharePasscodeBudgetExceeded } from "@/app/public-abuse";
 import { auth } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import {
+  SHARE_ACCESS_SELECT,
   evaluateShareAccess,
   toShareAccessInput,
   type ShareMode,
@@ -48,15 +49,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const document = await prisma.document.findFirst({
     where: { shareId },
-    select: {
-      shareId: true,
-      isShared: true,
-      deletedAt: true,
-      shareExpiresAt: true,
-      shareEmbedEnabled: true,
-      sharePresentEnabled: true,
-      sharePasscodeHash: true,
-    },
+    select: SHARE_ACCESS_SELECT,
   });
 
   if (!document?.sharePasscodeHash) {

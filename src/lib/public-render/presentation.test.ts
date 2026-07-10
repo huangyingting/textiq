@@ -15,7 +15,6 @@ import type { SlideChildNode } from "@/lib/presentation/schema";
 
 import {
   buildPublicPresentationModel,
-  buildPublicPresentationModelAny,
   publicPresentationRecoveryForViewer,
 } from "./presentation";
 
@@ -151,21 +150,6 @@ test("buildPublicPresentationModel exposes blocking recovery for invalid deckJso
     model.recovery,
   );
   assert.equal(model.attribution.ownerName, "Document owner");
-});
-
-test("buildPublicPresentationModelAny returns the presentation-only model", () => {
-  resetBuilderCounter();
-  const presentationDeck = buildDeck([buildCoverSlide()]);
-  const model = buildPublicPresentationModelAny({
-    title: "presentation deck",
-    contentJson: { root: { children: [] } },
-    deckJson: presentationDeck,
-    owner: { name: "Alex", plan: "pro" },
-  });
-
-  assert.equal(model.title, "presentation deck");
-  assert.equal(model.deck.schemaVersion, 7);
-  assert.equal(model.attribution.ownerName, "Alex");
 });
 
 test("buildPublicPresentationModel keeps presentation protected asset references instead of contentJson fallback", () => {
