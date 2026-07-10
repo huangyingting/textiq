@@ -1,15 +1,14 @@
 import "server-only";
 
-import { Prisma } from "@/generated/prisma/client";
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
-import { markdownToLexicalState } from "@/lib/content";
-import { templateContentJsonForId } from "@/lib/document/create";
+import {
+  clampDocumentContent,
+  clampDocumentTitle,
+  importedMarkdownToContentJson,
+  templateContentJsonForId,
+} from "@/lib/document/create";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
-import {
-  DOCUMENT_CONTENT_MAX_LENGTH,
-  DOCUMENT_TITLE_MAX_LENGTH,
-} from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { type WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 
@@ -196,12 +195,9 @@ export async function importWorkspaceDocumentForUser(
 ): Promise<{ id: string }> {
   await requireWorkspaceCapability(userId, workspaceId, "mutate");
 
-  const title =
-    rawTitle.trim().slice(0, DOCUMENT_TITLE_MAX_LENGTH) || "Imported document";
-  const safeContent = content.slice(0, DOCUMENT_CONTENT_MAX_LENGTH);
-  const contentJson = JSON.parse(
-    markdownToLexicalState(safeContent),
-  ) as Prisma.InputJsonValue;
+  const title = clampDocumentTitle(rawTitle, "Imported document");
+  const safeContent = clampDocumentContent(content);
+  const contentJson = importedMarkdownToContentJson(safeContent);
 
   // Document.content (the plaintext mirror) is deprecated — stop writing it.
   // Physical column drop is a follow-up migration.
