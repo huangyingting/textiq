@@ -21,8 +21,8 @@ import {
   transferWorkspaceOwnership,
   type CreateInviteLinkOptions,
   type InviteLink,
-  type WorkspaceDocumentsResult,
 } from "@/lib/workspace/service";
+import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import type { WorkspaceRole } from "@/lib/workspace/roles";
 
 export async function createInviteLink(
