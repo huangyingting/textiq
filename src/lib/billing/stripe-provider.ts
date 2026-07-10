@@ -30,7 +30,6 @@ import {
   getBillingSubscription,
   markSubscriptionCancelAtPeriodEnd,
   recordStripeCustomer,
-  shouldApplySubscriptionUpdate,
   writeLocalPlanChange,
   writeLocalSubscriptionDeleted,
   writeLocalSubscriptionUpdate,
@@ -336,17 +335,6 @@ export function reduceStripeSubscriptionEvent(
 
   return state;
 }
-
-/**
- * Pure ordering guard for `customer.subscription.updated`.
- *
- * Stripe can redeliver and reorder webhooks, so a stale event may carry an
- * older billing period than the one we already persisted. Returns `true` only
- * when the incoming period is at least as new as the stored one (or when we
- * have no period to compare against), so out-of-order events are ignored
- * instead of reverting newer subscription state.
- */
-export { shouldApplySubscriptionUpdate };
 
 export async function handleStripeWebhookEvent(
   rawBody: string,

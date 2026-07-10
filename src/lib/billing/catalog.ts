@@ -92,6 +92,14 @@ export function isPlan(value: unknown): value is Plan {
   /* node:coverage ignore next -- Closing brace is a source-map artifact; plan predicate behavior is asserted. */
 }
 
+/**
+ * Returns the canonical {@link Plan} for the given value. Falls back to `"free"`
+ * when the value is not a recognised plan (safe default).
+ */
+export function resolvePlan(plan: string | null | undefined): Plan {
+  return isPlan(plan) ? plan : "free";
+}
+
 /* node:coverage ignore next 6 -- Catalog fallback JSDoc is documentation-only; fallback behavior is asserted. */
 /**
  * Returns the catalog entry for the given plan string. Falls back to `"free"`

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-import { getEntitlements, isPlan, type Plan } from "./catalog";
+import { getEntitlements, resolvePlan, type Plan } from "./catalog";
 
 type PrismaClientLike = typeof prisma;
 type BillingWriteClient = Pick<PrismaClientLike, "subscription" | "user">;
@@ -43,10 +43,6 @@ export interface LocalPlanChangeOptions {
   currentPeriodEnd?: Date;
   updateSubscriptionPeriodOnExisting?: boolean;
   cancelAtPeriodEnd?: boolean;
-}
-
-export function resolvePlan(plan: string | null | undefined): Plan {
-  return isPlan(plan) ? plan : "free";
 }
 
 export async function loadAndSyncBillingState(

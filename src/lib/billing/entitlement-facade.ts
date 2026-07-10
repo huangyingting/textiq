@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/prisma";
 
-import { getEntitlements, type PlanEntitlements } from "./catalog";
+import { getEntitlements, resolvePlan, type PlanEntitlements } from "./catalog";
 import {
   decideEntitlement,
-  resolveEntitlementPlan,
   type EntitlementDecision,
   type EntitlementFeature,
 } from "./entitlement-decision";
@@ -34,7 +33,7 @@ export interface EntitlementFacade {
 export function createEntitlementFacade(
   plan: string | null | undefined,
 ): EntitlementFacade {
-  const resolvedPlan = resolveEntitlementPlan(plan);
+  const resolvedPlan = resolvePlan(plan);
   const entitlements = getEntitlements(resolvedPlan);
   return {
     plan: resolvedPlan,
