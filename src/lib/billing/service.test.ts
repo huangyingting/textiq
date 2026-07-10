@@ -11,7 +11,6 @@ import {
   loadAndSyncBillingState,
   markSubscriptionCancelAtPeriodEnd,
   recordStripeCustomer,
-  resolvePlan,
   shouldApplySubscriptionUpdate,
   writeLocalSubscriptionDeleted,
   writeLocalSubscriptionUpdate,
@@ -120,12 +119,6 @@ function makeFakeClient() {
 }
 
 describe("billing service state", () => {
-  it("resolves unknown stored plans to free", () => {
-    assert.equal(resolvePlan("plus"), "plus");
-    assert.equal(resolvePlan("legacy-enterprise"), "free");
-    assert.equal(resolvePlan(null), "free");
-  });
-
   it("centralizes credit period reset when reading billing state", async () => {
     const client = makeFakeClient();
     client._users.set("u1", {

@@ -12,6 +12,7 @@ import {
   getEntitlements,
   hasEntitlement,
   isPlan,
+  resolvePlan,
   type Plan,
 } from "@/lib/billing/catalog";
 import {
@@ -66,6 +67,14 @@ describe("PLAN_ENTITLEMENTS", () => {
     for (const e of Object.values(PLAN_ENTITLEMENTS)) {
       assert.equal("topUps" in e, false);
     }
+  });
+});
+
+describe("resolvePlan", () => {
+  it("returns valid plan strings unchanged and falls back unknown/null to free", () => {
+    assert.equal(resolvePlan("plus"), "plus");
+    assert.equal(resolvePlan("legacy-enterprise"), "free");
+    assert.equal(resolvePlan(null), "free");
   });
 });
 

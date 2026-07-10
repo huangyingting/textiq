@@ -1,6 +1,6 @@
 import {
   getEntitlements,
-  isPlan,
+  resolvePlan,
   type Plan,
   type PlanEntitlements,
 } from "@/lib/billing/catalog";
@@ -25,15 +25,11 @@ export type EntitlementDecision =
       reason: "upgrade_required";
     };
 
-export function resolveEntitlementPlan(plan: string | null | undefined): Plan {
-  return isPlan(plan) ? plan : "free";
-}
-
 export function decideEntitlement(
   plan: string | null | undefined,
   feature: EntitlementFeature,
 ): EntitlementDecision {
-  const resolvedPlan = resolveEntitlementPlan(plan);
+  const resolvedPlan = resolvePlan(plan);
   const allowed = Boolean(getEntitlements(resolvedPlan)[feature]);
   return allowed
     ? { allowed, feature, plan: resolvedPlan, reason: "included" }

@@ -16,10 +16,10 @@ import {
   planFromPriceId,
   reduceStripeSubscriptionEvent,
   setStripeLoaderForTesting,
-  shouldApplySubscriptionUpdate,
   StripeBillingProvider,
   type StripeSubscriptionLike,
 } from "@/lib/billing/stripe-provider";
+import { shouldApplySubscriptionUpdate } from "@/lib/billing/service";
 import { prisma } from "@/lib/prisma";
 
 const ENV = {
