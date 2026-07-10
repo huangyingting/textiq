@@ -662,6 +662,17 @@ export function groupNodesById(
   };
 }
 
+export function mapNodes(
+  nodes: readonly SlideChildNode[],
+  mapFn: (node: SlideChildNode) => SlideChildNode,
+): SlideChildNode[] {
+  return nodes.map((node) => {
+    const mapped = mapFn(node);
+    if (mapped.type !== "group") return mapped;
+    return { ...mapped, children: mapNodes(mapped.children, mapFn) };
+  });
+}
+
 export function ungroupNodeById(
   nodes: readonly SlideChildNode[],
   groupId: string,
