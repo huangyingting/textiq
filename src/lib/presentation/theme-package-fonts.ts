@@ -1,4 +1,4 @@
-import { buildFontFaceCss } from "@/lib/brand/font-face";
+import { buildFontFaceCss } from "@/lib/assets/font-face-css";
 
 import type { ThemePackageV1 } from "./theme-package-schema";
 
