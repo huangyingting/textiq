@@ -180,7 +180,7 @@ test("listTrashDocumentsForUser returns empty list when no documents match", asy
   assert.deepEqual(result, []);
 });
 
-test("listTrashDocumentsForUser maps remainingMs to zero for documents exactly at the cutoff", async () => {
+test("listTrashDocumentsForUser maps remainingMs to one for documents one millisecond inside the retention window", async () => {
   const now = new Date("2026-06-01T00:00:00Z");
   // Document deleted at exactly the boundary — 1 ms within the window
   const borderline = new Date(now.getTime() - SOFT_DELETE_RETENTION_MS + 1);
