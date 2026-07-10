@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-10"
 description: "The visual subsystem owns visual schemas, kind capabilities, renderer/export support, transformations, and AI prompt constraints. Persistence of visual nodes and Visual rows is documented in ../data-model/visual-mirror.md; editor lifecycle is documented in ../editor/document-editor.md."
 ---
 
@@ -93,10 +93,8 @@ uses these capabilities through the pipeline documented in
 
 - [`src/lib/visual/schema.test.ts`](../../src/lib/visual/schema.test.ts)
 - [`src/lib/visual/registry.test.ts`](../../src/lib/visual/registry.test.ts)
-- [`src/lib/visual/support-matrices.test.ts`](../../src/lib/visual/support-matrices.test.ts)
 - [`src/lib/visual/transforms.style.test.ts`](../../src/lib/visual/transforms.style.test.ts)
 - [`src/lib/visual/transforms.kind.test.ts`](../../src/lib/visual/transforms.kind.test.ts)
 - [`src/lib/visual/transforms.theme.test.ts`](../../src/lib/visual/transforms.theme.test.ts)
-- [`src/lib/visual/export-capabilities.test.ts`](../../src/lib/visual/export-capabilities.test.ts)
 - [`src/lib/visual/pptx-shapes.test.ts`](../../src/lib/visual/pptx-shapes.test.ts)
 - [`src/components/visual/resize.test.ts`](../../src/components/visual/resize.test.ts)
