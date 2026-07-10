@@ -28,26 +28,14 @@ import {
   type EditorTool,
 } from "@/lib/lexical/tool-registry";
 
+import { useIsMac } from "@/lib/shortcuts/use-is-mac";
+
 import { useEditingSurface } from "./use-editing-surface";
 
 // Gap (px) between the text selection and the floating toolbar.
 const TOOLBAR_GAP = 10;
 // Minimum inset from the viewport edges.
 const EDGE_INSET = 8;
-
-function useIsMac(): boolean {
-  return useMemo(() => {
-    if (typeof navigator === "undefined") {
-      return false;
-    }
-    const platform =
-      (navigator as Navigator & { userAgentData?: { platform?: string } })
-        .userAgentData?.platform ??
-      navigator.platform ??
-      navigator.userAgent;
-    return /mac|iphone|ipad|ipod/i.test(platform);
-  }, []);
-}
 
 /**
  * The registry-driven floating selection toolbar. It reads the shared

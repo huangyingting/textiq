@@ -249,6 +249,7 @@ import {
   useSlidePresence,
   type SlidePresenceAwareness,
 } from "@/lib/presentation/use-slide-presence";
+import { useIsMac } from "@/lib/shortcuts/use-is-mac";
 
 export { deleteActiveSlideFromToolbar } from "./slide-editor-toolbar-actions";
 export { SlideEditorInspectorRegion } from "./slide-editor-regions";
@@ -413,17 +414,7 @@ export function SlideEditor({
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const themePackages = useMemo(() => listThemePackages(), []);
-  const isMac = useMemo(() => {
-    if (typeof navigator === "undefined") {
-      return false;
-    }
-    const platform =
-      (navigator as Navigator & { userAgentData?: { platform?: string } })
-        .userAgentData?.platform ??
-      navigator.platform ??
-      navigator.userAgent;
-    return /mac|iphone|ipad|ipod/i.test(platform);
-  }, []);
+  const isMac = useIsMac();
   const documentVisualsById = useMemo(() => {
     const visuals = new Map<
       string,
