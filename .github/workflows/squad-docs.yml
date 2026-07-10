@@ -5,12 +5,13 @@ name: Docs Check
 on:
   workflow_dispatch:
   push:
-    branches: [main, dev, preview]
+    branches: [main]
     paths:
       - 'docs/**'
       - 'e2e/ui-matrix/README.md'
       - '.github/workflows/squad-docs.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'docs/**'
       - 'e2e/ui-matrix/README.md'

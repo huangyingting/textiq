@@ -2,8 +2,9 @@ name: Deterministic E2E
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read

@@ -2,6 +2,7 @@ name: Sync Squad Labels
 
 on:
   push:
+    branches: [main]
     paths:
       - '.squad/team.md'
   workflow_dispatch:

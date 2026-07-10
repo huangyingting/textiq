@@ -1,5 +1,5 @@
-# Disabled: this copied Squad CLI insider release workflow does not match TextIQ's private app release process.
-# See docs/operations/release-gate.md for the current TextIQ release gate.
+# Disabled: TextIQ uses a main-only workflow; no insider/insiders release channel is active.
+# See .github/skills/git-workflow/SKILL.md and docs/operations/release-gate.md.
 name: Squad Insider Release (disabled)
 
 on:
@@ -10,9 +10,9 @@ permissions:
 
 jobs:
   disabled:
-    name: Disabled copied Squad CLI insider release
+    name: Disabled insider release channel
     runs-on: ubuntu-latest
     steps:
       - name: Explain disabled workflow
         run: |
-          echo "::notice::Disabled copied Squad CLI insider release workflow. Use the TextIQ release gate instead."
+          echo "::notice::TextIQ uses main-only PRs and releases. The insider release channel is disabled."

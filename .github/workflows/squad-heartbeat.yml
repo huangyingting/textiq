@@ -11,6 +11,7 @@ on:
   issues:
     types: [closed, labeled]
   pull_request:
+    branches: [main]
     types: [closed]
 
   # Manual trigger

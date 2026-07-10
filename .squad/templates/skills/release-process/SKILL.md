@@ -30,7 +30,7 @@ Established through the v0.9.1 incident (8-hour recovery) and reinforced by the 
 
 ## Context
 
-Squad publishes two npm packages: `@bradygaster/squad-sdk` and `@bradygaster/squad-cli`. The release pipeline flows: dev → preview → main → GitHub Release → npm publish. Brady (project owner) triggers releases — the coordinator does NOT.
+TextIQ uses a main-only repository workflow. Feature branches merge by PR to `main`; releases and tags come from `main` after the TextIQ release gate passes. Do not use the old dev → preview → main promotion path here.
 
 ## Rules (Non-Negotiable)
 
@@ -99,7 +99,7 @@ Set this environment variable in all CI build steps to prevent the build script 
 ## Release Checklist (Quick Reference)
 
 ```
-□ All tests passing on dev
+□ All tests passing for the PR targeting main
 □ No file:/link: references in packages/*/package.json
 □ Root package.json version matches sub-packages (v0.9.4 lesson — PR #1043)
 □ CHANGELOG.md has ## [$VERSION] section (not just [Unreleased]) (v0.9.4 lesson — PR #1042)
@@ -107,10 +107,10 @@ Set this environment variable in all CI build steps to prevent the build script 
 □ npm auth verified (Automation token)
 □ No draft GitHub Releases pending
 □ Local build + test: npm run build && npx vitest run
-□ Push dev → CI green
-□ Promote dev → preview (squad-promote workflow)
-□ Preview CI green (squad-preview validates)
-□ Promote preview → main
+□ PR to main is green
+□ Merge approved PR to main
+□ Main CI green after merge
+□ Tag or release from main when ready
 □ squad-release auto-creates GitHub Release
 □ squad-npm-publish auto-triggers (⚠️ may be BLOCKED — see GITHUB_TOKEN limitation below)
 □ If publish didn't trigger: gh workflow run squad-npm-publish.yml --ref main -f version=X.Y.Z
@@ -188,18 +188,18 @@ npm install
 npm run build
 ```
 
-### The Full Promotion Chain (v0.9.4 Documented)
+### Main-Only Release Chain
 
 ```
-dev → preview → main (via squad-promote.yml)
-main push → squad-release.yml validates CHANGELOG, creates tag + GitHub Release
+feature branch → PR to main → main merge
+main release gate passes → tag/GitHub Release from main
 release published → squad-npm-publish.yml (⚠️ BLOCKED by GITHUB_TOKEN limitation)
 manual workaround → gh workflow run squad-npm-publish.yml --ref main -f version=X.Y.Z
 ```
 
 ### npm Publish Workflow Dispatch Target
 
-When using `workflow_dispatch` to trigger `squad-npm-publish.yml`, the default ref is the repo's default branch (`dev`). Always specify `--ref main` explicitly to ensure the workflow runs against the branch with the release tag and latest workflow fixes.
+When using `workflow_dispatch` for release-related workflows, use `--ref main` so the workflow runs against the branch with the release tag and latest workflow fixes.
 
 ## CI Gate: Workspace Publish Policy
 

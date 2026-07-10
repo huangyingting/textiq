@@ -824,7 +824,7 @@ Store `## Issue Source` in `team.md` with repository, connection date, and filte
 
 ### Issue → PR → Merge Lifecycle
 
-Agents create branch (`squad/{issue-number}-{slug}`), do work, commit referencing issue, push, and open PR via `gh pr create`. See `.squad/templates/issue-lifecycle.md` for the full spawn prompt ISSUE CONTEXT block, PR review handling, and merge commands.
+Agents create branch (`squad/{issue-number}-{slug}`) from `main`, do work, commit referencing issue, push, and open PR against `main` via `gh pr create --base main`. See `.squad/templates/issue-lifecycle.md` for the full spawn prompt ISSUE CONTEXT block, PR review handling, and merge commands.
 
 After issue work completes, follow standard After Agent Work flow.
 

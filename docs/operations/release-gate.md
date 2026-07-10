@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-07-04"
+last_updated: "2026-07-06"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -23,6 +23,11 @@ next feature wave.
 
 The gate is intentionally small: it must be runnable by any team member in
 under 30 minutes.
+
+Repository flow is intentionally small too: branch from `main`, open PRs to
+`main`, and release or tag from `main` after the gate passes. Legacy
+`dev`/`preview`/`insider` branches are not active targets, and branch cleanup is
+a manual human follow-up rather than automation.
 
 ---
 
