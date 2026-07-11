@@ -38,15 +38,16 @@ through the comment action layer and returns refreshed server truth.
 
 ## Anchor Types
 
-Top-level comments may be anchored in two ways.
+Top-level comments may be anchored in three forms.
 
-| Anchor                      | Fields                                                     | Meaning                                                    |
-| --------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Text/visual document anchor | `anchorType`, `anchorText`, `anchorNodeId`                 | Anchors to document text selection or visual node context. |
-| Slide anchor                | `slideId`, optional `elementId`, optional `{x,y}` geometry | Anchors to a deck slide or slide element.                  |
+| Anchor                             | Fields                                                                             | Meaning                                                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Text anchor                        | `anchorType="text"`, `anchorText`                                                  | Anchors to a document text selection.                                            |
+| Visual/table document block anchor | `anchorType="visual"` or `"table"`, optional `anchorText`, optional `anchorNodeId` | Anchors to a visual or table block node; `anchorNodeId` is the durable block id. |
+| Slide anchor                       | `slideId`, optional `elementId`, optional `{x,y}` geometry                         | Anchors to a deck slide or slide element.                                        |
 
-Slide anchors are mutually exclusive with text/visual anchor fields. If
-`slideId` is present, text/visual anchor fields are ignored.
+Slide anchors are mutually exclusive with document block anchor fields. If
+`slideId` is present, document block anchor fields are ignored.
 
 ## Slide Anchor Geometry
 

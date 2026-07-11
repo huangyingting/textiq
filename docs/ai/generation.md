@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-10"
 description: "Describes AI visual and deck generation routes, shared validation and billing flow, deck source extraction, presentation deck orchestration, template materialization, output validation, UI flow, quota, credits, and invariants."
 ---
 
@@ -28,6 +28,7 @@ validate/normalize output, and charge only successful generations.
 | Document plan repair   | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)             |
 | Semantic plan repair   | [`src/lib/presentation/semantic-deck-plan-repair.ts`](../../src/lib/presentation/semantic-deck-plan-repair.ts) |
 | Template compiler      | [`src/lib/presentation/template-compiler.ts`](../../src/lib/presentation/template-compiler.ts)                 |
+| Open-deck boundary     | [`src/lib/presentation/open-deck.ts`](../../src/lib/presentation/open-deck.ts)                                 |
 | Deck schema validation | [`src/lib/presentation/validation.ts`](../../src/lib/presentation/validation.ts)                               |
 | Quota                  | [`src/lib/ai/quota.ts`](../../src/lib/ai/quota.ts)                                                             |
 | Credits                | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                                               |
@@ -145,8 +146,10 @@ The slide editor open button controls deck generation UI:
    from document.
 4. Show staged progress while generation runs.
 5. Present a preview/diff surface comparing generated deck vs baseline.
-6. Applying the generated deck opens the editor through the same fresh-deck path
-   used by deterministic derivation.
+6. Applying the generated deck calls `openAiGeneratedDeck`, which routes through
+   `openDeckFromJson` — the same open-deck boundary used by deterministic
+   derivation. Both paths must pass `openDeckFromJson` validation before the
+   editor runtime sees the deck.
 7. Generation failure falls back to deterministic derivation, except empty
    content, which stays in the chooser with an "add content first" prompt.
 
