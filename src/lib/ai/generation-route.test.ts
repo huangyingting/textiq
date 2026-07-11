@@ -827,24 +827,68 @@ test("insufficient-credits capture refund settlement failure preserves 402 and i
   assert.ok(refundLog, "refund settlement failure must be structured-logged");
 });
 
-test("capture-failure path does not trigger a second refund in the outer catch (#1847)", async () => {
+test("capture-failure path settles exactly once before successResponse; outer catch observes no double-refund (#1847)", async () => {
+  // Generic capture failure: captureCredits returns { response: null, failed: true }
+  // so the route continues past capture settlement into successResponse.
   const state = createState({
-    captureError: new InsufficientCreditsError(0, 2),
-    captureInsufficientCredits: true,
+    captureError: new Error("ledger unavailable"),
   });
-  const handler = createGenerationRouteHandler(
-    createConfig(state),
-    createDeps(state),
+  let refundCountAtSuccessResponse = -1;
+  const config: GenerationRouteConfig<FakePayload, FakeResult> = {
+    ...createConfig(state),
+    successResponse: () => {
+      // Record count at the moment successResponse is invoked.
+      // HEAD: settleCaptureRefund already ran → count is 1.
+      // BASE: no settlement before this point → count is 0.
+      refundCountAtSuccessResponse = state.refunded.length;
+      throw new Error("post-capture-successResponse-throw");
+    },
+  };
+  const handler = createGenerationRouteHandler(config, createDeps(state));
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  // Settlement ran before successResponse — the post-capture op observed count 1.
+  assert.equal(
+    refundCountAtSuccessResponse,
+    1,
+    "successResponse saw refund count 1: settlement preceded it",
   );
-
-  await handler(createRequest({ text: "hello world" }));
-
-  // The capture-failure refund must be the only one; the outer catch must not
-  // attempt a second refund for the same reservation.
+  // Outer catch must not add a second refund (captureSettled was true).
   assert.equal(
     state.refunded.length,
     1,
-    "exactly one refund, no double-refund from outer catch",
+    "final refund count is 1 — outer catch did not double-refund",
+  );
+  assert.equal(response.status, 500);
+});
+
+test("captureMeteredUsage unexpected throw reaches outer catch with captureSettled false and refunds once", async () => {
+  const captureThrow = new Error("unexpected capture explode");
+  const state = createState();
+  const deps = {
+    ...createDeps(state),
+    captureMeteredUsage: async (reservation: MeteredUsageReservation) => {
+      state.captured.push(reservation);
+      throw captureThrow;
+    },
+  };
+  const handler = createGenerationRouteHandler(createConfig(state), deps);
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(response.status, 500);
+  assert.equal(state.generated, 1);
+  // captureSettled was false when outer catch ran → refund attempted exactly once.
+  assert.equal(state.refunded.length, 1, "outer catch refunds exactly once");
+  const unexpectedLog = state.logs.find(
+    (l) =>
+      ((l as { fields: Record<string, unknown> }).fields as { reason: string })
+        .reason === "unexpected",
+  );
+  assert.ok(
+    unexpectedLog,
+    "unexpected captureMeteredUsage throw is structured-logged",
   );
 });
 
