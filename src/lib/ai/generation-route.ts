@@ -335,6 +335,8 @@ export function createGenerationRouteHandler<TPayload, TResult>(
       commitAnonUsage = anon.cookieWriter;
     }
 
+    let captureSettled = false;
+
     try {
       const generationStartedAt = deps.now();
       const result = await config.generate({
@@ -353,8 +355,12 @@ export function createGenerationRouteHandler<TPayload, TResult>(
       commitAnonUsage?.commit();
 
       const capture = await captureCredits(config, deps, meteredUsage);
-      if (capture) {
-        return capture;
+      if (capture.failed) {
+        captureSettled = true;
+        await settleCaptureRefund(config, deps, meteredUsage);
+        if (capture.response) {
+          return capture.response;
+        }
       }
 
       const response = config.successResponse(result, successContext);
@@ -374,7 +380,7 @@ export function createGenerationRouteHandler<TPayload, TResult>(
       return response;
     } catch (error) {
       /* node:coverage ignore next 5 -- Refund-on-error branch is asserted; tsx maps the optional ledger guard as uncovered. */
-      if (meteredUsage?.ledgerReserved) {
+      if (!captureSettled && meteredUsage?.ledgerReserved) {
         await deps.refundMeteredUsage(meteredUsage).catch((refundErr) => {
           deps.logError(config.logScope, refundErr, {
             /* node:coverage ignore next 3 */
@@ -555,18 +561,25 @@ async function checkAnonymousAccess<TPayload, TResult>(
   };
 }
 
+interface CaptureResult {
+  /** HTTP response to return if the capture failed and the generation result should be withheld. */
+  response: NextResponse | null;
+  /** Whether capture failed (insufficient or generic) — the reservation needs settlement. */
+  failed: boolean;
+}
+
 async function captureCredits<TPayload, TResult>(
   config: GenerationRouteConfig<TPayload, TResult>,
   deps: GenerationRouteDeps,
   meteredUsage: MeteredUsageReservation | null,
-): Promise<NextResponse | null> {
+): Promise<CaptureResult> {
   if (!meteredUsage || meteredUsage.creditCost <= 0) {
-    return null;
+    return { response: null, failed: false };
   }
 
   const result = await deps.captureMeteredUsage(meteredUsage);
   if (result.ok) {
-    return null;
+    return { response: null, failed: false };
   }
   if (
     result.insufficientCredits ||
@@ -578,15 +591,40 @@ async function captureCredits<TPayload, TResult>(
       status: 402,
       userId: meteredUsage.userId,
     });
-    return paymentRequired(
-      result.error instanceof Error
-        ? result.error.message
-        : "Insufficient credits.",
-    );
+    return {
+      response: paymentRequired(
+        result.error instanceof Error
+          ? result.error.message
+          : "Insufficient credits.",
+      ),
+      failed: true,
+    };
   }
   deps.logError(config.logScope, result.error, {
     requestId: meteredUsage.idempotencyKey,
     reason: "credit-capture-failed",
   });
-  return null;
+  return { response: null, failed: true };
+}
+
+/**
+ * Settles a reserved ledger entry after capture failure by calling refund
+ * exactly once. Logs settlement failures without retrying or propagating.
+ */
+async function settleCaptureRefund<TPayload, TResult>(
+  config: GenerationRouteConfig<TPayload, TResult>,
+  deps: GenerationRouteDeps,
+  meteredUsage: MeteredUsageReservation | null,
+): Promise<void> {
+  if (!meteredUsage?.ledgerReserved) {
+    return;
+  }
+  try {
+    await deps.refundMeteredUsage(meteredUsage);
+  } catch (refundErr) {
+    deps.logError(config.logScope, refundErr, {
+      requestId: meteredUsage.idempotencyKey,
+      reason: "capture-refund-failed",
+    });
+  }
 }
