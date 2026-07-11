@@ -11,6 +11,7 @@
 import type { Deck } from "../deck-core";
 import type { TextRun } from "../deck-elements";
 import type { SlideFormat } from "@/lib/document/deck-kernel/slide-format";
+import { logError } from "@/lib/log";
 import type { Visual } from "@/lib/visual/schema";
 import { toHex } from "@/lib/visual/pptx-shapes";
 import type { PptxSpec } from "@/lib/visual/pptx-shapes";
@@ -39,6 +40,27 @@ import type {
 
 export type DeckSlideImageFormat = "svg" | "png";
 
+/**
+ * Reports one isolated render/rasterization failure. The affected operation
+ * (or, for rasterization, the affected slide) is omitted from the archive
+ * while every unaffected slide/operation still exports — mirroring the
+ * per-operation degradation `exportDeckAsPPTX` already applies via
+ * `applyDeckOp`/`applyVisualFallbackOp`. Diagnostics never abort the export
+ * on their own; only archive construction or invalid top-level input does.
+ */
+export interface DeckSlideImageDiagnostic {
+  /** Zero-based slide index, matching `deck.slides` order. */
+  slideIndex: number;
+  /** Zero-based operation index within the slide's ops, when the failure is scoped to a single op. */
+  opIndex?: number;
+  /** The op kind that failed to render, when the failure is scoped to a single op. */
+  opKind?: DeckOp["kind"];
+  /** Which stage of slide-image production failed. */
+  stage: "render" | "rasterize";
+  /** Human-readable description of the isolated failure. */
+  message: string;
+}
+
 export interface DeckSlideImageExportOptions {
   /**
    * Output format for each slide inside the returned ZIP archive.
@@ -50,6 +72,47 @@ export interface DeckSlideImageExportOptions {
    * Defaults to `1` because the exported slide SVG is already high resolution.
    */
   scale?: number;
+  /**
+   * Invoked once per isolated render/rasterization failure so callers can
+   * surface diagnostics without the export aborting. Callback exceptions are
+   * contained and emitted through the structured error logger.
+   */
+  onDiagnostic?: (diagnostic: DeckSlideImageDiagnostic) => void;
+}
+
+function diagnosticMessage(error: unknown): string {
+  try {
+    const message = error instanceof Error ? error.message : String(error);
+    return message || "Unknown slide image export failure.";
+  } catch {
+    return "Unknown slide image export failure.";
+  }
+}
+
+function emitDiagnostic(
+  onDiagnostic: DeckSlideImageExportOptions["onDiagnostic"],
+  diagnostic: DeckSlideImageDiagnostic,
+): void {
+  if (!onDiagnostic) return;
+
+  try {
+    onDiagnostic(diagnostic);
+  } catch {
+    logError(
+      "deck.slide-image-export",
+      new Error("Deck slide image diagnostic callback failed."),
+      {
+        slideIndex: diagnostic.slideIndex,
+        ...(diagnostic.opIndex === undefined
+          ? {}
+          : { opIndex: diagnostic.opIndex }),
+        ...(diagnostic.opKind === undefined
+          ? {}
+          : { opKind: diagnostic.opKind }),
+        diagnosticStage: diagnostic.stage,
+      },
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +801,11 @@ function slideSpecToSvgString(
   slideSpec: DeckSlideSpec,
   geometry: SlideImageGeometry,
   getSvg: (visualId: string) => SVGSVGElement | null,
+  onOpFailure: (
+    opIndex: number,
+    opKind: DeckOp["kind"],
+    message: string,
+  ) => void,
 ): string {
   const defs: string[] = [];
   const body: string[] = [];
@@ -765,79 +833,94 @@ function slideSpecToSvgString(
 
   slideSpec.ops.forEach((op: DeckOp, index: number) => {
     const id = `slide-${slideSpec.index}-${index}`;
-    switch (op.kind) {
-      case "text":
-        body.push(renderTextForeignObject(op, geometry.pxPerIn));
-        break;
-      case "bullets":
-        body.push(renderBulletsForeignObject(op, geometry.pxPerIn));
-        break;
-      case "shape":
-        {
-          const rendered = renderShapeSvg(op, id, geometry.pxPerIn);
-          defs.push(...rendered.defs);
-          body.push(rendered.body);
+    // Each op is rendered into scratch buffers first and only merged into
+    // `defs`/`body` on success. This is the narrow per-operation failure
+    // boundary: a single op's render/rasterization throw (e.g. an
+    // unserializable resolved fallback SVG) is isolated here and reported
+    // via `onOpFailure` rather than aborting the rest of the slide/archive —
+    // mirroring the per-op degradation `applyDeckOp` already performs for
+    // PPTX export.
+    const opDefs: string[] = [];
+    const opBody: string[] = [];
+    try {
+      switch (op.kind) {
+        case "text":
+          opBody.push(renderTextForeignObject(op, geometry.pxPerIn));
+          break;
+        case "bullets":
+          opBody.push(renderBulletsForeignObject(op, geometry.pxPerIn));
+          break;
+        case "shape":
+          {
+            const rendered = renderShapeSvg(op, id, geometry.pxPerIn);
+            opDefs.push(...rendered.defs);
+            opBody.push(rendered.body);
+          }
+          break;
+        case "image": {
+          const rendered = renderImageSvg(op, id, op.src, geometry.pxPerIn);
+          opDefs.push(...rendered.defs);
+          opBody.push(rendered.body);
+          break;
         }
-        break;
-      case "image": {
-        const rendered = renderImageSvg(op, id, op.src, geometry.pxPerIn);
-        defs.push(...rendered.defs);
-        body.push(rendered.body);
-        break;
-      }
-      case "connector": {
-        const rendered = renderConnectorSvg(op, id, geometry.pxPerIn);
-        defs.push(...rendered.defs);
-        body.push(rendered.body);
-        break;
-      }
-      case "visual-native":
-        op.specs.forEach((spec, specIndex) => {
-          const rendered = renderPptxSpecSvg(
-            spec,
-            `${id}-native-${specIndex}`,
-            geometry.pxPerIn,
+        case "connector": {
+          const rendered = renderConnectorSvg(op, id, geometry.pxPerIn);
+          opDefs.push(...rendered.defs);
+          opBody.push(rendered.body);
+          break;
+        }
+        case "visual-native":
+          op.specs.forEach((spec, specIndex) => {
+            const rendered = renderPptxSpecSvg(
+              spec,
+              `${id}-native-${specIndex}`,
+              geometry.pxPerIn,
+            );
+            opDefs.push(...rendered.defs);
+            opBody.push(rendered.body);
+          });
+          break;
+        case "visual-fallback": {
+          const svg = getSvg(op.visualId);
+          if (!svg) break;
+          const viewBox =
+            svg.getAttribute("viewBox") ??
+            `0 0 ${svg.viewBox.baseVal.width} ${svg.viewBox.baseVal.height}`;
+          const inner = new XMLSerializer()
+            .serializeToString(svg)
+            .replace(/^<svg\b[^>]*>/i, "")
+            .replace(/<\/svg>\s*$/i, "");
+          const rendered = renderImageSvg(op, id, "", geometry.pxPerIn);
+          opDefs.push(...rendered.defs);
+          opBody.push(
+            `<svg x="${px(op.x, geometry.pxPerIn)}" y="${px(op.y, geometry.pxPerIn)}" width="${px(op.w, geometry.pxPerIn)}" height="${px(op.h, geometry.pxPerIn)}" viewBox="${xmlEscape(viewBox)}" preserveAspectRatio="xMidYMid meet"${
+              op.opacity !== undefined || op.shadow || op.rotation
+                ? `${rotationTransform(
+                    op.x * geometry.pxPerIn,
+                    op.y * geometry.pxPerIn,
+                    op.w * geometry.pxPerIn,
+                    op.h * geometry.pxPerIn,
+                    op.rotation,
+                  )}${
+                    op.shadow || op.opacity !== undefined
+                      ? ` style="${[
+                          op.opacity !== undefined
+                            ? `opacity:${op.opacity};`
+                            : "",
+                          shadowCss(op.shadow),
+                        ].join("")}"`
+                      : ""
+                  }`
+                : ""
+            }>${inner}</svg>`,
           );
-          defs.push(...rendered.defs);
-          body.push(rendered.body);
-        });
-        break;
-      case "visual-fallback": {
-        const svg = getSvg(op.visualId);
-        if (!svg) break;
-        const viewBox =
-          svg.getAttribute("viewBox") ??
-          `0 0 ${svg.viewBox.baseVal.width} ${svg.viewBox.baseVal.height}`;
-        const inner = new XMLSerializer()
-          .serializeToString(svg)
-          .replace(/^<svg\b[^>]*>/i, "")
-          .replace(/<\/svg>\s*$/i, "");
-        const rendered = renderImageSvg(op, id, "", geometry.pxPerIn);
-        defs.push(...rendered.defs);
-        body.push(
-          `<svg x="${px(op.x, geometry.pxPerIn)}" y="${px(op.y, geometry.pxPerIn)}" width="${px(op.w, geometry.pxPerIn)}" height="${px(op.h, geometry.pxPerIn)}" viewBox="${xmlEscape(viewBox)}" preserveAspectRatio="xMidYMid meet"${
-            op.opacity !== undefined || op.shadow || op.rotation
-              ? `${rotationTransform(
-                  op.x * geometry.pxPerIn,
-                  op.y * geometry.pxPerIn,
-                  op.w * geometry.pxPerIn,
-                  op.h * geometry.pxPerIn,
-                  op.rotation,
-                )}${
-                  op.shadow || op.opacity !== undefined
-                    ? ` style="${[
-                        op.opacity !== undefined
-                          ? `opacity:${op.opacity};`
-                          : "",
-                        shadowCss(op.shadow),
-                      ].join("")}"`
-                    : ""
-                }`
-              : ""
-          }>${inner}</svg>`,
-        );
-        break;
+          break;
+        }
       }
+      defs.push(...opDefs);
+      body.push(...opBody);
+    } catch (error) {
+      onOpFailure(index, op.kind, diagnosticMessage(error));
     }
   });
 
@@ -869,6 +952,13 @@ function parsedSvgRoot(root: Element): SVGSVGElement {
  *
  * - `"svg"` preserves the richest fidelity and is the default.
  * - `"png"` rasterizes the generated slide SVG at the requested scale.
+ *
+ * Render/rasterization failures are isolated per operation (via
+ * `options.onDiagnostic`) or, if a whole slide's rasterization step fails,
+ * per slide — unaffected slides/operations still export, mirroring the
+ * per-op degradation `exportDeckAsPPTX` already applies. Only archive
+ * construction (`zip.generateAsync`) or invalid top-level input
+ * (`buildDeckSpecs`, the dynamic `jszip`/`export` imports) return `null`.
  */
 export async function exportDeckAsSlideImages(
   deck: Deck,
@@ -887,22 +977,75 @@ export async function exportDeckAsSlideImages(
     const zip = new JSZip();
 
     for (const slideSpec of specs) {
-      const svgString = slideSpecToSvgString(slideSpec, geometry, getSvg);
       const fileBase = `slide-${String(slideSpec.index + 1).padStart(2, "0")}`;
+      let svgString: string;
+      try {
+        svgString = slideSpecToSvgString(
+          slideSpec,
+          geometry,
+          getSvg,
+          (opIndex, opKind, message) => {
+            emitDiagnostic(options.onDiagnostic, {
+              slideIndex: slideSpec.index,
+              opIndex,
+              opKind,
+              stage: "render",
+              message,
+            });
+          },
+        );
+      } catch (error) {
+        // Safety net for a slide-level render failure outside the per-op
+        // boundary above (e.g. background rendering) — isolate it to this
+        // slide rather than aborting the whole archive.
+        emitDiagnostic(options.onDiagnostic, {
+          slideIndex: slideSpec.index,
+          stage: "render",
+          message: diagnosticMessage(error),
+        });
+        continue;
+      }
+
       if (format === "svg") {
         zip.file(`${fileBase}.svg`, svgString);
         continue;
       }
 
-      const svg = parseSvg(svgString);
-      if (!svg) return null;
-      const pngBlob = await exportPNG(svg, {
-        background: "include",
-        colorMode: "color",
-        scale: options.scale ?? 1,
-      });
-      if (!pngBlob) return null;
-      zip.file(`${fileBase}.png`, pngBlob);
+      try {
+        const svg = parseSvg(svgString);
+        if (!svg) {
+          emitDiagnostic(options.onDiagnostic, {
+            slideIndex: slideSpec.index,
+            stage: "rasterize",
+            message:
+              "Rendered slide SVG could not be parsed for rasterization.",
+          });
+          continue;
+        }
+        const pngBlob = await exportPNG(svg, {
+          background: "include",
+          colorMode: "color",
+          scale: options.scale ?? 1,
+        });
+        if (!pngBlob) {
+          emitDiagnostic(options.onDiagnostic, {
+            slideIndex: slideSpec.index,
+            stage: "rasterize",
+            message: "PNG rasterization produced no output for this slide.",
+          });
+          continue;
+        }
+        zip.file(`${fileBase}.png`, pngBlob);
+      } catch (error) {
+        // Isolate a rasterization failure (e.g. missing canvas support or a
+        // corrupt intermediate SVG) to this slide rather than aborting the
+        // archive.
+        emitDiagnostic(options.onDiagnostic, {
+          slideIndex: slideSpec.index,
+          stage: "rasterize",
+          message: diagnosticMessage(error),
+        });
+      }
     }
 
     return zip.generateAsync({ type: "blob" });
