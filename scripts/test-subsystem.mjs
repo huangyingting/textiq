@@ -240,6 +240,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/proxy\.test\.ts$/,
       /^src\/app\/api\/api-route-security-matrix\.test\.ts$/,
+      /^src\/app\/api\/account\/export\//,
+      /^src\/app\/api\/share-passcode\//,
       /^src\/app\/api\/slide-assets\//,
       /^src\/lib\/abuse-budget\.test\.ts$/,
       /^src\/lib\/access-policy\//,
