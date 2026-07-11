@@ -666,6 +666,30 @@ test("capture insufficient credits converts a successful generation to payment r
   assert.equal(state.denials.length, 1);
 });
 
+test("capture insufficient credits refunds the reserved usage exactly once (#1847)", async () => {
+  const state = createState({
+    captureError: new InsufficientCreditsError(0, 2),
+    captureInsufficientCredits: true,
+  });
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(
+    state.refunded.length,
+    1,
+    "refundMeteredUsage must be called exactly once",
+  );
+  assert.equal(
+    (state.refunded[0] as MeteredUsageReservation).idempotencyKey,
+    "request-1",
+    "refund must receive the original reservation",
+  );
+});
+
 test("capture failures are logged but do not block the success response", async () => {
   const state = createState({
     captureError: new Error("ledger capture unavailable"),
@@ -682,6 +706,190 @@ test("capture failures are logged but do not block the success response", async 
     result: { value: "HELLO WORLD" },
   });
   assert.equal(state.logs.length, 1);
+});
+
+test("generic capture failure refunds the reserved usage exactly once (#1847)", async () => {
+  const state = createState({
+    captureError: new Error("ledger capture unavailable"),
+  });
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(
+    state.refunded.length,
+    1,
+    "refundMeteredUsage must be called exactly once",
+  );
+  assert.equal(
+    (state.refunded[0] as MeteredUsageReservation).idempotencyKey,
+    "request-1",
+    "refund must receive the original reservation",
+  );
+});
+
+test("successful capture does not call refund (#1847)", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(response.status, 200);
+  assert.equal(state.captured.length, 1);
+  assert.equal(
+    state.refunded.length,
+    0,
+    "refundMeteredUsage must not be called on success",
+  );
+});
+
+test("generation exception refunds exactly once and does not double-refund (#1847)", async () => {
+  const state = createState({
+    generateError: new GenerationError("invalid model output"),
+  });
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(
+    state.refunded.length,
+    1,
+    "refundMeteredUsage must be called exactly once",
+  );
+  assert.equal(
+    state.captured.length,
+    0,
+    "no capture attempt on generation exception",
+  );
+});
+
+test("capture-failure refund settlement failure is structured-logged without changing response (#1847)", async () => {
+  const state = createState({
+    captureError: new Error("ledger capture unavailable"),
+    refundError: new Error("refund settlement unavailable"),
+  });
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  // Response policy preserved: generic capture failure still delivers result
+  assert.equal(response.status, 200);
+  assert.deepEqual(await responseJson(response), {
+    result: { value: "HELLO WORLD" },
+  });
+
+  assert.equal(state.refunded.length, 1, "refund attempted exactly once");
+
+  // Two log entries: capture failure + refund settlement failure
+  const refundLog = state.logs.find(
+    (l) =>
+      ((l as { fields: Record<string, unknown> }).fields as { reason: string })
+        .reason === "capture-refund-failed",
+  );
+  assert.ok(refundLog, "refund settlement failure must be structured-logged");
+});
+
+test("insufficient-credits capture refund settlement failure preserves 402 and is logged (#1847)", async () => {
+  const state = createState({
+    captureError: new InsufficientCreditsError(0, 2),
+    captureInsufficientCredits: true,
+    refundError: new Error("refund settlement unavailable"),
+  });
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  // Response policy preserved: insufficient credits still returns 402
+  assert.equal(response.status, 402);
+
+  assert.equal(state.refunded.length, 1, "refund attempted exactly once");
+
+  const refundLog = state.logs.find(
+    (l) =>
+      ((l as { fields: Record<string, unknown> }).fields as { reason: string })
+        .reason === "capture-refund-failed",
+  );
+  assert.ok(refundLog, "refund settlement failure must be structured-logged");
+});
+
+test("capture-failure path settles exactly once before successResponse; outer catch observes no double-refund (#1847)", async () => {
+  // Generic capture failure: captureCredits returns { response: null, failed: true }
+  // so the route continues past capture settlement into successResponse.
+  const state = createState({
+    captureError: new Error("ledger unavailable"),
+  });
+  let refundCountAtSuccessResponse = -1;
+  const config: GenerationRouteConfig<FakePayload, FakeResult> = {
+    ...createConfig(state),
+    successResponse: () => {
+      // Record count at the moment successResponse is invoked.
+      // HEAD: settleCaptureRefund already ran → count is 1.
+      // BASE: no settlement before this point → count is 0.
+      refundCountAtSuccessResponse = state.refunded.length;
+      throw new Error("post-capture-successResponse-throw");
+    },
+  };
+  const handler = createGenerationRouteHandler(config, createDeps(state));
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  // Settlement ran before successResponse — the post-capture op observed count 1.
+  assert.equal(
+    refundCountAtSuccessResponse,
+    1,
+    "successResponse saw refund count 1: settlement preceded it",
+  );
+  // Outer catch must not add a second refund (captureSettled was true).
+  assert.equal(
+    state.refunded.length,
+    1,
+    "final refund count is 1 — outer catch did not double-refund",
+  );
+  assert.equal(response.status, 500);
+});
+
+test("captureMeteredUsage unexpected throw reaches outer catch with captureSettled false and refunds once", async () => {
+  const captureThrow = new Error("unexpected capture explode");
+  const state = createState();
+  const deps = {
+    ...createDeps(state),
+    captureMeteredUsage: async (reservation: MeteredUsageReservation) => {
+      state.captured.push(reservation);
+      throw captureThrow;
+    },
+  };
+  const handler = createGenerationRouteHandler(createConfig(state), deps);
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(response.status, 500);
+  assert.equal(state.generated, 1);
+  // captureSettled was false when outer catch ran → refund attempted exactly once.
+  assert.equal(state.refunded.length, 1, "outer catch refunds exactly once");
+  const unexpectedLog = state.logs.find(
+    (l) =>
+      ((l as { fields: Record<string, unknown> }).fields as { reason: string })
+        .reason === "unexpected",
+  );
+  assert.ok(
+    unexpectedLog,
+    "unexpected captureMeteredUsage throw is structured-logged",
+  );
 });
 
 test("refund failures are logged while preserving the mapped generation error", async () => {
