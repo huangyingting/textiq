@@ -27,6 +27,7 @@
     "test:subsystem": "node scripts/test-subsystem.mjs",
     "test:coverage-map": "node scripts/test-subsystem.mjs --check",
     "test:auth": "npm run test:subsystem -- auth",
+    "test:billing": "npm run test:subsystem -- billing",
     "test:collab": "npm run test:subsystem -- collaboration",
     "test:documents": "npm run test:subsystem -- documents",
     "test:editor": "npm run test:subsystem -- editor",
