@@ -56,6 +56,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/auth\//,
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
+      /^src\/app\/app\/settings\//,
       /^e2e\/auth\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled|auth-forms|settings-account)\.spec\.ts$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
     ],
@@ -66,6 +67,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/billing\//,
       /^src\/app\/api\/billing\//,
+      /^src\/app\/api\/user\/entitlements\//,
       /^e2e\/product\/billing-brand\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
@@ -239,6 +241,9 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/proxy\.test\.ts$/,
       /^src\/app\/api\/api-route-security-matrix\.test\.ts$/,
+      /^src\/app\/api\/account\/export\//,
+      /^src\/app\/api\/brand-assets\//,
+      /^src\/app\/api\/share-passcode\//,
       /^src\/app\/api\/slide-assets\//,
       /^src\/lib\/abuse-budget\.test\.ts$/,
       /^src\/lib\/access-policy\//,
@@ -311,6 +316,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description: "Workspace capabilities and owner/editor/viewer behavior",
     patterns: [
       /^src\/lib\/workspace\//,
+      /^src\/app\/app\/workspaces\//,
       /^e2e\/workspace\/workspace\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
