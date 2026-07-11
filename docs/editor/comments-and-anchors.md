@@ -42,7 +42,7 @@ Top-level comments may be anchored in three forms.
 
 | Anchor                             | Fields                                                                             | Meaning                                                                          |
 | ---------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Text anchor                        | `anchorType="text"`, `anchorText`, optional `anchorNodeId`                         | Anchors to a document text selection; `anchorNodeId` is the durable block id.    |
+| Text anchor                        | `anchorType="text"`, `anchorText`                                                  | Anchors to a document text selection.                                            |
 | Visual/table document block anchor | `anchorType="visual"` or `"table"`, optional `anchorText`, optional `anchorNodeId` | Anchors to a visual or table block node; `anchorNodeId` is the durable block id. |
 | Slide anchor                       | `slideId`, optional `elementId`, optional `{x,y}` geometry                         | Anchors to a deck slide or slide element.                                        |
 
