@@ -316,6 +316,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description: "Workspace capabilities and owner/editor/viewer behavior",
     patterns: [
       /^src\/lib\/workspace\//,
+      /^src\/app\/app\/workspaces\//,
       /^e2e\/workspace\/workspace\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
