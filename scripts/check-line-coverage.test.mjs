@@ -72,6 +72,8 @@ test("source line coverage command excludes tests, generated code, and test supp
     "--test-concurrency=1",
     "--experimental-test-coverage",
     "--test-coverage-lines=92",
+    "--test-coverage-branches=88",
+    "--test-coverage-functions=93",
     "--test-coverage-include=src/**/*.ts",
     "--test-coverage-include=src/**/*.tsx",
     "--test-coverage-exclude=src/**/*.test.ts",
@@ -155,4 +157,59 @@ test("line coverage CLI maps an unavailable runner to failure", () => {
   );
 
   assert.equal(result.status, 1);
+});
+
+test("coverage stages have branch and function floor defaults at safe baselines", () => {
+  const [source, scripts] = LINE_COVERAGE_STAGES;
+
+  assert.equal(source.defaultBranchMinimum, 88);
+  assert.equal(source.branchEnvKey, "SOURCE_BRANCH_COVERAGE_MIN");
+  assert.equal(source.defaultFunctionMinimum, 93);
+  assert.equal(source.functionEnvKey, "SOURCE_FUNCTION_COVERAGE_MIN");
+
+  assert.equal(scripts.defaultBranchMinimum, 94);
+  assert.equal(scripts.branchEnvKey, "SCRIPT_BRANCH_COVERAGE_MIN");
+  assert.equal(scripts.defaultFunctionMinimum, 97);
+  assert.equal(scripts.functionEnvKey, "SCRIPT_FUNCTION_COVERAGE_MIN");
+});
+
+test("buildCoverageCommand includes branch and function flags after lines in Node metric order", () => {
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], {});
+  const linesIdx = cmd.args.findIndex((a) =>
+    a.startsWith("--test-coverage-lines="),
+  );
+  const branchIdx = cmd.args.findIndex((a) =>
+    a.startsWith("--test-coverage-branches="),
+  );
+  const funcIdx = cmd.args.findIndex((a) =>
+    a.startsWith("--test-coverage-functions="),
+  );
+
+  assert.ok(linesIdx !== -1, "--test-coverage-lines must be present");
+  assert.ok(branchIdx !== -1, "--test-coverage-branches must be present");
+  assert.ok(funcIdx !== -1, "--test-coverage-functions must be present");
+  assert.ok(linesIdx < branchIdx, "lines must precede branches");
+  assert.ok(branchIdx < funcIdx, "branches must precede functions");
+});
+
+test("buildCoverageCommand uses source stage branch and function defaults", () => {
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], {});
+  assert.ok(cmd.args.includes("--test-coverage-branches=88"));
+  assert.ok(cmd.args.includes("--test-coverage-functions=93"));
+});
+
+test("buildCoverageCommand uses script stage branch and function defaults", () => {
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[1], {});
+  assert.ok(cmd.args.includes("--test-coverage-lines=99"));
+  assert.ok(cmd.args.includes("--test-coverage-branches=94"));
+  assert.ok(cmd.args.includes("--test-coverage-functions=97"));
+});
+
+test("buildCoverageCommand respects branch and function env-key overrides", () => {
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], {
+    SOURCE_BRANCH_COVERAGE_MIN: "80",
+    SOURCE_FUNCTION_COVERAGE_MIN: "85",
+  });
+  assert.ok(cmd.args.includes("--test-coverage-branches=80"));
+  assert.ok(cmd.args.includes("--test-coverage-functions=85"));
 });
