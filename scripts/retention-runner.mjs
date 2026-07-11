@@ -85,13 +85,13 @@ function parsePositiveInteger(value, label) {
   return Number(value);
 }
 
-function createJsonLogger() {
+function createJsonLogger(stdout, stderr) {
   return {
     info(event, context) {
-      console.log(JSON.stringify({ event, ...context }));
+      stdout(JSON.stringify({ event, ...context }));
     },
     error(event, error, context) {
-      console.error(
+      stderr(
         JSON.stringify({
           event,
           ...context,
@@ -102,12 +102,22 @@ function createJsonLogger() {
   };
 }
 
-async function main() {
+export async function runRetentionMain({
+  argv = process.argv.slice(2),
+  env = process.env,
+  importDeps = async () =>
+    Promise.all([
+      import("../src/lib/maintenance/retention-runner.ts"),
+      import("../src/lib/prisma.ts"),
+    ]),
+  stdout = (msg) => console.log(msg),
+  stderr = (msg) => console.error(msg),
+} = {}) {
   let config;
   try {
-    config = buildRetentionCliConfig(process.argv.slice(2));
+    config = buildRetentionCliConfig(argv, env);
   } catch (error) {
-    console.error(
+    stderr(
       JSON.stringify({
         event: "maintenance.retention.config_failed",
         error: error instanceof Error ? error.message : "Invalid config",
@@ -119,20 +129,15 @@ async function main() {
 
   let prismaClient;
   try {
-    const [{ runOperationalRetention }, { prisma }] = await Promise.all([
-      import("../src/lib/maintenance/retention-runner.ts"),
-      import("../src/lib/prisma.ts"),
-    ]);
+    const [{ runOperationalRetention }, { prisma }] = await importDeps();
     prismaClient = prisma;
     const result = await runOperationalRetention({
       ...config,
-      logger: createJsonLogger(),
+      logger: createJsonLogger(stdout, stderr),
     });
-    console.log(
-      JSON.stringify({ event: "maintenance.retention.result", result }),
-    );
+    stdout(JSON.stringify({ event: "maintenance.retention.result", result }));
   } catch (error) {
-    console.error(
+    stderr(
       JSON.stringify({
         event: "maintenance.retention.failed",
         errorName: error instanceof Error ? error.name : "Error",
@@ -145,5 +150,5 @@ async function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
+  await runRetentionMain();
 }
