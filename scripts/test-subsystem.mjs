@@ -6,7 +6,11 @@ import { basename, join } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
-import { scanRepositoryRoots, toPosix } from "./source-scan-utils.mjs";
+import {
+  scanRepositoryRoots,
+  toPosix,
+  escapeTestPattern,
+} from "./source-scan-utils.mjs";
 
 const TEST_ROOTS = ["src", "scripts", "e2e"];
 const SKIPPED_DIRECTORIES = new Set([
@@ -553,14 +557,19 @@ export function buildTestPlan({ subsystems, testFiles, includeE2e = false }) {
     commands.push({
       label: "source unit tests",
       command: "node",
-      args: ["--import", "tsx", "--test", ...buckets.source],
+      args: [
+        "--import",
+        "tsx",
+        "--test",
+        ...buckets.source.map(escapeTestPattern),
+      ],
     });
   }
   if (buckets.scripts.length > 0) {
     commands.push({
       label: "script tests",
       command: "node",
-      args: ["--test", ...buckets.scripts],
+      args: ["--test", ...buckets.scripts.map(escapeTestPattern)],
     });
   }
   if (includeE2e && buckets.e2e.length > 0) {

@@ -1,6 +1,19 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
+/**
+ * Escape glob metacharacters in a literal file path so that Node's --test
+ * runner (and other glob-based consumers) treat it as a literal match.
+ * Handles Next.js dynamic segments ([id], [...slug], [[...params]]) and
+ * standard glob metacharacters (*, ?, {, }).
+ *
+ * Node's glob implementation uses bracket-quoting (e.g. [[] for literal [)
+ * rather than backslash escaping.
+ */
+export function escapeTestPattern(filePath) {
+  return filePath.replace(/[[\]*?{}]/g, (ch) => `[${ch}]`);
+}
+
 export function extensionOf(filePath) {
   const index = filePath.lastIndexOf(".");
   return index === -1 ? "" : filePath.slice(index);
