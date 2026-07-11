@@ -10,6 +10,10 @@ export const LINE_COVERAGE_STAGES = [
     envKey: "SOURCE_LINE_COVERAGE_MIN",
     // TEMPORARY: lowered to unblock merge queue churn; restore to 97 after backlog clears.
     defaultMinimum: 95,
+    branchEnvKey: "SOURCE_BRANCH_COVERAGE_MIN",
+    defaultBranchMinimum: 88,
+    functionEnvKey: "SOURCE_FUNCTION_COVERAGE_MIN",
+    defaultFunctionMinimum: 93,
     command: "node",
     args: [
       "--import",
@@ -33,6 +37,10 @@ export const LINE_COVERAGE_STAGES = [
     envKey: "SCRIPT_LINE_COVERAGE_MIN",
     // TEMPORARY: lowered to unblock merge backlog; restore to 100% after backlog clears.
     defaultMinimum: 99,
+    branchEnvKey: "SCRIPT_BRANCH_COVERAGE_MIN",
+    defaultBranchMinimum: 94,
+    functionEnvKey: "SCRIPT_FUNCTION_COVERAGE_MIN",
+    defaultFunctionMinimum: 97,
     command: "node",
     args: ["--test", "--experimental-test-coverage"],
     includes: ["scripts/**/*.mjs"],
@@ -67,11 +75,21 @@ function formatCoverageMinimum(minimum) {
 
 export function buildCoverageCommand(stage, env = process.env) {
   const minimum = coverageMinimum(stage, env);
+  const branchMin = parseCoverageMinimum(
+    env[stage.branchEnvKey] ?? stage.defaultBranchMinimum,
+    stage.branchEnvKey,
+  );
+  const functionMin = parseCoverageMinimum(
+    env[stage.functionEnvKey] ?? stage.defaultFunctionMinimum,
+    stage.functionEnvKey,
+  );
   return {
     command: stage.command,
     args: [
       ...stage.args,
       `--test-coverage-lines=${formatCoverageMinimum(minimum)}`,
+      `--test-coverage-branches=${formatCoverageMinimum(branchMin)}`,
+      `--test-coverage-functions=${formatCoverageMinimum(functionMin)}`,
       ...stage.includes.map((pattern) => `--test-coverage-include=${pattern}`),
       ...stage.excludes.map((pattern) => `--test-coverage-exclude=${pattern}`),
       ...stage.testFiles,
