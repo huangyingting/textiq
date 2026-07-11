@@ -11,7 +11,9 @@ const AUTH_PAGE_ROUTES = [
   { path: "/signup", match: "exact" },
 ] as const;
 const PUBLIC_ROUTES = [{ path: "/", match: "exact" }] as const;
-const PROXY_MATCHER = ["/((?!api|_next/static|_next/image|favicon.ico).*)"];
+const PROXY_MATCHER = [
+  "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon.ico).*)",
+];
 const PROXY_EXCLUDED_PREFIXES = ["/api", "/_next/static", "/_next/image"];
 const PROXY_EXCLUDED_PATHS = ["/favicon.ico"];
 
@@ -33,7 +35,7 @@ function matchesPattern(pathname: string, pattern: RoutePattern): boolean {
     return pathname === pattern.path;
   }
 
-  return pathname.startsWith(pattern.path);
+  return pathname === pattern.path || pathname.startsWith(pattern.path + "/");
 }
 
 function matchesAny(
@@ -83,7 +85,7 @@ export function isProxyRouteMatched(pathname: string): boolean {
     return false;
   }
 
-  return !routeProtectionPolicy.proxy.excludedPrefixes.some((prefix) =>
-    pathname.startsWith(prefix),
+  return !routeProtectionPolicy.proxy.excludedPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
   );
 }
