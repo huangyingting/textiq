@@ -392,6 +392,95 @@ test("test subsystem main returns failing command status", () => {
   assert.equal(result, 1);
 });
 
+test("test subsystem plan escapes bracket paths so node --test executes them", () => {
+  const root = fixtureRoot("test-subsystem-bracket-escape");
+  mkdirSync(join(root, "src", "app", "app", "documents", "[id]"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(root, "src", "app", "app", "documents", "[id]", "actions.test.ts"),
+    [
+      'import test from "node:test";',
+      'import assert from "node:assert/strict";',
+      'test("bracket path action executes", () => assert.equal(1, 1));',
+    ].join("\n"),
+  );
+
+  const plan = buildTestPlan({
+    subsystems: ["editor"],
+    testFiles: ["src/app/app/documents/[id]/actions.test.ts"],
+  });
+
+  // The raw path must be preserved in files for classification/reporting
+  assert.ok(plan.files.includes("src/app/app/documents/[id]/actions.test.ts"));
+
+  // The command args must escape brackets so node --test treats them literally
+  const sourceCmd = plan.commands.find((c) => c.label === "source unit tests");
+  assert.ok(sourceCmd, "source unit test command must exist");
+  const testArg = sourceCmd.args.find((a) => a.includes("actions.test.ts"));
+  assert.ok(testArg, "test file argument must exist");
+  assert.ok(
+    !testArg.includes("[id]"),
+    "bracket segment must be escaped in command args",
+  );
+  assert.ok(
+    testArg.includes("[[]id[]]"),
+    "brackets must be escaped with bracket quoting",
+  );
+
+  // Subprocess proof: escaped arg must actually make node --test find the file
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !k.startsWith("NODE_TEST_")),
+  );
+  const result = spawnSync(
+    process.execPath,
+    ["--import", "tsx", "--test", testArg],
+    { encoding: "utf8", cwd: root, env: cleanEnv },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `node --test with escaped path should succeed, got: ${result.stderr}`,
+  );
+  assert.match(
+    result.stdout + result.stderr,
+    /bracket path action executes/,
+    "test case must actually run under escaped argument",
+  );
+});
+
+test("test subsystem plan preserves raw paths for catch-all bracket forms", () => {
+  const plan = buildTestPlan({
+    subsystems: ["editor"],
+    testFiles: [
+      "src/app/app/documents/[id]/actions.test.ts",
+      "src/app/app/documents/[...slug]/page.test.ts",
+      "src/app/app/documents/[[...params]]/layout.test.ts",
+    ],
+  });
+
+  // All raw paths preserved in plan.files
+  assert.equal(plan.files.length, 3);
+  assert.ok(plan.files.includes("src/app/app/documents/[id]/actions.test.ts"));
+  assert.ok(
+    plan.files.includes("src/app/app/documents/[...slug]/page.test.ts"),
+  );
+  assert.ok(
+    plan.files.includes("src/app/app/documents/[[...params]]/layout.test.ts"),
+  );
+
+  // All args must be escaped using bracket quoting — no bare bracket segments
+  const sourceCmd = plan.commands.find((c) => c.label === "source unit tests");
+  for (const arg of sourceCmd.args.slice(3)) {
+    // A bare bracket segment like [id] or [...slug] should not appear
+    assert.ok(
+      !/\[[^\[\]]*\]/.test(arg.replace(/\[[\[\]*?{}]\]/g, "")),
+      `arg must escape brackets: ${arg}`,
+    );
+  }
+});
+
 test("test subsystem CLI supports help mode", () => {
   const result = spawnSync(
     process.execPath,
