@@ -56,6 +56,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/auth\//,
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
+      /^src\/app\/app\/settings\//,
       /^e2e\/auth\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled|auth-forms|settings-account)\.spec\.ts$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
     ],
