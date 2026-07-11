@@ -21,7 +21,7 @@ function proxyMatcherAllows(pathname: string): boolean {
 test("proxy matcher is explicit and sourced from the shared route policy", () => {
   assert.deepEqual(config.matcher, routeProtectionPolicy.proxy.matcher);
   assert.deepEqual(config.matcher, [
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon.ico).*)",
   ]);
 });
 
@@ -32,8 +32,9 @@ test("proxy exports the NextAuth proxy handler", () => {
 test("proxy matcher excludes API, Next static/image, and favicon routes", () => {
   for (const path of [
     "/api/auth/session",
-    "/apiary",
+    "/api",
     "/_next/static/chunk.js",
+    "/_next/static",
     "/_next/image",
     "/favicon.ico",
   ]) {
@@ -43,7 +44,17 @@ test("proxy matcher excludes API, Next static/image, and favicon routes", () => 
 });
 
 test("proxy matcher includes public, auth, and protected page routes", () => {
-  for (const path of ["/", "/login", "/signup", "/app", "/app/settings"]) {
+  for (const path of [
+    "/",
+    "/login",
+    "/signup",
+    "/app",
+    "/app/settings",
+    // Segment-boundary: /apiary must not be excluded by the /api prefix.
+    "/apiary",
+    "/_next/staticfoo",
+    "/_next/imagefoo",
+  ]) {
     assert.equal(proxyMatcherAllows(path), true, path);
     assert.equal(isProxyRouteMatched(path), true, path);
   }

@@ -13,5 +13,7 @@ export const proxy = auth;
 // build time, so it is kept inline here and mirrors
 // `routeProtectionPolicy.proxy.matcher` (kept in sync manually).
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon.ico).*)",
+  ],
 };
