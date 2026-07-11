@@ -8,7 +8,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  PLAN_CATALOG,
   PLAN_ENTITLEMENTS,
+  PLAN_NAMES,
+  getPlanCatalogEntry,
   getEntitlements,
   isPlan,
   resolvePlan,
@@ -173,5 +176,142 @@ describe("isUnlimitedCreditsEnabled", () => {
       isUnlimitedCreditsEnabled({ NODE_ENV: "production" }),
       false,
     );
+  });
+});
+
+describe("PLAN_CATALOG", () => {
+  it("each entry's plan field matches its record key and has a non-empty displayName", () => {
+    const plans: Plan[] = ["free", "plus", "pro"];
+    for (const key of plans) {
+      assert.strictEqual(
+        PLAN_CATALOG[key].plan,
+        key,
+        `PLAN_CATALOG.${key}.plan should equal '${key}'`,
+      );
+      assert.ok(
+        PLAN_CATALOG[key].displayName.length > 0,
+        `PLAN_CATALOG.${key}.displayName should not be empty`,
+      );
+    }
+  });
+
+  it("every entry's entitlements are reference-identical to PLAN_ENTITLEMENTS", () => {
+    const plans: Plan[] = ["free", "plus", "pro"];
+    for (const key of plans) {
+      assert.strictEqual(
+        PLAN_CATALOG[key].entitlements,
+        PLAN_ENTITLEMENTS[key],
+        `PLAN_CATALOG.${key}.entitlements should be the same object as PLAN_ENTITLEMENTS.${key}`,
+      );
+    }
+  });
+});
+
+describe("PLAN_NAMES", () => {
+  it("exposes the expected display names for all three tiers", () => {
+    assert.strictEqual(PLAN_NAMES.free, "Free");
+    assert.strictEqual(PLAN_NAMES.plus, "Plus");
+    assert.strictEqual(PLAN_NAMES.pro, "Pro");
+  });
+});
+
+describe("getPlanCatalogEntry", () => {
+  it("returns the catalog entry for each valid plan with a matching plan field", () => {
+    for (const plan of ["free", "plus", "pro"] as Plan[]) {
+      const entry = getPlanCatalogEntry(plan);
+      assert.strictEqual(entry.plan, plan);
+      assert.deepStrictEqual(entry.entitlements, PLAN_ENTITLEMENTS[plan]);
+    }
+  });
+
+  it("falls back to the free entry for an unknown string", () => {
+    const entry = getPlanCatalogEntry("legacy");
+    assert.strictEqual(entry.plan, "free");
+    assert.deepStrictEqual(entry.entitlements, PLAN_ENTITLEMENTS.free);
+  });
+
+  it("falls back to the free entry for null", () => {
+    assert.strictEqual(getPlanCatalogEntry(null).plan, "free");
+  });
+
+  it("falls back to the free entry for undefined", () => {
+    assert.strictEqual(getPlanCatalogEntry(undefined).plan, "free");
+  });
+});
+
+describe("decideEntitlement full feature matrix", () => {
+  type Feature = Parameters<typeof decideEntitlement>[1];
+
+  // All boolean features derived from PlanEntitlements
+  const BOOLEAN_FEATURES: Feature[] = [
+    "svgExport",
+    "pptxExport",
+    "brandStyles",
+    "removeWatermark",
+    "fontUpload",
+  ];
+
+  it("free plan: all boolean features are denied with upgrade_required", () => {
+    for (const feature of BOOLEAN_FEATURES) {
+      const d = decideEntitlement("free", feature);
+      assert.strictEqual(d.allowed, false, `free/${feature} should be denied`);
+      assert.strictEqual(d.plan, "free");
+      assert.strictEqual(d.reason, "upgrade_required");
+      assert.strictEqual(d.feature, feature);
+    }
+  });
+
+  it("plus plan: all features allowed except fontUpload", () => {
+    for (const feature of BOOLEAN_FEATURES) {
+      const expected = feature !== "fontUpload";
+      const d = decideEntitlement("plus", feature);
+      assert.strictEqual(
+        d.allowed,
+        expected,
+        `plus/${feature} expected allowed=${String(expected)}`,
+      );
+      assert.strictEqual(d.plan, "plus");
+      assert.strictEqual(d.reason, expected ? "included" : "upgrade_required");
+      assert.strictEqual(d.feature, feature);
+    }
+  });
+
+  it("pro plan: all boolean features are allowed with reason included", () => {
+    for (const feature of BOOLEAN_FEATURES) {
+      const d = decideEntitlement("pro", feature);
+      assert.strictEqual(d.allowed, true, `pro/${feature} should be allowed`);
+      assert.strictEqual(d.plan, "pro");
+      assert.strictEqual(d.reason, "included");
+      assert.strictEqual(d.feature, feature);
+    }
+  });
+
+  it("null plan falls back to free and denies every feature", () => {
+    for (const feature of BOOLEAN_FEATURES) {
+      const d = decideEntitlement(null, feature);
+      assert.strictEqual(
+        d.plan,
+        "free",
+        `null/${feature}: plan should be free`,
+      );
+      assert.strictEqual(d.allowed, false, `null/${feature} should be denied`);
+      assert.strictEqual(d.reason, "upgrade_required");
+    }
+  });
+
+  it("undefined plan falls back to free and denies every feature", () => {
+    for (const feature of BOOLEAN_FEATURES) {
+      const d = decideEntitlement(undefined, feature);
+      assert.strictEqual(
+        d.plan,
+        "free",
+        `undefined/${feature}: plan should be free`,
+      );
+      assert.strictEqual(
+        d.allowed,
+        false,
+        `undefined/${feature} should be denied`,
+      );
+    }
   });
 });
