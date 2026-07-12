@@ -1,5 +1,3 @@
-/* node:coverage disable */
-/* Coverage rationale: purge eligibility JSDoc is documentation-only; branch behavior is asserted. */
 /**
  * Maintenance / purge utilities.
  *
@@ -10,11 +8,21 @@
  * arrive.
  *
  * Architecture:
- *   - Pure helpers (shouldRunPurge, isInviteLinkPurgeEligible) are fully
- *     testable under `node --test` with no framework dependencies.
+ *   - Pure helpers (shouldRunPurge) are fully testable under `node --test`
+ *     with no framework dependencies.
  *   - The module-level `lastGlobalPurgeAt` guard is an in-memory timestamp;
  *     it resets on process restart (acceptable — the purge is idempotent and
  *     the miss cost is just one extra sweep at startup).
+ *
+ * Invite-link purge eligibility (revoked, expired, or usage-exhausted rows
+ * older than INVITE_LINK_RETENTION_MS) is decided entirely by the raw SQL in
+ * `src/lib/document/trash.ts`'s `runDocumentMaintenance` — there is no
+ * separate TypeScript predicate for it. Because `InviteLink` does not track
+ * `revokedAt`/`exhaustedAt`, that SQL anchors the age check for every dead
+ * branch (revoked, expired, exhausted) on `createdAt` alone; expiry only
+ * adds its own independent `expiresAt < cutoff` condition for the expired
+ * branch. See `src/lib/document/trash.test.ts` for the branch/parameter
+ * contracts pinned against that query.
  */
 
 // ---------------------------------------------------------------------------
@@ -50,52 +58,6 @@ export function shouldRunPurge(
   intervalMs: number,
 ): boolean {
   return lastRunAt === null || now - lastRunAt >= intervalMs;
-}
-
-/* node:coverage ignore next 9 -- Purge policy prose is documentation-only; predicate behavior is asserted. */
-/**
- * Returns `true` when an invite-link row is eligible for permanent purge.
- *
- * A link is "dead" when it is revoked, expired, or exhausted (usage cap
- * reached).  A dead link becomes purgeable once its `createdAt` timestamp
- * is older than `retentionMs` — this preserves a short audit window.
- *
- * Because `revokedAt` and `exhaustedAt` are not tracked, `createdAt` is the
- * age anchor for all three cases.  Expired links additionally use `expiresAt`
- * as the age anchor when it is further in the past than `createdAt`.
- *
- * @param link        - Subset of InviteLink fields needed for the decision.
- * @param now         - Current instant (injected for testability).
- * @param retentionMs - Retention window (default: INVITE_LINK_RETENTION_MS).
- */
-/* node:coverage enable */
-export function isInviteLinkPurgeEligible(
-  link: {
-    isRevoked: boolean;
-    expiresAt: Date | null;
-    maxUses: number | null;
-    useCount: number;
-    createdAt: Date;
-  },
-  now: Date,
-  retentionMs: number = INVITE_LINK_RETENTION_MS,
-): boolean {
-  const isDead =
-    link.isRevoked ||
-    (link.expiresAt !== null && link.expiresAt.getTime() <= now.getTime()) ||
-    (link.maxUses !== null && link.useCount >= link.maxUses);
-
-  if (!isDead) return false;
-
-  // Use the later of createdAt and expiresAt (when present) as the
-  // "dead-since" anchor so recently-expired links still get their window.
-  const anchor =
-    link.expiresAt !== null &&
-    link.expiresAt.getTime() > link.createdAt.getTime()
-      ? link.expiresAt
-      : link.createdAt;
-
-  return now.getTime() - anchor.getTime() >= retentionMs;
 }
 
 // ---------------------------------------------------------------------------
