@@ -19,6 +19,7 @@ in [release-gate.md](release-gate.md); local setup and troubleshooting live in
 | Package scripts        | `package.json`                                                            |
 | Local CI orchestrator  | `scripts/ci-local.mjs`                                                    |
 | Subsystem test router  | `scripts/test-subsystem.mjs`                                              |
+| Combined coverage gate | `scripts/check-combined-coverage.mjs`                                     |
 | Line coverage gate     | `scripts/check-line-coverage.mjs`                                         |
 | Coverage breadth gate  | `scripts/check-coverage-breadth.mjs`, `scripts/coverage-breadth.mjs`      |
 | Docs verification      | `scripts/check-docs-source-inventory.mjs`, `scripts/check-docs-links.mjs` |
@@ -57,13 +58,22 @@ instead of running individual commands manually.
 
 `npm test` is a pure test governance gate. It runs:
 
-1. `npm run test:line-coverage` — source and script tests under Node line
-   coverage floors.
+1. `npm run test:combined-coverage` (`scripts/check-combined-coverage.mjs`) —
+   runs the source unit suite exactly once and derives both the source line
+   coverage floors and the coverage _breadth_ non-regression check (see
+   below) from that single run's structured coverage summary, then runs the
+   script line coverage stage as a separate CLI child process.
 2. `npm run test:coverage-map` — subsystem assignment, bucket coverage, file
    naming, and test title checks.
-3. `npm run test:coverage-breadth` — non-regression gate over the coverage
-   _breadth_ inventory (see below); catches files that are invisible to the
-   line coverage floors above because no test ever loads them.
+
+Standalone `npm run test:line-coverage` and `npm run test:coverage-breadth`
+still exist and still each run the source unit suite independently through
+their original code paths (`check-line-coverage.mjs`'s CLI spawn and
+`check-coverage-breadth.mjs`'s `node:test` `run()` API, respectively) — they
+are unaffected by the combined gate and remain the right commands for
+debugging either concern in isolation. `npm test` no longer chains them
+together because doing so ran the identical source suite twice, adding
+several minutes of pure duplication with no additional signal (#1919).
 
 Focused work should use the subsystem router:
 
@@ -125,6 +135,12 @@ loaded by the source unit suite, and 167 actionable gap files — this PR adds
 visibility and a non-regression floor, it does not close the 167 existing
 gaps.
 
+On the combined `npm test` path (`scripts/check-combined-coverage.mjs`, #1919)
+this exact same computation — same eligibility scan, same classification,
+same ratchet — runs against the loaded-file set from the single shared source
+suite run instead of a dedicated second run; `npm run test:coverage-breadth`
+still runs it standalone, independently, with its own dedicated run.
+
 ## Lint Chain
 
 `npm run lint` runs domain checks before ESLint:
@@ -181,6 +197,7 @@ chain.
 
 - `scripts/ci-local.test.mjs`
 - `scripts/test-subsystem.test.mjs`
+- `scripts/check-combined-coverage.test.mjs`
 - `scripts/check-line-coverage.test.mjs`
 - `scripts/coverage-breadth.test.mjs`
 - `scripts/check-coverage-breadth.test.mjs`

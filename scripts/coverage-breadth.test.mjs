@@ -274,8 +274,16 @@ test("parseBreadthMarker returns null when no marker is present", () => {
 
 // --- collectLoadedFiles (node:test run() API integration point) ----------
 
-function fakeCoverageStream({ files, failCount = 0 }) {
+function fakeCoverageStream({ files, failCount = 0, composedChunks }) {
   const listeners = { "test:coverage": [], "test:fail": [] };
+  const emitCoverageAndFailures = () => {
+    for (let i = 0; i < failCount; i += 1) {
+      for (const handler of listeners["test:fail"]) handler({});
+    }
+    for (const handler of listeners["test:coverage"]) {
+      handler({ summary: { files } });
+    }
+  };
   return {
     on(event, handler) {
       listeners[event]?.push(handler);
@@ -291,6 +299,19 @@ function fakeCoverageStream({ files, failCount = 0 }) {
         handler({ summary: { files } });
       }
       yield { type: "test:coverage" };
+    },
+    // Mirrors `Readable.prototype.compose`: consuming the composed stream
+    // (rather than `this` directly) is how `collectLoadedFiles` drains the
+    // run() stream when a reporter is supplied.
+    compose() {
+      return {
+        async *[Symbol.asyncIterator]() {
+          emitCoverageAndFailures();
+          for (const chunk of composedChunks ?? []) {
+            yield chunk;
+          }
+        },
+      };
     },
   };
 }
@@ -360,6 +381,85 @@ test("collectLoadedFiles passes coverage include/exclude globs from the stage th
     SOURCE_COVERAGE_STAGE.excludes,
   );
   assert.equal(receivedOptions.coverage, true);
+});
+
+test("collectLoadedFiles defaults line/branch/function coverage thresholds to 0 (no enforced floor)", async () => {
+  let receivedOptions;
+  await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    run: (options) => {
+      receivedOptions = options;
+      return fakeCoverageStream({ files: [] });
+    },
+  });
+
+  assert.equal(receivedOptions.lineCoverage, 0);
+  assert.equal(receivedOptions.branchCoverage, 0);
+  assert.equal(receivedOptions.functionCoverage, 0);
+});
+
+test("collectLoadedFiles forwards custom line/branch/function coverage thresholds through to run(), for shared use by the combined coverage gate", async () => {
+  let receivedOptions;
+  await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    lineCoverage: 95,
+    branchCoverage: 89,
+    functionCoverage: 93,
+    run: (options) => {
+      receivedOptions = options;
+      return fakeCoverageStream({ files: [] });
+    },
+  });
+
+  assert.equal(receivedOptions.lineCoverage, 95);
+  assert.equal(receivedOptions.branchCoverage, 89);
+  assert.equal(receivedOptions.functionCoverage, 93);
+});
+
+test("collectLoadedFiles returns the raw structured coverage summary alongside the derived loaded set", async () => {
+  const summaryFiles = [{ path: "/repo/src/foo.ts" }];
+  const { summary, loaded } = await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    run: () => fakeCoverageStream({ files: summaryFiles }),
+  });
+
+  assert.deepEqual(summary, { files: summaryFiles });
+  assert.deepEqual([...loaded], ["src/foo.ts"]);
+});
+
+test("collectLoadedFiles pipes the run() stream through a supplied reporter instead of silently draining it", async () => {
+  const written = [];
+  const { loaded, failureCount } = await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    reporter: () => {}, // identity is irrelevant to the fake stream's compose()
+    reporterDestination: { write: (chunk) => written.push(chunk) },
+    run: () =>
+      fakeCoverageStream({
+        files: [{ path: "/repo/src/foo.ts" }],
+        failCount: 1,
+        composedChunks: ["chunk-a", "chunk-b"],
+      }),
+  });
+
+  assert.deepEqual([...loaded], ["src/foo.ts"]);
+  assert.equal(failureCount, 1);
+  assert.deepEqual(written, ["chunk-a", "chunk-b"]);
+});
+
+test("collectLoadedFiles does not pipe anything when no reporter is supplied (standalone breadth check semantics)", async () => {
+  const written = [];
+  await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    reporterDestination: { write: (chunk) => written.push(chunk) },
+    run: () => fakeCoverageStream({ files: [], composedChunks: ["unused"] }),
+  });
+
+  assert.deepEqual(written, []);
 });
 
 // --- buildBreadthReport / formatBreadthReport -----------------------------
