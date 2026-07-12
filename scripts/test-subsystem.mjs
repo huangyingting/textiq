@@ -77,6 +77,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/brand\//,
       /^src\/lib\/brand-studio\//,
+      /^src\/app\/api\/brand\//,
       /^e2e\/product\/billing-brand\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
