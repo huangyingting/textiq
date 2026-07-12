@@ -237,12 +237,32 @@ export function parseBreadthMarker(fileText) {
  * instrumented (i.e. were `require()`d/imported by at least one test),
  * derived from the structured `test:coverage` event rather than the
  * human-readable console table.
+ *
+ * `lineCoverage`/`branchCoverage`/`functionCoverage` are forwarded straight
+ * to `run()` (defaulting to 0, i.e. no enforced floor) so this single
+ * invocation of the source suite can also serve the percentage-floor
+ * checks in `check-combined-coverage.mjs` — that gate shares this exact
+ * `summary` (also returned here, not just the derived `loaded` set) between
+ * the floor comparison and the breadth report instead of running the suite
+ * a second time.
+ *
+ * `reporter` is optional and off by default (matching this function's
+ * standalone `check-coverage-breadth.mjs` caller, which never prints
+ * per-test output). When supplied, the raw event stream is piped through
+ * the given `node:test/reporters` reporter to `reporterDestination` so
+ * callers that need visible failure output (the combined gate) get it
+ * without changing the default, output-free behavior other callers rely on.
  */
 export async function collectLoadedFiles({
   repoRoot = process.cwd(),
   testFiles,
   stage = SOURCE_COVERAGE_STAGE,
   concurrency = 4,
+  lineCoverage = 0,
+  branchCoverage = 0,
+  functionCoverage = 0,
+  reporter = null,
+  reporterDestination = process.stdout,
   run,
 } = {}) {
   if (!run) {
@@ -256,6 +276,9 @@ export async function collectLoadedFiles({
     coverage: true,
     coverageIncludeGlobs: stage.includes,
     coverageExcludeGlobs: stage.excludes,
+    lineCoverage,
+    branchCoverage,
+    functionCoverage,
     // Explicit so the tsx loader is present in every spawned test-file
     // process regardless of how this script itself was invoked (matches
     // the "--import tsx" flag check-line-coverage.mjs passes on its CLI).
@@ -271,9 +294,17 @@ export async function collectLoadedFiles({
     failureCount += 1;
   });
 
-  // Drain the stream to completion; coverage is only finalized at the end.
-  for await (const _event of stream) {
-    // Intentionally empty: side effects are captured by the listeners above.
+  if (reporter) {
+    // Composing consumes `stream` itself, so draining happens through the
+    // formatted output stream instead of the raw `for await` loop below.
+    for await (const chunk of stream.compose(reporter)) {
+      reporterDestination.write(chunk);
+    }
+  } else {
+    // Drain the stream to completion; coverage is only finalized at the end.
+    for await (const _event of stream) {
+      // Intentionally empty: side effects are captured by the listeners above.
+    }
   }
 
   const loaded = new Set();
@@ -286,7 +317,7 @@ export async function collectLoadedFiles({
     loaded.add(relative);
   }
 
-  return { loaded, failureCount };
+  return { loaded, failureCount, summary: coverageSummary };
 }
 
 function modeForEligibleFile({ filePath, fileText, loadedFiles }) {

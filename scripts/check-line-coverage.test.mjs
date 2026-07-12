@@ -5,8 +5,10 @@ import test from "node:test";
 import {
   buildCoverageCommand,
   coverageMinimum,
+  evaluateCoverageFloors,
   LINE_COVERAGE_STAGES,
   parseCoverageMinimum,
+  resolveStageThresholds,
   runLineCoverage,
 } from "./check-line-coverage.mjs";
 
@@ -212,4 +214,84 @@ test("buildCoverageCommand respects branch and function env-key overrides", () =
   });
   assert.ok(cmd.args.includes("--test-coverage-branches=80"));
   assert.ok(cmd.args.includes("--test-coverage-functions=85"));
+});
+
+test("resolveStageThresholds returns the same line/branch/function minimums buildCoverageCommand embeds in its CLI flags", () => {
+  const env = {
+    SOURCE_LINE_COVERAGE_MIN: "80",
+    SOURCE_BRANCH_COVERAGE_MIN: "70",
+    SOURCE_FUNCTION_COVERAGE_MIN: "60",
+  };
+  const thresholds = resolveStageThresholds(LINE_COVERAGE_STAGES[0], env);
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], env);
+
+  assert.deepEqual(thresholds, { line: 80, branch: 70, function: 60 });
+  assert.ok(cmd.args.includes("--test-coverage-lines=80"));
+  assert.ok(cmd.args.includes("--test-coverage-branches=70"));
+  assert.ok(cmd.args.includes("--test-coverage-functions=60"));
+});
+
+test("resolveStageThresholds falls back to stage defaults when unset", () => {
+  const thresholds = resolveStageThresholds(LINE_COVERAGE_STAGES[0], {});
+  assert.deepEqual(thresholds, { line: 95, branch: 89, function: 93 });
+});
+
+test("resolveStageThresholds rejects an invalid override", () => {
+  assert.throws(
+    () =>
+      resolveStageThresholds(LINE_COVERAGE_STAGES[0], {
+        SOURCE_BRANCH_COVERAGE_MIN: "not-a-number",
+      }),
+    /SOURCE_BRANCH_COVERAGE_MIN/,
+  );
+});
+
+test("evaluateCoverageFloors returns no failures when every metric meets its threshold", () => {
+  const summary = {
+    totals: {
+      coveredLinePercent: 95,
+      coveredBranchPercent: 89,
+      coveredFunctionPercent: 93,
+    },
+  };
+  const failures = evaluateCoverageFloors(summary, {
+    line: 95,
+    branch: 89,
+    function: 93,
+  });
+  assert.deepEqual(failures, []);
+});
+
+test("evaluateCoverageFloors reports every metric that falls below its threshold", () => {
+  const summary = {
+    totals: {
+      coveredLinePercent: 50,
+      coveredBranchPercent: 89,
+      coveredFunctionPercent: 10,
+    },
+  };
+  const failures = evaluateCoverageFloors(summary, {
+    line: 95,
+    branch: 89,
+    function: 93,
+  });
+
+  assert.deepEqual(
+    failures.map((f) => f.name),
+    ["line", "function"],
+  );
+  assert.equal(failures[0].actual, 50);
+  assert.equal(failures[0].threshold, 95);
+});
+
+test("evaluateCoverageFloors treats a missing summary as 0% on every metric", () => {
+  const failures = evaluateCoverageFloors(null, {
+    line: 1,
+    branch: 1,
+    function: 1,
+  });
+  assert.deepEqual(
+    failures.map((f) => f.name),
+    ["line", "branch", "function"],
+  );
 });
