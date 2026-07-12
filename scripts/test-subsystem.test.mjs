@@ -97,6 +97,26 @@ test("test subsystem map classifies files by owning subsystem", () => {
     classifyTestFile("src/app/api/brand/font/route.test.ts").includes("brand"),
   );
   assert.deepEqual(
+    classifyTestFile("src/app/login/actions.test.ts"),
+    ["auth"],
+    "src/app/login/** action-boundary tests must classify under auth",
+  );
+  assert.deepEqual(
+    classifyTestFile("src/app/signup/actions.test.ts"),
+    ["auth"],
+    "src/app/signup/** action-boundary tests must classify under auth",
+  );
+  assert.deepEqual(
+    classifyTestFile("src/app/forgot-password/actions.test.ts"),
+    ["auth"],
+    "src/app/forgot-password/** action-boundary tests must classify under auth",
+  );
+  assert.deepEqual(
+    classifyTestFile("src/app/reset-password/actions.test.ts"),
+    ["auth"],
+    "src/app/reset-password/** action-boundary tests must classify under auth",
+  );
+  assert.deepEqual(
     classifyTestFile("src/app/api/brand-assets/route.test.ts").includes(
       "brand",
     ),
