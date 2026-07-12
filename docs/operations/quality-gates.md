@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-11"
 description: "This document is the inventory for local and CI quality gates. It explains what each command protects and where ownership lives. Release sign-off sequence lives in release-gate.md; local setup and troubleshooting live in developer-bootstrap.md."
 ---
 
@@ -20,6 +20,7 @@ in [release-gate.md](release-gate.md); local setup and troubleshooting live in
 | Local CI orchestrator  | `scripts/ci-local.mjs`                                                    |
 | Subsystem test router  | `scripts/test-subsystem.mjs`                                              |
 | Line coverage gate     | `scripts/check-line-coverage.mjs`                                         |
+| Coverage breadth gate  | `scripts/check-coverage-breadth.mjs`, `scripts/coverage-breadth.mjs`      |
 | Docs verification      | `scripts/check-docs-source-inventory.mjs`, `scripts/check-docs-links.mjs` |
 | Import graph           | `scripts/check-import-graph.mjs`, `scripts/import-graph.mjs`              |
 | Client boundary        | `scripts/check-client-boundary.mjs`, `scripts/client-boundary.mjs`        |
@@ -60,6 +61,9 @@ instead of running individual commands manually.
    coverage floors.
 2. `npm run test:coverage-map` — subsystem assignment, bucket coverage, file
    naming, and test title checks.
+3. `npm run test:coverage-breadth` — non-regression gate over the coverage
+   _breadth_ inventory (see below); catches files that are invisible to the
+   line coverage floors above because no test ever loads them.
 
 Focused work should use the subsystem router:
 
@@ -71,6 +75,55 @@ npm run test:subsystem -- --list
 
 Mapped Playwright specs are opt-in for focused runs; add `--with-e2e` when the
 changed behavior needs browser coverage.
+
+## Coverage Breadth Gate
+
+Node's `--experimental-test-coverage` (used by the line coverage gate) only
+scores files that were actually imported by a test. A file that is eligible
+for coverage but never imported is silently absent from the percentage —
+`test:line-coverage` can report a high percentage while whole files have zero
+test visibility.
+
+`npm run test:coverage-breadth` (`scripts/check-coverage-breadth.mjs`,
+`scripts/coverage-breadth.mjs`) closes that blind spot with a structured
+inventory instead of scraping the coverage table:
+
+1. Enumerates every file eligible under the "Source unit line coverage"
+   stage's include/exclude globs (same globs `check-line-coverage.mjs` uses —
+   single source of truth for "eligible").
+2. Runs the source unit test suite through the `node:test` `run()` API and
+   reads the structured `test:coverage` event (`data.summary.files`) to learn
+   which eligible files were actually loaded — not by parsing the printed
+   table.
+3. Classifies every eligible file with the TypeScript compiler API into
+   `type-only` (interfaces/types/ambient `declare` — nothing to unit test),
+   `barrel` (nothing but import/re-export statements — no local logic), or
+   `runtime` (has behavior that should be unit-tested).
+4. Assigns every eligible file exactly one testing mode: `unit-loaded`,
+   `type-only`, `barrel`, `mapped-e2e`, `approved-exception`, or `gap` (an
+   unresolved, actionable blind spot). E2E-mapped and approved-exception
+   files are never counted as unit-covered.
+
+Files opt into `mapped-e2e` or `approved-exception` with an inline marker
+comment near the top of the file (mirrors the `e2e-governance-allow` marker
+in `check-e2e-governance.mjs`), so the exception and its justification live
+in the same file and the same diff:
+
+```ts
+// coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts
+// coverage-breadth: approved-exception reason=manual QA runbook only
+```
+
+The gate fails if the number of unresolved `gap` files exceeds
+`DEFAULT_MAX_GAP_FILES` in `check-coverage-breadth.mjs` (a ratchet, matching
+`check-import-graph.mjs`'s pattern) — regressions are blocked, improvements
+always pass, and the baseline is never auto-lowered. Override the baseline
+locally with `COVERAGE_BREADTH_MAX_GAP_FILES=<n>`; do not use the override to
+mask a real regression in CI. As of #1896 the repository has 781 eligible
+runtime source files, 22 type-only, 26 barrel (2 of which were unloaded), 590
+loaded by the source unit suite, and 167 actionable gap files — this PR adds
+visibility and a non-regression floor, it does not close the 167 existing
+gaps.
 
 ## Lint Chain
 
@@ -129,6 +182,8 @@ chain.
 - `scripts/ci-local.test.mjs`
 - `scripts/test-subsystem.test.mjs`
 - `scripts/check-line-coverage.test.mjs`
+- `scripts/coverage-breadth.test.mjs`
+- `scripts/check-coverage-breadth.test.mjs`
 - `scripts/check-docs-source-inventory.test.mjs`
 - `scripts/check-docs-links.test.mjs`
 - `scripts/check-import-graph.test.mjs`
