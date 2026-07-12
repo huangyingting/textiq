@@ -6,8 +6,16 @@ import {
   restoreDocumentFromTrash,
   listTrashDocumentsForUser,
   permanentDeleteDocument,
+  runDocumentMaintenance,
+  runDashboardLoadMaintenance,
 } from "@/lib/document/trash";
 import { SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
+import {
+  INVITE_LINK_RETENTION_MS,
+  PURGE_MIN_INTERVAL_MS,
+  resetPurgeLockForTesting,
+} from "@/lib/maintenance";
+import { prisma } from "@/lib/prisma";
 
 // ---------------------------------------------------------------------------
 // softDeleteDocument
@@ -260,4 +268,405 @@ test("permanentDeleteDocument guards with deletedAt: { not: null } safety check"
 
   const call = calls[0] as { where: { id: string; deletedAt: unknown } };
   assert.deepEqual(call.where.deletedAt, { not: null });
+});
+
+// ---------------------------------------------------------------------------
+// runDocumentMaintenance — document purge cutoff / preservation contracts
+// ---------------------------------------------------------------------------
+//
+// `runDocumentMaintenance` delegates row selection to Prisma via a `where`
+// clause and a raw SQL statement; the correctness of Prisma's comparison
+// operators and the SQLite engine itself are out of scope here (and, per the
+// CI quality gate, the shared `dev.db` is not schema-migrated before tests
+// run — only `db:generate` runs, not `db:push`/`db:migrate` — so a real
+// connection has no tables to write against). These contracts instead pin
+// down the exact cutoff timestamps and query shapes `runDocumentMaintenance`
+// sends for each purge category, using the already-public `MaintenanceDb`
+// dependency-injection seam — the same technique the sibling
+// `softDeleteDocument`/`listTrashDocumentsForUser` contracts above use for
+// the same reason.
+
+type RecordedMaintenanceCall = {
+  deleteManyArgs?: unknown;
+  executeRawStrings?: readonly string[];
+  executeRawValues?: unknown[];
+};
+
+function createRecordingMaintenanceDb(call: RecordedMaintenanceCall) {
+  return {
+    document: {
+      deleteMany: async (args: unknown) => {
+        call.deleteManyArgs = args;
+        return { count: 0 };
+      },
+    },
+    $executeRaw: (strings: readonly string[], ...values: unknown[]) => {
+      call.executeRawStrings = strings;
+      call.executeRawValues = values;
+      return Promise.resolve(0);
+    },
+  };
+}
+
+test("runDocumentMaintenance purges documents by comparing deletedAt with strict less-than against the retention cutoff", async () => {
+  resetPurgeLockForTesting();
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const call: RecordedMaintenanceCall = {};
+  const db = createRecordingMaintenanceDb(call);
+
+  const result = await runDocumentMaintenance(
+    "dashboard-load",
+    db as never,
+    now,
+  );
+
+  assert.deepEqual(result, { policy: "dashboard-load", skipped: false });
+  const expectedCutoff = new Date(now.getTime() - SOFT_DELETE_RETENTION_MS);
+  assert.deepEqual(call.deleteManyArgs, {
+    where: { deletedAt: { lt: expectedCutoff } },
+  });
+  // `lt` (strict) rather than `lte` means a document deleted exactly at the
+  // cutoff is NOT purged — it is preserved for one more sweep.
+  assert.equal(
+    Object.keys(
+      (call.deleteManyArgs as { where: { deletedAt: object } }).where.deletedAt,
+    ).length,
+    1,
+    "deletedAt filter should use exactly one comparator (lt)",
+  );
+});
+
+test("runDocumentMaintenance computes the document purge cutoff as exactly now - SOFT_DELETE_RETENTION_MS", async () => {
+  resetPurgeLockForTesting();
+  for (const now of [
+    new Date("2026-01-15T08:30:00.000Z"),
+    new Date("2026-12-31T23:59:59.999Z"),
+  ]) {
+    resetPurgeLockForTesting();
+    const call: RecordedMaintenanceCall = {};
+    const db = createRecordingMaintenanceDb(call);
+
+    await runDocumentMaintenance("dashboard-load", db as never, now);
+
+    const expectedCutoff = new Date(now.getTime() - SOFT_DELETE_RETENTION_MS);
+    const args = call.deleteManyArgs as {
+      where: { deletedAt: { lt: Date } };
+    };
+    assert.equal(args.where.deletedAt.lt.getTime(), expectedCutoff.getTime());
+  }
+});
+
+test("runDocumentMaintenance's document filter relies on SQL NULL semantics to preserve never-deleted documents", async () => {
+  resetPurgeLockForTesting();
+  const call: RecordedMaintenanceCall = {};
+  const db = createRecordingMaintenanceDb(call);
+
+  await runDocumentMaintenance("dashboard-load", db as never, new Date());
+
+  // No explicit `deletedAt: { not: null } ` guard is present — the query
+  // relies on SQL's `NULL < x` evaluating to unknown/false, which already
+  // excludes documents that were never soft-deleted. This pins that
+  // reliance so a future refactor can't silently drop it without a test
+  // failure.
+  const where = (call.deleteManyArgs as { where: { deletedAt: object } }).where
+    .deletedAt as Record<string, unknown>;
+  assert.deepEqual(Object.keys(where), ["lt"]);
+});
+
+// ---------------------------------------------------------------------------
+// runDocumentMaintenance — invite-link purge cutoff / branch contracts
+// ---------------------------------------------------------------------------
+
+test("runDocumentMaintenance purges invite links via a single raw DELETE covering revoked, expired, and exhausted branches", async () => {
+  resetPurgeLockForTesting();
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const call: RecordedMaintenanceCall = {};
+  const db = createRecordingMaintenanceDb(call);
+
+  await runDocumentMaintenance("dashboard-load", db as never, now);
+
+  assert.ok(call.executeRawStrings, "expected a single $executeRaw call");
+  const sql = call.executeRawStrings!.join("?");
+  assert.match(sql, /DELETE FROM "InviteLink"/);
+  assert.match(sql, /WHERE "createdAt" < /);
+  assert.match(sql, /"isRevoked" = /);
+  assert.match(sql, /OR \("expiresAt" IS NOT NULL AND "expiresAt" < \?\)/);
+  assert.match(sql, /OR \("maxUses" IS NOT NULL AND "useCount" >= "maxUses"\)/);
+});
+
+test("runDocumentMaintenance's invite-link purge uses one inviteCutoff for the age filter, the expiry branch, and true for the revoked branch", async () => {
+  resetPurgeLockForTesting();
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const call: RecordedMaintenanceCall = {};
+  const db = createRecordingMaintenanceDb(call);
+
+  await runDocumentMaintenance("dashboard-load", db as never, now);
+
+  const expectedCutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  assert.deepEqual(call.executeRawValues, [
+    expectedCutoff,
+    true,
+    expectedCutoff,
+  ]);
+});
+
+test("runDocumentMaintenance computes the invite-link purge cutoff as exactly now - INVITE_LINK_RETENTION_MS", async () => {
+  for (const now of [
+    new Date("2026-01-15T08:30:00.000Z"),
+    new Date("2026-12-31T23:59:59.999Z"),
+  ]) {
+    resetPurgeLockForTesting();
+    const call: RecordedMaintenanceCall = {};
+    const db = createRecordingMaintenanceDb(call);
+
+    await runDocumentMaintenance("dashboard-load", db as never, now);
+
+    const expectedCutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+    const [cutoffArg] = call.executeRawValues as [Date, boolean, Date];
+    assert.equal(cutoffArg.getTime(), expectedCutoff.getTime());
+  }
+});
+
+// ---------------------------------------------------------------------------
+// runDocumentMaintenance — lock acquisition / skip behavior
+// ---------------------------------------------------------------------------
+
+test("runDocumentMaintenance acquires the purge lock and issues both purge queries on the first dashboard-load call", async () => {
+  resetPurgeLockForTesting();
+  const call: RecordedMaintenanceCall = {};
+  const db = createRecordingMaintenanceDb(call);
+
+  const result = await runDocumentMaintenance(
+    "dashboard-load",
+    db as never,
+    new Date(),
+  );
+
+  assert.deepEqual(result, { policy: "dashboard-load", skipped: false });
+  assert.ok(call.deleteManyArgs, "document.deleteMany should have run");
+  assert.ok(call.executeRawStrings, "$executeRaw should have run");
+});
+
+test("runDocumentMaintenance skips a second dashboard-load call within the throttle interval and issues no queries", async () => {
+  resetPurgeLockForTesting();
+  const first = new Date("2026-06-01T00:00:00.000Z");
+  const firstCall: RecordedMaintenanceCall = {};
+  const firstDb = createRecordingMaintenanceDb(firstCall);
+
+  const firstResult = await runDocumentMaintenance(
+    "dashboard-load",
+    firstDb as never,
+    first,
+  );
+  assert.equal(firstResult.skipped, false);
+
+  const secondCall: RecordedMaintenanceCall = {};
+  const secondDb = createRecordingMaintenanceDb(secondCall);
+  const withinInterval = new Date(first.getTime() + PURGE_MIN_INTERVAL_MS - 1);
+
+  const secondResult = await runDocumentMaintenance(
+    "dashboard-load",
+    secondDb as never,
+    withinInterval,
+  );
+
+  assert.deepEqual(secondResult, { policy: "dashboard-load", skipped: true });
+  // A true no-op: neither query surface was touched by the throttled call.
+  assert.equal(secondCall.deleteManyArgs, undefined);
+  assert.equal(secondCall.executeRawStrings, undefined);
+});
+
+test("runDocumentMaintenance re-acquires the lock and issues both queries once the throttle interval elapses", async () => {
+  resetPurgeLockForTesting();
+  const first = new Date("2026-06-01T00:00:00.000Z");
+  const firstDb = createRecordingMaintenanceDb({});
+
+  const firstResult = await runDocumentMaintenance(
+    "dashboard-load",
+    firstDb as never,
+    first,
+  );
+  assert.equal(firstResult.skipped, false);
+
+  const afterInterval = new Date(first.getTime() + PURGE_MIN_INTERVAL_MS);
+  const secondCall: RecordedMaintenanceCall = {};
+  const secondDb = createRecordingMaintenanceDb(secondCall);
+
+  const secondResult = await runDocumentMaintenance(
+    "dashboard-load",
+    secondDb as never,
+    afterInterval,
+  );
+
+  assert.deepEqual(secondResult, { policy: "dashboard-load", skipped: false });
+  assert.ok(secondCall.deleteManyArgs, "document.deleteMany should have run");
+  assert.ok(secondCall.executeRawStrings, "$executeRaw should have run");
+});
+
+// ---------------------------------------------------------------------------
+// runDocumentMaintenance — returned result shape
+// ---------------------------------------------------------------------------
+
+test("runDocumentMaintenance returns exactly { policy, skipped } with policy echoed back", async () => {
+  resetPurgeLockForTesting();
+  const db = createRecordingMaintenanceDb({});
+
+  const result = await runDocumentMaintenance(
+    "dashboard-load",
+    db as never,
+    new Date(),
+  );
+
+  assert.deepEqual(Object.keys(result).sort(), ["policy", "skipped"]);
+  assert.equal(result.policy, "dashboard-load");
+  assert.equal(result.skipped, false);
+});
+
+test("runDocumentMaintenance returns skipped:true with the policy still echoed back when throttled", async () => {
+  resetPurgeLockForTesting();
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  await runDocumentMaintenance(
+    "dashboard-load",
+    createRecordingMaintenanceDb({}) as never,
+    now,
+  );
+
+  const result = await runDocumentMaintenance(
+    "dashboard-load",
+    createRecordingMaintenanceDb({}) as never,
+    new Date(now.getTime() + 1),
+  );
+
+  assert.deepEqual(Object.keys(result).sort(), ["policy", "skipped"]);
+  assert.equal(result.policy, "dashboard-load");
+  assert.equal(result.skipped, true);
+});
+// --- error propagation -------------------------------------------------------
+//
+// Forcing a genuine SQLite failure deterministically depends on driver/OS
+// state, so these two contracts use the already-public `MaintenanceDb`
+// dependency-injection seam to prove errors from either query surface a real
+// rejection instead of being caught, logged, or replaced with a default
+// result.
+
+test("runDocumentMaintenance propagates a document.deleteMany failure without swallowing it", async () => {
+  resetPurgeLockForTesting();
+  const failure = new Error("document purge failed");
+  const db = {
+    document: {
+      deleteMany: async () => {
+        throw failure;
+      },
+    },
+    $executeRaw: async () => 0,
+  };
+
+  await assert.rejects(
+    runDocumentMaintenance("dashboard-load", db as never, new Date()),
+    failure,
+  );
+});
+
+test("runDocumentMaintenance propagates an invite-link $executeRaw failure without swallowing it", async () => {
+  resetPurgeLockForTesting();
+  const failure = new Error("invite link purge failed");
+  const db = {
+    document: {
+      deleteMany: async () => ({ count: 0 }),
+    },
+    $executeRaw: async () => {
+      throw failure;
+    },
+  };
+
+  await assert.rejects(
+    runDocumentMaintenance("dashboard-load", db as never, new Date()),
+    failure,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// runDashboardLoadMaintenance — dashboard delegation
+// ---------------------------------------------------------------------------
+
+test("runDashboardLoadMaintenance delegates to runDocumentMaintenance with the dashboard-load policy against the live prisma client", async (t) => {
+  resetPurgeLockForTesting();
+
+  const deleteManyCalls: unknown[] = [];
+  const executeRawCalls: unknown[] = [];
+
+  const originalDeleteMany = prisma.document.deleteMany;
+  const originalExecuteRaw = prisma.$executeRaw;
+
+  Object.defineProperty(prisma.document, "deleteMany", {
+    configurable: true,
+    value: async (args: unknown) => {
+      deleteManyCalls.push(args);
+      return { count: 0 };
+    },
+  });
+  Object.defineProperty(prisma, "$executeRaw", {
+    configurable: true,
+    value: (...args: unknown[]) => {
+      executeRawCalls.push(args);
+      return Promise.resolve(0);
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(prisma.document, "deleteMany", {
+      configurable: true,
+      value: originalDeleteMany,
+    });
+    Object.defineProperty(prisma, "$executeRaw", {
+      configurable: true,
+      value: originalExecuteRaw,
+    });
+  });
+
+  const result = await runDashboardLoadMaintenance();
+
+  assert.deepEqual(result, { policy: "dashboard-load", skipped: false });
+  assert.equal(deleteManyCalls.length, 1);
+  assert.equal(executeRawCalls.length, 1);
+});
+
+test("runDashboardLoadMaintenance is skipped when the dashboard-load lock was just acquired", async (t) => {
+  resetPurgeLockForTesting();
+
+  const deleteManyCalls: unknown[] = [];
+  const originalDeleteMany = prisma.document.deleteMany;
+  const originalExecuteRaw = prisma.$executeRaw;
+  Object.defineProperty(prisma.document, "deleteMany", {
+    configurable: true,
+    value: async (args: unknown) => {
+      deleteManyCalls.push(args);
+      return { count: 0 };
+    },
+  });
+  Object.defineProperty(prisma, "$executeRaw", {
+    configurable: true,
+    value: () => Promise.resolve(0),
+  });
+  t.after(() => {
+    Object.defineProperty(prisma.document, "deleteMany", {
+      configurable: true,
+      value: originalDeleteMany,
+    });
+    Object.defineProperty(prisma, "$executeRaw", {
+      configurable: true,
+      value: originalExecuteRaw,
+    });
+  });
+
+  // First call (via the direct API, current real time) acquires the lock.
+  // `runDashboardLoadMaintenance` below runs moments later — well inside
+  // PURGE_MIN_INTERVAL_MS (5 minutes) — so it must observe the held lock.
+  await runDocumentMaintenance("dashboard-load", prisma, new Date());
+  deleteManyCalls.length = 0;
+
+  const result = await runDashboardLoadMaintenance();
+
+  assert.deepEqual(result, { policy: "dashboard-load", skipped: true });
+  assert.equal(deleteManyCalls.length, 0);
 });
