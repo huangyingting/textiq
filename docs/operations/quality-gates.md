@@ -208,11 +208,32 @@ files (`DEFAULT_MAX_GAP_FILES` was lowered from 167 to 148 to match, with zero
 stale slack). #1933 closed six small editor shell control gaps
 (`document-export-button`, `import-button`, `page-break-indicator`,
 `present-button`, `side-panel`, `visual-svg-registry`, all under
-`src/components/editor/`) with direct unit tests. As of #1933 the repository
-has 848 eligible runtime source files, 24 type-only, 30 barrel, 794
-runtime-eligible, 664 loaded by the source unit suite, and 130 actionable gap
-files (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130 to match, with zero
-stale slack).
+`src/components/editor/`) with direct unit tests. **Branch-local** to #1933's
+own feature branch (measured before merge, not against `main`), the
+repository had 848 eligible runtime source files, 24 type-only, 30 barrel,
+794 runtime-eligible, 664 loaded by the source unit suite, and 130 actionable
+gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130 to match, with
+zero stale slack at that time). That 664/130 pair is a historical,
+branch-local measurement — it is preserved here for the record but is
+superseded by the authoritative merged baseline below and must not be
+re-derived or restored.
+
+**Authoritative merged Wave 5 baseline (#1943).** The 130 ceiling went stale
+almost immediately: several Wave 5 batch-2 PRs merged to `main` independently
+of #1933's own branch and closed additional gaps that branch could not see
+at measurement time. Re-measured directly against `main` at
+`cd38a40df82ce9d90d89e1784d2b2d0841eab2ac` (which already includes #1925,
+#1932, and #1933 among others), the combined gate reports 848 eligible
+runtime source files, 24 type-only, 30 barrel, 794 runtime-eligible, **672**
+loaded by the source unit suite, 5 mapped-e2e, 0 approved exceptions, and
+**117** actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 130 to
+117 to match, with zero stale slack. Filtered percentage coverage at this
+measurement was 95.41% lines / 89.58% branches / 93.91% functions — comfortably
+above the unchanged 95/89/93 floors in `check-line-coverage.mjs`; #1943 did
+not touch those floors, add exceptions, add new markers, or run the source
+suite a second time. This merged-tree measurement is the authoritative
+baseline going forward; the branch-local #1933 numbers above remain in this
+document only as historical context for how the ceiling evolved.
 
 Widening breadth eligibility/instrumentation to include deck-kernel would also
 widen `summary.totals` — the data the line/branch/function percentage floors

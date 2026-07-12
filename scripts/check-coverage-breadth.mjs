@@ -2,7 +2,7 @@
 
 /**
  * Coverage breadth non-regression gate (#1896, widened to deck-kernel in
- * #1925).
+ * #1925, ratcheted to the authoritative merged Wave 5 baseline in #1943).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -12,14 +12,22 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (130) was re-measured directly against this repository
- * after #1933 closed six editor shell control gaps (`document-export-button`,
- * `import-button`, `page-break-indicator`, `present-button`, `side-panel`,
- * `visual-svg-registry`, all under `src/components/editor/`): 848 eligible
- * runtime source files under `src/**`, 24 type-only, 30 barrel, 794
- * runtime-eligible, 664 loaded by the source unit suite, leaving 130
- * actionable gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130
- * to match). Before #1933 (as of #1925, which widened
+ * The baseline below (117) is the authoritative merged Wave 5 baseline
+ * (#1943), re-measured directly against `main` at
+ * cd38a40df82ce9d90d89e1784d2b2d0841eab2ac: 848 eligible runtime source files
+ * under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible, 672 loaded
+ * by the source unit suite, 5 mapped-e2e, 0 approved exceptions, leaving 117
+ * actionable gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 130 to 117
+ * to match). This supersedes the prior 130 ceiling: that number was only ever
+ * measured branch-locally on #1933's own feature branch, and went stale once
+ * several independently merged Wave 5 batch-2 PRs landed on `main` afterward
+ * and closed additional gaps invisible to #1933's branch at measurement time.
+ * Branch-local #1933 measured 848 eligible, 24 type-only, 30 barrel, 794
+ * runtime-eligible, 664 loaded, leaving 130 actionable gap files
+ * (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130 to match at the time)
+ * — that number is historical and no longer reflects `main`; see
+ * docs/operations/quality-gates.md for the full breakdown of both
+ * measurements. Before #1933 (as of #1925, which widened
  * `listEligibleSourceFiles`/`collectLoadedFiles` to include
  * `src/lib/document/deck-kernel/**` in breadth eligibility and
  * instrumentation — previously excluded entirely, see
@@ -50,7 +58,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 130;
+export const DEFAULT_MAX_GAP_FILES = 117;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
