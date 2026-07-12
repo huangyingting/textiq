@@ -22,12 +22,35 @@ type PdfTextResult = {
   totalPages?: unknown;
 };
 
+/** The minimal surface `parsePdf` needs from a `PDFParse` instance. */
+export interface PdfParserHandle {
+  getText(): Promise<PdfTextResult>;
+  destroy(): Promise<void>;
+}
+
+/**
+ * Factory boundary for the underlying `pdf-parse` parser. Exposed so tests can
+ * inject a fake handle that reports arbitrary page counts / text lengths
+ * without needing to construct a real multi-hundred-page (or 500k-character)
+ * PDF fixture to exercise the budget checks below.
+ */
+export interface ParsePdfDeps {
+  createParser(buffer: Buffer): PdfParserHandle;
+}
+
+const defaultParsePdfDeps: ParsePdfDeps = {
+  createParser: (buffer) => new PDFParse({ data: buffer }),
+};
+
 /**
  * Extracts text from a PDF `Buffer` and returns it as a plain text string.
  * Throws when `pdf-parse` cannot load or read the document.
  */
-export async function parsePdf(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
+export async function parsePdf(
+  buffer: Buffer,
+  deps: ParsePdfDeps = defaultParsePdfDeps,
+): Promise<string> {
+  const parser = deps.createParser(buffer);
   try {
     const result: PdfTextResult = await parser.getText();
     const pageCount = Number(result.totalPages ?? result.total);
