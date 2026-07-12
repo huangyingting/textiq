@@ -72,6 +72,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/billing\//,
       /^src\/app\/api\/billing\//,
       /^src\/app\/api\/user\/entitlements\//,
+      /^src\/app\/app\/settings\/billing\//,
       /^e2e\/product\/billing-brand\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
@@ -82,6 +83,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/brand\//,
       /^src\/lib\/brand-studio\//,
       /^src\/app\/api\/brand\//,
+      /^src\/app\/app\/brands\//,
       /^e2e\/product\/billing-brand\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
@@ -141,7 +143,9 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description:
       "Document creation, listing, tags, search, templates, trash, and workspace UI",
     patterns: [
+      /^src\/app\/app\/actions\.test\.ts$/,
       /^src\/app\/app\/document-list/,
+      /^src\/app\/app\/trash\//,
       /^src\/lib\/dashboard\//,
       /^src\/lib\/document\//,
       /^src\/lib\/document-stats\.test\.ts$/,
