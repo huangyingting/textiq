@@ -9,7 +9,7 @@ import {
 } from "./check-combined-coverage.mjs";
 import { LINE_COVERAGE_STAGES } from "./check-line-coverage.mjs";
 import { MAX_GAP_ENV_KEY } from "./check-coverage-breadth.mjs";
-import { MODE } from "./coverage-breadth.mjs";
+import { BREADTH_COVERAGE_STAGE, MODE } from "./coverage-breadth.mjs";
 import { createTestFixtureRoot } from "./test-fixtures.mjs";
 
 const [SOURCE_STAGE, SCRIPT_STAGE] = LINE_COVERAGE_STAGES;
@@ -41,14 +41,34 @@ function fakeReport({
   };
 }
 
+// Builds a single structured `summary.files` entry whose aggregated
+// percentages equal the given values exactly (each metric denominator is
+// 100, so `coveredXCount` doubles as `coveredXPercent`). Combined-gate
+// percentage floors are now derived from `summary.files` via
+// `aggregateCoverageTotals` (#1925), not from `summary.totals` directly, so
+// harness fixtures build files instead of a pre-computed totals object.
+function summaryFilesFromPercents({
+  coveredLinePercent = 100,
+  coveredBranchPercent = 100,
+  coveredFunctionPercent = 100,
+} = {}) {
+  return [
+    {
+      path: "/repo/src/a.ts",
+      totalLineCount: 100,
+      coveredLineCount: coveredLinePercent,
+      totalBranchCount: 100,
+      coveredBranchCount: coveredBranchPercent,
+      totalFunctionCount: 100,
+      coveredFunctionCount: coveredFunctionPercent,
+    },
+  ];
+}
+
 function harness({
   gapFiles = [],
   failureCount = 0,
-  summaryTotals = {
-    coveredLinePercent: 100,
-    coveredBranchPercent: 100,
-    coveredFunctionPercent: 100,
-  },
+  summaryFiles = summaryFilesFromPercents(),
   env = {},
   spawnResult = { status: 0 },
 } = {}) {
@@ -71,7 +91,7 @@ function harness({
         return {
           loaded: new Set(),
           failureCount,
-          summary: { totals: summaryTotals },
+          summary: { files: summaryFiles },
         };
       },
       buildReport: () => fakeReport({ gapFiles }),
@@ -115,15 +135,68 @@ test("runCombinedCoverageGate invokes the source suite collector exactly once ev
   );
 });
 
-test("runCombinedCoverageGate forwards the resolved source-stage thresholds to the shared collector", async () => {
+test("runCombinedCoverageGate derives both the deck-kernel-inclusive breadth report and the deck-kernel-excluded percentage floors from a single collector invocation (#1925)", async () => {
+  const h = harness({
+    summaryFiles: [
+      ...summaryFilesFromPercents({
+        coveredLinePercent: SOURCE_STAGE.defaultMinimum,
+        coveredBranchPercent: SOURCE_STAGE.defaultBranchMinimum,
+        coveredFunctionPercent: SOURCE_STAGE.defaultFunctionMinimum,
+      }),
+      {
+        path: "/repo/src/lib/document/deck-kernel/deck-diff.ts",
+        totalLineCount: 500,
+        coveredLineCount: 1,
+        totalBranchCount: 500,
+        coveredBranchCount: 1,
+        totalFunctionCount: 500,
+        coveredFunctionCount: 1,
+      },
+    ],
+  });
+  const exitCode = await runCombinedCoverageGate(h.options);
+
+  assert.equal(exitCode, 0);
+  assert.equal(
+    h.collectLoadedCalls.length,
+    1,
+    "a single structured source suite run must serve both the widened breadth report and the deck-kernel-excluded percentage floors — no second run for either concern",
+  );
+  const [call] = h.collectLoadedCalls;
+  assert.ok(
+    !call.stage.excludes.includes("src/lib/document/deck-kernel/**"),
+    "the one shared run instruments deck-kernel for breadth",
+  );
+});
+
+test("runCombinedCoverageGate shares the widened BREADTH_COVERAGE_STAGE with the collector for deck-kernel breadth (#1925)", async () => {
   const h = harness();
   await runCombinedCoverageGate(h.options);
 
   const [call] = h.collectLoadedCalls;
-  assert.equal(call.stage, SOURCE_STAGE);
-  assert.equal(call.lineCoverage, SOURCE_STAGE.defaultMinimum);
-  assert.equal(call.branchCoverage, SOURCE_STAGE.defaultBranchMinimum);
-  assert.equal(call.functionCoverage, SOURCE_STAGE.defaultFunctionMinimum);
+  assert.equal(call.stage, BREADTH_COVERAGE_STAGE);
+  assert.ok(
+    !call.stage.excludes.includes("src/lib/document/deck-kernel/**"),
+    "the shared run's own instrumentation must not exclude deck-kernel",
+  );
+});
+
+test("runCombinedCoverageGate does not forward source-stage thresholds to the shared collector's own run() threshold annotation (#1925)", async () => {
+  const h = harness();
+  await runCombinedCoverageGate(h.options);
+
+  const [call] = h.collectLoadedCalls;
+  // Once the shared run is widened to instrument deck-kernel,
+  // `summary.totals` (what `run()`'s own lineCoverage/branchCoverage/
+  // functionCoverage options are compared against) no longer matches the
+  // percentage-only, deck-kernel-excluded totals this gate actually
+  // enforces via `evaluateCoverageFloors` below. Forwarding the un-widened
+  // thresholds here would make `run()`'s reporter print spurious "does not
+  // meet threshold" diagnostics derived from the wrong (deck-kernel
+  // inclusive) totals, so these stay at the collector's own default of 0.
+  assert.equal(call.lineCoverage, undefined);
+  assert.equal(call.branchCoverage, undefined);
+  assert.equal(call.functionCoverage, undefined);
 });
 
 test("runCombinedCoverageGate defaults the shared run's concurrency to 1, matching the source stage's own --test-concurrency=1", async () => {
@@ -134,19 +207,28 @@ test("runCombinedCoverageGate defaults the shared run's concurrency to 1, matchi
   assert.equal(call.concurrency, 1);
 });
 
-test("runCombinedCoverageGate honors source threshold environment overrides", async () => {
-  const h = harness();
-  h.options.env = {
-    SOURCE_LINE_COVERAGE_MIN: "80",
-    SOURCE_BRANCH_COVERAGE_MIN: "70",
-    SOURCE_FUNCTION_COVERAGE_MIN: "60",
-  };
-  await runCombinedCoverageGate(h.options);
+test("runCombinedCoverageGate honors source threshold environment overrides in the percentage-floor evaluation", async () => {
+  // Env overrides are no longer forwarded to the shared collector call (see
+  // the "does not forward source-stage thresholds" test above) — they must
+  // still change the outcome of this gate's own `evaluateCoverageFloors`
+  // comparison against `aggregateCoverageTotals`. A summary that would fail
+  // the default 95/89/93 floors but passes a lowered 80/70/60 override
+  // proves the override reaches that comparison.
+  const h = harness({
+    summaryFiles: summaryFilesFromPercents({
+      coveredLinePercent: 80,
+      coveredBranchPercent: 70,
+      coveredFunctionPercent: 60,
+    }),
+    env: {
+      SOURCE_LINE_COVERAGE_MIN: "80",
+      SOURCE_BRANCH_COVERAGE_MIN: "70",
+      SOURCE_FUNCTION_COVERAGE_MIN: "60",
+    },
+  });
+  const exitCode = await runCombinedCoverageGate(h.options);
 
-  const [call] = h.collectLoadedCalls;
-  assert.equal(call.lineCoverage, 80);
-  assert.equal(call.branchCoverage, 70);
-  assert.equal(call.functionCoverage, 60);
+  assert.equal(exitCode, 0);
 });
 
 // --- fail-fast on invalid environment overrides ---------------------------
@@ -184,15 +266,15 @@ test("runCombinedCoverageGate fails and skips breadth/script stage when source u
   assert.equal(h.spawnCalls.length, 0);
 });
 
-// --- percentage floor enforcement (shared summary) -------------------------
+// --- percentage floor enforcement (shared summary, filtered via summary.files) ---
 
 test("runCombinedCoverageGate fails when the shared summary misses a percentage floor", async () => {
   const h = harness({
-    summaryTotals: {
+    summaryFiles: summaryFilesFromPercents({
       coveredLinePercent: 50,
       coveredBranchPercent: 100,
       coveredFunctionPercent: 100,
-    },
+    }),
   });
   const exitCode = await runCombinedCoverageGate(h.options);
 
@@ -207,15 +289,103 @@ test("runCombinedCoverageGate fails when the shared summary misses a percentage 
 
 test("runCombinedCoverageGate passes when the shared summary meets every percentage floor exactly", async () => {
   const h = harness({
-    summaryTotals: {
+    summaryFiles: summaryFilesFromPercents({
       coveredLinePercent: SOURCE_STAGE.defaultMinimum,
       coveredBranchPercent: SOURCE_STAGE.defaultBranchMinimum,
       coveredFunctionPercent: SOURCE_STAGE.defaultFunctionMinimum,
-    },
+    }),
   });
   const exitCode = await runCombinedCoverageGate(h.options);
 
   assert.equal(exitCode, 0);
+});
+
+test("runCombinedCoverageGate logs the deck-kernel-excluded percentage totals it actually enforces (#1925)", async () => {
+  // The reporter's own coverage table sums every instrumented file
+  // (deck-kernel included), so once deck-kernel is widened into the shared
+  // run's instrumentation that table no longer matches what this gate
+  // enforces. This explicit log line is what lets CI/local output state the
+  // filtered numbers the floor check actually used.
+  const h = harness({
+    summaryFiles: summaryFilesFromPercents({
+      coveredLinePercent: 96,
+      coveredBranchPercent: 90,
+      coveredFunctionPercent: 94,
+    }),
+  });
+  const exitCode = await runCombinedCoverageGate(h.options);
+
+  assert.equal(exitCode, 0);
+  assert.ok(
+    h.logs.some((line) =>
+      line.includes(
+        "Percentage floor totals (deck-kernel excluded): 96.00% lines, 90.00% branches, 94.00% functions.",
+      ),
+    ),
+  );
+});
+
+// --- unchanged percentage metrics despite the deck-kernel breadth widening (#1925) ---
+
+test("runCombinedCoverageGate ignores a deck-kernel file's coverage when evaluating percentage floors", async () => {
+  const h = harness({
+    summaryFiles: [
+      ...summaryFilesFromPercents({
+        coveredLinePercent: SOURCE_STAGE.defaultMinimum,
+        coveredBranchPercent: SOURCE_STAGE.defaultBranchMinimum,
+        coveredFunctionPercent: SOURCE_STAGE.defaultFunctionMinimum,
+      }),
+      {
+        // Instrumented for breadth (BREADTH_COVERAGE_STAGE no longer
+        // excludes deck-kernel), but must not move the percentage floors:
+        // zero coverage here would fail every floor if summary.totals (or
+        // an unfiltered summary.files aggregate) were trusted directly.
+        path: "/repo/src/lib/document/deck-kernel/deck-diff.ts",
+        totalLineCount: 10_000,
+        coveredLineCount: 0,
+        totalBranchCount: 10_000,
+        coveredBranchCount: 0,
+        totalFunctionCount: 10_000,
+        coveredFunctionCount: 0,
+      },
+    ],
+  });
+  const exitCode = await runCombinedCoverageGate(h.options);
+
+  assert.equal(
+    exitCode,
+    0,
+    "a poorly-covered deck-kernel file must not fail the percentage floors",
+  );
+});
+
+test("runCombinedCoverageGate still fails a percentage floor breached by a non-deck-kernel file even when a deck-kernel file is present", async () => {
+  const h = harness({
+    summaryFiles: [
+      ...summaryFilesFromPercents({ coveredLinePercent: 10 }),
+      {
+        path: "/repo/src/lib/document/deck-kernel/deck-diff.ts",
+        totalLineCount: 10_000,
+        coveredLineCount: 10_000,
+        totalBranchCount: 10_000,
+        coveredBranchCount: 10_000,
+        totalFunctionCount: 10_000,
+        coveredFunctionCount: 10_000,
+      },
+    ],
+  });
+  const exitCode = await runCombinedCoverageGate(h.options);
+
+  assert.equal(
+    exitCode,
+    1,
+    "a perfectly-covered deck-kernel file must not mask a real non-deck-kernel regression",
+  );
+  assert.ok(
+    h.errors.some((line) =>
+      line.includes("10.00% line coverage does not meet threshold"),
+    ),
+  );
 });
 
 // --- breadth gate reuse of the shared run ----------------------------------

@@ -1,45 +1,50 @@
 #!/usr/bin/env node
 
 /**
- * Coverage breadth non-regression gate (#1896).
+ * Coverage breadth non-regression gate (#1896, widened to deck-kernel in
+ * #1925).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
  * and fails only when the number of unresolved, actionable runtime-file
  * coverage gaps *increases* past the recorded baseline. Improvements (fewer
- * gap files) always pass; this PR intentionally does not force every
+ * gap files) always pass; this gate intentionally does not force every
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (167) was measured directly against this repository at
- * the time this gate was added, using this gate's own eligibility scan and
- * TypeScript-AST classification: 781 eligible runtime source files under
- * `src/**` (same include/exclude globs as the "Source unit line coverage"
- * stage), 590 loaded by the source unit suite, 191 absent. Of those 191
- * absent files, 22 are type-only (no runtime behavior — up from a rough
- * pre-#1896 estimate of 14, because this classifier also recognizes ambient
- * `declare module` augmentation files such as `src/types/next-auth.d.ts` and
- * ordinary `*-types.ts` files that a plain-text scan missed) and 2 are pure
- * re-export barrels (matching the pre-#1896 estimate exactly), leaving 167
- * actionable gap files. See docs/operations/quality-gates.md for the full
- * breakdown. Lower this constant by hand whenever gap files are closed in
- * the same commit; never raise it to hide a regression. Use
- * COVERAGE_BREADTH_MAX_GAP_FILES for local experimentation only — do not use
- * it to mask a real regression in CI.
+ * The baseline below (148) was re-measured directly against this repository
+ * when #1925 widened `listEligibleSourceFiles`/`collectLoadedFiles` to
+ * include `src/lib/document/deck-kernel/**` in breadth eligibility and
+ * instrumentation (previously excluded entirely — see
+ * `BREADTH_COVERAGE_STAGE` in `coverage-breadth.mjs`): 848 eligible runtime
+ * source files under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible,
+ * 646 loaded by the source unit suite, leaving 148 actionable gap files.
+ * Widening to include deck-kernel added 66 eligible files (1 type-only, 4
+ * barrel, 61 runtime-eligible), of which 60 were already loaded by
+ * deck-kernel's own test suite and 1
+ * (`src/lib/document/deck-kernel/theme-typography.ts`) is a new actionable
+ * gap — deck-kernel was already well unit-tested, so widening breadth to
+ * cover it barely moved the gap count even though it moved the eligible and
+ * loaded counts substantially. This is a zero-slack baseline: it is set to
+ * the exact measured count, not a rounded-up buffer. See
+ * docs/operations/quality-gates.md for the full breakdown. Lower this
+ * constant by hand whenever gap files are closed in the same commit; never
+ * raise it to hide a regression. Use COVERAGE_BREADTH_MAX_GAP_FILES for local
+ * experimentation only — do not use it to mask a real regression in CI.
  */
 
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import {
+  BREADTH_COVERAGE_STAGE,
   buildBreadthReport,
   collectLoadedFiles,
   formatBreadthReport,
   listEligibleSourceFiles,
-  SOURCE_COVERAGE_STAGE,
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 167;
+export const DEFAULT_MAX_GAP_FILES = 148;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
@@ -90,7 +95,7 @@ export async function runCoverageBreadthCheck({
   const { loaded, failureCount } = await collectLoaded({
     repoRoot,
     testFiles,
-    stage: SOURCE_COVERAGE_STAGE,
+    stage: BREADTH_COVERAGE_STAGE,
     concurrency,
   });
 

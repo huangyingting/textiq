@@ -98,9 +98,11 @@ test visibility.
 `scripts/coverage-breadth.mjs`) closes that blind spot with a structured
 inventory instead of scraping the coverage table:
 
-1. Enumerates every file eligible under the "Source unit line coverage"
-   stage's include/exclude globs (same globs `check-line-coverage.mjs` uses —
-   single source of truth for "eligible").
+1. Enumerates every file eligible under `BREADTH_COVERAGE_STAGE`'s
+   include/exclude globs (`coverage-breadth.mjs`) — the same "Source unit line
+   coverage" globs `check-line-coverage.mjs` uses, except deck-kernel is no
+   longer excluded (#1925; see below), so it is eligible for breadth like any
+   other source directory.
 2. Runs the source unit test suite through the `node:test` `run()` API and
    reads the structured `test:coverage` event (`data.summary.files`) to learn
    which eligible files were actually loaded — not by parsing the printed
@@ -129,11 +131,27 @@ The gate fails if the number of unresolved `gap` files exceeds
 `check-import-graph.mjs`'s pattern) — regressions are blocked, improvements
 always pass, and the baseline is never auto-lowered. Override the baseline
 locally with `COVERAGE_BREADTH_MAX_GAP_FILES=<n>`; do not use the override to
-mask a real regression in CI. As of #1896 the repository has 781 eligible
+mask a real regression in CI. As of #1896 the repository had 781 eligible
 runtime source files, 22 type-only, 26 barrel (2 of which were unloaded), 590
-loaded by the source unit suite, and 167 actionable gap files — this PR adds
-visibility and a non-regression floor, it does not close the 167 existing
-gaps.
+loaded by the source unit suite, and 167 actionable gap files. #1925 widened
+the shared structured source run's own instrumentation/eligibility globs
+(`BREADTH_COVERAGE_STAGE`) to include `src/lib/document/deck-kernel/**`,
+which had previously been excluded from both breadth and coverage entirely;
+deck-kernel turned out to be well unit-tested already. As of #1925 the
+repository has 848 eligible runtime source files, 24 type-only, 30 barrel, 794
+runtime-eligible, 646 loaded by the source unit suite, and 148 actionable gap
+files (`DEFAULT_MAX_GAP_FILES` was lowered from 167 to 148 to match, with zero
+stale slack).
+
+Widening breadth eligibility/instrumentation to include deck-kernel would also
+widen `summary.totals` — the data the line/branch/function percentage floors
+are checked against — to include deck-kernel, which was never the intent of
+#1925 (only breadth _visibility_ should change, not the percentage floors).
+`aggregateCoverageTotals` in `coverage-breadth.mjs` recomputes those totals
+from `summary.files` instead, re-applying the original deck-kernel exclusion
+(`PERCENTAGE_ONLY_EXCLUDE_GLOBS`) as a percentage-only filter, so
+`test:line-coverage`'s and `test:combined-coverage`'s reported
+line/branch/function percentages are unaffected by the breadth widening.
 
 On the combined `npm test` path (`scripts/check-combined-coverage.mjs`, #1919)
 this exact same computation — same eligibility scan, same classification,
