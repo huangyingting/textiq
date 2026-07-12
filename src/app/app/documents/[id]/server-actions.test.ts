@@ -320,6 +320,13 @@ describe("deck server actions", () => {
       deckJson: { slides: [] },
       revisionToken: "rev-1",
     });
+    // Exact document-id scoping: view access is checked for the requested
+    // document id, not a hardcoded or unrelated one (issue #1904).
+    assert.deepEqual(state().calls[0], [
+      "requireDocumentActionContext",
+      "doc-1",
+      "view",
+    ]);
 
     prisma.document.findUnique = async () => null;
     assert.deepEqual(await deckActions.fetchDeckJson("missing"), {
@@ -329,6 +336,11 @@ describe("deck server actions", () => {
       error: "Document not found.",
       failure: { code: "document_not_found", retryable: false },
     });
+    assert.deepEqual(state().calls.at(-1), [
+      "requireDocumentActionContext",
+      "missing",
+      "view",
+    ]);
 
     prisma.document.findUnique = async () => {
       throw new Error("database down");
@@ -337,6 +349,23 @@ describe("deck server actions", () => {
     assert.equal(failure.ok, false);
     assert.equal(failure.failure.code, "storage_unavailable");
     assert.equal(failure.failure.retryable, true);
+  });
+
+  it("denies fetch access without querying storage when authorization is rejected", async () => {
+    const denial = new Error(
+      "You do not have permission to view this document.",
+    );
+    state().requireDocumentActionContext = async () => {
+      throw denial;
+    };
+    prisma.document.findUnique = async () => {
+      throw new Error("should not be queried");
+    };
+
+    await assert.rejects(
+      () => deckActions.fetchDeckJson("doc-1"),
+      (error) => error === denial,
+    );
   });
 
   it("saves full deck snapshots with revalidation and storage errors", async () => {
@@ -361,6 +390,31 @@ describe("deck server actions", () => {
       error: "Failed to save deck. Please try again.",
       failure: { code: "storage_unavailable", retryable: true },
     });
+  });
+
+  it("denies save access without persisting or revalidating when authorization is rejected", async () => {
+    const denial = new Error(
+      "You do not have permission to edit this document.",
+    );
+    state().requireDocumentActionContext = async (documentId, capability) => {
+      state().calls.push([
+        "requireDocumentActionContext",
+        documentId,
+        capability,
+      ]);
+      throw denial;
+    };
+    state().persistDeck = async () => {
+      throw new Error("should not persist");
+    };
+
+    await assert.rejects(
+      () => deckActions.saveDeckJson("doc-1", { slides: [] }, "rev-1"),
+      (error) => error === denial,
+    );
+    assert.deepEqual(state().calls, [
+      ["requireDocumentActionContext", "doc-1", "edit"],
+    ]);
   });
 });
 
@@ -400,24 +454,94 @@ describe("lexical server actions", () => {
     ]);
   });
 
+  it("denies unauthenticated saves before any validation or persistence", async () => {
+    const redirect = new Error("NEXT_REDIRECT");
+    state().requireUser = async () => {
+      state().calls.push(["requireUser"]);
+      throw redirect;
+    };
+    state().atomicSaveDocumentLexical = async () => {
+      throw new Error("should not persist");
+    };
+
+    await assert.rejects(
+      () =>
+        lexicalActions.saveDocumentLexical(
+          "doc-1",
+          JSON.stringify({ root: { children: [] } }),
+        ),
+      (error) => error === redirect,
+    );
+    assert.deepEqual(state().calls, [["requireUser"]]);
+  });
+
+  it("denies edit-capability rejection scoped to the exact document id, without persisting", async () => {
+    const denial = new Error(
+      "You do not have permission to edit this document.",
+    );
+    state().requireDocumentCapability = async (userId, documentId) => {
+      state().calls.push([
+        "requireDocumentCapability",
+        userId,
+        documentId,
+        "edit",
+      ]);
+      throw denial;
+    };
+    state().atomicSaveDocumentLexical = async () => {
+      throw new Error("should not persist");
+    };
+
+    await assert.rejects(
+      () =>
+        lexicalActions.saveDocumentLexical(
+          "doc-77",
+          JSON.stringify({ root: { children: [] } }),
+        ),
+      (error) => error === denial,
+    );
+    assert.deepEqual(state().calls, [
+      ["requireUser"],
+      ["stampBlockIds", { root: { children: [] } }],
+      ["requireDocumentCapability", "user-1", "doc-77", "edit"],
+    ]);
+  });
+
   it("rebuilds visual mirrors across missing, empty, success, and failure paths", async () => {
     prisma.document.findUnique = async () => null;
     assert.deepEqual(await lexicalActions.rebuildVisualMirror("missing"), {
       ok: false,
       error: "Document not found.",
     });
+    // Exact document-id scoping: edit access is checked for the requested
+    // document id before any lookup runs (issue #1904).
+    assert.deepEqual(state().calls[0], [
+      "requireDocumentActionContext",
+      "missing",
+      "edit",
+    ]);
 
     prisma.document.findUnique = async () => ({ contentJson: null });
     assert.deepEqual(await lexicalActions.rebuildVisualMirror("doc-empty"), {
       ok: true,
       data: { created: 0, updated: 0, deleted: 0, skipped: 0, invalid: 0 },
     });
+    assert.deepEqual(state().calls.at(-2), [
+      "requireDocumentActionContext",
+      "doc-empty",
+      "edit",
+    ]);
 
     prisma.document.findUnique = async () => ({ contentJson: { root: {} } });
     assert.deepEqual(await lexicalActions.rebuildVisualMirror("doc-1"), {
       ok: true,
       data: { created: 0, updated: 1, deleted: 0, skipped: 0, invalid: 0 },
     });
+    assert.deepEqual(state().calls.at(-3), [
+      "requireDocumentActionContext",
+      "doc-1",
+      "edit",
+    ]);
     assert.deepEqual(state().calls.at(-2), [
       "rebuildMirror",
       "doc-1",
@@ -432,6 +556,23 @@ describe("lexical server actions", () => {
       ok: false,
       error: "Failed to rebuild visual mirror.",
     });
+  });
+
+  it("denies mirror rebuild access without querying storage when authorization is rejected", async () => {
+    const denial = new Error(
+      "You do not have permission to edit this document.",
+    );
+    state().requireDocumentActionContext = async () => {
+      throw denial;
+    };
+    prisma.document.findUnique = async () => {
+      throw new Error("should not be queried");
+    };
+
+    await assert.rejects(
+      () => lexicalActions.rebuildVisualMirror("doc-1"),
+      (error) => error === denial,
+    );
   });
 });
 
