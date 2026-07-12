@@ -13,6 +13,67 @@ const initialState: DeleteAccountResult | null = null;
 /** Literal keyword accepted as a confirmation alternative to the email. */
 const DELETE_KEYWORD = "DELETE";
 
+export type DeleteAccountConfirmationState = {
+  /** Whether the typed confirmation matches the email (case-insensitively) or the literal DELETE keyword. */
+  canSubmit: boolean;
+  /** Descriptor for the dialog's "Delete account" open trigger. */
+  openAction: ActionDescriptor;
+  /** Descriptor for the dialog's "Cancel" button. */
+  cancelAction: ActionDescriptor;
+  /** Descriptor for the dialog's destructive confirm button. */
+  confirmAction: ActionDescriptor;
+};
+
+/**
+ * Pure confirmation-safeguard decision for {@link DeleteAccountForm}
+ * (issue #1928).
+ *
+ * Given the account email, the currently typed confirmation text, and
+ * whether a delete request is in flight, decides whether the destructive
+ * confirm button may be enabled and derives the three action descriptors
+ * (open/cancel/confirm) — including their labels and `disabledReason`
+ * guidance — that gate the irreversible action. Extracted from the
+ * component body so the confirmation-matching and pending-lockout logic is
+ * unit-testable independent of the portaled `ModalSurface`, which requires a
+ * live `document` to render.
+ */
+export function computeDeleteAccountConfirmation({
+  email,
+  confirmation,
+  isPending,
+}: {
+  email: string;
+  confirmation: string;
+  isPending: boolean;
+}): DeleteAccountConfirmationState {
+  const trimmed = confirmation.trim();
+  const canSubmit =
+    trimmed.toLowerCase() === email.trim().toLowerCase() ||
+    trimmed === DELETE_KEYWORD;
+
+  const openAction: ActionDescriptor = {
+    id: "settings.delete-account.open",
+    label: "Delete account",
+    description: "Open account deletion confirmation",
+  };
+  const cancelAction: ActionDescriptor = {
+    id: "settings.delete-account.cancel",
+    label: "Cancel",
+    disabledReason: isPending ? "Account deletion is in progress" : undefined,
+  };
+  const confirmAction: ActionDescriptor = {
+    id: "settings.delete-account.confirm",
+    label: isPending ? "Deleting…" : "Delete account",
+    disabledReason: !canSubmit
+      ? "Type your email address or DELETE to confirm"
+      : isPending
+        ? "Account deletion is in progress"
+        : undefined,
+  };
+
+  return { canSubmit, openAction, cancelAction, confirmAction };
+}
+
 /**
  * The Danger zone control: a "Delete account" button that opens a confirmation
  * dialog requiring the user to type their exact email address (or the literal
@@ -35,29 +96,8 @@ export function DeleteAccountForm({ email }: { email: string }) {
     initialState,
   );
   const inputRef = useRef<HTMLInputElement>(null);
-  const trimmed = confirmation.trim();
-  const canSubmit =
-    trimmed.toLowerCase() === email.trim().toLowerCase() ||
-    trimmed === DELETE_KEYWORD;
-  const openAction: ActionDescriptor = {
-    id: "settings.delete-account.open",
-    label: "Delete account",
-    description: "Open account deletion confirmation",
-  };
-  const cancelAction: ActionDescriptor = {
-    id: "settings.delete-account.cancel",
-    label: "Cancel",
-    disabledReason: isPending ? "Account deletion is in progress" : undefined,
-  };
-  const confirmAction: ActionDescriptor = {
-    id: "settings.delete-account.confirm",
-    label: isPending ? "Deleting…" : "Delete account",
-    disabledReason: !canSubmit
-      ? "Type your email address or DELETE to confirm"
-      : isPending
-        ? "Account deletion is in progress"
-        : undefined,
-  };
+  const { canSubmit, openAction, cancelAction, confirmAction } =
+    computeDeleteAccountConfirmation({ email, confirmation, isPending });
 
   const close = () => {
     if (isPending) {

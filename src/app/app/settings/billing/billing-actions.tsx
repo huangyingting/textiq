@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 
+import type { ActionResult } from "@/lib/action-result";
+import type { BillingActionData } from "@/lib/billing/action-types";
 import type { Plan } from "@/lib/billing/catalog";
 import { PLAN_CATALOG } from "@/lib/billing/catalog";
 import { changePlanAction, cancelSubscriptionAction } from "./actions";
@@ -12,7 +14,10 @@ import { changePlanAction, cancelSubscriptionAction } from "./actions";
  * Uses explicit period checks so future catalog values (e.g. 14-day trials)
  * produce a distinct label rather than silently inheriting "mo".
  */
-function compactCreditPeriod(credits: number, periodDays: number): string {
+export function compactCreditPeriod(
+  credits: number,
+  periodDays: number,
+): string {
   const creditStr =
     credits >= 1000 && credits % 1000 === 0
       ? `${credits / 1000}k`
@@ -20,6 +25,41 @@ function compactCreditPeriod(credits: number, periodDays: number): string {
   const period =
     periodDays === 7 ? "week" : periodDays === 30 ? "mo" : `${periodDays}d`;
   return `${creditStr} credits/${period}`;
+}
+
+export type BillingActionOutcome = {
+  /** User-facing feedback message, or `null` when the action redirects instead of messaging. */
+  message: string | null;
+  isError: boolean;
+  /** Present only for a successful plan change that hands off to an external checkout/portal URL. */
+  redirectUrl?: string;
+};
+
+/**
+ * Pure outcome-mapping decision for the billing action UI adapter
+ * (issue #1928).
+ *
+ * Given the `ActionResult` returned by `changePlanAction`/
+ * `cancelSubscriptionAction`, decides the feedback message, its error/success
+ * styling, and whether the caller should redirect instead of rendering a
+ * message. Extracted from the `useTransition` handlers so the result ->
+ * outcome mapping is unit-testable without invoking the real server actions,
+ * which require a live session and billing provider.
+ */
+export function mapBillingActionOutcome(
+  result: ActionResult<BillingActionData>,
+): BillingActionOutcome {
+  if (!result.ok) {
+    return { message: result.error, isError: true };
+  }
+  if (result.data.redirectUrl) {
+    return {
+      message: null,
+      isError: false,
+      redirectUrl: result.data.redirectUrl,
+    };
+  }
+  return { message: result.data.message, isError: false };
 }
 
 interface BillingActionsProps {
@@ -40,17 +80,13 @@ export function BillingActions({
     setIsError(false);
     startTransition(async () => {
       const result = await changePlanAction(targetPlan);
-      if (!result.ok) {
-        setMessage(result.error);
-        setIsError(true);
+      const outcome = mapBillingActionOutcome(result);
+      if (outcome.redirectUrl) {
+        window.location.href = outcome.redirectUrl;
         return;
       }
-      if (result.data.redirectUrl) {
-        window.location.href = result.data.redirectUrl;
-        return;
-      }
-      setMessage(result.data.message);
-      setIsError(false);
+      setMessage(outcome.message);
+      setIsError(outcome.isError);
     });
   }
 
@@ -59,13 +95,9 @@ export function BillingActions({
     setIsError(false);
     startTransition(async () => {
       const result = await cancelSubscriptionAction();
-      if (!result.ok) {
-        setMessage(result.error);
-        setIsError(true);
-        return;
-      }
-      setMessage(result.data.message);
-      setIsError(false);
+      const outcome = mapBillingActionOutcome(result);
+      setMessage(outcome.message);
+      setIsError(outcome.isError);
     });
   }
 

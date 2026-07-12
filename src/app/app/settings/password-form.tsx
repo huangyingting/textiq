@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 
 import {
   AuthField,
@@ -13,36 +14,34 @@ import { changePassword } from "./actions";
 
 const initialState: PasswordResult | null = null;
 
+export type PasswordFormViewProps = {
+  hasPassword: boolean;
+  state: PasswordResult | null;
+  formAction: (payload: FormData) => void;
+  isPending: boolean;
+};
+
 /**
- * The change-password form: verifies the current password and sets a new one
- * via the `changePassword` server action.
+ * Pure state -> markup decision for {@link PasswordForm} (issue #1928).
  *
- * When the account has no password yet (Google-only sign-in) it renders a
- * "set a password" variant — the current-password field is hidden and an
- * explanatory note is shown. On success the password fields are cleared so the
- * typed secrets don't linger in the DOM.
+ * Given `hasPassword` and the current action-result state, decides whether
+ * to render the current-password field or the Google-only explanatory note,
+ * and which success/error message (if any) accompanies the form. Extracted
+ * from the component body so the field wiring and state transitions are
+ * unit-testable without exercising `useActionState`, which requires a live
+ * action dispatch to change state. Returns only the form's interior; the
+ * `<form>` element itself stays in {@link PasswordForm} so its `ref` is never
+ * threaded through a plain function call (see `react-hooks/refs`).
  */
-export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
-  const [state, formAction, isPending] = useActionState(
-    changePassword,
-    initialState,
-  );
-  const formRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (state?.ok) {
-      formRef.current?.reset();
-    }
-  }, [state]);
-
+export function renderPasswordFormView({
+  hasPassword,
+  state,
+  isPending,
+}: PasswordFormViewProps): ReactNode {
   const submitLabel = hasPassword ? "Update password" : "Set password";
 
   return (
-    <form
-      ref={formRef}
-      action={formAction}
-      className="flex w-full flex-col gap-4"
-    >
+    <>
       {hasPassword ? (
         <AuthField
           id="settings-current-password"
@@ -92,6 +91,39 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
           {submitLabel}
         </AuthSubmitButton>
       </div>
+    </>
+  );
+}
+
+/**
+ * The change-password form: verifies the current password and sets a new one
+ * via the `changePassword` server action.
+ *
+ * When the account has no password yet (Google-only sign-in) it renders a
+ * "set a password" variant — the current-password field is hidden and an
+ * explanatory note is shown. On success the password fields are cleared so the
+ * typed secrets don't linger in the DOM.
+ */
+export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
+  const [state, formAction, isPending] = useActionState(
+    changePassword,
+    initialState,
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state?.ok) {
+      formRef.current?.reset();
+    }
+  }, [state]);
+
+  return (
+    <form
+      ref={formRef}
+      action={formAction}
+      className="flex w-full flex-col gap-4"
+    >
+      {renderPasswordFormView({ hasPassword, state, formAction, isPending })}
     </form>
   );
 }
