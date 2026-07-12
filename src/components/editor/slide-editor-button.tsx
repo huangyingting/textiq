@@ -22,6 +22,7 @@ import type { DeckActionPort, SlideAssetActionPort } from "@/lib/action-ports";
 import type { ActionResult } from "@/lib/action-result";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { useSlideEditorOpen } from "@/components/editor/use-slide-editor-open";
+import { resolveSlideEditorButtonView } from "@/components/editor/slide-editor-button-view";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import { buildSourceBlockIndex } from "@/lib/presentation/block-index";
 import { openDeckFromJson } from "@/lib/presentation/open-deck";
@@ -285,6 +286,14 @@ export function SlideEditorButton({
     ...deckOpenDiagnostics,
     ...(themeResolution?.diagnostics ?? []),
   ];
+  const buttonView = resolveSlideEditorButtonView({
+    aiEnabled,
+    pendingJson,
+    aiPreview,
+    open,
+    deck,
+    deckOpenError,
+  });
   const documentBlocks = useMemo(
     () => collectDocumentBlocks(initialContentJson),
     [initialContentJson],
@@ -447,7 +456,7 @@ export function SlideEditorButton({
         aria-label="Open slide editor"
       />
 
-      {aiEnabled && pendingJson && !open ? (
+      {buttonView.showOpenDialog && pendingJson ? (
         <SlideEditorOpenDialog
           contentJson={pendingJson}
           themePackageId={pendingThemePackageId}
@@ -458,7 +467,7 @@ export function SlideEditorButton({
         />
       ) : null}
 
-      {aiPreview && !open ? (
+      {buttonView.showAiPreview && aiPreview ? (
         <DeckGenerationPreview
           proposedDeck={aiPreview.proposedDeck}
           baselineDeck={aiPreview.baselineDeck}
@@ -474,7 +483,7 @@ export function SlideEditorButton({
         />
       ) : null}
 
-      {open && deck ? (
+      {buttonView.showEditor && deck ? (
         <SlideEditorOverlay>
           <SlideEditor
             documentId={documentId}
@@ -508,7 +517,7 @@ export function SlideEditorButton({
         </SlideEditorOverlay>
       ) : null}
 
-      {open && !deck && deckOpenError ? (
+      {buttonView.showRecovery && deckOpenError ? (
         <SlideEditorOverlay>
           <SlideEditorOpenRecovery
             error={deckOpenError.error}

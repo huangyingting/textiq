@@ -41,6 +41,7 @@ import {
   PresenterToolIcon,
   SlideOverviewPanelPresentation,
 } from "@/components/presentation/present-mode/presenter-tools";
+import { resolvePresentModeShortcutEffect } from "@/components/presentation/present-mode-shortcuts";
 import { resolveDeckAssetSource } from "@/lib/presentation/deck-asset-source";
 import { presentCanvasAspectRatio } from "@/lib/presentation/present-shell";
 import { useDeckRenderTree } from "./use-deck-render-tree";
@@ -186,60 +187,58 @@ export function PresentMode({
 
   const handleShortcut = useCallback(
     (action: PresentShortcutAction) => {
-      if (action === "exit") {
-        if (keyboardHelpOpen) {
+      const effect = resolvePresentModeShortcutEffect(action, {
+        keyboardHelpOpen,
+        overviewOpen,
+      });
+      switch (effect.type) {
+        case "close-keyboard-help":
           closeKeyboardHelp();
           return true;
-        }
-        if (overviewOpen) {
+        case "close-overview":
           closeOverview();
           return true;
-        }
-        void handleClose();
-        return true;
-      }
-      if (action === "help") {
-        setKeyboardHelpOpen((o) => !o);
-        resetHudTimer();
-        return true;
-      }
-      if (keyboardHelpOpen) return false;
-      if (overviewOpen) {
-        if (action === "overview") {
-          closeOverview();
+        case "exit":
+          void handleClose();
           return true;
-        }
-        return false;
-      }
-      switch (action) {
-        case "next":
-          goNext();
+        case "toggle-keyboard-help":
+          setKeyboardHelpOpen((o) => !o);
+          resetHudTimer();
           return true;
-        case "previous":
-          goPrev();
+        case "blocked":
+          return false;
+        case "navigate":
+          switch (effect.action) {
+            case "next":
+              goNext();
+              break;
+            case "previous":
+              goPrev();
+              break;
+            case "first":
+              goFirst();
+              break;
+            case "last":
+              goLast();
+              break;
+          }
           return true;
-        case "first":
-          goFirst();
-          return true;
-        case "last":
-          goLast();
-          return true;
-        case "fullscreen":
+        case "toggle-fullscreen":
           void toggleFullscreen();
           return true;
-        case "notes":
+        case "toggle-notes":
           setNotesVisible((v) => !v);
           resetHudTimer();
           return true;
-        case "overview":
+        case "toggle-overview":
           setOverviewOpen((o) => !o);
           resetHudTimer();
           return true;
-        case "timer":
+        case "toggle-timer":
           setShowTimer((v) => !v);
           resetHudTimer();
           return true;
-        case "laser":
+        case "toggle-laser":
           toggleLaser();
           return true;
       }
