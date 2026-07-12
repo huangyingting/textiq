@@ -44,6 +44,7 @@ export { exportDeckAsPPTX } from "./deck-export-pptx";
 
 // Slide-image renderer
 export type {
+  DeckSlideImageDiagnostic,
   DeckSlideImageExportOptions,
   DeckSlideImageFormat,
 } from "./deck-export-slide-images";
