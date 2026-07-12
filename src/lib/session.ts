@@ -1,8 +1,15 @@
+import type { Session } from "next-auth";
+
 import { auth } from "@/auth";
 import { isSessionSecurityStampCurrent } from "@/lib/auth/session-security";
 import { prisma } from "@/lib/prisma";
 
-export type CurrentUser = Awaited<ReturnType<typeof getCurrentUser>>;
+// Written as an explicit alias (rather than `Awaited<ReturnType<typeof
+// getCurrentUser>>`) because that self-referential pattern causes tsx's
+// coverage instrumentation to misattribute `requireUserCore`'s branches --
+// which share the same `if (!user?.id)` shape -- as uncovered even when
+// fully exercised by tests. The resolved type is identical either way.
+export type CurrentUser = Session["user"] | null;
 
 interface SessionBackedUser {
   id: string;
