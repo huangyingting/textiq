@@ -11,7 +11,7 @@ export const LINE_COVERAGE_STAGES = [
     // TEMPORARY: lowered to unblock merge queue churn; restore to 97 after backlog clears.
     defaultMinimum: 95,
     branchEnvKey: "SOURCE_BRANCH_COVERAGE_MIN",
-    defaultBranchMinimum: 88,
+    defaultBranchMinimum: 89,
     functionEnvKey: "SOURCE_FUNCTION_COVERAGE_MIN",
     defaultFunctionMinimum: 93,
     command: "node",
