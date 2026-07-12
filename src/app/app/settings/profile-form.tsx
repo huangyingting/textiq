@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import type { ReactNode } from "react";
 
 import type { ProfileResult } from "@/lib/auth/form-state";
 
@@ -13,25 +14,31 @@ const fieldClass =
 
 const labelClass = "text-sm font-medium text-ds-text-primary";
 
-/**
- * The account profile form: edits the current user's display name via the
- * `updateProfile` server action. The email is shown read-only (it can't be
- * changed here). The display-name input is uncontrolled (`defaultValue`) so it
- * keeps the typed value after saving; a reload re-reads the fresh name from the
- * database.
- */
-export function ProfileForm({
-  initialName,
-  email,
-}: {
+export type ProfileFormViewProps = {
   initialName: string;
   email: string;
-}) {
-  const [state, formAction, isPending] = useActionState(
-    updateProfile,
-    initialState,
-  );
+  state: ProfileResult | null;
+  formAction: (payload: FormData) => void;
+  isPending: boolean;
+};
 
+/**
+ * Pure state -> markup decision for {@link ProfileForm} (issue #1928).
+ *
+ * Given the read-only email, the display-name default, and the current
+ * action-result state, decides which success/error message (if any)
+ * accompanies the form and whether the submit button is disabled. Extracted
+ * from the component body so the field wiring and state transitions are
+ * unit-testable without exercising `useActionState`, which requires a live
+ * action dispatch to change state.
+ */
+export function renderProfileFormView({
+  initialName,
+  email,
+  state,
+  formAction,
+  isPending,
+}: ProfileFormViewProps): ReactNode {
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -94,4 +101,32 @@ export function ProfileForm({
       </div>
     </form>
   );
+}
+
+/**
+ * The account profile form: edits the current user's display name via the
+ * `updateProfile` server action. The email is shown read-only (it can't be
+ * changed here). The display-name input is uncontrolled (`defaultValue`) so it
+ * keeps the typed value after saving; a reload re-reads the fresh name from the
+ * database.
+ */
+export function ProfileForm({
+  initialName,
+  email,
+}: {
+  initialName: string;
+  email: string;
+}) {
+  const [state, formAction, isPending] = useActionState(
+    updateProfile,
+    initialState,
+  );
+
+  return renderProfileFormView({
+    initialName,
+    email,
+    state,
+    formAction,
+    isPending,
+  });
 }

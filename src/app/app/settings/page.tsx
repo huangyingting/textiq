@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { loadSettingsAccountViewModel } from "@/lib/settings/loader";
+import type { SettingsAccountViewModel } from "@/lib/settings/view-model";
 import { requireUser } from "@/lib/session";
 
 import { ProfileForm } from "./profile-form";
@@ -14,14 +16,21 @@ export const metadata: Metadata = {
   title: "Settings — TextIQ",
 };
 
-export default async function SettingsPage() {
-  const sessionUser = await requireUser(redirect);
-  const viewModel = await loadSettingsAccountViewModel(sessionUser.id);
-
-  if (!viewModel) {
-    redirect("/login");
-  }
-
+/**
+ * Pure view-model -> markup composition for {@link SettingsPage}
+ * (issue #1928).
+ *
+ * Given the already-loaded account view model, decides which sections
+ * render — the email-verification badge/form pair, the connected-accounts
+ * list filtered to available providers, and the password/profile/danger-zone
+ * forms wired with their view-model props. Extracted from the async default
+ * export so the composition is unit-testable without exercising
+ * `requireUser`/`loadSettingsAccountViewModel`, which require a live session
+ * and database.
+ */
+export function renderSettingsAccountView(
+  viewModel: SettingsAccountViewModel,
+): ReactNode {
   return (
     <main className="flex flex-1 flex-col items-center bg-ds-surface-sunken px-6 py-12">
       <div className="flex w-full max-w-2xl flex-col gap-8">
@@ -168,4 +177,15 @@ export default async function SettingsPage() {
       </div>
     </main>
   );
+}
+
+export default async function SettingsPage() {
+  const sessionUser = await requireUser(redirect);
+  const viewModel = await loadSettingsAccountViewModel(sessionUser.id);
+
+  if (!viewModel) {
+    redirect("/login");
+  }
+
+  return renderSettingsAccountView(viewModel);
 }
