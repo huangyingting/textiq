@@ -39,6 +39,25 @@
  * The marker lives next to the code it excuses so the reason is reviewable
  * in the same diff that introduces or removes it, instead of drifting out of
  * sync with a separate allowlist file.
+ *
+ * `mapped-e2e` is evidence, not a free-form label: `ref=` must name a real,
+ * repo-relative `e2e/**\/*.spec.ts` file that actually exists, so the
+ * exception is checkable instead of a permanent, driftable assertion. Marker
+ * comments are extracted with the TypeScript compiler's comment-trivia API
+ * (`ts.getLeadingCommentRanges`) against the same parsed `sourceFile` used
+ * for classification, not by regexing the raw file text, so a marker-shaped
+ * string inside an actual string literal or template is never mistaken for a
+ * marker. A file can declare more than one `mapped-e2e` marker (multiple
+ * specs reaching the same file); every declared `ref=` must independently
+ * validate — structurally (non-empty, repo-relative, under `e2e/`, no
+ * backslashes/absolute paths/`..` traversal, `.spec.ts` extension) and by
+ * existence (the file is actually present under `e2e/`) — before the file is
+ * assigned `mapped-e2e`. `validateBreadthMarkerRef` and
+ * `listExistingE2eSpecFiles` implement those two checks. A dangling or
+ * malformed `ref=` is never silently downgraded to `gap`: `buildBreadthReport`
+ * throws a `BreadthMarkerValidationError` naming every offending file/line so
+ * the failure is an actionable, source-attributed diagnostic instead of a
+ * quiet accuracy regression in the inventory.
  */
 
 import { readFileSync } from "node:fs";
@@ -49,6 +68,20 @@ import { scanRepositoryRoots, toPosix } from "./source-scan-utils.mjs";
 export const SOURCE_COVERAGE_STAGE = LINE_COVERAGE_STAGES[0];
 export const ELIGIBLE_ROOTS = ["src"];
 export const ELIGIBLE_SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
+
+// The e2e evidence root and spec naming convention `mapped-e2e ref=` values
+// must satisfy — matches `testMatch: /.*\.spec\.ts/` in playwright.config.ts
+// and the `E2E_SPEC_FILE_PATTERN` naming rule in `test-subsystem.mjs`.
+export const E2E_ROOT = "e2e";
+export const E2E_SPEC_EXTENSION = ".spec.ts";
+const E2E_SKIPPED_DIRECTORIES = new Set([
+  "node_modules",
+  ".next",
+  "coverage",
+  "dist",
+  "playwright-report",
+  "test-results",
+]);
 
 // deck-kernel was previously excluded from the "Source unit line coverage"
 // stage entirely, which excluded it from both instrumentation *and* breadth
@@ -252,13 +285,214 @@ export function classifySourceFile(fileText, filePath) {
 }
 
 /**
- * Parse an explicit `coverage-breadth: mapped-e2e|approved-exception` marker
- * comment out of a file's text. Returns `null` when no marker is present.
+ * Extract every `coverage-breadth: mapped-e2e|approved-exception` marker
+ * comment attached to a top-level statement (or trailing at end-of-file) in
+ * `fileText`, using the TypeScript compiler's own comment-trivia API
+ * (`ts.getLeadingCommentRanges`) against a freshly parsed `sourceFile`
+ * instead of regexing the raw text. This means a marker-shaped string that
+ * happens to appear inside a string literal, template, or nested comment
+ * deep in a function body is never mistaken for a real marker — only actual
+ * leading comment trivia is inspected, and only at the top level, matching
+ * where the module docstring says the marker is meant to live ("near the top
+ * of the file", immediately above the declaration it excuses).
+ *
+ * Returns an array (possibly empty) of `{ mode, detail, line }` — `line` is
+ * 1-based and points at the marker comment itself, for actionable
+ * diagnostics. A file may carry more than one `mapped-e2e` marker (multiple
+ * e2e specs independently reaching the same file); every one of them is
+ * returned so the caller can validate each `ref=` individually.
  */
-export function parseBreadthMarker(fileText) {
-  const match = BREADTH_MARKER_PATTERN.exec(fileText);
-  if (!match) return null;
-  return { mode: MARKER_MODE_BY_TOKEN[match[1]], detail: match[2] ?? null };
+export function parseBreadthMarkers(fileText, filePath = "marker-scan.ts") {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    fileText,
+    ts.ScriptTarget.Latest,
+    true,
+    sourceKindFor(filePath),
+  );
+
+  const markers = [];
+  const seenRangeStarts = new Set();
+  const nodesToScan = [...sourceFile.statements, sourceFile.endOfFileToken];
+
+  for (const node of nodesToScan) {
+    const ranges = ts.getLeadingCommentRanges(
+      sourceFile.text,
+      node.getFullStart(),
+    );
+    for (const range of ranges ?? []) {
+      if (seenRangeStarts.has(range.pos)) continue;
+      seenRangeStarts.add(range.pos);
+
+      const commentText = sourceFile.text.slice(range.pos, range.end);
+      const match = BREADTH_MARKER_PATTERN.exec(commentText);
+      if (!match) continue;
+
+      const { line } = sourceFile.getLineAndCharacterOfPosition(range.pos);
+      markers.push({
+        mode: MARKER_MODE_BY_TOKEN[match[1]],
+        detail: match[2] ?? null,
+        line: line + 1,
+      });
+    }
+  }
+
+  return markers;
+}
+
+/**
+ * Convenience wrapper over `parseBreadthMarkers` for callers that only care
+ * about the first marker in a file (e.g. a file that opts into exactly one
+ * mode). Returns `null` when no marker is present.
+ */
+export function parseBreadthMarker(fileText, filePath) {
+  const [marker] = parseBreadthMarkers(fileText, filePath);
+  return marker ? { mode: marker.mode, detail: marker.detail } : null;
+}
+
+export const REF_PROBLEM = Object.freeze({
+  MISSING: "missing-ref",
+  BACKSLASH: "backslash-in-ref",
+  ABSOLUTE: "absolute-ref",
+  TRAVERSAL: "path-traversal-ref",
+  OUTSIDE_E2E_ROOT: "outside-e2e-root-ref",
+  UNSUPPORTED_EXTENSION: "unsupported-spec-extension-ref",
+  DANGLING: "dangling-ref",
+});
+
+const REF_PROBLEM_MESSAGES = Object.freeze({
+  [REF_PROBLEM.MISSING]:
+    "mapped-e2e marker is missing a non-empty ref=<path> value",
+  [REF_PROBLEM.BACKSLASH]: "ref must use forward slashes, not backslashes",
+  [REF_PROBLEM.ABSOLUTE]:
+    "ref must be a repo-relative path, not an absolute path",
+  [REF_PROBLEM.TRAVERSAL]: 'ref must not contain ".." path traversal segments',
+  [REF_PROBLEM.OUTSIDE_E2E_ROOT]: `ref must point under ${E2E_ROOT}/`,
+  [REF_PROBLEM.UNSUPPORTED_EXTENSION]: `ref must reference a ${E2E_SPEC_EXTENSION} spec file`,
+  [REF_PROBLEM.DANGLING]:
+    "referenced e2e spec file does not exist (dangling reference)",
+});
+
+const WINDOWS_DRIVE_ABSOLUTE_PATTERN = /^[A-Za-z]:[\\/]/;
+
+function hasTraversalSegment(ref) {
+  return ref.split("/").some((segment) => segment === "..");
+}
+
+/**
+ * Collapse repeated slashes and drop no-op `.` segments without resolving
+ * `..` segments — traversal is rejected outright by `hasTraversalSegment`
+ * before this runs, never silently resolved.
+ */
+function normalizeRelativePosixPath(ref) {
+  return ref
+    .split("/")
+    .filter((segment) => segment !== "" && segment !== ".")
+    .join("/");
+}
+
+/**
+ * Structurally validate a `mapped-e2e ref=` value and, when
+ * `existingE2eSpecFiles` is supplied, confirm the referenced file actually
+ * exists as a real, regular e2e spec. Every check below maps to a distinct
+ * `REF_PROBLEM` code so callers can produce an actionable, specific
+ * diagnostic instead of a generic "invalid marker" message:
+ *
+ *   - non-empty                        -> REF_PROBLEM.MISSING
+ *   - no backslashes                   -> REF_PROBLEM.BACKSLASH
+ *   - not an absolute path              -> REF_PROBLEM.ABSOLUTE
+ *   - no ".." traversal segments        -> REF_PROBLEM.TRAVERSAL
+ *   - normalizes under "e2e/"           -> REF_PROBLEM.OUTSIDE_E2E_ROOT
+ *   - ends with ".spec.ts"              -> REF_PROBLEM.UNSUPPORTED_EXTENSION
+ *   - exists in `existingE2eSpecFiles`  -> REF_PROBLEM.DANGLING
+ *
+ * Returns `{ ok: true, normalized }` on success or
+ * `{ ok: false, problem, message }` on the first failing check.
+ */
+export function validateBreadthMarkerRef(
+  ref,
+  { existingE2eSpecFiles = new Set() } = {},
+) {
+  const fail = (problem) => ({
+    ok: false,
+    problem,
+    message: REF_PROBLEM_MESSAGES[problem],
+  });
+
+  if (typeof ref !== "string" || ref.trim() === "") {
+    return fail(REF_PROBLEM.MISSING);
+  }
+  if (ref.includes("\\")) {
+    return fail(REF_PROBLEM.BACKSLASH);
+  }
+  if (ref.startsWith("/") || WINDOWS_DRIVE_ABSOLUTE_PATTERN.test(ref)) {
+    return fail(REF_PROBLEM.ABSOLUTE);
+  }
+  if (hasTraversalSegment(ref)) {
+    return fail(REF_PROBLEM.TRAVERSAL);
+  }
+
+  const normalized = normalizeRelativePosixPath(ref);
+  if (normalized === "" || !normalized.startsWith(`${E2E_ROOT}/`)) {
+    return fail(REF_PROBLEM.OUTSIDE_E2E_ROOT);
+  }
+  if (!normalized.endsWith(E2E_SPEC_EXTENSION)) {
+    return fail(REF_PROBLEM.UNSUPPORTED_EXTENSION);
+  }
+  if (!existingE2eSpecFiles.has(normalized)) {
+    return fail(REF_PROBLEM.DANGLING);
+  }
+
+  return { ok: true, normalized };
+}
+
+/**
+ * Deterministically list every real, regular `e2e/**\/*.spec.ts` file on
+ * disk — the same naming convention Playwright's own `testMatch` and
+ * `test-subsystem.mjs`'s `E2E_SPEC_FILE_PATTERN` use. This is the existence
+ * side of `mapped-e2e ref=` validation: a `ref` is only "real evidence" if it
+ * names a file in this set, not merely a structurally well-formed path.
+ */
+export function listExistingE2eSpecFiles(repoRoot = process.cwd()) {
+  return new Set(
+    scanRepositoryRoots({
+      repoRoot,
+      roots: [E2E_ROOT],
+      sourceExtensions: new Set([".ts"]),
+      scanText: (filePath) => [filePath],
+      shouldScanFile: (filePath) => filePath.endsWith(E2E_SPEC_EXTENSION),
+      skipDirectoryNames: E2E_SKIPPED_DIRECTORIES,
+    }),
+  );
+}
+
+/**
+ * Raised by `buildBreadthReport` when one or more `mapped-e2e ref=` markers
+ * fail structural or existence validation. Carries the full list of
+ * `problems` (each `{ filePath, line, ref, problem, message }`) so callers
+ * can print every offending marker at once instead of stopping at the first.
+ */
+export class BreadthMarkerValidationError extends Error {
+  constructor(problems) {
+    super(formatBreadthMarkerProblems(problems));
+    this.name = "BreadthMarkerValidationError";
+    this.problems = problems;
+  }
+}
+
+export function formatBreadthMarkerProblems(problems) {
+  const lines = [
+    `Coverage breadth marker validation failed (${problems.length} invalid mapped-e2e ref(s)):`,
+  ];
+  for (const problem of problems) {
+    lines.push(
+      `  - ${problem.filePath}:${problem.line} coverage-breadth: mapped-e2e ref=${JSON.stringify(problem.ref ?? "")} — ${problem.message}.`,
+    );
+  }
+  lines.push(
+    "Fix the ref= path (or remove the marker) so mapped-e2e only ever names a real, existing e2e/**/*.spec.ts file.",
+  );
+  return lines.join("\n");
 }
 
 /**
@@ -422,27 +656,66 @@ export function aggregateCoverageTotals(
   };
 }
 
-function modeForEligibleFile({ filePath, fileText, loadedFiles }) {
-  const classification = classifySourceFile(fileText, filePath);
-  if (classification === "type-only") return MODE.TYPE_ONLY;
-  if (classification === "barrel") return MODE.BARREL;
-  if (loadedFiles.has(filePath)) return MODE.UNIT_LOADED;
+/**
+ * Resolve an eligible, non-loaded file's testing mode from its declared
+ * markers. `mapped-e2e` is only assigned once *every* `mapped-e2e` marker on
+ * the file validates (structurally and by existence, via
+ * `validateBreadthMarkerRef`) — a single dangling or malformed `ref=` is
+ * recorded in `problems` (not silently downgraded to `gap`) so the caller can
+ * fail the whole run with an actionable diagnostic instead of quietly
+ * losing evidence coverage. `approved-exception` markers carry a free-form
+ * `reason=` and are not evidence references, so they are not validated
+ * against the e2e spec inventory.
+ */
+function modeForMarkers({ filePath, markers, existingE2eSpecFiles, problems }) {
+  const mappedMarkers = markers.filter(
+    (marker) => marker.mode === MODE.MAPPED_E2E,
+  );
+  const exceptionMarkers = markers.filter(
+    (marker) => marker.mode === MODE.APPROVED_EXCEPTION,
+  );
 
-  const marker = parseBreadthMarker(fileText);
-  if (marker) return marker.mode;
+  if (mappedMarkers.length > 0) {
+    let hasInvalidRef = false;
+    for (const marker of mappedMarkers) {
+      const result = validateBreadthMarkerRef(marker.detail, {
+        existingE2eSpecFiles,
+      });
+      if (!result.ok) {
+        hasInvalidRef = true;
+        problems.push({
+          filePath,
+          line: marker.line,
+          ref: marker.detail,
+          problem: result.problem,
+          message: result.message,
+        });
+      }
+    }
+    return hasInvalidRef ? null : MODE.MAPPED_E2E;
+  }
+
+  if (exceptionMarkers.length > 0) return MODE.APPROVED_EXCEPTION;
   return MODE.GAP;
 }
 
 /**
  * Build the deterministic breadth report: every eligible file assigned to
- * exactly one testing mode, plus roll-up counts. `readFile` is injectable so
- * this stays unit-testable without touching disk.
+ * exactly one testing mode, plus roll-up counts. `readFile` and
+ * `existingE2eSpecFiles` are injectable so this stays unit-testable without
+ * touching disk.
+ *
+ * Throws `BreadthMarkerValidationError` (collecting every offending marker
+ * across every file, not just the first) when any `mapped-e2e ref=` fails
+ * structural or existence validation — a file only ever becomes `mapped-e2e`
+ * once all of its declared refs validate.
  */
 export function buildBreadthReport({
   repoRoot = process.cwd(),
   eligibleFiles,
   loadedFiles,
   readFile = (filePath) => readFileSync(filePath, "utf8"),
+  existingE2eSpecFiles = listExistingE2eSpecFiles(repoRoot),
 } = {}) {
   const byMode = {
     [MODE.UNIT_LOADED]: [],
@@ -452,14 +725,40 @@ export function buildBreadthReport({
     [MODE.APPROVED_EXCEPTION]: [],
     [MODE.GAP]: [],
   };
+  const problems = [];
 
   for (const filePath of [...eligibleFiles].sort()) {
     const absolutePath = filePath.startsWith(repoRoot)
       ? filePath
       : `${repoRoot}/${filePath}`;
     const fileText = readFile(absolutePath);
-    const mode = modeForEligibleFile({ filePath, fileText, loadedFiles });
-    byMode[mode].push(filePath);
+    const classification = classifySourceFile(fileText, filePath);
+
+    if (classification === "type-only") {
+      byMode[MODE.TYPE_ONLY].push(filePath);
+      continue;
+    }
+    if (classification === "barrel") {
+      byMode[MODE.BARREL].push(filePath);
+      continue;
+    }
+    if (loadedFiles.has(filePath)) {
+      byMode[MODE.UNIT_LOADED].push(filePath);
+      continue;
+    }
+
+    const markers = parseBreadthMarkers(fileText, filePath);
+    const mode = modeForMarkers({
+      filePath,
+      markers,
+      existingE2eSpecFiles,
+      problems,
+    });
+    if (mode) byMode[mode].push(filePath);
+  }
+
+  if (problems.length > 0) {
+    throw new BreadthMarkerValidationError(problems);
   }
 
   const eligibleCount = eligibleFiles.length;

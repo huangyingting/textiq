@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "Log in — TextIQ",
 };
 
+// coverage-breadth: mapped-e2e ref=e2e/auth/auth-redirect.spec.ts
 export default async function LoginPage({
   searchParams,
 }: {

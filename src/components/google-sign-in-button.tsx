@@ -4,6 +4,7 @@ import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
 
+// coverage-breadth: mapped-e2e ref=e2e/auth/oauth-disabled.spec.ts
 export function GoogleSignInSection({
   label,
   callbackUrl,

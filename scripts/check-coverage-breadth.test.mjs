@@ -155,6 +155,24 @@ test("runCoverageBreadthCheck fails when underlying source unit tests fail durin
   );
 });
 
+test("runCoverageBreadthCheck fails with the validation error message when buildReport throws (dangling/malformed mapped-e2e ref)", async () => {
+  const h = harness({ gapFiles: [] });
+  h.options.buildReport = () => {
+    throw new Error(
+      'src/app/login/page.tsx:1 coverage-breadth: mapped-e2e ref="e2e/auth/ghost.spec.ts" — referenced e2e spec file does not exist.',
+    );
+  };
+  const exitCode = await runCoverageBreadthCheck(h.options);
+
+  assert.equal(exitCode, 1);
+  assert.equal(h.logs.length, 0);
+  assert.ok(h.errors.some((line) => line.includes("src/app/login/page.tsx:1")));
+  assert.ok(h.errors.some((line) => line.includes("does not exist")));
+  // A thrown validation error must short-circuit before the pass/fail gap
+  // comparison — the report never renders, and no gap-count wording appears.
+  assert.ok(!h.errors.some((line) => line.includes("Coverage breadth")));
+});
+
 test("runCoverageBreadthCheck output is deterministic given the same report", async () => {
   const h1 = harness({ gapFiles: ["src/a.ts", "src/b.ts"] });
   const h2 = harness({ gapFiles: ["src/a.ts", "src/b.ts"] });
