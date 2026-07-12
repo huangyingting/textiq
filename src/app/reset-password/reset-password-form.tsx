@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import type { ReactNode } from "react";
 
 import {
   AuthField,
@@ -18,12 +19,28 @@ import { resetPassword } from "./actions";
 
 const initialState: ResetPasswordState = initialResetPasswordState;
 
-export function ResetPasswordForm({ token }: { token: string }) {
-  const [state, formAction, isPending] = useActionState(
-    resetPassword,
-    initialState,
-  );
+export type ResetPasswordViewProps = {
+  token: string;
+  state: ResetPasswordState;
+  formAction: (payload: FormData) => void;
+  isPending: boolean;
+};
 
+/**
+ * Pure state -> markup decision for {@link ResetPasswordForm} (issue #1927).
+ *
+ * Given the token and current action-result state, decides whether to
+ * render the success panel or the token-carrying form, and which error
+ * message (if any) accompanies it. Extracted from the component body so the
+ * state transitions and token wiring are unit-testable without exercising
+ * `useActionState`, which requires a live action dispatch to change state.
+ */
+export function renderResetPasswordView({
+  token,
+  state,
+  formAction,
+  isPending,
+}: ResetPasswordViewProps): ReactNode {
   if (state.status === "success") {
     return (
       <div className="flex w-full flex-col gap-4">
@@ -85,4 +102,13 @@ export function ResetPasswordForm({ token }: { token: string }) {
       </p>
     </form>
   );
+}
+
+export function ResetPasswordForm({ token }: { token: string }) {
+  const [state, formAction, isPending] = useActionState(
+    resetPassword,
+    initialState,
+  );
+
+  return renderResetPasswordView({ token, state, formAction, isPending });
 }

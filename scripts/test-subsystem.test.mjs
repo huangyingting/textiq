@@ -117,6 +117,11 @@ test("test subsystem map classifies files by owning subsystem", () => {
     "src/app/reset-password/** action-boundary tests must classify under auth",
   );
   assert.deepEqual(
+    classifyTestFile("src/components/auth/auth-form.test.tsx"),
+    ["auth"],
+    "src/components/auth/** shared form primitives must classify under auth",
+  );
+  assert.deepEqual(
     classifyTestFile("src/app/api/brand-assets/route.test.ts").includes(
       "brand",
     ),

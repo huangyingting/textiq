@@ -56,6 +56,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/auth\//,
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
+      /^src\/components\/auth\//,
       /^src\/app\/app\/settings\//,
       /^src\/app\/login\//,
       /^src\/app\/signup\//,

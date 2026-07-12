@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import type { ReactNode } from "react";
 
 import {
   AuthField,
@@ -17,12 +18,26 @@ import { requestPasswordReset } from "./actions";
 
 const initialState: ForgotPasswordState = initialForgotPasswordState;
 
-export function ForgotPasswordForm() {
-  const [state, formAction, isPending] = useActionState(
-    requestPasswordReset,
-    initialState,
-  );
+export type ForgotPasswordViewProps = {
+  state: ForgotPasswordState;
+  formAction: (payload: FormData) => void;
+  isPending: boolean;
+};
 
+/**
+ * Pure state -> markup decision for {@link ForgotPasswordForm} (issue #1927).
+ *
+ * Given the current action-result state, decides whether to render the
+ * "sent" confirmation panel or the request form, and which status/error
+ * message (if any) accompanies it. Extracted from the component body so the
+ * state transitions are unit-testable without exercising `useActionState`,
+ * which requires a live action dispatch to change state.
+ */
+export function renderForgotPasswordView({
+  state,
+  formAction,
+  isPending,
+}: ForgotPasswordViewProps): ReactNode {
   if (state.status === "sent") {
     return (
       <div className="flex w-full flex-col gap-4">
@@ -70,4 +85,13 @@ export function ForgotPasswordForm() {
       </p>
     </form>
   );
+}
+
+export function ForgotPasswordForm() {
+  const [state, formAction, isPending] = useActionState(
+    requestPasswordReset,
+    initialState,
+  );
+
+  return renderForgotPasswordView({ state, formAction, isPending });
 }
