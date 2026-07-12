@@ -205,6 +205,13 @@ deck-kernel turned out to be well unit-tested already. As of #1925 the
 repository has 848 eligible runtime source files, 24 type-only, 30 barrel, 794
 runtime-eligible, 646 loaded by the source unit suite, and 148 actionable gap
 files (`DEFAULT_MAX_GAP_FILES` was lowered from 167 to 148 to match, with zero
+stale slack). #1933 closed six small editor shell control gaps
+(`document-export-button`, `import-button`, `page-break-indicator`,
+`present-button`, `side-panel`, `visual-svg-registry`, all under
+`src/components/editor/`) with direct unit tests. As of #1933 the repository
+has 848 eligible runtime source files, 24 type-only, 30 barrel, 794
+runtime-eligible, 664 loaded by the source unit suite, and 130 actionable gap
+files (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130 to match, with zero
 stale slack).
 
 Widening breadth eligibility/instrumentation to include deck-kernel would also
