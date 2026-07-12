@@ -32,58 +32,51 @@
  * timeout, 503 Azure misconfig.
  */
 
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, type NextResponse } from "next/server";
 
-import { DECK_OUTPUT_TOKEN_BUDGET } from "@/lib/limits";
 import { createGenerationRouteHandler } from "@/lib/ai/generation-route";
 import { notFound } from "@/lib/api/errors";
 import { isAiDeckGenEnabled } from "@/lib/ai/config";
 
-import {
-  mapGenerateDeckError,
-  parseGenerateDeckPayload,
-  type GenerateDeckPayload,
-} from "./parser";
-import {
-  buildGenerateDeckSuccessResponse,
-  generateDeckForRoute,
-  GENERATE_DECK_LOG_SCOPE,
-  logGenerateDeckSuccess,
-  type GenerateDeckRouteResult,
-} from "./route-logic";
+import { buildGenerateDeckRouteConfig } from "./route-config";
 
 // Use the Node.js runtime: the Azure call and node:crypto signing need it.
 export const runtime = "nodejs";
 
-const handleGenerateDeck = createGenerationRouteHandler<
-  GenerateDeckPayload,
-  GenerateDeckRouteResult
->({
-  logScope: GENERATE_DECK_LOG_SCOPE,
-  operation: "generate-deck",
-  rateLimitSubjects: {
-    user: "ai.deck.user",
-    anonymousIp: "ai.deck.anonymous-ip",
-  },
-  anonymousQuotaExceededMessage:
-    "You've used all your free generations. Sign in to keep creating decks.",
-  unexpectedErrorMessage: "Unexpected error while generating the deck.",
-  azureMaxOutputTokens: DECK_OUTPUT_TOKEN_BUDGET,
-  parsePayload: parseGenerateDeckPayload,
-  creditText: (payload) => payload.outline,
-  generate: generateDeckForRoute,
-  successResponse: (result) =>
-    NextResponse.json(buildGenerateDeckSuccessResponse(result)),
-  mapGenerationError: mapGenerateDeckError,
-  onSuccess: logGenerateDeckSuccess,
-});
+const handleGenerateDeck = createGenerationRouteHandler(
+  buildGenerateDeckRouteConfig(),
+);
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Disabled-by-default feature flag: bail out BEFORE doing any work so the
-  // route is invisible until an operator opts in.
-  if (!isAiDeckGenEnabled()) {
-    return notFound("Not found.");
-  }
-
-  return handleGenerateDeck(request);
+export interface GenerateDeckPostDeps {
+  /** Feature gate checked BEFORE any work is done; defaults to the real flag. */
+  isAiDeckGenEnabled: typeof isAiDeckGenEnabled;
+  /** The generation delegate invoked once the feature gate passes. */
+  handle: (request: NextRequest) => Promise<NextResponse>;
 }
+
+/**
+ * Builds the `POST` handler with injectable deps so tests can assert the
+ * disabled-404 gate and the enabled-delegation contract without exercising
+ * the real generation pipeline.
+ */
+export function createGenerateDeckPostHandler(
+  overrides: Partial<GenerateDeckPostDeps> = {},
+): (request: NextRequest) => Promise<NextResponse> {
+  const deps: GenerateDeckPostDeps = {
+    isAiDeckGenEnabled,
+    handle: handleGenerateDeck,
+    ...overrides,
+  };
+
+  return async function POST(request: NextRequest): Promise<NextResponse> {
+    // Disabled-by-default feature flag: bail out BEFORE doing any work so the
+    // route is invisible until an operator opts in.
+    if (!deps.isAiDeckGenEnabled()) {
+      return notFound("Not found.");
+    }
+
+    return deps.handle(request);
+  };
+}
+
+export const POST = createGenerateDeckPostHandler();

@@ -14,40 +14,16 @@
  * error, and exceeded limits return 429 with a `Retry-After` header.
  */
 
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, type NextResponse } from "next/server";
 
-import { generateVisuals } from "@/lib/ai/generate";
 import { createGenerationRouteHandler } from "@/lib/ai/generation-route";
-import type { Visual } from "@/lib/visual/schema";
 
-import {
-  mapGenerateError,
-  parseGeneratePayload,
-  type GeneratePayload,
-} from "./parser";
+import { buildGenerateRouteConfig } from "./route-config";
 
 // Use the Node.js runtime: the Azure call and node:crypto signing need it.
 export const runtime = "nodejs";
 
-/** Scope tag for structured error logs from this route. */
-const LOG_SCOPE = "api.generate";
-
-const handleGenerate = createGenerationRouteHandler<GeneratePayload, Visual[]>({
-  logScope: LOG_SCOPE,
-  operation: "generate",
-  rateLimitSubjects: {
-    user: "ai.visual.user",
-    anonymousIp: "ai.visual.anonymous-ip",
-  },
-  anonymousQuotaExceededMessage:
-    "You've used all your free generations. Sign in to keep creating visuals.",
-  unexpectedErrorMessage: "Unexpected error while generating visuals.",
-  parsePayload: parseGeneratePayload,
-  creditText: (payload) => payload.text,
-  generate: ({ payload, complete }) => generateVisuals(payload, { complete }),
-  successResponse: (candidates) => NextResponse.json({ candidates }),
-  mapGenerationError: mapGenerateError,
-});
+const handleGenerate = createGenerationRouteHandler(buildGenerateRouteConfig());
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   return handleGenerate(request);
