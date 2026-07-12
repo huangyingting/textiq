@@ -3,6 +3,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
+  aggregateCoverageTotals,
+  BREADTH_COVERAGE_STAGE,
   buildBreadthReport,
   classifySourceFile,
   collectLoadedFiles,
@@ -12,6 +14,7 @@ import {
   matchesAnyGlob,
   MODE,
   parseBreadthMarker,
+  PERCENTAGE_ONLY_EXCLUDE_GLOBS,
   SOURCE_COVERAGE_STAGE,
 } from "./coverage-breadth.mjs";
 import { createTestFixtureRoot } from "./test-fixtures.mjs";
@@ -102,6 +105,196 @@ test("SOURCE_COVERAGE_STAGE is the source unit line coverage stage", () => {
     "src/**/*.ts",
     "src/**/*.tsx",
   ]);
+});
+
+// --- deck-kernel breadth widening (#1925) ---------------------------------
+
+test("BREADTH_COVERAGE_STAGE widens the source stage to no longer exclude deck-kernel", () => {
+  assert.ok(
+    SOURCE_COVERAGE_STAGE.excludes.includes("src/lib/document/deck-kernel/**"),
+    "the standalone line-coverage stage must keep excluding deck-kernel",
+  );
+  assert.ok(
+    !BREADTH_COVERAGE_STAGE.excludes.includes(
+      "src/lib/document/deck-kernel/**",
+    ),
+    "the shared breadth/instrumentation stage must not exclude deck-kernel",
+  );
+  assert.deepEqual(
+    BREADTH_COVERAGE_STAGE.includes,
+    SOURCE_COVERAGE_STAGE.includes,
+  );
+  assert.deepEqual(
+    BREADTH_COVERAGE_STAGE.excludes,
+    SOURCE_COVERAGE_STAGE.excludes.filter(
+      (glob) => glob !== "src/lib/document/deck-kernel/**",
+    ),
+  );
+});
+
+test("PERCENTAGE_ONLY_EXCLUDE_GLOBS keeps only the deck-kernel exclusion, for percentage-floor filtering", () => {
+  assert.deepEqual(PERCENTAGE_ONLY_EXCLUDE_GLOBS, [
+    "src/lib/document/deck-kernel/**",
+  ]);
+});
+
+test("listEligibleSourceFiles includes deck-kernel files by default (breadth eligibility excludes only generated/tests, not deck-kernel)", (t) => {
+  const root = createTestFixtureRoot("coverage-breadth-deck-kernel", t);
+  const deckKernelDir = path.join(
+    root,
+    "src",
+    "lib",
+    "document",
+    "deck-kernel",
+  );
+  mkdirSync(deckKernelDir, { recursive: true });
+  writeFileSync(
+    path.join(deckKernelDir, "deck-diff.ts"),
+    "export function diff() { return 1; }\n",
+  );
+  writeFileSync(
+    path.join(deckKernelDir, "deck-diff.test.ts"),
+    "import test from 'node:test';\ntest('x', () => {});\n",
+  );
+
+  const generatedDir = path.join(root, "src", "generated");
+  mkdirSync(generatedDir, { recursive: true });
+  writeFileSync(path.join(generatedDir, "skip.ts"), "export const y = 1;\n");
+
+  const files = listEligibleSourceFiles(root);
+
+  assert.ok(
+    files.includes("src/lib/document/deck-kernel/deck-diff.ts"),
+    "deck-kernel source files must be breadth-eligible",
+  );
+  assert.ok(
+    !files.includes("src/lib/document/deck-kernel/deck-diff.test.ts"),
+    "test files stay excluded",
+  );
+  assert.ok(
+    !files.includes("src/generated/skip.ts"),
+    "generated files stay excluded",
+  );
+});
+
+// --- aggregateCoverageTotals (percentage-only deck-kernel exclusion) ------
+
+test("aggregateCoverageTotals sums per-file counts across included files", () => {
+  const files = [
+    {
+      path: "/repo/src/a.ts",
+      totalLineCount: 10,
+      coveredLineCount: 8,
+      totalBranchCount: 4,
+      coveredBranchCount: 2,
+      totalFunctionCount: 2,
+      coveredFunctionCount: 2,
+    },
+    {
+      path: "/repo/src/b.ts",
+      totalLineCount: 20,
+      coveredLineCount: 20,
+      totalBranchCount: 6,
+      coveredBranchCount: 6,
+      totalFunctionCount: 4,
+      coveredFunctionCount: 2,
+    },
+  ];
+
+  const totals = aggregateCoverageTotals(files, { repoRoot: "/repo" });
+
+  assert.equal(totals.totalLineCount, 30);
+  assert.equal(totals.coveredLineCount, 28);
+  assert.equal(totals.coveredLinePercent, (28 / 30) * 100);
+  assert.equal(totals.totalBranchCount, 10);
+  assert.equal(totals.coveredBranchCount, 8);
+  assert.equal(totals.coveredBranchPercent, 80);
+  assert.equal(totals.totalFunctionCount, 6);
+  assert.equal(totals.coveredFunctionCount, 4);
+  assert.ok(Math.abs(totals.coveredFunctionPercent - (4 / 6) * 100) < 1e-9);
+});
+
+test("aggregateCoverageTotals excludes files matching excludeGlobs from every metric", () => {
+  const files = [
+    {
+      path: "/repo/src/a.ts",
+      totalLineCount: 10,
+      coveredLineCount: 10,
+      totalBranchCount: 2,
+      coveredBranchCount: 2,
+      totalFunctionCount: 1,
+      coveredFunctionCount: 1,
+    },
+    {
+      // A deck-kernel file with terrible coverage — must not drag the
+      // aggregate down once excluded.
+      path: "/repo/src/lib/document/deck-kernel/deck-diff.ts",
+      totalLineCount: 1000,
+      coveredLineCount: 0,
+      totalBranchCount: 1000,
+      coveredBranchCount: 0,
+      totalFunctionCount: 1000,
+      coveredFunctionCount: 0,
+    },
+  ];
+
+  const totals = aggregateCoverageTotals(files, {
+    repoRoot: "/repo",
+    excludeGlobs: ["src/lib/document/deck-kernel/**"],
+  });
+
+  assert.equal(totals.totalLineCount, 10);
+  assert.equal(totals.coveredLineCount, 10);
+  assert.equal(totals.coveredLinePercent, 100);
+  assert.equal(totals.coveredBranchPercent, 100);
+  assert.equal(totals.coveredFunctionPercent, 100);
+});
+
+test("aggregateCoverageTotals reports 100% for an empty (or fully excluded) file set, matching node:test's own totals convention", () => {
+  const totals = aggregateCoverageTotals([], { repoRoot: "/repo" });
+  assert.equal(totals.coveredLinePercent, 100);
+  assert.equal(totals.coveredBranchPercent, 100);
+  assert.equal(totals.coveredFunctionPercent, 100);
+
+  const filteredToEmpty = aggregateCoverageTotals(
+    [
+      {
+        path: "/repo/src/lib/document/deck-kernel/deck-diff.ts",
+        totalLineCount: 5,
+        coveredLineCount: 1,
+        totalBranchCount: 5,
+        coveredBranchCount: 1,
+        totalFunctionCount: 5,
+        coveredFunctionCount: 1,
+      },
+    ],
+    { repoRoot: "/repo", excludeGlobs: ["src/lib/document/deck-kernel/**"] },
+  );
+  assert.equal(filteredToEmpty.coveredLinePercent, 100);
+});
+
+test("aggregateCoverageTotals normalizes native-separator absolute paths before matching excludeGlobs", () => {
+  const repoRoot = path.join(path.sep, "repo");
+  const deckKernelPath = path.join(
+    repoRoot,
+    "src",
+    "lib",
+    "document",
+    "deck-kernel",
+    "deck-diff.ts",
+  );
+  const totals = aggregateCoverageTotals(
+    [
+      {
+        path: deckKernelPath,
+        totalLineCount: 100,
+        coveredLineCount: 0,
+      },
+    ],
+    { repoRoot, excludeGlobs: ["src/lib/document/deck-kernel/**"] },
+  );
+  assert.equal(totals.totalLineCount, 0);
+  assert.equal(totals.coveredLinePercent, 100);
 });
 
 // --- classifySourceFile ---------------------------------------------------
@@ -383,6 +576,32 @@ test("collectLoadedFiles passes coverage include/exclude globs from the stage th
   assert.equal(receivedOptions.coverage, true);
 });
 
+test("collectLoadedFiles defaults to BREADTH_COVERAGE_STAGE, so deck-kernel is instrumented without an explicit stage", async () => {
+  let receivedOptions;
+  await collectLoadedFiles({
+    repoRoot: "/repo",
+    testFiles: ["src/foo.test.ts"],
+    run: (options) => {
+      receivedOptions = options;
+      return fakeCoverageStream({ files: [] });
+    },
+  });
+
+  assert.deepEqual(
+    receivedOptions.coverageIncludeGlobs,
+    BREADTH_COVERAGE_STAGE.includes,
+  );
+  assert.deepEqual(
+    receivedOptions.coverageExcludeGlobs,
+    BREADTH_COVERAGE_STAGE.excludes,
+  );
+  assert.ok(
+    !receivedOptions.coverageExcludeGlobs.includes(
+      "src/lib/document/deck-kernel/**",
+    ),
+  );
+});
+
 test("collectLoadedFiles defaults line/branch/function coverage thresholds to 0 (no enforced floor)", async () => {
   let receivedOptions;
   await collectLoadedFiles({
@@ -562,4 +781,55 @@ test("formatBreadthReport renders the roll-up counts", () => {
   assert.match(text, /Mapped interaction\/E2E \(not unit-covered\): 1/);
   assert.match(text, /Approved exception: 1/);
   assert.match(text, /Unresolved gap \(actionable\): 1/);
+});
+
+// --- deck-kernel loaded/gap classification (#1925) ------------------------
+
+test("buildBreadthReport classifies a loaded deck-kernel runtime file as unit-loaded, not silently skipped", () => {
+  const deckKernelPath = "src/lib/document/deck-kernel/deck-diff.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [deckKernelPath],
+    loadedFiles: new Set([deckKernelPath]),
+    readFile: () => "export function diff() { return 1; }",
+  });
+
+  assert.deepEqual(report.files[MODE.UNIT_LOADED], [deckKernelPath]);
+  assert.equal(report.loadedRuntimeCount, 1);
+  assert.equal(report.actionableGapCount, 0);
+});
+
+test("buildBreadthReport classifies an unloaded deck-kernel runtime file as an actionable gap, not silently skipped", () => {
+  const deckKernelPath = "src/lib/document/deck-kernel/theme-typography.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [deckKernelPath],
+    loadedFiles: new Set(),
+    readFile: () => "export function unusedByTests() { return 1; }",
+  });
+
+  assert.deepEqual(report.files[MODE.GAP], [deckKernelPath]);
+  assert.equal(report.actionableGapCount, 1);
+  assert.equal(report.loadedRuntimeCount, 0);
+});
+
+test("buildBreadthReport still classifies deck-kernel type-only/barrel files as excluded (not runtime-eligible), matching non-deck-kernel files", () => {
+  const typeOnlyPath = "src/lib/document/deck-kernel/types.ts";
+  const barrelPath = "src/lib/document/deck-kernel/index.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [typeOnlyPath, barrelPath],
+    loadedFiles: new Set(),
+    readFile: (absolutePath) => {
+      if (absolutePath.endsWith("types.ts")) {
+        return "export interface Foo { id: string }";
+      }
+      return 'export { diff } from "./deck-diff";';
+    },
+  });
+
+  assert.deepEqual(report.files[MODE.TYPE_ONLY], [typeOnlyPath]);
+  assert.deepEqual(report.files[MODE.BARREL], [barrelPath]);
+  assert.equal(report.runtimeEligibleCount, 0);
+  assert.equal(report.actionableGapCount, 0);
 });

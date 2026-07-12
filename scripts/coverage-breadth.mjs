@@ -50,6 +50,32 @@ export const SOURCE_COVERAGE_STAGE = LINE_COVERAGE_STAGES[0];
 export const ELIGIBLE_ROOTS = ["src"];
 export const ELIGIBLE_SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 
+// deck-kernel was previously excluded from the "Source unit line coverage"
+// stage entirely, which excluded it from both instrumentation *and* breadth
+// eligibility. #1925 widens the shared structured source coverage run (the
+// `node:test` `run()` API path used by `collectLoadedFiles` below, and the
+// eligibility scan in `listEligibleSourceFiles`) to include deck-kernel, so
+// deck-kernel files are no longer invisible to the breadth inventory.
+//
+// The line/branch/function coverage *percentage* floors must not shift just
+// because deck-kernel is now instrumented, so `PERCENTAGE_ONLY_EXCLUDE_GLOBS`
+// preserves the original deck-kernel exclusion for percentage purposes only
+// (see `aggregateCoverageTotals` below and `check-combined-coverage.mjs`,
+// which filters `summary.files` by this list instead of trusting
+// `summary.totals`). The standalone `test:line-coverage` CLI stage is
+// untouched — it still passes `SOURCE_COVERAGE_STAGE.excludes` (including
+// deck-kernel) straight to `node --test-coverage-exclude`.
+const DECK_KERNEL_EXCLUDE_GLOB = "src/lib/document/deck-kernel/**";
+
+export const PERCENTAGE_ONLY_EXCLUDE_GLOBS = [DECK_KERNEL_EXCLUDE_GLOB];
+
+export const BREADTH_COVERAGE_STAGE = {
+  ...SOURCE_COVERAGE_STAGE,
+  excludes: SOURCE_COVERAGE_STAGE.excludes.filter(
+    (glob) => glob !== DECK_KERNEL_EXCLUDE_GLOB,
+  ),
+};
+
 export const MODE = Object.freeze({
   UNIT_LOADED: "unit-loaded",
   TYPE_ONLY: "type-only",
@@ -103,11 +129,15 @@ export function matchesAnyGlob(filePath, globs) {
 
 /**
  * Deterministically (sorted) list every eligible runtime source file using
- * the same include/exclude globs as the source unit line coverage stage.
+ * the widened breadth coverage stage's include/exclude globs — the same
+ * globs the source unit line coverage stage uses, minus the deck-kernel
+ * exclusion (see `BREADTH_COVERAGE_STAGE`). Breadth eligibility excludes
+ * only generated code, test files, and (via `classifySourceFile`)
+ * type-only/barrel files — never deck-kernel.
  */
 export function listEligibleSourceFiles(
   repoRoot = process.cwd(),
-  stage = SOURCE_COVERAGE_STAGE,
+  stage = BREADTH_COVERAGE_STAGE,
 ) {
   return scanRepositoryRoots({
     repoRoot,
@@ -252,11 +282,18 @@ export function parseBreadthMarker(fileText) {
  * the given `node:test/reporters` reporter to `reporterDestination` so
  * callers that need visible failure output (the combined gate) get it
  * without changing the default, output-free behavior other callers rely on.
+ *
+ * `stage` defaults to `BREADTH_COVERAGE_STAGE` (not `SOURCE_COVERAGE_STAGE`)
+ * so this run's `coverageIncludeGlobs`/`coverageExcludeGlobs` instrument
+ * deck-kernel like every other eligible source file; the resulting
+ * `summary.files` still carries deck-kernel entries, which
+ * `aggregateCoverageTotals` filters back out for the percentage-only
+ * comparison without re-running the suite.
  */
 export async function collectLoadedFiles({
   repoRoot = process.cwd(),
   testFiles,
-  stage = SOURCE_COVERAGE_STAGE,
+  stage = BREADTH_COVERAGE_STAGE,
   concurrency = 4,
   lineCoverage = 0,
   branchCoverage = 0,
@@ -318,6 +355,71 @@ export async function collectLoadedFiles({
   }
 
   return { loaded, failureCount, summary: coverageSummary };
+}
+
+function percentOf(covered, total) {
+  // Matches node:test's own totals convention: an empty denominator (no
+  // eligible lines/branches/functions in the filtered file set) reports
+  // 100%, not 0% or NaN.
+  return total === 0 ? 100 : (covered / total) * 100;
+}
+
+/**
+ * Recompute line/branch/function coverage totals from a structured
+ * `test:coverage` event's `summary.files` array, excluding any file whose
+ * repo-relative path matches `excludeGlobs`. This is how the combined
+ * coverage gate keeps the percentage floors filtered exactly like the
+ * pre-#1925 `SOURCE_COVERAGE_STAGE.excludes` deck-kernel exclusion did, even
+ * though the shared structured run's own `coverageExcludeGlobs` (via
+ * `BREADTH_COVERAGE_STAGE`) no longer excludes deck-kernel from
+ * instrumentation — `summary.totals` itself can no longer be trusted for the
+ * percentage floors once deck-kernel is instrumented, so this aggregates
+ * `summary.files` directly instead.
+ */
+export function aggregateCoverageTotals(
+  files = [],
+  { repoRoot = process.cwd(), excludeGlobs = [] } = {},
+) {
+  const totals = {
+    totalLineCount: 0,
+    totalBranchCount: 0,
+    totalFunctionCount: 0,
+    coveredLineCount: 0,
+    coveredBranchCount: 0,
+    coveredFunctionCount: 0,
+  };
+
+  for (const file of files) {
+    const relative = toPosix(
+      file.path.startsWith(repoRoot)
+        ? file.path.slice(repoRoot.length + 1)
+        : file.path,
+    );
+    if (matchesAnyGlob(relative, excludeGlobs)) continue;
+
+    totals.totalLineCount += file.totalLineCount ?? 0;
+    totals.totalBranchCount += file.totalBranchCount ?? 0;
+    totals.totalFunctionCount += file.totalFunctionCount ?? 0;
+    totals.coveredLineCount += file.coveredLineCount ?? 0;
+    totals.coveredBranchCount += file.coveredBranchCount ?? 0;
+    totals.coveredFunctionCount += file.coveredFunctionCount ?? 0;
+  }
+
+  return {
+    ...totals,
+    coveredLinePercent: percentOf(
+      totals.coveredLineCount,
+      totals.totalLineCount,
+    ),
+    coveredBranchPercent: percentOf(
+      totals.coveredBranchCount,
+      totals.totalBranchCount,
+    ),
+    coveredFunctionPercent: percentOf(
+      totals.coveredFunctionCount,
+      totals.totalFunctionCount,
+    ),
+  };
 }
 
 function modeForEligibleFile({ filePath, fileText, loadedFiles }) {

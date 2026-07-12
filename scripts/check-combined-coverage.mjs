@@ -28,6 +28,24 @@
  *   - the breadth report is built from the same run's loaded-file set,
  *     reusing `buildBreadthReport` unchanged from `coverage-breadth.mjs`.
  *
+ * #1925 widens this shared run's own instrumentation/eligibility globs to
+ * include deck-kernel (`BREADTH_COVERAGE_STAGE` in `coverage-breadth.mjs`),
+ * so deck-kernel is no longer invisible to the breadth report. Because that
+ * widening means `summary.totals` now includes deck-kernel, the percentage
+ * floors below are computed from `aggregateCoverageTotals(summary.files,
+ * ...)` with the original, percentage-only deck-kernel exclusion
+ * (`PERCENTAGE_ONLY_EXCLUDE_GLOBS`) instead of trusting `summary.totals`
+ * directly — the reported line/branch/function percentages are therefore
+ * unchanged by the breadth widening. For the same reason, the source
+ * thresholds are no longer forwarded to the shared `collectLoaded` call's
+ * own `lineCoverage`/`branchCoverage`/`functionCoverage` options: `run()`'s
+ * built-in threshold annotation only ever compares against the (now
+ * deck-kernel-inclusive) `summary.totals`, so forwarding the un-widened
+ * thresholds there would print misleading "does not meet threshold"
+ * reporter diagnostics derived from the wrong totals. Enforcement stays
+ * entirely in this file's `evaluateCoverageFloors(percentageTotals, ...)`
+ * call, against the correctly-filtered totals.
+ *
  * The "Script line coverage" stage is unrelated to source breadth (it
  * covers `scripts/**\/*.mjs`, not `src/**`), so it keeps running exactly as
  * `check-line-coverage.mjs` always has: a spawned CLI child process with
@@ -55,10 +73,13 @@ import {
   parseMaxGapFiles,
 } from "./check-coverage-breadth.mjs";
 import {
+  aggregateCoverageTotals,
+  BREADTH_COVERAGE_STAGE,
   buildBreadthReport,
   collectLoadedFiles,
   formatBreadthReport,
   listEligibleSourceFiles,
+  PERCENTAGE_ONLY_EXCLUDE_GLOBS,
 } from "./coverage-breadth.mjs";
 
 const [SOURCE_STAGE, SCRIPT_STAGE] = LINE_COVERAGE_STAGES;
@@ -110,14 +131,23 @@ export async function runCombinedCoverageGate({
   );
 
   const testFiles = listTestFiles(repoRoot);
+  // `lineCoverage`/`branchCoverage`/`functionCoverage` are left at
+  // `collectLoaded`'s own default of 0 (no threshold forwarded to `run()`).
+  // Before #1925 this gate forwarded `sourceThresholds` here because
+  // `summary.totals` *was* the deck-kernel-excluded percentage-floor data,
+  // so Node's own threshold annotation and this gate's `evaluateCoverageFloors`
+  // call below compared the exact same numbers. Now that the shared run's
+  // instrumentation is widened to include deck-kernel, `summary.totals`
+  // includes deck-kernel while the floor check below is computed from the
+  // filtered `percentageTotals` — forwarding the un-widened thresholds here
+  // would make `run()`'s reporter print spurious "does not meet threshold"
+  // diagnostics derived from the deck-kernel-inclusive totals, which no
+  // longer represent what this gate actually enforces.
   const { loaded, failureCount, summary } = await collectLoaded({
     repoRoot,
     testFiles,
-    stage: SOURCE_STAGE,
+    stage: BREADTH_COVERAGE_STAGE,
     concurrency,
-    lineCoverage: sourceThresholds.line,
-    branchCoverage: sourceThresholds.branch,
-    functionCoverage: sourceThresholds.function,
     reporter,
     reporterDestination,
   });
@@ -129,7 +159,28 @@ export async function runCombinedCoverageGate({
     return 1;
   }
 
-  const floorFailures = evaluateCoverageFloors(summary, sourceThresholds);
+  // `summary.totals` now includes deck-kernel (the shared run's own
+  // instrumentation was widened to cover it for breadth). Recompute the
+  // percentage-floor totals from `summary.files` with the original,
+  // percentage-only deck-kernel exclusion instead, so the reported
+  // line/branch/function percentages stay exactly what they were before
+  // deck-kernel was added to the breadth inventory.
+  const percentageTotals = aggregateCoverageTotals(summary?.files ?? [], {
+    repoRoot,
+    excludeGlobs: PERCENTAGE_ONLY_EXCLUDE_GLOBS,
+  });
+  // The reporter's own coverage table above sums every instrumented file,
+  // deck-kernel included, so it no longer matches what this gate enforces.
+  // Log the filtered totals explicitly so CI/local output states what was
+  // actually compared against the floor, instead of leaving readers to
+  // reconcile a lower "all files" percentage with a passing gate.
+  log(
+    `\nPercentage floor totals (deck-kernel excluded): ${percentageTotals.coveredLinePercent.toFixed(2)}% lines, ${percentageTotals.coveredBranchPercent.toFixed(2)}% branches, ${percentageTotals.coveredFunctionPercent.toFixed(2)}% functions.`,
+  );
+  const floorFailures = evaluateCoverageFloors(
+    { totals: percentageTotals },
+    sourceThresholds,
+  );
   if (floorFailures.length > 0) {
     for (const { name, actual, threshold } of floorFailures) {
       logError(
