@@ -126,6 +126,70 @@ in the same file and the same diff:
 // coverage-breadth: approved-exception reason=manual QA runbook only
 ```
 
+`mapped-e2e` is evidence, not an assertion: `ref=` must name a real,
+repo-relative Playwright spec file that actually exercises the marked source
+file, and #1932 made that a validated contract instead of an honor system.
+`parseBreadthMarkers` in `coverage-breadth.mjs` reads each marker with the
+TypeScript compiler's own comment-range API
+(`ts.getLeadingCommentRanges` against the parsed source file's top-level
+statements and its EOF token) — never a whole-text regex or string
+search — so a `mapped-e2e`-shaped string literal or a marker buried inside a
+function body is never mistaken for a real marker. A file may carry more
+than one `mapped-e2e`/`approved-exception` marker; every declared ref on a
+file must independently validate before that file is classified as
+`mapped-e2e`.
+
+Every `ref=` value goes through `validateBreadthMarkerRef`, which rejects
+(with a distinct, named problem code):
+
+- a missing or empty ref value,
+- a backslash anywhere in the path (ambiguous on the Windows separator vs. a
+  literal filename character),
+- an absolute path (POSIX `/...` or a Windows drive letter like `C:\...`),
+- any `..` traversal segment — checked _before_ normalization, so a ref like
+  `foo/../e2e/product/x.spec.ts` is rejected even though it would textually
+  resolve under `e2e/` if collapsed first,
+- a normalized path that does not fall under the repository's `e2e/` root,
+- an unsupported spec extension (only `.spec.ts` matches the real Playwright
+  convention enforced by `playwright.config.ts`'s `testMatch` and
+  `scripts/test-subsystem.mjs`'s spec pattern), and finally
+- a dangling ref: `listExistingE2eSpecFiles` walks the real `e2e/` directory
+  on disk (skipping `node_modules`, `test-results`, and other build
+  artifacts) and the ref must match one of those real, tracked spec files —
+  not a helper, fixture, or `README`.
+
+`buildBreadthReport` collects every problem across every eligible file in one
+pass — it does not stop at the first bad marker — then throws a single
+`BreadthMarkerValidationError` whose message (via
+`formatBreadthMarkerProblems`) lists one `file:line` diagnostic per problem,
+e.g. `src/app/login/page.tsx:1 coverage-breadth: mapped-e2e
+ref="e2e/auth/ghost.spec.ts" — referenced e2e spec file does not exist.` Both
+`npm run test:coverage-breadth` and the combined `npm test` breadth stage
+catch this error, print its message, and exit 1 — a dangling or malformed
+`mapped-e2e` ref fails the gate loudly instead of silently falling back to
+`gap`.
+
+As of #1932, five login/signup runtime files carry verified `mapped-e2e`
+markers because real, always-run Playwright specs concretely exercise them:
+`src/app/login/page.tsx` (→ `e2e/auth/auth-redirect.spec.ts`, which asserts
+the page's unique "Welcome back" heading) and
+`src/app/login/login-form.tsx`, `src/app/signup/page.tsx`,
+`src/app/signup/signup-form.tsx`, and
+`src/components/google-sign-in-button.tsx` (→
+`e2e/auth/oauth-disabled.spec.ts`, which drives both pages' email/password
+inputs and the Google sign-in CTA's visibility toggle). Forgot-password,
+reset-password, and account-settings files were deliberately left unmarked:
+no real e2e spec demonstrably reaches them today, and marking a file
+`mapped-e2e` on filename similarity alone is exactly the brittle inference
+this gate now rejects. `scripts/test-subsystem.mjs`'s auth subsystem e2e
+pattern was also corrected to drop `auth-forms`/`settings-account`, two spec
+names it referenced that never existed on disk. Newly-verified files reduce
+the _actual_ gap count one-for-one (measured 138 → 133 actionable gap on this
+branch immediately before/after adding the five markers); #1932 does not
+lower `DEFAULT_MAX_GAP_FILES` — the 148 ceiling from #1925 is preserved as-is
+per this change's scope, so the gate still passes with slack rather than
+re-ratcheting on an unrelated baseline.
+
 The gate fails if the number of unresolved `gap` files exceeds
 `DEFAULT_MAX_GAP_FILES` in `check-coverage-breadth.mjs` (a ratchet, matching
 `check-import-graph.mjs`'s pattern) — regressions are blocked, improvements

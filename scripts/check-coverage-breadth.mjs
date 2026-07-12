@@ -99,11 +99,17 @@ export async function runCoverageBreadthCheck({
     concurrency,
   });
 
-  const report = buildReport({
-    repoRoot,
-    eligibleFiles,
-    loadedFiles: loaded,
-  });
+  let report;
+  try {
+    report = buildReport({
+      repoRoot,
+      eligibleFiles,
+      loadedFiles: loaded,
+    });
+  } catch (error) {
+    logError(error.message);
+    return 1;
+  }
 
   log(formatReport(report));
 

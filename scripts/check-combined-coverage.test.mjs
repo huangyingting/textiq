@@ -414,6 +414,23 @@ test("runCombinedCoverageGate allows a breadth improvement (fewer gap files than
   assert.equal(h.spawnCalls.length, 1);
 });
 
+test("runCombinedCoverageGate fails with the validation error message and skips the script stage when buildReport throws (dangling/malformed mapped-e2e ref)", async () => {
+  const h = harness();
+  h.options.buildReport = () => {
+    throw new Error(
+      'src/app/signup/page.tsx:1 coverage-breadth: mapped-e2e ref="e2e/auth/ghost.spec.ts" — referenced e2e spec file does not exist.',
+    );
+  };
+  const exitCode = await runCombinedCoverageGate(h.options);
+
+  assert.equal(exitCode, 1);
+  assert.equal(h.spawnCalls.length, 0);
+  assert.ok(
+    h.errors.some((line) => line.includes("src/app/signup/page.tsx:1")),
+  );
+  assert.ok(h.errors.some((line) => line.includes("does not exist")));
+});
+
 // --- script coverage stage (unchanged CLI-spawn semantics) -----------------
 
 test("runCombinedCoverageGate spawns the script coverage stage with the same command shape as check-line-coverage.mjs", async () => {

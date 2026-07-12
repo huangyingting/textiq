@@ -4,18 +4,26 @@ import path from "node:path";
 import test from "node:test";
 import {
   aggregateCoverageTotals,
+  BreadthMarkerValidationError,
   BREADTH_COVERAGE_STAGE,
   buildBreadthReport,
   classifySourceFile,
   collectLoadedFiles,
+  E2E_ROOT,
+  E2E_SPEC_EXTENSION,
+  formatBreadthMarkerProblems,
   formatBreadthReport,
   globToRegExp,
   listEligibleSourceFiles,
+  listExistingE2eSpecFiles,
   matchesAnyGlob,
   MODE,
   parseBreadthMarker,
+  parseBreadthMarkers,
   PERCENTAGE_ONLY_EXCLUDE_GLOBS,
+  REF_PROBLEM,
   SOURCE_COVERAGE_STAGE,
+  validateBreadthMarkerRef,
 } from "./coverage-breadth.mjs";
 import { createTestFixtureRoot } from "./test-fixtures.mjs";
 import { toPosix } from "./source-scan-utils.mjs";
@@ -465,6 +473,253 @@ test("parseBreadthMarker returns null when no marker is present", () => {
   assert.equal(parseBreadthMarker("export function foo() {}\n"), null);
 });
 
+test("parseBreadthMarker ignores a marker-shaped string literal (AST comment scan, not text regex)", () => {
+  const text = `
+    export const NOTE =
+      "coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts";
+  `;
+  assert.equal(
+    parseBreadthMarker(text),
+    null,
+    "a marker-shaped string literal must never be mistaken for a real marker comment",
+  );
+});
+
+// --- parseBreadthMarkers (AST comment-trivia scan, multiple markers) -------
+
+test("parseBreadthMarkers returns every marker in file order with 1-based line numbers", () => {
+  const text = [
+    "// coverage-breadth: mapped-e2e ref=e2e/auth/auth-redirect.spec.ts",
+    "// coverage-breadth: mapped-e2e ref=e2e/auth/oauth-disabled.spec.ts",
+    "export function LoginPage() {}",
+  ].join("\n");
+  const markers = parseBreadthMarkers(text, "login-page.ts");
+  assert.deepEqual(markers, [
+    {
+      mode: MODE.MAPPED_E2E,
+      detail: "e2e/auth/auth-redirect.spec.ts",
+      line: 1,
+    },
+    {
+      mode: MODE.MAPPED_E2E,
+      detail: "e2e/auth/oauth-disabled.spec.ts",
+      line: 2,
+    },
+  ]);
+});
+
+test("parseBreadthMarkers finds a marker attached to any top-level statement, not only the first", () => {
+  const text = [
+    "import { z } from 'zod';",
+    "",
+    "export const schema = z.object({});",
+    "",
+    "// coverage-breadth: mapped-e2e ref=e2e/product/mapped.spec.ts",
+    "export function parse() { return schema; }",
+  ].join("\n");
+  const markers = parseBreadthMarkers(text, "parser.ts");
+  assert.deepEqual(markers, [
+    { mode: MODE.MAPPED_E2E, detail: "e2e/product/mapped.spec.ts", line: 5 },
+  ]);
+});
+
+test("parseBreadthMarkers finds a trailing marker with no statement after it", () => {
+  const text = [
+    "export function legacy() {}",
+    "",
+    "// coverage-breadth: approved-exception reason=trailing-marker",
+  ].join("\n");
+  const markers = parseBreadthMarkers(text, "trailing.ts");
+  assert.deepEqual(markers, [
+    { mode: MODE.APPROVED_EXCEPTION, detail: "trailing-marker", line: 3 },
+  ]);
+});
+
+test("parseBreadthMarkers returns an empty array when no marker is present", () => {
+  assert.deepEqual(parseBreadthMarkers("export function foo() {}\n"), []);
+});
+
+test("parseBreadthMarkers ignores comments nested inside function bodies (top-level only)", () => {
+  const text = [
+    "export function wrapper() {",
+    "  // coverage-breadth: mapped-e2e ref=e2e/product/nested.spec.ts",
+    "  return 1;",
+    "}",
+  ].join("\n");
+  assert.deepEqual(parseBreadthMarkers(text, "wrapper.ts"), []);
+});
+
+// --- validateBreadthMarkerRef (structural + existence) ---------------------
+
+test("validateBreadthMarkerRef accepts a well-formed ref that exists on disk", () => {
+  const result = validateBreadthMarkerRef("e2e/product/mapped.spec.ts", {
+    existingE2eSpecFiles: new Set(["e2e/product/mapped.spec.ts"]),
+  });
+  assert.deepEqual(result, {
+    ok: true,
+    normalized: "e2e/product/mapped.spec.ts",
+  });
+});
+
+test("validateBreadthMarkerRef rejects a missing ref value", () => {
+  const result = validateBreadthMarkerRef(null);
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.MISSING);
+});
+
+test("validateBreadthMarkerRef rejects an empty-string ref value", () => {
+  const result = validateBreadthMarkerRef("   ");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.MISSING);
+});
+
+test("validateBreadthMarkerRef rejects a backslash-ambiguous ref", () => {
+  const result = validateBreadthMarkerRef("e2e\\auth\\login.spec.ts");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.BACKSLASH);
+});
+
+test("validateBreadthMarkerRef rejects a POSIX absolute-path ref", () => {
+  const result = validateBreadthMarkerRef("/e2e/auth/login.spec.ts");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.ABSOLUTE);
+});
+
+test("validateBreadthMarkerRef rejects a Windows drive-letter absolute-path ref", () => {
+  const result = validateBreadthMarkerRef("C:/e2e/auth/login.spec.ts");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.ABSOLUTE);
+});
+
+test("validateBreadthMarkerRef rejects a ref that traverses out of the repo", () => {
+  const result = validateBreadthMarkerRef("e2e/../../etc/passwd");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.TRAVERSAL);
+});
+
+test("validateBreadthMarkerRef rejects a leading-traversal ref even when it textually starts under e2e/", () => {
+  // "e2e/" only appears after a ".." segment is walked, so this must still be
+  // rejected outright rather than resolved and re-checked against the root.
+  const result = validateBreadthMarkerRef("foo/../e2e/product/mapped.spec.ts");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.TRAVERSAL);
+});
+
+test("validateBreadthMarkerRef rejects a ref outside the e2e/ root", () => {
+  const result = validateBreadthMarkerRef("src/app/login/page.tsx");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.OUTSIDE_E2E_ROOT);
+});
+
+test("validateBreadthMarkerRef rejects a ref with an unsupported extension", () => {
+  const result = validateBreadthMarkerRef("e2e/helpers/auth.ts", {
+    existingE2eSpecFiles: new Set(["e2e/helpers/auth.ts"]),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.UNSUPPORTED_EXTENSION);
+});
+
+test("validateBreadthMarkerRef rejects a dangling (well-formed but nonexistent) ref", () => {
+  const result = validateBreadthMarkerRef("e2e/auth/does-not-exist.spec.ts", {
+    existingE2eSpecFiles: new Set(["e2e/auth/auth-redirect.spec.ts"]),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.DANGLING);
+});
+
+test("validateBreadthMarkerRef defaults to an empty existing-file set (every ref dangles without one)", () => {
+  const result = validateBreadthMarkerRef("e2e/auth/auth-redirect.spec.ts");
+  assert.equal(result.ok, false);
+  assert.equal(result.problem, REF_PROBLEM.DANGLING);
+});
+
+test("validateBreadthMarkerRef normalizes repeated slashes and './' segments before comparing against the existing-file set", () => {
+  const result = validateBreadthMarkerRef("e2e//product/./mapped.spec.ts", {
+    existingE2eSpecFiles: new Set(["e2e/product/mapped.spec.ts"]),
+  });
+  assert.deepEqual(result, {
+    ok: true,
+    normalized: "e2e/product/mapped.spec.ts",
+  });
+});
+
+// --- listExistingE2eSpecFiles (real disk existence inventory) --------------
+
+test("listExistingE2eSpecFiles lists real .spec.ts files under e2e/ and excludes helpers/non-spec files", (t) => {
+  const root = createTestFixtureRoot("coverage-breadth-e2e-specs", t);
+  const authDir = path.join(root, "e2e", "auth");
+  const helpersDir = path.join(root, "e2e", "helpers");
+  mkdirSync(authDir, { recursive: true });
+  mkdirSync(helpersDir, { recursive: true });
+  writeFileSync(path.join(authDir, "auth-redirect.spec.ts"), "export {};\n");
+  writeFileSync(path.join(helpersDir, "auth.ts"), "export {};\n");
+  writeFileSync(path.join(root, "e2e", "README.md"), "# e2e\n");
+
+  const files = listExistingE2eSpecFiles(root);
+
+  assert.ok(files.has("e2e/auth/auth-redirect.spec.ts"));
+  assert.ok(!files.has("e2e/helpers/auth.ts"));
+  assert.ok(!files.has("e2e/README.md"));
+  assert.equal(files.size, 1);
+});
+
+test("listExistingE2eSpecFiles skips node_modules/build-artifact directories nested under e2e/", (t) => {
+  const root = createTestFixtureRoot("coverage-breadth-e2e-specs-skip-dirs", t);
+  const nodeModulesDir = path.join(root, "e2e", "node_modules", "pkg");
+  const testResultsDir = path.join(root, "e2e", "test-results");
+  mkdirSync(nodeModulesDir, { recursive: true });
+  mkdirSync(testResultsDir, { recursive: true });
+  writeFileSync(path.join(nodeModulesDir, "vendored.spec.ts"), "export {};\n");
+  writeFileSync(path.join(testResultsDir, "leftover.spec.ts"), "export {};\n");
+
+  const files = listExistingE2eSpecFiles(root);
+  assert.equal(files.size, 0);
+});
+
+test("listExistingE2eSpecFiles returns an empty set when the repo has no e2e/ directory (test-root edge case)", (t) => {
+  const root = createTestFixtureRoot("coverage-breadth-e2e-specs-missing", t);
+  const files = listExistingE2eSpecFiles(root);
+  assert.deepEqual([...files], []);
+});
+
+test("E2E_ROOT and E2E_SPEC_EXTENSION document the evidence-ref naming convention", () => {
+  assert.equal(E2E_ROOT, "e2e");
+  assert.equal(E2E_SPEC_EXTENSION, ".spec.ts");
+});
+
+// --- formatBreadthMarkerProblems / BreadthMarkerValidationError ------------
+
+test("formatBreadthMarkerProblems renders an actionable file:line diagnostic per problem", () => {
+  const text = formatBreadthMarkerProblems([
+    {
+      filePath: "src/app/login/page.tsx",
+      line: 4,
+      ref: "e2e/auth/does-not-exist.spec.ts",
+      problem: REF_PROBLEM.DANGLING,
+      message: "referenced e2e spec file does not exist (dangling reference)",
+    },
+  ]);
+  assert.match(text, /src\/app\/login\/page\.tsx:4/);
+  assert.match(text, /mapped-e2e ref="e2e\/auth\/does-not-exist\.spec\.ts"/);
+  assert.match(text, /does not exist \(dangling reference\)/);
+});
+
+test("BreadthMarkerValidationError exposes the full problem list and a formatted message", () => {
+  const problems = [
+    {
+      filePath: "src/a.ts",
+      line: 1,
+      ref: "../etc/passwd",
+      problem: REF_PROBLEM.TRAVERSAL,
+      message: 'ref must not contain ".." path traversal segments',
+    },
+  ];
+  const error = new BreadthMarkerValidationError(problems);
+  assert.equal(error.name, "BreadthMarkerValidationError");
+  assert.deepEqual(error.problems, problems);
+  assert.match(error.message, /src\/a\.ts:1/);
+});
+
 // --- collectLoadedFiles (node:test run() API integration point) ----------
 
 function fakeCoverageStream({ files, failCount = 0, composedChunks }) {
@@ -726,6 +981,11 @@ function buildFixtureReport() {
     repoRoot: "/repo",
     eligibleFiles,
     loadedFiles,
+    // "src/lib/mapped.ts" declares ref=e2e/product/mapped.spec.ts — the
+    // fixture existence set stands in for a real e2e/ directory scan so this
+    // suite stays hermetic (no disk access) while still exercising the real
+    // existence-validation path `buildBreadthReport` runs in production.
+    existingE2eSpecFiles: new Set(["e2e/product/mapped.spec.ts"]),
     readFile: (absolutePath) => {
       const relative = absolutePath.replace("/repo/", "");
       return fixtures[relative].text;
@@ -781,6 +1041,153 @@ test("formatBreadthReport renders the roll-up counts", () => {
   assert.match(text, /Mapped interaction\/E2E \(not unit-covered\): 1/);
   assert.match(text, /Approved exception: 1/);
   assert.match(text, /Unresolved gap \(actionable\): 1/);
+});
+
+test("buildBreadthReport throws BreadthMarkerValidationError for a dangling mapped-e2e ref", () => {
+  const fixtures = {
+    "src/lib/dangling.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=e2e/product/does-not-exist.spec.ts",
+        "export function dangling() { return 1; }",
+      ].join("\n"),
+    },
+  };
+  const eligibleFiles = Object.keys(fixtures);
+  assert.throws(
+    () =>
+      buildBreadthReport({
+        repoRoot: "/repo",
+        eligibleFiles,
+        loadedFiles: new Set(),
+        existingE2eSpecFiles: new Set(["e2e/product/mapped.spec.ts"]),
+        readFile: (absolutePath) =>
+          fixtures[absolutePath.replace("/repo/", "")].text,
+      }),
+    (error) => {
+      assert.ok(error instanceof BreadthMarkerValidationError);
+      assert.match(error.message, /src\/lib\/dangling\.ts/);
+      assert.match(error.message, /e2e\/product\/does-not-exist\.spec\.ts/);
+      assert.match(error.message, /does not exist/i);
+      return true;
+    },
+  );
+});
+
+test("buildBreadthReport throws BreadthMarkerValidationError for a malformed mapped-e2e ref", () => {
+  const fixtures = {
+    "src/lib/traversal.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=e2e/../secrets/leak.spec.ts",
+        "export function traversal() { return 1; }",
+      ].join("\n"),
+    },
+  };
+  const eligibleFiles = Object.keys(fixtures);
+  assert.throws(
+    () =>
+      buildBreadthReport({
+        repoRoot: "/repo",
+        eligibleFiles,
+        loadedFiles: new Set(),
+        existingE2eSpecFiles: new Set(),
+        readFile: (absolutePath) =>
+          fixtures[absolutePath.replace("/repo/", "")].text,
+      }),
+    BreadthMarkerValidationError,
+  );
+});
+
+test("buildBreadthReport aggregates problems across multiple files before throwing", () => {
+  const fixtures = {
+    "src/lib/bad-one.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=/etc/passwd",
+        "export function badOne() { return 1; }",
+      ].join("\n"),
+    },
+    "src/lib/bad-two.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=e2e/product/ghost.spec.ts",
+        "export function badTwo() { return 1; }",
+      ].join("\n"),
+    },
+  };
+  const eligibleFiles = Object.keys(fixtures).sort();
+  assert.throws(
+    () =>
+      buildBreadthReport({
+        repoRoot: "/repo",
+        eligibleFiles,
+        loadedFiles: new Set(),
+        existingE2eSpecFiles: new Set(),
+        readFile: (absolutePath) =>
+          fixtures[absolutePath.replace("/repo/", "")].text,
+      }),
+    (error) => {
+      assert.ok(error instanceof BreadthMarkerValidationError);
+      // Both files' problems must be reported together (collect-then-throw),
+      // not just the first one encountered — this is what lets a caller fix
+      // every dangling/malformed ref in one pass instead of playing whack-a-mole.
+      assert.match(error.message, /src\/lib\/bad-one\.ts/);
+      assert.match(error.message, /src\/lib\/bad-two\.ts/);
+      return true;
+    },
+  );
+});
+
+test("buildBreadthReport accepts multiple valid mapped-e2e markers on one file", () => {
+  const fixtures = {
+    "src/lib/multi-mapped.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=e2e/product/mapped.spec.ts",
+        "// coverage-breadth: mapped-e2e ref=e2e/product/other.spec.ts",
+        "export function multiMapped() { return 1; }",
+      ].join("\n"),
+    },
+  };
+  const eligibleFiles = Object.keys(fixtures);
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles,
+    loadedFiles: new Set(),
+    existingE2eSpecFiles: new Set([
+      "e2e/product/mapped.spec.ts",
+      "e2e/product/other.spec.ts",
+    ]),
+    readFile: (absolutePath) =>
+      fixtures[absolutePath.replace("/repo/", "")].text,
+  });
+  assert.deepEqual(report.files[MODE.MAPPED_E2E], ["src/lib/multi-mapped.ts"]);
+  assert.equal(report.mappedInteractionCount, 1);
+});
+
+test("buildBreadthReport rejects a duplicated mapped-e2e marker where one ref is invalid", () => {
+  const fixtures = {
+    "src/lib/mixed-mapped.ts": {
+      text: [
+        "// coverage-breadth: mapped-e2e ref=e2e/product/mapped.spec.ts",
+        "// coverage-breadth: mapped-e2e ref=e2e/product/ghost.spec.ts",
+        "export function mixedMapped() { return 1; }",
+      ].join("\n"),
+    },
+  };
+  const eligibleFiles = Object.keys(fixtures);
+  assert.throws(
+    () =>
+      buildBreadthReport({
+        repoRoot: "/repo",
+        eligibleFiles,
+        loadedFiles: new Set(),
+        existingE2eSpecFiles: new Set(["e2e/product/mapped.spec.ts"]),
+        readFile: (absolutePath) =>
+          fixtures[absolutePath.replace("/repo/", "")].text,
+      }),
+    (error) => {
+      assert.ok(error instanceof BreadthMarkerValidationError);
+      assert.match(error.message, /e2e\/product\/ghost\.spec\.ts/);
+      return true;
+    },
+  );
 });
 
 // --- deck-kernel loaded/gap classification (#1925) ------------------------

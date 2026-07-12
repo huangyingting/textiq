@@ -11,6 +11,7 @@ import {
 
 import { register } from "./actions";
 
+// coverage-breadth: mapped-e2e ref=e2e/auth/oauth-disabled.spec.ts
 export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
   const [errorMessage, formAction, isPending] = useActionState(
     register,

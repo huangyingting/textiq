@@ -191,7 +191,13 @@ export async function runCombinedCoverageGate({
   }
 
   const eligibleFiles = listEligible(repoRoot);
-  const report = buildReport({ repoRoot, eligibleFiles, loadedFiles: loaded });
+  let report;
+  try {
+    report = buildReport({ repoRoot, eligibleFiles, loadedFiles: loaded });
+  } catch (error) {
+    logError(error.message);
+    return 1;
+  }
   log(formatReport(report));
 
   if (report.actionableGapCount > maxGapFiles) {
