@@ -72,7 +72,7 @@ test("source line coverage command excludes tests, generated code, and test supp
     "--test-concurrency=1",
     "--experimental-test-coverage",
     "--test-coverage-lines=92",
-    "--test-coverage-branches=88",
+    "--test-coverage-branches=89",
     "--test-coverage-functions=93",
     "--test-coverage-include=src/**/*.ts",
     "--test-coverage-include=src/**/*.tsx",
@@ -162,7 +162,7 @@ test("line coverage CLI maps an unavailable runner to failure", () => {
 test("coverage stages have branch and function floor defaults at safe baselines", () => {
   const [source, scripts] = LINE_COVERAGE_STAGES;
 
-  assert.equal(source.defaultBranchMinimum, 88);
+  assert.equal(source.defaultBranchMinimum, 89);
   assert.equal(source.branchEnvKey, "SOURCE_BRANCH_COVERAGE_MIN");
   assert.equal(source.defaultFunctionMinimum, 93);
   assert.equal(source.functionEnvKey, "SOURCE_FUNCTION_COVERAGE_MIN");
@@ -194,7 +194,7 @@ test("buildCoverageCommand includes branch and function flags after lines in Nod
 
 test("buildCoverageCommand uses source stage branch and function defaults", () => {
   const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], {});
-  assert.ok(cmd.args.includes("--test-coverage-branches=88"));
+  assert.ok(cmd.args.includes("--test-coverage-branches=89"));
   assert.ok(cmd.args.includes("--test-coverage-functions=93"));
 });
 
