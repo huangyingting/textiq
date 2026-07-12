@@ -630,7 +630,9 @@ export function applyShapeOp(slide: PptxSlide, op: DeckShapeOp): void {
           color: op.color,
           ...(transparency !== undefined ? { transparency } : {}),
         },
-    ...(op.radius && op.shape !== "ellipse" ? { rectRadius: op.radius } : {}),
+    ...(op.radius && op.shape !== "circle" && op.shape !== "ellipse"
+      ? { rectRadius: op.radius }
+      : {}),
     ...rotate,
     ...(op.shadow ? { shadow: SHADOW_OPTS } : {}),
   });
