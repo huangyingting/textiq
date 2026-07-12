@@ -598,6 +598,7 @@ export function applyShapeOp(slide: PptxSlide, op: DeckShapeOp): void {
       ...rotate,
       ...(op.shadow ? { shadow: SHADOW_OPTS } : {}),
     });
+    applyShapeTextOp(slide, op);
     return;
   }
   const shapeName =

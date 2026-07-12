@@ -285,33 +285,153 @@ test("applyShapeOp renders a line shape as a centered horizontal rule and never 
   assert.equal(calls.texts.length, 0);
 });
 
-test("applyShapeOp renders triangle/diamond shapes with zero-width outline and no label support", () => {
-  const { calls, slide } = recordingSlide();
-  const op: DeckShapeOp = {
-    kind: "shape",
-    x: 1,
-    y: 2,
-    w: 3,
-    h: 4,
-    shape: "triangle",
-    color: "112233",
-    text: "Label text is not drawn for triangles",
-  };
-  applyShapeOp(slide as never, op);
-  assert.deepEqual(calls.shapes, [
-    {
-      shape: "triangle",
-      options: {
-        x: 1,
-        y: 2,
-        w: 3,
-        h: 4,
-        fill: { color: "112233" },
-        line: { width: 0, color: "112233" },
+test("applyShapeOp renders triangle/diamond shapes with zero-width outline and no label call when text is absent", () => {
+  for (const shape of ["triangle", "diamond"] as const) {
+    const { calls, slide } = recordingSlide();
+    const op: DeckShapeOp = {
+      kind: "shape",
+      x: 1,
+      y: 2,
+      w: 3,
+      h: 4,
+      shape,
+      color: "112233",
+    };
+    applyShapeOp(slide as never, op);
+    assert.deepEqual(calls.shapes, [
+      {
+        shape,
+        options: {
+          x: 1,
+          y: 2,
+          w: 3,
+          h: 4,
+          fill: { color: "112233" },
+          line: { width: 0, color: "112233" },
+        },
       },
-    },
-  ]);
-  assert.equal(calls.texts.length, 0);
+    ]);
+    assert.equal(calls.texts.length, 0);
+  }
+});
+
+test("applyShapeOp renders triangle/diamond shapes with an empty-string label and no label call", () => {
+  for (const shape of ["triangle", "diamond"] as const) {
+    const { calls, slide } = recordingSlide();
+    const op: DeckShapeOp = {
+      kind: "shape",
+      x: 1,
+      y: 2,
+      w: 3,
+      h: 4,
+      shape,
+      color: "112233",
+      text: "",
+    };
+    applyShapeOp(slide as never, op);
+    assert.equal(calls.shapes.length, 1);
+    assert.equal(calls.texts.length, 0);
+  }
+});
+
+test("applyShapeOp draws a centered label for triangle/diamond shapes without altering the shape options", () => {
+  for (const shape of ["triangle", "diamond"] as const) {
+    const { calls, slide } = recordingSlide();
+    const op: DeckShapeOp = {
+      kind: "shape",
+      x: 1,
+      y: 2,
+      w: 3,
+      h: 4,
+      shape,
+      color: "112233",
+      text: "Label",
+    };
+    applyShapeOp(slide as never, op);
+    assert.deepEqual(calls.shapes, [
+      {
+        shape,
+        options: {
+          x: 1,
+          y: 2,
+          w: 3,
+          h: 4,
+          fill: { color: "112233" },
+          line: { width: 0, color: "112233" },
+        },
+      },
+    ]);
+    assert.equal(calls.texts.length, 1);
+    assert.equal(calls.texts[0]!.text, "Label");
+    assert.deepEqual(calls.texts[0]!.options, {
+      x: 1 + 3 * 0.08,
+      y: 2 + 4 * 0.08,
+      w: 3 * 0.84,
+      h: 4 * 0.84,
+      color: "18181b",
+      fontSize: 18,
+      bold: false,
+      italic: false,
+      align: "center",
+      valign: "middle",
+      wrap: true,
+    });
+  }
+});
+
+test("applyShapeOp applies styled label options (color/fontSize/bold/italic/font face) to triangle/diamond shapes", () => {
+  for (const shape of ["triangle", "diamond"] as const) {
+    const { calls, slide } = recordingSlide();
+    const op: DeckShapeOp = {
+      kind: "shape",
+      x: 0,
+      y: 0,
+      w: 10,
+      h: 5,
+      shape,
+      color: "112233",
+      text: "Styled",
+      textColor: "ff0000",
+      fontSize: 24,
+      fontFace: "Georgia",
+      bold: true,
+      italic: true,
+      underline: true,
+      align: "left",
+      rotation: 15,
+      opacity: 0.5,
+    };
+    applyShapeOp(slide as never, op);
+    // Shape options are unaffected by label styling.
+    assert.deepEqual(calls.shapes[0]!.options, {
+      x: 0,
+      y: 0,
+      w: 10,
+      h: 5,
+      fill: { color: "112233", transparency: 50 },
+      line: { width: 0, color: "112233", transparency: 50 },
+      rotate: 15,
+    });
+    assert.equal(calls.texts.length, 1);
+    assert.equal(calls.texts[0]!.text, "Styled");
+    assert.deepEqual(calls.texts[0]!.options, {
+      x: 0 + 10 * 0.08,
+      y: 0 + 5 * 0.08,
+      w: 10 * 0.84,
+      h: 5 * 0.84,
+      color: "ff0000",
+      fontSize: 24,
+      fontFace: "Georgia",
+      bold: true,
+      italic: true,
+      align: "left",
+      valign: "middle",
+      wrap: true,
+      rotate: 15,
+      underline: { style: "sng" },
+      transparency: 50,
+    });
+  }
 });
 
 test("applyShapeOp renders a rounded rect shape and its centered label when text is present", () => {
