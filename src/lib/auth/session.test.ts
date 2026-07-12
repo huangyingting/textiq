@@ -116,4 +116,29 @@ describe("requireUserCore", () => {
     assert.equal(result, user);
     assert.deepEqual(redirects.calls, []);
   });
+
+  test("returns the session user when neither the token nor the row ever set a security stamp", async () => {
+    const user = {
+      id: "user-1",
+      email: "ada@example.test",
+      sessionInvalidatedAt: null,
+    } as CurrentUser;
+    const redirects = redirectRecorder();
+
+    const result = await requireUserCore(
+      {
+        async getSessionUser() {
+          return user;
+        },
+        async findUserById(id) {
+          assert.equal(id, "user-1");
+          return { id, sessionInvalidatedAt: null };
+        },
+      },
+      redirects.redirect,
+    );
+
+    assert.equal(result, user);
+    assert.deepEqual(redirects.calls, []);
+  });
 });
