@@ -86,6 +86,23 @@ test("test subsystem map classifies files by owning subsystem", () => {
       "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
     ).includes("billing"),
   );
+  assert.ok(
+    classifyTestFile("src/app/api/brand/route.test.ts").includes("brand"),
+    "src/app/api/brand/** must classify under the brand subsystem",
+  );
+  assert.ok(
+    classifyTestFile("src/app/api/brand/logo/route.test.ts").includes("brand"),
+  );
+  assert.ok(
+    classifyTestFile("src/app/api/brand/font/route.test.ts").includes("brand"),
+  );
+  assert.deepEqual(
+    classifyTestFile("src/app/api/brand-assets/route.test.ts").includes(
+      "brand",
+    ),
+    false,
+    "src/app/api/brand-assets/** stays owned by security, not brand",
+  );
 });
 
 test("test subsystem plan routes source and script files without e2e by default", () => {
