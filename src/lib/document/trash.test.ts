@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import Database from "better-sqlite3";
+
 import {
   softDeleteDocument,
   restoreDocumentFromTrash,
@@ -425,6 +427,286 @@ test("runDocumentMaintenance computes the invite-link purge cutoff as exactly no
     const [cutoffArg] = call.executeRawValues as [Date, boolean, Date];
     assert.equal(cutoffArg.getTime(), expectedCutoff.getTime());
   }
+});
+
+// ---------------------------------------------------------------------------
+// runDocumentMaintenance — invite-link purge: real SQLite branch semantics
+//
+// The tests above pin the query *text* and *parameters* Prisma is asked to
+// send. They can't observe per-row purge outcomes because the recording DB
+// never executes SQL. The tests below close that gap: they capture the exact
+// DELETE statement `runDocumentMaintenance` produces (via the same recording
+// seam) and execute it, verbatim, against a real in-memory SQLite table
+// (better-sqlite3 — already a project dependency; this bypasses Prisma/
+// migrations entirely, so it needs no schema push). Because the SQL text is
+// captured rather than hand-copied, these tests can't drift from production
+// behavior — if trash.ts's query changes, the captured text changes with it.
+//
+// This is the authoritative, single eligibility contract for invite-link
+// purging (see src/lib/maintenance.ts's module doc): revoked and exhausted
+// links anchor solely on `createdAt` (there is no `revokedAt`/`exhaustedAt`
+// column), while the expired branch additionally requires `expiresAt` itself
+// to be older than the cutoff.
+// ---------------------------------------------------------------------------
+
+type InviteLinkFixture = {
+  id: string;
+  createdAt: Date;
+  isRevoked: boolean;
+  expiresAt: Date | null;
+  maxUses: number | null;
+  useCount: number;
+};
+
+/** Creates an in-memory SQLite table with just the columns the raw DELETE touches. */
+function seedRealInviteLinkTable(rows: InviteLinkFixture[]): Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE "InviteLink" (
+      "id" TEXT PRIMARY KEY,
+      "createdAt" INTEGER NOT NULL,
+      "isRevoked" INTEGER NOT NULL,
+      "expiresAt" INTEGER,
+      "maxUses" INTEGER,
+      "useCount" INTEGER NOT NULL
+    );
+  `);
+  const insert = db.prepare(
+    `INSERT INTO "InviteLink" ("id", "createdAt", "isRevoked", "expiresAt", "maxUses", "useCount") VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  for (const row of rows) {
+    insert.run(
+      row.id,
+      row.createdAt.getTime(),
+      row.isRevoked ? 1 : 0,
+      row.expiresAt ? row.expiresAt.getTime() : null,
+      row.maxUses,
+      row.useCount,
+    );
+  }
+  return db;
+}
+
+/**
+ * Runs `runDocumentMaintenance` against the recording DB to capture the exact
+ * DELETE statement and bound values it sends, then replays that captured
+ * statement against a real in-memory SQLite table seeded with `rows`.
+ * Returns the ids that survive the purge.
+ */
+async function purgeInviteLinkFixturesWithCapturedSql(
+  now: Date,
+  rows: InviteLinkFixture[],
+): Promise<string[]> {
+  resetPurgeLockForTesting();
+  const call: RecordedMaintenanceCall = {};
+  const recordingDb = createRecordingMaintenanceDb(call);
+  await runDocumentMaintenance("dashboard-load", recordingDb as never, now);
+
+  const sql = call.executeRawStrings!.join("?");
+  const values = (call.executeRawValues as unknown[]).map((value) =>
+    value instanceof Date ? value.getTime() : value === true ? 1 : value,
+  );
+
+  const sqliteDb = seedRealInviteLinkTable(rows);
+  try {
+    sqliteDb.prepare(sql).run(...values);
+    return sqliteDb
+      .prepare(`SELECT "id" FROM "InviteLink" ORDER BY "id"`)
+      .all()
+      .map((row) => (row as { id: string }).id);
+  } finally {
+    sqliteDb.close();
+  }
+}
+
+test("runDocumentMaintenance's invite-link DELETE purges a revoked link whose createdAt is past the cutoff, even with a future expiresAt", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      // Revoked, created well before the cutoff, but with an expiresAt far
+      // in the future. Production purges this on createdAt alone — the
+      // revoked branch never consults expiresAt. (This is the exact case
+      // the removed isInviteLinkPurgeEligible helper got wrong: it anchored
+      // on max(createdAt, expiresAt), which would have kept this link alive
+      // indefinitely.)
+      id: "revoked-future-expiry",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: true,
+      expiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, []);
+});
+
+test("runDocumentMaintenance's invite-link DELETE preserves a revoked link whose createdAt has not yet passed the cutoff", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      id: "revoked-too-recent",
+      createdAt: new Date(cutoff.getTime() + 1),
+      isRevoked: true,
+      expiresAt: null,
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["revoked-too-recent"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE purges an exhausted link (useCount >= maxUses) past the cutoff", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      id: "exhausted-exact",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: false,
+      expiresAt: null,
+      maxUses: 10,
+      useCount: 10, // boundary: useCount === maxUses purges via >=
+    },
+    {
+      id: "exhausted-over",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: false,
+      expiresAt: null,
+      maxUses: 5,
+      useCount: 99,
+    },
+  ]);
+  assert.deepEqual(survivors, []);
+});
+
+test("runDocumentMaintenance's invite-link DELETE preserves a link within its usage cap regardless of age", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      id: "within-cap",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: false,
+      expiresAt: null,
+      maxUses: 5,
+      useCount: 3,
+    },
+  ]);
+  assert.deepEqual(survivors, ["within-cap"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE purges an expired link only when both createdAt and expiresAt are past the cutoff", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      // Both createdAt and expiresAt precede the cutoff → purged.
+      id: "expired-both-old",
+      createdAt: new Date(cutoff.getTime() - 2),
+      isRevoked: false,
+      expiresAt: new Date(cutoff.getTime() - 1),
+      maxUses: null,
+      useCount: 0,
+    },
+    {
+      // expiresAt precedes the cutoff, but createdAt does not (unusual data:
+      // expiresAt set earlier than createdAt) → the createdAt age filter
+      // gates every branch, so this survives despite the expired expiresAt.
+      id: "expired-but-too-new",
+      createdAt: new Date(cutoff.getTime() + 1),
+      isRevoked: false,
+      expiresAt: new Date(cutoff.getTime() - 1),
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["expired-but-too-new"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE preserves a link that is not yet expired, regardless of age", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      id: "future-expiry-old-created",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: false,
+      expiresAt: new Date(now.getTime() + 1_000),
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["future-expiry-old-created"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE preserves a live link with a null expiresAt regardless of age", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      id: "null-expiry-live",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: false,
+      expiresAt: null,
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["null-expiry-live"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE treats the createdAt cutoff comparison as strict less-than", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      // createdAt === cutoff is NOT "< cutoff" → preserved for one more sweep.
+      id: "created-at-cutoff-boundary",
+      createdAt: new Date(cutoff.getTime()),
+      isRevoked: true,
+      expiresAt: null,
+      maxUses: null,
+      useCount: 0,
+    },
+    {
+      // createdAt one millisecond older than the cutoff → purged.
+      id: "created-just-past-cutoff",
+      createdAt: new Date(cutoff.getTime() - 1),
+      isRevoked: true,
+      expiresAt: null,
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["created-at-cutoff-boundary"]);
+});
+
+test("runDocumentMaintenance's invite-link DELETE treats the expiresAt cutoff comparison as strict less-than", async () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+  const cutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
+  const survivors = await purgeInviteLinkFixturesWithCapturedSql(now, [
+    {
+      // expiresAt === cutoff is NOT "< cutoff" → preserved (not dead yet).
+      id: "expires-at-cutoff-boundary",
+      createdAt: new Date(cutoff.getTime() - 10),
+      isRevoked: false,
+      expiresAt: new Date(cutoff.getTime()),
+      maxUses: null,
+      useCount: 0,
+    },
+    {
+      // expiresAt one millisecond older than the cutoff → purged.
+      id: "expires-just-past-cutoff",
+      createdAt: new Date(cutoff.getTime() - 10),
+      isRevoked: false,
+      expiresAt: new Date(cutoff.getTime() - 1),
+      maxUses: null,
+      useCount: 0,
+    },
+  ]);
+  assert.deepEqual(survivors, ["expires-at-cutoff-boundary"]);
 });
 
 // ---------------------------------------------------------------------------
