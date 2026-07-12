@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
   buildRetentionCliConfig,
   runRetentionMain,
 } from "./retention-runner.mjs";
+import { createTestFixtureRoot } from "./test-fixtures.mjs";
 
 describe("retention-runner CLI config", () => {
   it("defaults to dry-run with bounded batches", () => {
@@ -435,5 +438,112 @@ describe("runRetentionMain lifecycle", () => {
     assert.equal(rec.errorName, "RangeError");
     assert.equal(rec.domain, "slide");
     assert.equal(rec.assetId, "asset-1");
+  });
+});
+
+describe("default dependency loading (loadRetentionDependencies)", () => {
+  it("runRetentionMain invokes the real default loader when importDeps is not overridden", async (t) => {
+    const saved = process.exitCode;
+    t.after(() => {
+      process.exitCode = saved;
+    });
+
+    const out = [];
+    const errOut = [];
+    process.exitCode = undefined;
+
+    // No `importDeps` override here: this exercises the actual
+    // `loadRetentionDependencies` default parameter -- the exact seam every
+    // other test in this file replaces with a double. Under the plain
+    // `node --test` harness used for the scripts suite (no TS-aware loader
+    // registered), the "@/..." path aliases the real modules depend on
+    // cannot resolve, so the genuine dynamic imports reject deterministically.
+    // That failure still proves the production wiring is correct: the real
+    // loader is called, its rejection is caught and reported, and no Prisma
+    // client is disconnected because none was ever obtained.
+    await runRetentionMain({
+      argv: [],
+      env: {},
+      stdout: (msg) => out.push(msg),
+      stderr: (msg) => errOut.push(msg),
+    });
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(out.length, 0);
+    assert.equal(errOut.length, 1);
+    const parsed = JSON.parse(errOut[0]);
+    assert.equal(parsed.event, "maintenance.retention.failed");
+    assert.equal(parsed.errorName, "Error");
+  });
+
+  it("loadRetentionDependencies resolves the real maintenance runner and Prisma client without mutating data", (t) => {
+    // Runs under `--import tsx`, the same loader `npm run retention:run`
+    // uses in production, so the "@/..." aliases resolve and the two real
+    // dynamic imports in `loadRetentionDependencies` succeed. The probe only
+    // compares module bindings and disconnects the client -- it never calls
+    // a query or mutation method, so no data is read or changed.
+    //
+    // The probe is written to a real fixture file (not passed inline via
+    // `-e`): on Node 22, `--input-type=module -e "<script>"` fails to
+    // statically resolve named exports re-exported through tsx's
+    // CJS-interop transform for `src/lib/prisma.ts` (a genuine
+    // `SyntaxError: ... does not provide an export named 'prisma'`, verified
+    // to reproduce even outside this test), while the identical source
+    // loaded from a real module file resolves correctly. Using a file keeps
+    // this test's assertions genuine on every supported Node version instead
+    // of just happening to avoid a loader quirk.
+    //
+    // `runOperationalRetention` is compared by name + exact source text
+    // rather than by object identity: Node 22's tsx/ESM interop has been
+    // verified (independently of this seam) to sometimes instantiate
+    // `src/lib/maintenance/retention-runner.ts` twice -- once for the static
+    // "expected" import below and once for `loadRetentionDependencies`'s own
+    // dynamic import -- so `===` is not a reliable check on every supported
+    // Node version. Matching source text still proves the loaded function is
+    // the real production code, not a stub or double; `prisma`'s reference
+    // equality is reliable because `src/lib/prisma.ts` caches its client on
+    // `globalThis`, so both imports resolve the same singleton regardless.
+    const root = createTestFixtureRoot("retention-runner-loader-probe", t);
+    const probePath = join(root, "probe.mjs");
+    writeFileSync(
+      probePath,
+      `
+      import { loadRetentionDependencies } from ${JSON.stringify(join(import.meta.dirname, "retention-runner.mjs"))};
+      import { runOperationalRetention as expectedRunOperationalRetention } from ${JSON.stringify(join(import.meta.dirname, "..", "src", "lib", "maintenance", "retention-runner.ts"))};
+      import { prisma as expectedPrisma } from ${JSON.stringify(join(import.meta.dirname, "..", "src", "lib", "prisma.ts"))};
+
+      const [{ runOperationalRetention }, { prisma }] =
+        await loadRetentionDependencies();
+      const report = {
+        runOperationalRetentionIsRealExport:
+          runOperationalRetention.name === expectedRunOperationalRetention.name &&
+          runOperationalRetention.toString() ===
+            expectedRunOperationalRetention.toString(),
+        runOperationalRetentionName: runOperationalRetention.name,
+        prismaIsRealExport: prisma === expectedPrisma,
+        prismaHasDisconnect: typeof prisma.$disconnect === "function",
+      };
+      await prisma.$disconnect();
+      console.log(JSON.stringify(report));
+      `,
+    );
+
+    // Strip NODE_V8_COVERAGE defensively so this subprocess never inherits
+    // the parent `node --test --experimental-test-coverage` run's shared
+    // coverage directory.
+    const { NODE_V8_COVERAGE: _omitted, ...envWithoutCoverage } = process.env;
+    const result = spawnSync(process.execPath, ["--import", "tsx", probePath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: envWithoutCoverage,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), {
+      runOperationalRetentionIsRealExport: true,
+      runOperationalRetentionName: "runOperationalRetention",
+      prismaIsRealExport: true,
+      prismaHasDisconnect: true,
+    });
   });
 });
