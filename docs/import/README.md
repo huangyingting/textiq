@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-11"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -103,10 +103,14 @@ blank imported document accidentally.
 
 ## Primary Tests
 
+- [`src/app/api/import/route.test.ts`](../../src/app/api/import/route.test.ts)
 - [`src/app/api/import/parser.test.ts`](../../src/app/api/import/parser.test.ts)
+- [`src/lib/import/index.test.ts`](../../src/lib/import/index.test.ts)
 - [`src/lib/import/validate.test.ts`](../../src/lib/import/validate.test.ts)
 - [`src/lib/import/normalize.test.ts`](../../src/lib/import/normalize.test.ts)
 - [`src/lib/import/timeout.test.ts`](../../src/lib/import/timeout.test.ts)
 - [`src/lib/import/archive-budget.test.ts`](../../src/lib/import/archive-budget.test.ts)
 - [`src/lib/import/html.test.ts`](../../src/lib/import/html.test.ts)
+- [`src/lib/import/docx.test.ts`](../../src/lib/import/docx.test.ts)
+- [`src/lib/import/pdf.test.ts`](../../src/lib/import/pdf.test.ts)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)
