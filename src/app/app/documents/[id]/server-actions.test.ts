@@ -594,6 +594,54 @@ describe("sharing server actions", () => {
     ]);
   });
 
+  it("disables sharing for the exact document id and revalidates", async () => {
+    state().setDocumentSharing = async (documentId, isShared) => {
+      state().calls.push(["setDocumentSharing", documentId, isShared]);
+      return { isShared, shareId: null };
+    };
+
+    assert.deepEqual(
+      await sharingActions.toggleDocumentSharing("doc-2", false),
+      { ok: true, data: { isShared: false, shareId: null } },
+    );
+    assert.deepEqual(state().calls, [
+      ["requireDocumentActionContext", "doc-2", "manage"],
+      ["setDocumentSharing", "doc-2", false],
+      ["revalidatePath", "/app/documents/doc-2"],
+      ["revalidatePath", "/app"],
+    ]);
+  });
+
+  it("denies sharing mutations when manage capability is rejected, without persisting or revalidating", async () => {
+    state().requireDocumentActionContext = async (documentId, capability) => {
+      state().calls.push([
+        "requireDocumentActionContext",
+        documentId,
+        capability,
+      ]);
+      throw new Error("You do not have permission to manage this document.");
+    };
+
+    await assert.rejects(
+      () => sharingActions.toggleDocumentSharing("doc-1", true),
+      /You do not have permission to manage this document\./,
+    );
+    await assert.rejects(
+      () => sharingActions.regenerateShareLink("doc-1"),
+      /You do not have permission to manage this document\./,
+    );
+    await assert.rejects(
+      () => sharingActions.updateSharePolicy("doc-1", { embedEnabled: true }),
+      /You do not have permission to manage this document\./,
+    );
+
+    assert.deepEqual(state().calls, [
+      ["requireDocumentActionContext", "doc-1", "manage"],
+      ["requireDocumentActionContext", "doc-1", "manage"],
+      ["requireDocumentActionContext", "doc-1", "manage"],
+    ]);
+  });
+
   it("regenerates enabled share links and rejects disabled sharing", async () => {
     assert.deepEqual(await sharingActions.regenerateShareLink("doc-1"), {
       ok: true,
@@ -736,6 +784,33 @@ describe("versioning server actions", () => {
     ]);
   });
 
+  it("scopes the version query to the exact document id and requires view access", async () => {
+    let capturedWhere: unknown;
+    prisma.documentVersion.findMany = async (args: unknown) => {
+      capturedWhere = (args as { where: unknown }).where;
+      return [];
+    };
+
+    await versioningActions.listDocumentVersions("doc-exact-1");
+    assert.deepEqual(capturedWhere, { documentId: "doc-exact-1" });
+    assert.deepEqual(state().calls, [
+      ["requireDocumentActionContext", "doc-exact-1", "view"],
+    ]);
+
+    state().requireDocumentActionContext = async (documentId, capability) => {
+      state().calls.push([
+        "requireDocumentActionContext",
+        documentId,
+        capability,
+      ]);
+      throw new Error("You do not have permission to view this document.");
+    };
+    await assert.rejects(
+      () => versioningActions.listDocumentVersions("doc-exact-1"),
+      /You do not have permission to view this document\./,
+    );
+  });
+
   it("restores versions, rejects missing snapshots, and reports restore errors", async () => {
     prisma.documentVersion.findUnique = async () => null;
     assert.deepEqual(
@@ -771,5 +846,70 @@ describe("versioning server actions", () => {
         error: "Failed to restore document version.",
       },
     );
+  });
+
+  it("scopes restore to the document owning the version record, not the versionId text", async () => {
+    let capturedFindUniqueWhere: unknown;
+    prisma.documentVersion.findUnique = async (args: unknown) => {
+      capturedFindUniqueWhere = (args as { where: unknown }).where;
+      return { documentId: "doc-owner-9" };
+    };
+
+    const result = await versioningActions.restoreDocumentVersion("version-42");
+
+    assert.deepEqual(capturedFindUniqueWhere, { id: "version-42" });
+    assert.equal(result.ok, true);
+    assert.deepEqual(state().calls, [
+      ["requireUser"],
+      ["requireDocumentCapability", "user-1", "doc-owner-9", "edit"],
+      ["restoreVersion", "doc-owner-9", "version-42", "user-1"],
+      ["revalidatePath", "/app/documents/doc-owner-9"],
+      ["revalidatePath", "/app"],
+    ]);
+  });
+
+  it("denies restore before capability checks or lookups when unauthenticated", async () => {
+    let findUniqueCalled = false;
+    prisma.documentVersion.findUnique = async () => {
+      findUniqueCalled = true;
+      return { documentId: "doc-1" };
+    };
+    state().requireUser = async () => {
+      state().calls.push(["requireUser"]);
+      throw new Error("NEXT_REDIRECT");
+    };
+
+    await assert.rejects(
+      () => versioningActions.restoreDocumentVersion("version-1"),
+      /NEXT_REDIRECT/,
+    );
+    assert.equal(findUniqueCalled, false);
+    assert.deepEqual(state().calls, [["requireUser"]]);
+  });
+
+  it("denies restore when edit capability is rejected, without restoring or revalidating", async () => {
+    prisma.documentVersion.findUnique = async () => ({ documentId: "doc-1" });
+    state().requireDocumentCapability = async (
+      userId,
+      documentId,
+      capability,
+    ) => {
+      state().calls.push([
+        "requireDocumentCapability",
+        userId,
+        documentId,
+        capability,
+      ]);
+      throw new Error("You do not have permission to edit this document.");
+    };
+
+    await assert.rejects(
+      () => versioningActions.restoreDocumentVersion("version-1"),
+      /You do not have permission to edit this document\./,
+    );
+    assert.deepEqual(state().calls, [
+      ["requireUser"],
+      ["requireDocumentCapability", "user-1", "doc-1", "edit"],
+    ]);
   });
 });
