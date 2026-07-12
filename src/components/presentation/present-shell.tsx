@@ -10,7 +10,7 @@ import {
   type TouchEvent,
 } from "react";
 
-import { matchesShortcut } from "@/lib/shortcuts/catalog";
+import { matchesShortcut, type ShortcutId } from "@/lib/shortcuts/catalog";
 import { isEditableTagName } from "@/lib/shortcuts/match";
 import {
   DEFAULT_PRESENT_VIEWPORT,
@@ -159,6 +159,39 @@ export function usePresentClickZones({
   };
 }
 
+export type PresentKeyboardDispatchTarget = {
+  tagName?: string | null;
+  isContentEditable?: boolean;
+} | null;
+
+/**
+ * Pure decision for which shortcut action (if any) a keydown should dispatch:
+ * editable targets never dispatch, and the first shortcut whose id matches
+ * wins (mirrors the original in-effect iteration order). Kept free of
+ * `KeyboardEvent`/DOM so it is unit-testable with `node --test`.
+ */
+export function resolvePresentKeyboardDispatch({
+  target,
+  shortcuts,
+  matches,
+}: {
+  target: PresentKeyboardDispatchTarget;
+  shortcuts: PresentShortcutIdMap;
+  matches: (id: ShortcutId) => boolean;
+}): PresentShortcutAction | null {
+  if (isEditableTagName(target?.tagName, target?.isContentEditable ?? false)) {
+    return null;
+  }
+
+  for (const [action, id] of Object.entries(shortcuts)) {
+    if (matches(id)) {
+      return action as PresentShortcutAction;
+    }
+  }
+
+  return null;
+}
+
 export function usePresentKeyboardNavigation({
   shortcuts,
   onShortcut,
@@ -171,21 +204,16 @@ export function usePresentKeyboardNavigation({
 }): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        isEditableTagName(target?.tagName, target?.isContentEditable ?? false)
-      ) {
-        return;
-      }
+      const action = resolvePresentKeyboardDispatch({
+        target: event.target as HTMLElement | null,
+        shortcuts,
+        matches: (id) => matchesShortcut(id, event),
+      });
+      if (!action) return;
 
-      for (const [action, id] of Object.entries(shortcuts)) {
-        if (matchesShortcut(id, event)) {
-          const handled = onShortcut(action as PresentShortcutAction, event);
-          if (handled === false) return;
-          event.preventDefault();
-          return;
-        }
-      }
+      const handled = onShortcut(action, event);
+      if (handled === false) return;
+      event.preventDefault();
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -406,6 +434,17 @@ export function usePresenterFullscreen(): {
   };
 }
 
+/**
+ * Pure elapsed-seconds decision for the presenter timer tick, isolated from
+ * `Date.now()`/`setInterval` so it is unit-testable with plain numbers.
+ */
+export function computePresentElapsedSeconds(
+  startedAt: number,
+  now: number,
+): number {
+  return Math.floor((now - startedAt) / 1000);
+}
+
 export function usePresenterTimer(): {
   elapsedSeconds: number;
   startedAtRef: RefObject<number | null>;
@@ -417,7 +456,7 @@ export function usePresenterTimer(): {
     const startedAt = startedAtRef.current ?? Date.now();
     startedAtRef.current = startedAt;
     const intervalId = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      setElapsedSeconds(computePresentElapsedSeconds(startedAt, Date.now()));
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, []);
