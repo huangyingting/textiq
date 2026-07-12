@@ -102,14 +102,23 @@ function createJsonLogger(stdout, stderr) {
   };
 }
 
+/**
+ * Loads the real maintenance runner and Prisma client via dynamic import.
+ * Extracted from `runRetentionMain`'s default `importDeps` so it can be
+ * exercised directly (under a TS-aware loader) instead of only ever being
+ * replaced by test doubles.
+ */
+export async function loadRetentionDependencies() {
+  return Promise.all([
+    import("../src/lib/maintenance/retention-runner.ts"),
+    import("../src/lib/prisma.ts"),
+  ]);
+}
+
 export async function runRetentionMain({
   argv = process.argv.slice(2),
   env = process.env,
-  importDeps = async () =>
-    Promise.all([
-      import("../src/lib/maintenance/retention-runner.ts"),
-      import("../src/lib/prisma.ts"),
-    ]),
+  importDeps = loadRetentionDependencies,
   stdout = (msg) => console.log(msg),
   stderr = (msg) => console.error(msg),
 } = {}) {
