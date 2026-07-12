@@ -12,21 +12,27 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (148) was re-measured directly against this repository
- * when #1925 widened `listEligibleSourceFiles`/`collectLoadedFiles` to
- * include `src/lib/document/deck-kernel/**` in breadth eligibility and
- * instrumentation (previously excluded entirely — see
+ * The baseline below (130) was re-measured directly against this repository
+ * after #1933 closed six editor shell control gaps (`document-export-button`,
+ * `import-button`, `page-break-indicator`, `present-button`, `side-panel`,
+ * `visual-svg-registry`, all under `src/components/editor/`): 848 eligible
+ * runtime source files under `src/**`, 24 type-only, 30 barrel, 794
+ * runtime-eligible, 664 loaded by the source unit suite, leaving 130
+ * actionable gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 148 to 130
+ * to match). Before #1933 (as of #1925, which widened
+ * `listEligibleSourceFiles`/`collectLoadedFiles` to include
+ * `src/lib/document/deck-kernel/**` in breadth eligibility and
+ * instrumentation — previously excluded entirely, see
  * `BREADTH_COVERAGE_STAGE` in `coverage-breadth.mjs`): 848 eligible runtime
- * source files under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible,
- * 646 loaded by the source unit suite, leaving 148 actionable gap files.
- * Widening to include deck-kernel added 66 eligible files (1 type-only, 4
- * barrel, 61 runtime-eligible), of which 60 were already loaded by
- * deck-kernel's own test suite and 1
- * (`src/lib/document/deck-kernel/theme-typography.ts`) is a new actionable
- * gap — deck-kernel was already well unit-tested, so widening breadth to
- * cover it barely moved the gap count even though it moved the eligible and
- * loaded counts substantially. This is a zero-slack baseline: it is set to
- * the exact measured count, not a rounded-up buffer. See
+ * source files, 24 type-only, 30 barrel, 794 runtime-eligible, 646 loaded by
+ * the source unit suite, leaving 148 actionable gap files. Widening to
+ * include deck-kernel added 66 eligible files (1 type-only, 4 barrel, 61
+ * runtime-eligible), of which 60 were already loaded by deck-kernel's own
+ * test suite and 1 (`src/lib/document/deck-kernel/theme-typography.ts`) is a
+ * new actionable gap — deck-kernel was already well unit-tested, so widening
+ * breadth to cover it barely moved the gap count even though it moved the
+ * eligible and loaded counts substantially. This is a zero-slack baseline: it
+ * is set to the exact measured count, not a rounded-up buffer. See
  * docs/operations/quality-gates.md for the full breakdown. Lower this
  * constant by hand whenever gap files are closed in the same commit; never
  * raise it to hide a regression. Use COVERAGE_BREADTH_MAX_GAP_FILES for local
@@ -44,7 +50,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 148;
+export const DEFAULT_MAX_GAP_FILES = 130;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
