@@ -147,6 +147,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
       "Document creation, listing, tags, search, templates, trash, and workspace UI",
     patterns: [
       /^src\/app\/app\/actions\.test\.ts$/,
+      /^src\/app\/app\/document-card\.test\.tsx$/,
+      /^src\/app\/app\/document-grid\.test\.tsx$/,
       /^src\/app\/app\/document-list/,
       /^src\/app\/app\/import-document-button\.test\.tsx$/,
       /^src\/app\/app\/new-document-button\.test\.tsx$/,

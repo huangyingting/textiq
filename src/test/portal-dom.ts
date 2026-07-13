@@ -57,6 +57,32 @@ import { createRequire } from "node:module";
 import type { ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+// Any component that renders `next/link`'s `<Link>` (e.g. `DocumentCard`)
+// mounts `useIntersection`'s prefetch-on-visible effect. Node has no global
+// `IntersectionObserver`, so `next/link` falls back to
+// `requestIdleCallback` — whose own fallback implementation (Node/this
+// process also lacks a global `self`) references `self.setTimeout` and
+// throws `ReferenceError: self is not defined` the moment that passive
+// effect runs. Stubbing a real (no-op) `IntersectionObserver` here — once,
+// at this module's first import, well before any component or `next/link`
+// itself is dynamically imported — makes `next/link` treat intersection
+// observation as supported and skip the broken fallback entirely; the stub
+// never reports an intersection, so prefetch simply never fires, which is
+// irrelevant to any of this repo's direct component tests.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  class NoopIntersectionObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  (
+    globalThis as unknown as { IntersectionObserver: unknown }
+  ).IntersectionObserver = NoopIntersectionObserver;
+}
+
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -141,9 +167,28 @@ export function createPortalNodeMock() {
     focus: () => undefined,
     blur: () => undefined,
     contains: () => false,
+    closest: () => null,
     querySelectorAll: () => [],
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
+    // `SelectMenu`/`Popover`/`Tooltip` all measure their trigger (and, for
+    // `Popover`, an ancestor found via `closest`) via `getBoundingClientRect`
+    // in a `useLayoutEffect` that fires as soon as they open, to position
+    // their portalled panel. A zeroed rect is a valid, inert measurement —
+    // it keeps that positioning math from throwing so tests can open these
+    // controls and interact with their portalled options/content.
+    getBoundingClientRect: () => ({
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+    offsetWidth: 0,
     style: {},
   };
 }
@@ -161,6 +206,21 @@ export function createPortalNodeMock() {
  * after the synchronous portion of an async function returns), so awaited
  * interactions inside `run` still see the fake DOM.
  */
+// `Popover`/`ColorPicker` both drive a continuous "track position while
+// open" loop: a `useLayoutEffect` calls `reposition()` once synchronously,
+// then requests a frame for `trackPosition`, whose body calls `reposition()`
+// again and immediately re-requests another frame — a self-perpetuating RAF
+// loop, by design, so the panel keeps following its trigger during real
+// scrolling/resizing. Invoking the callback synchronously (as this shim does,
+// so the effect's *first* measurement is available immediately after mount)
+// would recurse forever for that pattern, since each nested `requestAnimationFrame`
+// call would itself synchronously invoke and re-request. `rafDepth` guards
+// against that: only the outermost call actually invokes its callback: any
+// call made from *within* an already-executing callback (i.e. the loop's own
+// re-request) is accepted but never fired, which is enough for static test
+// assertions — no test needs to simulate an in-progress scroll/resize.
+let rafDepth = 0;
+
 export function withPortalDom<T>(run: () => T): T {
   const previousDocument = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -201,7 +261,15 @@ export function withPortalDom<T>(run: () => T): T {
         removeEventListener: () => undefined,
       }),
       requestAnimationFrame: (callback: FrameRequestCallback) => {
-        callback(0);
+        if (rafDepth > 0) {
+          return 0;
+        }
+        rafDepth++;
+        try {
+          callback(0);
+        } finally {
+          rafDepth--;
+        }
         return 0;
       },
       cancelAnimationFrame: () => undefined,
