@@ -19,9 +19,10 @@
  * shared harness's `run()`, which never commits what it builds and so cannot
  * propagate `LexicalComposerContext`/`VisualPanelProvider` to a nested
  * consumer) — same rationale as `editor-context-provider.test.ts`. Importing
- * `createReactRenderHarness` is for its module-level side effect only: it
- * flips on `IS_REACT_ACT_ENVIRONMENT` and installs the baseline
- * `document`/`window` stubs `EditorContextProvider`'s effect depends on.
+ * `@/test/react-render-harness` is for its module-level side effect only: it
+ * flips on `IS_REACT_ACT_ENVIRONMENT`. `installPersistentDefaultDom` installs
+ * the baseline `document`/`window` stubs `EditorContextProvider`'s effect
+ * depends on, persistently for this file's lifetime.
  */
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
@@ -55,15 +56,16 @@ import { FIXTURES } from "@/lib/visual/fixtures";
 import { $createVisualNode, VisualNode } from "@/lib/lexical/visual-node";
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
 
-// Side effect only: flips `IS_REACT_ACT_ENVIRONMENT` on and installs the
-// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Side effect only: flips `IS_REACT_ACT_ENVIRONMENT` on; also installs the
+// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs,
+// persistently for this file's lifetime.
+import { installPersistentDefaultDom } from "@/test/react-render-harness";
 
 import { useEditingSurface } from "./use-editing-surface";
 import { useVisualPanel, VisualPanelProvider } from "./visual-panel-context";
 import type { ResolvedEditingSurface } from "@/lib/lexical/editing-surface";
 
-createReactRenderHarness().run(() => null);
+installPersistentDefaultDom();
 
 /**
  * `useActiveTableCaptionKey` (used internally by `useEditingSurface`) checks

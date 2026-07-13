@@ -18,11 +18,16 @@
  * initial render), this file mounts it directly with `react-test-renderer`'s
  * `act`/`create`/`update` rather than the shared harness's `run()` (which
  * never mounts what it builds) or `renderWithTestRenderer` (which unmounts
- * immediately after one render). Importing `createReactRenderHarness` here is
- * for its module-level side effects only: it flips on
- * `IS_REACT_ACT_ENVIRONMENT` and installs the `document`/`window` stubs that
- * `EditorContextProvider`'s effect needs (`addEventListener`,
- * `getSelection`, `requestAnimationFrame`, ...).
+ * immediately after one render). Importing `@/test/react-render-harness` here
+ * is for its module-level side effect only: it flips on
+ * `IS_REACT_ACT_ENVIRONMENT`. This file separately installs the
+ * `document`/`window` stubs `EditorContextProvider`'s effect needs
+ * (`addEventListener`, `getSelection`, `requestAnimationFrame`, ...) via
+ * `installPersistentDefaultDom`, persistently for the file's lifetime —
+ * `withDefaultDom`'s per-call restore would otherwise tear them down between
+ * tests, and this file's tests rely on directly monkey-patching
+ * `globalThis.window`/`globalThis.document` across cases (e.g.
+ * `globalThis.window.getSelection = ...`).
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -43,9 +48,11 @@ import {
   type LexicalEditor,
 } from "lexical";
 
-// Side effect only: sets IS_REACT_ACT_ENVIRONMENT and (on first use) the
-// document/window stubs EditorContextProvider's effect depends on.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Importing this module also sets IS_REACT_ACT_ENVIRONMENT as a side effect.
+import {
+  createReactRenderHarness,
+  installPersistentDefaultDom,
+} from "@/test/react-render-harness";
 
 import {
   EditorContextProvider,
@@ -53,10 +60,9 @@ import {
   type EditorContextSnapshot,
 } from "./editor-context";
 
-// Prime the shared document/window stubs once, without mounting anything of
-// our own through it (see the file header for why this file drives its own
-// `act`/`create`/`update` instead of the harness's `run()`).
-createReactRenderHarness().run(() => null);
+// Install document/window stubs once, persistently for this file's process
+// lifetime (see the file header for why this can't use `withDefaultDom`).
+installPersistentDefaultDom();
 
 /**
  * A headless editor with `getRootElement`/`getElementByKey` stubbed to `null`

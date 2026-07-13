@@ -44,13 +44,15 @@ import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { $isVisualNode, VisualNode } from "@/lib/lexical/visual-node";
 import { FIXTURES } from "@/lib/visual/fixtures";
 
-// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
-// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT`; also installs the
+// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs,
+// persistently for this file's lifetime (its tests directly monkey-patch
+// `globalThis.document`/`globalThis.window` across cases).
+import { installPersistentDefaultDom } from "@/test/react-render-harness";
 
 import { GenerateVisualSection } from "./mobile-generate-visual-section";
 
-createReactRenderHarness().run(() => null);
+installPersistentDefaultDom();
 
 // `Tooltip` (wrapping every generated-candidate button) always calls
 // `createPortal(tooltip, document.body)` once `document` exists, so `body`

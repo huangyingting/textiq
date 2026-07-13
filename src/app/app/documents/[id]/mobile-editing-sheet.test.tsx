@@ -285,13 +285,14 @@ before(async () => {
     await import("./visual-panel-context"));
   ({ MobileEditingSheetHost } = await import("./mobile-editing-sheet"));
 
-  // Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
+  // Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT`; also installs the
   // baseline `document`/`window` stubs `EditorContextProvider`'s effect
-  // needs. Also dynamically imported so its own module graph can't resolve
-  // `@/components/ui` ahead of the hook above.
-  const { createReactRenderHarness } =
+  // needs, persistently for this file's lifetime. Also dynamically imported
+  // so its own module graph can't resolve `@/components/ui` ahead of the
+  // hook above.
+  const { installPersistentDefaultDom } =
     await import("@/test/react-render-harness");
-  createReactRenderHarness().run(() => null);
+  installPersistentDefaultDom();
 
   // `Tooltip` (rendered by the real `TextFormatSection`) unconditionally
   // calls `createPortal(tooltip, document.body)` once `document` exists, so

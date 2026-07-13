@@ -56,13 +56,14 @@ import {
 } from "@/lib/lexical/visual-node";
 import { FIXTURES } from "@/lib/visual/fixtures";
 
-// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
-// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT`; also installs the
+// baseline `document`/`window` stubs `EditorContextProvider`'s effect needs,
+// persistently for this file's lifetime.
+import { installPersistentDefaultDom } from "@/test/react-render-harness";
 
 import { useVisualPanel, VisualPanelProvider } from "./visual-panel-context";
 
-createReactRenderHarness().run(() => null);
+installPersistentDefaultDom();
 
 type ModuleHooks = {
   registerHooks(hooks: {
