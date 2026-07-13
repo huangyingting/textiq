@@ -150,6 +150,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/app\/document-list/,
       /^src\/app\/app\/import-document-button\.test\.tsx$/,
       /^src\/app\/app\/new-document-button\.test\.tsx$/,
+      /^src\/app\/app\/page\.test\.tsx?$/,
       /^src\/app\/app\/trash\//,
       /^src\/app\/app\/use-optimistic-document-trash\.test\.tsx?$/,
       /^src\/lib\/dashboard\//,
@@ -350,6 +351,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description: "Workspace capabilities and owner/editor/viewer behavior",
     patterns: [
       /^src\/lib\/workspace\//,
+      /^src\/app\/app\/join\//,
       /^src\/app\/app\/workspaces\//,
       /^src\/app\/app\/loading\.test\.tsx$/,
       /^e2e\/workspace\/workspace\.spec\.ts$/,
