@@ -249,6 +249,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/share-passcode-server\.test\.ts$/,
       /^src\/app\/public-abuse\.test\.ts$/,
       /^src\/app\/share\//,
+      /^src\/app\/embed\//,
+      /^src\/app\/present\//,
       /^src\/components\/share\//,
       /^e2e\/presentation\/present-export\.spec\.ts$/,
       /^e2e\/public-render\/(?:public-pages|share-fallback)\.spec\.ts$/,
@@ -290,6 +292,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       "Cross-cutting helpers, app shell, view model contracts, and UI support logic",
     patterns: [
       /^src\/app\/(?:layout|error|not-found)\.test\.tsx$/,
+      /^src\/components\/not-found-fallback\.test\.tsx$/,
       /^src\/components\/site-header\.test\.tsx$/,
       /^src\/components\/ui\//,
       /^src\/lib\/a11y\//,
