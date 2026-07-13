@@ -34,24 +34,41 @@ export function InviteLinkManager({
   );
   const [expiryDays, setExpiryDays] = useState<string>("0");
   const [maxUses, setMaxUses] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    const expiresInDays = Number(expiryDays) > 0 ? Number(expiryDays) : null;
-    const parsedMaxUses = maxUses.trim() === "" ? null : Number(maxUses);
-    const link = await createInviteLink(workspaceId, selectedRole, {
-      expiresInDays,
-      maxUses:
-        parsedMaxUses !== null && Number.isFinite(parsedMaxUses)
-          ? parsedMaxUses
-          : null,
-    });
-    setLinks([link, ...links]);
-    setMaxUses("");
+    setError(null);
+    try {
+      const expiresInDays = Number(expiryDays) > 0 ? Number(expiryDays) : null;
+      const parsedMaxUses = maxUses.trim() === "" ? null : Number(maxUses);
+      const link = await createInviteLink(workspaceId, selectedRole, {
+        expiresInDays,
+        maxUses:
+          parsedMaxUses !== null && Number.isFinite(parsedMaxUses)
+            ? parsedMaxUses
+            : null,
+      });
+      setLinks((prev) => [link, ...prev]);
+      setMaxUses("");
+      setError(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not create invite link.",
+      );
+    }
   };
 
   const handleRevoke = async (linkId: string) => {
-    await revokeInviteLink(linkId);
-    setLinks(links.filter((l) => l.id !== linkId));
+    setError(null);
+    try {
+      await revokeInviteLink(linkId);
+      setLinks((prev) => prev.filter((l) => l.id !== linkId));
+      setError(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not revoke invite link.",
+      );
+    }
   };
 
   const getInviteUrl = (token: string) => {
@@ -102,6 +119,11 @@ export function InviteLinkManager({
           Anyone with the link can join this workspace with the selected role,
           until it expires or reaches its usage limit.
         </p>
+        {error && (
+          <p role="alert" className="text-xs text-ds-danger-text">
+            {error}
+          </p>
+        )}
       </div>
 
       {links.length > 0 && (
