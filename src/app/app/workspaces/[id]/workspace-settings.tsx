@@ -59,9 +59,20 @@ export function WorkspaceSettings({
         } else {
           await leaveWorkspace(workspaceId);
         }
-        // Server actions redirect on success; reload as a fallback.
-        window.location.assign("/app/workspaces");
       } catch (err) {
+        // `deleteWorkspace`/`leaveWorkspace` redirect to /app/workspaces on
+        // success, and Next.js implements `redirect()` by throwing a
+        // NEXT_REDIRECT control-flow signal that must propagate uncaught so
+        // the router can navigate (same pattern as google-sign-in-button.tsx).
+        // Swallowing it here would both block the redirect and misreport a
+        // successful action as a failure, so only genuine mutation failures
+        // are turned into an error message below.
+        if (
+          err instanceof Error &&
+          (err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")
+        ) {
+          throw err;
+        }
         setConfirmOpen(false);
         setError(err instanceof Error ? err.message : "Action failed.");
       }
