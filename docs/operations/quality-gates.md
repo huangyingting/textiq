@@ -242,6 +242,39 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Core-editor-interaction direct coverage (#1958), mechanically rebased onto
+`main` at `a5ead8fc` (post #1984, which folds in #1957/#1961/#1959/#1960/
+#1962 and their dependents).** Nine core document-editor files had no direct
+unit coverage, represented only by mapped/skipped E2E evidence:
+`src/app/app/documents/[id]/block-spark.tsx`, `floating-text-toolbar.tsx`,
+`icon-picker.tsx`, `import-plugin.tsx`, `insert-menu.tsx`,
+`lexical-editor.tsx`, `table-controls.tsx`, `visual-card.tsx`, and
+`page.tsx`. #1958 added direct, behavior-asserting unit tests for all nine
+via a new shared `src/test/lexical-component-harness.ts` harness
+(command/plugin registration, selection/visibility gating, menu open/close/
+actions, table row/column/cell operations, visual card selection/actions,
+BlockSpark generation, and the server page's auth/document-scoping/
+composition behavior); no production files changed. Measured directly
+against the rebased tree before this branch's own commit lands (`main` at
+`a5ead8fc` alone): 848 eligible runtime source files, 24 type-only, 31
+barrel, 11 static-data, 782 runtime-eligible, 760 loaded by the source unit
+suite, 6 mapped-e2e, 0 approved exceptions, and 16 actionable gap files —
+nine of which are exactly the #1958 target files above (the 27 ceiling
+inherited from #1961 already had slack: later `main` commits closed gaps of
+their own without ratcheting the constant down, per this gate's
+improvements-always-pass design). With #1958's nine target files now
+genuinely unit-loaded, re-measured against the full rebased tree: 769 loaded
+(760 + 9), 6 mapped-e2e (unchanged), 0 approved exceptions, leaving **7**
+actionable gap files (`src/app/api/slide-assets/[documentId]/[...path]/
+route.ts`, `src/app/app/documents/[id]/visual-context-popover-panels.tsx`,
+`visual-context-popover.tsx`, `visual-editor.tsx`,
+`src/components/visual/export-dialog.tsx`, `export-menu.tsx`, and
+`src/scripts/audit-persisted-schema.ts` — all pre-existing, unrelated to this
+branch). `DEFAULT_MAX_GAP_FILES` was lowered from 27 to **7** to match, with
+zero stale slack. This is the authoritative baseline going forward; the
+historical entries below (including the #1961 27-ceiling entry) remain only
+as historical context for how the ceiling evolved.
+
 **Documents/dashboard management-UI direct coverage (#1961), rebased onto
 `main` (post #1972, the merged #1957 workspace/dashboard-page ratchet).**
 Nine document-management files had no unit coverage at all: `document-card.tsx`,
@@ -277,11 +310,11 @@ barrel (unchanged), 11 static-data (unchanged), 782 runtime-eligible
 (unchanged), **749** loaded by the source unit suite (739 #1957 baseline +
 10 from #1961), 6 mapped-e2e (unchanged), 0 approved exceptions, and **27**
 actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 37 to 27 to
-match, with zero stale slack. This is the authoritative baseline going
-forward; the historical entries below (including this branch's own
-pre-third-rebase 735/41 and 740/36 measurements, and the #1957/#1960/
-#1956/#1950 numbers further below) remain in this document only as
-historical context for how the ceiling evolved.
+match, with zero stale slack. This was the authoritative baseline until
+superseded by the #1958 rebase above; the historical entries below
+(including this branch's own pre-third-rebase 735/41 and 740/36
+measurements, and the #1957/#1960/#1956/#1950 numbers further below) remain
+in this document only as historical context for how the ceiling evolved.
 
 **#1957 rebased onto `main` (post #1975, the merged #1960 ratchet).** Before
 merge, #1957 was rebased onto a `main` that had independently gained #1975
