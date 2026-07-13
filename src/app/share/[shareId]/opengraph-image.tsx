@@ -19,6 +19,57 @@ const BG = "#0b0d12";
 const TEXT = "#f5f6f6";
 const SECONDARY = "#a1a1aa";
 
+/** Fallback title shown for denied, unknown, or unshared documents. */
+const FALLBACK_TITLE = "Shared document";
+
+/** Title text is clamped to this many characters before an ellipsis is appended. */
+const MAX_TITLE_CHARS = 90;
+
+export interface OgSourceDocument {
+  title: string;
+  contentJson: unknown;
+  metadataMode: string;
+}
+
+export interface OgTextContent {
+  /** Already truncated/ellipsized for direct rendering. */
+  displayTitle: string;
+  description: string;
+}
+
+/**
+ * Derives the OG card's display title and description from a resolved
+ * public-render metadata document. Extracted as a pure seam so the
+ * metadata-mode gating (generic/title/title-excerpt), empty-title fallback,
+ * and long-title truncation are directly unit-testable without invoking
+ * `ImageResponse`/satori rendering.
+ */
+export function resolveOgTextContent(
+  document: OgSourceDocument | null,
+): OgTextContent {
+  const metadataMode =
+    document?.metadataMode === "title" ||
+    document?.metadataMode === "title-excerpt"
+      ? document.metadataMode
+      : "generic";
+
+  const title =
+    metadataMode === "title" || metadataMode === "title-excerpt"
+      ? document?.title?.trim() || FALLBACK_TITLE
+      : FALLBACK_TITLE;
+  const description =
+    metadataMode === "title-excerpt" && document
+      ? excerpt(deriveFromContentJson(document.contentJson).plaintext, 180)
+      : "";
+
+  const displayTitle =
+    title.length > MAX_TITLE_CHARS
+      ? `${title.slice(0, MAX_TITLE_CHARS).trimEnd()}…`
+      : title;
+
+  return { displayTitle, description };
+}
+
 /**
  * Auto-generated 1200x630 Open Graph preview card for a shared document
  * (US-030). It renders text + branding only (the document title, an excerpt,
@@ -42,20 +93,7 @@ export default async function Image({
       });
   const document =
     result?.ok && result.projection === "metadata" ? result.metadata : null;
-  const metadataMode =
-    document?.metadataMode === "title" ||
-    document?.metadataMode === "title-excerpt"
-      ? document.metadataMode
-      : "generic";
-
-  const title =
-    metadataMode === "title" || metadataMode === "title-excerpt"
-      ? document?.title?.trim() || "Shared document"
-      : "Shared document";
-  const description =
-    metadataMode === "title-excerpt" && document
-      ? excerpt(deriveFromContentJson(document.contentJson).plaintext, 180)
-      : "";
+  const { displayTitle: title, description } = resolveOgTextContent(document);
 
   return new ImageResponse(
     <div
@@ -108,11 +146,11 @@ export default async function Image({
             fontSize: 72,
             fontWeight: 700,
             lineHeight: 1.1,
-            // Clamp long titles to keep the card balanced.
+            // Long titles are already clamped by resolveOgTextContent.
             display: "flex",
           }}
         >
-          {title.length > 90 ? `${title.slice(0, 90).trimEnd()}…` : title}
+          {title}
         </div>
         {description ? (
           <div
