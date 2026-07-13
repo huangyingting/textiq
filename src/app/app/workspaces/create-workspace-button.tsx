@@ -1,44 +1,57 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button, Dialog, FIELD_CONTROL } from "@/components/ui";
 
 import { createWorkspace } from "./actions";
 
-export function CreateWorkspaceButton({
+export type CreateWorkspaceViewProps = {
+  error: string | null;
+  action: (payload: FormData) => void;
+  isPending: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  className?: string;
+  children?: ReactNode;
+};
+
+/**
+ * Pure state -> markup decision for {@link CreateWorkspaceButton} (issue
+ * #1957). Given the current `useActionState` result, the dialog's open flag,
+ * and its open/close callback, decides the trigger button label, whether the
+ * validation error paragraph renders (a path-like value signals a pending
+ * redirect rather than a validation error, so it is never shown as text),
+ * and the submit button's pending label/disabled state. Extracted from the
+ * component body — including the submit button, which previously read its
+ * own pending flag via `useFormStatus()` — so the same `isPending` value
+ * `useActionState` already returns can drive both the effect and the
+ * markup without a second, hook-coupled read of form status.
+ */
+export function renderCreateWorkspaceView({
+  error,
+  action,
+  isPending,
+  open,
+  onOpenChange,
   className,
   children = "New workspace",
-}: {
-  className?: string;
-  children?: React.ReactNode;
-}) {
-  const router = useRouter();
-  const [error, action] = useActionState(createWorkspace, null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (error && error.startsWith("/app/workspaces/")) {
-      router.push(error);
-    }
-  }, [error, router]);
-
+}: CreateWorkspaceViewProps): ReactNode {
   return (
     <>
       <Button
         variant="solid"
         size="lg"
         className={className}
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
       >
         {children}
       </Button>
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => onOpenChange(false)}
         aria-labelledby="create-workspace-title"
         className="max-w-sm"
       >
@@ -79,11 +92,19 @@ export function CreateWorkspaceButton({
           </div>
 
           <div className="flex gap-2">
-            <SubmitButton />
+            <Button
+              type="submit"
+              disabled={isPending}
+              variant="solid"
+              size="lg"
+              className="flex-1"
+            >
+              {isPending ? "Creating..." : "Create"}
+            </Button>
             <Button
               variant="subtle"
               size="lg"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               className="flex-1"
             >
               Cancel
@@ -95,17 +116,30 @@ export function CreateWorkspaceButton({
   );
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      variant="solid"
-      size="lg"
-      className="flex-1"
-    >
-      {pending ? "Creating..." : "Create"}
-    </Button>
-  );
+export function CreateWorkspaceButton({
+  className,
+  children = "New workspace",
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const router = useRouter();
+  const [error, action, isPending] = useActionState(createWorkspace, null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (error && error.startsWith("/app/workspaces/")) {
+      router.push(error);
+    }
+  }, [error, router]);
+
+  return renderCreateWorkspaceView({
+    error,
+    action,
+    isPending,
+    open,
+    onOpenChange: setOpen,
+    className,
+    children,
+  });
 }

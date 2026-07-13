@@ -8,7 +8,9 @@
  * boundary and editor-glue exception candidates in #1949, folded static-data
  * and import-alias-barrel classification into the breadth inventory in
  * #1950, closed brand and billing product-surface gaps in #1956, closed the
- * six public-render page/lightbox/fallback exception candidates in #1960).
+ * six public-render page/lightbox/fallback exception candidates in #1960,
+ * ratcheted again for direct workspace/dashboard page and member-interaction
+ * coverage in #1957).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -17,6 +19,57 @@
  * gap files) always pass; this gate intentionally does not force every
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
+ *
+ * The baseline below (37) is #1957 rebased onto `main` after
+ * #1975 (the merged #1960 ratchet). #1957 added direct behavior coverage for
+ * nine previously mapped-E2E-only workspace/dashboard files
+ * (`src/app/app/page.tsx`, `src/app/app/join/[token]/page.tsx`,
+ * `src/app/app/workspaces/page.tsx`, `src/app/app/workspaces/[id]/page.tsx`,
+ * `src/app/app/workspaces/create-workspace-button.tsx`,
+ * `src/app/app/workspaces/[id]/invite-link-manager.tsx`,
+ * `src/app/app/workspaces/[id]/members-list.tsx`,
+ * `src/app/app/workspaces/[id]/workspace-documents.tsx`,
+ * `src/app/app/workspaces/[id]/workspace-settings.tsx`). An earlier revision
+ * of this same test also left `src/app/app/page.tsx`'s new test importing
+ * its `./document-list` sibling for real (unstubbed), which added
+ * `document-list.tsx` itself plus four further transitively-loaded
+ * dashboard components to the unit-loaded set — five files in total
+ * (`src/app/app/document-list.tsx`, `src/app/app/document-grid.tsx`,
+ * `src/app/app/document-card.tsx`, `src/app/app/document-list-toolbar.tsx`,
+ * `src/app/app/document-list-undo-toast.tsx`) — briefly counted as 5
+ * incremental gap closures (739 loaded / 32 gap, then later 744 loaded / 32
+ * gap after the second rebase). None of those five files have a dedicated
+ * test, and — because `DashboardPage`'s test never calls React's
+ * reconciler — none of their component bodies actually run; they were
+ * merely imported, so most of their lines/branches/functions were
+ * instrumented but never exercised. That dragged the repo-wide line-
+ * coverage floor from a passing 95.14% down to a failing 94.73% in the
+ * Node 22 Quality Gate CI run (floor is 95% lines), even though every unit
+ * suite passed. The fix, applied directly in `src/app/app/page.test.tsx`,
+ * stubs `./document-list` the same way `./actions` is already stubbed
+ * elsewhere in the same file (a relative specifier matched literally by the
+ * `resolve` hook — there was never a technical restriction preventing this,
+ * only a prior choice to leave it real), which removes all five files from
+ * the instrumented set again and restores the floor to a passing 95.21%
+ * lines. That correction gives back the five incidental gap "closures" that
+ * were never true behavioral coverage in the first place, so the real,
+ * durable improvement from #1957 is exactly the nine direct target files
+ * above. This branch was originally rebased onto `main` at `d9844dbf` (post
+ * #1956's merged brand/billing ratchet: 782 runtime-eligible, 725 loaded),
+ * then mechanically rebased a second time onto `main` (#1960, which closed
+ * 6 public-render page/lightbox/fallback gaps, raising unit-loaded to 730
+ * and lowering the gap ceiling to 46, with zero gap-count change of its own
+ * to the 9 #1957 target files). Re-measured directly against this
+ * twice-rebased tree after the document-list stub fix, the 9 newly-tested
+ * files leave 848 eligible runtime source files, 24 type-only, 31 barrel,
+ * 11 static-data, 782 runtime-eligible (all unchanged), 739 loaded by the
+ * source unit suite (730 #1960 baseline + 9 from #1957), 6 mapped-e2e
+ * (unchanged), 0 approved exceptions, leaving 37 actionable gap
+ * files (`DEFAULT_MAX_GAP_FILES` was lowered from 46 to 37 to
+ * match, with zero stale slack). This is the authoritative baseline going
+ * forward; the historical entries below (including this branch's own
+ * earlier 739/32-then-744/32 transitive-credit measurements) remain only as
+ * context for how the ceiling evolved.
  *
  * The baseline below (46) is #1960 rebased onto `main` after #1956 (the
  * merged brand/billing product-surface ratchet). #1960 added direct
@@ -43,10 +96,10 @@
  * unchanged), 730 loaded by the source unit suite (725 #1956 baseline + 5
  * from #1960), 6 mapped-e2e (unchanged), 0 approved exceptions, leaving 46
  * actionable gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 51 to 46 to
- * match, with zero stale slack). This is the authoritative baseline going
- * forward; the historical entries below (including #1960's own pre-second-
- * rebase 722/54 measurement) remain only as context for how the ceiling
- * evolved.
+ * match, with zero stale slack). This was the authoritative baseline until
+ * superseded by the #1957 rebase above; the historical entries below
+ * (including #1960's own pre-second-rebase 722/54 measurement) remain only
+ * as context for how the ceiling evolved.
  *
  * The baseline prior to #1960's second rebase (51) is #1956 rebased onto
  * `main` after #1950 (see below); the baseline prior to that (59) is #1950
@@ -76,7 +129,7 @@
  * was lowered from 60 to 59 to match — the twelfth reclassified file, the
  * nextauth route handler, was the prior gap file that moved directly into
  * `barrel`, with zero stale slack). This was the authoritative baseline
- * until superseded by the #1960 ratchet above.
+ * until superseded by the #1957 rebase above.
  *
  * The baseline prior to #1950 (60) is #1949 rebased onto `main` after #1966
  * (the merged #1948 ratchet). #1949 replaced the "rejected exception
@@ -130,6 +183,11 @@
  * lowered from 117 to 90 to match at the time). That number is historical
  * and no longer reflects `main`.
  *
+ * The baseline prior to #1948 (94) is #1947 rebased onto `main` after #1951
+ * and #1952 independently landed their own gap-closing coverage (client
+ * runtime hooks and server loader contracts, respectively) without lowering
+ * the 117 ceiling they inherited from #1943. #1947 itself added direct unit
+ * coverage for five previously-untested files
  * The baseline prior to #1948 (94) is #1947 rebased onto `main` after #1951
  * and #1952 independently landed their own gap-closing coverage (client
  * runtime hooks and server loader contracts, respectively) without lowering
@@ -206,7 +264,7 @@
  * #1956), 6 mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable
  * gap files. `DEFAULT_MAX_GAP_FILES` is lowered from 59 to 51 to match, with
  * zero stale slack. This was the authoritative baseline until superseded by
- * the #1960 second-rebase ratchet above.
+ * the #1957 rebase above.
  */
 
 import process from "node:process";
@@ -220,7 +278,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 46;
+export const DEFAULT_MAX_GAP_FILES = 37;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {

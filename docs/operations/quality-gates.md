@@ -242,6 +242,80 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**#1957 rebased onto `main` (post #1975, the merged #1960 ratchet).** Before
+merge, #1957 was rebased onto a `main` that had independently gained #1975
+(the merged #1960 ratchet, closing public-render page/lightbox/fallback
+gaps), raising the inherited ceiling to 46 without #1957's own gap closures.
+#1957 added direct behavior coverage
+for nine previously mapped-E2E-only workspace/dashboard files:
+`src/app/app/page.tsx` (dashboard composition, auth/scoping),
+`src/app/app/join/[token]/page.tsx` (invite accept/deny/redirect outcomes),
+`src/app/app/workspaces/page.tsx` (owned/member workspace list, empty
+state), `src/app/app/workspaces/[id]/page.tsx` (workspace detail
+composition, owner/member gating), `src/app/app/workspaces/create-workspace-button.tsx`,
+`src/app/app/workspaces/[id]/invite-link-manager.tsx`,
+`src/app/app/workspaces/[id]/members-list.tsx`,
+`src/app/app/workspaces/[id]/workspace-documents.tsx`, and
+`src/app/app/workspaces/[id]/workspace-settings.tsx`. All nine Server/Client
+Components are exercised by directly importing and asserting them — pages
+are invoked as plain async functions and their unrendered React element
+trees are asserted via structural traversal (never mounted through
+`react-test-renderer`, since they compose real `"use client"` children with
+their own hooks that already have dedicated coverage elsewhere); the
+interactive components are mounted through `react-test-renderer` with their
+deep alias dependencies (session, prisma, workspace/invite services, etc.)
+stubbed via `node:module` `registerHooks`, matching the existing sibling
+`actions.test.ts` convention. `scripts/test-subsystem.mjs`'s
+`documents` subsystem pattern set was widened to match
+`src/app/app/page.test.tsx`, and the `workspace` subsystem pattern set was
+widened to match `src/app/app/join/`, so both new page tests classify
+correctly instead of falling through unclassified. An earlier revision of
+`src/app/app/page.test.tsx` also imported its `./document-list` sibling for
+real (unstubbed), which transitively moved five sibling dashboard client
+components from unloaded to loaded: `src/app/app/document-list.tsx`,
+`src/app/app/document-grid.tsx`, `src/app/app/document-card.tsx`,
+`src/app/app/document-list-toolbar.tsx`, and
+`src/app/app/document-list-undo-toast.tsx` (the transitive closure of
+`document-list.tsx`'s own relative imports). None of those five files have a
+dedicated test, and since `DashboardPage`'s test never calls React's
+reconciler, none of their component bodies actually ran — they were merely
+imported, so most of their lines/branches/functions were instrumented but
+never exercised. That dragged the repo-wide line-coverage floor from a
+passing 95.14% down to a failing 94.73% in the Node 22 Quality Gate CI run
+(the floor is 95% lines), even though every unit suite passed. The fix,
+applied directly in `src/app/app/page.test.tsx`, stubs `./document-list` the
+same way `./actions` is already stubbed elsewhere in the same file (a
+relative specifier matched literally by the `resolve` hook — there was never
+a technical restriction preventing this, only a prior choice to leave it
+real), which removes all five files from the instrumented set again and
+restores the floor to a passing 95.21% lines. The three sibling components
+this dashboard test also imports for real — `import-document-button.tsx`,
+`new-document-button.tsx`, and `onboarding-checklist.tsx` — keep being
+loaded for real since they were already closed directly by #1956's own unit
+tests and contribute no incremental loaded-file count here. This branch was
+originally rebased onto `main` at `d9844dbf` (post #1956/#1971's merged
+brand/billing ratchet: 782 runtime-eligible, 725 loaded), briefly counting 9
+direct + 5 transitive gaps for 739 loaded / 37 actionable gap files at that
+time (before the document-list stub fix). This commit was then mechanically
+rebased a second time onto `main` at `90a23fcc` (#1960/#1975, which closed 6
+public-render page/lightbox/fallback gaps, raising unit-loaded to 730 and
+lowering the gap ceiling to 46, with zero gap-count change of its own to the
+#1957 target files), briefly measuring 744 loaded / 32 gap with the five
+transitive files still counted. After the document-list stub fix removed
+those five files from the loaded set again, re-measuring directly against
+this twice-rebased tree leaves 848 eligible runtime source files, 24
+type-only, 31 barrel, 11 static-data, 782 runtime-eligible (all unchanged),
+**739** loaded by the source unit suite (730 #1960 baseline + 9 from
+#1957), 6 mapped-e2e (unchanged), 0 approved exceptions, leaving **37**
+actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 46 to
+**37** to match, with zero stale slack. The nine direct target files above
+remain the durable, real improvement from #1957; the five transitive files'
+brief 739/32-then-744/32 loaded-credit was never true behavioral coverage
+and has been given back to fix the coverage-floor regression it caused.
+This is the authoritative baseline going forward; the measurements above
+and the #1960/#1956/#1950 numbers below remain in this
+document only as historical context for how the ceiling evolved.
+
 **Public-render page/lightbox/fallback direct coverage (#1960), rebased onto
 `main` (post #1956, the merged brand/billing product-surface ratchet).**
 Five files were previously exercised only by E2E `notFound()` paths, leaving
@@ -289,10 +363,39 @@ static-data (unchanged), 782 runtime-eligible (unchanged), **730** loaded by
 the source unit suite (725 #1956 baseline + 5 from #1960), 6 mapped-e2e
 (unchanged), 0 approved exceptions, and **46** actionable gap files.
 `DEFAULT_MAX_GAP_FILES` was lowered from 51 to 46 to match, with zero stale
-slack. This is the authoritative baseline going forward; the 722/54
-pre-second-rebase measurement above and the #1956/#1950 numbers below
-remain in this document only as historical context for how the ceiling
-evolved.
+slack. This was the authoritative baseline until superseded by the #1957
+rebase above; the 722/54 pre-second-rebase measurement above and the
+#1956/#1950 numbers below remain in this document only as historical
+context for how the ceiling evolved.
+
+**#1956 rebased onto `main` (post #1969, the merged #1950 static-data/
+import-alias-barrel classification).** #1956 was originally measured against
+a pre-#1950 tree (736 loaded, 52 actionable gap, 794 runtime-eligible); after
+this mandatory rebase onto `main` at `969e6387` (the merged #1950 ratchet,
+which lowered runtime-eligible to 782 and folded 12 previously-runtime files
+into `barrel`/`static-data`), that measurement is superseded and marked
+historical below. #1956 itself still closes the same 8 actionable gaps with
+direct, behavior-asserting unit tests, replacing the "too DOM/portal-coupled
+for a fast unit harness" conclusion for `brand-studio-teaser.tsx`,
+`brand-studio.tsx`, `brands/page.tsx`, `import-document-button.tsx`,
+`new-document-button.tsx`, `onboarding-checklist.tsx`, and
+`settings/billing/page.tsx` (the seven files this issue targeted), plus one
+legitimate transitive gap, `src/app/app/brands/brand-studio-ports.ts`, whose
+`BrandUploadPort` contract is now genuinely exercised (not stubbed) by the
+new `brand-studio.test.tsx`'s logo/font upload tests. Re-measured directly
+against the rebased tree: 848 eligible runtime source files (unchanged), 24
+type-only (unchanged), 31 barrel (unchanged), 11 static-data (unchanged),
+782 runtime-eligible (unchanged by #1956 — it adds no new source files, only
+tests and extractions of existing logic into already-eligible files), 725
+loaded by the source unit suite (717 #1950 baseline + 8 from #1956), 6
+mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable gap files.
+`DEFAULT_MAX_GAP_FILES` was lowered from 59 to 51 to match, with zero stale
+slack. #1956 added no
+`mapped-e2e`/`approved-exception` markers and did not touch the
+line/branch/function percentage floors. This was the authoritative baseline
+until superseded by the #1957 rebase above; the pre-rebase 736/52
+measurement above and the #1950/#1949 numbers below remain in this document
+only as historical context for how the ceiling evolved.
 
 **Static-data and import-alias-barrel classification (#1950), rebased onto
 `main` (post #1970, the merged #1949 ratchet).** Before merge, #1950 was
@@ -333,37 +436,8 @@ exceptions, and **59** actionable gap files (down from 60 — the twelfth
 reclassified file, the nextauth route handler, was the prior gap file that
 moved directly into `barrel`). `DEFAULT_MAX_GAP_FILES` was lowered from 60
 to 59 to match, with zero stale slack. This was the authoritative baseline
-until superseded by the #1960 measurement above; the historical entries
+until superseded by the #1957 measurement above; the historical entries
 below remain only as context for how the ceiling evolved before #1950.
-
-**#1956 rebased onto `main` (post #1969, the merged #1950 static-data/
-import-alias-barrel classification).** #1956 was originally measured against
-a pre-#1950 tree (736 loaded, 52 actionable gap, 794 runtime-eligible); after
-this mandatory rebase onto `main` at `969e6387` (the merged #1950 ratchet,
-which lowered runtime-eligible to 782 and folded 12 previously-runtime files
-into `barrel`/`static-data`), that measurement is superseded and marked
-historical below. #1956 itself still closes the same 8 actionable gaps with
-direct, behavior-asserting unit tests, replacing the "too DOM/portal-coupled
-for a fast unit harness" conclusion for `brand-studio-teaser.tsx`,
-`brand-studio.tsx`, `brands/page.tsx`, `import-document-button.tsx`,
-`new-document-button.tsx`, `onboarding-checklist.tsx`, and
-`settings/billing/page.tsx` (the seven files this issue targeted), plus one
-legitimate transitive gap, `src/app/app/brands/brand-studio-ports.ts`, whose
-`BrandUploadPort` contract is now genuinely exercised (not stubbed) by the
-new `brand-studio.test.tsx`'s logo/font upload tests. Re-measured directly
-against the rebased tree: 848 eligible runtime source files (unchanged), 24
-type-only (unchanged), 31 barrel (unchanged), 11 static-data (unchanged),
-782 runtime-eligible (unchanged by #1956 — it adds no new source files, only
-tests and extractions of existing logic into already-eligible files), 725
-loaded by the source unit suite (717 #1950 baseline + 8 from #1956), 6
-mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable gap files.
-`DEFAULT_MAX_GAP_FILES` was lowered from 59 to 51 to match, with zero stale
-slack. #1956 added no
-`mapped-e2e`/`approved-exception` markers and did not touch the
-line/branch/function percentage floors. This was the authoritative baseline
-until superseded by the #1960 rebase above; the pre-rebase 736/52
-measurement above and the #1950/#1949 numbers below remain in this document
-only as historical context for how the ceiling evolved.
 
 **#1949 rebased onto `main` (post #1966, the merged #1948 ratchet).** #1949
 replaced the "rejected exception candidate" conclusion for nine files with
