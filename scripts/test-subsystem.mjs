@@ -63,6 +63,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/forgot-password\//,
       /^src\/app\/reset-password\//,
       /^src\/app\/signout\//,
+      /^src\/app\/verify-email\//,
       /^src\/app\/app\/loading\.test\.tsx$/,
       /^e2e\/auth\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled)\.spec\.ts$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
@@ -98,6 +99,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/collab\//,
       /^src\/app\/api\/collab\//,
       /^scripts\/collab-/,
+      /^src\/app\/app\/documents\/\[id\]\/presence\.test\.tsx$/,
     ],
   },
   commands: {
@@ -116,6 +118,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/lib\/comments\//,
       /^src\/app\/app\/documents\/.*comment.*\.test\.ts$/,
+      /^src\/app\/app\/documents\/\[id\]\/inline-comments-layer\.test\.tsx$/,
     ],
   },
   "data-model": {
@@ -191,7 +194,10 @@ export const SUBSYSTEM_TEST_TARGETS = {
   },
   localization: {
     description: "Locale catalog and language activation gate",
-    patterns: [/^src\/lib\/i18n\//],
+    patterns: [
+      /^src\/lib\/i18n\//,
+      /^src\/components\/language-switcher\.test\.tsx$/,
+    ],
   },
   operations: {
     description:
@@ -293,6 +299,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/app\/(?:layout|error|not-found)\.test\.tsx$/,
       /^src\/components\/not-found-fallback\.test\.tsx$/,
+      /^src\/components\/keyboard-shortcuts\.test\.tsx$/,
       /^src\/components\/site-header\.test\.tsx$/,
       /^src\/components\/ui\//,
       /^src\/lib\/a11y\//,
