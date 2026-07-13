@@ -242,6 +242,45 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Slide-asset route direct coverage (#1989), rebased onto `main` at
+`d66939c312b4fb1b8a906e0600a5cc796ab83ff4` (post #1987, the merged #1964
+shell/schema-audit ratchet described below).** Before this rebase, #1987 had
+already measured 848 eligible runtime source files, 24 type-only, 31 barrel,
+11 static-data, 782 runtime-eligible, 775 loaded by the source unit suite, 6
+mapped-e2e, 0 approved exceptions, and 1 actionable gap file against that
+tree: `src/app/api/slide-assets/[documentId]/[...path]/route.ts`. The route
+handler had no direct behavior coverage: its previous test (`route.test.ts`)
+only exercised the pure `decideSlideAssetAccess` helper the handler calls,
+not the `GET` export itself (the file's header comment explained this as a
+limitation of `node:test`'s `mock.module`, which is unrelated to the
+`node:module` `registerHooks` module-customization API other route tests in
+this repository already use to stub dependencies). #1989 rewrote the test to
+invoke the real `GET` handler with `registerHooks` stubs at the auth
+(`@/lib/session`), rate-limit (`@/lib/abuse-budget`), and passcode-cookie
+(`@/lib/share-passcode-server`) boundaries, `prisma.asset.findFirst` patched
+per-test via `Object.defineProperty`, and a real in-memory storage adapter
+injected through `setDefaultStorageAdapter` — mirroring
+`brand-assets/[ownerId]/[...path]/route.test.ts`. The rewritten suite covers
+the abuse-budget gate (429/Retry-After, skip-when-no-secret, allowed
+fall-through), storage-key reconstruction from the catch-all path segments,
+privacy 404s (missing asset, document relation cleared, soft-deleted
+document), authenticated capability access (owner, workspace editor/viewer,
+unrelated user forbidden), anonymous public present/embed access (including
+`shareMode` validation, mismatched/missing share-id proof, and the
+passcode-gated branch), the 200 success path, and storage-adapter-failure
+absorption into a 404. No production files changed; `decideSlideAssetAccess`'s
+own exhaustive access-matrix coverage is unaffected and still lives in
+`asset-access.test.ts`. This closed the sole remaining actionable gap file.
+Re-measured directly against this tree: 848 eligible runtime source files
+(unchanged), 24 type-only (unchanged), 31 barrel (unchanged), 11 static-data
+(unchanged), 782 runtime-eligible (unchanged), **776** loaded by the source
+unit suite (775 pre-#1989 + 1 from #1989), 6 mapped-e2e (unchanged), 0
+approved exceptions, and **0** actionable gap files. `DEFAULT_MAX_GAP_FILES`
+was lowered from 1 to **0** to match, with zero stale slack. This is the
+authoritative baseline going forward; the #1964 entry below (and everything
+further below it) remains in this document only as historical context for
+how the ceiling evolved.
+
 **Shell/schema-audit runtime direct coverage (#1964), rebased onto `main` at
 `b9837692f5c74ba275bd78f1ea5365ab88eba93a` (post #1986, the merged #1963
 visual popover/canvas/export-dialog ratchet described below).** Before this

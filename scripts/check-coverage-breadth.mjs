@@ -13,7 +13,8 @@
  * coverage in #1957, closed nine dashboard/document-management-UI gaps in
  * #1961, closed nine core-editor-interaction gaps in #1958, closed the
  * visual popover/canvas/export-dialog gaps in #1963, closed the
- * shell/schema-audit runtime gap in #1964).
+ * shell/schema-audit runtime gap in #1964, closed the slide-asset route gap
+ * in #1989).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -22,6 +23,36 @@
  * gap files) always pass; this gate intentionally does not force every
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
+ *
+ * The baseline below (0) is #1989 rebased onto `main` at
+ * `d66939c312b4fb1b8a906e0600a5cc796ab83ff4` (post #1987, the merged #1964
+ * shell/schema-audit ratchet described below). Before this rebase, #1987 had
+ * already measured 848 eligible runtime source files, 24 type-only, 31
+ * barrel, 11 static-data, 782 runtime-eligible, 775 loaded by the source
+ * unit suite, 6 mapped-e2e, 0 approved exceptions, and 1 actionable gap
+ * file against that tree: `src/app/api/slide-assets/[documentId]/[...path]/
+ * route.ts`. #1989 rewrote `route.test.ts` to invoke the real `GET` handler
+ * (not just the pure `decideSlideAssetAccess` helper it calls, whose own
+ * exhaustive access-matrix coverage is unaffected and still lives in
+ * `asset-access.test.ts`) through `node:module` `registerHooks` stubs at the
+ * auth (`@/lib/session`), rate-limit (`@/lib/abuse-budget`), and
+ * passcode-cookie (`@/lib/share-passcode-server`) boundaries, with
+ * `prisma.asset.findFirst` patched per-test via `Object.defineProperty` and
+ * a real in-memory storage adapter injected through
+ * `setDefaultStorageAdapter` — mirroring
+ * `brand-assets/[ownerId]/[...path]/route.test.ts`. No production files
+ * changed; this closed the sole remaining actionable gap file. Re-measured
+ * directly against this tree: 848 eligible runtime source files (unchanged),
+ * 24 type-only (unchanged), 31 barrel (unchanged), 11 static-data
+ * (unchanged), 782 runtime-eligible (unchanged), **776** loaded by the
+ * source unit suite (775 pre-#1989 + 1 from #1989:
+ * `src/app/api/slide-assets/[documentId]/[...path]/route.ts`), 6 mapped-e2e
+ * (unchanged), 0 approved exceptions, and **0** actionable gap files.
+ * `DEFAULT_MAX_GAP_FILES` was lowered from 1 to **0** to match, with zero
+ * stale slack. This is the authoritative baseline going forward; the
+ * historical entries below (including the #1964/1-ceiling entry, now
+ * superseded by this entry) remain only as context for how the ceiling
+ * evolved.
  *
  * The baseline below (1) is #1964 rebased onto `main` at
  * `b9837692f5c74ba275bd78f1ea5365ab88eba93a` (post #1986, the merged #1963
@@ -461,7 +492,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 1;
+export const DEFAULT_MAX_GAP_FILES = 0;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
