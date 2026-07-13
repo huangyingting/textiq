@@ -235,6 +235,39 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**#1947 ratchet.** Added direct unit coverage for five previously-untested
+runtime files: `src/lib/visual/document-export-targets.ts` (PDF/PPTX/
+infographic export target selection, layout, and raster/vector output),
+`src/app/app/documents/[id]/visual-context-popover-hooks.ts` (brand context,
+popover generation/sync, and anchored-position hooks),
+`src/app/app/documents/[id]/visual-panel-context.tsx`,
+`src/app/app/documents/[id]/source-block-jump.tsx`, and
+`src/components/lexical/lexical-read-only.tsx`. `scripts/test-subsystem.mjs`'s
+"editor" subsystem pattern set was also widened to match
+`src/components/lexical/` (previously only `src/components/editor/` matched),
+so `lexical-read-only.test.tsx` classifies correctly instead of falling
+through unclassified. Closing exactly these five gaps moves the combined gate
+from 848 eligible, 24 type-only, 30 barrel, 794 runtime-eligible, 672 loaded,
+5 mapped-e2e, 0 approved exceptions, 117 actionable gap to the same eligible/
+type-only/barrel/runtime-eligible/mapped-e2e/exception counts with **677**
+loaded and **112** actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered
+from 117 to 112 to match, with zero stale slack. This measurement was taken
+on #1947's own feature branch before rebase and is superseded below; it is
+preserved here only as historical context for how the ceiling evolved.
+
+**#1947 rebased onto `main` (post #1951/#1952).** Before merge, #1947 was
+rebased onto a `main` that had independently gained two more gap-closing PRs
+invisible to the branch-local measurement above: #1951 (client runtime hooks,
++8 loaded) and #1952 (server loader contracts, +10 loaded), neither of which
+lowered the inherited 117 ceiling. Re-measured directly against the rebased
+branch: 848 eligible runtime source files, 24 type-only, 30 barrel, 794
+runtime-eligible, **695** loaded by the source unit suite (672 Wave 5
+baseline + 8 from #1951 + 10 from #1952 + 5 from #1947), 5 mapped-e2e, 0
+approved exceptions, leaving **94** actionable gap files. `DEFAULT_MAX_GAP_FILES`
+was lowered from 117 to 94 to match, with zero stale slack. This is the
+authoritative baseline going forward; the branch-local #1947 numbers above
+remain in this document only as historical context.
+
 Widening breadth eligibility/instrumentation to include deck-kernel would also
 widen `summary.totals` — the data the line/branch/function percentage floors
 are checked against — to include deck-kernel, which was never the intent of

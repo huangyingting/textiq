@@ -2,7 +2,8 @@
 
 /**
  * Coverage breadth non-regression gate (#1896, widened to deck-kernel in
- * #1925, ratcheted to the authoritative merged Wave 5 baseline in #1943).
+ * #1925, ratcheted to the authoritative merged Wave 5 baseline in #1943,
+ * ratcheted again for direct visual-export/editor coverage in #1947).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -12,8 +13,22 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (117) is the authoritative merged Wave 5 baseline
- * (#1943), re-measured directly against `main` at
+ * The baseline below (94) is #1947 rebased onto `main` after #1951 and #1952
+ * independently landed their own gap-closing coverage (client runtime hooks
+ * and server loader contracts, respectively) without lowering the 117
+ * ceiling they inherited from #1943. #1947 itself added direct unit coverage
+ * for five previously-untested files (`src/lib/visual/document-export-targets.ts`,
+ * `src/app/app/documents/[id]/visual-context-popover-hooks.ts`,
+ * `src/app/app/documents/[id]/visual-panel-context.tsx`,
+ * `src/app/app/documents/[id]/source-block-jump.tsx`,
+ * `src/components/lexical/lexical-read-only.tsx`). Re-measured directly
+ * against the rebased branch: 848 eligible runtime source files under
+ * `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible, 695 loaded by the
+ * source unit suite (672 Wave 5 baseline + 8 from #1951 + 10 from #1952 + 5
+ * from #1947), 5 mapped-e2e, 0 approved exceptions, leaving 94 actionable
+ * gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 117 to 94 to match,
+ * with zero stale slack). Prior to #1947 (and #1951/#1952), the authoritative
+ * merged Wave 5 baseline (#1943), re-measured directly against `main` at
  * cd38a40df82ce9d90d89e1784d2b2d0841eab2ac: 848 eligible runtime source files
  * under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible, 672 loaded
  * by the source unit suite, 5 mapped-e2e, 0 approved exceptions, leaving 117
@@ -58,7 +73,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 117;
+export const DEFAULT_MAX_GAP_FILES = 94;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
