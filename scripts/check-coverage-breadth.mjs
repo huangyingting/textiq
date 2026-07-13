@@ -4,7 +4,8 @@
  * Coverage breadth non-regression gate (#1896, widened to deck-kernel in
  * #1925, ratcheted to the authoritative merged Wave 5 baseline in #1943,
  * ratcheted again for direct visual-export/editor coverage in #1947, closed
- * nine framework/page exception-audit gaps in #1948).
+ * nine framework/page exception-audit gaps in #1948, closed the loading-
+ * boundary and editor-glue exception candidates in #1949).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -14,7 +15,24 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (70) is #1948 rebased onto `main` after #1954
+ * The baseline below (60) is #1949 rebased onto `main` after #1966 (the
+ * merged #1948 ratchet). #1949 replaced the "rejected exception candidate"
+ * conclusion for nine files with direct coverage: `src/lib/visual/export-
+ * settings.ts` and `src/app/app/documents/[id]/insert-visual-plugin.tsx`
+ * gained real headless-Lexical/React-render tests, and all seven route
+ * `loading.tsx` boundaries (`app`, `documents/[id]`, `brands`, `settings`,
+ * `settings/billing`, `workspaces`, `workspaces/[id]`) gained a single
+ * batch-render test asserting distinct accessible labels/status/busy
+ * semantics and meaningful skeleton structure. Re-measured directly against
+ * the rebased branch: 848 eligible runtime source files, 24 type-only, 30
+ * barrel, 794 runtime-eligible, **728** loaded by the source unit suite (718
+ * #1966 baseline + 9 target files + `src/components/ui/skeleton.tsx`, the
+ * shared primitive closed transitively by the loading-boundary batch test),
+ * 6 mapped-e2e (unchanged), 0 approved exceptions, leaving **60** actionable
+ * gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 70 to 60 to match,
+ * with zero stale slack. This is the authoritative baseline going forward.
+ *
+ * The baseline prior to #1949 (70) is #1948 rebased onto `main` after #1954
  * (the rebased #1947 ratchet, which itself absorbed #1951 and #1952)
  * independently raised the inherited ceiling to 94 without #1948's own gap
  * closures. #1948 replaced the "untestable exception" conclusion for ten
@@ -109,7 +127,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 70;
+export const DEFAULT_MAX_GAP_FILES = 60;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
