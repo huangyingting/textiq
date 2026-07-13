@@ -284,6 +284,35 @@ to 59 to match, with zero stale slack. This is the authoritative baseline
 going forward; the historical entries below remain only as context for how
 the ceiling evolved before #1950.
 
+**#1956 rebased onto `main` (post #1969, the merged #1950 static-data/
+import-alias-barrel classification).** #1956 was originally measured against
+a pre-#1950 tree (736 loaded, 52 actionable gap, 794 runtime-eligible); after
+this mandatory rebase onto `main` at `969e6387` (the merged #1950 ratchet,
+which lowered runtime-eligible to 782 and folded 12 previously-runtime files
+into `barrel`/`static-data`), that measurement is superseded and marked
+historical below. #1956 itself still closes the same 8 actionable gaps with
+direct, behavior-asserting unit tests, replacing the "too DOM/portal-coupled
+for a fast unit harness" conclusion for `brand-studio-teaser.tsx`,
+`brand-studio.tsx`, `brands/page.tsx`, `import-document-button.tsx`,
+`new-document-button.tsx`, `onboarding-checklist.tsx`, and
+`settings/billing/page.tsx` (the seven files this issue targeted), plus one
+legitimate transitive gap, `src/app/app/brands/brand-studio-ports.ts`, whose
+`BrandUploadPort` contract is now genuinely exercised (not stubbed) by the
+new `brand-studio.test.tsx`'s logo/font upload tests. Re-measured directly
+against the rebased tree: 848 eligible runtime source files (unchanged), 24
+type-only (unchanged), 31 barrel (unchanged), 11 static-data (unchanged),
+782 runtime-eligible (unchanged by #1956 — it adds no new source files, only
+tests and extractions of existing logic into already-eligible files), 725
+loaded by the source unit suite (717 #1950 baseline + 8 from #1956), 6
+mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable gap files.
+`DEFAULT_MAX_GAP_FILES` was lowered from 59 to 51 to match, with zero stale
+slack. #1956 added no
+`mapped-e2e`/`approved-exception` markers and did not touch the
+line/branch/function percentage floors. This is the authoritative baseline
+going forward; the pre-rebase 736/52 measurement above and the #1950/#1949
+numbers below remain in this document only as historical context for how the
+ceiling evolved.
+
 **#1949 rebased onto `main` (post #1966, the merged #1948 ratchet).** #1949
 replaced the "rejected exception candidate" conclusion for nine files with
 direct coverage: `src/lib/visual/export-settings.ts` and

@@ -148,6 +148,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
     patterns: [
       /^src\/app\/app\/actions\.test\.ts$/,
       /^src\/app\/app\/document-list/,
+      /^src\/app\/app\/import-document-button\.test\.tsx$/,
+      /^src\/app\/app\/new-document-button\.test\.tsx$/,
       /^src\/app\/app\/trash\//,
       /^src\/app\/app\/use-optimistic-document-trash\.test\.tsx?$/,
       /^src\/lib\/dashboard\//,
@@ -302,6 +304,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/markdown\.test\.ts$/,
       /^src\/lib\/mobile-viewport\.test\.ts$/,
       /^src\/lib\/onboarding\//,
+      /^src\/app\/app\/onboarding-checklist\.test\.tsx$/,
       /^src\/lib\/pointer\.test\.ts$/,
       /^src\/lib\/right-surface-coordinator\.test\.ts$/,
       /^src\/lib\/slug\.test\.ts$/,
