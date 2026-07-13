@@ -238,17 +238,22 @@ const SLIDE_H = 7.5; // inches
 
 /** Adds a single-visual slide to the presentation using native shapes where
  * supported; falls back to an embedded PNG for visual kinds that cannot be
- * represented as native PowerPoint shapes (funnel, pyramid). */
+ * represented as native PowerPoint shapes (funnel, pyramid).
+ *
+ * Returns `false` (without adding a slide) when the SVG has a zero-area
+ * viewBox — there is nothing renderable to show. Returns `true` in every
+ * other case, since `pptx.addSlide()` has already been called by then (even
+ * if PNG rasterization subsequently fails and the slide ends up title-only). */
 async function addVisualSlide(
   pptx: PptxGenJS,
   svg: SVGSVGElement,
   slideTitle: string | null,
   visual: Visual | null,
-): Promise<void> {
+): Promise<boolean> {
   const viewBox = svg.viewBox.baseVal;
   const vw = viewBox.width;
   const vh = viewBox.height;
-  if (vw === 0 || vh === 0) return;
+  if (vw === 0 || vh === 0) return false;
 
   const slide = pptx.addSlide();
 
@@ -274,13 +279,13 @@ async function addVisualSlide(
     if (!isImageFallback(specs)) {
       const { applySpecsToSlide } = await import("@/lib/visual/pptx-apply");
       applySpecsToSlide(slide, specs);
-      return;
+      return true;
     }
   }
 
   // Image fallback
   const pngDataUrl = await svgToPngDataUrl(svg);
-  if (!pngDataUrl) return;
+  if (!pngDataUrl) return true;
 
   const contentH = SLIDE_H - titleAreaH - 0.3;
   const contentW = SLIDE_W * 0.9;
@@ -291,14 +296,34 @@ async function addVisualSlide(
   const y = titleAreaH + (contentH - imgH) / 2 + 0.15;
 
   slide.addImage({ data: pngDataUrl, x, y, w: imgW, h: imgH });
+  return true;
+}
+
+/** Adds a single title-only slide, used both for empty documents and for
+ * decks where every visual failed to resolve, so the produced PPTX is never
+ * empty. */
+function addTitleOnlySlide(pptx: PptxGenJS, title: string): void {
+  const slide = pptx.addSlide();
+  slide.addText(title || "Untitled document", {
+    x: 1,
+    y: 2.5,
+    w: SLIDE_W - 2,
+    h: 1.5,
+    fontSize: 32,
+    bold: true,
+    align: "center",
+    color: "1a1a2e",
+  });
 }
 
 /**
  * Produces a PPTX deck with one slide per visual in the document.
  *
  * The nearest preceding heading (scanning backwards from each visual) is used
- * as the slide title. If a document has no visuals, a single title-only slide
- * is emitted so the file is never empty.
+ * as the slide title. If a document has no visuals — or every visual fails to
+ * resolve into an actual slide (unresolved SVG, zero-area viewBox, etc.) — a
+ * single title-only slide is emitted instead, so the produced PPTX is never
+ * empty.
  *
  * @param blocks   Output of {@link collectDocumentBlocks}
  * @param title    Document title — used for the title-only fallback slide
@@ -331,25 +356,20 @@ export async function exportDocumentAsPPTX(
       }
     }
 
-    if (entries.length === 0) {
-      // Emit a title-only slide so the deck is never empty
-      const slide = pptx.addSlide();
-      slide.addText(title || "Untitled document", {
-        x: 1,
-        y: 2.5,
-        w: SLIDE_W - 2,
-        h: 1.5,
-        fontSize: 32,
-        bold: true,
-        align: "center",
-        color: "1a1a2e",
-      });
-    } else {
-      for (const { block, heading } of entries) {
-        const svg = getSvg(block.visualId);
-        if (!svg) continue;
-        await addVisualSlide(pptx, svg, heading, block.visual);
+    let slidesAdded = 0;
+    for (const { block, heading } of entries) {
+      const svg = getSvg(block.visualId);
+      if (!svg) continue;
+      if (await addVisualSlide(pptx, svg, heading, block.visual)) {
+        slidesAdded++;
       }
+    }
+
+    // Emit a title-only slide whenever no visual slide actually made it into
+    // the deck — whether because there were no visuals at all, or because
+    // every one of them failed to resolve — so the deck is never empty.
+    if (slidesAdded === 0) {
+      addTitleOnlySlide(pptx, title);
     }
 
     const arrayBuffer = (await pptx.write({
