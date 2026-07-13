@@ -242,6 +242,46 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Shell/schema-audit runtime direct coverage (#1964), rebased onto `main` at
+`b9837692f5c74ba275bd78f1ea5365ab88eba93a` (post #1986, the merged #1963
+visual popover/canvas/export-dialog ratchet described below).** Before this
+rebase, #1986 had already measured 848 eligible runtime source files, 24
+type-only, 31 barrel, 11 static-data, 782 runtime-eligible, 774 loaded by the
+source unit suite, 6 mapped-e2e, 0 approved exceptions, and 2 actionable gap
+files against that tree: `src/app/api/slide-assets/[documentId]/[...path]/
+route.ts` and `src/scripts/audit-persisted-schema.ts`. Six shell/UI
+components had no direct unit coverage — `sign-out-button.tsx`,
+`theme-mode-button.tsx`, `user-menu.tsx`, `mobile-nav-menu.tsx`,
+`header-gate.tsx`, and `mobile-viewport-sync.tsx` — plus
+`share/social-share-menu.tsx`, which was already transitively loaded by
+`share-button.test.tsx` (#1961) but had no dedicated test of its own, and the
+`audit-persisted-schema.ts` CLI script, whose logic lived entirely behind an
+untestable `import.meta.url` top-level-await main guard. #1964 added direct,
+behavior-asserting unit tests for all seven components (signout form/action
+pending-state, theme selection/current/system/accessibility, user/mobile-nav
+menu open-close/click-outside/escape/navigation, route-based header gating,
+`visualViewport` CSS updates/listener cleanup/fallback, and social
+clipboard/native-share/platform-intent/success/error/unsupported flows), and
+extracted a typed, dependency-injected `runAuditMain`/`AuditDb` seam out of
+the audit script (mirroring `src/lib/maintenance/retention-runner.ts`'s
+injectable `db` pattern) so `audit-persisted-schema.test.ts` can drive
+pagination, query-sequencing, `--json`/`--ci`/`--strict` output, and
+disconnect/error-propagation behavior with a fake in-memory `db` — no real
+Prisma client or subprocess. Of these eight target files, seven were already
+unit-loaded transitively before this change (their own direct tests deepen
+genuine behavioral assertion coverage but do not move the gap count);
+`audit-persisted-schema.ts` was the one genuine gap closure. Re-measured
+directly against this tree: 848 eligible runtime source files (unchanged), 24
+type-only (unchanged), 31 barrel (unchanged), 11 static-data (unchanged), 782
+runtime-eligible (unchanged), **775** loaded by the source unit suite (774
+pre-#1964 + 1 from #1964), 6 mapped-e2e (unchanged), 0 approved exceptions,
+and **1** actionable gap file (`src/app/api/slide-assets/[documentId]/
+[...path]/route.ts` — pre-existing, unrelated to this branch).
+`DEFAULT_MAX_GAP_FILES` was lowered from 2 to 1 to match, with zero stale
+slack. This is the authoritative baseline going forward; the #1963 entry
+below (and everything further below it) remains in this document only as
+historical context for how the ceiling evolved.
+
 **Visual popover/canvas/export-dialog direct coverage (#1963), mechanically
 rebased onto `main` at `67f9311a` (post #1978, which folds in #1958's nine
 core-editor-interaction closures on top of #1957/#1961/#1959/#1960/#1962 and
@@ -283,12 +323,12 @@ unit suite (769 #1978 baseline + 5 from #1963), 6 mapped-e2e
 (`src/app/api/slide-assets/[documentId]/[...path]/route.ts` and
 `src/scripts/audit-persisted-schema.ts` — both pre-existing, unrelated to
 this branch). `DEFAULT_MAX_GAP_FILES` was lowered from 7 to **2**
-to match, with zero stale slack. This is the authoritative baseline going
-forward; the historical entries below (including the #1958/7-ceiling entry,
-now superseded by this entry, and this branch's own pre-rebase 766/10
-measurement against `a5f683f3`, which is no longer accurate now that #1978
-has independently closed the icon-picker.tsx gap) remain only as historical
-context for how the ceiling evolved.
+to match, with zero stale slack. This was the authoritative baseline until
+superseded by the #1964 measurement above; the historical entries below
+(including the #1958/7-ceiling entry, now superseded by this entry, and this
+branch's own pre-rebase 766/10 measurement against `a5f683f3`, which is no
+longer accurate now that #1978 has independently closed the icon-picker.tsx
+gap) remain only as historical context for how the ceiling evolved.
 
 **Core-editor-interaction direct coverage (#1958), mechanically rebased onto
 `main` at `a5ead8fc` (post #1984, which folds in #1957/#1961/#1959/#1960/

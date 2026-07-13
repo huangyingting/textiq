@@ -12,7 +12,8 @@
  * ratcheted again for direct workspace/dashboard page and member-interaction
  * coverage in #1957, closed nine dashboard/document-management-UI gaps in
  * #1961, closed nine core-editor-interaction gaps in #1958, closed the
- * visual popover/canvas/export-dialog gaps in #1963).
+ * visual popover/canvas/export-dialog gaps in #1963, closed the
+ * shell/schema-audit runtime gap in #1964).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -22,8 +23,45 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (2) is #1963 mechanically rebased onto
- * `main` at `67f9311a` (post #1978, which folds in #1958's nine
+ * The baseline below (1) is #1964 rebased onto `main` at
+ * `b9837692f5c74ba275bd78f1ea5365ab88eba93a` (post #1986, the merged #1963
+ * visual popover/canvas/export-dialog ratchet described below). Before this
+ * rebase, #1986 had already measured 848 eligible runtime source files, 24
+ * type-only, 31 barrel, 11 static-data, 782 runtime-eligible, 774 loaded by
+ * the source unit suite, 6 mapped-e2e, 0 approved exceptions, and 2
+ * actionable gap files against that tree:
+ * `src/app/api/slide-assets/[documentId]/[...path]/route.ts` and
+ * `src/scripts/audit-persisted-schema.ts`. #1964 adds direct,
+ * behavior-asserting unit tests for seven previously-untested shell/UI
+ * components: `sign-out-button.tsx`, `theme-mode-button.tsx`,
+ * `user-menu.tsx`, `mobile-nav-menu.tsx`, `header-gate.tsx`,
+ * `mobile-viewport-sync.tsx`, and `share/social-share-menu.tsx` (the last
+ * already transitively loaded by `share-button.test.tsx` (#1961) but newly
+ * given its own direct test) — all seven were already unit-loaded
+ * transitively before this change and so do not move the gap count — plus a
+ * typed, dependency-injected `runAuditMain`/`AuditDb` seam extracted out of
+ * `audit-persisted-schema.ts`'s previously-untestable `import.meta.url`
+ * top-level-await main guard (mirroring
+ * `src/lib/maintenance/retention-runner.ts`'s injectable `db` pattern) so
+ * `audit-persisted-schema.test.ts` can drive pagination, query-sequencing,
+ * `--json`/`--ci`/`--strict` output, and disconnect/error-propagation
+ * behavior with a fake in-memory `db` — no real Prisma client or subprocess.
+ * `audit-persisted-schema.ts` was the one genuine gap closure. Re-measured
+ * directly against this tree: 848 eligible runtime source files
+ * (unchanged), 24 type-only (unchanged), 31 barrel (unchanged), 11
+ * static-data (unchanged), 782 runtime-eligible (unchanged), **775** loaded
+ * by the source unit suite (774 pre-#1964 + 1 from #1964:
+ * `audit-persisted-schema.ts`), 6 mapped-e2e (unchanged), 0 approved
+ * exceptions, leaving **1** actionable gap file
+ * (`src/app/api/slide-assets/[documentId]/[...path]/route.ts` —
+ * pre-existing, unrelated to this branch). `DEFAULT_MAX_GAP_FILES` was
+ * lowered from 2 to **1** to match, with zero stale slack. This is the
+ * authoritative baseline going forward; the historical entries below
+ * (including the #1963-rebase 2-ceiling measurement, now superseded by this
+ * entry) remain only as context for how the ceiling evolved.
+ *
+ * The baseline prior to #1964's rebase (2) is #1963 mechanically rebased
+ * onto `main` at `67f9311a` (post #1978, which folds in #1958's nine
  * core-editor-interaction closures on top of #1957/#1961/#1959/#1960/#1962
  * and their dependents). Before this rebase, #1978 had already measured
  * 848 eligible runtime source files, 24 type-only, 31 barrel, 11
@@ -423,7 +461,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 2;
+export const DEFAULT_MAX_GAP_FILES = 1;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
