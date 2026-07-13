@@ -22,12 +22,28 @@
  *      dependency and already used by `import-graph.mjs`,
  *      `client-boundary.mjs`, `perf-budgets.mjs`, and `test-subsystem.mjs`)
  *      to separate files that have no runtime behavior to unit-test
- *      (`type-only`, `barrel`) from files that do (`runtime`).
+ *      (`type-only`, `barrel`, `static-data`) from files that do (`runtime`).
+ *      `barrel` also covers re-export GLUE built from const aliases to
+ *      non-computed property accesses on imported bindings (#1950), e.g.
+ *      `export const GET = handlers.GET;` — no local logic, just naming an
+ *      already-imported value. `static-data` (#1950) covers modules with
+ *      nothing but type declarations and `const` data built ENTIRELY from
+ *      static primitive/template literals and recursively static
+ *      arrays/objects (e.g. `src/lib/app-shell/chrome.ts`) — real values,
+ *      unlike `barrel`, but nothing with behavior to unit-test, unlike
+ *      `runtime`. Both are deliberately conservative: calls, `new`, `await`,
+ *      generators, functions, getters/setters, spreads, computed
+ *      properties/keys, tagged templates, identifier-dependent expressions,
+ *      binary/conditional expressions, side-effecting imports outside the
+ *      alias pattern, and mutable (`let`/`var`) declarations all fall
+ *      through to `runtime` — see the classifier helper docstrings below for
+ *      the exact AST shapes each category accepts and rejects.
  *   4. `buildBreadthReport` assigns every eligible runtime file exactly one
- *      testing mode: `unit-loaded`, `type-only`, `barrel`, `mapped-e2e`,
- *      `approved-exception`, or `gap` (an unresolved, actionable blind
- *      spot). E2E-mapped and approved-exception files are never counted as
- *      unit-covered — they are reported in their own bucket.
+ *      testing mode: `unit-loaded`, `type-only`, `barrel`, `static-data`,
+ *      `mapped-e2e`, `approved-exception`, or `gap` (an unresolved,
+ *      actionable blind spot). E2E-mapped and approved-exception files are
+ *      never counted as unit-covered — they are reported in their own
+ *      bucket.
  *
  * Files opt into `mapped-e2e` or `approved-exception` with an inline marker
  * comment near the top of the file, mirroring the `e2e-governance-allow`
@@ -113,6 +129,7 @@ export const MODE = Object.freeze({
   UNIT_LOADED: "unit-loaded",
   TYPE_ONLY: "type-only",
   BARREL: "barrel",
+  STATIC_DATA: "static-data",
   MAPPED_E2E: "mapped-e2e",
   APPROVED_EXCEPTION: "approved-exception",
   GAP: "gap",
@@ -247,15 +264,182 @@ function isPureTypeStatement(statement) {
   );
 }
 
-function isPureBarrelStatement(statement) {
-  return isReexportDeclaration(statement) || ts.isImportDeclaration(statement);
+function hasExportModifier(node) {
+  return Boolean(
+    node.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    ),
+  );
+}
+
+/**
+ * Collect the name of every top-level import binding that denotes a single,
+ * specific runtime value: a default import (`import Foo from "..."`) or a
+ * named import specifier (`import { foo } from "..."`, excluding `import {
+ * type Foo }`/fully type-only clauses). A namespace import (`import * as ns
+ * from "..."`) is deliberately EXCLUDED — `ns` denotes the entire imported
+ * module namespace object, so `ns.anything` reaches into an arbitrary,
+ * unknown-shape token table rather than a single named re-export, and must
+ * stay runtime-eligible (see the "namespace import mixed with local
+ * behavior" conservatism test).
+ */
+function collectAliasableImportNames(statements) {
+  const names = new Set();
+  for (const statement of statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+    if (clause.name) names.add(clause.name.text);
+    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const element of clause.namedBindings.elements) {
+        if (element.isTypeOnly) continue;
+        names.add(element.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * Unwrap a (possibly chained) NON-COMPUTED property access expression down to
+ * its root identifier, e.g. `handlers.GET` -> `handlers`, `a.b.c` -> `a`.
+ * Returns `null` — forcing the caller to treat the statement as
+ * runtime-eligible — for anything that is not a plain, required (`?.`-free)
+ * chain of one or more `PropertyAccessExpression`s ending in an
+ * `Identifier`: computed member access (`a["GET"]`), optional chaining
+ * (`a?.b`), calls, or any other expression shape. Also returns `null` when
+ * there is no property access at all (`depth === 0`) — a bare `export const
+ * X = importedName;` re-export-as-rename is a distinct pattern from the
+ * `export const GET = handlers.GET;` alias this targets.
+ */
+function unwrapNonComputedPropertyAccessRoot(expr) {
+  let node = expr;
+  let depth = 0;
+  while (ts.isPropertyAccessExpression(node) && !node.questionDotToken) {
+    node = node.expression;
+    depth += 1;
+  }
+  return depth > 0 && ts.isIdentifier(node) ? node : null;
+}
+
+/**
+ * `export const <Identifier> = <non-computed property access chain rooted in
+ * an imported binding>;` — the re-export glue `barrel` widens to cover
+ * (#1950), e.g. `export const GET = handlers.GET;`. Every declarator in the
+ * statement must independently qualify: `const` (never `let`/`var` —
+ * mutable bindings stay runtime-eligible), a plain identifier name (no
+ * destructuring), and a root identifier present in `aliasableImportNames`
+ * (a named or default import of THIS file — never a namespace import or a
+ * locally-computed value).
+ */
+function isImportAliasExportStatement(statement, aliasableImportNames) {
+  if (!ts.isVariableStatement(statement)) return false;
+  if (!hasExportModifier(statement)) return false;
+  const declarationList = statement.declarationList;
+  if (!(declarationList.flags & ts.NodeFlags.Const)) return false;
+  if (declarationList.declarations.length === 0) return false;
+  return declarationList.declarations.every((declaration) => {
+    if (!ts.isIdentifier(declaration.name)) return false;
+    if (!declaration.initializer) return false;
+    const root = unwrapNonComputedPropertyAccessRoot(declaration.initializer);
+    return Boolean(root) && aliasableImportNames.has(root.text);
+  });
+}
+
+/**
+ * Recursively determine whether `expr` is built ENTIRELY from static
+ * primitive/template literals and static arrays/objects — no identifier
+ * references, calls, `new`, spreads, computed keys, or accessors anywhere in
+ * the tree. Backs the `static-data` category (#1950), e.g.
+ * `src/lib/app-shell/chrome.ts`'s `SHELL_NAV_ITEM_CHROME` record.
+ *
+ * Deliberately conservative: `ts.isPropertyAssignment` already excludes
+ * shorthand properties (`{ foo }`, identifier-dependent), method/getter/
+ * setter declarations, and spread assignments simply by node kind, and
+ * `ts.isSpreadElement` is rejected explicitly for arrays. Tagged templates,
+ * calls, `new`, binary/conditional expressions, and any bare identifier all
+ * fall through to `false` (stay runtime-eligible) because no branch below
+ * recognizes those node kinds; only `as`/`satisfies`/parenthesized/non-null
+ * wrappers around an otherwise-static expression are unwrapped.
+ */
+function isStaticLiteralExpression(expr) {
+  let node = expr;
+  while (
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isParenthesizedExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    node = node.expression;
+  }
+
+  if (ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return true;
+  if (
+    node.kind === ts.SyntaxKind.TrueKeyword ||
+    node.kind === ts.SyntaxKind.FalseKeyword ||
+    node.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  if (ts.isBigIntLiteral(node)) return true;
+  if (
+    ts.isPrefixUnaryExpression(node) &&
+    (node.operator === ts.SyntaxKind.MinusToken ||
+      node.operator === ts.SyntaxKind.PlusToken) &&
+    ts.isNumericLiteral(node.operand)
+  ) {
+    return true;
+  }
+  if (ts.isTemplateExpression(node)) {
+    return node.templateSpans.every((span) =>
+      isStaticLiteralExpression(span.expression),
+    );
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.every(
+      (element) =>
+        !ts.isSpreadElement(element) && isStaticLiteralExpression(element),
+    );
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    return node.properties.every((property) => {
+      if (!ts.isPropertyAssignment(property)) return false;
+      if (ts.isComputedPropertyName(property.name)) return false;
+      return isStaticLiteralExpression(property.initializer);
+    });
+  }
+  return false;
+}
+
+/**
+ * `export const <Identifier> = <static literal expression>;` — the const
+ * data half of the `static-data` category (#1950). Same `const`/identifier/
+ * exported constraints as `isImportAliasExportStatement`, but the
+ * initializer must satisfy `isStaticLiteralExpression` instead of being a
+ * property-access chain.
+ */
+function isStaticDataExportStatement(statement) {
+  if (!ts.isVariableStatement(statement)) return false;
+  if (!hasExportModifier(statement)) return false;
+  const declarationList = statement.declarationList;
+  if (!(declarationList.flags & ts.NodeFlags.Const)) return false;
+  if (declarationList.declarations.length === 0) return false;
+  return declarationList.declarations.every((declaration) => {
+    if (!ts.isIdentifier(declaration.name)) return false;
+    if (!declaration.initializer) return false;
+    return isStaticLiteralExpression(declaration.initializer);
+  });
 }
 
 /**
  * Classify a source file as `type-only` (nothing but type declarations,
  * type-only imports/exports, or ambient module augmentation), `barrel`
- * (nothing but import/re-export statements — no local runtime logic), or
- * `runtime` (has behavior that unit tests can and should exercise).
+ * (nothing but import/re-export statements, or const aliases to
+ * non-computed property accesses on imported bindings — no local runtime
+ * logic either way), `static-data` (types plus `const` data built entirely
+ * from static literals/arrays/objects — real values, but nothing to
+ * unit-test), or `runtime` (has behavior that unit tests can and should
+ * exercise).
  */
 export function classifySourceFile(fileText, filePath) {
   const sourceFile = ts.createSourceFile(
@@ -275,12 +459,33 @@ export function classifySourceFile(fileText, filePath) {
   if (statements.every(isPureTypeStatement)) {
     return "type-only";
   }
+
+  const aliasableImportNames = collectAliasableImportNames(statements);
+  const isBarrelStatement = (statement) =>
+    isReexportDeclaration(statement) ||
+    ts.isImportDeclaration(statement) ||
+    isImportAliasExportStatement(statement, aliasableImportNames);
+  const isBarrelGlueStatement = (statement) =>
+    isReexportDeclaration(statement) ||
+    isImportAliasExportStatement(statement, aliasableImportNames);
+
   if (
-    statements.every(isPureBarrelStatement) &&
-    statements.some(isReexportDeclaration)
+    statements.every(isBarrelStatement) &&
+    statements.some(isBarrelGlueStatement)
   ) {
     return "barrel";
   }
+
+  const isStaticDataStatement = (statement) =>
+    isPureTypeStatement(statement) || isStaticDataExportStatement(statement);
+
+  if (
+    statements.every(isStaticDataStatement) &&
+    statements.some(isStaticDataExportStatement)
+  ) {
+    return "static-data";
+  }
+
   return "runtime";
 }
 
@@ -721,6 +926,7 @@ export function buildBreadthReport({
     [MODE.UNIT_LOADED]: [],
     [MODE.TYPE_ONLY]: [],
     [MODE.BARREL]: [],
+    [MODE.STATIC_DATA]: [],
     [MODE.MAPPED_E2E]: [],
     [MODE.APPROVED_EXCEPTION]: [],
     [MODE.GAP]: [],
@@ -740,6 +946,10 @@ export function buildBreadthReport({
     }
     if (classification === "barrel") {
       byMode[MODE.BARREL].push(filePath);
+      continue;
+    }
+    if (classification === "static-data") {
+      byMode[MODE.STATIC_DATA].push(filePath);
       continue;
     }
     if (loadedFiles.has(filePath)) {
@@ -764,7 +974,9 @@ export function buildBreadthReport({
   const eligibleCount = eligibleFiles.length;
   const typeOnlyCount = byMode[MODE.TYPE_ONLY].length;
   const barrelCount = byMode[MODE.BARREL].length;
-  const runtimeEligibleCount = eligibleCount - typeOnlyCount - barrelCount;
+  const staticDataCount = byMode[MODE.STATIC_DATA].length;
+  const runtimeEligibleCount =
+    eligibleCount - typeOnlyCount - barrelCount - staticDataCount;
   const loadedRuntimeCount = byMode[MODE.UNIT_LOADED].length;
   const mappedInteractionCount = byMode[MODE.MAPPED_E2E].length;
   const approvedExceptionCount = byMode[MODE.APPROVED_EXCEPTION].length;
@@ -778,6 +990,7 @@ export function buildBreadthReport({
     unloadedRuntimeCount,
     typeOnlyCount,
     barrelCount,
+    staticDataCount,
     mappedInteractionCount,
     approvedExceptionCount,
     actionableGapCount,
@@ -791,6 +1004,7 @@ export function formatBreadthReport(report) {
     `  Eligible runtime source files: ${report.eligibleCount}`,
     `  Type-only (excluded, no runtime behavior): ${report.typeOnlyCount}`,
     `  Barrel (excluded, re-export only): ${report.barrelCount}`,
+    `  Static data (excluded, static literal records only): ${report.staticDataCount}`,
     `  Runtime-eligible (must be tested or explicitly excepted): ${report.runtimeEligibleCount}`,
     `    Unit-loaded: ${report.loadedRuntimeCount}`,
     `    Mapped interaction/E2E (not unit-covered): ${report.mappedInteractionCount}`,
