@@ -529,7 +529,7 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("known gap: create/revoke have no try/catch, so a rejected action propagates as an unhandled rejection (no error UI)", async () => {
+  test("a rejected create is caught and renders an alert with the thrown message, without adding a link", async () => {
     state().createWorkspaceInviteLink = async () => {
       throw new Error("boom");
     };
@@ -538,18 +538,261 @@ describe("InviteLinkManager", () => {
       const createButton = renderer.root.findByProps({
         children: "Create invite link",
       });
-      // `handleCreate` (the real onClick handler) has no try/catch, so its
-      // rejection is only observable here because we call it directly and
-      // await/catch its returned promise ourselves — a real end user's
-      // click would leave this as a genuinely unhandled rejection, which
-      // this test intentionally does not reproduce (that would crash the
-      // test process); it only confirms no error UI exists for this path.
-      await assert.rejects(async () => {
-        await act(async () => {
-          await createButton.props.onClick();
-        });
-      }, /boom/);
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      const alert = renderer.root.findByProps({ role: "alert" });
+      assert.match(JSON.stringify(alert.props.children), /boom/);
+      assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /tok-new/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a non-Error create rejection falls back to a generic message", async () => {
+    state().createWorkspaceInviteLink = async () => {
+      throw "not an Error instance";
+    };
+    const renderer = mountManager([]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      const alert = renderer.root.findByProps({ role: "alert" });
+      assert.match(
+        JSON.stringify(alert.props.children),
+        /Could not create invite link\./,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a rejected revoke is caught and renders an alert with the thrown message, keeping the link in the list", async () => {
+    state().revokeWorkspaceInviteLink = async () => {
+      throw new Error("Cannot revoke this link.");
+    };
+    const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
+    try {
+      const revokeButton = renderer.root
+        .findAll(
+          (instance) =>
+            (instance.props as { "aria-label"?: string })["aria-label"] ===
+            "Revoke invite link",
+        )
+        .filter((instance) => typeof instance.type !== "string")[0];
+      await act(async () => {
+        revokeButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      const alert = renderer.root.findByProps({ role: "alert" });
+      assert.match(
+        JSON.stringify(alert.props.children),
+        /Cannot revoke this link\./,
+      );
+      assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a non-Error revoke rejection falls back to a generic message", async () => {
+    state().revokeWorkspaceInviteLink = async () => {
+      throw "not an Error instance";
+    };
+    const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
+    try {
+      const revokeButton = renderer.root
+        .findAll(
+          (instance) =>
+            (instance.props as { "aria-label"?: string })["aria-label"] ===
+            "Revoke invite link",
+        )
+        .filter((instance) => typeof instance.type !== "string")[0];
+      await act(async () => {
+        revokeButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      const alert = renderer.root.findByProps({ role: "alert" });
+      assert.match(
+        JSON.stringify(alert.props.children),
+        /Could not revoke invite link\./,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("an error thrown deeper in the create action (authorization) is still caught and surfaced as an alert", async () => {
+    // `createInviteLink`/`revokeInviteLink` only ever throw — there is no
+    // `{ ok: false, error }` return shape on these actions today, unlike the
+    // `ActionResult` convention used elsewhere (e.g.
+    // `src/app/app/brands/actions.ts`). This exercises a rejection that
+    // originates from a dependency awaited *inside* the action
+    // (`requireWorkspaceCapability`) rather than from `createWorkspaceInviteLink`
+    // itself, confirming the handler's `try`/`catch` wraps the entire
+    // awaited action call, not just its final step.
+    state().requireWorkspaceCapability = async () => {
+      throw new Error("Not authorized to manage this workspace.");
+    };
+    const renderer = mountManager([]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      const alert = renderer.root.findByProps({ role: "alert" });
+      assert.match(
+        JSON.stringify(alert.props.children),
+        /Not authorized to manage this workspace\./,
+      );
+      assert.equal(callsOf("createWorkspaceInviteLink").length, 0);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("retrying a create after a failure clears the previous error once the retry succeeds", async () => {
+    let shouldFail = true;
+    state().createWorkspaceInviteLink = async (args) => {
+      if (shouldFail) throw new Error("temporary failure");
+      return {
+        id: "link-retry",
+        token: "tok-retry",
+        role: args.role as InviteLink["role"],
+        createdAt: new Date("2026-02-01T00:00:00Z"),
+        expiresAt: null,
+        maxUses: null,
+        useCount: 0,
+      };
+    };
+    const renderer = mountManager([]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.ok(renderer.root.findByProps({ role: "alert" }));
+
+      shouldFail = false;
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
       assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      assert.match(JSON.stringify(renderer.toJSON()), /tok-retry/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a successful revoke after a failed create clears the stale create error", async () => {
+    state().createWorkspaceInviteLink = async () => {
+      throw new Error("cannot create right now");
+    };
+    const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.ok(renderer.root.findByProps({ role: "alert" }));
+
+      const revokeButton = renderer.root
+        .findAll(
+          (instance) =>
+            (instance.props as { "aria-label"?: string })["aria-label"] ===
+            "Revoke invite link",
+        )
+        .filter((instance) => typeof instance.type !== "string")[0];
+      await act(async () => {
+        revokeButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /tok-1/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("concurrent create and revoke resolve deterministically: both errors surface in order and only the failed revoke's link remains", async () => {
+    let resolveCreate!: (link: InviteLink) => void;
+    state().createWorkspaceInviteLink = () =>
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      });
+    let rejectRevoke!: (err: Error) => void;
+    state().revokeWorkspaceInviteLink = () =>
+      new Promise((_resolve, reject) => {
+        rejectRevoke = reject;
+      });
+    const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      const revokeButton = renderer.root
+        .findAll(
+          (instance) =>
+            (instance.props as { "aria-label"?: string })["aria-label"] ===
+            "Revoke invite link",
+        )
+        .filter((instance) => typeof instance.type !== "string")[0];
+
+      await act(async () => {
+        createButton.props.onClick();
+        revokeButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      // Both are still in-flight: no alert yet, and the original link is
+      // still present (revoke hasn't resolved).
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
+
+      await act(async () => {
+        rejectRevoke(new Error("revoke failed"));
+        await waitForAsyncDrain();
+      });
+      const alertAfterRevoke = renderer.root.findByProps({ role: "alert" });
+      assert.match(
+        JSON.stringify(alertAfterRevoke.props.children),
+        /revoke failed/,
+      );
+      assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
+
+      await act(async () => {
+        resolveCreate({
+          id: "link-new",
+          token: "tok-new",
+          role: "EDITOR",
+          createdAt: new Date("2026-02-01T00:00:00Z"),
+          expiresAt: null,
+          maxUses: null,
+          useCount: 0,
+        });
+        await waitForAsyncDrain();
+      });
+      // The successful create clears its own stale error state and the new
+      // link is present alongside the never-revoked original.
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      const html = JSON.stringify(renderer.toJSON());
+      assert.match(html, /tok-1/);
+      assert.match(html, /tok-new/);
     } finally {
       act(() => renderer.unmount());
     }
