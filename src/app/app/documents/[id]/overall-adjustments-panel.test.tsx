@@ -51,11 +51,13 @@ import {
 import { FIXTURES } from "@/lib/visual/fixtures";
 import { STYLE_THEMES } from "@/lib/visual/themes";
 
-// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
-// baseline `document`/`window` stubs this file's effects need.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT`; also installs the
+// baseline `document`/`window` stubs this file's effects need, persistently
+// for this file's lifetime (its tests directly monkey-patch
+// `globalThis.document`/`globalThis.window` across cases).
+import { installPersistentDefaultDom } from "@/test/react-render-harness";
 
-createReactRenderHarness().run(() => null);
+installPersistentDefaultDom();
 
 // `Tooltip` (wrapping every theme/brand button) unconditionally calls
 // `createPortal(tooltip, document.body)` once `document` exists, so `body`
@@ -65,8 +67,8 @@ createReactRenderHarness().run(() => null);
   nodeType: 1,
 } as never;
 
-// The fake `document` installed by `createReactRenderHarness` doesn't define
-// `head`/`getElementById` at all (only `createElement`, which already
+// The fake `document` installed by `installPersistentDefaultDom` doesn't
+// define `head`/`getElementById` at all (only `createElement`, which already
 // returns a plain, freely-assignable mock object). Install both so the
 // Google-Font `<link>` path (`applyBrandToAll`) and the custom-font
 // `injectBrandFontFace` `<style>` path can both be exercised without jsdom.

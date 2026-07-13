@@ -1,6 +1,11 @@
 import { createElement, isValidElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+import {
+  captureOwnPropertyDescriptors,
+  restoreOwnPropertyDescriptors,
+} from "@/test/global-property-descriptors";
+
 export type ServerRenderHarnessOptions = {
   firstRefCurrent?: unknown;
   idPrefix?: string;
@@ -60,13 +65,11 @@ console.error = (...args: unknown[]) => {
   originalConsoleError(...args);
 };
 
-function withDefaultDom<T>(callback: () => T): T {
-  const previousDocument = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "document",
-  );
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  const fakeDocument = {
+const DEFAULT_DOM_GLOBAL_KEYS = ["document", "window"] as const;
+
+/** The `document` stub `withDefaultDom` installs when none already exists. */
+export function createDefaultFakeDocument() {
+  return {
     activeElement: { focus: () => undefined },
     addEventListener: () => undefined,
     createElement: () => createDefaultNodeMock(),
@@ -74,44 +77,106 @@ function withDefaultDom<T>(callback: () => T): T {
     querySelector: () => null,
     removeEventListener: () => undefined,
   };
-  if (!previousDocument) {
+}
+
+/** The `window` stub `withDefaultDom` installs when none already exists. */
+export function createDefaultFakeWindow() {
+  return {
+    addEventListener: () => undefined,
+    getSelection: () => null,
+    matchMedia: () => ({
+      addEventListener: () => undefined,
+      matches: false,
+      removeEventListener: () => undefined,
+    }),
+    requestAnimationFrame: (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    },
+    cancelAnimationFrame: () => undefined,
+    removeEventListener: () => undefined,
+  };
+}
+
+/**
+ * Installs the default fake `document`/`window` permanently — i.e. without
+ * `withDefaultDom`'s per-call teardown — for test files whose tests rely on
+ * directly monkey-patching `globalThis.document`/`globalThis.window` across
+ * the whole file rather than scoping a fake DOM to one call. A no-op for
+ * whichever of `document`/`window` already exists.
+ */
+export function installPersistentDefaultDom(): void {
+  if (!("document" in globalThis)) {
     Object.defineProperty(globalThis, "document", {
       configurable: true,
       writable: true,
-      value: fakeDocument,
+      value: createDefaultFakeDocument(),
     });
   }
-  if (!previousWindow) {
+  if (!("window" in globalThis)) {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       writable: true,
-      value: {
-        addEventListener: () => undefined,
-        getSelection: () => null,
-        matchMedia: () => ({
-          addEventListener: () => undefined,
-          matches: false,
-          removeEventListener: () => undefined,
-        }),
-        requestAnimationFrame: (callback: FrameRequestCallback) => {
-          callback(0);
-          return 0;
-        },
-        cancelAnimationFrame: () => undefined,
-        removeEventListener: () => undefined,
-      },
+      value: createDefaultFakeWindow(),
     });
   }
-  try {
-    return callback();
-  } finally {
-    if (previousDocument) {
-      Object.defineProperty(globalThis, "document", previousDocument);
-    }
-    if (previousWindow) {
-      Object.defineProperty(globalThis, "window", previousWindow);
-    }
+}
+
+/**
+ * Installs a fake `document`/`window` for the duration of `callback`,
+ * restoring the previous globals afterwards — reinstalling their exact
+ * descriptors when they pre-existed, or deleting the temporary properties
+ * entirely when they didn't (so a fake `document`/`window` never leaks into
+ * later tests just because none existed yet). `callback` may be sync or
+ * async: if it returns a thenable, the previous globals are restored only
+ * after that promise settles, whether it resolves or rejects, so awaited
+ * work inside `callback` still sees the fake DOM.
+ */
+export function withDefaultDom<T>(callback: () => T): T {
+  const previous = captureOwnPropertyDescriptors(
+    globalThis,
+    DEFAULT_DOM_GLOBAL_KEYS,
+  );
+  if (!previous.get("document")) {
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      writable: true,
+      value: createDefaultFakeDocument(),
+    });
   }
+  if (!previous.get("window")) {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: createDefaultFakeWindow(),
+    });
+  }
+
+  function restore(): void {
+    restoreOwnPropertyDescriptors(globalThis, previous);
+  }
+
+  let result: T;
+  try {
+    result = callback();
+  } catch (error) {
+    restore();
+    throw error;
+  }
+  if (result instanceof Promise) {
+    return result.then(
+      (value) => {
+        restore();
+        return value;
+      },
+      (error: unknown) => {
+        restore();
+        throw error;
+      },
+    ) as T;
+  }
+  restore();
+  return result;
 }
 
 function Probe<T>({ render, renderResult = false, onResult }: ProbeProps<T>) {

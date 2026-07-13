@@ -64,13 +64,14 @@ import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { toolsFor } from "@/lib/lexical/tool-registry";
 import type { EditorContextSnapshot } from "@/lib/lexical/selection-snapshot";
 
-// Flips on `IS_REACT_ACT_ENVIRONMENT` and installs the baseline
-// `document`/`window` stubs `EditorContextProvider`'s effect needs.
-import { createReactRenderHarness } from "@/test/react-render-harness";
+// Flips on `IS_REACT_ACT_ENVIRONMENT`; also installs the baseline
+// `document`/`window` stubs `EditorContextProvider`'s effect needs,
+// persistently for this file's lifetime.
+import { installPersistentDefaultDom } from "@/test/react-render-harness";
 
 import { TextFormatSection } from "./mobile-text-format-section";
 
-createReactRenderHarness().run(() => null);
+installPersistentDefaultDom();
 
 // Every tool is wrapped in `Tooltip`, which always calls
 // `createPortal(tooltip, document.body)` once `document` exists, so `body`

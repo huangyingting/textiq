@@ -57,6 +57,11 @@ import { createRequire } from "node:module";
 import type { ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+import {
+  captureOwnPropertyDescriptors,
+  restoreOwnPropertyDescriptors,
+} from "@/test/global-property-descriptors";
+
 // Any component that renders `next/link`'s `<Link>` (e.g. `DocumentCard`)
 // mounts `useIntersection`'s prefetch-on-visible effect. Node has no global
 // `IntersectionObserver`, so `next/link` falls back to
@@ -221,12 +226,13 @@ export function createPortalNodeMock() {
 // assertions — no test needs to simulate an in-progress scroll/resize.
 let rafDepth = 0;
 
+const PORTAL_DOM_GLOBAL_KEYS = ["document", "window"] as const;
+
 export function withPortalDom<T>(run: () => T): T {
-  const previousDocument = Object.getOwnPropertyDescriptor(
+  const previous = captureOwnPropertyDescriptors(
     globalThis,
-    "document",
+    PORTAL_DOM_GLOBAL_KEYS,
   );
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
   const body = {
     nodeType: 1,
@@ -277,16 +283,7 @@ export function withPortalDom<T>(run: () => T): T {
   });
 
   function restore(): void {
-    if (previousDocument) {
-      Object.defineProperty(globalThis, "document", previousDocument);
-    } else {
-      Reflect.deleteProperty(globalThis, "document");
-    }
-    if (previousWindow) {
-      Object.defineProperty(globalThis, "window", previousWindow);
-    } else {
-      Reflect.deleteProperty(globalThis, "window");
-    }
+    restoreOwnPropertyDescriptors(globalThis, previous);
   }
 
   let result: T;

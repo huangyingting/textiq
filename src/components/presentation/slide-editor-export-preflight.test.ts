@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { act } from "react-test-renderer";
 
 import type { PresentationExportPreflightResult } from "@/lib/presentation/export-preflight";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
@@ -13,7 +14,11 @@ import {
   buildSlide,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
-import { createReactRenderHarness } from "@/test/react-render-harness";
+import {
+  createReactRenderHarness,
+  withDefaultDom,
+} from "@/test/react-render-harness";
+import { waitForAsyncDrain } from "@/test/render-text";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -67,155 +72,188 @@ function renderTopToolbar(root: ReactNode): ReactNode {
   );
 }
 
-describe("SlideEditor export preflight", () => {
-  test("blocks PDF download behind a fatal format preflight", () => {
-    const deck = buildDeck([
-      buildSlide(
-        "content",
-        [
-          buildImageNode("missing-image", {
-            id: "image-missing",
-          }),
-        ],
-        { id: "slide-1" },
-      ),
-    ]);
-    const renderer = createHookRenderer();
-    let pdfExports = 0;
-
-    let tree = renderer.run(() =>
-      SlideEditor({
-        documentId: "doc-export-preflight",
-        deck,
-        themePackage: buildMinimalThemePackage(),
-        onDeckChange: () => undefined,
-        onExportPdf: async () => {
-          pdfExports += 1;
-        },
-      }),
-    );
-
-    const requestPdfExport = findRequiredElement(
-      renderTopToolbar(tree),
-      (element) =>
-        element.type === "button" &&
-        element.props["aria-label"] === "Export PDF",
-      "expected PDF export menu item",
-    ).props.onClick;
-    if (typeof requestPdfExport !== "function") {
-      throw new TypeError("Expected PDF export menu item to be clickable");
-    }
-    requestPdfExport();
-
-    tree = renderer.run(() =>
-      SlideEditor({
-        documentId: "doc-export-preflight",
-        deck,
-        themePackage: buildMinimalThemePackage(),
-        onDeckChange: () => undefined,
-        onExportPdf: async () => {
-          pdfExports += 1;
-        },
-      }),
-    );
-
-    const dialogElement = findRequiredElement(
-      tree,
-      (element) => element.type === ExportPreflightDialog,
-      "expected PDF export preflight dialog",
-    );
-    const result = dialogElement.props
-      .result as PresentationExportPreflightResult;
-    const dialog = ExportPreflightDialog({
-      result,
-      onClose: () => undefined,
-      onContinue: () => undefined,
+/**
+ * Runs `body` inside a `withDefaultDom` scope and drains a few event-loop
+ * ticks before that scope's `document`/`window` are torn down.
+ *
+ * Each test below clicks an export menu item's `onClick` directly (bypassing
+ * React's synthetic event system), which makes the resulting
+ * `setExportPreflight` update settle via React's real scheduler rather than
+ * `act()`'s synchronous flush. That leaves `SlideEditor`'s keydown effect
+ * cleanup/re-registration (`window.removeEventListener`) still pending a
+ * macrotask after `body`'s last `renderer.run()` call — i.e. after
+ * `createHookRenderer()`'s harness would otherwise already have torn down
+ * its `document`/`window` — so it must observe the fake DOM installed by
+ * this (outer, nesting-safe — see `react-render-harness.test.ts`) scope
+ * instead of throwing "window is not defined".
+ */
+async function runWithSettledDom(body: () => Promise<void> | void) {
+  await withDefaultDom(async () => {
+    await body();
+    await act(async () => {
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
     });
-    const continueButton = findRequiredElement(
-      dialog,
-      (element) =>
-        element.type === "button" &&
-        flattenText(element).includes("Continue export"),
-      "expected continue button",
-    );
-
-    assert.equal(pdfExports, 0);
-    assert.equal(result.canExport, false);
-    assert.match(result.fatalDiagnostics[0]?.message ?? "", /missing-image/);
-    assert.equal(continueButton.props.disabled, true);
-    assert.match(flattenText(dialog), /Fix blockers/);
   });
+}
 
-  test("continues PPTX export after warning preflight review", async () => {
-    const deck = buildDeck([
-      buildSlide(
-        "content",
-        [
-          buildVisualNode({
-            id: "visual-warning",
-            content: { visualId: "visual-without-rendered-asset" },
-          }),
-        ],
-        { id: "slide-1" },
-      ),
-    ]);
-    const renderer = createHookRenderer();
-    let pptxExports = 0;
+describe("SlideEditor export preflight", () => {
+  // Clicking the export menu item below calls its `onClick` directly
+  // (bypassing React's synthetic event system), which makes the resulting
+  // `setExportPreflight` update settle via React's real scheduler rather
+  // than `act()`'s synchronous flush — see `runWithSettledDom`'s docstring.
+  test("blocks PDF download behind a fatal format preflight", () =>
+    runWithSettledDom(() => {
+      const deck = buildDeck([
+        buildSlide(
+          "content",
+          [
+            buildImageNode("missing-image", {
+              id: "image-missing",
+            }),
+          ],
+          { id: "slide-1" },
+        ),
+      ]);
+      const renderer = createHookRenderer();
+      let pdfExports = 0;
 
-    let tree = renderer.run(() =>
-      SlideEditor({
-        documentId: "doc-export-preflight-warning",
-        deck,
-        themePackage: buildMinimalThemePackage(),
-        onDeckChange: () => undefined,
-        onExportPptx: async () => {
-          pptxExports += 1;
-        },
-      }),
-    );
+      let tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-export-preflight",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPdf: async () => {
+            pdfExports += 1;
+          },
+        }),
+      );
 
-    const requestPptxExport = findRequiredElement(
-      renderTopToolbar(tree),
-      (element) =>
-        element.type === "button" &&
-        element.props["aria-label"] === "Export PPTX",
-      "expected PPTX export menu item",
-    ).props.onClick;
-    if (typeof requestPptxExport !== "function") {
-      throw new TypeError("Expected PPTX export menu item to be clickable");
-    }
-    await requestPptxExport();
+      const requestPdfExport = findRequiredElement(
+        renderTopToolbar(tree),
+        (element) =>
+          element.type === "button" &&
+          element.props["aria-label"] === "Export PDF",
+        "expected PDF export menu item",
+      ).props.onClick;
+      if (typeof requestPdfExport !== "function") {
+        throw new TypeError("Expected PDF export menu item to be clickable");
+      }
+      requestPdfExport();
 
-    tree = renderer.run(() =>
-      SlideEditor({
-        documentId: "doc-export-preflight-warning",
-        deck,
-        themePackage: buildMinimalThemePackage(),
-        onDeckChange: () => undefined,
-        onExportPptx: async () => {
-          pptxExports += 1;
-        },
-      }),
-    );
+      tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-export-preflight",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPdf: async () => {
+            pdfExports += 1;
+          },
+        }),
+      );
 
-    const dialogElement = findRequiredElement(
-      tree,
-      (element) => element.type === ExportPreflightDialog,
-      "expected PPTX export preflight dialog",
-    );
-    const result = dialogElement.props
-      .result as PresentationExportPreflightResult;
+      const dialogElement = findRequiredElement(
+        tree,
+        (element) => element.type === ExportPreflightDialog,
+        "expected PDF export preflight dialog",
+      );
+      const result = dialogElement.props
+        .result as PresentationExportPreflightResult;
+      const dialog = ExportPreflightDialog({
+        result,
+        onClose: () => undefined,
+        onContinue: () => undefined,
+      });
+      const continueButton = findRequiredElement(
+        dialog,
+        (element) =>
+          element.type === "button" &&
+          flattenText(element).includes("Continue export"),
+        "expected continue button",
+      );
 
-    assert.equal(result.canExport, true);
-    assert.equal(result.hasWarnings, true);
-    assert.equal(pptxExports, 0);
+      assert.equal(pdfExports, 0);
+      assert.equal(result.canExport, false);
+      assert.match(result.fatalDiagnostics[0]?.message ?? "", /missing-image/);
+      assert.equal(continueButton.props.disabled, true);
+      assert.match(flattenText(dialog), /Fix blockers/);
+    }));
 
-    const continueExport = dialogElement.props.onContinue;
-    if (typeof continueExport !== "function") {
-      throw new TypeError("Expected export preflight to be continuable");
-    }
-    continueExport();
+  test("continues PPTX export after warning preflight review", () =>
+    runWithSettledDom(async () => {
+      const deck = buildDeck([
+        buildSlide(
+          "content",
+          [
+            buildVisualNode({
+              id: "visual-warning",
+              content: { visualId: "visual-without-rendered-asset" },
+            }),
+          ],
+          { id: "slide-1" },
+        ),
+      ]);
+      const renderer = createHookRenderer();
+      let pptxExports = 0;
 
-    assert.equal(pptxExports, 1);
-  });
+      let tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-export-preflight-warning",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPptx: async () => {
+            pptxExports += 1;
+          },
+        }),
+      );
+
+      const requestPptxExport = findRequiredElement(
+        renderTopToolbar(tree),
+        (element) =>
+          element.type === "button" &&
+          element.props["aria-label"] === "Export PPTX",
+        "expected PPTX export menu item",
+      ).props.onClick;
+      if (typeof requestPptxExport !== "function") {
+        throw new TypeError("Expected PPTX export menu item to be clickable");
+      }
+      await requestPptxExport();
+
+      tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-export-preflight-warning",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPptx: async () => {
+            pptxExports += 1;
+          },
+        }),
+      );
+
+      const dialogElement = findRequiredElement(
+        tree,
+        (element) => element.type === ExportPreflightDialog,
+        "expected PPTX export preflight dialog",
+      );
+      const result = dialogElement.props
+        .result as PresentationExportPreflightResult;
+
+      assert.equal(result.canExport, true);
+      assert.equal(result.hasWarnings, true);
+      assert.equal(pptxExports, 0);
+
+      const continueExport = dialogElement.props.onContinue;
+      if (typeof continueExport !== "function") {
+        throw new TypeError("Expected export preflight to be continuable");
+      }
+      continueExport();
+
+      assert.equal(pptxExports, 1);
+    }));
 });

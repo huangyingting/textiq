@@ -309,10 +309,12 @@ before(async () => {
   ({ SAVE_STATUS_LABEL } = await import("@/lib/presentation/save-status"));
 
   // Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
-  // baseline `document`/`window` stubs.
-  const { createReactRenderHarness } =
+  // baseline `document`/`window` stubs, persistently for this file's
+  // lifetime (this suite directly monkey-patches `globalThis.window`, e.g.
+  // `location`/`open` immediately below).
+  const { installPersistentDefaultDom } =
     await import("@/test/react-render-harness");
-  createReactRenderHarness().run(() => null);
+  installPersistentDefaultDom();
 
   // The route client reads `window.location.origin` (share/present URL
   // building) and calls `window.open` (opening the public share link); the
