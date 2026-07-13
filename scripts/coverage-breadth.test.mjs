@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -441,6 +441,337 @@ test("classifySourceFile treats a namespace import mixed with local behavior as 
   `;
   assert.equal(
     classifySourceFile(text, "namespace-import-mixed.ts"),
+    "runtime",
+  );
+});
+
+// --- import-alias route re-export glue -> barrel (#1950) -------------------
+
+test("classifySourceFile treats the real nextauth route handler aliases as barrel", () => {
+  const filePath = "src/app/api/auth/[...nextauth]/route.ts";
+  const text = readFileSync(path.join(process.cwd(), filePath), "utf8");
+  assert.equal(classifySourceFile(text, filePath), "barrel");
+});
+
+test("classifySourceFile treats a single const alias to a non-computed import property access as barrel", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-single.ts"), "barrel");
+});
+
+test("classifySourceFile treats a multi-level non-computed alias chain rooted in an import as barrel", () => {
+  const text = `
+    import { api } from "./api";
+
+    export const GET = api.routes.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-chained.ts"), "barrel");
+});
+
+test("classifySourceFile treats a const alias rooted in a default import as barrel", () => {
+  const text = `
+    import handlers from "@/auth";
+
+    export const GET = handlers.GET;
+    export const POST = handlers.POST;
+  `;
+  assert.equal(classifySourceFile(text, "alias-default-import.ts"), "barrel");
+});
+
+test("classifySourceFile treats a real re-export mixed with an import-alias export as barrel", () => {
+  const text = `
+    export { helper } from "./helper";
+    import { handlers } from "./h";
+    export const GET = handlers.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-mixed-glue.ts"), "barrel");
+});
+
+test("classifySourceFile treats a computed property alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers["GET"];
+  `;
+  assert.equal(classifySourceFile(text, "alias-computed.ts"), "runtime");
+});
+
+test("classifySourceFile treats a called alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers.GET();
+  `;
+  assert.equal(classifySourceFile(text, "alias-called.ts"), "runtime");
+});
+
+test("classifySourceFile treats an optional-chained alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers?.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-optional-chain.ts"), "runtime");
+});
+
+test("classifySourceFile treats an alias rooted in a local (non-imported) binding as runtime", () => {
+  const text = `
+    const handlers = { GET() {} };
+    export const GET = handlers.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-local-root.ts"), "runtime");
+});
+
+test("classifySourceFile treats a mutable (let) alias export as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export let GET = handlers.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-mutable.ts"), "runtime");
+});
+
+test("classifySourceFile treats an alias file with an extra executable statement as runtime", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers.GET;
+    console.log("side effect");
+  `;
+  assert.equal(classifySourceFile(text, "alias-extra-statement.ts"), "runtime");
+});
+
+test("classifySourceFile treats an awaited alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = await handlers.GET;
+  `;
+  assert.equal(classifySourceFile(text, "alias-await.ts"), "runtime");
+});
+
+test("classifySourceFile treats a binary-expression alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = handlers.GET || null;
+  `;
+  assert.equal(classifySourceFile(text, "alias-binary.ts"), "runtime");
+});
+
+test("classifySourceFile treats a conditional-expression alias as runtime (no false suppression)", () => {
+  const text = `
+    import { handlers } from "@/auth";
+
+    export const GET = true ? handlers.GET : handlers.POST;
+  `;
+  assert.equal(classifySourceFile(text, "alias-conditional.ts"), "runtime");
+});
+
+// --- types + static const data -> static-data (#1950) -----------------------
+
+test("classifySourceFile treats the real app-shell chrome module as static-data", () => {
+  const filePath = "src/lib/app-shell/chrome.ts";
+  const text = readFileSync(path.join(process.cwd(), filePath), "utf8");
+  assert.equal(classifySourceFile(text, filePath), "static-data");
+});
+
+test("classifySourceFile treats types plus a nested static string record as static-data", () => {
+  const text = `
+    export type Variant = "a" | "b";
+
+    export const CHROME: Record<Variant, { default: string }> = {
+      a: { default: "flex items-center" },
+      b: { default: "flex justify-center" },
+    };
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-record.ts"),
+    "static-data",
+  );
+});
+
+test("classifySourceFile treats a static array of static objects as static-data", () => {
+  const text = `
+    export const ITEMS = [
+      { id: "a", label: "Alpha" },
+      { id: "b", label: "Beta" },
+    ];
+  `;
+  assert.equal(classifySourceFile(text, "static-data-array.ts"), "static-data");
+});
+
+test("classifySourceFile treats a template literal built from static parts as static-data", () => {
+  const text = `
+    export const CLASS_NAME = \`flex \${"h-9"}-\${1}\`;
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-template.ts"),
+    "static-data",
+  );
+});
+
+test("classifySourceFile treats an `as const`-wrapped static record as static-data", () => {
+  const text = `
+    export const DURATION = {
+      instant: 0,
+      pop: 0.14,
+    } as const;
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-as-const.ts"),
+    "static-data",
+  );
+});
+
+test("classifySourceFile treats boolean/null/bigint/signed-numeric static literals as static-data", () => {
+  const text = `
+    export const FLAGS = {
+      enabled: true,
+      disabled: false,
+      missing: null,
+      big: 10n,
+      negative: -5,
+      positive: +5,
+    };
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-primitive-literals.ts"),
+    "static-data",
+  );
+});
+
+test("classifySourceFile treats a pure type-only file as type-only, not static-data", () => {
+  const text = `
+    export interface Foo {
+      id: string;
+    }
+  `;
+  assert.equal(
+    classifySourceFile(text, "type-only-not-static.ts"),
+    "type-only",
+  );
+});
+
+test("classifySourceFile treats a getter in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const CONFIG = {
+      get value() {
+        return 1;
+      },
+    };
+  `;
+  assert.equal(classifySourceFile(text, "static-data-getter.ts"), "runtime");
+});
+
+test("classifySourceFile treats a setter in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const CONFIG = {
+      set value(v: number) {
+        this._value = v;
+      },
+    };
+  `;
+  assert.equal(classifySourceFile(text, "static-data-setter.ts"), "runtime");
+});
+
+test("classifySourceFile treats an object spread in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const CONFIG = { ...{ a: 1 }, extra: 1 };
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-object-spread.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats an array spread in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const ITEMS = [...[1, 2], 3];
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-array-spread.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats a computed property key in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const CONFIG = { ["a" + "b"]: 1 };
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-computed-key.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats a tagged template in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const QUERY = String.raw\`hello\`;
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-tagged-template.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats a function call value in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const VALUE = Date.now();
+  `;
+  assert.equal(classifySourceFile(text, "static-data-call.ts"), "runtime");
+});
+
+test("classifySourceFile treats a new-expression value in const data as runtime (no false suppression)", () => {
+  const text = `
+    export const CREATED_AT = new Date();
+  `;
+  assert.equal(classifySourceFile(text, "static-data-new.ts"), "runtime");
+});
+
+test("classifySourceFile treats an identifier-dependent const value as runtime (no false suppression)", () => {
+  const text = `
+    export const VALUE = undefined;
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-identifier.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats a binary-expression const value as runtime (no false suppression)", () => {
+  const text = `
+    export const VALUE = 1 + 2;
+  `;
+  assert.equal(classifySourceFile(text, "static-data-binary.ts"), "runtime");
+});
+
+test("classifySourceFile treats a conditional-expression const value as runtime (no false suppression)", () => {
+  const text = `
+    export const VALUE = true ? 1 : 2;
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-conditional.ts"),
+    "runtime",
+  );
+});
+
+test("classifySourceFile treats a mutable (let) const-shaped data export as runtime (no false suppression)", () => {
+  const text = `
+    export let CONFIG = { a: 1 };
+  `;
+  assert.equal(classifySourceFile(text, "static-data-mutable.ts"), "runtime");
+});
+
+test("classifySourceFile treats a destructured export as runtime (no false suppression)", () => {
+  const text = `
+    export const { a } = { a: 1 };
+  `;
+  assert.equal(
+    classifySourceFile(text, "static-data-destructured.ts"),
     "runtime",
   );
 });
@@ -1239,4 +1570,100 @@ test("buildBreadthReport still classifies deck-kernel type-only/barrel files as 
   assert.deepEqual(report.files[MODE.BARREL], [barrelPath]);
   assert.equal(report.runtimeEligibleCount, 0);
   assert.equal(report.actionableGapCount, 0);
+});
+
+// --- static-data / import-alias barrel integration (#1950) ------------------
+
+test("buildBreadthReport classifies an import-alias route file as barrel, not an actionable gap", () => {
+  const routePath = "src/app/api/auth/[...nextauth]/route.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [routePath],
+    loadedFiles: new Set(),
+    readFile: () =>
+      [
+        'import { handlers } from "@/auth";',
+        "",
+        "export const GET = handlers.GET;",
+        "export const POST = handlers.POST;",
+      ].join("\n"),
+  });
+
+  assert.deepEqual(report.files[MODE.BARREL], [routePath]);
+  assert.equal(report.runtimeEligibleCount, 0);
+  assert.equal(report.actionableGapCount, 0);
+});
+
+test("buildBreadthReport classifies a types-plus-static-record file as static-data, not an actionable gap", () => {
+  const chromePath = "src/lib/app-shell/chrome.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [chromePath],
+    loadedFiles: new Set(),
+    readFile: () =>
+      [
+        'export type Variant = "a" | "b";',
+        "",
+        "export const CHROME: Record<Variant, { default: string }> = {",
+        '  a: { default: "flex items-center" },',
+        '  b: { default: "flex justify-center" },',
+        "};",
+      ].join("\n"),
+  });
+
+  assert.deepEqual(report.files[MODE.STATIC_DATA], [chromePath]);
+  assert.equal(report.runtimeEligibleCount, 0);
+  assert.equal(report.actionableGapCount, 0);
+});
+
+test("buildBreadthReport counts static-data files as excluded, not runtime-eligible, alongside type-only/barrel", () => {
+  const typeOnlyPath = "src/lib/example/types.ts";
+  const barrelPath = "src/lib/example/index.ts";
+  const staticDataPath = "src/lib/example/static-data.ts";
+  const gapPath = "src/lib/example/gap.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [typeOnlyPath, barrelPath, staticDataPath, gapPath],
+    loadedFiles: new Set(),
+    readFile: (absolutePath) => {
+      if (absolutePath.endsWith("types.ts")) {
+        return "export interface Foo { id: string }";
+      }
+      if (absolutePath.endsWith("index.ts")) {
+        return 'export { thing } from "./thing";';
+      }
+      if (absolutePath.endsWith("static-data.ts")) {
+        return "export const VALUES = [1, 2, 3];";
+      }
+      return "export function unusedByTests() { return 1; }";
+    },
+  });
+
+  assert.deepEqual(report.files[MODE.TYPE_ONLY], [typeOnlyPath]);
+  assert.deepEqual(report.files[MODE.BARREL], [barrelPath]);
+  assert.deepEqual(report.files[MODE.STATIC_DATA], [staticDataPath]);
+  assert.deepEqual(report.files[MODE.GAP], [gapPath]);
+  assert.equal(report.eligibleCount, 4);
+  assert.equal(report.typeOnlyCount, 1);
+  assert.equal(report.barrelCount, 1);
+  assert.equal(report.staticDataCount, 1);
+  // Only the untyped/undataed gap file counts toward runtime eligibility.
+  assert.equal(report.runtimeEligibleCount, 1);
+  assert.equal(report.actionableGapCount, 1);
+});
+
+test("formatBreadthReport renders the static-data roll-up count", () => {
+  const staticDataPath = "src/lib/example/static-data.ts";
+  const report = buildBreadthReport({
+    repoRoot: "/repo",
+    eligibleFiles: [staticDataPath],
+    loadedFiles: new Set(),
+    readFile: () => "export const VALUES = [1, 2, 3];",
+  });
+
+  const text = formatBreadthReport(report);
+  assert.match(
+    text,
+    /Static data \(excluded, static literal records only\): 1/,
+  );
 });

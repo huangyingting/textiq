@@ -109,12 +109,19 @@ inventory instead of scraping the coverage table:
    table.
 3. Classifies every eligible file with the TypeScript compiler API into
    `type-only` (interfaces/types/ambient `declare` — nothing to unit test),
-   `barrel` (nothing but import/re-export statements — no local logic), or
-   `runtime` (has behavior that should be unit-tested).
+   `barrel` (nothing but import/re-export statements, side-effect imports, or
+   — as of #1950 — a `const` exported as a non-computed property-access alias
+   rooted in an imported binding, e.g. `export const GET = handlers.GET;` —
+   re-export glue either way, no local logic), `static-data` (as of #1950:
+   types plus `const` exports built entirely from static primitive/template
+   literals and recursively static arrays/objects — a pure data record with
+   nothing to unit test), or `runtime` (has behavior that should be
+   unit-tested).
 4. Assigns every eligible file exactly one testing mode: `unit-loaded`,
-   `type-only`, `barrel`, `mapped-e2e`, `approved-exception`, or `gap` (an
-   unresolved, actionable blind spot). E2E-mapped and approved-exception
-   files are never counted as unit-covered.
+   `type-only`, `barrel`, `static-data`, `mapped-e2e`, `approved-exception`,
+   or `gap` (an unresolved, actionable blind spot). E2E-mapped,
+   approved-exception, and static-data files are never counted as
+   unit-covered.
 
 Files opt into `mapped-e2e` or `approved-exception` with an inline marker
 comment near the top of the file (mirrors the `e2e-governance-allow` marker
@@ -235,6 +242,48 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Static-data and import-alias-barrel classification (#1950), rebased onto
+`main` (post #1970, the merged #1949 ratchet).** Before merge, #1950 was
+rebased onto a `main` that had independently gained #1970 (the merged
+#1949 ratchet, closing the loading-boundary and editor-glue exception
+candidates), raising the inherited ceiling to 60 without #1950's own gap
+closures. Two behavior-free shapes were previously misclassified as
+`runtime` purely because they contain no local functions but also weren't
+recognized as `type-only`/`barrel`: (1) route modules whose only runtime
+exports are `const` aliases to a non-computed property access on an
+imported binding (e.g. `src/app/api/auth/[...nextauth]/route.ts`'s
+`export const GET = handlers.GET;`) are re-export glue and are now folded
+into `barrel`; (2) modules containing only types plus `const` data built
+entirely from static primitive/template literals and recursively static
+arrays/objects (e.g. `src/lib/app-shell/chrome.ts`) have nothing to unit
+test and are now classified into a new `static-data` category, counted as
+excluded alongside `type-only`/`barrel` rather than as `runtime-eligible`.
+Both checks are conservative by construction: namespace imports (`import *
+as ns`), computed property access, optional chaining, calls, `await`,
+`new`, mutable (`let`/`var`) declarations, spreads, computed keys,
+getters/setters, tagged templates, and identifier-/binary-/conditional-
+dependent values all fall through to `runtime`, matched by an exhaustive
+set of lookalike fixtures in `coverage-breadth.test.mjs` that assert no
+false suppression. Re-measured directly against the rebased branch: 848
+eligible runtime source files (unchanged), 24 type-only (unchanged), **31**
+barrel (+1, the nextauth route handler), **11** static-data (new bucket —
+`src/lib/app-shell/chrome.ts`, `src/components/motion/tokens.ts`,
+`src/lib/auth/form-state.ts`, `src/lib/presentation/schema.ts`'s type
+definitions plus its single `DECK_SCHEMA_VERSION` constant,
+`src/lib/icons/data.ts`,
+`src/lib/visual/{display-styles,registry-prompt,themes}.ts`, and three
+`src/lib/document/deck-kernel/` primitive-id files — all eleven
+independently audited and confirmed to contain no functions, classes, or
+value imports), **782** runtime-eligible (down from 794), **717** loaded by
+the source unit suite (down from 728 — eleven of the twelve reclassified
+files were previously unit-loaded), 6 mapped-e2e (unchanged), 0 approved
+exceptions, and **59** actionable gap files (down from 60 — the twelfth
+reclassified file, the nextauth route handler, was the prior gap file that
+moved directly into `barrel`). `DEFAULT_MAX_GAP_FILES` was lowered from 60
+to 59 to match, with zero stale slack. This is the authoritative baseline
+going forward; the historical entries below remain only as context for how
+the ceiling evolved before #1950.
+
 **#1949 rebased onto `main` (post #1966, the merged #1948 ratchet).** #1949
 replaced the "rejected exception candidate" conclusion for nine files with
 direct coverage: `src/lib/visual/export-settings.ts` and
@@ -249,10 +298,10 @@ loaded by the source unit suite (718 #1966 baseline + 9 target files +
 `src/components/ui/skeleton.tsx`, the shared primitive closed transitively
 by the loading-boundary batch test), 6 mapped-e2e (unchanged), 0 approved
 exceptions, and **60** actionable gap files. `DEFAULT_MAX_GAP_FILES` was
-lowered from 70 to 60 to match, with zero stale slack. This is the
-authoritative baseline going forward; the `#1948 rebased onto main` numbers
-below remain in this document only as historical context for how the
-ceiling evolved.
+lowered from 70 to 60 to match, with zero stale slack. This was the
+authoritative baseline until superseded by the #1950 rebase above; the
+`#1948 rebased onto main` numbers below remain in this document only as
+historical context for how the ceiling evolved.
 
 **#1948 rebased onto `main` (post #1954).** Before merge, #1948 was rebased
 onto a `main` that had independently gained #1954 (the rebased #1947
@@ -277,10 +326,10 @@ branch-local 672 → 698 delta because several of those siblings were already
 loaded transitively via #1947/#1951/#1952 by rebase time), **6** mapped-e2e
 (up from 5), 0 approved exceptions, and **70** actionable gap files.
 `DEFAULT_MAX_GAP_FILES` was lowered from 94 to 70 to match, with zero stale
-slack. This is the authoritative baseline going forward; the branch-local
-#1948 numbers below (90, measured before #1948 was rebased onto #1954) are
-historical/superseded and remain only as context for how the ceiling
-evolved.
+slack. This was the authoritative baseline until superseded by the #1950
+rebase above; the branch-local #1948 numbers below (90, measured before
+#1948 was rebased onto #1954) are historical/superseded and remain only as
+context for how the ceiling evolved.
 
 **#1948 branch-local measurement (superseded above by the rebased
 measurement).** The prior "untestable exception" conclusion for ten
