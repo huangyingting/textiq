@@ -560,31 +560,57 @@ describe("exportDocumentAsPPTX", () => {
     assert.ok(xml.includes("<p:pic>"), "expected an image-fallback element");
   });
 
-  test("skips a visual whose SVG cannot be resolved (deck ends up with zero slides)", async () => {
+  test("falls back to a title-only slide when a single visual's SVG cannot be resolved", async () => {
     installStubs();
     const blocks: DocumentBlock[] = [
       visualBlock("missing", FIXTURES.flowchart),
     ];
     const blob = await exportDocumentAsPPTX(blocks, "Deck", () => null);
-    // Because `entries.length > 0` (a visual block was collected), the
-    // title-only fallback branch is skipped entirely; the per-entry loop
-    // then `continue`s past the unresolved SVG, so no slide is ever added.
-    // pptxgenjs still happily serializes a deck with zero slides.
     assert.ok(blob);
-    assert.deepEqual(await slideXmlEntries(blob!), []);
+    // No visual slide was actually emitted, so the deck must still contain
+    // exactly one (title-only) fallback slide rather than being empty.
+    assert.deepEqual(await slideXmlEntries(blob!), ["ppt/slides/slide1.xml"]);
+    const xml = await slideXml(blob!, 1);
+    assert.ok(xml.includes("Deck"));
+    assert.ok(!xml.includes("<p:pic>"));
   });
 
-  test("skips a visual with a zero-area viewBox (no slide is added for it)", async () => {
+  test("falls back to a title-only slide when every visual is unresolvable (zero-area viewBox and unresolved SVG mixed)", async () => {
     installStubs();
     const blocks: DocumentBlock[] = [
       textBlock("heading", "Section", 1),
       visualBlock("zero", FIXTURES.flowchart),
+      visualBlock("missing", FIXTURES.funnel),
     ];
-    const blob = await exportDocumentAsPPTX(blocks, "Deck", () =>
-      svgElement(0, 100),
+    const blob = await exportDocumentAsPPTX(blocks, "Deck", (id) =>
+      id === "zero" ? svgElement(0, 100) : null,
     );
     assert.ok(blob);
-    assert.deepEqual(await slideXmlEntries(blob!), []);
+    assert.deepEqual(await slideXmlEntries(blob!), ["ppt/slides/slide1.xml"]);
+    const xml = await slideXml(blob!, 1);
+    assert.ok(xml.includes("Deck"));
+    assert.ok(!xml.includes("<p:pic>"));
+  });
+
+  test("emits only the valid slide (no fallback) when one visual resolves and another does not", async () => {
+    installStubs();
+    const blocks: DocumentBlock[] = [
+      textBlock("heading", "Kept Section", 1),
+      visualBlock("missing", FIXTURES.flowchart),
+      textBlock("heading", "Valid Section", 1),
+      visualBlock("v1", FIXTURES.flowchart),
+    ];
+    const blob = await exportDocumentAsPPTX(blocks, "Deck", (id) =>
+      id === "v1" ? svgElement(400, 300) : null,
+    );
+    assert.ok(blob);
+    // Exactly the one valid slide is present — no title-only fallback is
+    // added since a real visual slide was already emitted.
+    assert.deepEqual(await slideXmlEntries(blob!), ["ppt/slides/slide1.xml"]);
+    const xml = await slideXml(blob!, 1);
+    assert.ok(xml.includes("Valid Section"));
+    assert.ok(!xml.includes("Kept Section"));
+    assert.ok(!xml.includes("Deck"));
   });
 
   test("still adds a (title-only) slide when image-fallback PNG rasterization fails", async () => {
