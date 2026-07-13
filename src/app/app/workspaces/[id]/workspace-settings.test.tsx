@@ -17,17 +17,19 @@
  * own `children` prop (eagerly constructed by `WorkspaceSettings` regardless
  * of what `Dialog` renders), matching `members-list.test.tsx`'s technique.
  *
- * **Real, pre-existing defect exercised (not fixed) here**: `handleDestructive`
- * wraps `await deleteWorkspace(...)` / `await leaveWorkspace(...)` in a
- * `try/catch`, but both actions *always* end by calling `redirect(...)` on
- * success (see `./actions.ts`). Per Next.js's own documentation, `redirect()`
- * throws and "should be called outside of try/catch blocks" — so on a
- * *successful* delete/leave here, the catch block intercepts that
- * intentional throw and displays it as a generic failure message, and the
- * `window.location.assign("/app/workspaces")` fallback on the line above it
- * never executes (the preceding `await` rejects first). The tests below
- * document this actual current behavior faithfully rather than the
- * (unreachable) intended one; see the final report for the defect writeup.
+ * `handleDestructive` wraps `await deleteWorkspace(...)` / `await
+ * leaveWorkspace(...)` in a `try/catch`, and both actions *always* end by
+ * calling `redirect(...)` on success (see `./actions.ts`). Next.js
+ * implements `redirect()` by throwing an error whose `digest` starts with
+ * `"NEXT_REDIRECT"`, which must propagate uncaught so the router can
+ * navigate (the same `digest`-sniffing pattern `google-sign-in-button.tsx`
+ * uses). The `redirect` stub below attaches a realistic `digest` so the
+ * tests can assert that signal escapes `handleDestructive`'s `catch` — via
+ * `react-test-renderer`'s `act()` rejecting with it, which also unmounts the
+ * tree, matching how an uncaught error propagates past a component with no
+ * error boundary in a real app — while genuine mutation failures (rejected
+ * with a plain `Error`, or a non-`Error` throw) are still caught and
+ * rendered as an actionable error banner.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -82,7 +84,11 @@ function createDefaultState(): TestState {
     calls,
     redirect(url: string): never {
       calls.push(["redirect", url]);
-      throw new Error(`NEXT_REDIRECT:${url}`);
+      // Mirror Next.js's real redirect() shape: message is just
+      // "NEXT_REDIRECT", and the routing signal lives in `digest`.
+      const error = new Error("NEXT_REDIRECT") as Error & { digest: string };
+      error.digest = `NEXT_REDIRECT;push;${url};307;`;
+      throw error;
     },
     revalidatePath(path: string) {
       calls.push(["revalidatePath", path]);
@@ -147,8 +153,6 @@ Object.defineProperty(globalThis, "window", {
     location: {
       reload: () =>
         globalForTest.__workspaceSettingsTestState.calls.push(["reload"]),
-      assign: (url: string) =>
-        globalForTest.__workspaceSettingsTestState.calls.push(["assign", url]),
     },
   },
 });
@@ -282,6 +286,22 @@ function state(): TestState {
 
 function callsOf(tag: string): unknown[][] {
   return state().calls.filter((c) => c[0] === tag);
+}
+
+/**
+ * True when `error` is the `digest`-carrying signal Next.js's `redirect()`
+ * throws to navigate to `url` — the same check `handleDestructive` and
+ * `google-sign-in-button.tsx` use to distinguish it from a genuine mutation
+ * failure.
+ */
+function isRedirectSignal(error: unknown, url: string): boolean {
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  return (
+    error instanceof Error &&
+    typeof digest === "string" &&
+    digest.startsWith("NEXT_REDIRECT") &&
+    digest.includes(`;${url};`)
+  );
 }
 
 function waitForAsyncDrain(): Promise<void> {
@@ -497,7 +517,7 @@ describe("WorkspaceSettings (owner)", () => {
     }
   });
 
-  test("confirming delete calls deleteWorkspace, but the redirect-on-success is caught by handleDestructive's try/catch (pre-existing gap): the confirm dialog closes and an error banner shows the raw redirect signal instead of navigating", async () => {
+  test("confirming delete calls deleteWorkspace and lets the on-success redirect propagate uncaught so the router can navigate", async () => {
     const renderer = mountWorkspaceSettings({
       workspaceId: "workspace-1",
       name: "Marketing",
@@ -511,24 +531,30 @@ describe("WorkspaceSettings (owner)", () => {
         findDialog(renderer).props.children as ReactNode,
         (el) => el.props.children === "Delete workspace",
       );
-      await act(async () => {
-        (confirmButton.props.onClick as () => void)();
-        await waitForAsyncDrain();
-        await waitForAsyncDrain();
-      });
+      // `deleteWorkspace` calls `redirect("/app/workspaces")` on success,
+      // which throws a NEXT_REDIRECT signal. `handleDestructive` must not
+      // swallow it, so it escapes the `act()` call here uncaught (and, with
+      // no error boundary present, unmounts the tree — matching how the
+      // signal would reach the router in a real app).
+      await assert.rejects(
+        async () =>
+          act(async () => {
+            (confirmButton.props.onClick as () => void)();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          }),
+        (err: unknown) => isRedirectSignal(err, "/app/workspaces"),
+      );
       assert.equal(callsOf("deleteWorkspaceAndDetachDocuments").length, 1);
-      assert.equal(findDialog(renderer).props.open, false);
-      // The intended fallback navigation never runs — `redirect()` rejects
-      // the preceding `await` before this line is reached.
-      assert.equal(callsOf("assign").length, 0);
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /NEXT_REDIRECT:\/app\/workspaces/);
+      assert.deepEqual(callsOf("redirect"), [["redirect", "/app/workspaces"]]);
     } finally {
+      // The tree already unmounted itself when the redirect signal
+      // propagated above; unmount() is a safe no-op here.
       act(() => renderer.unmount());
     }
   });
 
-  test("a genuine delete failure (unrelated to redirect) shows its message and does not navigate", async () => {
+  test("a genuine delete failure (unrelated to redirect) shows its message, closes the dialog, and does not navigate", async () => {
     state().deleteWorkspaceAndDetachDocuments = async () => {
       throw new Error("Workspace has active billing obligations.");
     };
@@ -552,7 +578,79 @@ describe("WorkspaceSettings (owner)", () => {
       });
       const text = JSON.stringify(renderer.toJSON());
       assert.match(text, /Workspace has active billing obligations\./);
-      assert.equal(callsOf("assign").length, 0);
+      assert.equal(findDialog(renderer).props.open, false);
+      assert.equal(callsOf("redirect").length, 0);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a non-Error delete rejection falls back to 'Action failed.'", async () => {
+    state().deleteWorkspaceAndDetachDocuments = async () => {
+      throw "nope";
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root.findByProps({ children: "Delete" }).props.onClick();
+      });
+      const confirmButton = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (el) => el.props.children === "Delete workspace",
+      );
+      await act(async () => {
+        (confirmButton.props.onClick as () => void)();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(JSON.stringify(renderer.toJSON()), /Action failed\./);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("reopening the confirm dialog after a failed delete clears the stale error banner", async () => {
+    state().deleteWorkspaceAndDetachDocuments = async () => {
+      throw new Error("Workspace has active billing obligations.");
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root.findByProps({ children: "Delete" }).props.onClick();
+      });
+      const confirmButton = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (el) => el.props.children === "Delete workspace",
+      );
+      await act(async () => {
+        (confirmButton.props.onClick as () => void)();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Workspace has active billing obligations\./,
+      );
+
+      // Retrying (reopening the confirmation dialog) clears the stale error
+      // immediately, before any new attempt is made.
+      await act(async () => {
+        renderer.root.findByProps({ children: "Delete" }).props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.doesNotMatch(
+        JSON.stringify(renderer.toJSON()),
+        /Workspace has active billing obligations\./,
+      );
     } finally {
       act(() => renderer.unmount());
     }
@@ -576,7 +674,7 @@ describe("WorkspaceSettings (non-owner member)", () => {
     }
   });
 
-  test("opening the confirm dialog shows the Leave copy, and confirming calls leaveWorkspace", async () => {
+  test("opening the confirm dialog shows the Leave copy, and confirming calls leaveWorkspace and lets the on-success redirect propagate uncaught so the router can navigate", async () => {
     const renderer = mountWorkspaceSettings({
       workspaceId: "workspace-1",
       name: "Marketing",
@@ -593,15 +691,53 @@ describe("WorkspaceSettings (non-owner member)", () => {
         dialogChildren,
         (el) => el.props.children === "Leave workspace",
       );
+      // `leaveWorkspace` also calls `redirect("/app/workspaces")` on
+      // success, and the signal must escape `handleDestructive` uncaught
+      // (see the equivalent owner/delete test above for the full rationale).
+      await assert.rejects(
+        async () =>
+          act(async () => {
+            (confirmButton.props.onClick as () => void)();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          }),
+        (err: unknown) => isRedirectSignal(err, "/app/workspaces"),
+      );
+      assert.deepEqual(callsOf("leaveWorkspaceForUser"), [
+        ["leaveWorkspaceForUser", "workspace-1", "user-1"],
+      ]);
+      assert.deepEqual(callsOf("redirect"), [["redirect", "/app/workspaces"]]);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a genuine leave failure (unrelated to redirect) shows its message, closes the dialog, and does not navigate", async () => {
+    state().leaveWorkspaceForUser = async () => {
+      throw new Error("Transfer ownership before leaving.");
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: false,
+    });
+    try {
+      act(() => {
+        renderer.root.findByProps({ children: "Leave" }).props.onClick();
+      });
+      const confirmButton = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (el) => el.props.children === "Leave workspace",
+      );
       await act(async () => {
         (confirmButton.props.onClick as () => void)();
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      assert.deepEqual(callsOf("leaveWorkspaceForUser"), [
-        ["leaveWorkspaceForUser", "workspace-1", "user-1"],
-      ]);
+      const text = JSON.stringify(renderer.toJSON());
+      assert.match(text, /Transfer ownership before leaving\./);
       assert.equal(findDialog(renderer).props.open, false);
+      assert.equal(callsOf("redirect").length, 0);
     } finally {
       act(() => renderer.unmount());
     }
