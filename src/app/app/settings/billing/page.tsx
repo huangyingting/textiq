@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { requireUser } from "@/lib/session";
-import { PLAN_NAMES } from "@/lib/billing/catalog";
+import {
+  PLAN_NAMES,
+  type Plan,
+  type PlanEntitlements,
+} from "@/lib/billing/catalog";
 import { isUnlimitedCreditsEnabled } from "@/lib/billing/config";
 import { createEntitlementFacade } from "@/lib/billing/entitlement-facade";
-import { loadAndSyncBillingState } from "@/lib/billing/service";
+import {
+  loadAndSyncBillingState,
+  type BillingSubscriptionState,
+} from "@/lib/billing/service";
 
 import { BillingActions } from "./billing-actions";
 
@@ -14,22 +22,35 @@ export const metadata: Metadata = {
   title: "Billing & Plan — TextIQ",
 };
 
-export default async function BillingPage() {
-  const sessionUser = await requireUser(redirect);
+export type BillingViewInput = {
+  plan: Plan;
+  subscription: BillingSubscriptionState | null;
+  periodEnd: Date;
+  creditBalance: number;
+  entitlements: PlanEntitlements;
+  unlimitedCredits: boolean;
+};
 
-  const billingState = await loadAndSyncBillingState(sessionUser.id).catch(() =>
-    redirect("/login"),
-  );
-
-  const plan = billingState.plan;
-  const entitlements = createEntitlementFacade(plan).entitlements;
-  const unlimitedCredits = isUnlimitedCreditsEnabled();
-  const periodEnd =
-    billingState.subscription?.currentPeriodEnd ?? billingState.periodEnd;
+/**
+ * Pure billing-state -> markup composition for {@link BillingPage} (issue
+ * #1956).
+ *
+ * Given the already-loaded plan/subscription/credit-balance/entitlement
+ * values, decides the current-plan summary (including the
+ * renewing-vs-cancelling copy), the credit usage bar/copy (including the
+ * unlimited-credits override), the plan-features checklist, and the
+ * `BillingActions` wiring. Extracted from the async default export so this
+ * composition is unit-testable without exercising `requireUser`/
+ * `loadAndSyncBillingState`, which require a live session and database.
+ */
+export function renderBillingView(input: BillingViewInput): ReactNode {
+  const { plan, subscription, creditBalance, entitlements, unlimitedCredits } =
+    input;
+  const periodEnd = subscription?.currentPeriodEnd ?? input.periodEnd;
 
   const creditsUsed = Math.max(
     0,
-    entitlements.creditsPerPeriod - billingState.creditBalance,
+    entitlements.creditsPerPeriod - creditBalance,
   );
 
   const usagePct =
@@ -73,7 +94,7 @@ export default async function BillingPage() {
           </div>
 
           {/* Subscription status */}
-          {billingState.subscription?.cancelAtPeriodEnd && (
+          {subscription?.cancelAtPeriodEnd && (
             <p className="rounded-lg bg-ds-warning-surface px-4 py-2 text-sm text-ds-warning-text">
               Your subscription will be cancelled at the end of the current
               billing period
@@ -81,7 +102,7 @@ export default async function BillingPage() {
             </p>
           )}
 
-          {periodEnd && !billingState.subscription?.cancelAtPeriodEnd && (
+          {periodEnd && !subscription?.cancelAtPeriodEnd && (
             <p className="text-sm text-ds-text-secondary">
               Renews on{" "}
               <span className="font-medium">
@@ -102,7 +123,7 @@ export default async function BillingPage() {
               <span className="text-3xl font-bold tabular-nums text-ds-text-primary">
                 {unlimitedCredits
                   ? "Unlimited"
-                  : billingState.creditBalance.toLocaleString()}
+                  : creditBalance.toLocaleString()}
               </span>
               <span className="text-sm text-ds-text-secondary">
                 {unlimitedCredits
@@ -187,9 +208,7 @@ export default async function BillingPage() {
           </h2>
           <BillingActions
             currentPlan={plan}
-            cancelAtPeriodEnd={
-              billingState.subscription?.cancelAtPeriodEnd ?? false
-            }
+            cancelAtPeriodEnd={subscription?.cancelAtPeriodEnd ?? false}
           />
         </section>
 
@@ -202,6 +221,25 @@ export default async function BillingPage() {
       </div>
     </main>
   );
+}
+
+export default async function BillingPage() {
+  const sessionUser = await requireUser(redirect);
+
+  const billingState = await loadAndSyncBillingState(sessionUser.id).catch(() =>
+    redirect("/login"),
+  );
+
+  const entitlements = createEntitlementFacade(billingState.plan).entitlements;
+
+  return renderBillingView({
+    plan: billingState.plan,
+    subscription: billingState.subscription,
+    periodEnd: billingState.periodEnd,
+    creditBalance: billingState.creditBalance,
+    entitlements,
+    unlimitedCredits: isUnlimitedCreditsEnabled(),
+  });
 }
 
 function FeatureRow({ enabled, label }: { enabled: boolean; label: string }) {

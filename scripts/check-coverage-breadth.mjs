@@ -7,7 +7,7 @@
  * nine framework/page exception-audit gaps in #1948, closed the loading-
  * boundary and editor-glue exception candidates in #1949, folded static-data
  * and import-alias-barrel classification into the breadth inventory in
- * #1950).
+ * #1950, closed brand and billing product-surface gaps in #1956).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -146,6 +146,34 @@
  * constant by hand whenever gap files are closed in the same commit; never
  * raise it to hide a regression. Use COVERAGE_BREADTH_MAX_GAP_FILES for local
  * experimentation only — do not use it to mask a real regression in CI.
+ *
+ * #1956 re-baseline (historical, pre-#1950). Rebased onto `main` after #1949
+ * (which independently lowered the inherited ceiling to 60, 728 loaded):
+ * re-measured directly against that (pre-#1950) tree, 848 eligible runtime
+ * source files, 24 type-only, 30 barrel, 794 runtime-eligible, 736 loaded, 6
+ * mapped-e2e (unchanged), 0 approved exceptions, and 52 actionable gap
+ * files. This measurement predates the mandatory #1950 rebase below and is
+ * retained only as historical context; it is no longer authoritative.
+ *
+ * #1956 re-baseline, mechanically rebased onto `main` at `969e6387` (post
+ * #1950's static-data/import-alias-barrel classification, which lowered
+ * runtime-eligible to 782 and unit-loaded to 717). #1956 closed 8
+ * actionable gaps with direct unit tests: `brand-studio-teaser.tsx`,
+ * `brand-studio.tsx`, `brands/page.tsx`, `import-document-button.tsx`,
+ * `new-document-button.tsx`, `onboarding-checklist.tsx`, and
+ * `settings/billing/page.tsx` (the seven files this issue targeted,
+ * previously rejected from mapped-E2E coverage), plus one legitimate
+ * transitive gap file, `src/app/app/brands/brand-studio-ports.ts`, whose
+ * `BrandUploadPort` contract is now genuinely exercised (not stubbed) by the
+ * new `brand-studio.test.tsx`'s logo/font upload tests. Re-measured
+ * directly against the rebased tree: 848 eligible runtime source files
+ * (unchanged), 24 type-only (unchanged), 31 barrel (unchanged), 11
+ * static-data (unchanged), 782 runtime-eligible (unchanged — #1956 adds no
+ * new source files, only tests and extractions within already-eligible
+ * files), 725 loaded by the source unit suite (717 #1950 baseline + 8 from
+ * #1956), 6 mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable
+ * gap files. `DEFAULT_MAX_GAP_FILES` is lowered from 59 to 51 to match, with
+ * zero stale slack.
  */
 
 import process from "node:process";
@@ -159,7 +187,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 59;
+export const DEFAULT_MAX_GAP_FILES = 51;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {

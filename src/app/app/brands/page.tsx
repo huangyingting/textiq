@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { loadBrandStudioViewModel } from "@/lib/brand-studio/loader";
+import type { BrandStudioViewModel } from "@/lib/brand-studio/view-model";
 import { requireUser } from "@/lib/session";
 import { BrandStudio } from "./brand-studio";
 import { BrandStudioTeaser } from "./brand-studio-teaser";
@@ -11,10 +13,20 @@ export const metadata: Metadata = {
   title: "Brand Studio — TextIQ",
 };
 
-export default async function BrandsPage() {
-  const user = await requireUser(redirect);
-  const viewModel = await loadBrandStudioViewModel(user.id);
-
+/**
+ * Pure view-model -> markup composition for {@link BrandsPage} (issue
+ * #1956).
+ *
+ * Given the already-loaded Brand Studio view model, decides whether the
+ * editable `BrandStudio` (with its initial brands/font-upload entitlement)
+ * or the read-only `BrandStudioTeaser` renders. Extracted from the async
+ * default export so the entitlement gating is unit-testable without
+ * exercising `requireUser`/`loadBrandStudioViewModel`, which require a live
+ * session and database.
+ */
+export function renderBrandsPageView(
+  viewModel: BrandStudioViewModel,
+): ReactNode {
   return (
     <main className="flex flex-1 flex-col items-center bg-ds-surface-sunken px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex w-full max-w-4xl flex-col gap-8">
@@ -46,4 +58,11 @@ export default async function BrandsPage() {
       </div>
     </main>
   );
+}
+
+export default async function BrandsPage() {
+  const user = await requireUser(redirect);
+  const viewModel = await loadBrandStudioViewModel(user.id);
+
+  return renderBrandsPageView(viewModel);
 }

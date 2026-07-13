@@ -80,6 +80,40 @@ function emptyInput(): BrandFormState {
   };
 }
 
+/**
+ * Quantizes a logo image's pixel data down to up to 6 dominant hex colors,
+ * sorted by frequency. Extracted from `handleLogoUpload`'s `img.onload`
+ * (issue #1956) so the bucket-counting/sorting algorithm is directly
+ * unit-testable without a canvas/Image — the orchestration that produces
+ * `data` (drawing the uploaded logo onto an offscreen canvas and reading
+ * `ImageData`) still requires a real `document`/`Image`/`CanvasRenderingContext2D`
+ * and remains inline in `handleLogoUpload`.
+ *
+ * Samples every 8th pixel (`4 * 8` = 32 bytes) for speed, skips
+ * near-transparent (`alpha < 128`), near-black, and near-white pixels so the
+ * palette favors the logo's actual brand colors, and quantizes each channel
+ * to 16 levels (`(c >> 4) << 4`) to merge near-duplicate shades into the same
+ * bucket.
+ */
+export function extractPaletteFromImageData(data: Uint8ClampedArray): string[] {
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < data.length; i += 4 * 8) {
+    const a = data[i + 3];
+    if (a < 128) continue;
+    const qr = (data[i] >> 4) << 4;
+    const qg = (data[i + 1] >> 4) << 4;
+    const qb = (data[i + 2] >> 4) << 4;
+    if (qr < 20 && qg < 20 && qb < 20) continue; // skip near-black
+    if (qr > 235 && qg > 235 && qb > 235) continue; // skip near-white
+    const hex = `#${qr.toString(16).padStart(2, "0")}${qg.toString(16).padStart(2, "0")}${qb.toString(16).padStart(2, "0")}`;
+    buckets.set(hex, (buckets.get(hex) ?? 0) + 1);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([hex]) => hex);
+}
+
 // ---------------------------------------------------------------------------
 // Brand preview mini-visual card
 // ---------------------------------------------------------------------------
@@ -203,22 +237,7 @@ function BrandForm({
           if (!ctx) return;
           ctx.drawImage(img, 0, 0, SIZE, SIZE);
           const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
-          const buckets = new Map<string, number>();
-          for (let i = 0; i < data.length; i += 4 * 8) {
-            const a = data[i + 3];
-            if (a < 128) continue;
-            const qr = (data[i] >> 4) << 4;
-            const qg = (data[i + 1] >> 4) << 4;
-            const qb = (data[i + 2] >> 4) << 4;
-            if (qr < 20 && qg < 20 && qb < 20) continue; // skip near-black
-            if (qr > 235 && qg > 235 && qb > 235) continue; // skip near-white
-            const hex = `#${qr.toString(16).padStart(2, "0")}${qg.toString(16).padStart(2, "0")}${qb.toString(16).padStart(2, "0")}`;
-            buckets.set(hex, (buckets.get(hex) ?? 0) + 1);
-          }
-          const top = Array.from(buckets.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 6)
-            .map(([hex]) => hex);
+          const top = extractPaletteFromImageData(data);
           if (top.length >= 2) {
             setForm((f) => ({ ...f, palette: top }));
           }
