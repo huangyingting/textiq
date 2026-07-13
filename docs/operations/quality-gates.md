@@ -242,6 +242,58 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Public-render page/lightbox/fallback direct coverage (#1960), rebased onto
+`main` (post #1956, the merged brand/billing product-surface ratchet).**
+Five files were previously exercised only by E2E `notFound()` paths, leaving
+their success/composition behavior untested by the unit suite:
+`src/app/embed/[shareId]/page.tsx`,
+`src/app/present/[shareId]/embed/page.tsx`,
+`src/app/present/[shareId]/page.tsx`, `src/app/share/[shareId]/page.tsx`,
+and `src/app/share/[shareId]/share-lightbox.tsx`. #1960 added direct
+module-hook/server-component tests for the four page modules (stubbing
+`next/navigation`, `@/app/public-abuse`, `@/lib/public-render/resolver`, and
+`@/lib/share-passcode-server` while importing every other real dependency —
+`SharePasscodeGate`, `PublicPresentViewer`, `LexicalReadOnly`,
+`MadeWithBadge`, `ShareLightbox` — transitively through the real page
+module) covering `generateMetadata` wiring, the abuse-budget short-circuit,
+resolver call-argument wiring, the passcode-required gate (mode/returnTo/
+resolved-shareId/query-driven alert variants), `notFound()` for other deny
+reasons and defensive projection mismatches, and the successful
+embed-vs-full-present composition (HUD suppressed vs. visible, recovery
+passthrough, attribution badge). `share-lightbox.tsx` needed a real DOM
+(portal target, `querySelectorAll`, focus management) that
+`react-test-renderer` cannot provide, so it was tested with `happy-dom`'s
+`Window` (already a transitive dependency exercised directly by
+`inline-text-dom-adapter.test.ts`) driven by `react-dom/client`'s
+`createRoot` and React 19's built-in `act`, with `matchMedia` polyfilled to
+force `framer-motion`'s reduced-motion branch for deterministic output —
+covering open/close via click, keyboard (Enter/Space), Escape, and backdrop
+mousedown, the Tab focus trap, focus restoration, body-scroll-lock
+toggling, and multi-image label switching. A sixth file,
+`src/components/not-found-fallback.tsx`, was already `unit-loaded`
+transitively through `src/app/not-found.test.tsx`; #1960 added a direct
+`not-found-fallback.test.tsx` importing it on its
+own for completeness, but this does not change the loaded count. This
+branch was originally rebased onto `main` at `969e6387` (post #1950's
+static-data/import-alias-barrel classification: 782 runtime-eligible, 717
+loaded), closing 5 actionable gaps (the sixth target file being already
+loaded) for 722 loaded / 54 actionable gap files at that time. That 722/54
+measurement is now historical: this commit was mechanically rebased a
+second time onto `main` at `d9844dbf` (#1956/#1971, which closed 8
+brand/billing/product-surface gaps, raising unit-loaded to 725 and lowering
+the gap ceiling to 51 with zero gap-count change of its own to the six
+#1960 target files). Re-measured directly against this twice-rebased tree,
+the same five newly-tested target files leave 848 eligible runtime source
+files (unchanged), 24 type-only (unchanged), 31 barrel (unchanged), 11
+static-data (unchanged), 782 runtime-eligible (unchanged), **730** loaded by
+the source unit suite (725 #1956 baseline + 5 from #1960), 6 mapped-e2e
+(unchanged), 0 approved exceptions, and **46** actionable gap files.
+`DEFAULT_MAX_GAP_FILES` was lowered from 51 to 46 to match, with zero stale
+slack. This is the authoritative baseline going forward; the 722/54
+pre-second-rebase measurement above and the #1956/#1950 numbers below
+remain in this document only as historical context for how the ceiling
+evolved.
+
 **Static-data and import-alias-barrel classification (#1950), rebased onto
 `main` (post #1970, the merged #1949 ratchet).** Before merge, #1950 was
 rebased onto a `main` that had independently gained #1970 (the merged
@@ -280,9 +332,9 @@ files were previously unit-loaded), 6 mapped-e2e (unchanged), 0 approved
 exceptions, and **59** actionable gap files (down from 60 — the twelfth
 reclassified file, the nextauth route handler, was the prior gap file that
 moved directly into `barrel`). `DEFAULT_MAX_GAP_FILES` was lowered from 60
-to 59 to match, with zero stale slack. This is the authoritative baseline
-going forward; the historical entries below remain only as context for how
-the ceiling evolved before #1950.
+to 59 to match, with zero stale slack. This was the authoritative baseline
+until superseded by the #1960 measurement above; the historical entries
+below remain only as context for how the ceiling evolved before #1950.
 
 **#1956 rebased onto `main` (post #1969, the merged #1950 static-data/
 import-alias-barrel classification).** #1956 was originally measured against
@@ -308,10 +360,10 @@ mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable gap files.
 `DEFAULT_MAX_GAP_FILES` was lowered from 59 to 51 to match, with zero stale
 slack. #1956 added no
 `mapped-e2e`/`approved-exception` markers and did not touch the
-line/branch/function percentage floors. This is the authoritative baseline
-going forward; the pre-rebase 736/52 measurement above and the #1950/#1949
-numbers below remain in this document only as historical context for how the
-ceiling evolved.
+line/branch/function percentage floors. This was the authoritative baseline
+until superseded by the #1960 rebase above; the pre-rebase 736/52
+measurement above and the #1950/#1949 numbers below remain in this document
+only as historical context for how the ceiling evolved.
 
 **#1949 rebased onto `main` (post #1966, the merged #1948 ratchet).** #1949
 replaced the "rejected exception candidate" conclusion for nine files with

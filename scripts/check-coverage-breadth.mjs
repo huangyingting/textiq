@@ -7,7 +7,8 @@
  * nine framework/page exception-audit gaps in #1948, closed the loading-
  * boundary and editor-glue exception candidates in #1949, folded static-data
  * and import-alias-barrel classification into the breadth inventory in
- * #1950, closed brand and billing product-surface gaps in #1956).
+ * #1950, closed brand and billing product-surface gaps in #1956, closed the
+ * six public-render page/lightbox/fallback exception candidates in #1960).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -17,8 +18,40 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (59) is #1950 rebased onto `main` after #1970 (the
- * merged #1949 ratchet). #1950 widened `barrel` to also cover
+ * The baseline below (46) is #1960 rebased onto `main` after #1956 (the
+ * merged brand/billing product-surface ratchet). #1960 added direct
+ * module-hook/server-component tests for the five files that were
+ * previously only exercised by E2E `notFound()` paths — `src/app/embed/
+ * [shareId]/page.tsx`, `src/app/present/[shareId]/embed/page.tsx`,
+ * `src/app/present/[shareId]/page.tsx`, `src/app/share/[shareId]/page.tsx`,
+ * and `src/app/share/[shareId]/share-lightbox.tsx` (the last via a real-DOM
+ * `happy-dom` + `react-dom/client` harness for its portal/focus/keyboard
+ * interactions) — plus a direct render test for
+ * `src/components/not-found-fallback.tsx`, which was already unit-loaded
+ * transitively through `src/app/not-found.test.tsx` and so does not change
+ * the loaded count on its own. This branch was originally rebased onto
+ * `main` at `969e6387` (post #1950's static-data/import-alias-barrel
+ * classification: 782 runtime-eligible, 717 loaded), closing 5 actionable
+ * gaps for 722 loaded / 54 actionable gap files at that time. That 722/54
+ * measurement is now historical: this commit was mechanically rebased a
+ * second time onto `main` (#1956, which closed 8 brand/billing/
+ * product-surface gaps, raising unit-loaded to 725 and lowering the gap
+ * ceiling to 51 with zero gap-count change of its own to the six #1960
+ * target files). Re-measured directly against this twice-rebased tree, the
+ * same five newly-tested target files leave 848 eligible runtime source
+ * files, 24 type-only, 31 barrel, 11 static-data, 782 runtime-eligible (all
+ * unchanged), 730 loaded by the source unit suite (725 #1956 baseline + 5
+ * from #1960), 6 mapped-e2e (unchanged), 0 approved exceptions, leaving 46
+ * actionable gap files (`DEFAULT_MAX_GAP_FILES` was lowered from 51 to 46 to
+ * match, with zero stale slack). This is the authoritative baseline going
+ * forward; the historical entries below (including #1960's own pre-second-
+ * rebase 722/54 measurement) remain only as context for how the ceiling
+ * evolved.
+ *
+ * The baseline prior to #1960's second rebase (51) is #1956 rebased onto
+ * `main` after #1950 (see below); the baseline prior to that (59) is #1950
+ * rebased onto `main` after #1970 (the merged #1949 ratchet). #1950 widened
+ * `barrel` to also cover
  * re-export glue built from `const` aliases to non-computed property
  * accesses on imported bindings (e.g.
  * `src/app/api/auth/[...nextauth]/route.ts`'s `export const GET =
@@ -42,9 +75,8 @@
  * approved exceptions, leaving 59 actionable gap files (`DEFAULT_MAX_GAP_FILES`
  * was lowered from 60 to 59 to match — the twelfth reclassified file, the
  * nextauth route handler, was the prior gap file that moved directly into
- * `barrel`, with zero stale slack). This is the authoritative baseline going
- * forward; the historical entries below remain only as context for how the
- * ceiling evolved before #1950.
+ * `barrel`, with zero stale slack). This was the authoritative baseline
+ * until superseded by the #1960 ratchet above.
  *
  * The baseline prior to #1950 (60) is #1949 rebased onto `main` after #1966
  * (the merged #1948 ratchet). #1949 replaced the "rejected exception
@@ -173,7 +205,8 @@
  * files), 725 loaded by the source unit suite (717 #1950 baseline + 8 from
  * #1956), 6 mapped-e2e (unchanged), 0 approved exceptions, and 51 actionable
  * gap files. `DEFAULT_MAX_GAP_FILES` is lowered from 59 to 51 to match, with
- * zero stale slack.
+ * zero stale slack. This was the authoritative baseline until superseded by
+ * the #1960 second-rebase ratchet above.
  */
 
 import process from "node:process";
@@ -187,7 +220,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 51;
+export const DEFAULT_MAX_GAP_FILES = 46;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
