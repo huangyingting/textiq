@@ -242,6 +242,47 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Documents/dashboard management-UI direct coverage (#1961), rebased onto
+`main` (post #1972, the merged #1957 workspace/dashboard-page ratchet).**
+Nine document-management files had no unit coverage at all: `document-card.tsx`,
+`document-grid.tsx`, `document-list.tsx`, `document-list-toolbar.tsx`,
+`document-list-undo-toast.tsx`, `documents/[id]/share-button.tsx`,
+`documents/[id]/tag-control.tsx`, `documents/[id]/version-history-panel.tsx`,
+and `trash/trash-list.tsx`. #1961 added direct, behavior-asserting unit tests
+for all nine (list search/filter/sort/view/URL/empty states, card
+menu/rename/move/trash/optimistic behavior, undo-toast portal lifecycle,
+share visibility/passcode/link/copy flows, tag autocomplete, version
+restore, and trash restore/permanent-delete confirmation), stubbing every
+already-covered server action/service they call via a new shared
+`@/test/module-stub` helper rather than re-driving it. This closed the same
+9 actionable gaps plus one legitimate transitive gap file,
+`src/components/share/social-share-menu.tsx`, whose presence-gating and
+intent-link rendering is now genuinely exercised (not stubbed) by the new
+`share-button.test.tsx`'s toggled-on/disabled-prompt tests. This branch was
+originally rebased onto `main` at `d9844dbf` (post #1956's brand/billing
+product-surface ratchet: 782 runtime-eligible, 725 loaded), closing the same
+10 gaps for 735 loaded / 41 actionable gap files at that time, then
+mechanically rebased a second time onto `main` at `90a23fcc` (#1960/#1975,
+which closed 5 public-render gaps of its own, raising unit-loaded to 730 and
+lowering the gap ceiling to 46 with zero gap-count change of its own to the
+nine #1961 target files), measuring 740 loaded / 36 gap at that time (see
+the superseded entry below). `main` then independently gained #1972 (the
+merged #1957 ratchet, closing nine workspace/dashboard-page gaps and raising
+unit-loaded to 739 / lowering the ceiling to 37, with zero gap-count change
+of its own to the #1961 target files). Rebased a third time onto that
+`main`, and re-measured directly against this tree, the same nine
+newly-tested target files plus the one transitive closure leave 848
+eligible runtime source files (unchanged), 24 type-only (unchanged), 31
+barrel (unchanged), 11 static-data (unchanged), 782 runtime-eligible
+(unchanged), **749** loaded by the source unit suite (739 #1957 baseline +
+10 from #1961), 6 mapped-e2e (unchanged), 0 approved exceptions, and **27**
+actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 37 to 27 to
+match, with zero stale slack. This is the authoritative baseline going
+forward; the historical entries below (including this branch's own
+pre-third-rebase 735/41 and 740/36 measurements, and the #1957/#1960/
+#1956/#1950 numbers further below) remain in this document only as
+historical context for how the ceiling evolved.
+
 **#1957 rebased onto `main` (post #1975, the merged #1960 ratchet).** Before
 merge, #1957 was rebased onto a `main` that had independently gained #1975
 (the merged #1960 ratchet, closing public-render page/lightbox/fallback
@@ -312,9 +353,48 @@ actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 46 to
 remain the durable, real improvement from #1957; the five transitive files'
 brief 739/32-then-744/32 loaded-credit was never true behavioral coverage
 and has been given back to fix the coverage-floor regression it caused.
-This is the authoritative baseline going forward; the measurements above
-and the #1960/#1956/#1950 numbers below remain in this
-document only as historical context for how the ceiling evolved.
+This was the authoritative baseline until superseded by the #1961 third
+rebase above; the measurements above and the #1960/#1956/#1950 numbers below
+remain in this document only as historical context for how the ceiling
+evolved.
+
+**#1961 rebased onto `main` (post #1960, the merged public-render
+page/lightbox/fallback ratchet, before #1972/#1957 landed).** Nine
+document-management files had no unit coverage at all: `document-card.tsx`,
+`document-grid.tsx`, `document-list.tsx`, `document-list-toolbar.tsx`,
+`document-list-undo-toast.tsx`, `documents/[id]/share-button.tsx`,
+`documents/[id]/tag-control.tsx`, `documents/[id]/version-history-panel.tsx`,
+and `trash/trash-list.tsx`. #1961 added direct, behavior-asserting unit tests
+for all nine (list search/filter/sort/view/URL/empty states, card
+menu/rename/move/trash/optimistic behavior, undo-toast portal lifecycle,
+share visibility/passcode/link/copy flows, tag autocomplete, version
+restore, and trash restore/permanent-delete confirmation), stubbing every
+already-covered server action/service they call via a new shared
+`@/test/module-stub` helper rather than re-driving it. This closed the same
+9 actionable gaps plus one legitimate transitive gap file,
+`src/components/share/social-share-menu.tsx`, whose presence-gating and
+intent-link rendering is now genuinely exercised (not stubbed) by the new
+`share-button.test.tsx`'s toggled-on/disabled-prompt tests. This branch was
+originally rebased onto `main` at `d9844dbf` (post #1956's brand/billing
+product-surface ratchet: 782 runtime-eligible, 725 loaded), closing the
+same 10 gaps for 735 loaded / 41 actionable gap files at that time. That
+735/41 measurement is now historical: this commit was mechanically rebased
+a second time onto `main` (#1960, which closed 5 public-render gaps of its
+own, raising unit-loaded to 730 and lowering the gap ceiling to 46 with
+zero gap-count change of its own to the nine #1961 target files).
+Re-measured directly against this twice-rebased tree, the same nine
+newly-tested target files plus the one transitive closure left 848
+eligible runtime source files (unchanged), 24 type-only (unchanged), 31
+barrel (unchanged), 11 static-data (unchanged), 782 runtime-eligible
+(unchanged), **740** loaded by the source unit suite (730 #1960 baseline +
+10 from #1961), 6 mapped-e2e (unchanged), 0 approved exceptions, and **36**
+actionable gap files. `DEFAULT_MAX_GAP_FILES` was lowered from 46 to 36 to
+match at the time. This was the authoritative baseline until superseded by
+the #1961 third rebase above (`main` independently gained #1972/#1957 in
+the interim, ratcheting the ceiling to 37 before this branch's own third
+rebase closed it further to 27); the 735/41 pre-second-rebase measurement
+and the #1960/#1956/#1950 numbers below remain in this document only as
+historical context for how the ceiling evolved.
 
 **Public-render page/lightbox/fallback direct coverage (#1960), rebased onto
 `main` (post #1956, the merged brand/billing product-surface ratchet).**

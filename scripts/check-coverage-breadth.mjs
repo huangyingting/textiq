@@ -10,7 +10,8 @@
  * #1950, closed brand and billing product-surface gaps in #1956, closed the
  * six public-render page/lightbox/fallback exception candidates in #1960,
  * ratcheted again for direct workspace/dashboard page and member-interaction
- * coverage in #1957).
+ * coverage in #1957, closed nine dashboard/document-management-UI gaps in
+ * #1961).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -20,7 +21,45 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (37) is #1957 rebased onto `main` after
+ * The baseline below (27) is #1961 rebased onto `main` after #1972 (the
+ * merged #1957 workspace/dashboard-page ratchet). #1961 closes 9
+ * dashboard/document-management-UI gaps with direct behavior tests:
+ * `document-card.tsx`, `document-grid.tsx`, `document-list.tsx`,
+ * `document-list-toolbar.tsx`, `document-list-undo-toast.tsx`,
+ * `documents/[id]/share-button.tsx`, `documents/[id]/tag-control.tsx`,
+ * `documents/[id]/version-history-panel.tsx`, and `trash/trash-list.tsx`
+ * (all nine previously untested; every server action they call was already
+ * covered elsewhere and is stubbed via the new shared `@/test/module-stub`
+ * helper), plus one legitimate transitive gap file,
+ * `src/components/share/social-share-menu.tsx`, whose presence-gating and
+ * intent-link rendering is now genuinely exercised (not stubbed) by the new
+ * `share-button.test.tsx`'s toggled-on/disabled-prompt tests. This branch
+ * was originally rebased onto `main` at `d9844dbf` (post #1956's brand/
+ * billing product-surface ratchet: 782 runtime-eligible, 725 loaded),
+ * closing the same 9 direct gaps plus the transitive one for 735 loaded /
+ * 41 actionable gap files at that time, then mechanically rebased a second
+ * time onto `main` at `90a23fcc` (#1960/#1975, which closed 5 public-render
+ * gaps of its own, raising unit-loaded to 730 and lowering the gap ceiling
+ * to 46 with zero gap-count change of its own to the nine #1961 target
+ * files), measuring 740 loaded / 36 gap at that time (see the superseded
+ * entry below). `main` then independently gained #1972 (the merged #1957
+ * ratchet, closing nine workspace/dashboard-page gaps and raising
+ * unit-loaded to 739 / lowering the ceiling to 37, with zero gap-count
+ * change of its own to the #1961 target files). Rebased a third time onto
+ * that `main`, and re-measured directly against this tree, the same nine
+ * newly-tested target files plus the one transitive closure leave 848
+ * eligible runtime source files, 24 type-only, 31 barrel, 11 static-data,
+ * 782 runtime-eligible (all unchanged), **749** loaded by the source unit
+ * suite (739 #1957 baseline + 10 from #1961), 6 mapped-e2e (unchanged), 0
+ * approved exceptions, leaving **27** actionable gap files.
+ * `DEFAULT_MAX_GAP_FILES` was lowered from 37 to **27** to match, with zero
+ * stale slack. This is the authoritative baseline going forward; the
+ * historical entries below (including this branch's own pre-third-rebase
+ * 735/41 and 740/36 measurements) remain only as context for how the
+ * ceiling evolved.
+ *
+ * The baseline prior to #1961's third rebase (37) is #1957 rebased onto
+ * `main` after
  * #1975 (the merged #1960 ratchet). #1957 added direct behavior coverage for
  * nine previously mapped-E2E-only workspace/dashboard files
  * (`src/app/app/page.tsx`, `src/app/app/join/[token]/page.tsx`,
@@ -66,10 +105,35 @@
  * source unit suite (730 #1960 baseline + 9 from #1957), 6 mapped-e2e
  * (unchanged), 0 approved exceptions, leaving 37 actionable gap
  * files (`DEFAULT_MAX_GAP_FILES` was lowered from 46 to 37 to
- * match, with zero stale slack). This is the authoritative baseline going
- * forward; the historical entries below (including this branch's own
- * earlier 739/32-then-744/32 transitive-credit measurements) remain only as
- * context for how the ceiling evolved.
+ * match, with zero stale slack). This was the authoritative baseline until
+ * superseded by the #1961 third rebase above; the historical entries below
+ * (including this branch's own earlier 739/32-then-744/32 transitive-credit
+ * measurements) remain only as context for how the ceiling evolved.
+ *
+ * The baseline prior to #1961's third rebase (36) is #1961 rebased onto
+ * `main` after #1960 (the merged public-render page/lightbox/fallback
+ * ratchet, before #1972/#1957 landed). #1961 closed the same 9
+ * dashboard/document-management-UI gaps with direct behavior tests plus one
+ * legitimate transitive gap file, `src/components/share/social-share-menu.tsx`,
+ * whose presence-gating and intent-link rendering is now genuinely
+ * exercised (not stubbed) by `share-button.test.tsx`'s toggled-on/
+ * disabled-prompt tests. This branch was originally rebased onto `main` at
+ * `d9844dbf` (post #1956's brand/billing product-surface ratchet: 782
+ * runtime-eligible, 725 loaded), closing the same 9 direct gaps plus the
+ * transitive one for 735 loaded / 41 actionable gap files at that time, then
+ * mechanically rebased a second time onto `main` (#1960, which closed 5
+ * public-render gaps of its own, raising unit-loaded to 730 and lowering the
+ * gap ceiling to 46 with zero gap-count change of its own to the nine #1961
+ * target files). Re-measured directly against this twice-rebased tree, the
+ * same nine newly-tested target files plus the one transitive closure left
+ * 848 eligible runtime source files, 24 type-only, 31 barrel, 11
+ * static-data, 782 runtime-eligible (all unchanged), 740 loaded by the
+ * source unit suite (730 #1960 baseline + 10 from #1961), 6 mapped-e2e
+ * (unchanged), 0 approved exceptions, and 36 actionable gap files
+ * (`DEFAULT_MAX_GAP_FILES` was lowered from 46 to 36 to match at the time).
+ * This was the authoritative baseline until superseded by the #1961 third
+ * rebase above (`main` independently gained #1972/#1957 in the interim); the
+ * 735/41 pre-second-rebase measurement remains only as historical context.
  *
  * The baseline below (46) is #1960 rebased onto `main` after #1956 (the
  * merged brand/billing product-surface ratchet). #1960 added direct
@@ -278,7 +342,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 37;
+export const DEFAULT_MAX_GAP_FILES = 27;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
