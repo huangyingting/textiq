@@ -3,7 +3,8 @@
 /**
  * Coverage breadth non-regression gate (#1896, widened to deck-kernel in
  * #1925, ratcheted to the authoritative merged Wave 5 baseline in #1943,
- * ratcheted again for direct visual-export/editor coverage in #1947).
+ * ratcheted again for direct visual-export/editor coverage in #1947, closed
+ * nine framework/page exception-audit gaps in #1948).
  *
  * Runs the source unit test suite through the `node:test` `run()` API,
  * builds the structured breadth inventory from `scripts/coverage-breadth.mjs`,
@@ -13,11 +14,46 @@
  * existing gap closed (#1896 scope: visibility + non-regression, not a full
  * backfill).
  *
- * The baseline below (94) is #1947 rebased onto `main` after #1951 and #1952
- * independently landed their own gap-closing coverage (client runtime hooks
- * and server loader contracts, respectively) without lowering the 117
- * ceiling they inherited from #1943. #1947 itself added direct unit coverage
- * for five previously-untested files (`src/lib/visual/document-export-targets.ts`,
+ * The baseline below (70) is #1948 rebased onto `main` after #1954
+ * (the rebased #1947 ratchet, which itself absorbed #1951 and #1952)
+ * independently raised the inherited ceiling to 94 without #1948's own gap
+ * closures. #1948 replaced the "untestable exception" conclusion for ten
+ * framework/page files with direct coverage: nine files
+ * (`src/app/layout.tsx`, `error.tsx`, `not-found.tsx`, `signout/route.ts`,
+ * `forgot-password/page.tsx`, `reset-password/page.tsx`, `visuals/page.tsx`,
+ * `src/components/site-header.tsx`, `src/app/app/trash/page.tsx`) gained
+ * direct module-hook/server-component render tests, and the tenth
+ * (`src/app/page.tsx`) gained a `coverage-breadth: mapped-e2e` marker
+ * referencing the always-running `e2e/public-render/public-pages.spec.ts`.
+ * Re-measured directly against the rebased branch: 848 eligible runtime
+ * source files under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible,
+ * 718 loaded by the source unit suite (695 #1954 baseline + 23 from #1948 —
+ * some sibling files the original #1948 measurement counted as newly loaded
+ * were already loaded transitively via #1947/#1951/#1952 by rebase time), 6
+ * mapped-e2e (up from 5), 0 approved exceptions, leaving 70 actionable gap
+ * files (`DEFAULT_MAX_GAP_FILES` was lowered from 94 to 70 to match, with
+ * zero stale slack). This is the authoritative baseline going forward; the
+ * branch-local #1948 numbers below (90, measured before #1948 was rebased
+ * onto #1954) are historical/superseded and remain only as context for how
+ * the ceiling evolved.
+ *
+ * #1948 branch-local measurement (superseded above by the rebased
+ * measurement): added direct unit/render tests for the same nine
+ * previously-gap framework files and the same `src/app/page.tsx`
+ * mapped-e2e marker described above. Re-measured on top of the #1943
+ * baseline (before #1947/#1951/#1952/#1954 existed): 848 eligible runtime
+ * source files, 24 type-only, 30 barrel, 794 runtime-eligible, 698 loaded by
+ * the source unit suite (up from 672), 6 mapped-e2e (up from 5), 0 approved
+ * exceptions, leaving 90 actionable gap files (`DEFAULT_MAX_GAP_FILES` was
+ * lowered from 117 to 90 to match at the time). That number is historical
+ * and no longer reflects `main`.
+ *
+ * The baseline prior to #1948 (94) is #1947 rebased onto `main` after #1951
+ * and #1952 independently landed their own gap-closing coverage (client
+ * runtime hooks and server loader contracts, respectively) without lowering
+ * the 117 ceiling they inherited from #1943. #1947 itself added direct unit
+ * coverage for five previously-untested files
+ * (`src/lib/visual/document-export-targets.ts`,
  * `src/app/app/documents/[id]/visual-context-popover-hooks.ts`,
  * `src/app/app/documents/[id]/visual-panel-context.tsx`,
  * `src/app/app/documents/[id]/source-block-jump.tsx`,
@@ -73,7 +109,7 @@ import {
 } from "./coverage-breadth.mjs";
 import { scanRepositoryRoots } from "./source-scan-utils.mjs";
 
-export const DEFAULT_MAX_GAP_FILES = 94;
+export const DEFAULT_MAX_GAP_FILES = 70;
 export const MAX_GAP_ENV_KEY = "COVERAGE_BREADTH_MAX_GAP_FILES";
 
 export function parseMaxGapFiles(env = process.env) {
