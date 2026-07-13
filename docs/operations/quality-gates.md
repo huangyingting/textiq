@@ -235,6 +235,25 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**#1949 rebased onto `main` (post #1966, the merged #1948 ratchet).** #1949
+replaced the "rejected exception candidate" conclusion for nine files with
+direct coverage: `src/lib/visual/export-settings.ts` and
+`src/app/app/documents/[id]/insert-visual-plugin.tsx` gained real headless-
+Lexical/React-render tests, and all seven route `loading.tsx` boundaries
+(`app`, `documents/[id]`, `brands`, `settings`, `settings/billing`,
+`workspaces`, `workspaces/[id]`) gained a single batch-render test asserting
+distinct accessible labels/status/busy semantics and meaningful skeleton
+structure. Re-measured directly against the rebased branch: 848 eligible
+runtime source files, 24 type-only, 30 barrel, 794 runtime-eligible, **728**
+loaded by the source unit suite (718 #1966 baseline + 9 target files +
+`src/components/ui/skeleton.tsx`, the shared primitive closed transitively
+by the loading-boundary batch test), 6 mapped-e2e (unchanged), 0 approved
+exceptions, and **60** actionable gap files. `DEFAULT_MAX_GAP_FILES` was
+lowered from 70 to 60 to match, with zero stale slack. This is the
+authoritative baseline going forward; the `#1948 rebased onto main` numbers
+below remain in this document only as historical context for how the
+ceiling evolved.
+
 **#1948 rebased onto `main` (post #1954).** Before merge, #1948 was rebased
 onto a `main` that had independently gained #1954 (the rebased #1947
 ratchet, itself absorbing #1951 and #1952), raising the inherited ceiling to
