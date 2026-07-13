@@ -242,6 +242,54 @@ suite a second time. This merged-tree measurement is the authoritative
 baseline going forward; the branch-local #1933 numbers above remain in this
 document only as historical context for how the ceiling evolved.
 
+**Visual popover/canvas/export-dialog direct coverage (#1963), mechanically
+rebased onto `main` at `67f9311a` (post #1978, which folds in #1958's nine
+core-editor-interaction closures on top of #1957/#1961/#1959/#1960/#1962 and
+their dependents).** Before this rebase, #1978 had already measured 848
+eligible runtime source files, 24 type-only, 31 barrel, 11 static-data, 782
+runtime-eligible, 769 loaded by the source unit suite, 6 mapped-e2e, 0
+approved exceptions, and 7 actionable gap files against that tree:
+`src/app/api/slide-assets/[documentId]/[...path]/route.ts`,
+`src/app/app/documents/[id]/visual-context-popover-panels.tsx`,
+`visual-context-popover.tsx`, `visual-editor.tsx`,
+`src/components/visual/export-dialog.tsx`, `export-menu.tsx`, and
+`src/scripts/audit-persisted-schema.ts`. #1963 added direct,
+behavior-asserting unit tests for four of those seven previously-untested
+large visual-editing components: `src/app/app/documents/[id]/
+visual-context-popover.tsx`, `src/app/app/documents/[id]/
+visual-context-popover-panels.tsx`, `src/app/app/documents/[id]/
+visual-editor.tsx`, and `src/components/visual/export-dialog.tsx` (popover
+open/close/panel-switching/brand/context-sync/AI-generation/error/
+accessibility, panel controls/callbacks/disabled states, canvas selection/
+drag/resize/edge-editing/undo/error-cleanup, and export format/background/
+scale/preview/download/pending/failure behavior), reusing the
+already-covered popover hooks, panel context, and export fixtures rather
+than duplicating their logic — no production code required extraction to
+make this directly testable. This closed the same four direct gaps plus one
+legitimate transitive gap file, `src/components/visual/export-menu.tsx`,
+whose rendering and entitlement-gated behavior is now genuinely exercised
+(not stubbed) by the new `visual-context-popover.test.tsx` and
+`visual-context-popover-panels.test.tsx` suites. `src/app/app/documents/[id]/
+icon-picker.tsx` was already closed by #1978/#1958 before this rebase and is
+unaffected by #1963. `src/components/visual/generated-candidates-panel.tsx`
+was also directly tested in this change but was already transitively loaded
+(not a gap) beforehand, so it does not add to the closure count. Re-measured
+directly against this tree: 848 eligible runtime source files (unchanged),
+24 type-only (unchanged), 31 barrel (unchanged), 11 static-data (unchanged),
+782 runtime-eligible (unchanged — #1963 adds no new source files, only
+tests within already-eligible files), 774 loaded by the source
+unit suite (769 #1978 baseline + 5 from #1963), 6 mapped-e2e
+(unchanged), 0 approved exceptions, and **2** actionable gap files
+(`src/app/api/slide-assets/[documentId]/[...path]/route.ts` and
+`src/scripts/audit-persisted-schema.ts` — both pre-existing, unrelated to
+this branch). `DEFAULT_MAX_GAP_FILES` was lowered from 7 to **2**
+to match, with zero stale slack. This is the authoritative baseline going
+forward; the historical entries below (including the #1958/7-ceiling entry,
+now superseded by this entry, and this branch's own pre-rebase 766/10
+measurement against `a5f683f3`, which is no longer accurate now that #1978
+has independently closed the icon-picker.tsx gap) remain only as historical
+context for how the ceiling evolved.
+
 **Core-editor-interaction direct coverage (#1958), mechanically rebased onto
 `main` at `a5ead8fc` (post #1984, which folds in #1957/#1961/#1959/#1960/
 #1962 and their dependents).** Nine core document-editor files had no direct
@@ -271,9 +319,10 @@ route.ts`, `src/app/app/documents/[id]/visual-context-popover-panels.tsx`,
 `src/components/visual/export-dialog.tsx`, `export-menu.tsx`, and
 `src/scripts/audit-persisted-schema.ts` — all pre-existing, unrelated to this
 branch). `DEFAULT_MAX_GAP_FILES` was lowered from 27 to **7** to match, with
-zero stale slack. This is the authoritative baseline going forward; the
-historical entries below (including the #1961 27-ceiling entry) remain only
-as historical context for how the ceiling evolved.
+zero stale slack. This was the authoritative baseline until superseded by
+the #1963 rebase above; the historical entries below (including the #1961
+27-ceiling entry) remain only as historical context for how the ceiling
+evolved.
 
 **Documents/dashboard management-UI direct coverage (#1961), rebased onto
 `main` (post #1972, the merged #1957 workspace/dashboard-page ratchet).**
