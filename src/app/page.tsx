@@ -42,6 +42,11 @@ const useCases = [
   },
 ];
 
+// coverage-breadth: mapped-e2e ref=e2e/public-render/public-pages.spec.ts
+// Only the unique "Turn text into visuals" hero heading (asserted by "home
+// page renders the hero and primary CTAs") is exercised here — the
+// how-it-works/use-cases/footer sections below are not asserted by that spec
+// and are not covered by this marker.
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col bg-ds-surface-sunken">

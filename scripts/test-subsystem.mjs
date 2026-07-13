@@ -62,6 +62,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/signup\//,
       /^src\/app\/forgot-password\//,
       /^src\/app\/reset-password\//,
+      /^src\/app\/signout\//,
       /^e2e\/auth\/(?:auth-redirect|authenticated-nested-routes|oauth-disabled)\.spec\.ts$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
     ],
@@ -285,6 +286,8 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description:
       "Cross-cutting helpers, app shell, view model contracts, and UI support logic",
     patterns: [
+      /^src\/app\/(?:layout|error|not-found)\.test\.tsx$/,
+      /^src\/components\/site-header\.test\.tsx$/,
       /^src\/components\/ui\//,
       /^src\/lib\/a11y\//,
       /^src\/lib\/action-result\.test\.ts$/,
@@ -325,6 +328,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description:
       "Visual schemas, mirror logic, rendering helpers, icons, and visual components",
     patterns: [
+      /^src\/app\/visuals\//,
       /^src\/components\/visual\//,
       /^src\/lib\/icons\//,
       /^src\/lib\/visual\//,
