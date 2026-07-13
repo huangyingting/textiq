@@ -7,10 +7,13 @@
  * the React/DOM bridge `theme-provider.tsx` adds on top: the SSR
  * `getServerSnapshot` fallback (no `window`/`document` touched at all), the
  * client-side `useSyncExternalStore` subscription driving `localStorage`
- * persistence (including the try/catch fallback when storage throws),
- * `setMode`/`cycleMode` applying the resolved theme to `document.documentElement`
- * and firing the cross-instance `textiq-theme-mode-change` custom event, a
- * cross-tab `storage` event re-syncing the mode, a system
+ * persistence (including the narrow try/catch fallback when storage throws
+ * on read and/or write, and that the chosen mode stays authoritative in
+ * memory — never reverted — while persistence is unavailable, recovering
+ * automatically once storage works again), `setMode`/`cycleMode` applying the
+ * resolved theme to `document.documentElement` and firing the
+ * cross-instance `textiq-theme-mode-change` custom event, a cross-tab
+ * `storage` event re-syncing the mode from the persisted value, a system
  * `prefers-color-scheme` change only re-resolving when the current mode is
  * `"system"`, the guarded `useThemeMode` outside any provider, and that the
  * subscription's three listeners (`textiq-theme-mode-change`, `storage`,
@@ -75,7 +78,8 @@ function createFakeWindow() {
   const listeners = new Map<string, Set<(event: unknown) => void>>();
   const mediaListeners = new Set<(event: { matches: boolean }) => void>();
   const store = new Map<string, string>();
-  let storageThrows = false;
+  let getItemThrows = false;
+  let setItemThrows = false;
   let systemPrefersDark = false;
 
   function on(type: string, handler: (event: unknown) => void) {
@@ -106,11 +110,11 @@ function createFakeWindow() {
     },
     localStorage: {
       getItem(key: string) {
-        if (storageThrows) throw new Error("storage blocked");
+        if (getItemThrows) throw new Error("storage blocked");
         return store.has(key) ? (store.get(key) as string) : null;
       },
       setItem(key: string, value: string) {
-        if (storageThrows) throw new Error("storage blocked");
+        if (setItemThrows) throw new Error("storage blocked");
         store.set(key, value);
       },
     },
@@ -147,7 +151,14 @@ function createFakeWindow() {
       return mediaListeners.size;
     },
     setStorageThrows(value: boolean) {
-      storageThrows = value;
+      getItemThrows = value;
+      setItemThrows = value;
+    },
+    setGetItemThrows(value: boolean) {
+      getItemThrows = value;
+    },
+    setSetItemThrows(value: boolean) {
+      setItemThrows = value;
     },
     getStoredMode() {
       return store.get(APP_THEME_STORAGE_KEY);
@@ -315,9 +326,9 @@ test("setMode persists to localStorage, applies the theme to documentElement, an
     unmount();
   }));
 
-test("setMode never throws when localStorage.setItem throws, but its own change event re-reads the still-broken storage and reverts to the default mode", () =>
+test("setMode never throws when localStorage.setItem throws, and keeps the newly selected mode authoritative in memory and in the DOM (no reversion)", () =>
   withFakeDom((fake) => {
-    fake.setStorageThrows(true);
+    fake.setSetItemThrows(true);
     const { latest, unmount } = mountProvider();
 
     assert.doesNotThrow(() => {
@@ -326,15 +337,96 @@ test("setMode never throws when localStorage.setItem throws, but its own change 
       });
     });
 
-    // setMode applies "dark" to the DOM directly, but then dispatches
-    // THEME_MODE_CHANGE_EVENT, which its own subscription handles by
-    // re-reading `storedThemeMode()` — and since localStorage is still
-    // throwing, that read falls back to the default ("system") and
-    // re-applies *that* to the DOM, overwriting the "dark" application a
-    // moment earlier. Net effect: a fully broken localStorage makes setMode
-    // an effective no-op once its change notification round-trips.
+    // setMode's in-memory store is set before the (failing) persistence
+    // attempt, so its own THEME_MODE_CHANGE_EVENT notification re-reads that
+    // same in-memory value instead of re-reading the still-throwing storage.
+    // The selection must therefore remain "dark", not revert to the default.
+    assert.equal(latest().mode, "dark");
+    assert.equal(latest().resolvedMode, "dark");
+    assert.equal(fake.document.documentElement.dataset.theme, "dark");
+    assert.equal(fake.document.documentElement.style.colorScheme, "dark");
+    assert.equal(fake.getStoredMode(), undefined);
+    unmount();
+  }));
+
+test("falls back to the default mode when localStorage.getItem throws on mount, but setMode still selects and keeps a new mode", () =>
+  withFakeDom((fake) => {
+    fake.setGetItemThrows(true);
+    const { latest, unmount } = mountProvider();
+
     assert.equal(latest().mode, "system");
-    assert.equal(fake.document.documentElement.dataset.theme, "system");
+
+    act(() => {
+      latest().setMode("dark");
+    });
+
+    assert.equal(latest().mode, "dark");
+    assert.equal(fake.document.documentElement.dataset.theme, "dark");
+    unmount();
+  }));
+
+test("cycleMode keeps advancing from the in-memory mode across repeated calls while localStorage is fully broken", () =>
+  withFakeDom((fake) => {
+    fake.setStorageThrows(true);
+    const { latest, unmount } = mountProvider();
+    assert.equal(latest().mode, "system");
+
+    act(() => {
+      latest().cycleMode();
+    });
+    assert.equal(latest().mode, "light");
+
+    act(() => {
+      latest().cycleMode();
+    });
+    assert.equal(latest().mode, "dark");
+    unmount();
+  }));
+
+test("setMode persists again once localStorage recovers after a prior failure", () =>
+  withFakeDom((fake) => {
+    fake.setStorageThrows(true);
+    const { latest, unmount } = mountProvider();
+
+    act(() => {
+      latest().setMode("dark");
+    });
+    assert.equal(latest().mode, "dark");
+    assert.equal(fake.getStoredMode(), undefined);
+
+    fake.setStorageThrows(false);
+    act(() => {
+      latest().setMode("ocean");
+    });
+
+    assert.equal(latest().mode, "ocean");
+    assert.equal(fake.getStoredMode(), "ocean");
+    assert.equal(fake.document.documentElement.dataset.theme, "ocean");
+    unmount();
+  }));
+
+test("a cross-tab storage event still re-syncs the mode from the persisted value after a recovered-storage selection", () =>
+  withFakeDom((fake) => {
+    fake.setStorageThrows(true);
+    const { latest, unmount } = mountProvider();
+
+    act(() => {
+      latest().setMode("dark");
+    });
+    assert.equal(latest().mode, "dark");
+
+    fake.setStorageThrows(false);
+    act(() => {
+      latest().setMode("light");
+    });
+    assert.equal(fake.getStoredMode(), "light");
+
+    act(() => {
+      fake.fireCrossTabStorageChange("mint");
+    });
+
+    assert.equal(latest().mode, "mint");
+    assert.equal(fake.document.documentElement.dataset.theme, "mint");
     unmount();
   }));
 
