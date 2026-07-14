@@ -10,6 +10,11 @@ import {
   SLIDE_FORMATS,
   type SlideFormat,
 } from "@/lib/document/deck-kernel/slide-format";
+import {
+  forEachUnknownKey,
+  isLiteralMember,
+  isValidationFiniteNumber,
+} from "@/lib/validation-primitives";
 
 export class DeckValidationError extends Error {
   constructor(message: string) {
@@ -23,29 +28,21 @@ export function rejectUnknownKeys(
   allowedKeys: readonly string[],
   context: string,
 ): void {
-  const allowed = new Set(allowedKeys);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      throw new DeckValidationError(
-        `${context}.${key} is not part of the current schema`,
-      );
-    }
-  }
+  forEachUnknownKey(input, allowedKeys, (key) => {
+    throw new DeckValidationError(
+      `${context}.${key} is not part of the current schema`,
+    );
+  });
 }
 
 export function isPresentationThemeId(
   value: unknown,
 ): value is PresentationThemeId {
-  return (
-    typeof value === "string" &&
-    PRESENTATION_THEME_IDS.includes(value as PresentationThemeId)
-  );
+  return isLiteralMember(value, PRESENTATION_THEME_IDS);
 }
 
 export function isSlideFormat(value: unknown): value is SlideFormat {
-  return (
-    typeof value === "string" && SLIDE_FORMATS.includes(value as SlideFormat)
-  );
+  return isLiteralMember(value, SLIDE_FORMATS);
 }
 
 export function validateStringArray(value: unknown, context: string): string[] {
@@ -96,7 +93,7 @@ export const TEXT_FIT_MODES: readonly TextFitMode[] = [
 ];
 
 export function validateFiniteNumber(value: unknown, context: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (!isValidationFiniteNumber(value)) {
     throw new DeckValidationError(`${context} must be a finite number`);
   }
   return value;
