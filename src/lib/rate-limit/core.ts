@@ -33,7 +33,7 @@ export interface RateLimitResult {
  * back it with an in-memory fake. `get` returns the subject's current window
  * (or `undefined`); `set` persists a window for the subject.
  *
- * Cost-bearing stores should implement the optional `atomicIncrement` method
+ * Cost-bearing stores should implement the optional `atomicConsume` method
  * to eliminate the get→compute→set race that can allow a small overshoot under
  * concurrency. When present, {@link checkRateLimitWithStore} delegates to it
  * instead of the two-phase read-modify-write (#482).
@@ -42,22 +42,17 @@ export interface RateLimitStore {
   get(key: string): Promise<RateLimitWindow | undefined>;
   set(key: string, window: RateLimitWindow): Promise<void>;
   /**
-   * Optional atomic increment (#482).
+   * Optional atomic consume operation (#482, #1997).
    *
-   * Performs a single DB-level operation that increments the window count by 1
-   * when `count < limit` and the window has not expired, or resets the window
-   * when it has expired.
+   * Consumes exactly one request attempt for `key` and returns the authoritative
+   * {@link RateLimitResult} in one concurrency-safe persistence operation
+   * (missing/current/expired window handling included).
    *
-   * Returns the resulting {@link RateLimitResult} directly. When this method is
-   * present, {@link checkRateLimitWithStore} uses it instead of the two-phase
-   * get → compute → set path, eliminating the race where two concurrent
-   * requests each read the same count and both succeed past the limit.
-   *
-   * Guarantee: the number of allowed increments within a window is bounded to
-   * exactly `limit`. An overshoot of ≥1 is not possible as long as the
-   * underlying DB operation is atomic (conditional `updateMany` + upsert).
+   * When this method is present, {@link checkRateLimitWithStore} uses it instead
+   * of the two-phase get → compute → set path, eliminating races where
+   * concurrent requests observe stale state and both persist `count = 1`.
    */
-  atomicIncrement?(
+  atomicConsume?(
     key: string,
     options: RateLimitOptions,
   ): Promise<RateLimitResult>;
@@ -138,7 +133,7 @@ export function checkRateLimit(
 
 /**
  * Store-backed counterpart of {@link checkRateLimit}. When the store provides
- * {@link RateLimitStore.atomicIncrement}, delegates to it for an atomically
+ * {@link RateLimitStore.atomicConsume}, delegates to it for an atomically
  * bounded guarantee (no overshoot, #482). Otherwise falls back to the
  * read-modify-write path.
  *
@@ -150,8 +145,8 @@ export async function checkRateLimitWithStore(
   key: string,
   options: RateLimitOptions,
 ): Promise<RateLimitResult> {
-  if (store.atomicIncrement) {
-    return store.atomicIncrement(key, options);
+  if (store.atomicConsume) {
+    return store.atomicConsume(key, options);
   }
   const { result, next } = computeRateLimit(await store.get(key), options);
   if (next) {

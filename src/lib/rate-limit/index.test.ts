@@ -291,13 +291,13 @@ test("different client IPs get independent windows", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// atomicIncrement (#482) — tests for bounded, race-free rate limiting
+// atomicConsume (#482, #1997) — tests for bounded, race-free rate limiting
 // ---------------------------------------------------------------------------
 
 import { describe, it } from "node:test";
 
 /**
- * A fake store that implements `atomicIncrement` using an in-memory row, so we
+ * A fake store that implements `atomicConsume` using an in-memory row, so we
  * can verify that `checkRateLimitWithStore` delegates to it when present.
  */
 function createAtomicFakeStore(opts: {
@@ -318,7 +318,7 @@ function createAtomicFakeStore(opts: {
       count = window.count;
       resetAt = window.resetAt;
     },
-    async atomicIncrement(_key: string, options: RateLimitOptions) {
+    async atomicConsume(_key: string, options: RateLimitOptions) {
       atomicCalls++;
       const { limit, windowMs, now } = options;
       if (!resetAt || now >= resetAt) {
@@ -350,8 +350,8 @@ function createAtomicFakeStore(opts: {
   return store;
 }
 
-describe("checkRateLimitWithStore with atomicIncrement (#482)", () => {
-  it("delegates to atomicIncrement when present", async () => {
+describe("checkRateLimitWithStore with atomicConsume (#482, #1997)", () => {
+  it("delegates to atomicConsume when present", async () => {
     const store = createAtomicFakeStore({});
     const opts = { limit: 3, windowMs: 1000, now: 100 };
 
@@ -363,7 +363,7 @@ describe("checkRateLimitWithStore with atomicIncrement (#482)", () => {
     );
   });
 
-  it("blocks after limit is reached via atomicIncrement", async () => {
+  it("blocks after limit is reached via atomicConsume", async () => {
     const store = createAtomicFakeStore({});
     const opts = { limit: 2, windowMs: 1000, now: 0 };
 
@@ -380,7 +380,7 @@ describe("checkRateLimitWithStore with atomicIncrement (#482)", () => {
     assert.equal(third.remaining, 0);
   });
 
-  it("resets window after expiry via atomicIncrement", async () => {
+  it("resets window after expiry via atomicConsume", async () => {
     const store = createAtomicFakeStore({
       initialCount: 3,
       initialResetAt: 500,
@@ -408,13 +408,13 @@ describe("checkRateLimitWithStore with atomicIncrement (#482)", () => {
 });
 
 describe("prismaRateLimitStore shape (#482)", () => {
-  it("has an atomicIncrement method", () => {
+  it("has an atomicConsume method", () => {
     // Import and verify the method exists — without hitting the DB.
     // The real prismaRateLimitStore is imported indirectly; we test the shape.
     const store = createAtomicFakeStore({});
     assert.equal(
-      typeof (store as RateLimitStore & { atomicIncrement?: unknown })
-        .atomicIncrement,
+      typeof (store as RateLimitStore & { atomicConsume?: unknown })
+        .atomicConsume,
       "function",
     );
   });
@@ -422,12 +422,38 @@ describe("prismaRateLimitStore shape (#482)", () => {
 
 function createFakeRateLimitClient() {
   type Row = { subject: string; count: number; resetAt: Date };
+  type CasWhere = { subject: string; count: number; resetAt: Date };
+  type CasData =
+    | { count: { increment: number } }
+    | { count: number; resetAt: Date };
   const rows = new Map<string, Row>();
+
+  function cloneRow(row: Row): Row {
+    return {
+      subject: row.subject,
+      count: row.count,
+      resetAt: new Date(row.resetAt),
+    };
+  }
+
+  function uniqueConflictError(): Error & { code: string } {
+    return Object.assign(new Error("unique conflict"), { code: "P2002" });
+  }
+
   return {
     rows,
     rateLimitHit: {
       async findUnique({ where }: { where: { subject: string } }) {
-        return rows.get(where.subject) ?? null;
+        const row = rows.get(where.subject);
+        return row ? cloneRow(row) : null;
+      },
+      async create({ data }: { data: Row }) {
+        if (rows.has(data.subject)) {
+          throw uniqueConflictError();
+        }
+        const row = cloneRow(data);
+        rows.set(data.subject, row);
+        return cloneRow(row);
       },
       async upsert({
         where,
@@ -440,35 +466,121 @@ function createFakeRateLimitClient() {
       }) {
         const current = rows.get(where.subject);
         if (current) {
-          Object.assign(current, update);
-          return current;
+          if (update.count !== undefined) {
+            current.count = update.count;
+          }
+          if (update.resetAt !== undefined) {
+            current.resetAt = new Date(update.resetAt);
+          }
+          return cloneRow(current);
         }
-        rows.set(where.subject, { ...create });
-        return rows.get(where.subject)!;
+        rows.set(where.subject, cloneRow(create));
+        return cloneRow(rows.get(where.subject)!);
       },
-      async updateMany({
-        where,
-        data,
-      }: {
-        where: {
-          subject: string;
-          count: { lt: number };
-          resetAt: { gt: Date };
-        };
-        data: { count: { increment: number } };
-      }) {
+      async updateMany({ where, data }: { where: CasWhere; data: CasData }) {
         const current = rows.get(where.subject);
         if (
           !current ||
-          current.count >= where.count.lt ||
-          current.resetAt.getTime() <= where.resetAt.gt.getTime()
+          current.count !== where.count ||
+          current.resetAt.getTime() !== where.resetAt.getTime()
         ) {
           return { count: 0 };
         }
-        current.count += data.count.increment;
+        if ("resetAt" in data) {
+          current.count = data.count;
+          current.resetAt = new Date(data.resetAt);
+        } else {
+          current.count += data.count.increment;
+        }
         return { count: 1 };
       },
     },
+  };
+}
+
+function createDeferred<T = void>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => undefined;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+function createInterleavedCreateClient() {
+  const client = createFakeRateLimitClient();
+  const firstCreateStarted = createDeferred();
+  const secondCreateStarted = createDeferred();
+  const releaseFirstCreate = createDeferred();
+
+  const baseCreate = client.rateLimitHit.create;
+  type CreateArgs = Parameters<typeof baseCreate>[0];
+  let createCalls = 0;
+
+  client.rateLimitHit.create = async (args: CreateArgs) => {
+    createCalls += 1;
+    if (createCalls === 1) {
+      firstCreateStarted.resolve();
+      await releaseFirstCreate.promise;
+      return baseCreate(args);
+    }
+    if (createCalls === 2) {
+      secondCreateStarted.resolve();
+      throw Object.assign(new Error("unique conflict"), { code: "P2002" });
+    }
+    return baseCreate(args);
+  };
+
+  return {
+    ...client,
+    firstCreateStarted,
+    secondCreateStarted,
+    releaseFirstCreate,
+  };
+}
+
+function createInterleavedExpiredResetClient(
+  key: string,
+  existing: { count: number; resetAt: number },
+) {
+  const client = createFakeRateLimitClient();
+  client.rows.set(key, {
+    subject: key,
+    count: existing.count,
+    resetAt: new Date(existing.resetAt),
+  });
+
+  const firstResetStarted = createDeferred();
+  const secondResetStarted = createDeferred();
+  const releaseFirstReset = createDeferred();
+  const firstResetApplied = createDeferred();
+
+  const baseUpdateMany = client.rateLimitHit.updateMany;
+  type UpdateManyArgs = Parameters<typeof baseUpdateMany>[0];
+  let resetCalls = 0;
+
+  client.rateLimitHit.updateMany = async (args: UpdateManyArgs) => {
+    if (typeof args.data.count === "number") {
+      resetCalls += 1;
+      if (resetCalls === 1) {
+        firstResetStarted.resolve();
+        await releaseFirstReset.promise;
+        const result = await baseUpdateMany(args);
+        firstResetApplied.resolve();
+        return result;
+      }
+      if (resetCalls === 2) {
+        secondResetStarted.resolve();
+        await firstResetApplied.promise;
+      }
+    }
+    return baseUpdateMany(args);
+  };
+
+  return {
+    ...client,
+    firstResetStarted,
+    secondResetStarted,
+    releaseFirstReset,
   };
 }
 
@@ -495,7 +607,7 @@ describe("createPrismaRateLimitStore", () => {
     });
     const store = createPrismaRateLimitStore(client as never);
 
-    const result = await store.atomicIncrement!("anonymous:hash", {
+    const result = await store.atomicConsume!("anonymous:hash", {
       limit: 3,
       windowMs: 1_000,
       now: 500,
@@ -515,7 +627,7 @@ describe("createPrismaRateLimitStore", () => {
     const store = createPrismaRateLimitStore(client as never);
 
     assert.deepEqual(
-      await store.atomicIncrement!("anonymous:hash", {
+      await store.atomicConsume!("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 5_000,
@@ -529,7 +641,7 @@ describe("createPrismaRateLimitStore", () => {
       resetAt: new Date(5_500),
     });
     assert.deepEqual(
-      await store.atomicIncrement!("anonymous:hash", {
+      await store.atomicConsume!("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 6_000,
@@ -548,12 +660,85 @@ describe("createPrismaRateLimitStore", () => {
     const store = createPrismaRateLimitStore(client as never);
 
     assert.deepEqual(
-      await store.atomicIncrement!("anonymous:hash", {
+      await store.atomicConsume!("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 5_000,
       }),
       { allowed: false, remaining: 0, limit: 2, resetAt: 10_000 },
     );
+  });
+
+  it("new-window interleaving consumes two concurrent hits without persisting count=1", async () => {
+    const key = "anonymous:hash";
+    const client = createInterleavedCreateClient();
+    const store = createPrismaRateLimitStore(client as never);
+
+    const first = store.atomicConsume!(key, {
+      limit: 2,
+      windowMs: 1_000,
+      now: 100,
+    });
+    await client.firstCreateStarted.promise;
+
+    const second = store.atomicConsume!(key, {
+      limit: 2,
+      windowMs: 1_000,
+      now: 100,
+    });
+    await client.secondCreateStarted.promise;
+    client.releaseFirstCreate.resolve();
+
+    const results = await Promise.all([first, second]);
+
+    assert.equal(
+      results.filter((result) => result.allowed).length,
+      2,
+      "both first-window requests should be consumed",
+    );
+    assert.deepEqual(
+      results.map((result) => result.remaining).sort((a, b) => a - b),
+      [0, 1],
+    );
+    assert.equal(client.rows.get(key)?.count, 2);
+    assert.equal(client.rows.get(key)?.resetAt.getTime(), 1_100);
+  });
+
+  it("expired-window interleaving consumes two concurrent hits without double reset loss", async () => {
+    const key = "anonymous:hash";
+    const client = createInterleavedExpiredResetClient(key, {
+      count: 2,
+      resetAt: 500,
+    });
+    const store = createPrismaRateLimitStore(client as never);
+
+    const first = store.atomicConsume!(key, {
+      limit: 2,
+      windowMs: 1_000,
+      now: 1_000,
+    });
+    await client.firstResetStarted.promise;
+
+    const second = store.atomicConsume!(key, {
+      limit: 2,
+      windowMs: 1_000,
+      now: 1_000,
+    });
+    await client.secondResetStarted.promise;
+    client.releaseFirstReset.resolve();
+
+    const results = await Promise.all([first, second]);
+
+    assert.equal(
+      results.filter((result) => result.allowed).length,
+      2,
+      "two requests in a fresh replacement window should be consumed up to the limit",
+    );
+    assert.deepEqual(
+      results.map((result) => result.remaining).sort((a, b) => a - b),
+      [0, 1],
+    );
+    assert.equal(client.rows.get(key)?.count, 2);
+    assert.equal(client.rows.get(key)?.resetAt.getTime(), 2_000);
   });
 });
