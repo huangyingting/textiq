@@ -37,6 +37,11 @@ export function generateVerificationToken(): string {
   return generateSingleUseToken();
 }
 
+export type VerificationTokenMaterial = Readonly<{
+  rawToken: string;
+  tokenHash: string;
+}>;
+
 /**
  * Hashes a raw verification token with SHA-256 (hex) for storage and lookup. A
  * plain unsalted hash is appropriate here — the token is high-entropy random, so
@@ -45,6 +50,32 @@ export function generateVerificationToken(): string {
  */
 export function hashVerificationToken(rawToken: string): string {
   return hashSingleUseToken(rawToken);
+}
+
+export function generateVerificationTokenMaterial(): VerificationTokenMaterial {
+  const rawToken = generateVerificationToken();
+  return {
+    rawToken,
+    tokenHash: hashVerificationToken(rawToken),
+  };
+}
+
+export type VerificationTokenPersistenceInput = Readonly<{
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}>;
+
+export function buildVerificationTokenPersistenceInput(input: {
+  userId: string;
+  material: VerificationTokenMaterial;
+  expiresAt: Date;
+}): VerificationTokenPersistenceInput {
+  return {
+    userId: input.userId,
+    tokenHash: input.material.tokenHash,
+    expiresAt: input.expiresAt,
+  };
 }
 
 /* @preserve node:coverage ignore next 6 -- Verification-token aliases are TypeScript-only facade exports. */

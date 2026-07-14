@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { deleteAccountForUser } from "@/lib/account/deletion-service";
+import {
+  ACCOUNT_DELETION_CANONICAL_ERROR_CODE,
+  deleteAccountForUser,
+} from "@/lib/account/deletion-service";
 import type { BillingProvider } from "@/lib/billing/provider";
+import { buildErrorLog } from "@/lib/log";
 import type { prisma } from "@/lib/prisma";
 
 function makeClient(email: string | null) {
@@ -227,6 +231,10 @@ test("deleteAccountForUser fails closed when erasure verification finds residual
 
 test("deleteAccountForUser fails closed when deletion dependencies throw", async () => {
   const client = makeClient("ada@example.com");
+  const logs: Array<{
+    scope: string;
+    context: Record<string, unknown>;
+  }> = [];
 
   const result = await deleteAccountForUser(
     { userId: "u1", confirmation: "DELETE" },
@@ -234,6 +242,9 @@ test("deleteAccountForUser fails closed when deletion dependencies throw", async
       client,
       getCancellationState: async () => {
         throw new Error("subscription lookup unavailable");
+      },
+      log(scope, _error, context) {
+        logs.push({ scope, context: context ?? {} });
       },
     },
   );
@@ -243,4 +254,58 @@ test("deleteAccountForUser fails closed when deletion dependencies throw", async
     error: "Could not delete your account. Please try again.",
   });
   assert.deepEqual(client._deleted, []);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].scope, "account-deletion");
+  assert.deepEqual(logs[0].context, {
+    userId: "u1",
+    stage: "account-deletion",
+    code: ACCOUNT_DELETION_CANONICAL_ERROR_CODE,
+  });
+});
+
+test("deleteAccountForUser logs canonical-safe context when dependencies throw secret-bearing errors", async () => {
+  const client = makeClient("ada@example.com");
+  const serializedLogs: string[] = [];
+
+  const result = await deleteAccountForUser(
+    { userId: "u1", confirmation: "DELETE" },
+    {
+      client,
+      getCancellationState: async () => {
+        throw new Error(
+          "opaque-provider-secret token=raw-verification-token recipient=person@example.com callback=https://secret.example/hook host=host.secret.example",
+          {
+            cause: new Error("bearer=demo-bearer-token"),
+          },
+        );
+      },
+      log(scope, error, context) {
+        serializedLogs.push(
+          JSON.stringify(buildErrorLog(scope, error, context ?? {})),
+        );
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "Could not delete your account. Please try again.",
+  });
+  assert.equal(serializedLogs.length, 1);
+  const serialized = serializedLogs[0] ?? "";
+  assert.equal(
+    serialized.includes(ACCOUNT_DELETION_CANONICAL_ERROR_CODE),
+    true,
+  );
+  assert.equal(serialized.includes("opaque-provider-secret"), false);
+  assert.equal(serialized.includes("raw-verification-token"), false);
+  assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("https://secret.example/hook"), false);
+  assert.equal(serialized.includes("host.secret.example"), false);
+  assert.equal(serialized.includes("demo-bearer-token"), false);
+
+  const record = JSON.parse(serialized) as Record<string, unknown>;
+  assert.equal(record.scope, "account-deletion");
+  assert.equal(record.errorName, "AccountDeletionError");
+  assert.equal(record.code, ACCOUNT_DELETION_CANONICAL_ERROR_CODE);
 });
