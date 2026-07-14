@@ -5,6 +5,7 @@ import {
   buildHealthSummary,
   resolveDeploymentConfig,
 } from "./deployment-config";
+import { resolveDeploymentConfig as resolveDeploymentConfigMjs } from "../../../scripts/collab-deployment-config.mjs";
 
 // ---------------------------------------------------------------------------
 // resolveDeploymentConfig â€” mode / warnings / healthy from env vars
@@ -56,6 +57,45 @@ test("resolveDeploymentConfig: COLLAB_INSTANCE_COUNT=1 (explicit but default) â†
   assert.equal(cfg.mode, "unconfigured");
   assert.equal(cfg.healthy, true);
   assert.equal(cfg.warnings.length, 1);
+});
+
+test("resolveDeploymentConfig parity: TypeScript and plain-ESM surfaces stay identical across representative env modes", () => {
+  const cases = [
+    {
+      name: "declared single instance",
+      env: { COLLAB_SINGLE_INSTANCE: "1" },
+    },
+    {
+      name: "multi-instance without sticky routing",
+      env: { COLLAB_INSTANCE_COUNT: "3" },
+    },
+    {
+      name: "multi-instance with sticky routing",
+      env: { COLLAB_INSTANCE_COUNT: "3", COLLAB_STICKY_ROUTING: "true" },
+    },
+    {
+      name: "default advisory",
+      env: {},
+    },
+    {
+      name: "invalid COLLAB_INSTANCE_COUNT normalizes to default advisory",
+      env: { COLLAB_INSTANCE_COUNT: "banana" },
+    },
+    {
+      name: "non-positive COLLAB_INSTANCE_COUNT clamps to 1",
+      env: { COLLAB_INSTANCE_COUNT: "0", COLLAB_STICKY_ROUTING: "1" },
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const tsResult = resolveDeploymentConfig(testCase.env);
+    const mjsResult = resolveDeploymentConfigMjs(testCase.env);
+    assert.deepEqual(
+      mjsResult,
+      tsResult,
+      `deployment config mismatch for case: ${testCase.name}`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
