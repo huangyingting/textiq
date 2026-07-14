@@ -133,6 +133,21 @@ validator) rather than the canonical `safeParseDeck` from
 `src/lib/presentation/validation.ts`. Deck reconciliation after a visual
 mirror therefore silently accepts v6 payloads.
 
+**Legacy validator in `document/duplicate.ts`
+(`remapDeckSourceRefs`):** `remapDeckSourceRefs` imports `safeParseDeck`
+and `safeParseCurrentDeck` from `src/lib/document/deck-schema.ts` and
+implements a v7-then-v6 fallback: it first attempts canonical v7 parsing
+via `safeParseCurrentDeck` and, if that fails, falls through to the legacy
+v6 `safeParseDeck`. The v6 fallback silently accepts v6 payloads during
+document duplication. This violates invariants 3 and 4.
+
+**Legacy validator in `ai/deck-metrics.ts`:**
+`ai/deck-metrics.ts` imports `safeParseDeck` from
+`src/lib/document/deck-schema.ts`, receiving the legacy v6 validator, and
+uses it to assess schema validity during AI metric computation. Deck
+validity in AI metrics is therefore assessed against the legacy v6 schema,
+not the canonical v7 schema. This violates invariant 4.
+
 ## Target State
 
 1. `src/lib/presentation/schema.ts` remains the single source of truth for
@@ -145,12 +160,20 @@ mirror therefore silently accepts v6 payloads.
 3. The deck-kernel `Deck` type and its `validateDeck` function are retired.
    No translation layer, bridge, alias facade, or legacy/v6 compatibility
    path is introduced in the process.
-4. `src/lib/document/deck-schema.ts` exposes only the canonical v7
-   boundary. Legacy exports (`Deck`, `safeParseDeck`, `DeckParseResult` as
-   the v6 variants) are removed when all consumers are migrated.
-5. `src/lib/deck/current-deck-schema.ts` is collapsed into its single
-   consumer (`deck-schema.ts`) or retained as a thin stable facade — not
-   as a migration artifact.
+4. The legacy unqualified exports from `src/lib/document/deck-schema.ts`
+   (`safeParseDeck` and `DeckParseResult` as the v6 variants) and the
+   deck-kernel validation utility re-exports (`validateElement`,
+   `validateImageCrop`, `validateImageFitMode`, `validateImageMaskShape`,
+   `validateSourceRef`) are removed once their callers are migrated. After
+   all callers of the `Current*`-qualified canonical re-exports also migrate
+   to import directly from `src/lib/presentation/schema.ts` and
+   `src/lib/presentation/validation.ts`, `deck-schema.ts` is deleted; it is
+   not retained as a canonical hub.
+5. `src/lib/deck/current-deck-schema.ts` and
+   `src/lib/document/persistence/current-deck-schema.ts` are deleted once
+   their consumers have migrated to direct canonical imports. Neither facade
+   layer is retained; `Current*`-aliased re-exports are not a stable final
+   surface.
 6. AI and downstream consumers depend on the thin presentation contract
    surface (`schema.ts`, `validation.ts`) rather than on
    implementation registries or deck-kernel internals.
@@ -162,9 +185,11 @@ document facades depend on them.
 
 ### (a) Current import paths
 
-The `deck-schema.ts` facade is **not** universal. `persistence/visual.ts`
-imports the **legacy** `safeParseDeck` from it; `schema-audit/audit.ts`
-bypasses it entirely with a direct import to `presentation/validation.ts`.
+The `deck-schema.ts` facade is **not** universal. `persistence/visual.ts`,
+`ai/deck-metrics.ts`, and the v6 fallback path in `document/duplicate.ts`
+import the **legacy** `safeParseDeck` from it. `schema-audit/audit.ts` and
+other presentation-layer callers bypass it entirely with a direct import to
+`presentation/validation.ts`.
 
 ```
 persistence/versioning.ts ─(safeParseLegacyDeck, legacy branch)──→ document/deck-schema.ts
@@ -175,6 +200,15 @@ persistence/versioning.ts ─(safeParseLegacyDeck, legacy branch)──→ docum
 
 persistence/visual.ts ─(safeParseDeck)──→ document/deck-schema.ts  [VIOLATION: legacy v6 validator]
                                               → deck-kernel/deck-validation/core.ts (validateDeck)
+
+document/duplicate.ts ─(safeParseCurrentDeck, v7 path)──→ document/deck-schema.ts (Current*)
+                      ─(safeParseDeck, v6 fallback)──→ document/deck-schema.ts  [VIOLATION: v6 fallback]
+
+ai/deck-metrics.ts ─(safeParseDeck)──→ document/deck-schema.ts  [VIOLATION: legacy v6 validator]
+
+-- canonical direct callers (representative, bypass all document facades):
+presentation/open-deck.ts, ai/deck-generation-request.ts, comments/service.ts,
+api/generate-deck/route-logic.ts ─(safeParseDeck)──→ presentation/validation.ts  [direct]
 
 schema-audit/audit.ts ─(safeParseDeck, NodeSourceMetadata only)──→ presentation/validation.ts  [direct bypass]
                       ─(getPersistedJsonContract)──→ data-contracts/persisted-json.ts
@@ -187,20 +221,36 @@ removal targets.
 
 ### (b) Target dependency direction
 
-```
-All callers (persistence/versioning.ts, persistence/visual.ts, AI, downstream)
-        ↓ imports
-src/lib/document/deck-schema.ts       ← document facade (v7-only after B4)
-        ↓ imports
-src/lib/deck/current-deck-schema.ts   ← thin re-export (collapse candidate, B5)
-        ↓ imports
-src/lib/presentation/schema.ts        ← canonical Deck type (source of truth)
-src/lib/presentation/validation.ts    ← safeParseDeck (canonical validator)
+Callers are split by consumer class. No caller routes through
+`document/deck-schema.ts` in the final state.
 
-src/lib/data-contracts/persisted-json.ts  ← registry; imports safeParseDeck from validation.ts
-src/lib/schema-audit/audit.ts             ← uses registry for all contract areas;
-                                             retains direct import of safeParseDeck
-                                             from validation.ts for NodeSourceMetadata only
+```
+-- Presentation-layer and cross-cutting consumers (direct; already satisfied or straightforward migration):
+src/lib/presentation/open-deck.ts                   \
+src/lib/presentation/document-slide-plan-compiler.ts  |
+src/app/api/generate-deck/route-logic.ts              |  → src/lib/presentation/schema.ts
+src/lib/ai/deck-generation-request.ts                 |  → src/lib/presentation/validation.ts
+src/lib/comments/service.ts                           |
+src/lib/schema-audit/audit.ts                        /
+
+-- AI metric consumer (migrate in B4):
+src/lib/ai/deck-metrics.ts → src/lib/presentation/validation.ts
+
+-- Document-owned persistence consumers (migrate in B7; direct after migration):
+src/lib/document/persistence/versioning.ts  \
+src/lib/document/persistence/visual.ts       |
+src/lib/document/persistence/deck.ts         |  → src/lib/presentation/schema.ts
+src/lib/document/deck-cas-writer.ts          |  → src/lib/presentation/validation.ts
+src/lib/document/duplicate.ts               /
+
+-- Data-contract registry (already direct; unchanged):
+src/lib/data-contracts/persisted-json.ts → src/lib/presentation/validation.ts
+src/lib/schema-audit/audit.ts (NodeSourceMetadata) → src/lib/presentation/validation.ts
+
+-- Retired facades (all deleted after callers complete call-site migration):
+src/lib/document/deck-schema.ts
+src/lib/deck/current-deck-schema.ts
+src/lib/document/persistence/current-deck-schema.ts
 ```
 
 `deck-kernel/` is fully retired; no module in the target graph imports it.
@@ -233,13 +283,14 @@ production paths and are migration targets.
 The following steps are **not yet implemented**. They are targets for
 future refactor batches.
 
-| Step | Target                                                                                                                                                                                                                                                                                                                        | Acceptance check                                                                                                                                                                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B3   | Retire the deck-kernel `Deck` type; convert all consumers to import `Deck` directly from `src/lib/presentation/schema.ts`.                                                                                                                                                                                                    | `deck-core.ts` no longer defines a separate v6 type; no alias or compatibility shim introduced; tests updated to use presentation `Deck`.                                                                                                                                     |
-| B4   | Retire `validateDeck` in `deck-validation/core.ts`; remove all callers including the `safeParseDeck` wrapper in `deck-schema.ts`; remove all deck-kernel validation utility re-exports from `deck-schema.ts` (`validateElement`, `validateImageCrop`, `validateImageFitMode`, `validateImageMaskShape`, `validateSourceRef`). | `validateDeck` deleted; `deck-schema.ts` exports only the canonical `Current*` surface; no legacy `safeParseDeck`, `DeckParseResult`, or deck-kernel validation utilities remain; no delegating wrapper introduced; schema-audit green.                                       |
-| B5   | Collapse `src/lib/deck/current-deck-schema.ts` if its only consumer is `deck-schema.ts`.                                                                                                                                                                                                                                      | No other module imports `current-deck-schema`; facade file deleted or kept thin.                                                                                                                                                                                              |
-| B6   | Inventory all `Document.deckJson` and `DocumentVersion.deckJson` rows; characterize non-v7 payloads (v6 shape, null, or schema-invalid); migrate or archive them so neither live documents nor version snapshots hold a non-v7 deck shape.                                                                                    | Schema-audit CLI reports zero `Document.deckJson` violations and zero `DocumentVersion.deckJson` violations; a query recording the `schemaVersion` distribution per table is captured as evidence; rollback plan for surviving non-v7 rows documented; ops smoke test passes. |
-| B7   | Remove the v6 restore branch and raw-invalid passthrough from `sanitizeRestoredDeck` (`persistence/versioning.ts`); fix `reconcileDeckAfterMirror` (`persistence/visual.ts`) to import the canonical `safeParseDeck` from `src/lib/presentation/validation.ts`.                                                               | `sanitizeRestoredDeck` rejects non-v7 payloads without writing to `Document.deckJson`; raw-invalid input is not persisted; `reconcileDeckAfterMirror` imports from `src/lib/presentation/validation.ts`; affected tests updated.                                              |
+| Step | Target                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Acceptance check                                                                                                                                                                                                                                                                                                                                                      |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B3   | Retire the deck-kernel `Deck` type; convert all consumers to import `Deck` directly from `src/lib/presentation/schema.ts`.                                                                                                                                                                                                                                                                                                                                                                                                             | `deck-core.ts` no longer defines a separate v6 type; no alias or compatibility shim introduced; tests updated to use presentation `Deck`.                                                                                                                                                                                                                             |
+| B4   | Migrate `src/lib/ai/deck-metrics.ts` to import `safeParseDeck` from `src/lib/presentation/validation.ts`. Remove all deck-kernel validation utility re-exports from `deck-schema.ts` (`validateElement`, `validateImageCrop`, `validateImageFitMode`, `validateImageMaskShape`, `validateSourceRef`).                                                                                                                                                                                                                                  | `deck-metrics.ts` imports `safeParseDeck` from `src/lib/presentation/validation.ts`; all deck-kernel validation utility re-exports deleted from `deck-schema.ts`; schema-audit green.                                                                                                                                                                                 |
+| B5   | Collapse `src/lib/deck/current-deck-schema.ts` into `deck-schema.ts` (its only direct consumer).                                                                                                                                                                                                                                                                                                                                                                                                                                       | No module imports `src/lib/deck/current-deck-schema.ts` after collapse; facade file deleted.                                                                                                                                                                                                                                                                          |
+| B6   | Inventory all `Document.deckJson` and `DocumentVersion.deckJson` rows; characterize non-v7 payloads (v6 shape, null, or schema-invalid); migrate or archive them so neither live documents nor version snapshots hold a non-v7 deck shape.                                                                                                                                                                                                                                                                                             | Schema-audit CLI reports zero `Document.deckJson` violations and zero `DocumentVersion.deckJson` violations; a query recording the `schemaVersion` distribution per table is captured as evidence; rollback plan for surviving non-v7 rows documented; ops smoke test passes.                                                                                         |
+| B7   | Remove the v6 restore branch and raw-invalid passthrough from `sanitizeRestoredDeck` (`persistence/versioning.ts`); fix `reconcileDeckAfterMirror` (`persistence/visual.ts`) to import canonical `safeParseDeck` from `src/lib/presentation/validation.ts`; remove the v6 fallback from `remapDeckSourceRefs` (`document/duplicate.ts`). Remove the legacy `safeParseDeck` wrapper and `DeckParseResult` from `deck-schema.ts`; retire `validateDeck` in `deck-kernel/deck-validation/core.ts` (now unused after all callers migrate). | `sanitizeRestoredDeck` rejects non-v7 payloads without writing to `Document.deckJson`; raw-invalid input is not persisted; `reconcileDeckAfterMirror` and `remapDeckSourceRefs` import from `src/lib/presentation/validation.ts`; legacy `safeParseDeck` wrapper and `DeckParseResult` removed from `deck-schema.ts`; `validateDeck` deleted; affected tests updated. |
+| B8   | Migrate all callers of `Current*`-qualified re-exports in `deck-schema.ts` and `persistence/current-deck-schema.ts` — `deck-cas-writer.ts`, `persistence/deck.ts`, and the canonical path in `duplicate.ts` — to import `Deck`, `safeParseDeck`, `DECK_SCHEMA_VERSION`, `SlideNode`, and `SlideChildNode` directly from `src/lib/presentation/schema.ts` and `src/lib/presentation/validation.ts`. Delete `src/lib/document/deck-schema.ts` and `src/lib/document/persistence/current-deck-schema.ts`.                                 | No module imports `deck-schema.ts` or `persistence/current-deck-schema.ts`; both files deleted; all callers resolve canonical imports directly from `presentation/schema.ts` or `presentation/validation.ts`; no `Current*`-aliased re-export surface remains.                                                                                                        |
 
 ## Non-Goals
 
