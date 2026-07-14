@@ -126,7 +126,85 @@ describe("LexicalWebsocketProviderAdapter", () => {
     assert.equal(calls.length, before);
   });
 
-  test("dispose detaches update listeners from doc and awareness", () => {
+  test("deduplicates update listeners when the same callback is registered twice", () => {
+    const { adapter, doc } = createHarness();
+
+    const updates: unknown[] = [];
+    const onUpdate = (update: unknown) => {
+      updates.push(update);
+    };
+
+    adapter.on("update", onUpdate);
+    adapter.on("update", onUpdate);
+    doc.getText("body").insert(0, "hello");
+
+    assert.equal(updates.length, 1, "duplicate on must not double-fire");
+
+    adapter.off("update", onUpdate);
+    doc.getText("body").insert(5, " world");
+
+    assert.equal(
+      updates.length,
+      1,
+      "off must detach the single registered listener",
+    );
+  });
+
+  test("deduplicates awareness update listeners when the same callback is registered twice", () => {
+    const { adapter } = createHarness();
+
+    const calls: number[] = [];
+    const onAwarenessUpdate = () => {
+      calls.push(1);
+    };
+
+    adapter.awareness.on("update", onAwarenessUpdate);
+    adapter.awareness.on("update", onAwarenessUpdate);
+    adapter.awareness.setLocalState({
+      anchorPos: null,
+      awarenessData: {},
+      color: "#ff0000",
+      focusPos: null,
+      focusing: true,
+      name: "Alice",
+    });
+
+    assert.equal(
+      calls.length,
+      1,
+      "duplicate awareness on must not double-fire",
+    );
+
+    adapter.awareness.off("update", onAwarenessUpdate);
+    const before = calls.length;
+    adapter.awareness.setLocalStateField("name", "Bob");
+
+    assert.equal(
+      calls.length,
+      before,
+      "awareness off must detach the single registered listener",
+    );
+  });
+
+  test("off on unregistered callback is a no-op and leaves other listeners intact", () => {
+    const { adapter, doc } = createHarness();
+
+    const updates: unknown[] = [];
+    const registered = (u: unknown) => updates.push(u);
+    const stranger = () => {};
+
+    adapter.on("update", registered);
+    adapter.off("update", stranger);
+    doc.getText("body").insert(0, "x");
+
+    assert.equal(
+      updates.length,
+      1,
+      "registered listener must still fire after off of stranger",
+    );
+  });
+
+  test("dispose leaves no doc or awareness listeners and no stale registry entries", () => {
     const { adapter, doc } = createHarness();
 
     let updates = 0;
@@ -134,13 +212,16 @@ describe("LexicalWebsocketProviderAdapter", () => {
     const onUpdate = () => {
       updates += 1;
     };
-    const onAwarenessUpdate = () => {
+    const onAwareness = () => {
       awarenessUpdates += 1;
     };
 
     adapter.on("update", onUpdate);
-    adapter.awareness.on("update", onAwarenessUpdate);
+    adapter.awareness.on("update", onAwareness);
 
+    adapter.dispose();
+
+    // Second dispose must be a safe no-op
     adapter.dispose();
 
     doc.getText("body").insert(0, "ignored");
@@ -149,11 +230,11 @@ describe("LexicalWebsocketProviderAdapter", () => {
       awarenessData: {},
       color: "#00ff00",
       focusPos: null,
-      focusing: true,
-      name: "Alice",
+      focusing: false,
+      name: "Eve",
     });
 
-    assert.equal(updates, 0);
-    assert.equal(awarenessUpdates, 0);
+    assert.equal(updates, 0, "no doc update after dispose");
+    assert.equal(awarenessUpdates, 0, "no awareness update after dispose");
   });
 });

@@ -12,20 +12,24 @@ type ProviderUserState = Exclude<
   null
 >;
 
-const toProviderUserState = (state: {
-  [x: string]: any;
-}): ProviderUserState => ({
-  ...state,
-  anchorPos: state.anchorPos ?? null,
-  awarenessData:
-    typeof state.awarenessData === "object" && state.awarenessData !== null
-      ? state.awarenessData
-      : {},
-  color: typeof state.color === "string" ? state.color : "",
-  focusPos: state.focusPos ?? null,
-  focusing: Boolean(state.focusing),
-  name: typeof state.name === "string" ? state.name : "",
-});
+const toProviderUserState = (state: unknown): ProviderUserState => {
+  const s: Record<string, unknown> =
+    typeof state === "object" && state !== null
+      ? (state as Record<string, unknown>)
+      : {};
+  return {
+    ...s,
+    anchorPos: (s["anchorPos"] ?? null) as ProviderUserState["anchorPos"],
+    awarenessData:
+      typeof s["awarenessData"] === "object" && s["awarenessData"] !== null
+        ? (s["awarenessData"] as object)
+        : {},
+    color: typeof s["color"] === "string" ? s["color"] : "",
+    focusPos: (s["focusPos"] ?? null) as ProviderUserState["focusPos"],
+    focusing: Boolean(s["focusing"]),
+    name: typeof s["name"] === "string" ? s["name"] : "",
+  };
+};
 
 class LexicalAwarenessAdapter implements ProviderAwareness {
   private readonly updateListeners = new Map<
@@ -61,6 +65,9 @@ class LexicalAwarenessAdapter implements ProviderAwareness {
 
   on(...args: ["update", AwarenessUpdateListener]): void {
     const [, cb] = args;
+    if (this.updateListeners.has(cb)) {
+      return;
+    }
     const wrapped = () => {
       cb();
     };
@@ -79,10 +86,10 @@ class LexicalAwarenessAdapter implements ProviderAwareness {
   }
 
   dispose(): void {
-    for (const [cb, wrapped] of this.updateListeners.entries()) {
+    for (const wrapped of this.updateListeners.values()) {
       this.awareness.off("update", wrapped);
-      this.updateListeners.delete(cb);
     }
+    this.updateListeners.clear();
   }
 }
 
@@ -131,6 +138,9 @@ export class LexicalWebsocketProviderAdapter implements Provider {
       return;
     }
     if (type === "update") {
+      if (this.updateListeners.has(cb)) {
+        return;
+      }
       const wrapped = (update: Uint8Array) => {
         cb(update);
       };
@@ -174,10 +184,10 @@ export class LexicalWebsocketProviderAdapter implements Provider {
   }
 
   dispose(): void {
-    for (const [cb, wrapped] of this.updateListeners.entries()) {
+    for (const wrapped of this.updateListeners.values()) {
       this.doc.off("update", wrapped);
-      this.updateListeners.delete(cb);
     }
+    this.updateListeners.clear();
     if (this.awareness instanceof LexicalAwarenessAdapter) {
       this.awareness.dispose();
     }

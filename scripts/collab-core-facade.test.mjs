@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import * as coreNamespace from "./collab-core.mjs";
 import {
   ROOM_IDLE_TTL_MS,
   connCount,
@@ -37,6 +38,23 @@ import {
 } from "./collab-core-observability.mjs";
 import { collabLimits, upgradeWindows } from "./collab-core-limits.mjs";
 
+const EXPECTED_FACADE_EXPORTS = [
+  "ROOM_IDLE_TTL_MS",
+  "connCount",
+  "createCollabWss",
+  "flushStats",
+  "getRoomSavedStateVector",
+  "hasPendingUpdates",
+  "markRoomSaved",
+  "recentFlushFailures",
+  "recordFlushAttempt",
+  "recordFlushFailure",
+  "roomCount",
+  "setRoomSavedStateVector",
+  "shouldEvict",
+  "_testOnly",
+].sort();
+
 describe("collab-core facade parity", () => {
   test("re-exports room lifecycle helpers", () => {
     assert.equal(createCollabWss, createCollabWssImpl);
@@ -64,5 +82,32 @@ describe("collab-core facade parity", () => {
     assert.equal(_testOnly.flushCounters, flushCounters);
     assert.equal(_testOnly.upgradeWindows, upgradeWindows);
     assert.equal(_testOnly.collabLimits, collabLimits);
+  });
+
+  test("exact facade namespace matches stable public surface — no accidental mutable exports", () => {
+    const actual = Object.keys(coreNamespace).sort();
+    assert.deepEqual(
+      actual,
+      EXPECTED_FACADE_EXPORTS,
+      "collab-core.mjs exports diverged from the expected stable surface",
+    );
+  });
+
+  test("mutable internals are not reachable except through _testOnly", () => {
+    assert.equal(
+      "savedStateVectors" in coreNamespace,
+      false,
+      "savedStateVectors must not be a direct facade export",
+    );
+    assert.equal(
+      "flushFailureRing" in coreNamespace,
+      false,
+      "flushFailureRing must not be a direct facade export",
+    );
+    assert.equal(
+      "flushCounters" in coreNamespace,
+      false,
+      "flushCounters must not be a direct facade export",
+    );
   });
 });

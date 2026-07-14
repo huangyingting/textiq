@@ -18,7 +18,6 @@ export {
   setRoomSavedStateVector,
   getRoomSavedStateVector,
   markRoomSaved,
-  savedStateVectors,
 } from "./collab-core-durability.mjs";
 
 export {
@@ -26,8 +25,6 @@ export {
   recordFlushFailure,
   recentFlushFailures,
   flushStats,
-  flushFailureRing,
-  flushCounters,
 } from "./collab-core-observability.mjs";
 
 import {
