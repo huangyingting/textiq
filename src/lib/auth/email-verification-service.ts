@@ -5,6 +5,7 @@ import {
   deliverVerificationEmail,
 } from "@/lib/auth/email";
 import type { VerifyEmailResult } from "@/lib/auth/form-state";
+import { createPrismaVerificationTokenPort } from "@/lib/auth/verification-token-prisma-adapter";
 import {
   VERIFICATION_TOKEN_REJECTION_MESSAGE,
   VERIFICATION_TOKEN_TTL_MS,
@@ -12,7 +13,12 @@ import {
   evaluateVerificationToken,
   generateVerificationTokenMaterial,
   hashVerificationToken,
+  type VerificationTokenPersistenceInput,
 } from "@/lib/auth/verification-token";
+import type {
+  VerificationTokenPort,
+  VerificationTokenReconciliationState,
+} from "@/lib/auth/verification-token-port";
 import { singleUseTokenExpiresAt } from "@/lib/auth/single-use-token";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
@@ -35,6 +41,15 @@ export const AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE =
   "AUTH_EMAIL_VERIFICATION_ACTIVATION_FAILED";
 const AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_MESSAGE =
   "Could not activate a delivered email verification token.";
+export const AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_CODE =
+  "AUTH_EMAIL_VERIFICATION_RECONCILIATION_FAILED";
+const AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_MESSAGE =
+  "Could not reconcile delivered email verification token activation.";
+
+type VerificationTokenActivationStatus =
+  | { status: "sent" }
+  | { status: "activation_failed" }
+  | { status: "reconciliation_failed" };
 
 export async function requestEmailVerificationForUser(
   userId: string,
@@ -62,16 +77,23 @@ export async function requestEmailVerificationForUser(
       to: dbUser.email,
       verifyUrl: buildEmailVerificationUrl(tokenMaterial.rawToken),
     });
-    try {
-      await client.emailVerificationToken.create({
-        data: buildVerificationTokenPersistenceInput({
-          userId,
-          material: tokenMaterial,
-          expiresAt,
-        }),
-      });
-    } catch {
+
+    const tokenActivationStatus = await activateDeliveredVerificationToken({
+      tokenPort: createPrismaVerificationTokenPort(client),
+      persistenceInput: buildVerificationTokenPersistenceInput({
+        userId,
+        material: tokenMaterial,
+        expiresAt,
+      }),
+      now: new Date(),
+    });
+
+    if (tokenActivationStatus.status === "activation_failed") {
       logVerificationTokenActivationFailure(userId);
+      return actionError(GENERIC_VERIFICATION_ERROR);
+    }
+    if (tokenActivationStatus.status === "reconciliation_failed") {
+      logVerificationTokenReconciliationFailure(userId);
       return actionError(GENERIC_VERIFICATION_ERROR);
     }
 
@@ -204,4 +226,61 @@ function logVerificationTokenActivationFailure(userId: string): void {
       userId,
     },
   );
+}
+
+function logVerificationTokenReconciliationFailure(userId: string): void {
+  logError(
+    "email-verification",
+    new Error(AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_MESSAGE),
+    {
+      outcome: "reconciliation_failed",
+      code: AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_CODE,
+      userId,
+    },
+  );
+}
+
+async function activateDeliveredVerificationToken(input: {
+  tokenPort: VerificationTokenPort;
+  persistenceInput: VerificationTokenPersistenceInput;
+  now: Date;
+}): Promise<VerificationTokenActivationStatus> {
+  try {
+    await input.tokenPort.create(input.persistenceInput);
+    return { status: "sent" };
+  } catch {
+    return reconcileDeliveredVerificationToken({
+      tokenPort: input.tokenPort,
+      tokenHash: input.persistenceInput.tokenHash,
+      now: input.now,
+    });
+  }
+}
+
+async function reconcileDeliveredVerificationToken(input: {
+  tokenPort: Pick<VerificationTokenPort, "reconcileByTokenHash">;
+  tokenHash: string;
+  now: Date;
+}): Promise<VerificationTokenActivationStatus> {
+  try {
+    const reconciliation = await input.tokenPort.reconcileByTokenHash({
+      tokenHash: input.tokenHash,
+      now: input.now,
+    });
+    return mapReconciliationToActivationStatus(reconciliation);
+  } catch {
+    return { status: "reconciliation_failed" };
+  }
+}
+
+function mapReconciliationToActivationStatus(
+  reconciliation: VerificationTokenReconciliationState,
+): VerificationTokenActivationStatus {
+  if (reconciliation.status === "active") {
+    return { status: "sent" };
+  }
+  if (reconciliation.status === "ambiguous") {
+    return { status: "reconciliation_failed" };
+  }
+  return { status: "activation_failed" };
 }

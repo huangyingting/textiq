@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/email";
 import {
   AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE,
+  AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_CODE,
   consumeEmailVerificationToken,
   requestEmailVerificationForUser,
 } from "@/lib/auth/email-verification-service";
@@ -103,6 +104,9 @@ function makeRequestClient(
     initialTokens?: VerificationTokenRow[];
     createError?: Error;
     createErrors?: Array<Error | null>;
+    createErrorsAfterPersist?: Array<Error | null>;
+    reconcileError?: Error;
+    reconcileErrors?: Array<Error | null>;
     beforeCreate?: (input: {
       callIndex: number;
       data: { userId: string; tokenHash: string; expiresAt: Date };
@@ -126,6 +130,7 @@ function makeRequestClient(
     data: { usedAt: Date };
   }> = [];
   const deleteManyCalls: Array<{ id?: string; userId?: string }> = [];
+  const reconcileTokenHashes: string[] = [];
   let nextId = tokens.length + 1;
 
   const userRecord =
@@ -146,11 +151,8 @@ function makeRequestClient(
         const callIndex = createInputs.length;
         createInputs.push(data);
         await options.beforeCreate?.({ callIndex, data });
-        const plannedError =
+        const plannedPrePersistError =
           options.createErrors?.[callIndex] ?? options.createError;
-        if (plannedError) {
-          throw plannedError;
-        }
         const created = {
           id: `evt_new_${nextId++}`,
           userId: data.userId,
@@ -158,9 +160,41 @@ function makeRequestClient(
           expiresAt: data.expiresAt,
           usedAt: null,
         };
+        const plannedPostPersistError =
+          options.createErrorsAfterPersist?.[callIndex] ?? null;
+        if (plannedPrePersistError) {
+          throw plannedPrePersistError;
+        }
         tokens.push(created);
         createdTokenHashes.push(created.tokenHash);
+        if (plannedPostPersistError) {
+          throw plannedPostPersistError;
+        }
         return { id: created.id };
+      },
+      findMany: async ({
+        where,
+        take,
+      }: {
+        where: { tokenHash: string };
+        select: { expiresAt: true; usedAt: true };
+        take?: number;
+      }) => {
+        const callIndex = reconcileTokenHashes.length;
+        reconcileTokenHashes.push(where.tokenHash);
+        const plannedError =
+          options.reconcileErrors?.[callIndex] ?? options.reconcileError;
+        if (plannedError) {
+          throw plannedError;
+        }
+        const matches = tokens
+          .filter((token) => token.tokenHash === where.tokenHash)
+          .slice(0, take ?? tokens.length)
+          .map((token) => ({
+            expiresAt: token.expiresAt,
+            usedAt: token.usedAt,
+          }));
+        return matches;
       },
       updateMany: async ({
         where,
@@ -191,6 +225,7 @@ function makeRequestClient(
     _createInputs: createInputs,
     _updateManyCalls: updateManyCalls,
     _deleteManyCalls: deleteManyCalls,
+    _reconcileTokenHashes: reconcileTokenHashes,
   });
 
   return client;
@@ -214,6 +249,17 @@ function countSentAuditLines(lines: string[]): number {
       line.includes('"scope":"security.audit"') &&
       line.includes('"message":"auth.email_verification.requested"') &&
       line.includes('"outcome":"sent"'),
+  ).length;
+}
+
+function countVerificationFailureLines(
+  lines: string[],
+  outcome: "activation_failed" | "delivery_failed" | "reconciliation_failed",
+): number {
+  return lines.filter(
+    (line) =>
+      line.includes('"scope":"email-verification"') &&
+      line.includes(`"outcome":"${outcome}"`),
   ).length;
 }
 
@@ -445,17 +491,10 @@ test("requestEmailVerificationForUser performs zero token writes when delivery f
   assert.equal(client._tokens.length, 1);
   assert.equal(client._tokens[0]?.id, "evt_old_1");
   assert.equal(client._tokens[0]?.usedAt, null);
-  assert.equal(
-    errorLines.filter(
-      (line) =>
-        line.includes('"scope":"email-verification"') &&
-        line.includes('"outcome":"delivery_failed"'),
-    ).length,
-    1,
-  );
+  assert.equal(countVerificationFailureLines(errorLines, "delivery_failed"), 1);
 });
 
-test("requestEmailVerificationForUser logs canonical activation failures after delivery", async () => {
+test("requestEmailVerificationForUser logs canonical activation failures after no-commit persistence rejection", async () => {
   const client = makeRequestClient({
     createError: new Error(
       "provider=smtp://secret.example token=raw-verification-token recipient=person@example.com callback=https://secret.example/hook",
@@ -492,7 +531,16 @@ test("requestEmailVerificationForUser logs canonical activation failures after d
   assert.equal(delivered.length, 1);
   assert.equal(client._createInputs.length, 1);
   assert.equal(client._tokens.length, 0);
+  assert.equal(client._reconcileTokenHashes.length, 1);
   assert.equal(countSentAuditLines(infoLines), 0);
+  assert.equal(
+    countVerificationFailureLines(errorLines, "activation_failed"),
+    1,
+  );
+  assert.equal(
+    countVerificationFailureLines(errorLines, "reconciliation_failed"),
+    0,
+  );
   assert.equal(errorLines.length, 1);
   const serialized = errorLines[0] ?? "";
   assert.equal(serialized.includes('"outcome":"activation_failed"'), true);
@@ -503,6 +551,119 @@ test("requestEmailVerificationForUser logs canonical activation failures after d
   assert.equal(serialized.includes("secret.example"), false);
   assert.equal(serialized.includes("raw-verification-token"), false);
   assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("/verify-email/"), false);
+});
+
+test("requestEmailVerificationForUser confirms sent when persistence rejects after durable append and reconciliation is active", async () => {
+  const client = makeRequestClient({
+    createErrorsAfterPersist: [
+      new Error(
+        "provider=smtp://secret.example token=raw-verification-token recipient=person@example.com callback=https://secret.example/hook",
+      ),
+    ],
+  });
+  const delivered: AuthEmailMessage[] = [];
+  const infoLines: string[] = [];
+  const errorLines: string[] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
+  console.error = (line?: unknown) => {
+    errorLines.push(String(line));
+  };
+  configureAuthEmailDeliveryPort({
+    async send(message) {
+      delivered.push(message);
+    },
+  });
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: true,
+      data: { status: "sent" },
+    });
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(delivered.length, 1);
+  assert.equal(client._createInputs.length, 1);
+  assert.equal(client._tokens.length, 1);
+  assert.equal(client._reconcileTokenHashes.length, 1);
+  assert.equal(countSentAuditLines(infoLines), 1);
+  assert.equal(
+    countVerificationFailureLines(errorLines, "activation_failed"),
+    0,
+  );
+  assert.equal(
+    countVerificationFailureLines(errorLines, "reconciliation_failed"),
+    0,
+  );
+});
+
+test("requestEmailVerificationForUser logs canonical reconciliation failures when reconciliation query throws", async () => {
+  const client = makeRequestClient({
+    createError: new Error("write rejected"),
+    reconcileError: new Error(
+      "provider=smtp://secret.example token=raw-verification-token recipient=person@example.com callback=https://secret.example/hook bearer=demo-bearer-token",
+    ),
+  });
+  const delivered: AuthEmailMessage[] = [];
+  const infoLines: string[] = [];
+  const errorLines: string[] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
+  console.error = (line?: unknown) => {
+    errorLines.push(String(line));
+  };
+  configureAuthEmailDeliveryPort({
+    async send(message) {
+      delivered.push(message);
+    },
+  });
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: false,
+      error: "Could not send a verification email. Please try again.",
+    });
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(delivered.length, 1);
+  assert.equal(client._createInputs.length, 1);
+  assert.equal(client._tokens.length, 0);
+  assert.equal(client._reconcileTokenHashes.length, 1);
+  assert.equal(countSentAuditLines(infoLines), 0);
+  assert.equal(
+    countVerificationFailureLines(errorLines, "reconciliation_failed"),
+    1,
+  );
+  assert.equal(
+    countVerificationFailureLines(errorLines, "activation_failed"),
+    0,
+  );
+  assert.equal(errorLines.length, 1);
+  const serialized = errorLines[0] ?? "";
+  assert.equal(serialized.includes('"outcome":"reconciliation_failed"'), true);
+  assert.equal(
+    serialized.includes(AUTH_EMAIL_VERIFICATION_RECONCILIATION_ERROR_CODE),
+    true,
+  );
+  assert.equal(serialized.includes("secret.example"), false);
+  assert.equal(serialized.includes("raw-verification-token"), false);
+  assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("demo-bearer-token"), false);
   assert.equal(serialized.includes("/verify-email/"), false);
 });
 
@@ -570,6 +731,33 @@ test("requestEmailVerificationForUser retries with a fresh delivered token after
     1,
   );
   assert.equal(countSentAuditLines(infoLines), 1);
+});
+
+test("requestEmailVerificationForUser keeps confirmed success when sent audit logging fails closed", async () => {
+  const client = makeRequestClient();
+  const delivered: AuthEmailMessage[] = [];
+  const originalInfo = console.info;
+  configureAuthEmailDeliveryPort({
+    async send(message) {
+      delivered.push(message);
+    },
+  });
+  console.info = () => {
+    throw new Error("stdout unavailable");
+  };
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: true,
+      data: { status: "sent" },
+    });
+  } finally {
+    console.info = originalInfo;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(delivered.length, 1);
+  assert.equal(client._tokens.length, 1);
 });
 
 test("requestEmailVerificationForUser preserves canonical delivery error logging without transport secrets", async () => {
@@ -782,8 +970,11 @@ test("requestEmailVerificationForUser does not write sent audit when activation 
   assert.equal(delivered.length, 2);
   assert.equal(countSentAuditLines(infoLines), 1);
   assert.equal(
-    errorLines.filter((line) => line.includes('"outcome":"activation_failed"'))
-      .length,
+    countVerificationFailureLines(errorLines, "reconciliation_failed"),
+    0,
+  );
+  assert.equal(
+    countVerificationFailureLines(errorLines, "activation_failed"),
     1,
   );
 });

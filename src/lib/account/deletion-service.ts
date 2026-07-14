@@ -22,6 +22,9 @@ type PrismaClientLike = typeof prisma;
 const DELETE_CONFIRMATION_KEYWORD = "DELETE";
 
 const GENERIC_DELETE_ERROR = "Could not delete your account. Please try again.";
+export const ACCOUNT_DELETION_CANONICAL_ERROR_CODE = "ACCOUNT_DELETION_FAILED";
+const ACCOUNT_DELETION_CANONICAL_ERROR_MESSAGE =
+  "Could not complete account deletion operation.";
 
 export interface DeleteAccountDependencies {
   client?: PrismaClientLike;
@@ -125,10 +128,13 @@ export async function deleteAccountForUser(
       count: erasure.deletedAssetCount,
       outcome: "success",
     });
-  } /* node:coverage ignore next -- Defensive catch behavior is asserted; tsx maps the catch boundary as uncovered. */ catch (error) {
-    log("account-deletion", error, {
+  } /* node:coverage ignore next -- Defensive catch behavior is asserted; tsx maps the catch boundary as uncovered. */ catch {
+    const canonicalError = new Error(ACCOUNT_DELETION_CANONICAL_ERROR_MESSAGE);
+    canonicalError.name = "AccountDeletionError";
+    log("account-deletion", canonicalError, {
       userId: input.userId,
       stage: "account-deletion",
+      code: ACCOUNT_DELETION_CANONICAL_ERROR_CODE,
     });
     return actionError(GENERIC_DELETE_ERROR);
   }
