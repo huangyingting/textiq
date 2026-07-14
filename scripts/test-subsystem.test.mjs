@@ -47,6 +47,7 @@ const SAMPLE_TEST_FILES = [
   "src/lib/auth/password.test.ts",
   "src/lib/collab/room-access.test.ts",
   "src/lib/presentation/validation.test.ts",
+  "src/lib/validation-primitives.test.ts",
 ];
 
 test("test subsystem map exposes stable subsystem names", () => {
@@ -66,6 +67,12 @@ test("test subsystem map classifies files by owning subsystem", () => {
     classifyTestFile("src/lib/presentation/validation.test.ts").includes(
       "data-model",
     ),
+  );
+  assert.ok(
+    classifyTestFile("src/lib/validation-primitives.test.ts").includes(
+      "data-model",
+    ),
+    "src/lib/validation-primitives.test.ts must classify under data-model",
   );
   assert.ok(
     classifyTestFile("e2e/presentation/present-export.spec.ts").includes(
