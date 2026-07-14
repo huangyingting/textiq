@@ -212,7 +212,8 @@ describe("checkRateLimitWithStore atomicConsume concurrency (#1997)", () => {
       1,
       "exactly one concurrent request should be allowed at limit=1",
     );
-    assert.equal(store.windows.get("key")?.count, 1);
+    // Exact post-state: count=1, resetAt=now+windowMs=0+1000=1000
+    assert.deepEqual(store.windows.get("key"), { count: 1, resetAt: 1000 });
   });
 
   it("concurrent live-window limit=2 allows exactly two of three requests", async () => {

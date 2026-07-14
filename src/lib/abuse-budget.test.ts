@@ -311,14 +311,19 @@ test("checkAbuseBudget concurrent same-key allows exact limit and blocks excess 
     );
     assert.equal(blocked.length, 1, "exactly one concurrent request blocked");
 
-    // All results share the same key and subjectHash
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("room-concurrent-9001", "abuse-budget-test-secret") = "a0209bf4fc80d4854fdc957139d71ae5"
+    const expectedSubjectHash = "a0209bf4fc80d4854fdc957139d71ae5";
+    const expectedKey = "collab.flush.room:a0209bf4fc80d4854fdc957139d71ae5";
+
+    // All results carry the literal expected subjectHash and key
     assert.ok(
-      results.every((r) => r.key === r1.key),
-      "all concurrent results share the same key",
+      results.every((r) => r.subjectHash === expectedSubjectHash),
+      "all concurrent results carry the literal expected subjectHash",
     );
     assert.ok(
-      results.every((r) => r.subjectHash === r1.subjectHash),
-      "all concurrent results share the same subjectHash",
+      results.every((r) => r.key === expectedKey),
+      "all concurrent results carry the literal expected key",
     );
 
     // Sorted remaining values of allowed results: [0, 1]
@@ -349,6 +354,10 @@ test("checkAbuseBudget concurrent same-key allows exact limit and blocks excess 
       blockedResult.retryAfterSeconds,
       Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
     );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=2
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 2, resetAt: expectedResetAt });
   } finally {
     delete process.env.COLLAB_FLUSH_RATE_LIMIT;
     delete process.env.COLLAB_FLUSH_RATE_WINDOW_MS;
@@ -402,17 +411,22 @@ test("checkIpRateLimit concurrent same-IP allows exact limit and blocks excess w
     assert.equal(allowed.length, 2);
     assert.equal(blocked.length, 1);
 
-    // All results share the same key and subjectHash
-    assert.ok(results.every((r) => r.key === r1.key));
-    assert.ok(results.every((r) => r.subjectHash === r1.subjectHash));
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("203.0.113.50", "abuse-budget-test-secret") = "a5b8bb321c928821ca7cf8db5ff55c62"
+    const expectedSubjectHash = "a5b8bb321c928821ca7cf8db5ff55c62";
+    const expectedKey = "import.ip:a5b8bb321c928821ca7cf8db5ff55c62";
+
+    // All results carry the literal expected subjectHash and key
+    assert.ok(results.every((r) => r.subjectHash === expectedSubjectHash));
+    assert.ok(results.every((r) => r.key === expectedKey));
 
     // Key is namespace-prefixed hashed identifier — never contains the raw IP
     assert.ok(
-      !r1.key.includes("203.0.113.50"),
+      !expectedKey.includes("203.0.113.50"),
       "key must not contain the raw client IP",
     );
-    assert.equal(r1.key, `import.ip:${r1.subjectHash}`);
-    assert.equal(r1.subjectHash.length, 32);
+    assert.equal(r1.key, expectedKey);
+    assert.equal(r1.subjectHash, expectedSubjectHash);
 
     // Sorted remaining values of allowed results: [0, 1]
     const sortedRemaining = allowed
@@ -436,9 +450,88 @@ test("checkIpRateLimit concurrent same-IP allows exact limit and blocks excess w
       blockedResult.retryAfterSeconds,
       Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
     );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=2
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 2, resetAt: expectedResetAt });
   } finally {
     delete process.env.IMPORT_RATE_LIMIT;
     delete process.env.IMPORT_RATE_WINDOW_MS;
+  }
+});
+
+test("checkAbuseBudget concurrent new-window limit=1 allows exactly one and blocks excess atomically", async () => {
+  process.env.AUTH_LOGIN_RATE_LIMIT = "1";
+  process.env.AUTH_LOGIN_RATE_WINDOW_MS = "60000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const now = 3000;
+    const base = {
+      namespace: "auth.login.email" as const,
+      subject: "concurrent-limit1-7777",
+      secret: SECRET,
+      store,
+      now,
+    };
+
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("concurrent-limit1-7777", "abuse-budget-test-secret") = "48c67db244cfddd5ef45fc34fbabd9d2"
+    const expectedSubjectHash = "48c67db244cfddd5ef45fc34fbabd9d2";
+    const expectedKey = "auth.login.email:48c67db244cfddd5ef45fc34fbabd9d2";
+    const expectedResetAt = now + 60000;
+
+    const [r1, r2] = await Promise.all([
+      checkAbuseBudget(base),
+      checkAbuseBudget(base),
+    ]);
+
+    const results = [r1, r2];
+    const allowed = results.filter((r) => r.allowed);
+    const blocked = results.filter((r) => !r.allowed);
+
+    // Exactly one allowed, one blocked at limit=1
+    assert.equal(
+      allowed.length,
+      1,
+      "exactly one concurrent request allowed at limit=1",
+    );
+    assert.equal(
+      blocked.length,
+      1,
+      "exactly one concurrent request blocked at limit=1",
+    );
+
+    // All results carry the literal expected subjectHash and key
+    assert.equal(r1.subjectHash, expectedSubjectHash);
+    assert.equal(r2.subjectHash, expectedSubjectHash);
+    assert.equal(r1.key, expectedKey);
+    assert.equal(r2.key, expectedKey);
+
+    // Exact sorted remaining multiset: both remaining=0 at limit=1
+    const sortedRemaining = results
+      .map((r) => r.result.remaining)
+      .sort((a, b) => a - b);
+    assert.deepEqual(sortedRemaining, [0, 0]);
+
+    // Exact limit and resetAt for both results
+    assert.ok(results.every((r) => r.result.limit === 1));
+    assert.ok(results.every((r) => r.result.resetAt === expectedResetAt));
+
+    // Allowed result omits retryAfterSeconds
+    assert.equal(allowed[0]!.retryAfterSeconds, undefined);
+
+    // Blocked result carries exact retryAfterSeconds
+    assert.equal(
+      blocked[0]!.retryAfterSeconds,
+      Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
+    );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=1
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 1, resetAt: expectedResetAt });
+  } finally {
+    delete process.env.AUTH_LOGIN_RATE_LIMIT;
+    delete process.env.AUTH_LOGIN_RATE_WINDOW_MS;
   }
 });
 
