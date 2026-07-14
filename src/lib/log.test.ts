@@ -9,6 +9,10 @@ import {
   normalizeLogKey,
 } from "@/lib/log";
 import { buildInfoLog, logInfo } from "@/lib/log";
+import {
+  buildScriptErrorLog,
+  buildScriptLogRecord,
+} from "../../scripts/structured-log.mjs";
 
 test("buildErrorLog redacts configured sensitive context keys", () => {
   const record = buildErrorLog("api.generate", new Error("boom"), {
@@ -185,6 +189,51 @@ test("buildInfoLog keeps reserved fields authoritative", () => {
   assert.equal(record.scope, "my.scope");
   assert.equal(record.message, "real-message");
   assert.equal(typeof record.timestamp, "string");
+});
+
+test("app and script info record builders stay field-for-field aligned", () => {
+  const context = {
+    requestId: "req-7",
+    message: "spoofed-message",
+    scope: "spoofed-scope",
+    token: "secret-token",
+  };
+  const appRecord = buildInfoLog("collab.flush", "ok", context);
+  const scriptRecord = buildScriptLogRecord(
+    "info",
+    "collab.flush",
+    "ok",
+    context,
+  );
+
+  assert.deepEqual(
+    { ...appRecord, timestamp: "<fixed>" },
+    { ...scriptRecord, timestamp: "<fixed>" },
+  );
+  assert.deepEqual(Object.keys(appRecord), Object.keys(scriptRecord));
+});
+
+test("app and script error record builders stay field-for-field aligned", () => {
+  const err = new TypeError("request failed: https://api.example.com/secret");
+  err.stack =
+    "TypeError: request failed: https://api.example.com/secret\n at x";
+  const context = {
+    requestId: "req-8",
+    errorName: "spoofed",
+    message: "spoofed",
+    Authorization: "Bearer secret",
+    payload: { text: "raw content" },
+  };
+  const appRecord = buildErrorLog("collab.sync", err, context);
+  const scriptRecord = buildScriptErrorLog("collab.sync", err, context);
+
+  assert.deepEqual(
+    { ...appRecord, timestamp: "<fixed>" },
+    { ...scriptRecord, timestamp: "<fixed>" },
+  );
+  assert.deepEqual(Object.keys(appRecord), Object.keys(scriptRecord));
+  assert.equal(appRecord.message, REDACTED);
+  assert.equal(appRecord.Authorization, REDACTED);
 });
 
 test("logInfo emits a single JSON line with no raw newline", () => {

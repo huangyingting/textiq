@@ -158,6 +158,38 @@ test("design-system check: scans repository roots and skips unsupported files", 
   );
 });
 
+test("design-system check: table-driven source filter keeps scan coverage", (t) => {
+  const repoRoot = createTestFixtureRoot("design-system-filter-table", t);
+  const cases = [
+    { path: ["src", "app", "included.tsx"], shouldReport: true },
+    { path: ["src", "components", "included.js"], shouldReport: true },
+    { path: ["src", "components", "notes.md"], shouldReport: false },
+    { path: ["src", "app", ".next", "ignored.tsx"], shouldReport: false },
+    {
+      path: ["src", "components", "node_modules", "pkg", "ignored.tsx"],
+      shouldReport: false,
+    },
+  ];
+
+  for (const item of cases) {
+    mkdirSync(join(repoRoot, ...item.path.slice(0, -1)), { recursive: true });
+    writeFileSync(
+      join(repoRoot, ...item.path),
+      '<div className="z-50 bg-[#fff]" />\n',
+    );
+  }
+
+  const reportedFiles = scanDesignSystem(repoRoot)
+    .map((finding) => finding.filePath)
+    .sort();
+  const expectedFiles = cases
+    .filter((item) => item.shouldReport)
+    .map((item) => item.path.join("/"))
+    .sort();
+
+  assert.deepEqual([...new Set(reportedFiles)], expectedFiles);
+});
+
 test("design-system CLI reports pass and failure results", (t) => {
   const scriptPath = join(process.cwd(), "scripts", "check-design-system.mjs");
   const passRoot = createTestFixtureRoot("design-system-cli-pass", t);
