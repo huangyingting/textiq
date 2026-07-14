@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { resolve as resolvePath } from "node:path";
 import { before, test } from "node:test";
+import { promisify } from "node:util";
 
 type ModuleHooks = {
   registerHooks(hooks: {
@@ -37,7 +42,9 @@ registerHooks({
   },
 });
 
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { Prisma } from "@/generated/prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type InviteServiceModule = typeof import("./invite-service");
@@ -47,6 +54,7 @@ let acceptWorkspaceInvite: InviteServiceModule["acceptWorkspaceInvite"];
 let assertInvitableWorkspaceRole: InviteServiceModule["assertInvitableWorkspaceRole"];
 let createWorkspaceInviteLink: InviteServiceModule["createWorkspaceInviteLink"];
 let getInviteLinkTarget: InviteServiceModule["getInviteLinkTarget"];
+let isWorkspaceMembershipUniqueConflict: InviteServiceModule["isWorkspaceMembershipUniqueConflict"];
 let normalizeInviteExpiry: InviteServiceModule["normalizeInviteExpiry"];
 let normalizeInviteMaxUses: InviteServiceModule["normalizeInviteMaxUses"];
 let revokeWorkspaceInviteLink: InviteServiceModule["revokeWorkspaceInviteLink"];
@@ -59,12 +67,18 @@ before(async () => {
   assertInvitableWorkspaceRole = mod.assertInvitableWorkspaceRole;
   createWorkspaceInviteLink = mod.createWorkspaceInviteLink;
   getInviteLinkTarget = mod.getInviteLinkTarget;
+  isWorkspaceMembershipUniqueConflict = mod.isWorkspaceMembershipUniqueConflict;
   normalizeInviteExpiry = mod.normalizeInviteExpiry;
   normalizeInviteMaxUses = mod.normalizeInviteMaxUses;
   revokeWorkspaceInviteLink = mod.revokeWorkspaceInviteLink;
 });
 
 const NOW = new Date("2026-06-25T00:00:00Z");
+const REPO_ROOT = process.cwd();
+const SQLITE_TEST_DB_DIRECTORY = resolvePath(REPO_ROOT, "prisma", ".test-dbs");
+const WORKSPACE_MEMBER_UNIQUE_CONSTRAINT =
+  "WorkspaceMember_workspaceId_userId_key";
+const execFileAsync = promisify(execFile);
 
 function mutablePrisma(): Record<string, unknown> {
   return prisma as unknown as Record<string, unknown>;
@@ -81,6 +95,19 @@ function replacePrismaProperty(
   t.after(() => {
     target[key] = original;
   });
+}
+
+type KnownRequestErrorOptions = ConstructorParameters<
+  typeof Prisma.PrismaClientKnownRequestError
+>[1];
+
+function knownRequestError(
+  options: KnownRequestErrorOptions,
+): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError(
+    "Prisma request failed",
+    options,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +150,78 @@ test("assertInvitableWorkspaceRole accepts only invite-grantable roles", () => {
   assert.doesNotThrow(() => assertInvitableWorkspaceRole("EDITOR"));
   assert.doesNotThrow(() => assertInvitableWorkspaceRole("VIEWER"));
   assert.throws(() => assertInvitableWorkspaceRole("OWNER"), /Invalid invite/);
+});
+
+// ---------------------------------------------------------------------------
+// P2002 membership conflict classifier
+// ---------------------------------------------------------------------------
+
+test("isWorkspaceMembershipUniqueConflict matches sqlite meta.target array fields", () => {
+  const error = knownRequestError({
+    code: "P2002",
+    clientVersion: "test",
+    meta: { target: ["workspaceId", "userId"] },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), true);
+});
+
+test("isWorkspaceMembershipUniqueConflict matches sqlite meta.target field string", () => {
+  const error = knownRequestError({
+    code: "P2002",
+    clientVersion: "test",
+    meta: { target: "workspaceId,userId" },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), true);
+});
+
+test("isWorkspaceMembershipUniqueConflict matches postgres constraint-name targets", () => {
+  const error = knownRequestError({
+    code: "P2002",
+    clientVersion: "test",
+    meta: { target: `public.${WORKSPACE_MEMBER_UNIQUE_CONSTRAINT}` },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), true);
+});
+
+test("isWorkspaceMembershipUniqueConflict matches sqlite driver-adapter constraint fields", () => {
+  const error = knownRequestError({
+    code: "P2002",
+    clientVersion: "test",
+    meta: {
+      driverAdapterError: {
+        cause: {
+          constraint: {
+            fields: ["workspaceId", "userId"],
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), true);
+});
+
+test("isWorkspaceMembershipUniqueConflict rejects unrelated unique targets", () => {
+  const error = knownRequestError({
+    code: "P2002",
+    clientVersion: "test",
+    meta: { target: ["inviteLinkId", "userId"] },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), false);
+});
+
+test("isWorkspaceMembershipUniqueConflict rejects non-P2002 errors", () => {
+  const error = knownRequestError({
+    code: "P2003",
+    clientVersion: "test",
+    meta: { target: ["workspaceId", "userId"] },
+  });
+
+  assert.equal(isWorkspaceMembershipUniqueConflict(error), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -746,7 +845,11 @@ test("acceptWorkspaceInvite maps workspaceMember P2002 replay to already-member"
       async create() {
         throw new Prisma.PrismaClientKnownRequestError(
           "Unique constraint failed",
-          { code: "P2002", clientVersion: "test" },
+          {
+            code: "P2002",
+            clientVersion: "test",
+            meta: { target: ["workspaceId", "userId"] },
+          },
         );
       },
     },
@@ -769,6 +872,51 @@ test("acceptWorkspaceInvite maps workspaceMember P2002 replay to already-member"
     workspaceId: "ws-race",
   });
   assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite rethrows workspaceMember P2002 when target is unrelated", async (t) => {
+  const unrelatedUniqueError = new Prisma.PrismaClientKnownRequestError(
+    "Unique constraint failed",
+    {
+      code: "P2002",
+      clientVersion: "test",
+      meta: { target: ["inviteLinkId", "userId"] },
+    },
+  );
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        return inviteRow({ workspaceId: "ws-race", maxUses: 5, useCount: 0 });
+      },
+      async updateMany() {
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        return null;
+      },
+      async create() {
+        throw unrelatedUniqueError;
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        return {};
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      acceptWorkspaceInvite({
+        inviteLinkId: "link-1",
+        userId: "user-1",
+        now: NOW,
+      }),
+    unrelatedUniqueError,
+  );
 });
 
 test("acceptWorkspaceInvite denies invalid persisted invite roles explicitly", async (t) => {
@@ -971,6 +1119,314 @@ test("acceptWorkspaceInvite surfaces transaction errors from inviteLink.updateMa
       }),
     p2002,
   );
+});
+
+type InviteServiceIntegrationHarness = {
+  databaseFilePath: string;
+  databaseUrl: string;
+  client: PrismaClient;
+};
+
+type InviteServiceFixture = {
+  ownerId: string;
+  workspaceId: string;
+  inviteLinkId: string;
+};
+
+function id(prefix: string): string {
+  return `${prefix}-${randomUUID()}`;
+}
+
+function email(idValue: string): string {
+  return `${idValue}@example.com`;
+}
+
+async function createInviteServiceIntegrationHarness(): Promise<InviteServiceIntegrationHarness> {
+  await mkdir(SQLITE_TEST_DB_DIRECTORY, { recursive: true });
+
+  const databaseFilePath = resolvePath(
+    SQLITE_TEST_DB_DIRECTORY,
+    `invite-service-${randomUUID()}.db`,
+  );
+  const databaseUrl = `file:${databaseFilePath}`;
+
+  await execFileAsync(
+    "npx",
+    ["prisma", "db", "push", "--schema", "prisma/schema.sqlite.prisma"],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        DB_PROVIDER: "sqlite",
+        DATABASE_URL: databaseUrl,
+      },
+    },
+  );
+
+  const adapter = new PrismaBetterSqlite3({ url: databaseUrl });
+  const client = new PrismaClient({ adapter });
+
+  return { databaseFilePath, databaseUrl, client };
+}
+
+async function disposeInviteServiceIntegrationHarness(
+  harness: InviteServiceIntegrationHarness,
+): Promise<void> {
+  await harness.client.$disconnect();
+  await rm(harness.databaseFilePath, { force: true });
+  await rm(`${harness.databaseFilePath}-journal`, { force: true });
+  await rm(`${harness.databaseFilePath}-wal`, { force: true });
+  await rm(`${harness.databaseFilePath}-shm`, { force: true });
+}
+
+function bindInviteServicePrismaToIntegrationClient(
+  t: { after(callback: () => void): void },
+  client: PrismaClient,
+) {
+  replacePrismaProperty(t, "$transaction", client.$transaction.bind(client));
+  replacePrismaProperty(t, "inviteLink", client.inviteLink);
+  replacePrismaProperty(t, "workspaceMember", client.workspaceMember);
+  replacePrismaProperty(t, "inviteLinkUse", client.inviteLinkUse);
+}
+
+async function seedInviteServiceFixture(
+  client: PrismaClient,
+  options: {
+    role?: "EDITOR" | "VIEWER";
+    maxUses?: number | null;
+    useCount?: number;
+  } = {},
+): Promise<InviteServiceFixture> {
+  const ownerId = id("owner");
+  const workspaceId = id("workspace");
+  const inviteLinkId = id("invite");
+  const inviteToken = id("token");
+  const role = options.role ?? "EDITOR";
+  const maxUses = options.maxUses ?? null;
+  const useCount = options.useCount ?? 0;
+
+  await client.user.create({
+    data: { id: ownerId, email: email(ownerId) },
+  });
+
+  await client.workspace.create({
+    data: { id: workspaceId, name: "Workspace", ownerId },
+  });
+
+  await client.inviteLink.create({
+    data: {
+      id: inviteLinkId,
+      workspaceId,
+      token: inviteToken,
+      role,
+      maxUses,
+      useCount,
+      createdById: ownerId,
+      isRevoked: false,
+      expiresAt: null,
+    },
+  });
+
+  return { ownerId, workspaceId, inviteLinkId };
+}
+
+async function countInviteSideEffects(
+  client: PrismaClient,
+  fixture: InviteServiceFixture,
+) {
+  const invite = await client.inviteLink.findUnique({
+    where: { id: fixture.inviteLinkId },
+    select: { useCount: true },
+  });
+  const members = await client.workspaceMember.findMany({
+    where: { workspaceId: fixture.workspaceId },
+    select: { userId: true, role: true },
+  });
+  const audits = await client.inviteLinkUse.findMany({
+    where: { inviteLinkId: fixture.inviteLinkId },
+    select: { userId: true, role: true },
+  });
+
+  return {
+    useCount: invite?.useCount ?? null,
+    memberCount: members.length,
+    auditCount: audits.length,
+    members,
+    audits,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// acceptWorkspaceInvite — real SQLite + Prisma integration coverage
+// ---------------------------------------------------------------------------
+
+test("acceptWorkspaceInvite integration persists useCount/member/audit for a successful join", async (t) => {
+  const harness = await createInviteServiceIntegrationHarness();
+  t.after(async () => {
+    await disposeInviteServiceIntegrationHarness(harness);
+  });
+  bindInviteServicePrismaToIntegrationClient(t, harness.client);
+
+  const fixture = await seedInviteServiceFixture(harness.client, {
+    role: "EDITOR",
+    maxUses: 5,
+  });
+  const joinerId = id("joiner");
+  await harness.client.user.create({
+    data: { id: joinerId, email: email(joinerId) },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: fixture.inviteLinkId,
+    userId: joinerId,
+    now: NOW,
+  });
+
+  assert.deepEqual(result, {
+    outcome: "joined",
+    workspaceId: fixture.workspaceId,
+  });
+
+  const effects = await countInviteSideEffects(harness.client, fixture);
+  assert.equal(effects.useCount, 1);
+  assert.equal(effects.memberCount, 1);
+  assert.equal(effects.auditCount, 1);
+  assert.deepEqual(effects.members[0], { userId: joinerId, role: "EDITOR" });
+  assert.deepEqual(effects.audits[0], { userId: joinerId, role: "EDITOR" });
+});
+
+test("acceptWorkspaceInvite integration denies the second maxUses=1 accept and keeps counts at one", async (t) => {
+  const harness = await createInviteServiceIntegrationHarness();
+  t.after(async () => {
+    await disposeInviteServiceIntegrationHarness(harness);
+  });
+  bindInviteServicePrismaToIntegrationClient(t, harness.client);
+
+  const fixture = await seedInviteServiceFixture(harness.client, {
+    role: "VIEWER",
+    maxUses: 1,
+  });
+  const firstJoinerId = id("joiner");
+  const secondJoinerId = id("joiner");
+  await harness.client.user.createMany({
+    data: [
+      { id: firstJoinerId, email: email(firstJoinerId) },
+      { id: secondJoinerId, email: email(secondJoinerId) },
+    ],
+  });
+
+  const firstResult = await acceptWorkspaceInvite({
+    inviteLinkId: fixture.inviteLinkId,
+    userId: firstJoinerId,
+    now: NOW,
+  });
+  assert.deepEqual(firstResult, {
+    outcome: "joined",
+    workspaceId: fixture.workspaceId,
+  });
+
+  const secondResult = await acceptWorkspaceInvite({
+    inviteLinkId: fixture.inviteLinkId,
+    userId: secondJoinerId,
+    now: NOW,
+  });
+  assert.deepEqual(secondResult, { outcome: "denied", reason: "exhausted" });
+
+  const effects = await countInviteSideEffects(harness.client, fixture);
+  assert.equal(effects.useCount, 1);
+  assert.equal(effects.memberCount, 1);
+  assert.equal(effects.auditCount, 1);
+  assert.deepEqual(effects.members[0], {
+    userId: firstJoinerId,
+    role: "VIEWER",
+  });
+  assert.deepEqual(effects.audits[0], {
+    userId: firstJoinerId,
+    role: "VIEWER",
+  });
+});
+
+test("acceptWorkspaceInvite integration rolls back use/member/audit when downstream audit write fails", async (t) => {
+  const harness = await createInviteServiceIntegrationHarness();
+  t.after(async () => {
+    await disposeInviteServiceIntegrationHarness(harness);
+  });
+  bindInviteServicePrismaToIntegrationClient(t, harness.client);
+
+  const fixture = await seedInviteServiceFixture(harness.client, {
+    role: "EDITOR",
+    maxUses: 3,
+  });
+  const joinerId = id("joiner");
+  await harness.client.user.create({
+    data: { id: joinerId, email: email(joinerId) },
+  });
+
+  const triggerName = `InviteLinkUseFail_${randomUUID().replace(/-/g, "_")}`;
+  await harness.client.$executeRawUnsafe(`
+    CREATE TRIGGER "${triggerName}"
+    BEFORE INSERT ON "InviteLinkUse"
+    WHEN NEW."inviteLinkId" = '${fixture.inviteLinkId}'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced invite-link-use failure');
+    END;
+  `);
+
+  await assert.rejects(
+    () =>
+      acceptWorkspaceInvite({
+        inviteLinkId: fixture.inviteLinkId,
+        userId: joinerId,
+        now: NOW,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Prisma.PrismaClientKnownRequestError);
+      assert.equal(error.code, "P2003");
+      return true;
+    },
+  );
+
+  const effects = await countInviteSideEffects(harness.client, fixture);
+  assert.equal(effects.useCount, 0);
+  assert.equal(effects.memberCount, 0);
+  assert.equal(effects.auditCount, 0);
+});
+
+test("real sqlite composite unique violations raise P2002 and classify as workspace-membership conflicts", async (t) => {
+  const harness = await createInviteServiceIntegrationHarness();
+  t.after(async () => {
+    await disposeInviteServiceIntegrationHarness(harness);
+  });
+
+  const ownerId = id("owner");
+  const memberId = id("member");
+  const workspaceId = id("workspace");
+  await harness.client.user.createMany({
+    data: [
+      { id: ownerId, email: email(ownerId) },
+      { id: memberId, email: email(memberId) },
+    ],
+  });
+  await harness.client.workspace.create({
+    data: { id: workspaceId, name: "Workspace", ownerId },
+  });
+
+  await harness.client.workspaceMember.create({
+    data: { workspaceId, userId: memberId, role: "EDITOR" },
+  });
+
+  let caughtError: unknown;
+  try {
+    await harness.client.workspaceMember.create({
+      data: { workspaceId, userId: memberId, role: "EDITOR" },
+    });
+  } catch (error) {
+    caughtError = error;
+  }
+
+  assert.ok(caughtError instanceof Prisma.PrismaClientKnownRequestError);
+  assert.equal(caughtError.code, "P2002");
+  assert.equal(isWorkspaceMembershipUniqueConflict(caughtError), true);
 });
 
 function callsByName(ops: Array<[string, unknown]>, name: string): number {

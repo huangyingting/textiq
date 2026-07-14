@@ -4,7 +4,7 @@
  * `JoinWorkspacePage` is an async Server Component invoked directly (no
  * client-side hooks, so no `react-test-renderer` `act()` ceremony is needed
  * for state) with its module dependencies stubbed via `node:module`
- * `registerHooks`: `@/lib/prisma` (raw invite-link lookup),
+ * `registerHooks`: `@/lib/prisma` (raw invite-link/member lookups),
  * `@/lib/session` (auth), `@/lib/workspace/invite-service`
  * (`acceptWorkspaceInvite`, already covered by `invite-service.test.ts` and
  * not re-asserted here), and `next/navigation` (`redirect`/`notFound`,
@@ -79,9 +79,11 @@ type JoinPageTestState = {
   calls: unknown[][];
   user: { id: string } | null;
   inviteLink: InviteLinkRow | null;
+  existingMember: { id: string } | null;
   acceptResult: AcceptResult;
   requireUser: (redirect: (url: string) => never) => Promise<{ id: string }>;
   findUniqueInviteLink: (args: unknown) => Promise<InviteLinkRow | null>;
+  findFirstMember: (args: unknown) => Promise<{ id: string } | null>;
   acceptWorkspaceInvite: (args: unknown) => Promise<AcceptResult>;
 };
 
@@ -108,6 +110,7 @@ function createDefaultState(): JoinPageTestState {
     calls,
     user: { id: "user-1" },
     inviteLink: defaultInviteLink(),
+    existingMember: null,
     acceptResult: { outcome: "joined", workspaceId: "ws-1" },
     async requireUser() {
       calls.push(["requireUser"]);
@@ -116,6 +119,10 @@ function createDefaultState(): JoinPageTestState {
     async findUniqueInviteLink(args) {
       calls.push(["prisma.inviteLink.findUnique", args]);
       return state().inviteLink;
+    },
+    async findFirstMember(args) {
+      calls.push(["prisma.workspaceMember.findFirst", args]);
+      return state().existingMember;
     },
     async acceptWorkspaceInvite(args) {
       calls.push(["acceptWorkspaceInvite", args]);
@@ -175,6 +182,11 @@ const stubbedModules = new Map<string, string>([
         inviteLink: {
           findUnique(args) {
             return globalThis.__joinPageTestState.findUniqueInviteLink(args);
+          },
+        },
+        workspaceMember: {
+          findFirst(args) {
+            return globalThis.__joinPageTestState.findFirstMember(args);
           },
         },
       };
@@ -269,10 +281,11 @@ describe("JoinWorkspacePage", () => {
         workspace: { select: { ownerId: true } },
       },
     });
+    assert.equal(callsOf("prisma.workspaceMember.findFirst").length, 0);
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 
-  it("redirects a workspace owner straight to the workspace without accepting", async () => {
+  it("redirects a workspace owner straight to the workspace without checking membership or accepting", async () => {
     state().user = { id: "owner-1" };
     state().inviteLink = {
       ...defaultInviteLink(),
@@ -284,6 +297,22 @@ describe("JoinWorkspacePage", () => {
       /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
     );
 
+    assert.equal(callsOf("prisma.workspaceMember.findFirst").length, 0);
+    assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
+  });
+
+  it("redirects an existing workspace member straight to the workspace without accepting again", async () => {
+    state().existingMember = { id: "member-1" };
+
+    await assert.rejects(
+      () => invoke(),
+      /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
+    );
+
+    assert.deepEqual(callsOf("prisma.workspaceMember.findFirst")[0]?.[1], {
+      where: { workspaceId: "ws-1", userId: "user-1" },
+      select: { id: true },
+    });
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 
@@ -308,6 +337,19 @@ describe("JoinWorkspacePage", () => {
       text,
       /This invite link has been revoked by a workspace owner\./,
     );
+    assert.equal(callsOf("prisma.workspaceMember.findFirst").length, 1);
+    assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
+  });
+
+  it("redirects existing members before rendering revoked-link invalid state", async () => {
+    state().inviteLink = { ...defaultInviteLink(), isRevoked: true };
+    state().existingMember = { id: "member-1" };
+
+    await assert.rejects(
+      () => invoke(),
+      /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
+    );
+
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 

@@ -26,6 +26,9 @@ export const MAX_INVITE_EXPIRY_DAYS = 365;
 export const MAX_INVITE_USES_LIMIT = 10_000;
 
 const MAX_ACCEPT_INVITE_CAS_ATTEMPTS = 2;
+const WORKSPACE_MEMBER_UNIQUE_FIELDS = ["workspaceId", "userId"] as const;
+const WORKSPACE_MEMBER_UNIQUE_CONSTRAINT =
+  "WorkspaceMember_workspaceId_userId_key";
 
 const ACCEPT_INVITE_SELECT = {
   id: true,
@@ -46,6 +49,109 @@ type InviteAcceptanceTxClient = Pick<
 type InviteForAcceptance = Prisma.InviteLinkGetPayload<{
   select: typeof ACCEPT_INVITE_SELECT;
 }>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function matchesWorkspaceMemberUniqueFields(
+  fields: readonly string[],
+): boolean {
+  if (fields.length !== WORKSPACE_MEMBER_UNIQUE_FIELDS.length) {
+    return false;
+  }
+
+  const normalized = fields.map((field) => field.trim());
+  return WORKSPACE_MEMBER_UNIQUE_FIELDS.every((field) =>
+    normalized.includes(field),
+  );
+}
+
+function matchesWorkspaceMemberUniqueStringTarget(target: string): boolean {
+  const normalizedTarget = target.replace(/["'`()[\]]/g, "").trim();
+
+  if (
+    normalizedTarget === WORKSPACE_MEMBER_UNIQUE_CONSTRAINT ||
+    normalizedTarget.endsWith(`.${WORKSPACE_MEMBER_UNIQUE_CONSTRAINT}`)
+  ) {
+    return true;
+  }
+
+  const asFields = normalizedTarget
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  return matchesWorkspaceMemberUniqueFields(asFields);
+}
+
+function extractWorkspaceMemberConstraintTarget(
+  error: Prisma.PrismaClientKnownRequestError,
+): string | string[] | null {
+  const meta = error.meta;
+  if (!isRecord(meta)) {
+    return null;
+  }
+
+  if (typeof meta.target === "string" || isStringArray(meta.target)) {
+    return meta.target;
+  }
+
+  const driverAdapterError = meta.driverAdapterError;
+  if (!isRecord(driverAdapterError)) {
+    return null;
+  }
+
+  const cause = driverAdapterError.cause;
+  if (!isRecord(cause)) {
+    return null;
+  }
+
+  const constraint = cause.constraint;
+  if (!isRecord(constraint)) {
+    return null;
+  }
+
+  if (isStringArray(constraint.fields)) {
+    return constraint.fields;
+  }
+
+  if (typeof constraint.name === "string") {
+    return constraint.name;
+  }
+
+  if (typeof constraint.index === "string") {
+    return constraint.index;
+  }
+
+  return null;
+}
+
+export function isWorkspaceMembershipUniqueConflict(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== "P2002"
+  ) {
+    return false;
+  }
+
+  const target = extractWorkspaceMemberConstraintTarget(error);
+  if (!target) {
+    return false;
+  }
+
+  if (typeof target === "string") {
+    return matchesWorkspaceMemberUniqueStringTarget(target);
+  }
+
+  return matchesWorkspaceMemberUniqueFields(target);
+}
 
 /** Converts an optional expiry window in days to an absolute timestamp. */
 export function normalizeInviteExpiry(
@@ -251,10 +357,7 @@ async function acceptWorkspaceInviteInTransaction(
         },
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      if (isWorkspaceMembershipUniqueConflict(error)) {
         throw new AlreadyMemberSignal(invite.workspaceId);
       }
       throw error;

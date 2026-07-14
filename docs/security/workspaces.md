@@ -84,6 +84,14 @@ path (revoked/expired/exhausted/invalid-role/owner/member) exits without member
 creation or invite-use audit writes. Invalid persisted invite roles are denied
 explicitly; they are never coerced to viewer for acceptance.
 
+The membership replay classifier is provider-neutral but narrow by design:
+`P2002` maps to `already-member` only when the unique target resolves to the
+workspace-member composite (`workspaceId` + `userId`) or canonical constraint
+name (`WorkspaceMember_workspaceId_userId_key`). Other `P2002` errors rethrow.
+Current test evidence is real SQLite/Prisma only (success path, cap-exhausted
+second accept, downstream rollback, and composite-unique classification). We do
+not claim Postgres concurrency execution in this suite.
+
 ## Member Removal And Workspace Deletion
 
 Removing a member does not transfer their authored documents to the workspace

@@ -66,8 +66,17 @@ export default async function JoinWorkspacePage({
     notFound();
   }
 
-  // Owners short-circuit straight to the workspace.
+  // Owners and existing members short-circuit straight to the workspace.
   if (inviteLink.workspace.ownerId === user.id) {
+    redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+  }
+
+  const existingMember = await prisma.workspaceMember.findFirst({
+    where: { workspaceId: inviteLink.workspaceId, userId: user.id },
+    select: { id: true },
+  });
+
+  if (existingMember) {
     redirect(`/app/workspaces/${inviteLink.workspaceId}`);
   }
 
