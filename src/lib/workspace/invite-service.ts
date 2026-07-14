@@ -3,9 +3,9 @@ import "server-only";
 import { nanoid } from "nanoid";
 
 import { Prisma } from "@/generated/prisma/client";
+import { evaluateInviteAccess, toInviteAccessInput } from "@/lib/invite-access";
 import { prisma } from "@/lib/prisma";
 import {
-  asWorkspaceRole,
   isInvitableWorkspaceRole,
   type WorkspaceRole,
 } from "@/lib/workspace/roles";
@@ -24,6 +24,134 @@ export const MAX_INVITE_EXPIRY_DAYS = 365;
 
 /** Largest accepted usage cap. */
 export const MAX_INVITE_USES_LIMIT = 10_000;
+
+const MAX_ACCEPT_INVITE_CAS_ATTEMPTS = 2;
+const WORKSPACE_MEMBER_UNIQUE_FIELDS = ["workspaceId", "userId"] as const;
+const WORKSPACE_MEMBER_UNIQUE_CONSTRAINT =
+  "WorkspaceMember_workspaceId_userId_key";
+
+const ACCEPT_INVITE_SELECT = {
+  id: true,
+  workspaceId: true,
+  role: true,
+  isRevoked: true,
+  expiresAt: true,
+  maxUses: true,
+  useCount: true,
+  workspace: { select: { ownerId: true } },
+} satisfies Prisma.InviteLinkSelect;
+
+type InviteAcceptanceTxClient = Pick<
+  Prisma.TransactionClient,
+  "inviteLink" | "workspaceMember" | "inviteLinkUse"
+>;
+
+type InviteForAcceptance = Prisma.InviteLinkGetPayload<{
+  select: typeof ACCEPT_INVITE_SELECT;
+}>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function matchesWorkspaceMemberUniqueFields(
+  fields: readonly string[],
+): boolean {
+  if (fields.length !== WORKSPACE_MEMBER_UNIQUE_FIELDS.length) {
+    return false;
+  }
+
+  const normalized = fields.map((field) => field.trim());
+  return WORKSPACE_MEMBER_UNIQUE_FIELDS.every((field) =>
+    normalized.includes(field),
+  );
+}
+
+function matchesWorkspaceMemberUniqueStringTarget(target: string): boolean {
+  const normalizedTarget = target.replace(/["'`()[\]]/g, "").trim();
+
+  if (
+    normalizedTarget === WORKSPACE_MEMBER_UNIQUE_CONSTRAINT ||
+    normalizedTarget.endsWith(`.${WORKSPACE_MEMBER_UNIQUE_CONSTRAINT}`)
+  ) {
+    return true;
+  }
+
+  const asFields = normalizedTarget
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  return matchesWorkspaceMemberUniqueFields(asFields);
+}
+
+function extractWorkspaceMemberConstraintTarget(
+  error: Prisma.PrismaClientKnownRequestError,
+): string | string[] | null {
+  const meta = error.meta;
+  if (!isRecord(meta)) {
+    return null;
+  }
+
+  if (typeof meta.target === "string" || isStringArray(meta.target)) {
+    return meta.target;
+  }
+
+  const driverAdapterError = meta.driverAdapterError;
+  if (!isRecord(driverAdapterError)) {
+    return null;
+  }
+
+  const cause = driverAdapterError.cause;
+  if (!isRecord(cause)) {
+    return null;
+  }
+
+  const constraint = cause.constraint;
+  if (!isRecord(constraint)) {
+    return null;
+  }
+
+  if (isStringArray(constraint.fields)) {
+    return constraint.fields;
+  }
+
+  if (typeof constraint.name === "string") {
+    return constraint.name;
+  }
+
+  if (typeof constraint.index === "string") {
+    return constraint.index;
+  }
+
+  return null;
+}
+
+export function isWorkspaceMembershipUniqueConflict(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== "P2002"
+  ) {
+    return false;
+  }
+
+  const target = extractWorkspaceMemberConstraintTarget(error);
+  if (!target) {
+    return false;
+  }
+
+  if (typeof target === "string") {
+    return matchesWorkspaceMemberUniqueStringTarget(target);
+  }
+
+  return matchesWorkspaceMemberUniqueFields(target);
+}
 
 /** Converts an optional expiry window in days to an absolute timestamp. */
 export function normalizeInviteExpiry(
@@ -64,6 +192,13 @@ export function assertInvitableWorkspaceRole(role: WorkspaceRole): void {
   }
 }
 
+function assertPersistedInvitableWorkspaceRole(role: unknown): WorkspaceRole {
+  if (!isInvitableWorkspaceRole(role)) {
+    throw new Error(`Invalid persisted invite role: ${String(role)}.`);
+  }
+  return role;
+}
+
 export async function createWorkspaceInviteLink({
   workspaceId,
   role,
@@ -97,7 +232,10 @@ export async function createWorkspaceInviteLink({
     },
   });
 
-  return { ...inviteLink, role: asWorkspaceRole(inviteLink.role) };
+  return {
+    ...inviteLink,
+    role: assertPersistedInvitableWorkspaceRole(inviteLink.role),
+  };
 }
 
 export async function getInviteLinkTarget(
@@ -116,89 +254,173 @@ export async function revokeWorkspaceInviteLink(linkId: string): Promise<void> {
   });
 }
 
-/**
- * Private sentinel used to communicate cap-exhaustion out of the interactive
- * transaction callback. Never exported — callers receive a typed result.
- */
-class CapExhaustedSignal extends Error {}
+class AlreadyMemberSignal extends Error {
+  constructor(readonly workspaceId: string) {
+    super("User is already a workspace member.");
+  }
+}
+
+class InviteAcceptanceConflictError extends Error {
+  constructor(inviteLinkId: string) {
+    super(
+      `Invite acceptance conflicted for invite link ${inviteLinkId} after bounded retries.`,
+    );
+  }
+}
+
+function buildInviteConsumptionWhere(invite: InviteForAcceptance) {
+  return {
+    id: invite.id,
+    workspaceId: invite.workspaceId,
+    role: invite.role,
+    isRevoked: false,
+    expiresAt: invite.expiresAt,
+    maxUses: invite.maxUses,
+    useCount:
+      invite.maxUses === null
+        ? invite.useCount
+        : { equals: invite.useCount, lt: invite.maxUses },
+  } satisfies Prisma.InviteLinkWhereInput;
+}
+
+async function loadInviteForAcceptance(
+  tx: InviteAcceptanceTxClient,
+  inviteLinkId: string,
+): Promise<InviteForAcceptance | null> {
+  return tx.inviteLink.findUnique({
+    where: { id: inviteLinkId },
+    select: ACCEPT_INVITE_SELECT,
+  });
+}
+
+async function hasWorkspaceMembership(
+  tx: InviteAcceptanceTxClient,
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const member = await tx.workspaceMember.findFirst({
+    where: { workspaceId, userId },
+    select: { id: true },
+  });
+
+  return member !== null;
+}
+
+async function acceptWorkspaceInviteInTransaction(
+  tx: InviteAcceptanceTxClient,
+  input: AcceptInviteInput,
+  now: Date,
+): Promise<AcceptInviteResult> {
+  for (
+    let attempt = 0;
+    attempt < MAX_ACCEPT_INVITE_CAS_ATTEMPTS;
+    attempt += 1
+  ) {
+    const invite = await loadInviteForAcceptance(tx, input.inviteLinkId);
+    if (!invite) {
+      return { outcome: "denied", reason: "revoked" };
+    }
+
+    const decision = evaluateInviteAccess(toInviteAccessInput(invite, now));
+    if (!decision.allow) {
+      return { outcome: "denied", reason: decision.reason };
+    }
+
+    if (invite.workspace.ownerId === input.userId) {
+      return { outcome: "already-owner", workspaceId: invite.workspaceId };
+    }
+
+    const existingMember = await hasWorkspaceMembership(
+      tx,
+      invite.workspaceId,
+      input.userId,
+    );
+    if (existingMember) {
+      return { outcome: "already-member", workspaceId: invite.workspaceId };
+    }
+
+    const consumedInvite = await tx.inviteLink.updateMany({
+      where: buildInviteConsumptionWhere(invite),
+      data: { useCount: { increment: 1 } },
+    });
+
+    if (consumedInvite.count !== 1) {
+      continue;
+    }
+
+    try {
+      await tx.workspaceMember.create({
+        data: {
+          workspaceId: invite.workspaceId,
+          userId: input.userId,
+          role: decision.role,
+        },
+      });
+    } catch (error) {
+      if (isWorkspaceMembershipUniqueConflict(error)) {
+        throw new AlreadyMemberSignal(invite.workspaceId);
+      }
+      throw error;
+    }
+
+    await tx.inviteLinkUse.create({
+      data: {
+        inviteLinkId: invite.id,
+        userId: input.userId,
+        role: decision.role,
+      },
+    });
+
+    return { outcome: "joined", workspaceId: invite.workspaceId };
+  }
+
+  const latestInvite = await loadInviteForAcceptance(tx, input.inviteLinkId);
+  if (!latestInvite) {
+    return { outcome: "denied", reason: "revoked" };
+  }
+
+  const latestDecision = evaluateInviteAccess(
+    toInviteAccessInput(latestInvite, now),
+  );
+  if (!latestDecision.allow) {
+    return { outcome: "denied", reason: latestDecision.reason };
+  }
+
+  if (latestInvite.workspace.ownerId === input.userId) {
+    return { outcome: "already-owner", workspaceId: latestInvite.workspaceId };
+  }
+
+  const latestMember = await hasWorkspaceMembership(
+    tx,
+    latestInvite.workspaceId,
+    input.userId,
+  );
+  if (latestMember) {
+    return { outcome: "already-member", workspaceId: latestInvite.workspaceId };
+  }
+
+  throw new InviteAcceptanceConflictError(input.inviteLinkId);
+}
 
 /**
- * Private sentinel thrown when `workspaceMember.create` fails with P2002
- * (unique constraint on `(workspaceId, userId)`). Thrown inside the
- * transaction callback so the prior use-count increment is rolled back,
- * then mapped to the typed `already-member` outcome in the outer catch.
- */
-class AlreadyMemberSignal extends Error {}
-
-/**
- * Atomically accepts a workspace invite: re-verifies the usage cap with a
- * conditional `updateMany`, grants membership, and writes the audit row — all
- * in one transaction so a successful join is always fully recorded and races
- * cannot bypass `maxUses`.
- *
- * P2002 from the unique `(workspaceId, userId)` constraint on
- * `workspaceMember.create` is caught inside the transaction callback and
- * converted to an `AlreadyMemberSignal`. This rejects the transaction so
- * the prior use-count increment is rolled back, then the outer catch maps
- * the signal to the typed `already-member` outcome. P2002 from any other
- * Prisma call (e.g. `inviteLinkUse.create`) is not intercepted and
- * propagates as an unhandled error.
+ * Atomically accepts a workspace invite in one transaction. The persisted invite
+ * row is the source of truth for grant facts (workspace, role, cap, expiry,
+ * revocation), which are re-evaluated at mutation time before capacity is
+ * consumed, membership is created, and audit is written.
  */
 export async function acceptWorkspaceInvite(
   input: AcceptInviteInput,
 ): Promise<AcceptInviteResult> {
+  const now = input.now ?? new Date();
+
   try {
-    await prisma.$transaction(async (tx) => {
-      const capUpdate = await tx.inviteLink.updateMany({
-        where:
-          input.maxUses === null
-            ? { id: input.inviteLinkId }
-            : {
-                id: input.inviteLinkId,
-                useCount: { lt: input.maxUses },
-              },
-        data: { useCount: { increment: 1 } },
-      });
-
-      if (capUpdate.count === 0) {
-        throw new CapExhaustedSignal();
-      }
-
-      try {
-        await tx.workspaceMember.create({
-          data: {
-            workspaceId: input.workspaceId,
-            userId: input.userId,
-            role: input.role,
-          },
-        });
-      } catch (memberErr) {
-        if (
-          memberErr instanceof Prisma.PrismaClientKnownRequestError &&
-          memberErr.code === "P2002"
-        ) {
-          throw new AlreadyMemberSignal();
-        }
-        throw memberErr;
-      }
-
-      await tx.inviteLinkUse.create({
-        data: {
-          inviteLinkId: input.inviteLinkId,
-          userId: input.userId,
-          role: input.role,
-        },
-      });
-    });
-
-    return { outcome: "joined" };
-  } catch (err) {
-    if (err instanceof CapExhaustedSignal) {
-      return { outcome: "cap-exhausted" };
+    return await prisma.$transaction(async (tx) =>
+      acceptWorkspaceInviteInTransaction(tx, input, now),
+    );
+  } catch (error) {
+    if (error instanceof AlreadyMemberSignal) {
+      return { outcome: "already-member", workspaceId: error.workspaceId };
     }
-    if (err instanceof AlreadyMemberSignal) {
-      return { outcome: "already-member" };
-    }
-    throw err;
+    throw error;
   }
 }

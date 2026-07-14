@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-14"
 description: "This document describes workspace ownership, membership, invite links, and how workspace roles feed document permissions."
 ---
 
@@ -73,6 +73,25 @@ Expiry and max-use values are validated server-side. Links can be revoked.
 Expiry windows and max-use caps are normalized by service helpers so creation and
 tests use the same bounds.
 
+Invite acceptance is transactional and uses the persisted invite row as the only
+grant source (`workspaceId`, role, revocation, expiry, and usage cap). The join
+page may render preview state from a read, but the mutation re-reads and
+re-evaluates policy before writing.
+
+In one transaction, acceptance checks owner/membership, consumes capacity with a
+CAS update, creates membership, and appends the invite-use audit row. Any deny
+path (revoked/expired/exhausted/invalid-role/owner/member) exits without member
+creation or invite-use audit writes. Invalid persisted invite roles are denied
+explicitly; they are never coerced to viewer for acceptance.
+
+The membership replay classifier is provider-neutral but narrow by design:
+`P2002` maps to `already-member` only when the unique target resolves to the
+workspace-member composite (`workspaceId` + `userId`) or canonical constraint
+name (`WorkspaceMember_workspaceId_userId_key`). Other `P2002` errors rethrow.
+Current test evidence is real SQLite/Prisma only (success path, cap-exhausted
+second accept, downstream rollback, and composite-unique classification). We do
+not claim Postgres concurrency execution in this suite.
+
 ## Member Removal And Workspace Deletion
 
 Removing a member does not transfer their authored documents to the workspace
@@ -99,10 +118,13 @@ semantics.
 ## Invariants
 
 1. Workspace management actions require `manage` capability.
-2. Invite roles are validated server-side.
+2. Invite roles are validated server-side, and acceptance denies invalid
+   persisted invite roles explicitly.
 3. Removing a member preserves their authored documents.
 4. Deleting a workspace does not delete documents.
 5. Workspace membership feeds document permission derivation.
+6. Invite acceptance mutation never trusts join-page preview grant facts.
+7. Invite denials perform no membership/audit writes.
 
 ## Primary Tests
 

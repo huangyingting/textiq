@@ -90,15 +90,12 @@ export default async function JoinWorkspacePage({
 
   const result = await acceptWorkspaceInvite({
     inviteLinkId: inviteLink.id,
-    maxUses: inviteLink.maxUses,
-    workspaceId: inviteLink.workspaceId,
     userId: user.id,
-    role: decision.role,
   });
 
-  if (result.outcome === "cap-exhausted") {
-    return <InviteInvalid reason="exhausted" />;
+  if (result.outcome === "denied") {
+    return <InviteInvalid reason={result.reason} />;
   }
 
-  redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+  redirect(`/app/workspaces/${result.workspaceId}`);
 }

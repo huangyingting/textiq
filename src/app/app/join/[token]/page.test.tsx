@@ -17,14 +17,11 @@
  *
  * Covers: unauthenticated visitors redirected to `/login` before any invite
  * lookup; a missing invite token producing `notFound()`; workspace-owner and
- * existing-member short-circuits that redirect straight to the workspace
- * without touching acceptance; denied invites (revoked / invalid stored
- * role) rendering the `InviteInvalid` safe-failure state with the correct
- * message; a successful join redirecting to the workspace with the
- * server-validated role and link id threaded through exactly; an
- * `already-member` acceptance race still redirecting home; and a
- * `cap-exhausted` acceptance race (the link filled up between the read and
- * the atomic accept) rendering the exhausted `InviteInvalid` state.
+ * existing-member outcomes that redirect straight to the workspace; denied
+ * invites (revoked / invalid stored role) rendering the `InviteInvalid`
+ * safe-failure state with the correct message; a successful join redirecting
+ * to the workspace with only invite-id/user-id passed to mutation; and a
+ * mutation-time denial race rendering the exhausted `InviteInvalid` state.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -70,9 +67,13 @@ type InviteLinkRow = {
 };
 
 type AcceptResult =
-  | { outcome: "joined" }
-  | { outcome: "cap-exhausted" }
-  | { outcome: "already-member" };
+  | { outcome: "joined"; workspaceId: string }
+  | { outcome: "already-member"; workspaceId: string }
+  | { outcome: "already-owner"; workspaceId: string }
+  | {
+      outcome: "denied";
+      reason: "revoked" | "expired" | "exhausted" | "invalid-role";
+    };
 
 type JoinPageTestState = {
   calls: unknown[][];
@@ -110,7 +111,7 @@ function createDefaultState(): JoinPageTestState {
     user: { id: "user-1" },
     inviteLink: defaultInviteLink(),
     existingMember: null,
-    acceptResult: { outcome: "joined" },
+    acceptResult: { outcome: "joined", workspaceId: "ws-1" },
     async requireUser() {
       calls.push(["requireUser"]);
       return state().user ?? { id: "user-1" };
@@ -315,6 +316,15 @@ describe("JoinWorkspacePage", () => {
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 
+  it("redirects when mutation returns already-member", async () => {
+    state().acceptResult = { outcome: "already-member", workspaceId: "ws-1" };
+
+    await assert.rejects(
+      () => invoke(),
+      /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
+    );
+  });
+
   it("renders the invalid-invite state for a revoked link without attempting acceptance", async () => {
     state().inviteLink = { ...defaultInviteLink(), isRevoked: true };
 
@@ -327,6 +337,19 @@ describe("JoinWorkspacePage", () => {
       text,
       /This invite link has been revoked by a workspace owner\./,
     );
+    assert.equal(callsOf("prisma.workspaceMember.findFirst").length, 1);
+    assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
+  });
+
+  it("redirects existing members before rendering revoked-link invalid state", async () => {
+    state().inviteLink = { ...defaultInviteLink(), isRevoked: true };
+    state().existingMember = { id: "member-1" };
+
+    await assert.rejects(
+      () => invoke(),
+      /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
+    );
+
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 
@@ -343,15 +366,14 @@ describe("JoinWorkspacePage", () => {
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 
-  it("accepts a valid invite and redirects to the workspace with the server-validated role threaded through", async () => {
+  it("accepts a valid invite and passes only lookup facts into mutation", async () => {
     state().inviteLink = {
       ...defaultInviteLink(),
       id: "invite-9",
       workspaceId: "ws-9",
-      maxUses: 5,
-      role: "EDITOR",
       workspace: { ownerId: "owner-9" },
     };
+    state().acceptResult = { outcome: "joined", workspaceId: "ws-9" };
 
     await assert.rejects(
       () => invoke(),
@@ -363,17 +385,14 @@ describe("JoinWorkspacePage", () => {
         "acceptWorkspaceInvite",
         {
           inviteLinkId: "invite-9",
-          maxUses: 5,
-          workspaceId: "ws-9",
           userId: "user-1",
-          role: "EDITOR",
         },
       ],
     ]);
   });
 
-  it("redirects to the workspace when acceptance races into an already-member outcome", async () => {
-    state().acceptResult = { outcome: "already-member" };
+  it("redirects to the workspace when mutation returns already-owner", async () => {
+    state().acceptResult = { outcome: "already-owner", workspaceId: "ws-1" };
 
     await assert.rejects(
       () => invoke(),
@@ -381,8 +400,8 @@ describe("JoinWorkspacePage", () => {
     );
   });
 
-  it("renders the exhausted invalid-invite state when acceptance races into a cap-exhausted outcome", async () => {
-    state().acceptResult = { outcome: "cap-exhausted" };
+  it("renders the exhausted invalid-invite state when mutation re-check denies exhausted", async () => {
+    state().acceptResult = { outcome: "denied", reason: "exhausted" };
 
     const result = (await invoke()) as ReactElement;
     const text = renderText(result);
