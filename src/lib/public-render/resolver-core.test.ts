@@ -675,3 +675,102 @@ test("resolvePublicRenderWithSource rejects null and undefined tokens before any
     });
   }
 });
+
+const INHERITED_KEYS = [
+  "toString",
+  "constructor",
+  "__proto__",
+  "hasOwnProperty",
+  "valueOf",
+  "toLocaleString",
+] as const;
+
+test("isPublicRenderModeProjectionPair returns false for inherited Object.prototype keys without throwing", () => {
+  for (const key of INHERITED_KEYS) {
+    assert.equal(
+      isPublicRenderModeProjectionPair(key, "document"),
+      false,
+      `expected inherited mode "${key}" to return false`,
+    );
+    assert.equal(
+      isPublicRenderModeProjectionPair("view", key),
+      false,
+      `expected inherited projection "${key}" to return false`,
+    );
+  }
+});
+
+test("assertPublicRenderModeProjectionPair throws a stable boundary error (not TypeError) for inherited Object.prototype keys", () => {
+  for (const key of INHERITED_KEYS) {
+    assert.throws(
+      () => assertPublicRenderModeProjectionPair(key, "document"),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "expected Error instance");
+        assert.ok(
+          /Invalid public render request pair/.test(err.message),
+          `expected stable boundary error, got: ${err.message}`,
+        );
+        return true;
+      },
+    );
+    assert.throws(
+      () => assertPublicRenderModeProjectionPair("view", key),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "expected Error instance");
+        assert.ok(
+          /Invalid public render request pair/.test(err.message),
+          `expected stable boundary error, got: ${err.message}`,
+        );
+        return true;
+      },
+    );
+  }
+});
+
+test("resolvePublicRenderWithSource rejects inherited Object.prototype keys as mode before any source lookup", async () => {
+  for (const key of INHERITED_KEYS) {
+    const tracked = trackedSource();
+    const raw: Record<string, unknown> = {
+      params: { shareId: "share123" },
+      mode: key,
+      projection: "document",
+      now: NOW,
+    };
+    await assert.rejects(
+      resolvePublicRenderWithSource(
+        tracked.source,
+        raw as unknown as ResolvePublicRenderInput,
+      ),
+      /Invalid public render request pair/,
+    );
+    assert.deepEqual(
+      tracked.calls,
+      { document: 0, metadata: 0, presentation: 0 },
+      `expected zero lookups for inherited mode "${key}"`,
+    );
+  }
+});
+
+test("resolvePublicRenderWithSource rejects inherited Object.prototype keys as projection before any source lookup", async () => {
+  for (const key of INHERITED_KEYS) {
+    const tracked = trackedSource();
+    const raw: Record<string, unknown> = {
+      params: { shareId: "share123" },
+      mode: "view",
+      projection: key,
+      now: NOW,
+    };
+    await assert.rejects(
+      resolvePublicRenderWithSource(
+        tracked.source,
+        raw as unknown as ResolvePublicRenderInput,
+      ),
+      /Invalid public render request pair/,
+    );
+    assert.deepEqual(
+      tracked.calls,
+      { document: 0, metadata: 0, presentation: 0 },
+      `expected zero lookups for inherited projection "${key}"`,
+    );
+  }
+});

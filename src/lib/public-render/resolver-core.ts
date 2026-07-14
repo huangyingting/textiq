@@ -40,7 +40,7 @@ const PUBLIC_RENDER_PROJECTIONS_BY_MODE = {
 >;
 
 function isKnownMode(value: string): value is PublicRenderMode {
-  return value in PUBLIC_RENDER_PROJECTIONS_BY_MODE;
+  return Object.hasOwn(PUBLIC_RENDER_PROJECTIONS_BY_MODE, value);
 }
 
 export function isPublicRenderModeProjectionPair(
