@@ -20,7 +20,10 @@
  *
  * Runs under plain Node (no TS path aliases), like the rest of `scripts/*.mjs`.
  */
-import { recordFlushAttempt, recordFlushFailure } from "./collab-core.mjs";
+import {
+  recordFlushAttempt,
+  recordFlushFailure,
+} from "./collab-core-observability.mjs";
 import {
   logScriptInfo,
   logScriptWarning,

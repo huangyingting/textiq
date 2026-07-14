@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { Provider } from "@lexical/yjs";
 import { act } from "react-test-renderer";
 import type { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
 
+import { isLexicalWebsocketProviderAdapter } from "./lexical-provider-adapter";
 import { colorFromId } from "./y-text";
 import {
   useLexicalCollaboration,
@@ -57,6 +59,13 @@ function mountCollaboration(opts: { room: string; userName: string }): {
       return latest as LexicalCollaboration;
     },
   };
+}
+
+function websocketFromProvider(provider: Provider): WebsocketProvider {
+  if (!isLexicalWebsocketProviderAdapter(provider)) {
+    throw new Error("expected lexical provider adapter");
+  }
+  return provider.websocketProvider;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,10 +143,9 @@ test("useLexicalCollaboration: cursorColor is derived deterministically from the
     });
     try {
       const state = get();
-      const provider = state.providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        state.providerFactory("doc-1", new Map()),
+      );
 
       assert.equal(state.cursorColor, colorFromId(provider.awareness.clientID));
     } finally {
@@ -157,10 +165,9 @@ test("useLexicalCollaboration: status reflects the provider's status events", ()
       userName: "Alice",
     });
     try {
-      const provider = get().providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        get().providerFactory("doc-1", new Map()),
+      );
 
       act(() => {
         provider.emit("status", [{ status: "connected" }]);
@@ -184,10 +191,9 @@ test("useLexicalCollaboration: synced flips to true (and ready follows) once the
       userName: "Alice",
     });
     try {
-      const provider = get().providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        get().providerFactory("doc-1", new Map()),
+      );
 
       act(() => {
         provider.emit("sync", [false]);
@@ -212,10 +218,9 @@ test("useLexicalCollaboration: removes the provider status/sync listeners on unm
       room: "room-status-cleanup",
       userName: "Alice",
     });
-    const provider = get().providerFactory(
-      "doc-1",
-      new Map(),
-    ) as unknown as WebsocketProvider;
+    const provider = websocketFromProvider(
+      get().providerFactory("doc-1", new Map()),
+    );
 
     assert.ok((provider._observers.get("status")?.size ?? 0) > 0);
     assert.ok((provider._observers.get("sync")?.size ?? 0) > 0);
@@ -263,10 +268,9 @@ test("useLexicalCollaboration: a sync before the timeout leaves degraded false f
       userName: "Alice",
     });
     try {
-      const provider = get().providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        get().providerFactory("doc-1", new Map()),
+      );
       const [timer] = [...timers.values()];
       assert.equal(timer.cleared, false);
 
@@ -295,10 +299,9 @@ test("useLexicalCollaboration: computes peers from awareness state, self first t
       userName: "Alice",
     });
     try {
-      const provider = get().providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        get().providerFactory("doc-1", new Map()),
+      );
       const awareness = provider.awareness;
       const selfId = awareness.clientID;
 
@@ -347,10 +350,9 @@ test("useLexicalCollaboration: awareness states without a name are excluded from
       userName: "Alice",
     });
     try {
-      const provider = get().providerFactory(
-        "doc-1",
-        new Map(),
-      ) as unknown as WebsocketProvider;
+      const provider = websocketFromProvider(
+        get().providerFactory("doc-1", new Map()),
+      );
       const awareness = provider.awareness;
       const remoteId = awareness.clientID + 1;
 
@@ -380,10 +382,7 @@ test("useLexicalCollaboration: destroys the provider and Y.Doc on unmount", () =
       userName: "Alice",
     });
     const map = new Map<string, Y.Doc>();
-    const provider = get().providerFactory(
-      "doc-1",
-      map,
-    ) as unknown as WebsocketProvider;
+    const provider = websocketFromProvider(get().providerFactory("doc-1", map));
     const doc = map.get("doc-1")!;
 
     assert.equal(doc.isDestroyed, false);
