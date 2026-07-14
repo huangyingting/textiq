@@ -97,6 +97,48 @@ function sanitizeLogString(value) {
   return isUnsafeLogString(value) ? REDACTED : value;
 }
 
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeErrorForLog(error) {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name,
+      message: sanitizeLogString(error.message),
+      ...(error.stack ? { stack: sanitizeLogString(error.stack) } : {}),
+    };
+  }
+  if (typeof error === "string") {
+    return { errorName: "Error", message: sanitizeLogString(error) };
+  }
+  return {
+    errorName: "Error",
+    message: sanitizeLogString(safeStringify(error)),
+  };
+}
+
+function buildLogRecord({ level, scope, context = {}, fields = {} }) {
+  const cleanedFields = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === "level" || key === "scope" || key === "timestamp") {
+      continue;
+    }
+    cleanedFields[key] = value;
+  }
+  return {
+    ...redactContext(context),
+    level,
+    scope,
+    timestamp: new Date().toISOString(),
+    ...cleanedFields,
+  };
+}
+
 function isSafeTelemetryScalar(value) {
   return (
     typeof value === "string" ||
@@ -126,4 +168,6 @@ module.exports = {
   buildSafeTelemetryContext,
   isUnsafeLogString,
   sanitizeLogString,
+  normalizeErrorForLog,
+  buildLogRecord,
 };

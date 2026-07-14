@@ -32,14 +32,44 @@ export function lineAndColumn(text, index) {
   };
 }
 
-export function shouldScanSourceFile(filePath, sourceExtensions) {
-  const normalized = toPosix(filePath);
-  if (!sourceExtensions.has(extensionOf(normalized))) {
+function isBaseSourceFile(filePath, sourceExtensions) {
+  if (!sourceExtensions.has(extensionOf(filePath))) {
     return false;
   }
-  return (
-    !normalized.includes("/node_modules/") && !normalized.includes("/.next/")
-  );
+  return !filePath.includes("/node_modules/") && !filePath.includes("/.next/");
+}
+
+function toPathSet(paths) {
+  return new Set(paths.map((item) => toPosix(item)));
+}
+
+function toPrefixList(paths) {
+  return paths.map((item) => toPosix(item));
+}
+
+export function shouldScanSourceFile(filePath, sourceExtensions) {
+  const normalized = toPosix(filePath);
+  return isBaseSourceFile(normalized, sourceExtensions);
+}
+
+export function makeShouldScanFile({
+  sourceExtensions,
+  excludedPaths = [],
+  excludedPrefixes = [],
+} = {}) {
+  const pathExclusions = toPathSet(excludedPaths);
+  const prefixExclusions = toPrefixList(excludedPrefixes);
+
+  return (filePath) => {
+    const normalized = toPosix(filePath);
+    if (!isBaseSourceFile(normalized, sourceExtensions)) {
+      return false;
+    }
+    if (pathExclusions.has(normalized)) {
+      return false;
+    }
+    return !prefixExclusions.some((prefix) => normalized.startsWith(prefix));
+  };
 }
 
 function walkFiles(root, skipDirectoryNames) {
@@ -64,8 +94,7 @@ export function scanRepositoryRoots({
   roots,
   sourceExtensions,
   scanText,
-  shouldScanFile = (filePath) =>
-    shouldScanSourceFile(filePath, sourceExtensions),
+  shouldScanFile = makeShouldScanFile({ sourceExtensions }),
   skipDirectoryNames = new Set(["node_modules", ".next"]),
 }) {
   const findings = [];

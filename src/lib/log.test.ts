@@ -9,6 +9,11 @@ import {
   normalizeLogKey,
 } from "@/lib/log";
 import { buildInfoLog, logInfo } from "@/lib/log";
+import redaction from "@/lib/log-redaction-core.cjs";
+import {
+  buildScriptErrorLog,
+  buildScriptLogRecord,
+} from "../../scripts/structured-log.mjs";
 
 test("buildErrorLog redacts configured sensitive context keys", () => {
   const record = buildErrorLog("api.generate", new Error("boom"), {
@@ -187,6 +192,51 @@ test("buildInfoLog keeps reserved fields authoritative", () => {
   assert.equal(typeof record.timestamp, "string");
 });
 
+test("app and script info record builders stay field-for-field aligned", () => {
+  const context = {
+    requestId: "req-7",
+    message: "spoofed-message",
+    scope: "spoofed-scope",
+    token: "secret-token",
+  };
+  const appRecord = buildInfoLog("collab.flush", "ok", context);
+  const scriptRecord = buildScriptLogRecord(
+    "info",
+    "collab.flush",
+    "ok",
+    context,
+  );
+
+  assert.deepEqual(
+    { ...appRecord, timestamp: "<fixed>" },
+    { ...scriptRecord, timestamp: "<fixed>" },
+  );
+  assert.deepEqual(Object.keys(appRecord), Object.keys(scriptRecord));
+});
+
+test("app and script error record builders stay field-for-field aligned", () => {
+  const err = new TypeError("request failed: https://api.example.com/secret");
+  err.stack =
+    "TypeError: request failed: https://api.example.com/secret\n at x";
+  const context = {
+    requestId: "req-8",
+    errorName: "spoofed",
+    message: "spoofed",
+    Authorization: "Bearer secret",
+    payload: { text: "raw content" },
+  };
+  const appRecord = buildErrorLog("collab.sync", err, context);
+  const scriptRecord = buildScriptErrorLog("collab.sync", err, context);
+
+  assert.deepEqual(
+    { ...appRecord, timestamp: "<fixed>" },
+    { ...scriptRecord, timestamp: "<fixed>" },
+  );
+  assert.deepEqual(Object.keys(appRecord), Object.keys(scriptRecord));
+  assert.equal(appRecord.message, REDACTED);
+  assert.equal(appRecord.Authorization, REDACTED);
+});
+
 test("logInfo emits a single JSON line with no raw newline", () => {
   const original = console.info;
   const lines: string[] = [];
@@ -354,3 +404,55 @@ test("context redaction detects embedded URL and Bearer values in string context
   assert.equal(record.requestId, "req-safe-1");
   assert.equal(record.safeLabel, "generation-failed");
 });
+
+test("buildLogRecord strips reserved keys from fields and keeps authoritative values", () => {
+  const record = redaction.buildLogRecord({
+    level: "debug" as const,
+    scope: "test.scope",
+    fields: {
+      level: "spoofed-level",
+      scope: "spoofed-scope",
+      timestamp: "1970-01-01T00:00:00.000Z",
+      requestId: "r1",
+    },
+  });
+
+  assert.equal(record.level, "debug");
+  assert.equal(record.scope, "test.scope");
+  assert.notEqual(
+    record.timestamp,
+    "1970-01-01T00:00:00.000Z",
+    "timestamp must be authoritative ISO string, not spoofed field value",
+  );
+  assert.equal(record.requestId, "r1");
+});
+
+// Compile-time type assertions for buildLogRecord — evaluated by tsc, not at runtime.
+{
+  // Reserved-key inputs must compile without error.
+  const fields: {
+    level: "spoofed";
+    scope: "spoofed";
+    timestamp: "spoofed";
+    requestId: string;
+  } = {
+    level: "spoofed",
+    scope: "spoofed",
+    timestamp: "spoofed",
+    requestId: "r1",
+  };
+  const record = redaction.buildLogRecord({
+    level: "info" as const,
+    scope: "s",
+    fields,
+  });
+
+  // Non-reserved field retains declared type, not widened to unknown.
+  const _safe: string = record.requestId;
+  void _safe;
+
+  // @ts-expect-error spoofed "level" field must not collapse or override authoritative TLevel
+  const _level: "spoofed" = record.level;
+  // @ts-expect-error spoofed "timestamp" field must not collapse or override authoritative string
+  const _timestamp: "spoofed" = record.timestamp;
+}

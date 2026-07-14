@@ -87,6 +87,52 @@ test("action-port check: scans repository roots and skips unsupported files", (t
   );
 });
 
+test("action-port check: table-driven source filter keeps scan coverage", (t) => {
+  const repoRoot = createTestFixtureRoot("action-port-filter-table", t);
+  const cases = [
+    {
+      path: ["src", "components", "included.tsx"],
+      text: 'import { save } from "@/app/app/actions";\n',
+      shouldReport: true,
+    },
+    {
+      path: ["src", "lib", "included.mjs"],
+      text: 'const route = import("@/app/app/documents/view");\n',
+      shouldReport: true,
+    },
+    {
+      path: ["src", "components", "notes.txt"],
+      text: 'import { save } from "@/app/app/actions";\n',
+      shouldReport: false,
+    },
+    {
+      path: ["src", "components", ".next", "ignored.tsx"],
+      text: 'import { save } from "@/app/app/actions";\n',
+      shouldReport: false,
+    },
+    {
+      path: ["src", "lib", "node_modules", "pkg", "ignored.ts"],
+      text: 'const route = import("@/app/app/documents/view");\n',
+      shouldReport: false,
+    },
+  ];
+
+  for (const item of cases) {
+    mkdirSync(join(repoRoot, ...item.path.slice(0, -1)), { recursive: true });
+    writeFileSync(join(repoRoot, ...item.path), item.text);
+  }
+
+  const reportedFiles = scanActionPorts(repoRoot)
+    .map((finding) => finding.filePath)
+    .sort();
+  const expectedFiles = cases
+    .filter((item) => item.shouldReport)
+    .map((item) => item.path.join("/"))
+    .sort();
+
+  assert.deepEqual([...new Set(reportedFiles)], expectedFiles);
+});
+
 test("action-port CLI reports pass and failure results", (t) => {
   const scriptPath = join(process.cwd(), "scripts", "check-action-ports.mjs");
   const passRoot = createTestFixtureRoot("action-port-cli-pass", t);
