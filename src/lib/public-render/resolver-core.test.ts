@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  assertPublicRenderModeProjectionPair,
+  isPublicRenderModeProjectionPair,
   resolvePublicRenderWithSource,
   type PublicRenderDocumentRow,
   type PublicRenderMetadataRow,
@@ -537,4 +539,139 @@ test("selectForPublicRenderProjection returns the matching Prisma select", () =>
     selectForPublicRenderProjection("presentation"),
     PUBLIC_RENDER_PRESENTATION_SELECT,
   );
+});
+
+test("isPublicRenderModeProjectionPair returns false for unknown tokens without throwing", () => {
+  // Unknown mode strings — previously would throw TypeError from .includes on undefined
+  assert.equal(isPublicRenderModeProjectionPair("bogus", "document"), false);
+  assert.equal(isPublicRenderModeProjectionPair("BOGUS", "metadata"), false);
+  assert.equal(isPublicRenderModeProjectionPair("", "document"), false);
+  // Unknown projection with valid mode
+  assert.equal(isPublicRenderModeProjectionPair("view", "bogus"), false);
+  assert.equal(isPublicRenderModeProjectionPair("og", ""), false);
+  // Non-string primitive mode
+  assert.equal(isPublicRenderModeProjectionPair(null, "document"), false);
+  assert.equal(isPublicRenderModeProjectionPair(undefined, "document"), false);
+  assert.equal(isPublicRenderModeProjectionPair(0, "document"), false);
+  assert.equal(isPublicRenderModeProjectionPair(true, "metadata"), false);
+  // Non-string primitive projection
+  assert.equal(isPublicRenderModeProjectionPair("view", null), false);
+  assert.equal(isPublicRenderModeProjectionPair("view", undefined), false);
+  assert.equal(isPublicRenderModeProjectionPair("og", 1), false);
+  // Both non-string
+  assert.equal(isPublicRenderModeProjectionPair(undefined, undefined), false);
+  assert.equal(isPublicRenderModeProjectionPair({}, {}), false);
+  // Invalid known-mode pairs
+  assert.equal(isPublicRenderModeProjectionPair("view", "presentation"), false);
+  assert.equal(isPublicRenderModeProjectionPair("og", "document"), false);
+  // Valid pairs still pass
+  assert.equal(isPublicRenderModeProjectionPair("view", "document"), true);
+  assert.equal(isPublicRenderModeProjectionPair("view", "metadata"), true);
+  assert.equal(isPublicRenderModeProjectionPair("embed", "document"), true);
+  assert.equal(isPublicRenderModeProjectionPair("embed", "presentation"), true);
+  assert.equal(
+    isPublicRenderModeProjectionPair("present", "presentation"),
+    true,
+  );
+  assert.equal(isPublicRenderModeProjectionPair("present", "metadata"), true);
+  assert.equal(isPublicRenderModeProjectionPair("og", "metadata"), true);
+});
+
+test("assertPublicRenderModeProjectionPair throws a stable boundary error for all invalid runtime tokens", () => {
+  const invalid: Array<[unknown, unknown]> = [
+    ["bogus", "document"],
+    ["view", "bogus"],
+    ["bogus", "bogus"],
+    [null, "document"],
+    [undefined, "document"],
+    ["view", null],
+    ["view", undefined],
+    [0, "document"],
+    [true, "metadata"],
+    [{}, {}],
+    [undefined, undefined],
+    ["view", "presentation"],
+    ["og", "document"],
+  ];
+  for (const [mode, projection] of invalid) {
+    assert.throws(
+      () => assertPublicRenderModeProjectionPair(mode, projection),
+      /Invalid public render request pair/,
+    );
+  }
+});
+
+test("resolvePublicRenderWithSource rejects unknown runtime mode before any source lookup", async () => {
+  const tracked = trackedSource();
+  // Model an untyped JSON-parse boundary without hiding the bug behind `as any`
+  const raw: Record<string, unknown> = {
+    params: { shareId: "share123" },
+    mode: "bogus",
+    projection: "document",
+    now: NOW,
+  };
+  await assert.rejects(
+    resolvePublicRenderWithSource(
+      tracked.source,
+      raw as unknown as ResolvePublicRenderInput,
+    ),
+    /Invalid public render request pair/,
+  );
+  assert.deepEqual(tracked.calls, {
+    document: 0,
+    metadata: 0,
+    presentation: 0,
+  });
+});
+
+test("resolvePublicRenderWithSource rejects unknown runtime projection before any source lookup", async () => {
+  const tracked = trackedSource();
+  const raw: Record<string, unknown> = {
+    params: { shareId: "share123" },
+    mode: "view",
+    projection: "bogus",
+    now: NOW,
+  };
+  await assert.rejects(
+    resolvePublicRenderWithSource(
+      tracked.source,
+      raw as unknown as ResolvePublicRenderInput,
+    ),
+    /Invalid public render request pair/,
+  );
+  assert.deepEqual(tracked.calls, {
+    document: 0,
+    metadata: 0,
+    presentation: 0,
+  });
+});
+
+test("resolvePublicRenderWithSource rejects null and undefined tokens before any source lookup", async () => {
+  const pairs: Array<[unknown, unknown]> = [
+    [null, "document"],
+    [undefined, "document"],
+    ["view", null],
+    [undefined, undefined],
+  ];
+  for (const [mode, projection] of pairs) {
+    const tracked = trackedSource();
+    const raw: Record<string, unknown> = {
+      params: { shareId: "share123" },
+      mode,
+      projection,
+      now: NOW,
+    };
+    await assert.rejects(
+      resolvePublicRenderWithSource(
+        tracked.source,
+        raw as unknown as ResolvePublicRenderInput,
+      ),
+      /Invalid public render request pair/,
+    );
+    assert.deepEqual(tracked.calls, {
+      document: 0,
+      metadata: 0,
+      presentation: 0,
+    });
+  }
 });

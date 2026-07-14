@@ -39,25 +39,32 @@ const PUBLIC_RENDER_PROJECTIONS_BY_MODE = {
   readonly PublicRenderProjection[]
 >;
 
+function isKnownMode(value: string): value is PublicRenderMode {
+  return value in PUBLIC_RENDER_PROJECTIONS_BY_MODE;
+}
+
 export function isPublicRenderModeProjectionPair(
-  mode: PublicRenderMode,
-  projection: PublicRenderProjection,
+  mode: unknown,
+  projection: unknown,
 ): boolean {
-  return (
-    PUBLIC_RENDER_PROJECTIONS_BY_MODE[mode] as readonly PublicRenderProjection[]
-  ).includes(projection);
+  if (typeof mode !== "string" || typeof projection !== "string") return false;
+  if (!isKnownMode(mode)) return false;
+  return PUBLIC_RENDER_PROJECTIONS_BY_MODE[mode].some((p) => p === projection);
 }
 
 export function assertPublicRenderModeProjectionPair(
-  mode: PublicRenderMode,
-  projection: PublicRenderProjection,
-): void {
+  mode: unknown,
+  projection: unknown,
+): asserts mode is PublicRenderMode {
   if (isPublicRenderModeProjectionPair(mode, projection)) {
     return;
   }
 
+  const safeMode = typeof mode === "string" ? `"${mode}"` : "<non-string>";
+  const safeProjection =
+    typeof projection === "string" ? `"${projection}"` : "<non-string>";
   throw new Error(
-    `Invalid public render request pair: mode "${mode}" does not support projection "${projection}".`,
+    `Invalid public render request pair: mode ${safeMode} does not support projection ${safeProjection}.`,
   );
 }
 
