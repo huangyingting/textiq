@@ -5,6 +5,7 @@ import {
   type RateLimitStore,
   type RateLimitWindow,
   type RateLimitOptions,
+  type RateLimitResult,
   checkRateLimitWithStore,
 } from "@/lib/rate-limit/core";
 import {
@@ -210,16 +211,51 @@ function createFakeStore(): RateLimitStore & {
   readonly map: Map<string, RateLimitWindow>;
 } {
   const map = new Map<string, RateLimitWindow>();
-  return {
-    map,
-    async get(key) {
-      const window = map.get(key);
-      return window ? { ...window } : undefined;
-    },
-    async set(key, window) {
-      map.set(key, { ...window });
-    },
-  };
+  const store: RateLimitStore & { readonly map: Map<string, RateLimitWindow> } =
+    {
+      map,
+      async get(key) {
+        const window = map.get(key);
+        return window ? { ...window } : undefined;
+      },
+      async set(key, window) {
+        map.set(key, { ...window });
+      },
+      atomicConsume(
+        key: string,
+        options: RateLimitOptions,
+      ): Promise<RateLimitResult> {
+        const { limit, windowMs, now } = options;
+        const existing = map.get(key);
+        if (!existing || now >= existing.resetAt) {
+          const resetAt = now + windowMs;
+          map.set(key, { count: 1, resetAt });
+          return Promise.resolve({
+            allowed: true,
+            remaining: Math.max(0, limit - 1),
+            limit,
+            resetAt,
+          });
+        }
+        if (existing.count >= limit) {
+          return Promise.resolve({
+            allowed: false,
+            remaining: 0,
+            limit,
+            resetAt: existing.resetAt,
+          });
+        }
+        const count = existing.count + 1;
+        map.set(key, { count, resetAt: existing.resetAt });
+        return Promise.resolve({
+          allowed: true,
+          remaining: Math.max(0, limit - count),
+          limit,
+          resetAt: existing.resetAt,
+        });
+      },
+    };
+  return store;
 }
 
 test("anonymous per-IP throttle allows up to the limit then returns a retry-after", async () => {
@@ -412,11 +448,7 @@ describe("prismaRateLimitStore shape (#482)", () => {
     // Import and verify the method exists — without hitting the DB.
     // The real prismaRateLimitStore is imported indirectly; we test the shape.
     const store = createAtomicFakeStore({});
-    assert.equal(
-      typeof (store as RateLimitStore & { atomicConsume?: unknown })
-        .atomicConsume,
-      "function",
-    );
+    assert.equal(typeof (store as RateLimitStore).atomicConsume, "function");
   });
 });
 
@@ -607,7 +639,7 @@ describe("createPrismaRateLimitStore", () => {
     });
     const store = createPrismaRateLimitStore(client as never);
 
-    const result = await store.atomicConsume!("anonymous:hash", {
+    const result = await store.atomicConsume("anonymous:hash", {
       limit: 3,
       windowMs: 1_000,
       now: 500,
@@ -627,7 +659,7 @@ describe("createPrismaRateLimitStore", () => {
     const store = createPrismaRateLimitStore(client as never);
 
     assert.deepEqual(
-      await store.atomicConsume!("anonymous:hash", {
+      await store.atomicConsume("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 5_000,
@@ -641,7 +673,7 @@ describe("createPrismaRateLimitStore", () => {
       resetAt: new Date(5_500),
     });
     assert.deepEqual(
-      await store.atomicConsume!("anonymous:hash", {
+      await store.atomicConsume("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 6_000,
@@ -660,7 +692,7 @@ describe("createPrismaRateLimitStore", () => {
     const store = createPrismaRateLimitStore(client as never);
 
     assert.deepEqual(
-      await store.atomicConsume!("anonymous:hash", {
+      await store.atomicConsume("anonymous:hash", {
         limit: 2,
         windowMs: 1_000,
         now: 5_000,
@@ -674,14 +706,14 @@ describe("createPrismaRateLimitStore", () => {
     const client = createInterleavedCreateClient();
     const store = createPrismaRateLimitStore(client as never);
 
-    const first = store.atomicConsume!(key, {
+    const first = store.atomicConsume(key, {
       limit: 2,
       windowMs: 1_000,
       now: 100,
     });
     await client.firstCreateStarted.promise;
 
-    const second = store.atomicConsume!(key, {
+    const second = store.atomicConsume(key, {
       limit: 2,
       windowMs: 1_000,
       now: 100,
@@ -712,14 +744,14 @@ describe("createPrismaRateLimitStore", () => {
     });
     const store = createPrismaRateLimitStore(client as never);
 
-    const first = store.atomicConsume!(key, {
+    const first = store.atomicConsume(key, {
       limit: 2,
       windowMs: 1_000,
       now: 1_000,
     });
     await client.firstResetStarted.promise;
 
-    const second = store.atomicConsume!(key, {
+    const second = store.atomicConsume(key, {
       limit: 2,
       windowMs: 1_000,
       now: 1_000,

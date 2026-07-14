@@ -33,26 +33,26 @@ export interface RateLimitResult {
  * back it with an in-memory fake. `get` returns the subject's current window
  * (or `undefined`); `set` persists a window for the subject.
  *
- * Cost-bearing stores should implement the optional `atomicConsume` method
- * to eliminate the get→compute→set race that can allow a small overshoot under
- * concurrency. When present, {@link checkRateLimitWithStore} delegates to it
- * instead of the two-phase read-modify-write (#482).
+ * All stores must implement `atomicConsume` to eliminate the get→compute→set
+ * race that can allow overshoot under concurrency (#482, #1997).
+ * {@link checkRateLimitWithStore} unconditionally delegates to it.
  */
 export interface RateLimitStore {
   get(key: string): Promise<RateLimitWindow | undefined>;
   set(key: string, window: RateLimitWindow): Promise<void>;
   /**
-   * Optional atomic consume operation (#482, #1997).
+   * Required atomic consume operation (#482, #1997).
    *
    * Consumes exactly one request attempt for `key` and returns the authoritative
    * {@link RateLimitResult} in one concurrency-safe persistence operation
    * (missing/current/expired window handling included).
    *
-   * When this method is present, {@link checkRateLimitWithStore} uses it instead
-   * of the two-phase get → compute → set path, eliminating races where
+   * In-memory implementations perform the read-modify-write as one synchronous
+   * critical section (no await between read and write). Database-backed
+   * implementations use compare-and-swap or equivalent to eliminate races where
    * concurrent requests observe stale state and both persist `count = 1`.
    */
-  atomicConsume?(
+  atomicConsume(
     key: string,
     options: RateLimitOptions,
   ): Promise<RateLimitResult>;
@@ -132,25 +132,15 @@ export function checkRateLimit(
 }
 
 /**
- * Store-backed counterpart of {@link checkRateLimit}. When the store provides
- * {@link RateLimitStore.atomicConsume}, delegates to it for an atomically
- * bounded guarantee (no overshoot, #482). Otherwise falls back to the
- * read-modify-write path.
- *
- * The atomic path ensures that exactly `limit` requests succeed per window
- * even under high concurrency across multiple instances.
+ * Store-backed counterpart of {@link checkRateLimit}. Unconditionally delegates
+ * to {@link RateLimitStore.atomicConsume} for a concurrency-safe guarantee with
+ * no overshoot (#482, #1997). The non-atomic read-modify-write fallback has been
+ * removed; every store must implement `atomicConsume`.
  */
 export async function checkRateLimitWithStore(
   store: RateLimitStore,
   key: string,
   options: RateLimitOptions,
 ): Promise<RateLimitResult> {
-  if (store.atomicConsume) {
-    return store.atomicConsume(key, options);
-  }
-  const { result, next } = computeRateLimit(await store.get(key), options);
-  if (next) {
-    await store.set(key, next);
-  }
-  return result;
+  return store.atomicConsume(key, options);
 }
