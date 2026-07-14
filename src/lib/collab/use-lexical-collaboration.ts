@@ -6,6 +6,7 @@ import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
 import type { CollabStatus, Peer } from "./use-collaboration";
+import { createLexicalWebsocketProviderAdapter } from "./lexical-provider-adapter";
 import { colorFromId } from "./y-text";
 import { resolveCollabWsUrl } from "./ws-url";
 
@@ -21,10 +22,6 @@ const TITLE_LOCAL_ORIGIN = Symbol("textiq-lexical-title-local");
 const TITLE_SEED_ORIGIN = Symbol("textiq-lexical-title-seed");
 
 type Awareness = WebsocketProvider["awareness"];
-
-function lexicalProvider(provider: WebsocketProvider): Provider {
-  return provider as unknown as Provider;
-}
 
 /**
  * Lexical's `@lexical/yjs` binding stores presence at the top level of each
@@ -103,6 +100,9 @@ export function useLexicalCollaboration(opts: {
     const wsUrl = resolveCollabWsUrl();
     return new WebsocketProvider(wsUrl, room, doc, { connect: false });
   });
+  const [lexicalProvider] = useState(() =>
+    createLexicalWebsocketProviderAdapter(provider, doc),
+  );
 
   const [status, setStatus] = useState<CollabStatus>("connecting");
   const [synced, setSynced] = useState(false);
@@ -144,19 +144,20 @@ export function useLexicalCollaboration(opts: {
   // The plugin only disconnects on unmount; fully tear down the provider/doc.
   useEffect(() => {
     return () => {
+      lexicalProvider.dispose();
       provider.destroy();
       doc.destroy();
     };
-  }, [provider, doc]);
+  }, [doc, lexicalProvider, provider]);
 
   const providerFactory = useCallback(
     (id: string, yjsDocMap: Map<string, Y.Doc>) => {
       if (!yjsDocMap.has(id)) {
         yjsDocMap.set(id, doc);
       }
-      return lexicalProvider(provider);
+      return lexicalProvider;
     },
-    [doc, provider],
+    [doc, lexicalProvider],
   );
 
   const cursorColor = colorFromId(provider.awareness.clientID);
