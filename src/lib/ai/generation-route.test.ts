@@ -70,8 +70,8 @@ function createConfig(
     logScope: "api.fake-generate",
     operation: "fake-generate",
     rateLimitSubjects: {
-      user: "fake-user",
-      anonymousIp: "fake-anon-ip",
+      user: "ai.visual.user",
+      anonymousIp: "ai.visual.anonymous-ip",
     },
     anonymousQuotaExceededMessage:
       "You've used all your free generations. Sign in to keep creating fakes.",
@@ -138,24 +138,25 @@ function createDeps(state: FakeState): GenerationRouteDeps {
     withAbortDeadline: (factory) => factory(new AbortController().signal),
     timeoutMs: 45_000,
     getCurrentUser: async () => state.user,
-    rateLimitStore: {
-      async get() {
-        return undefined;
-      },
-      async set() {},
-    },
-    checkRateLimitWithStore: async (_store, key) => {
+    checkAbuseBudget: async ({ namespace, subject }) => {
+      const subjectHash = `hash:${SECRET}:${subject}`;
+      const key = `${namespace}:${subjectHash}`;
       state.subjects.push(key);
       return {
         allowed: state.rateAllowed,
-        remaining: state.rateAllowed ? 9 : 0,
-        limit: 10,
-        resetAt: state.rateResetAt,
+        result: {
+          allowed: state.rateAllowed,
+          remaining: state.rateAllowed ? 9 : 0,
+          limit: 10,
+          resetAt: state.rateResetAt,
+        },
+        retryAfterSeconds: state.rateAllowed
+          ? undefined
+          : Math.max(1, Math.ceil((state.rateResetAt - state.now) / 1000)),
+        subjectHash,
+        key,
       };
     },
-    rateLimitSubject: (scope, identifier) => `${scope}:${identifier}`,
-    userRateLimit: () => 10,
-    userRateWindowMs: () => 60_000,
     checkIpRateLimit: async ({ namespace, headers }) => {
       const ip = headers.get("x-forwarded-for") ?? "unknown";
       const hash = `hash:${SECRET}:${ip}`;
@@ -324,11 +325,28 @@ test("authenticated success reserves then captures credits without setting anon 
     result: { value: "HELLO WORLD" },
   });
   assert.equal(response.headers.get("set-cookie"), null);
-  assert.equal(state.subjects[0], "fake-user:user-1");
+  assert.equal(state.subjects[0], "ai.visual.user:hash:test-secret:user-1");
   assert.equal(state.generated, 1);
   assert.equal(state.reserved.length, 1);
   assert.equal(state.captured.length, 1);
   assert.equal(state.refunded.length, 0);
+});
+
+test("authenticated checks honor deck user namespace from route config", async () => {
+  const state = createState();
+  const config: GenerationRouteConfig<FakePayload, FakeResult> = {
+    ...createConfig(state),
+    rateLimitSubjects: {
+      user: "ai.deck.user",
+      anonymousIp: "ai.deck.anonymous-ip",
+    },
+  };
+  const handler = createGenerationRouteHandler(config, createDeps(state));
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(response.status, 200);
+  assert.equal(state.subjects[0], "ai.deck.user:hash:test-secret:user-1");
 });
 
 test("zero-credit authenticated success skips capture", async () => {
@@ -361,7 +379,10 @@ test("anonymous success increments the signed one-year trial cookie", async () =
   );
 
   assert.equal(response.status, 200);
-  assert.equal(state.subjects[0], "fake-anon-ip:hash:test-secret:203.0.113.1");
+  assert.equal(
+    state.subjects[0],
+    "ai.visual.anonymous-ip:hash:test-secret:203.0.113.1",
+  );
   assert.equal(state.reserved.length, 0);
   assert.equal(state.captured.length, 0);
 
@@ -374,6 +395,31 @@ test("anonymous success increments the signed one-year trial cookie", async () =
   assert.ok(value);
   const parsed = parseAnonCookie(value, SECRET);
   assert.equal(parsed?.count, 1);
+});
+
+test("anonymous checks honor deck network namespace from route config", async () => {
+  const state = createState({ user: null });
+  const config: GenerationRouteConfig<FakePayload, FakeResult> = {
+    ...createConfig(state),
+    rateLimitSubjects: {
+      user: "ai.deck.user",
+      anonymousIp: "ai.deck.anonymous-ip",
+    },
+  };
+  const handler = createGenerationRouteHandler(config, createDeps(state));
+
+  const response = await handler(
+    createRequest(
+      { text: "hello anon" },
+      { headers: { "x-forwarded-for": "203.0.113.2" } },
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    state.subjects[0],
+    "ai.deck.anonymous-ip:hash:test-secret:203.0.113.2",
+  );
 });
 
 test("rate limit returns 429 with Retry-After before generation", async () => {

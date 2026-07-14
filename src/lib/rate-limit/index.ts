@@ -34,6 +34,16 @@ import { prisma } from "@/lib/prisma";
 
 type RateLimitPrismaClient = Pick<typeof prisma, "rateLimitHit">;
 
+const ATOMIC_CONSUME_MAX_ATTEMPTS = 4;
+const RETRYABLE_ATOMIC_CONSUME_ERROR_CODES = new Set(["P2002", "P2034"]);
+
+function isRetryableAtomicConsumeError(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return (
+    typeof code === "string" && RETRYABLE_ATOMIC_CONSUME_ERROR_CODES.has(code)
+  );
+}
+
 type IpFamily = "ipv4" | "ipv6";
 
 export type ClientIpSource =
@@ -343,25 +353,26 @@ export function retryAfterSeconds(resetAt: number, now: number): number {
 
 /* node:coverage disable */
 /**
- * `RateLimitHit`-backed {@link RateLimitStore} with atomic increment (#482).
+ * `RateLimitHit`-backed {@link RateLimitStore} with atomic consume (#482).
  *
  * Persisting the window in a row (instead of a per-instance Map) makes a limit
  * hold across instances and, for IP-keyed limits, survive a cookie reset.
  *
- * ## Atomicity guarantee (#482)
+ * ## Atomic consume algorithm (#1997)
  *
- * The store implements `atomicIncrement` which collapses the previous
- * read-modify-write into a single conditional `updateMany` guarded by
- * `count < limit AND resetAt > now`. Prisma executes this as one DB-level
- * operation (a single UPDATE with a WHERE clause), so two concurrent requests
- * that both read count=N−1 cannot both succeed — exactly one UPDATE matches and
- * increments; the other sees 0 rows updated and is either blocked or starts a
- * new window (if expired).
+ * The store implements `atomicConsume` as a bounded compare-and-swap loop:
  *
- * Bounded guarantee: the number of allowed requests within a window is bounded
- * to exactly `limit`. An overshoot of ≥1 at the critical boundary is not
- * possible under this scheme, as long as the underlying DB enforces row-level
- * write serialization (SQLite WAL mode, PostgreSQL MVCC).
+ *  1. Read the current row.
+ *  2. Missing row: try `create(count=1, resetAt=now+window)`.
+ *  3. Expired row: CAS reset via `updateMany` guarded by the exact previously
+ *     observed `{ count, resetAt }`.
+ *  4. Live row below limit: CAS increment via `updateMany` guarded by the exact
+ *     previously observed `{ count, resetAt }`.
+ *  5. Live row at/above limit: block.
+ *
+ * The CAS guards ensure competing writers cannot both "win" the same state
+ * transition. Retry is bounded to known Prisma conflict errors (`P2002`
+ * unique-constraint race, `P2034` write conflict/deadlock) and capped.
  */
 /* node:coverage enable */
 export function createPrismaRateLimitStore(
@@ -386,79 +397,115 @@ export function createPrismaRateLimitStore(
       });
     },
 
-    /**
-     * Atomic conditional increment for the fixed-window rate limiter (#482).
-     *
-     * Decision tree (all in DB-level operations):
-     *
-     *  1. Try `updateMany WHERE subject=key AND count < limit AND resetAt > now,
-     *     SET count = count + 1`.
-     *     - If 1 row updated → allowed; re-read count and return.
-     *  2. If 0 rows updated, fetch the current row:
-     *     a. Row absent or expired (resetAt ≤ now) → upsert with count=1 and a
-     *        fresh resetAt. Return allowed with count=1.
-     *     b. Row present and not expired → blocked at limit.
-     */
-    async atomicIncrement(
+    async atomicConsume(
       key: string,
       options: RateLimitOptions,
     ): Promise<RateLimitResult> {
       const { limit, windowMs, now } = options;
-      const nowDate = new Date(now);
       const newResetAt = new Date(now + windowMs);
+      for (let attempt = 1; attempt <= ATOMIC_CONSUME_MAX_ATTEMPTS; attempt++) {
+        try {
+          const existing = await client.rateLimitHit.findUnique({
+            where: { subject: key },
+          });
 
-      // Phase 1: atomic conditional increment.
-      const incremented = await client.rateLimitHit.updateMany({
-        where: {
-          subject: key,
-          count: { lt: limit },
-          resetAt: { gt: nowDate },
-        },
-        data: { count: { increment: 1 } },
-      });
+          if (!existing) {
+            await client.rateLimitHit.create({
+              data: {
+                subject: key,
+                count: 1,
+                resetAt: newResetAt,
+              },
+            });
+            return {
+              allowed: true,
+              remaining: Math.max(0, limit - 1),
+              limit,
+              resetAt: newResetAt.getTime(),
+            };
+          }
 
-      if (incremented.count > 0) {
-        // Read back to get the actual count after increment.
-        const row = await client.rateLimitHit.findUnique({
-          where: { subject: key },
-        });
-        const count = row?.count ?? 1;
-        const resetAt = row?.resetAt.getTime() ?? now + windowMs;
-        return {
-          allowed: true,
-          remaining: Math.max(0, limit - count),
-          limit,
-          resetAt,
-        };
+          const existingResetAt = existing.resetAt.getTime();
+          if (existingResetAt <= now) {
+            const reset = await client.rateLimitHit.updateMany({
+              where: {
+                subject: key,
+                count: existing.count,
+                resetAt: existing.resetAt,
+              },
+              data: {
+                count: 1,
+                resetAt: newResetAt,
+              },
+            });
+
+            if (reset.count > 0) {
+              return {
+                allowed: true,
+                remaining: Math.max(0, limit - 1),
+                limit,
+                resetAt: newResetAt.getTime(),
+              };
+            }
+
+            if (attempt < ATOMIC_CONSUME_MAX_ATTEMPTS) {
+              continue;
+            }
+
+            throw new Error(
+              `Rate-limit atomic consume exhausted retries while resetting "${key}".`,
+            );
+          }
+
+          if (existing.count >= limit) {
+            return {
+              allowed: false,
+              remaining: 0,
+              limit,
+              resetAt: existingResetAt,
+            };
+          }
+
+          const increment = await client.rateLimitHit.updateMany({
+            where: {
+              subject: key,
+              count: existing.count,
+              resetAt: existing.resetAt,
+            },
+            data: { count: { increment: 1 } },
+          });
+
+          if (increment.count > 0) {
+            const count = existing.count + 1;
+            return {
+              allowed: true,
+              remaining: Math.max(0, limit - count),
+              limit,
+              resetAt: existingResetAt,
+            };
+          }
+
+          if (attempt < ATOMIC_CONSUME_MAX_ATTEMPTS) {
+            continue;
+          }
+
+          throw new Error(
+            `Rate-limit atomic consume exhausted retries while incrementing "${key}".`,
+          );
+        } catch (error) {
+          if (
+            attempt < ATOMIC_CONSUME_MAX_ATTEMPTS &&
+            isRetryableAtomicConsumeError(error)
+          ) {
+            continue;
+          }
+          throw error;
+        }
       }
 
-      // Phase 2: no rows matched — either expired or blocked.
-      const existing = await client.rateLimitHit.findUnique({
-        where: { subject: key },
-      });
-
-      if (!existing || existing.resetAt.getTime() <= now) {
-        // Window absent or expired — start a fresh window atomically.
-        await client.rateLimitHit.upsert({
-          where: { subject: key },
-          create: { subject: key, count: 1, resetAt: newResetAt },
-          update: { count: 1, resetAt: newResetAt },
-        });
-        return {
-          allowed: true,
-          remaining: Math.max(0, limit - 1),
-          limit,
-          resetAt: newResetAt.getTime(),
-        };
-      }
-
-      // Row exists, window not expired, count >= limit → blocked.
-      return {
-        allowed: false,
-        remaining: 0,
-        limit,
-        resetAt: existing.resetAt.getTime(),
-      };
+      throw new Error(
+        `Rate-limit atomic consume exhausted retries for "${key}".`,
+      );
     },
   };
 }
