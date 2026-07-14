@@ -27,6 +27,7 @@ import {
   transferWorkspaceOwnership,
 } from "@/lib/workspace/service";
 import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
+import { isWorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
 import type { WorkspaceRole } from "@/lib/workspace/roles";
 
 export async function createInviteLink(
@@ -168,7 +169,18 @@ export async function transferOwnership(
   const user = await requireUser(redirect);
   await requireWorkspaceCapability(user.id, workspaceId, "manage");
 
-  await transferWorkspaceOwnership(workspaceId, user.id, newOwnerUserId);
+  try {
+    await transferWorkspaceOwnership({
+      workspaceId,
+      actorUserId: user.id,
+      targetUserId: newOwnerUserId,
+    });
+  } catch (error) {
+    if (isWorkspaceOwnershipTransferConflictError(error)) {
+      throw new Error("Only the workspace owner may perform this action.");
+    }
+    throw error;
+  }
 
   revalidatePath("/app");
   revalidatePath("/app/workspaces");
