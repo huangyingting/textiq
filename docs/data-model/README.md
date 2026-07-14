@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-14"
 description: "These documents define persisted JSON contracts and database projections. They are the first place to update when a schema or source-of-truth boundary changes."
 ---
 
