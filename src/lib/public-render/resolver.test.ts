@@ -10,7 +10,6 @@ import {
 } from "node:test";
 
 import {
-  PUBLIC_RENDER_ASSET_ACCESS_SELECT,
   PUBLIC_RENDER_DOCUMENT_SELECT,
   PUBLIC_RENDER_METADATA_SELECT,
   PUBLIC_RENDER_PRESENTATION_SELECT,
@@ -29,56 +28,24 @@ test("public render selects are projection-specific", () => {
     string,
     unknown
   >;
-  const assetAccess = PUBLIC_RENDER_ASSET_ACCESS_SELECT as Record<
-    string,
-    unknown
-  >;
 
+  assert.equal(metadata.id, undefined);
   assert.equal(metadata.contentJson, true);
-  assert.equal(metadata.content, undefined);
+  assert.equal(metadata.slug, true);
   assert.equal(metadata.deckJson, undefined);
   assert.equal(metadata.owner, undefined);
 
+  assert.equal(document.id, true);
   assert.equal(document.contentJson, true);
-  assert.equal(document.content, undefined);
   assert.equal(document.deckJson, undefined);
   assert.notEqual(document.owner, undefined);
 
+  assert.equal(presentation.id, true);
   assert.equal(presentation.contentJson, true);
   assert.equal(presentation.deckJson, true);
-  assert.equal(presentation.content, undefined);
-
-  assert.equal(assetAccess.ownerId, true);
-  assert.equal(assetAccess.workspaceId, true);
-  assert.equal(assetAccess.content, undefined);
-  assert.equal(assetAccess.contentJson, undefined);
-  assert.equal(assetAccess.deckJson, undefined);
-  assert.equal(assetAccess.owner, undefined);
+  assert.notEqual(presentation.owner, undefined);
 });
 
-/**
- * Direct contracts for `resolvePublicRender` (#1945).
- *
- * The tests above only cover `resolver-selects.ts`'s projection-specific
- * select shapes, and `resolver-core.test.ts` covers
- * `resolvePublicRenderWithSource`'s pure decision logic against a fake
- * `PublicRenderSource`. This block instead covers `resolver.ts` itself: the
- * thin prisma-backed `PublicRenderSource` implementation, specifically that
- * `findByShareId` queries `prisma.document.findFirst` scoped by `shareId`
- * with the projection-specific select, that a missing document short-circuits
- * without ever calling the custom-theme-package loader, that the theme-package
- * loader only runs for the `"presentation"` projection (and its result is
- * merged onto the returned row), and that `findByDocumentId` queries
- * `prisma.document.findUnique` by id with the fixed asset-access select.
- *
- * `resolver.ts` imports `server-only` (throws outside a Server Component
- * build) and `@/lib/presentation/brand-kit/persistence`
- * (`loadCustomThemePackagesForDeckJson`, which issues its own unrelated
- * brand-kit/DB queries). Following the module-hooks pattern already used by
- * `src/lib/document-editor/loader.test.ts`, this stubs those two specifiers;
- * `prisma.document.findFirst`/`findUnique` are monkey-patched directly (the
- * two prisma calls the resolver itself issues).
- */
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -178,16 +145,8 @@ function trackedCalls<T>(implementation: (...args: unknown[]) => T): {
   };
 }
 
-function baseShareRow(overrides: Record<string, unknown> = {}) {
+function baseShareFields(overrides: Record<string, unknown> = {}) {
   return {
-    id: "doc-1",
-    title: "Shared Doc",
-    contentJson: { root: { children: [] } },
-    deckJson: null,
-    slug: "shared-doc",
-    ownerId: "owner-1",
-    workspaceId: null,
-    workspace: null,
     shareId: "share123",
     isShared: true,
     deletedAt: null,
@@ -197,7 +156,39 @@ function baseShareRow(overrides: Record<string, unknown> = {}) {
     sharePasscodeHash: null,
     shareMetadataMode: "generic",
     shareDiscoverable: false,
+    ...overrides,
+  };
+}
+
+function metadataRow(overrides: Record<string, unknown> = {}) {
+  return {
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
+    slug: "shared-doc",
+    ...baseShareFields(),
+    ...overrides,
+  };
+}
+
+function documentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "doc-1",
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
     owner: { name: null, plan: "free" },
+    ...baseShareFields(),
+    ...overrides,
+  };
+}
+
+function presentationRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "doc-1",
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
+    deckJson: null,
+    owner: { name: null, plan: "free" },
+    ...baseShareFields(),
     ...overrides,
   };
 }
@@ -208,8 +199,8 @@ beforeEach(() => {
 });
 
 describe("resolvePublicRender", () => {
-  it("queries prisma.document.findFirst scoped by shareId with the projection-specific select", async (t) => {
-    const findFirst = trackedCalls(async () => baseShareRow());
+  it("queries prisma.document.findFirst scoped by shareId with metadata select", async (t) => {
+    const findFirst = trackedCalls(async () => metadataRow());
     replacePrismaProperty(t, "document", { findFirst: findFirst.fn });
 
     await resolvePublicRender({
@@ -224,6 +215,42 @@ describe("resolvePublicRender", () => {
     ];
     assert.deepEqual(args.where, { shareId: "share123" });
     assert.deepEqual(args.select, PUBLIC_RENDER_METADATA_SELECT);
+  });
+
+  it("queries prisma.document.findFirst scoped by shareId with document select", async (t) => {
+    const findFirst = trackedCalls(async () => documentRow());
+    replacePrismaProperty(t, "document", { findFirst: findFirst.fn });
+
+    await resolvePublicRender({
+      params: { shareId: "shared-doc-share123" },
+      mode: "view",
+      projection: "document",
+    });
+
+    assert.equal(findFirst.calls.length, 1);
+    const [args] = findFirst.calls[0] as [
+      { where: { shareId: string }; select: Record<string, unknown> },
+    ];
+    assert.deepEqual(args.where, { shareId: "share123" });
+    assert.deepEqual(args.select, PUBLIC_RENDER_DOCUMENT_SELECT);
+  });
+
+  it("queries prisma.document.findFirst scoped by shareId with presentation select", async (t) => {
+    const findFirst = trackedCalls(async () => presentationRow());
+    replacePrismaProperty(t, "document", { findFirst: findFirst.fn });
+
+    await resolvePublicRender({
+      params: { shareId: "shared-doc-share123" },
+      mode: "present",
+      projection: "presentation",
+    });
+
+    assert.equal(findFirst.calls.length, 1);
+    const [args] = findFirst.calls[0] as [
+      { where: { shareId: string }; select: Record<string, unknown> },
+    ];
+    assert.deepEqual(args.where, { shareId: "share123" });
+    assert.deepEqual(args.select, PUBLIC_RENDER_PRESENTATION_SELECT);
   });
 
   it("short-circuits to a not-found result without ever calling the theme-package loader", async (t) => {
@@ -242,7 +269,7 @@ describe("resolvePublicRender", () => {
 
   it("skips the theme-package loader entirely for non-presentation projections", async (t) => {
     replacePrismaProperty(t, "document", {
-      findFirst: async () => baseShareRow({ deckJson: { some: "deck" } }),
+      findFirst: async () => metadataRow(),
     });
 
     const result = await resolvePublicRender({
@@ -255,12 +282,7 @@ describe("resolvePublicRender", () => {
     assert.equal(globalThis.__publicRenderTestThemeCalls.length, 0);
   });
 
-  it("loads and merges custom theme packages onto the row only for the presentation projection", async (t) => {
-    // A deck whose theme references a package id that does NOT exist in the
-    // built-in registry — resolving it to the real, non-fallback custom
-    // package therefore proves the loader's result was genuinely threaded
-    // through to `buildPublicPresentationModel`'s theme resolution, not just
-    // invoked and discarded.
+  it("loads and merges custom theme packages onto the presentation row", async (t) => {
     const customPackage = buildMinimalThemePackage("custom-theme-xyz");
     const deck = buildDeck(undefined, {
       theme: buildThemeBinding({ packageId: "custom-theme-xyz" }),
@@ -268,7 +290,7 @@ describe("resolvePublicRender", () => {
     const deckJson = JSON.parse(JSON.stringify(deck));
     replacePrismaProperty(t, "document", {
       findFirst: async () =>
-        baseShareRow({
+        presentationRow({
           deckJson,
           sharePresentEnabled: true,
         }),
@@ -288,57 +310,9 @@ describe("resolvePublicRender", () => {
     assert.deepEqual(globalThis.__publicRenderTestThemeCalls[0], [deckJson]);
     assert.equal(result.ok, true);
     if (result.ok && result.projection === "presentation") {
-      // A "neutral"/fallback package here would mean the merge never reached
-      // the theme resolver — this proves the custom package was applied.
       assert.equal(result.presentation.themePackage.id, "custom-theme-xyz");
     } else {
       assert.fail("expected a successful presentation projection result");
     }
-  });
-
-  it("queries prisma.document.findUnique by id with the fixed asset-access select for asset-mode requests", async (t) => {
-    const findUnique = trackedCalls(async () =>
-      baseShareRow({
-        ownerId: "owner-9",
-        workspaceId: "ws-1",
-        workspace: { ownerId: "owner-9", members: [] },
-      }),
-    );
-    replacePrismaProperty(t, "document", { findUnique: findUnique.fn });
-
-    await resolvePublicRender({
-      params: {
-        documentId: "doc-9",
-        shareId: "shared-doc-share123",
-        shareMode: "present",
-      },
-      mode: "asset",
-      projection: "assetAccess",
-    });
-
-    assert.equal(findUnique.calls.length, 1);
-    const [args] = findUnique.calls[0] as [
-      { where: { id: string }; select: Record<string, unknown> },
-    ];
-    assert.deepEqual(args.where, { id: "doc-9" });
-    assert.deepEqual(args.select, PUBLIC_RENDER_ASSET_ACCESS_SELECT);
-  });
-
-  it("skips the document lookup entirely when the asset request supplies no documentId", async (t) => {
-    const findUnique = trackedCalls(async () => {
-      throw new Error(
-        "document.findUnique should not run without a documentId",
-      );
-    });
-    replacePrismaProperty(t, "document", { findUnique: findUnique.fn });
-
-    const result = await resolvePublicRender({
-      params: { shareId: "shared-doc-share123", shareMode: "present" },
-      mode: "asset",
-      projection: "assetAccess",
-    });
-
-    assert.equal(findUnique.calls.length, 0);
-    assert.equal(result.ok, false);
   });
 });

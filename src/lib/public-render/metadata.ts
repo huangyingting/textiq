@@ -1,18 +1,14 @@
 import { deriveFromContentJson } from "@/lib/document-stats";
 import { buildShareSegment } from "@/lib/slug";
 
+import {
+  normalizePublicMetadataMode,
+  type PublicMetadataDocument,
+} from "./metadata-contract";
+
 const PUBLIC_SITE_NAME = "TextIQ";
 
 export type PublicMetadataSurface = "share" | "present";
-
-export interface PublicMetadataDocument {
-  title: string;
-  contentJson: unknown;
-  slug: string | null;
-  shareId: string | null;
-  metadataMode: string;
-  discoverable: boolean;
-}
 
 export interface BuildPublicMetadataInput {
   document: PublicMetadataDocument | null;
@@ -65,11 +61,7 @@ export function buildPublicMetadata({
       ? `${baseUrl}/share/${segment}`
       : `${baseUrl}/present/${segment}`;
   const shareCanonical = `${baseUrl}/share/${segment}`;
-  const metadataMode =
-    document.metadataMode === "title" ||
-    document.metadataMode === "title-excerpt"
-      ? document.metadataMode
-      : "generic";
+  const metadataMode = normalizePublicMetadataMode(document.metadataMode);
   const canShowTitle =
     metadataMode === "title" || metadataMode === "title-excerpt";
   const canShowExcerpt = metadataMode === "title-excerpt";
@@ -86,7 +78,10 @@ export function buildPublicMetadata({
   return {
     title: pageTitle,
     description,
-    robots: { index: document.discoverable, follow: document.discoverable },
+    robots: {
+      index: document.discoverable ?? false,
+      follow: document.discoverable ?? false,
+    },
     alternates: { canonical },
     openGraph: {
       title: pageTitle,

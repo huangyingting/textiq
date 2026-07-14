@@ -7,6 +7,7 @@ import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { app as appEnv } from "@/lib/env";
 import { buildPublicMetadata } from "@/lib/public-render/metadata";
 import { publicPresentationRecoveryForViewer } from "@/lib/public-render/presentation";
+import { adaptPublicRouteOutcome } from "@/lib/public-render/route-outcome";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
@@ -59,27 +60,26 @@ export default async function PresentPage({
     passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
-  if (!result.ok || result.projection !== "presentation") {
-    if (
-      !result.decision.allow &&
-      result.decision.reason === "passcode-required"
-    ) {
-      return (
-        <SharePasscodeGate
-          shareId={"shareId" in result ? result.shareId : shareId}
-          mode="present"
-          returnTo={`/present/${shareId}`}
-          error={
-            passcodeStatus === "invalid" || passcodeStatus === "limited"
-              ? passcodeStatus
-              : undefined
-          }
-        />
-      );
-    }
+  const outcome = adaptPublicRouteOutcome(
+    result,
+    "presentation",
+    shareId,
+    passcodeStatus,
+  );
+  if (outcome.kind === "passcode-required") {
+    return (
+      <SharePasscodeGate
+        shareId={outcome.gate.shareId}
+        mode="present"
+        returnTo={`/present/${shareId}`}
+        error={outcome.gate.error}
+      />
+    );
+  }
+  if (outcome.kind === "not-found") {
     notFound();
   }
-  const { presentation } = result;
+  const { presentation } = outcome.result;
   const recovery = publicPresentationRecoveryForViewer(presentation.recovery);
 
   return (

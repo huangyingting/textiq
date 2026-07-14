@@ -8,6 +8,7 @@ import { ShareLightbox } from "./share-lightbox";
 import { MadeWithBadge } from "@/components/made-with-badge";
 import { app as appEnv } from "@/lib/env";
 import { buildPublicMetadata } from "@/lib/public-render/metadata";
+import { adaptPublicRouteOutcome } from "@/lib/public-render/route-outcome";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
@@ -64,27 +65,26 @@ export default async function SharedDocumentPage({
     passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
-  if (!result.ok || result.projection !== "document") {
-    if (
-      !result.decision.allow &&
-      result.decision.reason === "passcode-required"
-    ) {
-      return (
-        <SharePasscodeGate
-          shareId={"shareId" in result ? result.shareId : shareId}
-          mode="view"
-          returnTo={`/share/${shareId}`}
-          error={
-            passcodeStatus === "invalid" || passcodeStatus === "limited"
-              ? passcodeStatus
-              : undefined
-          }
-        />
-      );
-    }
+  const outcome = adaptPublicRouteOutcome(
+    result,
+    "document",
+    shareId,
+    passcodeStatus,
+  );
+  if (outcome.kind === "passcode-required") {
+    return (
+      <SharePasscodeGate
+        shareId={outcome.gate.shareId}
+        mode="view"
+        returnTo={`/share/${shareId}`}
+        error={outcome.gate.error}
+      />
+    );
+  }
+  if (outcome.kind === "not-found") {
     notFound();
   }
-  const { document } = result;
+  const { document } = outcome.result;
 
   return (
     <main className="min-h-screen bg-ds-surface-sunken">
