@@ -66,17 +66,8 @@ export default async function JoinWorkspacePage({
     notFound();
   }
 
-  // Owners and existing members short-circuit straight to the workspace.
+  // Owners short-circuit straight to the workspace.
   if (inviteLink.workspace.ownerId === user.id) {
-    redirect(`/app/workspaces/${inviteLink.workspaceId}`);
-  }
-
-  const existingMember = await prisma.workspaceMember.findFirst({
-    where: { workspaceId: inviteLink.workspaceId, userId: user.id },
-    select: { id: true },
-  });
-
-  if (existingMember) {
     redirect(`/app/workspaces/${inviteLink.workspaceId}`);
   }
 
@@ -90,15 +81,12 @@ export default async function JoinWorkspacePage({
 
   const result = await acceptWorkspaceInvite({
     inviteLinkId: inviteLink.id,
-    maxUses: inviteLink.maxUses,
-    workspaceId: inviteLink.workspaceId,
     userId: user.id,
-    role: decision.role,
   });
 
-  if (result.outcome === "cap-exhausted") {
-    return <InviteInvalid reason="exhausted" />;
+  if (result.outcome === "denied") {
+    return <InviteInvalid reason={result.reason} />;
   }
 
-  redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+  redirect(`/app/workspaces/${result.workspaceId}`);
 }

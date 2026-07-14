@@ -191,6 +191,48 @@ test("getInviteLinkTarget and revokeWorkspaceInviteLink delegate to prisma", asy
 // acceptWorkspaceInvite — transaction tests
 // ---------------------------------------------------------------------------
 
+const ACCEPT_INVITE_SELECT = {
+  id: true,
+  workspaceId: true,
+  role: true,
+  isRevoked: true,
+  expiresAt: true,
+  maxUses: true,
+  useCount: true,
+  workspace: { select: { ownerId: true } },
+} as const;
+
+type InviteAcceptanceRow = {
+  id: string;
+  workspaceId: string;
+  role: string;
+  isRevoked: boolean;
+  expiresAt: Date | null;
+  maxUses: number | null;
+  useCount: number;
+  workspace: { ownerId: string };
+};
+
+function inviteRow(
+  overrides: Partial<InviteAcceptanceRow> = {},
+): InviteAcceptanceRow {
+  const defaults: InviteAcceptanceRow = {
+    id: "link-1",
+    workspaceId: "ws-1",
+    role: "EDITOR",
+    isRevoked: false,
+    expiresAt: null,
+    maxUses: null,
+    useCount: 0,
+    workspace: { ownerId: "owner-1" },
+  };
+  return {
+    ...defaults,
+    ...overrides,
+    workspace: overrides.workspace ?? defaults.workspace,
+  };
+}
+
 /**
  * Builds a stub that mimics Prisma's interactive `$transaction(callback)`.
  * The callback receives a fake transaction client whose model stubs are
@@ -209,17 +251,34 @@ function stubTransaction(
   );
 }
 
-test("acceptWorkspaceInvite capped: exact predicate, increment, member, audit, and joined outcome", async (t) => {
+test("acceptWorkspaceInvite joins using persisted invite facts and CAS consumption", async (t) => {
   const ops: Array<[string, unknown]> = [];
+  const expiresAt = new Date("2026-06-26T00:00:00Z");
 
   stubTransaction(t, {
     inviteLink: {
+      async findUnique(args: unknown) {
+        ops.push(["inviteLink.findUnique", args]);
+        return inviteRow({
+          id: "link-9",
+          workspaceId: "ws-db",
+          role: "EDITOR",
+          maxUses: 5,
+          useCount: 1,
+          expiresAt,
+          workspace: { ownerId: "owner-9" },
+        });
+      },
       async updateMany(args: unknown) {
         ops.push(["inviteLink.updateMany", args]);
         return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst(args: unknown) {
+        ops.push(["workspaceMember.findFirst", args]);
+        return null;
+      },
       async create(args: unknown) {
         ops.push(["workspaceMember.create", args]);
         return {};
@@ -234,49 +293,65 @@ test("acceptWorkspaceInvite capped: exact predicate, increment, member, audit, a
   });
 
   const result = await acceptWorkspaceInvite({
-    inviteLinkId: "link-1",
-    maxUses: 5,
-    workspaceId: "ws-1",
+    inviteLinkId: "link-9",
     userId: "user-1",
-    role: "EDITOR",
+    now: NOW,
   });
 
-  assert.deepEqual(result, { outcome: "joined" });
-  assert.equal(ops.length, 3);
-
-  // Capped predicate includes useCount condition
+  assert.deepEqual(result, { outcome: "joined", workspaceId: "ws-db" });
   assert.deepEqual(ops[0], [
-    "inviteLink.updateMany",
+    "inviteLink.findUnique",
     {
-      where: { id: "link-1", useCount: { lt: 5 } },
-      data: { useCount: { increment: 1 } },
+      where: { id: "link-9" },
+      select: ACCEPT_INVITE_SELECT,
     },
   ]);
-
-  // Member creation payload
   assert.deepEqual(ops[1], [
-    "workspaceMember.create",
-    { data: { workspaceId: "ws-1", userId: "user-1", role: "EDITOR" } },
+    "workspaceMember.findFirst",
+    { where: { workspaceId: "ws-db", userId: "user-1" }, select: { id: true } },
   ]);
-
-  // Audit row payload
   assert.deepEqual(ops[2], [
+    "inviteLink.updateMany",
+    {
+      where: {
+        id: "link-9",
+        workspaceId: "ws-db",
+        role: "EDITOR",
+        isRevoked: false,
+        expiresAt,
+        maxUses: 5,
+        useCount: { equals: 1, lt: 5 },
+      },
+      data: { useCount: { increment: 1 } },
+    },
+  ]);
+  assert.deepEqual(ops[3], [
+    "workspaceMember.create",
+    { data: { workspaceId: "ws-db", userId: "user-1", role: "EDITOR" } },
+  ]);
+  assert.deepEqual(ops[4], [
     "inviteLinkUse.create",
-    { data: { inviteLinkId: "link-1", userId: "user-1", role: "EDITOR" } },
+    { data: { inviteLinkId: "link-9", userId: "user-1", role: "EDITOR" } },
   ]);
 });
 
-test("acceptWorkspaceInvite unlimited: predicate excludes useCount condition", async (t) => {
+test("acceptWorkspaceInvite uses scalar useCount CAS predicate for unlimited invites", async (t) => {
   const ops: Array<[string, unknown]> = [];
 
   stubTransaction(t, {
     inviteLink: {
+      async findUnique() {
+        return inviteRow({ id: "link-unlimited", maxUses: null, useCount: 2 });
+      },
       async updateMany(args: unknown) {
         ops.push(["inviteLink.updateMany", args]);
         return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst() {
+        return null;
+      },
       async create(args: unknown) {
         ops.push(["workspaceMember.create", args]);
         return {};
@@ -291,36 +366,48 @@ test("acceptWorkspaceInvite unlimited: predicate excludes useCount condition", a
   });
 
   const result = await acceptWorkspaceInvite({
-    inviteLinkId: "link-1",
-    maxUses: null,
-    workspaceId: "ws-1",
+    inviteLinkId: "link-unlimited",
     userId: "user-1",
-    role: "VIEWER",
+    now: NOW,
   });
 
-  assert.deepEqual(result, { outcome: "joined" });
-
-  // Unlimited predicate: id only, no useCount
+  assert.deepEqual(result, { outcome: "joined", workspaceId: "ws-1" });
   assert.deepEqual(ops[0], [
     "inviteLink.updateMany",
     {
-      where: { id: "link-1" },
+      where: {
+        id: "link-unlimited",
+        workspaceId: "ws-1",
+        role: "EDITOR",
+        isRevoked: false,
+        expiresAt: null,
+        maxUses: null,
+        useCount: 2,
+      },
       data: { useCount: { increment: 1 } },
     },
   ]);
 });
 
-test("acceptWorkspaceInvite returns cap-exhausted with no member/audit calls when count is 0", async (t) => {
+test("acceptWorkspaceInvite denies a revoked invite without count/member/audit writes", async (t) => {
   const ops: Array<[string, unknown]> = [];
 
   stubTransaction(t, {
     inviteLink: {
-      async updateMany(args: unknown) {
-        ops.push(["inviteLink.updateMany", args]);
-        return { count: 0 };
+      async findUnique(args: unknown) {
+        ops.push(["inviteLink.findUnique", args]);
+        return inviteRow({ isRevoked: true });
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
       async create() {
         ops.push(["workspaceMember.create", null]);
         return {};
@@ -336,33 +423,326 @@ test("acceptWorkspaceInvite returns cap-exhausted with no member/audit calls whe
 
   const result = await acceptWorkspaceInvite({
     inviteLinkId: "link-1",
-    maxUses: 5,
-    workspaceId: "ws-1",
     userId: "user-1",
-    role: "EDITOR",
+    now: NOW,
   });
 
-  assert.deepEqual(result, { outcome: "cap-exhausted" });
-
-  // Only the updateMany was called; member and audit were never reached.
+  assert.deepEqual(result, { outcome: "denied", reason: "revoked" });
   assert.equal(ops.length, 1);
-  assert.equal(ops[0][0], "inviteLink.updateMany");
+  assert.equal(ops[0][0], "inviteLink.findUnique");
 });
 
-test("acceptWorkspaceInvite maps P2002 to already-member after transaction rejection", async (t) => {
+test("acceptWorkspaceInvite denies at the expiry boundary without writes", async (t) => {
   const ops: Array<[string, unknown]> = [];
 
-  // The transaction stub invokes the callback, which throws P2002 from
-  // workspaceMember.create. Since we let the error propagate, the transaction
-  // rejects (simulating rollback). The service maps it to `already-member`.
   stubTransaction(t, {
     inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        return inviteRow({ expiresAt: NOW });
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "denied", reason: "expired" });
+  assert.deepEqual(ops, [["inviteLink.findUnique", null]]);
+});
+
+test("acceptWorkspaceInvite re-checks revocation races between read and consume", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+  const snapshots = [
+    inviteRow({ isRevoked: false, maxUses: 5, useCount: 0 }),
+    inviteRow({ isRevoked: true, maxUses: 5, useCount: 0 }),
+  ];
+  let findCount = 0;
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        const snapshot = snapshots[Math.min(findCount, snapshots.length - 1)];
+        findCount += 1;
+        return snapshot;
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 0 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "denied", reason: "revoked" });
+  assert.deepEqual(
+    ops.map(([name]) => name),
+    [
+      "inviteLink.findUnique",
+      "workspaceMember.findFirst",
+      "inviteLink.updateMany",
+      "inviteLink.findUnique",
+    ],
+  );
+});
+
+test("acceptWorkspaceInvite re-checks expiry races between read and consume", async (t) => {
+  const future = new Date("2026-06-25T01:00:00Z");
+  const ops: Array<[string, unknown]> = [];
+  const snapshots = [
+    inviteRow({ expiresAt: future }),
+    inviteRow({ expiresAt: NOW }),
+  ];
+  let findCount = 0;
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        const snapshot = snapshots[Math.min(findCount, snapshots.length - 1)];
+        findCount += 1;
+        return snapshot;
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 0 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "denied", reason: "expired" });
+  assert.equal(callsByName(ops, "workspaceMember.create"), 0);
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite re-checks cap races and denies exhausted without writes", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+  const snapshots = [
+    inviteRow({ maxUses: 2, useCount: 1 }),
+    inviteRow({ maxUses: 2, useCount: 2 }),
+  ];
+  let findCount = 0;
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        const snapshot = snapshots[Math.min(findCount, snapshots.length - 1)];
+        findCount += 1;
+        return snapshot;
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 0 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "denied", reason: "exhausted" });
+  assert.equal(callsByName(ops, "workspaceMember.create"), 0);
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite returns already-owner without consuming invite capacity", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        return inviteRow({
+          workspaceId: "ws-9",
+          workspace: { ownerId: "user-1" },
+        });
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "already-owner", workspaceId: "ws-9" });
+  assert.equal(callsByName(ops, "workspaceMember.findFirst"), 0);
+  assert.equal(callsByName(ops, "inviteLink.updateMany"), 0);
+  assert.equal(callsByName(ops, "workspaceMember.create"), 0);
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite returns already-member without consuming invite capacity", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        return inviteRow({ workspaceId: "ws-7" });
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return { id: "member-1" };
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "already-member", workspaceId: "ws-7" });
+  assert.equal(callsByName(ops, "inviteLink.updateMany"), 0);
+  assert.equal(callsByName(ops, "workspaceMember.create"), 0);
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite maps workspaceMember P2002 replay to already-member", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        return inviteRow({ workspaceId: "ws-race", maxUses: 5, useCount: 0 });
+      },
       async updateMany(args: unknown) {
         ops.push(["inviteLink.updateMany", args]);
         return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst(args: unknown) {
+        ops.push(["workspaceMember.findFirst", args]);
+        return null;
+      },
       async create() {
         throw new Prisma.PrismaClientKnownRequestError(
           "Unique constraint failed",
@@ -380,19 +760,97 @@ test("acceptWorkspaceInvite maps P2002 to already-member after transaction rejec
 
   const result = await acceptWorkspaceInvite({
     inviteLinkId: "link-1",
-    maxUses: 5,
-    workspaceId: "ws-1",
     userId: "user-1",
-    role: "EDITOR",
+    now: NOW,
   });
 
-  assert.deepEqual(result, { outcome: "already-member" });
+  assert.deepEqual(result, {
+    outcome: "already-member",
+    workspaceId: "ws-race",
+  });
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
 
-  // The increment happened inside the callback, but since the transaction
-  // rejected the P2002 should roll it back in a real database. The audit
-  // row was never created because the error escaped before reaching it.
-  assert.equal(ops.length, 1);
-  assert.equal(ops[0][0], "inviteLink.updateMany");
+test("acceptWorkspaceInvite denies invalid persisted invite roles explicitly", async (t) => {
+  const ops: Array<[string, unknown]> = [];
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        ops.push(["inviteLink.findUnique", null]);
+        return inviteRow({ role: "OWNER" });
+      },
+      async updateMany() {
+        ops.push(["inviteLink.updateMany", null]);
+        return { count: 1 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        ops.push(["workspaceMember.findFirst", null]);
+        return null;
+      },
+      async create() {
+        ops.push(["workspaceMember.create", null]);
+        return {};
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        ops.push(["inviteLinkUse.create", null]);
+        return {};
+      },
+    },
+  });
+
+  const result = await acceptWorkspaceInvite({
+    inviteLinkId: "link-1",
+    userId: "user-1",
+    now: NOW,
+  });
+
+  assert.deepEqual(result, { outcome: "denied", reason: "invalid-role" });
+  assert.equal(callsByName(ops, "inviteLink.updateMany"), 0);
+  assert.equal(callsByName(ops, "workspaceMember.create"), 0);
+  assert.equal(callsByName(ops, "inviteLinkUse.create"), 0);
+});
+
+test("acceptWorkspaceInvite throws explicit error when bounded CAS retries exhaust", async (t) => {
+  const active = inviteRow({ maxUses: null, useCount: 0 });
+
+  stubTransaction(t, {
+    inviteLink: {
+      async findUnique() {
+        return active;
+      },
+      async updateMany() {
+        return { count: 0 };
+      },
+    },
+    workspaceMember: {
+      async findFirst() {
+        return null;
+      },
+      async create() {
+        return { count: 1 };
+      },
+    },
+    inviteLinkUse: {
+      async create() {
+        return {};
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      acceptWorkspaceInvite({
+        inviteLinkId: "link-1",
+        userId: "user-1",
+        now: NOW,
+      }),
+    /Invite acceptance conflicted/,
+  );
 });
 
 test("acceptWorkspaceInvite rethrows non-P2002 errors unchanged", async (t) => {
@@ -400,11 +858,17 @@ test("acceptWorkspaceInvite rethrows non-P2002 errors unchanged", async (t) => {
 
   stubTransaction(t, {
     inviteLink: {
+      async findUnique() {
+        return inviteRow();
+      },
       async updateMany() {
         return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst() {
+        return null;
+      },
       async create() {
         throw dbError;
       },
@@ -420,10 +884,8 @@ test("acceptWorkspaceInvite rethrows non-P2002 errors unchanged", async (t) => {
     () =>
       acceptWorkspaceInvite({
         inviteLinkId: "link-1",
-        maxUses: null,
-        workspaceId: "ws-1",
         userId: "user-1",
-        role: "EDITOR",
+        now: NOW,
       }),
     dbError,
   );
@@ -437,11 +899,17 @@ test("acceptWorkspaceInvite does not swallow P2002 from inviteLinkUse.create", a
 
   stubTransaction(t, {
     inviteLink: {
+      async findUnique() {
+        return inviteRow();
+      },
       async updateMany() {
         return { count: 1 };
       },
     },
     workspaceMember: {
+      async findFirst() {
+        return null;
+      },
       async create() {
         return {};
       },
@@ -457,16 +925,14 @@ test("acceptWorkspaceInvite does not swallow P2002 from inviteLinkUse.create", a
     () =>
       acceptWorkspaceInvite({
         inviteLinkId: "link-1",
-        maxUses: 5,
-        workspaceId: "ws-1",
         userId: "user-1",
-        role: "EDITOR",
+        now: NOW,
       }),
     p2002,
   );
 });
 
-test("acceptWorkspaceInvite does not swallow P2002 from inviteLink.updateMany", async (t) => {
+test("acceptWorkspaceInvite surfaces transaction errors from inviteLink.updateMany", async (t) => {
   const p2002 = new Prisma.PrismaClientKnownRequestError(
     "Unique constraint failed on inviteLink",
     { code: "P2002", clientVersion: "test" },
@@ -474,11 +940,17 @@ test("acceptWorkspaceInvite does not swallow P2002 from inviteLink.updateMany", 
 
   stubTransaction(t, {
     inviteLink: {
+      async findUnique() {
+        return inviteRow();
+      },
       async updateMany() {
         throw p2002;
       },
     },
     workspaceMember: {
+      async findFirst() {
+        return null;
+      },
       async create() {
         return {};
       },
@@ -494,11 +966,13 @@ test("acceptWorkspaceInvite does not swallow P2002 from inviteLink.updateMany", 
     () =>
       acceptWorkspaceInvite({
         inviteLinkId: "link-1",
-        maxUses: null,
-        workspaceId: "ws-1",
         userId: "user-1",
-        role: "EDITOR",
+        now: NOW,
       }),
     p2002,
   );
 });
+
+function callsByName(ops: Array<[string, unknown]>, name: string): number {
+  return ops.filter(([op]) => op === name).length;
+}

@@ -1,4 +1,5 @@
 import type { WorkspaceRole } from "@/lib/workspace/roles";
+import type { InviteDenyReason } from "@/lib/invite-access";
 
 export type InviteLink = {
   id: string;
@@ -22,14 +23,13 @@ export type InviteLinkTarget = {
 /** Input required by {@link acceptWorkspaceInvite}. */
 export type AcceptInviteInput = {
   inviteLinkId: string;
-  maxUses: number | null;
-  workspaceId: string;
   userId: string;
-  role: string;
+  now?: Date;
 };
 
 /** Exhaustive outcome of an invite acceptance attempt. */
 export type AcceptInviteResult =
-  | { outcome: "joined" }
-  | { outcome: "cap-exhausted" }
-  | { outcome: "already-member" };
+  | { outcome: "joined"; workspaceId: string }
+  | { outcome: "already-member"; workspaceId: string }
+  | { outcome: "already-owner"; workspaceId: string }
+  | { outcome: "denied"; reason: InviteDenyReason };
