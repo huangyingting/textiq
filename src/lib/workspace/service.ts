@@ -11,6 +11,10 @@ import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import { type WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
+import {
+  type TransferWorkspaceOwnershipInput,
+  WorkspaceOwnershipTransferConflictError,
+} from "@/lib/workspace/ownership-transfer-types";
 
 export type WorkspaceMemberRemovalTarget = {
   workspaceId: string;
@@ -117,35 +121,73 @@ export async function leaveWorkspaceForUser(
 }
 
 export async function transferWorkspaceOwnership(
-  workspaceId: string,
-  currentOwnerId: string,
-  newOwnerUserId: string,
+  input: TransferWorkspaceOwnershipInput,
 ): Promise<void> {
-  if (newOwnerUserId === currentOwnerId) {
+  if (input.targetUserId === input.actorUserId) {
     throw new Error("You already own this workspace.");
   }
 
-  const newOwnerMembership = await prisma.workspaceMember.findFirst({
-    where: { workspaceId, userId: newOwnerUserId },
-    select: { id: true },
-  });
+  await prisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: { ownerId: true },
+    });
 
-  if (!newOwnerMembership) {
-    throw new Error("New owner must be an existing member of the workspace.");
-  }
+    if (!workspace || workspace.ownerId !== input.actorUserId) {
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    }
 
-  await prisma.$transaction([
-    prisma.workspace.update({
-      where: { id: workspaceId },
-      data: { ownerId: newOwnerUserId },
-    }),
-    prisma.workspaceMember.delete({ where: { id: newOwnerMembership.id } }),
-    prisma.workspaceMember.upsert({
-      where: { workspaceId_userId: { workspaceId, userId: currentOwnerId } },
-      create: { workspaceId, userId: currentOwnerId, role: "EDITOR" },
+    const newOwnerMembership = await tx.workspaceMember.findFirst({
+      where: { workspaceId: input.workspaceId, userId: input.targetUserId },
+      select: { id: true },
+    });
+
+    if (!newOwnerMembership) {
+      throw new Error("New owner must be an existing member of the workspace.");
+    }
+
+    const casOwnerUpdate = await tx.workspace.updateMany({
+      where: { id: input.workspaceId, ownerId: input.actorUserId },
+      data: { ownerId: input.targetUserId },
+    });
+
+    if (casOwnerUpdate.count !== 1) {
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    }
+
+    const removedTargetMembership = await tx.workspaceMember.deleteMany({
+      where: {
+        id: newOwnerMembership.id,
+        workspaceId: input.workspaceId,
+        userId: input.targetUserId,
+      },
+    });
+
+    if (removedTargetMembership.count !== 1) {
+      throw new Error("New owner must be an existing member of the workspace.");
+    }
+
+    await tx.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: input.workspaceId,
+          userId: input.actorUserId,
+        },
+      },
+      create: {
+        workspaceId: input.workspaceId,
+        userId: input.actorUserId,
+        role: "EDITOR",
+      },
       update: { role: "EDITOR" },
-    }),
-  ]);
+    });
+  });
 }
 
 export async function listWorkspaceDocumentsForUser(

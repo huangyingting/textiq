@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, it } from "node:test";
 
+import { WorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
+
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -81,11 +83,11 @@ type TestState = {
     workspaceId: string,
     rawName: string,
   ) => Promise<void>;
-  transferWorkspaceOwnership: (
-    workspaceId: string,
-    currentOwnerId: string,
-    newOwnerUserId: string,
-  ) => Promise<void>;
+  transferWorkspaceOwnership: (input: {
+    workspaceId: string;
+    actorUserId: string;
+    targetUserId: string;
+  }) => Promise<void>;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -190,17 +192,8 @@ function createDefaultState(): TestState {
     async renameWorkspaceRecord(workspaceId, rawName) {
       calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
     },
-    async transferWorkspaceOwnership(
-      workspaceId,
-      currentOwnerId,
-      newOwnerUserId,
-    ) {
-      calls.push([
-        "transferWorkspaceOwnership",
-        workspaceId,
-        currentOwnerId,
-        newOwnerUserId,
-      ]);
+    async transferWorkspaceOwnership(input) {
+      calls.push(["transferWorkspaceOwnership", input]);
     },
   };
 }
@@ -300,9 +293,9 @@ const stubbedModules = new Map<string, string>([
       export async function renameWorkspaceRecord(workspaceId, rawName) {
         return globalThis.__workspaceActionsTestState.renameWorkspaceRecord(workspaceId, rawName);
       }
-      export async function transferWorkspaceOwnership(workspaceId, currentOwnerId, newOwnerUserId) {
+      export async function transferWorkspaceOwnership(input) {
         return globalThis.__workspaceActionsTestState.transferWorkspaceOwnership(
-          workspaceId, currentOwnerId, newOwnerUserId,
+          input,
         );
       }
     `,
@@ -774,10 +767,45 @@ describe("transferOwnership", () => {
     assert.deepEqual(state().calls, [
       ["requireUser"],
       ["requireWorkspaceCapability", "user-1", "ws-1", "manage"],
-      ["transferWorkspaceOwnership", "ws-1", "user-1", "user-2"],
+      [
+        "transferWorkspaceOwnership",
+        {
+          workspaceId: "ws-1",
+          actorUserId: "user-1",
+          targetUserId: "user-2",
+        },
+      ],
       ["revalidatePath", "/app"],
       ["revalidatePath", "/app/workspaces"],
       ["revalidatePath", "/app/workspaces/ws-1"],
+    ]);
+  });
+
+  it("maps stale-owner CAS conflicts to the owner-only message and skips revalidation", async () => {
+    state().transferWorkspaceOwnership = async (input) => {
+      state().calls.push(["transferWorkspaceOwnership", input]);
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    };
+
+    await assert.rejects(
+      () => actions.transferOwnership("ws-1", "user-2"),
+      /Only the workspace owner may perform this action\./,
+    );
+
+    assert.deepEqual(state().calls, [
+      ["requireUser"],
+      ["requireWorkspaceCapability", "user-1", "ws-1", "manage"],
+      [
+        "transferWorkspaceOwnership",
+        {
+          workspaceId: "ws-1",
+          actorUserId: "user-1",
+          targetUserId: "user-2",
+        },
+      ],
     ]);
   });
 });

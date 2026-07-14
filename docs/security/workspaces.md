@@ -18,6 +18,7 @@ workspace roles feed document permissions.
 | Workspace detail actions          | [`src/app/app/workspaces/[id]/actions.ts`](../../src/app/app/workspaces/%5Bid%5D/actions.ts)                           |
 | Workspace role helpers            | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                                       |
 | Workspace service helpers         | [`src/lib/workspace/service.ts`](../../src/lib/workspace/service.ts)                                                   |
+| Ownership transfer types          | [`src/lib/workspace/ownership-transfer-types.ts`](../../src/lib/workspace/ownership-transfer-types.ts)                 |
 | Workspace membership capabilities | [`src/lib/workspace/capabilities.ts`](../../src/lib/workspace/capabilities.ts)                                         |
 | Invite link service               | [`src/lib/workspace/invite-service.ts`](../../src/lib/workspace/invite-service.ts)                                     |
 | Invite link types                 | [`src/lib/workspace/invite-types.ts`](../../src/lib/workspace/invite-types.ts)                                         |
@@ -101,6 +102,13 @@ back to that user's personal space (`workspaceId = null`).
 Deleting a workspace also preserves documents by moving every attached document
 back to its author's personal space before deleting the workspace.
 
+Ownership transfer is transactional. The mutation re-reads `Workspace.ownerId`
+and the target membership row inside one transaction, claims the owner swap
+through a CAS update (`where: { id, ownerId: actorUserId }`), removes only the
+winning target membership row, and demotes the prior owner to `EDITOR`. If the
+actor is stale or the target membership disappears, the transaction aborts and
+rolls back all transfer-side writes.
+
 ## Relationship To Document Permissions
 
 Document capability resolution considers both document ownership and workspace
@@ -125,6 +133,8 @@ semantics.
 5. Workspace membership feeds document permission derivation.
 6. Invite acceptance mutation never trusts join-page preview grant facts.
 7. Invite denials perform no membership/audit writes.
+8. Ownership transfer uses transactional owner CAS; stale-owner conflicts do not
+   partially apply membership writes.
 
 ## Primary Tests
 
