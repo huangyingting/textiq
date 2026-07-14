@@ -6,9 +6,11 @@
  * human-readable warnings, and a `healthy` flag. The logic is free of I/O and
  * side-effects so it can be exercised directly by node:test.
  *
- * The plain-ESM mirror (`scripts/collab-deployment-config.mjs`) replicates this
- * logic for the server scripts that run as plain Node.js without tsx.
+ * Runtime parity is enforced by sharing the canonical implementation in
+ * `deployment-config-source.mjs`, which is consumed by both this TypeScript
+ * module and the plain-ESM server adapter.
  */
+import { resolveDeploymentConfig as resolveDeploymentConfigSource } from "./deployment-config-source.mjs";
 
 type CollabDeploymentMode = "single-instance" | "unconfigured";
 
@@ -44,51 +46,9 @@ export interface CollabEnv {
 export function resolveDeploymentConfig(
   env: CollabEnv = {},
 ): CollabDeploymentConfig {
-  const singleInstance =
-    env.COLLAB_SINGLE_INSTANCE === "1" || env.COLLAB_SINGLE_INSTANCE === "true";
-  const instanceCount = Math.max(
-    1,
-    parseInt(env.COLLAB_INSTANCE_COUNT ?? "1", 10) || 1,
+  return resolveDeploymentConfigSource(
+    env as Record<string, string | undefined>,
   );
-  const stickyRouting =
-    env.COLLAB_STICKY_ROUTING === "1" || env.COLLAB_STICKY_ROUTING === "true";
-
-  // Explicitly declared single-instance: clean bill of health.
-  if (singleInstance) {
-    return { mode: "single-instance", warnings: [], healthy: true };
-  }
-
-  // Multi-instance without sticky routing: edits diverge silently → unhealthy.
-  if (instanceCount > 1 && !stickyRouting) {
-    return {
-      mode: "unconfigured",
-      warnings: [
-        `COLLAB_INSTANCE_COUNT=${instanceCount} is set without COLLAB_STICKY_ROUTING=1. ` +
-          "Clients on different instances will not converge — they will each see a private " +
-          "in-memory room and edits will silently diverge. Either enable sticky routing at " +
-          "your load balancer and set COLLAB_STICKY_ROUTING=1, or run a single instance " +
-          "and set COLLAB_SINGLE_INSTANCE=1.",
-      ],
-      healthy: false,
-    };
-  }
-
-  // Multi-instance with sticky routing: explicitly configured and healthy.
-  if (instanceCount > 1 && stickyRouting) {
-    return { mode: "unconfigured", warnings: [], healthy: true };
-  }
-
-  // Default: single instance implicitly, but the operator has not declared that
-  // intent. Surface a soft advisory; the server is still healthy.
-  return {
-    mode: "unconfigured",
-    warnings: [
-      "COLLAB_SINGLE_INSTANCE is not set. Set COLLAB_SINGLE_INSTANCE=1 to explicitly " +
-        "declare single-instance mode and silence this warning. Running without this " +
-        "flag is safe for a single instance but will produce this advisory on every start.",
-    ],
-    healthy: true,
-  };
 }
 
 /** Runtime statistics collected from the running server. */

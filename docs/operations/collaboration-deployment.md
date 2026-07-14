@@ -91,7 +91,10 @@ for a durable horizontal-scale path.
 
 The startup guard runs before the server accepts any connections. It is
 implemented in [`scripts/collab-deployment-config.mjs`](../../scripts/collab-deployment-config.mjs)
-(plain ESM, used by both entry points) with a TypeScript-tested mirror in
+(plain ESM adapter, used by both entry points) backed by the canonical shared
+policy in
+[`src/lib/collab/deployment-config-source.mjs`](../../src/lib/collab/deployment-config-source.mjs)
+and exposed to TypeScript via
 [`src/lib/collab/deployment-config.ts`](../../src/lib/collab/deployment-config.ts).
 
 | Env configuration                                          | Startup result    | Health `mode`     | `healthy` |
