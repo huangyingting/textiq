@@ -23,11 +23,10 @@ declare const redaction: {
     scope: string;
     context?: Record<string, unknown>;
     fields?: TFields;
-  }): { level: TLevel; scope: string; timestamp: string } & Record<
-    string,
-    unknown
-  > &
-    TFields;
+  }): { level: TLevel; scope: string; timestamp: string } & Omit<
+    TFields,
+    "level" | "scope" | "timestamp"
+  >;
 };
 
 export = redaction;
