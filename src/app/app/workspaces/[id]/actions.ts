@@ -28,11 +28,11 @@ import {
 } from "@/lib/workspace/service";
 import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import { isWorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import type { InvitableWorkspaceRole } from "@/lib/workspace/roles";
 
 export async function createInviteLink(
   workspaceId: string,
-  role: WorkspaceRole,
+  role: InvitableWorkspaceRole,
   options: CreateInviteLinkOptions = {},
 ): Promise<InviteLink> {
   const user = await requireUser(redirect);

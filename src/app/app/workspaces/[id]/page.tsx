@@ -5,7 +5,11 @@ import Link from "next/link";
 import { accessibleWorkspaceWhere } from "@/lib/access-query";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
-import { asWorkspaceRole } from "@/lib/workspace/roles";
+import {
+  assertPersistedWorkspaceMemberRole,
+  type EffectiveWorkspaceRole,
+  type PersistedWorkspaceMemberRole,
+} from "@/lib/workspace/roles";
 
 import { InviteLinkManager } from "./invite-link-manager";
 import { MembersList } from "./members-list";
@@ -15,6 +19,12 @@ import { WorkspaceSettings } from "./workspace-settings";
 export const metadata: Metadata = {
   title: "Workspace — TextIQ",
 };
+
+function toEffectiveWorkspaceRole(
+  role: PersistedWorkspaceMemberRole,
+): Exclude<EffectiveWorkspaceRole, "owner"> {
+  return role === "EDITOR" ? "editor" : "viewer";
+}
 
 export default async function WorkspacePage({
   params,
@@ -65,28 +75,30 @@ export default async function WorkspacePage({
 
   const isOwner = workspace.ownerId === user.id;
   const userMembership = workspace.members.find((m) => m.userId === user.id);
-  const userRole = isOwner
-    ? "OWNER"
+  const userRole: EffectiveWorkspaceRole | null = isOwner
+    ? "owner"
     : userMembership
-      ? asWorkspaceRole(userMembership.role)
+      ? toEffectiveWorkspaceRole(
+          assertPersistedWorkspaceMemberRole(userMembership.role),
+        )
       : null;
 
   if (!userRole) {
     notFound();
   }
 
-  // The `role` columns are plain strings (portable schema); coerce them to the
-  // `WorkspaceRole` union at this read boundary before handing off to the UI.
+  // The `role` columns are plain strings (portable schema); parse them at this
+  // boundary so malformed persisted rows fail explicitly.
   const workspaceForMembers = {
     ...workspace,
     members: workspace.members.map((member) => ({
       ...member,
-      role: asWorkspaceRole(member.role),
+      role: assertPersistedWorkspaceMemberRole(member.role),
     })),
   };
   const inviteLinks = workspace.inviteLinks.map((link) => ({
     ...link,
-    role: asWorkspaceRole(link.role),
+    role: assertPersistedWorkspaceMemberRole(link.role),
   }));
 
   return (

@@ -1,17 +1,18 @@
 /**
  * Unit tests for the workspace capability helper.
- *
- * Mirrors the document-permissions.test.ts pattern: DB-free, pure-function
- * tests covering every (role, capability) combination and all canonical actors.
  */
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { prisma } from "@/lib/prisma";
+import { capabilitiesForEffectiveWorkspaceRole } from "@/lib/workspace/capabilities";
+
 import {
   assertWorkspaceCapability,
   capabilitiesForWorkspaceRole,
   deriveWorkspaceRole,
+  requireWorkspaceCapability,
   workspaceCapabilityAccessDecision,
   workspaceCapabilities,
   WorkspacePermissionError,
@@ -19,15 +20,37 @@ import {
   type WorkspaceRole,
   type WorkspaceRoleInput,
 } from "./workspace-capabilities";
-
-// ---------------------------------------------------------------------------
-// Fixtures: four canonical actors.
-// ---------------------------------------------------------------------------
+import { RoleResolutionDataIntegrityError } from "./permission-builder";
 
 const OWNER = "user-owner";
 const EDITOR = "user-editor";
 const VIEWER = "user-viewer";
 const STRANGER = "user-stranger";
+
+function stubPrismaMethod<T extends object, K extends keyof T>(
+  t: { after: (fn: () => void) => void },
+  object: T,
+  methodName: K,
+  implementation: (...args: unknown[]) => unknown,
+): { calls: unknown[][] } {
+  const original = object[methodName];
+  const calls: unknown[][] = [];
+  const wrapped = (...args: unknown[]) => {
+    calls.push(args);
+    return (implementation as (...args: unknown[]) => unknown)(...args);
+  };
+  Object.defineProperty(object, methodName, {
+    value: wrapped,
+    configurable: true,
+  });
+  t.after(() => {
+    Object.defineProperty(object, methodName, {
+      value: original,
+      configurable: true,
+    });
+  });
+  return { calls };
+}
 
 /** A workspace owned by OWNER with an editor and a viewer member. */
 function workspace(): WorkspaceRoleInput {
@@ -44,10 +67,6 @@ function workspace(): WorkspaceRoleInput {
 function emptyWorkspace(): WorkspaceRoleInput {
   return { ownerId: OWNER, members: [] };
 }
-
-// ---------------------------------------------------------------------------
-// deriveWorkspaceRole
-// ---------------------------------------------------------------------------
 
 test("deriveWorkspaceRole: workspace owner is owner", () => {
   assert.equal(deriveWorkspaceRole(workspace(), OWNER), "owner");
@@ -67,25 +86,35 @@ test("deriveWorkspaceRole: unrelated user has no role", () => {
   assert.equal(deriveWorkspaceRole(emptyWorkspace(), STRANGER), "none");
 });
 
-test("deriveWorkspaceRole: OWNER-role member is treated as owner", () => {
+test("deriveWorkspaceRole: ownerId wins even when an owner membership row is malformed", () => {
+  const ws: WorkspaceRoleInput = {
+    ownerId: OWNER,
+    members: [{ userId: OWNER, role: "OWNER" }],
+  };
+  assert.equal(deriveWorkspaceRole(ws, OWNER), "owner");
+});
+
+test("deriveWorkspaceRole: OWNER membership rows are rejected for non-owners", () => {
   const ws: WorkspaceRoleInput = {
     ownerId: OWNER,
     members: [{ userId: "user-admin", role: "OWNER" }],
   };
-  assert.equal(deriveWorkspaceRole(ws, "user-admin"), "owner");
+  assert.throws(
+    () => deriveWorkspaceRole(ws, "user-admin"),
+    RoleResolutionDataIntegrityError,
+  );
 });
 
-test("deriveWorkspaceRole: unknown role string falls back to viewer", () => {
+test("deriveWorkspaceRole: unknown membership role strings are rejected", () => {
   const ws: WorkspaceRoleInput = {
     ownerId: OWNER,
     members: [{ userId: "user-x", role: "SUPERUSER" }],
   };
-  assert.equal(deriveWorkspaceRole(ws, "user-x"), "viewer");
+  assert.throws(
+    () => deriveWorkspaceRole(ws, "user-x"),
+    RoleResolutionDataIntegrityError,
+  );
 });
-
-// ---------------------------------------------------------------------------
-// capabilitiesForWorkspaceRole
-// ---------------------------------------------------------------------------
 
 test("capabilitiesForWorkspaceRole: owner can view/mutate/manage", () => {
   assert.deepEqual(capabilitiesForWorkspaceRole("owner"), {
@@ -123,9 +152,15 @@ test("capabilitiesForWorkspaceRole: none can do nothing", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// workspaceCapabilities — end-to-end matrix
-// ---------------------------------------------------------------------------
+test("workspace capability map stays in parity with UI capability helpers", () => {
+  const effectiveRoles = ["owner", "editor", "viewer"] as const;
+  for (const role of effectiveRoles) {
+    assert.deepEqual(capabilitiesForWorkspaceRole(role), {
+      role,
+      ...capabilitiesForEffectiveWorkspaceRole(role),
+    });
+  }
+});
 
 const EXPECTED: Record<
   string,
@@ -163,10 +198,6 @@ for (const [userId, expected] of Object.entries(EXPECTED)) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// assertWorkspaceCapability — every (role, capability) combination
-// ---------------------------------------------------------------------------
-
 type Allowed = { view: boolean; mutate: boolean; manage: boolean };
 
 const ALLOWED: Record<WorkspaceRole, Allowed> = {
@@ -194,10 +225,6 @@ for (const role of Object.keys(ALLOWED) as WorkspaceRole[]) {
     });
   }
 }
-
-// ---------------------------------------------------------------------------
-// Error messages
-// ---------------------------------------------------------------------------
 
 test("assertWorkspaceCapability: no-access error says 'Workspace not found.' with null capability", () => {
   const caps = capabilitiesForWorkspaceRole("none");
@@ -237,16 +264,16 @@ test("workspaceCapabilities combines role derivation with capability flags", () 
   const caps = workspaceCapabilities(
     {
       ownerId: OWNER,
-      members: [{ userId: "user-admin", role: "OWNER" as never }],
+      members: [{ userId: "user-member", role: "EDITOR" }],
     },
-    "user-admin",
+    "user-member",
   );
 
   assert.deepEqual(caps, {
-    role: "owner",
+    role: "editor",
     canView: true,
     canMutate: true,
-    canManage: true,
+    canManage: false,
   });
 });
 
@@ -319,22 +346,15 @@ test("workspaceCapabilityAccessDecision maps workspace denials to taxonomy", () 
   );
 });
 
-// ---------------------------------------------------------------------------
-// Action → capability contract (mirrors document-permissions.test.ts style)
-// ---------------------------------------------------------------------------
-
 const ACTION_CAPABILITY: Record<string, WorkspaceCapability> = {
-  // Owner-only lifecycle mutations
   renameWorkspace: "manage",
   deleteWorkspace: "manage",
   transferOwnership: "manage",
   createInviteLink: "manage",
   revokeInviteLink: "manage",
   removeMember: "manage",
-  // Document mutations (owner + editor)
   createWorkspaceDocument: "mutate",
   importWorkspaceDocument: "mutate",
-  // Read-only
   getWorkspaceDocuments: "view",
 };
 
@@ -376,3 +396,31 @@ for (const [action, capability] of Object.entries(ACTION_CAPABILITY)) {
     );
   });
 }
+
+test("requireWorkspaceCapability surfaces invalid persisted membership rows as invalid-role denials", async (t) => {
+  stubPrismaMethod(t, prisma.workspace, "findUnique", async () => ({
+    id: "ws-1",
+    ownerId: OWNER,
+    members: [{ userId: "user-bad", role: "OWNER" }],
+  }));
+
+  await assert.rejects(
+    () => requireWorkspaceCapability("user-bad", "ws-1", "view"),
+    (error: unknown) =>
+      error instanceof WorkspacePermissionError &&
+      error.capability === "view" &&
+      error.accessDecision?.reason === "invalid-role",
+  );
+});
+
+test("requireWorkspaceCapability keeps owner access when ownerId matches, even if a malformed owner membership row exists", async (t) => {
+  stubPrismaMethod(t, prisma.workspace, "findUnique", async () => ({
+    id: "ws-1",
+    ownerId: OWNER,
+    members: [{ userId: OWNER, role: "OWNER" }],
+  }));
+
+  const result = await requireWorkspaceCapability(OWNER, "ws-1", "manage");
+  assert.equal(result.role, "owner");
+  assert.equal(result.canManage, true);
+});

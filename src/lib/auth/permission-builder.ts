@@ -12,12 +12,12 @@
  *
  * This module provides the shared primitives so both consumers produce
  * structurally identical results from one implementation.
- *
- * `DocumentRole` and `WorkspaceRole` are aliases of `ResourceRole`; the
- * four-member union is defined once here.
  */
 
-import { asWorkspaceRole } from "@/lib/workspace/roles";
+import {
+  parsePersistedWorkspaceMemberRole,
+  type WorkspaceMemberRoleParseError,
+} from "@/lib/workspace/roles";
 import {
   allowAccess,
   denyAccess,
@@ -27,22 +27,44 @@ import {
 } from "@/lib/access-policy/taxonomy";
 
 /**
- * The four effective resource roles used across all permission modules.
- * `DocumentRole` and `WorkspaceRole` are re-exported aliases of this type.
+ * The four access roles used by permission checks.
+ * `none` means "no relationship to the resource", not an effective role.
  */
 export type ResourceRole = "owner" | "editor" | "viewer" | "none";
 
 /** Membership row shape shared by both resource types. */
 export type MemberRow = { userId: string; role: string };
 
+export type RoleResolutionDataIntegrity = {
+  ownerId: string;
+  userId: string;
+  membershipRole: unknown;
+  parseError: WorkspaceMemberRoleParseError;
+};
+
+/**
+ * Raised when a persisted membership role cannot be interpreted safely.
+ *
+ * This is a data-integrity signal: permission consumers must surface it
+ * explicitly (never coerce to viewer/owner and continue).
+ */
+export class RoleResolutionDataIntegrityError extends Error {
+  readonly details: RoleResolutionDataIntegrity;
+
+  constructor(details: RoleResolutionDataIntegrity) {
+    super(details.parseError.message);
+    this.name = "RoleResolutionDataIntegrityError";
+    this.details = details;
+  }
+}
+
 /**
  * Derives a `ResourceRole` from a flat owner-id and member list.
  *
- * Shared implementation used by both `deriveDocumentRole` (workspace
- * membership path) and `deriveWorkspaceRole`.
- *
- * Unknown or garbled membership role strings are coerced to the
- * least-privilege `VIEWER` via {@link asWorkspaceRole}.
+ * - `owner` is derived ONLY from `ownerId`.
+ * - membership rows may only contribute `editor` or `viewer`.
+ * - malformed or `OWNER` membership rows throw
+ *   {@link RoleResolutionDataIntegrityError}.
  */
 export function deriveRoleFromOwnerAndMembers(
   ownerId: string,
@@ -50,14 +72,24 @@ export function deriveRoleFromOwnerAndMembers(
   userId: string,
 ): ResourceRole {
   if (ownerId === userId) return "owner";
-  const membership = members.find((m) => m.userId === userId);
-  if (membership) {
-    const role = asWorkspaceRole(membership.role);
-    if (role === "OWNER") return "owner";
-    if (role === "EDITOR") return "editor";
-    return "viewer";
+  const membership = members.find((member) => member.userId === userId);
+  if (!membership) {
+    return "none";
   }
-  return "none";
+
+  const parsedMembershipRole = parsePersistedWorkspaceMemberRole(
+    membership.role,
+  );
+  if (!parsedMembershipRole.success) {
+    throw new RoleResolutionDataIntegrityError({
+      ownerId,
+      userId,
+      membershipRole: membership.role,
+      parseError: parsedMembershipRole.error,
+    });
+  }
+
+  return parsedMembershipRole.value === "EDITOR" ? "editor" : "viewer";
 }
 
 /**

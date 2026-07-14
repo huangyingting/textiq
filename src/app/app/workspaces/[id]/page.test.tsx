@@ -25,7 +25,7 @@
  * real `Button`/tokens but no-ops `Dialog` — see those files for why) so
  * `./actions` loads without touching a real database or a real `Dialog`
  * portal. `@/lib/access-query` (`accessibleWorkspaceWhere`) and
- * `@/lib/workspace/roles` (`asWorkspaceRole`) are pure and already covered
+ * `@/lib/workspace/roles` (strict role parsing) are pure and already covered
  * (`access-query.test.ts`, `roles.test.ts`) so they are imported for real.
  */
 import assert from "node:assert/strict";
@@ -463,7 +463,7 @@ describe("WorkspacePage", () => {
       byComponentName("WorkspaceDocuments"),
     );
     assert.equal(documents.props.workspaceId, "ws-1");
-    assert.equal(documents.props.userRole, "OWNER");
+    assert.equal(documents.props.userRole, "owner");
 
     const settings = firstElement(result, byComponentName("WorkspaceSettings"));
     assert.equal(settings.props.workspaceId, "ws-1");
@@ -495,7 +495,7 @@ describe("WorkspacePage", () => {
       result,
       byComponentName("WorkspaceDocuments"),
     );
-    assert.equal(documents.props.userRole, "EDITOR");
+    assert.equal(documents.props.userRole, "editor");
 
     const settings = firstElement(result, byComponentName("WorkspaceSettings"));
     assert.equal(settings.props.isOwner, false);
@@ -508,7 +508,7 @@ describe("WorkspacePage", () => {
     );
   });
 
-  it("coerces an unrecognized stored member role to the least-privilege VIEWER default", async () => {
+  it("fails explicitly when a stored member role is unrecognized", async () => {
     state().user = { id: "user-1" };
     state().workspace = {
       ...defaultWorkspace(),
@@ -520,12 +520,29 @@ describe("WorkspacePage", () => {
       ],
     };
 
-    const result = (await invoke()) as ReactElement;
-    const documents = firstElement(
-      result,
-      byComponentName("WorkspaceDocuments"),
+    await assert.rejects(
+      () => invoke(),
+      /Workspace member role must be one of: EDITOR, VIEWER/,
     );
-    assert.equal(documents.props.userRole, "VIEWER");
+  });
+
+  it("fails explicitly when a non-owner membership row is persisted as OWNER", async () => {
+    state().user = { id: "user-1" };
+    state().workspace = {
+      ...defaultWorkspace(),
+      ownerId: "owner-1",
+      members: [
+        {
+          ...defaultWorkspace().members[0],
+          role: "OWNER",
+        },
+      ],
+    };
+
+    await assert.rejects(
+      () => invoke(),
+      /must not be OWNER; ownership is derived from Workspace\.ownerId/i,
+    );
   });
 
   it("renders singular document/member copy at counts of exactly one", async () => {

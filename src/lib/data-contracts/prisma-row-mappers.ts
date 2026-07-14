@@ -9,7 +9,7 @@ import {
   type Visual,
   type VisualKind,
 } from "@/lib/visual/schema";
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import type { PersistedWorkspaceMemberRole } from "@/lib/workspace/roles";
 
 import {
   assertWorkspaceRoleLiteral,
@@ -166,7 +166,7 @@ export type WorkspaceDtoRow = Prisma.WorkspaceGetPayload<{
 export interface WorkspaceMemberDto {
   id: string;
   userId: string;
-  role: WorkspaceRole;
+  role: PersistedWorkspaceMemberRole;
   createdAt: string;
 }
 

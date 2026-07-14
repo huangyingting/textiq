@@ -1,55 +1,105 @@
 /**
- * App-level workspace role types.
+ * Canonical workspace role policy.
  *
- * These replace the generated Prisma `WorkspaceRole` enum so the schema stays
- * portable across Postgres and SQLite (the column is a plain `String`). Because
- * the database no longer enforces the allowed set, reads should be funneled
- * through `asWorkspaceRole` at the boundary to coerce unexpected values back to
- * a known role (least-privilege fallback: `VIEWER`).
+ * Persisted workspace membership rows store ONLY `EDITOR` or `VIEWER`.
+ * Workspace ownership is never encoded in a membership row; owner is derived
+ * strictly from `Workspace.ownerId`.
  */
 
-const WORKSPACE_ROLES = ["OWNER", "EDITOR", "VIEWER"] as const;
+export const PERSISTED_WORKSPACE_MEMBER_ROLES = ["EDITOR", "VIEWER"] as const;
 
 /* node:coverage ignore start */
-/* Coverage rationale: WorkspaceRole is a TypeScript-only alias erased at runtime. */
-export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
+/* Coverage rationale: type aliases are erased at runtime. */
+export type PersistedWorkspaceMemberRole =
+  (typeof PERSISTED_WORKSPACE_MEMBER_ROLES)[number];
+export type InvitableWorkspaceRole = PersistedWorkspaceMemberRole;
+export type EffectiveWorkspaceRole = "owner" | "editor" | "viewer";
 /* node:coverage ignore stop */
 
-const DEFAULT_WORKSPACE_ROLE: WorkspaceRole = "VIEWER";
+export type WorkspaceMemberRoleParseErrorCode =
+  | "owner-membership-row"
+  | "invalid-workspace-member-role";
+
+export type WorkspaceMemberRoleParseError = {
+  code: WorkspaceMemberRoleParseErrorCode;
+  value: unknown;
+  message: string;
+};
+
+export type WorkspaceMemberRoleParseResult =
+  | { success: true; value: PersistedWorkspaceMemberRole }
+  | { success: false; error: WorkspaceMemberRoleParseError };
+
+const WORKSPACE_MEMBER_ROLE_SET = new Set<string>(
+  PERSISTED_WORKSPACE_MEMBER_ROLES,
+);
+
+function isPersistedWorkspaceMemberRole(
+  value: unknown,
+): value is PersistedWorkspaceMemberRole {
+  return typeof value === "string" && WORKSPACE_MEMBER_ROLE_SET.has(value);
+}
 
 /**
- * Roles that may legitimately be granted via a workspace invite link. `OWNER`
- * is intentionally excluded — ownership is established at creation and cannot be
- * handed out through an invite. Invite creation and acceptance both validate the
- * requested role against this allowlist server-side (issue #103).
+ * Parses a persisted `WorkspaceMember.role` value.
+ *
+ * `OWNER` is rejected explicitly because ownership is derived from
+ * `Workspace.ownerId` and must not be represented by a membership row.
  */
-const INVITABLE_WORKSPACE_ROLES = ["EDITOR", "VIEWER"] as const;
+export function parsePersistedWorkspaceMemberRole(
+  value: unknown,
+): WorkspaceMemberRoleParseResult {
+  if (isPersistedWorkspaceMemberRole(value)) {
+    return { success: true, value };
+  }
 
-export type InvitableWorkspaceRole = (typeof INVITABLE_WORKSPACE_ROLES)[number];
+  if (value === "OWNER") {
+    return {
+      success: false,
+      error: {
+        code: "owner-membership-row",
+        value,
+        message:
+          "Workspace member role must not be OWNER; ownership is derived from Workspace.ownerId.",
+      },
+    };
+  }
+
+  return {
+    success: false,
+    error: {
+      code: "invalid-workspace-member-role",
+      value,
+      message: `Workspace member role must be one of: ${PERSISTED_WORKSPACE_MEMBER_ROLES.join(", ")}`,
+    },
+  };
+}
+
+export class WorkspaceRoleDataIntegrityError extends Error {
+  readonly code: WorkspaceMemberRoleParseErrorCode;
+  readonly value: unknown;
+
+  constructor(error: WorkspaceMemberRoleParseError) {
+    super(error.message);
+    this.name = "WorkspaceRoleDataIntegrityError";
+    this.code = error.code;
+    this.value = error.value;
+  }
+}
+
+export function assertPersistedWorkspaceMemberRole(
+  value: unknown,
+): PersistedWorkspaceMemberRole {
+  const parsed = parsePersistedWorkspaceMemberRole(value);
+  if (!parsed.success) {
+    throw new WorkspaceRoleDataIntegrityError(parsed.error);
+  }
+  return parsed.value;
+}
 
 /** Whether `value` is a role that an invite link is allowed to grant. */
 export function isInvitableWorkspaceRole(
   value: unknown,
 ): value is InvitableWorkspaceRole {
-  return (
-    typeof value === "string" &&
-    (INVITABLE_WORKSPACE_ROLES as readonly string[]).includes(value)
-  );
-}
-
-function isWorkspaceRole(value: unknown): value is WorkspaceRole {
-  /* node:coverage ignore next 4 -- Workspace role parsing is asserted; tsx maps the includes guard as uncovered. */
-  return (
-    typeof value === "string" &&
-    (WORKSPACE_ROLES as readonly string[]).includes(value)
-  );
-}
-
-/**
- * Coerces a raw value (e.g. a `String` role read from the database) into a known
- * `WorkspaceRole`, falling back to `DEFAULT_WORKSPACE_ROLE` for anything
- * unrecognized.
- */
-export function asWorkspaceRole(value: unknown): WorkspaceRole {
-  return isWorkspaceRole(value) ? value : DEFAULT_WORKSPACE_ROLE;
+  return parsePersistedWorkspaceMemberRole(value).success;
 }

@@ -4,23 +4,15 @@
  * Every document mutation (and the editor UI) derives the acting user's
  * capabilities from a single place so authorization stays consistent. A user's
  * effective role for a document is derived from document ownership plus their
- * workspace membership role:
+ * workspace relationship:
  *
- *   - owner  — owns the document, or owns/has the `OWNER` role in its workspace
- *   - editor — `EDITOR` member of the document's workspace
- *   - viewer — `VIEWER` member of the document's workspace
+ *   - owner  — owns the document, or owns its workspace
+ *   - editor — `EDITOR` workspace member
+ *   - viewer — `VIEWER` workspace member
  *   - none   — no access at all
  *
- * Capabilities map from the role:
- *
- *   - canView   — owner | editor | viewer (read, comment, duplicate)
- *   - canEdit   — owner | editor (title, body, deck, tags, favorite)
- *   - canManage — owner only (share settings, delete, restore)
- *
- * The pure functions (`deriveDocumentRole`, `capabilitiesForRole`,
- * `documentCapabilities`, `assertCapability`) are DB-free and exhaustively unit
- * tested; the async wrappers fetch the document with the membership context and
- * apply the same logic.
+ * Persisted `OWNER`/unknown membership roles are treated as data-integrity
+ * violations and surfaced explicitly.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -33,6 +25,7 @@ import {
   type ResourceRole,
   createPermissionBuilder,
   deriveRoleFromOwnerAndMembers,
+  RoleResolutionDataIntegrityError,
 } from "./permission-builder";
 
 /** Effective role of a user for a single document. */
@@ -51,8 +44,7 @@ export type DocumentCapabilities = {
 
 /**
  * Minimal document shape needed to derive a role. The `workspace.members` list
- * should contain the membership row(s) for the acting user (each carrying its
- * `userId` and `role`), mirroring the relation as stored in the database.
+ * should contain membership row(s) for the acting user.
  */
 export type DocumentRoleInput = {
   ownerId: string;
@@ -63,7 +55,7 @@ export type DocumentRoleInput = {
   } | null;
 };
 
-/** Minimal document identity returned by the async permission lookups. */
+/** Minimal document identity returned by async permission lookups. */
 export type DocumentIdentity = {
   id: string;
   ownerId: string;
@@ -72,9 +64,7 @@ export type DocumentIdentity = {
 
 /**
  * Thrown when a user attempts an action they are not authorized to perform.
- * Server actions surface this as a clear error (per issue #89 AC #4) rather than
- * a silent no-op. The `capability` is `null` for a pure "no access" (the user
- * cannot even view the document).
+ * The `capability` is `null` for pure "no access" decisions.
  */
 export class DocumentPermissionError extends Error {
   readonly capability: Capability | null;
@@ -92,15 +82,38 @@ export class DocumentPermissionError extends Error {
   }
 }
 
+function documentInvalidMembershipDecision(
+  capability: Capability,
+): AccessDeniedDecision {
+  return denyAccess({
+    resource: { kind: "document" },
+    capability,
+    reason: "invalid-role",
+    status: 403,
+    safeMessage:
+      "Document permissions are misconfigured because workspace membership data is invalid.",
+    concealResource: false,
+  });
+}
+
+function asDocumentDataIntegrityPermissionError(
+  capability: Capability,
+  error: unknown,
+): DocumentPermissionError | null {
+  if (!(error instanceof RoleResolutionDataIntegrityError)) {
+    return null;
+  }
+  const decision = documentInvalidMembershipDecision(capability);
+  return new DocumentPermissionError(
+    decision.safeMessage,
+    capability,
+    decision,
+  );
+}
+
 /**
  * Derives the acting user's effective {@link DocumentRole} from document
- * ownership and workspace membership. Document ownership wins outright; failing
- * that, workspace ownership or an `OWNER` membership grants `owner`, an `EDITOR`
- * membership grants `editor`, and any other membership grants `viewer`. A user
- * with no relationship to the document gets `none`.
- *
- * Unknown/garbled membership role strings are coerced to the least-privilege
- * `VIEWER` via the shared {@link deriveRoleFromOwnerAndMembers} helper.
+ * ownership and workspace membership.
  */
 export function deriveDocumentRole(
   document: DocumentRoleInput,
@@ -139,11 +152,7 @@ export function capabilitiesForRole(role: DocumentRole): DocumentCapabilities {
   return _docBuilder.capabilitiesForRole(role);
 }
 
-/**
- * Convenience: derive the role from a document shape and map it to capabilities
- * in one call. Pure and DB-free — used by both the editor page and the async
- * lookups.
- */
+/** Convenience: derive role and map capabilities in one pure call. */
 export function documentCapabilities(
   document: DocumentRoleInput,
   userId: string,
@@ -153,10 +162,7 @@ export function documentCapabilities(
 
 /**
  * Throws a {@link DocumentPermissionError} when `capabilities` does not satisfy
- * the required `capability`. A user who cannot even view the document gets the
- * generic "Document not found." message (so the action never leaks whether a
- * document exists to an unrelated user); a viewer/editor who lacks the specific
- * capability gets a clear permission error.
+ * the required `capability`.
  */
 export function assertCapability(
   capabilities: DocumentCapabilities,
@@ -185,10 +191,7 @@ export function documentCapabilityAccessDecision(
 
 /**
  * Fetches the document (with the acting user's membership context) and resolves
- * its capabilities. Returns a `none` capability set with `document: null` when
- * the document does not exist, or when it is soft-deleted and `includeDeleted`
- * is not set. The optional `includeDeleted` flag is used by restore, which must
- * operate on soft-deleted rows.
+ * its capabilities.
  */
 export async function getDocumentCapabilities(
   userId: string,
@@ -230,10 +233,7 @@ export async function getDocumentCapabilities(
 }
 
 /**
- * Authorizes the current user for `capability` on a document, throwing a clear
- * {@link DocumentPermissionError} when not allowed (issue #89 AC #4). Returns
- * the document identity and resolved capabilities on success so the caller can
- * proceed with the mutation.
+ * Authorizes the current user for `capability` on a document.
  */
 export async function requireDocumentCapability(
   userId: string,
@@ -241,7 +241,19 @@ export async function requireDocumentCapability(
   capability: Capability,
   options: { includeDeleted?: boolean } = {},
 ): Promise<DocumentCapabilities & { document: DocumentIdentity }> {
-  const result = await getDocumentCapabilities(userId, documentId, options);
+  let result: DocumentCapabilities & { document: DocumentIdentity | null };
+  try {
+    result = await getDocumentCapabilities(userId, documentId, options);
+  } catch (error) {
+    const integrityError = asDocumentDataIntegrityPermissionError(
+      capability,
+      error,
+    );
+    if (integrityError) {
+      throw integrityError;
+    }
+    throw error;
+  }
 
   if (!result.document) {
     throw new DocumentPermissionError(

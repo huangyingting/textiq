@@ -399,13 +399,24 @@ describe("WorkspacesPage", () => {
     assert.ok(memberRole);
   });
 
-  it("falls back to VIEWER when a member workspace's role list is empty", async () => {
+  it("fails explicitly when a member workspace row has no caller membership role", async () => {
     state().memberWorkspaces = [memberWorkspace({ members: [] })];
 
-    const result = (await WorkspacesPage()) as ReactElement;
-    const elements = collectElements(result);
+    await assert.rejects(
+      () => WorkspacesPage(),
+      /missing the caller membership row/i,
+    );
+  });
 
-    assert.ok(elements.some((el) => el.props.children === "VIEWER"));
+  it("fails explicitly when a member workspace role is unrecognized", async () => {
+    state().memberWorkspaces = [
+      memberWorkspace({ members: [{ role: "SOME_UNKNOWN_ROLE" }] }),
+    ];
+
+    await assert.rejects(
+      () => WorkspacesPage(),
+      /Workspace member role must be one of: EDITOR, VIEWER/,
+    );
   });
 
   it("renders singular member/document copy at counts of exactly one", async () => {

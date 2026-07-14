@@ -303,7 +303,7 @@ function waitForAsyncDrain(): Promise<void> {
 type Member = {
   id: string;
   userId: string;
-  role: "OWNER" | "EDITOR" | "VIEWER";
+  role: "EDITOR" | "VIEWER";
   user: { email: string; name: string | null };
 };
 

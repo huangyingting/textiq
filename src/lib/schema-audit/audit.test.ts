@@ -470,6 +470,23 @@ describe("auditRows — invalid rows", () => {
     assert.equal(report.summary.byArea["Subscription.status"], 1);
   });
 
+  test("flags persisted OWNER role rows in workspace membership/invite tables", () => {
+    const report = auditRows({
+      workspaceMembers: [{ id: "member-owner", role: "OWNER" }],
+      inviteLinks: [{ id: "invite-owner", role: "OWNER" }],
+      inviteLinkUses: [{ id: "invite-use-owner", role: "OWNER" }],
+    });
+
+    assert.equal(report.summary.byArea["WorkspaceMember.role"], 1);
+    assert.equal(report.summary.byArea["InviteLink.role"], 1);
+    assert.equal(report.summary.byArea["InviteLinkUse.role"], 1);
+    assert.ok(
+      report.violations.every((violation) =>
+        violation.reason.includes("must not be OWNER"),
+      ),
+    );
+  });
+
   test("counts violations by area in the summary", () => {
     const report = auditRows({
       documents: [

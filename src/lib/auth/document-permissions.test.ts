@@ -15,6 +15,7 @@ import {
   type DocumentRoleInput,
 } from "./document-permissions";
 import { prisma } from "@/lib/prisma";
+import { RoleResolutionDataIntegrityError } from "./permission-builder";
 
 // ---------------------------------------------------------------------------
 // Fixtures: four canonical actors against one workspace document.
@@ -103,7 +104,19 @@ test("deriveDocumentRole: unrelated user has no role", () => {
   assert.equal(deriveDocumentRole(personalDoc(), STRANGER), "none");
 });
 
-test("deriveDocumentRole: OWNER-role member is treated as owner", () => {
+test("deriveDocumentRole: ownerId wins even when an owner membership row exists for that same user", () => {
+  const doc: DocumentRoleInput = {
+    ownerId: OWNER,
+    workspaceId: "ws-1",
+    workspace: {
+      ownerId: WS_OWNER,
+      members: [{ userId: OWNER, role: "OWNER" }],
+    },
+  };
+  assert.equal(deriveDocumentRole(doc, OWNER), "owner");
+});
+
+test("deriveDocumentRole: OWNER membership rows are rejected for non-owners", () => {
   const doc: DocumentRoleInput = {
     ownerId: OWNER,
     workspaceId: "ws-1",
@@ -112,10 +125,13 @@ test("deriveDocumentRole: OWNER-role member is treated as owner", () => {
       members: [{ userId: "user-admin", role: "OWNER" }],
     },
   };
-  assert.equal(deriveDocumentRole(doc, "user-admin"), "owner");
+  assert.throws(
+    () => deriveDocumentRole(doc, "user-admin"),
+    RoleResolutionDataIntegrityError,
+  );
 });
 
-test("deriveDocumentRole: unknown role string falls back to viewer", () => {
+test("deriveDocumentRole: unknown role strings are rejected", () => {
   const doc: DocumentRoleInput = {
     ownerId: OWNER,
     workspaceId: "ws-1",
@@ -124,7 +140,10 @@ test("deriveDocumentRole: unknown role string falls back to viewer", () => {
       members: [{ userId: "user-x", role: "SUPERUSER" }],
     },
   };
-  assert.equal(deriveDocumentRole(doc, "user-x"), "viewer");
+  assert.throws(
+    () => deriveDocumentRole(doc, "user-x"),
+    RoleResolutionDataIntegrityError,
+  );
 });
 
 test("deriveDocumentRole: workspaceId set but workspace null yields none for non-owner", () => {
@@ -375,6 +394,27 @@ test("requireDocumentCapability returns identity on success and typed denial on 
       error instanceof DocumentPermissionError &&
       error.capability === null &&
       error.accessDecision?.reason === "resource-not-found",
+  );
+});
+
+test("requireDocumentCapability surfaces invalid persisted workspace membership roles as invalid-role denials", async (t) => {
+  stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
+    id: "doc-1",
+    ownerId: "owner-1",
+    workspaceId: "ws-1",
+    deletedAt: null,
+    workspace: {
+      ownerId: "owner-1",
+      members: [{ userId: "user-2", role: "OWNER" }],
+    },
+  }));
+
+  await assert.rejects(
+    () => requireDocumentCapability("user-2", "doc-1", "view"),
+    (error: unknown) =>
+      error instanceof DocumentPermissionError &&
+      error.capability === "view" &&
+      error.accessDecision?.reason === "invalid-role",
   );
 });
 

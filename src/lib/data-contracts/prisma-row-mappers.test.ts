@@ -205,7 +205,7 @@ test("maps comment, tag, workspace, and literal rows", () => {
           { id: "member-1", userId: "user-1", role: "ADMIN", createdAt: now },
         ],
       } as WorkspaceDtoRow),
-    /Workspace role/,
+    /Workspace member role/,
   );
   assert.throws(
     () => mapSubscriptionLiterals({ plan: "enterprise", status: "active" }),
