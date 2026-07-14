@@ -5,33 +5,46 @@ import { loadCustomThemePackagesForDeckJson } from "@/lib/presentation/brand-kit
 
 import {
   resolvePublicRenderWithSource,
-  type PublicRenderDocumentRow,
   type ResolvePublicRenderInput,
 } from "./resolver-core";
 import {
-  PUBLIC_RENDER_ASSET_ACCESS_SELECT,
-  selectForPublicRenderProjection,
+  mapPublicRenderDocumentRow,
+  mapPublicRenderMetadataRow,
+  mapPublicRenderPresentationRow,
+  PUBLIC_RENDER_DOCUMENT_SELECT,
+  PUBLIC_RENDER_METADATA_SELECT,
+  PUBLIC_RENDER_PRESENTATION_SELECT,
 } from "./resolver-selects";
 
 export async function resolvePublicRender(input: ResolvePublicRenderInput) {
   return resolvePublicRenderWithSource(
     {
-      async findByShareId(shareId) {
-        const document = (await prisma.document.findFirst({
+      async findDocumentByShareId(shareId) {
+        const row = await prisma.document.findFirst({
           where: { shareId },
-          select: selectForPublicRenderProjection(input.projection),
-        })) as PublicRenderDocumentRow | null;
-        if (!document || input.projection !== "presentation") return document;
-        const customThemes = await loadCustomThemePackagesForDeckJson(
-          document.deckJson,
-        );
-        return { ...document, customThemePackages: customThemes.packages };
+          select: PUBLIC_RENDER_DOCUMENT_SELECT,
+        });
+        return row ? mapPublicRenderDocumentRow(row) : null;
       },
-      async findByDocumentId(documentId) {
-        return (await prisma.document.findUnique({
-          where: { id: documentId },
-          select: PUBLIC_RENDER_ASSET_ACCESS_SELECT,
-        })) as PublicRenderDocumentRow | null;
+      async findMetadataByShareId(shareId) {
+        const row = await prisma.document.findFirst({
+          where: { shareId },
+          select: PUBLIC_RENDER_METADATA_SELECT,
+        });
+        return row ? mapPublicRenderMetadataRow(row) : null;
+      },
+      async findPresentationByShareId(shareId) {
+        const row = await prisma.document.findFirst({
+          where: { shareId },
+          select: PUBLIC_RENDER_PRESENTATION_SELECT,
+        });
+        if (!row) return null;
+
+        const presentation = mapPublicRenderPresentationRow(row);
+        const customThemes = await loadCustomThemePackagesForDeckJson(
+          presentation.deckJson,
+        );
+        return { ...presentation, customThemePackages: customThemes.packages };
       },
     },
     input,

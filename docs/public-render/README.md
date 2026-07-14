@@ -1,31 +1,34 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
-description: "The public-render subsystem resolves share/embed/present/OG/asset requests into read-only models. It bridges security policy, public metadata privacy, presentation rendering, visual dependencies, and paid-plan attribution."
+last_updated: "2026-07-14"
+description: "The public-render subsystem resolves share/embed/present/OG requests into read-only models and shares one public-asset policy for slide asset serving."
 ---
 
 # Public Render Surfaces
 
-The public-render subsystem resolves share/embed/present/OG/asset requests into
+The public-render subsystem resolves share/embed/present/OG requests into
 read-only models. It bridges security policy, public metadata privacy,
-presentation rendering, visual dependencies, and paid-plan attribution.
+presentation rendering, visual dependencies, and paid-plan attribution, while
+sharing one public-asset policy module with the slide-assets route.
 
 ## Source Anchors
 
-| Area                      | Source                                                                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Resolver entry point      | [`src/lib/public-render/resolver.ts`](../../src/lib/public-render/resolver.ts)                                                       |
-| Pure resolver core        | [`src/lib/public-render/resolver-core.ts`](../../src/lib/public-render/resolver-core.ts)                                             |
-| Prisma projection selects | [`src/lib/public-render/resolver-selects.ts`](../../src/lib/public-render/resolver-selects.ts)                                       |
-| Presentation model        | [`src/lib/public-render/presentation.ts`](../../src/lib/public-render/presentation.ts)                                               |
-| Public metadata           | [`src/lib/public-render/metadata.ts`](../../src/lib/public-render/metadata.ts)                                                       |
-| Attribution               | [`src/lib/public-render/attribution.ts`](../../src/lib/public-render/attribution.ts)                                                 |
-| Share page                | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                                                     |
-| Embed page                | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                                                     |
-| Public present page       | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)                                                 |
-| Present embed route input | [`src/lib/public-render/present-embed-route.ts`](../../src/lib/public-render/present-embed-route.ts)                                 |
-| Protected slide assets    | [`src/app/api/slide-assets/[documentId]/[...path]/route.ts`](../../src/app/api/slide-assets/%5BdocumentId%5D/%5B...path%5D/route.ts) |
+| Area                         | Source                                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Resolver entry point         | [`src/lib/public-render/resolver.ts`](../../src/lib/public-render/resolver.ts)                                                       |
+| Pure resolver core           | [`src/lib/public-render/resolver-core.ts`](../../src/lib/public-render/resolver-core.ts)                                             |
+| Prisma projection selects    | [`src/lib/public-render/resolver-selects.ts`](../../src/lib/public-render/resolver-selects.ts)                                       |
+| Public route outcome adapter | [`src/lib/public-render/route-outcome.ts`](../../src/lib/public-render/route-outcome.ts)                                             |
+| Presentation model           | [`src/lib/public-render/presentation.ts`](../../src/lib/public-render/presentation.ts)                                               |
+| Public metadata              | [`src/lib/public-render/metadata.ts`](../../src/lib/public-render/metadata.ts)                                                       |
+| Metadata contract            | [`src/lib/public-render/metadata-contract.ts`](../../src/lib/public-render/metadata-contract.ts)                                     |
+| Attribution                  | [`src/lib/public-render/attribution.ts`](../../src/lib/public-render/attribution.ts)                                                 |
+| Share page                   | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                                                     |
+| Embed page                   | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                                                     |
+| Public present page          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)                                                 |
+| Shared public-asset policy   | [`src/lib/share/public-asset-policy.ts`](../../src/lib/share/public-asset-policy.ts)                                                 |
+| Protected slide assets       | [`src/app/api/slide-assets/[documentId]/[...path]/route.ts`](../../src/app/api/slide-assets/%5BdocumentId%5D/%5B...path%5D/route.ts) |
 
 ## Modes And Projections
 
@@ -34,15 +37,15 @@ The resolver separates user-facing mode from data projection:
 | Mode      | Projection     | Purpose                                                      |
 | --------- | -------------- | ------------------------------------------------------------ |
 | `view`    | `document`     | Public read-only document page.                              |
+| `view`    | `metadata`     | Share page metadata/canonical contract.                      |
 | `embed`   | `document`     | Public embeddable document view (`/embed/[shareId]`).        |
 | `embed`   | `presentation` | Embeddable public presentation (`/present/[shareId]/embed`). |
+| `present` | `metadata`     | Presentation page metadata/canonical contract.               |
 | `present` | `presentation` | Public deck presentation (`/present/[shareId]`).             |
 | `og`      | `metadata`     | Open Graph and social metadata.                              |
-| `asset`   | `assetAccess`  | Protected public asset serving decision.                     |
 
-The pure resolver validates that asset mode only uses the asset-access
-projection. Non-asset public modes resolve by share id. Asset access resolves by
-document id because asset URLs are scoped to a document.
+The pure resolver validates mode/projection pairs at its boundary and resolves
+all public render requests by share id.
 The present embed route intentionally uses `mode: "embed"` with
 `projection: "presentation"` so embedded presentations follow embed-share policy
 rather than present-share policy.
@@ -91,7 +94,7 @@ decision.
 ## Invariants
 
 1. Public render never mutates document, deck, or visual state.
-2. Mode/projection mismatches fail before producing a public model.
+2. Invalid mode/projection pairs fail before any source lookup.
 3. Public asset access requires active share-bound present/embed access.
 4. Missing shares are concealed as not found with visible generic fallback text.
 5. Public metadata defaults to generic, non-discoverable output.

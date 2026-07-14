@@ -25,7 +25,7 @@ import {
   documentCapabilities,
   type DocumentRoleInput,
 } from "@/lib/auth/document-permissions";
-import { type PublicAssetAccessDecision } from "@/lib/public-render/resolver-core";
+import { type PublicAssetAccessDecision } from "@/lib/share/public-asset-policy";
 import { type ShareAccessFields } from "@/lib/share-access";
 import {
   allowAccess,

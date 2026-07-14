@@ -1,8 +1,4 @@
-import {
-  allowAccess,
-  denyAccess,
-  type AccessDecision,
-} from "@/lib/access-policy/taxonomy";
+import { denyAccess, type AccessDecision } from "@/lib/access-policy/taxonomy";
 import {
   evaluateShareAccessDecision,
   toShareAccessInput,
@@ -10,7 +6,6 @@ import {
   type ShareMode,
 } from "@/lib/share-access";
 import { shareIdFromParam } from "@/lib/slug";
-import type { DocumentRoleInput } from "@/lib/auth/document-permissions";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 
 /* node:coverage disable */
@@ -20,34 +15,82 @@ import {
   type PublicPresentationModel,
 } from "./presentation";
 /* node:coverage enable */
+import type { PublicMetadataDocument } from "./metadata-contract";
 
-export type PublicRenderMode = "view" | "embed" | "present" | "og" | "asset";
-export type PublicRenderProjection =
-  | "document"
-  | "presentation"
-  | "metadata"
-  | "assetAccess";
-type PublicAssetShareMode = "present" | "embed";
+export type PublicRenderMode = "view" | "embed" | "present" | "og";
+export type PublicRenderProjection = "document" | "presentation" | "metadata";
+
+type PublicRenderModeProjectionPair =
+  | { mode: "view"; projection: "document" }
+  | { mode: "view"; projection: "metadata" }
+  | { mode: "embed"; projection: "document" }
+  | { mode: "embed"; projection: "presentation" }
+  | { mode: "present"; projection: "presentation" }
+  | { mode: "present"; projection: "metadata" }
+  | { mode: "og"; projection: "metadata" };
+
+const PUBLIC_RENDER_PROJECTIONS_BY_MODE = {
+  view: ["document", "metadata"],
+  embed: ["document", "presentation"],
+  present: ["presentation", "metadata"],
+  og: ["metadata"],
+} as const satisfies Record<
+  PublicRenderMode,
+  readonly PublicRenderProjection[]
+>;
+
+export function isPublicRenderModeProjectionPair(
+  mode: PublicRenderMode,
+  projection: PublicRenderProjection,
+): boolean {
+  return (
+    PUBLIC_RENDER_PROJECTIONS_BY_MODE[mode] as readonly PublicRenderProjection[]
+  ).includes(projection);
+}
+
+export function assertPublicRenderModeProjectionPair(
+  mode: PublicRenderMode,
+  projection: PublicRenderProjection,
+): void {
+  if (isPublicRenderModeProjectionPair(mode, projection)) {
+    return;
+  }
+
+  throw new Error(
+    `Invalid public render request pair: mode "${mode}" does not support projection "${projection}".`,
+  );
+}
 
 export interface PublicRenderRawParams {
   shareId?: string;
-  documentId?: string;
-  shareMode?: string;
 }
 
-export type PublicRenderDocumentRow = ShareAccessFields &
-  DocumentRoleInput & {
-    id: string;
-    title: string;
-    contentJson: unknown;
-    deckJson: unknown;
-    slug: string | null;
-    owner: {
-      name: string | null;
-      plan: string;
-    };
-    customThemePackages?: ThemePackageV1[];
-  };
+interface PublicRenderOwner {
+  name: string | null;
+  plan: string;
+}
+
+export type PublicRenderDocumentRow = ShareAccessFields & {
+  id: string;
+  title: string;
+  contentJson: unknown;
+  owner: PublicRenderOwner;
+};
+
+export type PublicRenderMetadataRow = ShareAccessFields & {
+  title: string;
+  contentJson: unknown;
+  slug: string | null;
+};
+
+export type PublicRenderPresentationRow = ShareAccessFields & {
+  id: string;
+  title: string;
+  contentJson: unknown;
+  deckJson: unknown;
+  owner: PublicRenderOwner;
+  customThemePackages?: ThemePackageV1[];
+};
 
 export interface PublicDocumentModel {
   id: string;
@@ -57,35 +100,25 @@ export interface PublicDocumentModel {
   showAttribution: boolean;
 }
 
-export interface PublicMetadataModel {
-  title: string;
-  contentJson: unknown;
-  slug: string | null;
-  shareId: string | null;
-  metadataMode: string;
-  discoverable: boolean;
-}
-
-/* node:coverage disable */
-export type PublicAssetAccessDecision =
-  | { allow: true; via: "share-present" | "share-embed" }
-  | {
-      allow: false;
-      status: 403 | 404;
-      reason: "document-not-found" | "forbidden";
-    };
-/* node:coverage enable */
+export type PublicMetadataModel = PublicMetadataDocument;
 
 export interface PublicRenderSource {
-  findByShareId(shareId: string): Promise<PublicRenderDocumentRow | null>;
-  findByDocumentId(documentId: string): Promise<PublicRenderDocumentRow | null>;
+  findDocumentByShareId(
+    shareId: string,
+  ): Promise<PublicRenderDocumentRow | null>;
+  findMetadataByShareId(
+    shareId: string,
+  ): Promise<PublicRenderMetadataRow | null>;
+  findPresentationByShareId(
+    shareId: string,
+  ): Promise<PublicRenderPresentationRow | null>;
 }
 
 /* node:coverage disable */
 type SharedProjectionResult =
   | {
       ok: true;
-      mode: Exclude<PublicRenderMode, "asset">;
+      mode: "view" | "embed";
       projection: "document";
       shareId: string;
       document: PublicDocumentModel;
@@ -93,7 +126,7 @@ type SharedProjectionResult =
     }
   | {
       ok: true;
-      mode: Exclude<PublicRenderMode, "asset">;
+      mode: "view" | "present" | "og";
       projection: "metadata";
       shareId: string;
       metadata: PublicMetadataModel;
@@ -101,7 +134,7 @@ type SharedProjectionResult =
     }
   | {
       ok: true;
-      mode: Exclude<PublicRenderMode, "asset">;
+      mode: "embed" | "present";
       projection: "presentation";
       shareId: string;
       presentation: PublicPresentationModel;
@@ -113,25 +146,14 @@ export type PublicRenderResult =
   | SharedProjectionResult
   | {
       ok: false;
-      mode: Exclude<PublicRenderMode, "asset">;
-      projection: Exclude<PublicRenderProjection, "assetAccess">;
+      mode: PublicRenderMode;
+      projection: PublicRenderProjection;
       shareId: string;
-      decision: AccessDecision;
-    }
-  | {
-      ok: boolean;
-      mode: "asset";
-      projection: "assetAccess";
-      documentId: string;
-      document: PublicRenderDocumentRow | null;
-      publicAccess: PublicAssetAccessDecision;
       decision: AccessDecision;
     };
 
-export interface ResolvePublicRenderInput {
+export type ResolvePublicRenderInput = {
   params: PublicRenderRawParams;
-  mode: PublicRenderMode;
-  projection: PublicRenderProjection;
   now?: Date;
   passcodeUnlocked?:
     | boolean
@@ -139,7 +161,7 @@ export interface ResolvePublicRenderInput {
         document: ShareAccessFields,
         shareId: string,
       ) => boolean | Promise<boolean>);
-}
+} & PublicRenderModeProjectionPair;
 
 function shareModeForPublicMode(mode: PublicRenderMode): ShareMode {
   switch (mode) {
@@ -150,79 +172,18 @@ function shareModeForPublicMode(mode: PublicRenderMode): ShareMode {
     case "view":
     case "og":
       return "view";
-    case "asset":
-      throw new Error("Asset mode uses asset access projection.");
   }
 }
 
 function missingShareDecision(mode: PublicRenderMode): AccessDecision {
-  const capability = mode === "asset" ? "serve" : shareModeForPublicMode(mode);
   return denyAccess({
     resource: { kind: "share" },
-    capability,
+    capability: shareModeForPublicMode(mode),
     reason: "resource-not-found",
     status: 404,
     safeMessage: "Shared document not found.",
     concealResource: true,
   });
-}
-
-function publicAssetAccessDecisionToAccessDecision(
-  decision: PublicAssetAccessDecision,
-): AccessDecision {
-  if (decision.allow) {
-    return allowAccess({
-      resource: { kind: "share" },
-      capability: "serve",
-    });
-  }
-
-  return denyAccess({
-    resource: { kind: "share" },
-    capability: "serve",
-    reason:
-      decision.reason === "document-not-found"
-        ? "resource-not-found"
-        : "forbidden",
-    status: decision.status,
-    safeMessage: decision.status === 404 ? "Not found" : "Forbidden",
-    concealResource: decision.status === 404,
-  });
-}
-
-export function resolvePublicAssetAccessForDocument(
-  document: (ShareAccessFields & { deletedAt: Date | null }) | null,
-  requestedShareId: string,
-  requestedShareMode: PublicAssetShareMode | null,
-  now?: Date,
-  passcodeUnlocked = false,
-): PublicAssetAccessDecision {
-  if (!document || document.deletedAt) {
-    return { allow: false, status: 404, reason: "document-not-found" };
-  }
-
-  if (!requestedShareId || !requestedShareMode) {
-    return { allow: false, status: 403, reason: "forbidden" };
-  }
-
-  const decision = evaluateShareAccessDecision(
-    toShareAccessInput(
-      document,
-      requestedShareId,
-      requestedShareMode,
-      now,
-      passcodeUnlocked,
-    ),
-  );
-  if (decision.allow) {
-    return {
-      allow: true,
-      via: requestedShareMode === "present" ? "share-present" : "share-embed",
-    };
-  }
-
-  return { allow: false, status: 403, reason: "forbidden" };
-  /* node:coverage ignore next 3 -- tsx maps the function close/next signature to non-runtime lines. */
 }
 
 async function resolvePasscodeUnlocked(
@@ -236,74 +197,19 @@ async function resolvePasscodeUnlocked(
   return input.passcodeUnlocked ?? false;
 }
 
-/* node:coverage disable */
-export async function resolvePublicRenderWithSource(
-  source: PublicRenderSource,
+async function evaluatePublicShareDecision(
   input: ResolvePublicRenderInput,
-): Promise<PublicRenderResult> {
-  /* node:coverage enable */
-  if (input.mode === "asset" || input.projection === "assetAccess") {
-    if (input.mode !== "asset" || input.projection !== "assetAccess") {
-      throw new Error(
-        "Asset public render requests require assetAccess projection.",
-      );
-    }
-
-    const documentId = input.params.documentId ?? "";
-    const document = documentId
-      ? await source.findByDocumentId(documentId)
-      : null;
-    const rawShareId = input.params.shareId ?? "";
-    const requestedShareId = shareIdFromParam(rawShareId) || rawShareId;
-    const requestedShareMode =
-      input.params.shareMode === "present" || input.params.shareMode === "embed"
-        ? input.params.shareMode
-        : null;
-    const passcodeUnlocked = document
-      ? await resolvePasscodeUnlocked(input, document, requestedShareId)
-      : false;
-    const publicAccess = resolvePublicAssetAccessForDocument(
-      document,
-      requestedShareId,
-      requestedShareMode,
-      input.now,
-      passcodeUnlocked,
-    );
-
-    return {
-      ok: publicAccess.allow,
-      mode: "asset",
-      projection: "assetAccess",
-      documentId,
-      document,
-      publicAccess,
-      decision: publicAssetAccessDecisionToAccessDecision(publicAccess),
-    };
-  }
-
-  const rawShareId = input.params.shareId ?? "";
-  const shareId = shareIdFromParam(rawShareId) || rawShareId;
-  const document = shareId ? await source.findByShareId(shareId) : null;
-  const mode = input.mode;
-  const projection = input.projection;
-
-  if (!document) {
-    return {
-      ok: false,
-      mode,
-      projection,
-      shareId,
-      decision: missingShareDecision(mode),
-    };
-  }
-
-  const shareMode = shareModeForPublicMode(mode);
+  document: ShareAccessFields,
+  shareId: string,
+): Promise<AccessDecision> {
+  const shareMode = shareModeForPublicMode(input.mode);
   const passcodeUnlocked = await resolvePasscodeUnlocked(
     input,
     document,
     shareId,
   );
-  const decision = evaluateShareAccessDecision(
+
+  return evaluateShareAccessDecision(
     toShareAccessInput(
       document,
       shareId,
@@ -312,18 +218,55 @@ export async function resolvePublicRenderWithSource(
       passcodeUnlocked,
     ),
   );
-  if (!decision.allow) {
-    return { ok: false, mode, projection, shareId, decision };
-  }
+}
 
-  if (projection === "document") {
+/* node:coverage disable */
+export async function resolvePublicRenderWithSource(
+  source: PublicRenderSource,
+  input: ResolvePublicRenderInput,
+): Promise<PublicRenderResult> {
+  /* node:coverage enable */
+  assertPublicRenderModeProjectionPair(input.mode, input.projection);
+
+  const rawShareId = input.params.shareId ?? "";
+  const shareId = shareIdFromParam(rawShareId) || rawShareId;
+
+  if (input.projection === "document") {
+    const document = shareId
+      ? await source.findDocumentByShareId(shareId)
+      : null;
+    if (!document) {
+      return {
+        ok: false,
+        mode: input.mode,
+        projection: "document",
+        shareId,
+        decision: missingShareDecision(input.mode),
+      };
+    }
+
+    const decision = await evaluatePublicShareDecision(
+      input,
+      document,
+      shareId,
+    );
+    if (!decision.allow) {
+      return {
+        ok: false,
+        mode: input.mode,
+        projection: "document",
+        shareId,
+        decision,
+      };
+    }
+
     if (document.contentJson == null) {
       return {
         ok: false,
-        mode,
-        projection,
+        mode: input.mode,
+        projection: "document",
         shareId,
-        decision: missingShareDecision(mode),
+        decision: missingShareDecision(input.mode),
       };
     }
 
@@ -332,8 +275,8 @@ export async function resolvePublicRenderWithSource(
     );
     return {
       ok: true,
-      mode,
-      projection,
+      mode: input.mode,
+      projection: "document",
       shareId,
       document: {
         id: document.id,
@@ -346,11 +289,39 @@ export async function resolvePublicRenderWithSource(
     };
   }
 
-  if (projection === "metadata") {
+  if (input.projection === "metadata") {
+    const document = shareId
+      ? await source.findMetadataByShareId(shareId)
+      : null;
+    if (!document) {
+      return {
+        ok: false,
+        mode: input.mode,
+        projection: "metadata",
+        shareId,
+        decision: missingShareDecision(input.mode),
+      };
+    }
+
+    const decision = await evaluatePublicShareDecision(
+      input,
+      document,
+      shareId,
+    );
+    if (!decision.allow) {
+      return {
+        ok: false,
+        mode: input.mode,
+        projection: "metadata",
+        shareId,
+        decision,
+      };
+    }
+
     return {
       ok: true,
-      mode,
-      projection,
+      mode: input.mode,
+      projection: "metadata",
       shareId,
       metadata: {
         title: document.title,
@@ -364,14 +335,38 @@ export async function resolvePublicRenderWithSource(
     };
   }
 
+  const document = shareId
+    ? await source.findPresentationByShareId(shareId)
+    : null;
+  if (!document) {
+    return {
+      ok: false,
+      mode: input.mode,
+      projection: "presentation",
+      shareId,
+      decision: missingShareDecision(input.mode),
+    };
+  }
+
+  const decision = await evaluatePublicShareDecision(input, document, shareId);
+  if (!decision.allow) {
+    return {
+      ok: false,
+      mode: input.mode,
+      projection: "presentation",
+      shareId,
+      decision,
+    };
+  }
+
   return {
     ok: true,
-    mode,
-    projection,
+    mode: input.mode,
+    projection: "presentation",
     shareId,
     presentation: buildPublicPresentationModel(document, {
       shareId,
-      mode: mode === "embed" ? "embed" : "present",
+      mode: input.mode === "embed" ? "embed" : "present",
     }),
     decision,
   };

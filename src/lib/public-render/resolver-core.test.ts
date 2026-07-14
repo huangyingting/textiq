@@ -2,45 +2,32 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  resolvePublicAssetAccessForDocument,
   resolvePublicRenderWithSource,
   type PublicRenderDocumentRow,
+  type PublicRenderMetadataRow,
+  type PublicRenderMode,
+  type PublicRenderPresentationRow,
+  type PublicRenderProjection,
   type PublicRenderSource,
+  type ResolvePublicRenderInput,
 } from "./resolver-core";
+import {
+  PUBLIC_RENDER_DOCUMENT_SELECT,
+  PUBLIC_RENDER_METADATA_SELECT,
+  PUBLIC_RENDER_PRESENTATION_SELECT,
+  selectForPublicRenderProjection,
+} from "./resolver-selects";
 import {
   buildCoverSlide,
   buildDeck,
   buildImageAsset,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
-import {
-  PUBLIC_RENDER_ASSET_ACCESS_SELECT,
-  PUBLIC_RENDER_DOCUMENT_SELECT,
-  PUBLIC_RENDER_METADATA_SELECT,
-  PUBLIC_RENDER_PRESENTATION_SELECT,
-  selectForPublicRenderProjection,
-} from "./resolver-selects";
 
 const NOW = new Date("2026-06-25T00:00:00Z");
 
-function partialPublicRenderRow(
-  row: unknown,
-): Partial<PublicRenderDocumentRow> {
-  return row as unknown as Partial<PublicRenderDocumentRow>;
-}
-
-function document(
-  overrides: Partial<PublicRenderDocumentRow> = {},
-): PublicRenderDocumentRow {
+function shareFields(overrides: Partial<PublicRenderMetadataRow> = {}) {
   return {
-    id: "doc-1",
-    title: "Shared Doc",
-    contentJson: { root: { children: [] } },
-    deckJson: null,
-    slug: "shared-doc",
-    ownerId: "owner-1",
-    workspaceId: null,
-    workspace: null,
     shareId: "share123",
     isShared: true,
     deletedAt: null,
@@ -50,29 +37,186 @@ function document(
     sharePasscodeHash: null,
     shareMetadataMode: "generic",
     shareDiscoverable: false,
+    ...overrides,
+  } satisfies Omit<PublicRenderMetadataRow, "title" | "contentJson" | "slug">;
+}
+
+function metadataRow(
+  overrides: Partial<PublicRenderMetadataRow> = {},
+): PublicRenderMetadataRow {
+  return {
+    ...shareFields(),
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
+    slug: "shared-doc",
+    ...overrides,
+  };
+}
+
+function documentRow(
+  overrides: Partial<PublicRenderDocumentRow> = {},
+): PublicRenderDocumentRow {
+  return {
+    ...shareFields(),
+    id: "doc-1",
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
     owner: { name: null, plan: "free" },
     ...overrides,
   };
 }
 
-function source(row: PublicRenderDocumentRow | null): PublicRenderSource {
+function presentationRow(
+  overrides: Partial<PublicRenderPresentationRow> = {},
+): PublicRenderPresentationRow {
   return {
-    async findByShareId() {
-      return row;
+    ...shareFields(),
+    id: "doc-1",
+    title: "Shared Doc",
+    contentJson: { root: { children: [] } },
+    deckJson: null,
+    owner: { name: null, plan: "free" },
+    ...overrides,
+  };
+}
+
+function source(rows: {
+  document?: PublicRenderDocumentRow | null;
+  metadata?: PublicRenderMetadataRow | null;
+  presentation?: PublicRenderPresentationRow | null;
+}): PublicRenderSource {
+  return {
+    async findDocumentByShareId() {
+      return rows.document ?? null;
     },
-    async findByDocumentId() {
-      return row;
+    async findMetadataByShareId() {
+      return rows.metadata ?? null;
+    },
+    async findPresentationByShareId() {
+      return rows.presentation ?? null;
     },
   };
 }
 
+function trackedSource() {
+  const calls = { document: 0, metadata: 0, presentation: 0 };
+  const tracked: PublicRenderSource = {
+    async findDocumentByShareId() {
+      calls.document += 1;
+      return documentRow();
+    },
+    async findMetadataByShareId() {
+      calls.metadata += 1;
+      return metadataRow();
+    },
+    async findPresentationByShareId() {
+      calls.presentation += 1;
+      return presentationRow();
+    },
+  };
+  return { source: tracked, calls };
+}
+
+test("resolvePublicRenderWithSource characterizes every mode/projection pair and rejects invalid pairs before lookup", async () => {
+  const cases: Array<{
+    mode: PublicRenderMode;
+    projection: PublicRenderProjection;
+    valid: boolean;
+    lookup: keyof ReturnType<typeof trackedSource>["calls"] | null;
+  }> = [
+    { mode: "view", projection: "document", valid: true, lookup: "document" },
+    { mode: "view", projection: "metadata", valid: true, lookup: "metadata" },
+    {
+      mode: "view",
+      projection: "presentation",
+      valid: false,
+      lookup: null,
+    },
+    { mode: "embed", projection: "document", valid: true, lookup: "document" },
+    {
+      mode: "embed",
+      projection: "metadata",
+      valid: false,
+      lookup: null,
+    },
+    {
+      mode: "embed",
+      projection: "presentation",
+      valid: true,
+      lookup: "presentation",
+    },
+    {
+      mode: "present",
+      projection: "document",
+      valid: false,
+      lookup: null,
+    },
+    {
+      mode: "present",
+      projection: "metadata",
+      valid: true,
+      lookup: "metadata",
+    },
+    {
+      mode: "present",
+      projection: "presentation",
+      valid: true,
+      lookup: "presentation",
+    },
+    { mode: "og", projection: "document", valid: false, lookup: null },
+    { mode: "og", projection: "metadata", valid: true, lookup: "metadata" },
+    { mode: "og", projection: "presentation", valid: false, lookup: null },
+  ];
+
+  for (const pair of cases) {
+    const tracked = trackedSource();
+    const input = {
+      params: { shareId: "share123" },
+      mode: pair.mode,
+      projection: pair.projection,
+      now: NOW,
+    } as unknown as ResolvePublicRenderInput;
+
+    if (!pair.valid) {
+      await assert.rejects(
+        resolvePublicRenderWithSource(tracked.source, input),
+        /Invalid public render request pair/,
+      );
+      assert.deepEqual(tracked.calls, {
+        document: 0,
+        metadata: 0,
+        presentation: 0,
+      });
+      continue;
+    }
+
+    const result = await resolvePublicRenderWithSource(tracked.source, input);
+    assert.equal(result.projection, pair.projection);
+    assert.equal(result.ok, true);
+    assert.equal(
+      tracked.calls.document +
+        tracked.calls.metadata +
+        tracked.calls.presentation,
+      1,
+    );
+    assert.equal(
+      pair.lookup ? tracked.calls[pair.lookup] : 0,
+      1,
+      `expected ${pair.mode}/${pair.projection} to use ${pair.lookup} lookup`,
+    );
+  }
+});
+
 test("resolvePublicRenderWithSource parses raw share segments and returns a render-ready document", async () => {
-  const result = await resolvePublicRenderWithSource(source(document()), {
-    params: { shareId: "shared-doc-share123" },
-    mode: "view",
-    projection: "document",
-    now: NOW,
-  });
+  const result = await resolvePublicRenderWithSource(
+    source({ document: documentRow() }),
+    {
+      params: { shareId: "shared-doc-share123" },
+      mode: "view",
+      projection: "document",
+      now: NOW,
+    },
+  );
 
   assert.equal(result.ok, true);
   assert.equal(result.projection, "document");
@@ -86,7 +230,7 @@ test("resolvePublicRenderWithSource parses raw share segments and returns a rend
 
 test("resolvePublicRenderWithSource preserves display names without email fallback", async () => {
   const result = await resolvePublicRenderWithSource(
-    source(document({ owner: { name: "Ada", plan: "free" } })),
+    source({ document: documentRow({ owner: { name: "Ada", plan: "free" } }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "view",
@@ -104,7 +248,7 @@ test("resolvePublicRenderWithSource preserves display names without email fallba
 
 test("resolvePublicRenderWithSource denies regenerated links without returning document data", async () => {
   const result = await resolvePublicRenderWithSource(
-    source(document({ shareId: "new-share" })),
+    source({ metadata: metadataRow({ shareId: "new-share" }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "view",
@@ -124,7 +268,7 @@ test("resolvePublicRenderWithSource denies regenerated links without returning d
 
 test("resolvePublicRenderWithSource applies embed mode policy centrally", async () => {
   const result = await resolvePublicRenderWithSource(
-    source(document({ shareEmbedEnabled: false })),
+    source({ document: documentRow({ shareEmbedEnabled: false }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "embed",
@@ -144,7 +288,7 @@ test("resolvePublicRenderWithSource applies embed mode policy centrally", async 
 
 test("resolvePublicRenderWithSource gates passcode-protected shares without leaking content", async () => {
   const locked = await resolvePublicRenderWithSource(
-    source(document({ sharePasscodeHash: "hash" })),
+    source({ document: documentRow({ sharePasscodeHash: "hash" }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "view",
@@ -162,7 +306,7 @@ test("resolvePublicRenderWithSource gates passcode-protected shares without leak
   assert.equal(locked.decision.concealResource, false);
 
   const unlocked = await resolvePublicRenderWithSource(
-    source(document({ sharePasscodeHash: "hash" })),
+    source({ document: documentRow({ sharePasscodeHash: "hash" }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "view",
@@ -176,12 +320,12 @@ test("resolvePublicRenderWithSource gates passcode-protected shares without leak
 
 test("resolvePublicRenderWithSource enforces independent present/embed policy for presentation projection", async () => {
   const embedDenied = await resolvePublicRenderWithSource(
-    source(
-      document({
+    source({
+      presentation: presentationRow({
         shareEmbedEnabled: false,
         sharePresentEnabled: true,
       }),
-    ),
+    }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "embed",
@@ -198,12 +342,12 @@ test("resolvePublicRenderWithSource enforces independent present/embed policy fo
   assert.equal(embedDenied.decision.concealResource, true);
 
   const embedAllowed = await resolvePublicRenderWithSource(
-    source(
-      document({
+    source({
+      presentation: presentationRow({
         shareEmbedEnabled: true,
         sharePresentEnabled: false,
       }),
-    ),
+    }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "embed",
@@ -218,12 +362,12 @@ test("resolvePublicRenderWithSource enforces independent present/embed policy fo
   assert.equal(embedAllowed.mode, "embed");
 
   const presentDenied = await resolvePublicRenderWithSource(
-    source(
-      document({
+    source({
+      presentation: presentationRow({
         shareEmbedEnabled: true,
         sharePresentEnabled: false,
       }),
-    ),
+    }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "present",
@@ -241,12 +385,15 @@ test("resolvePublicRenderWithSource enforces independent present/embed policy fo
 });
 
 test("resolvePublicRenderWithSource accepts raw share IDs for presentation embed routes", async () => {
-  const result = await resolvePublicRenderWithSource(source(document()), {
-    params: { shareId: "share123" },
-    mode: "embed",
-    projection: "presentation",
-    now: NOW,
-  });
+  const result = await resolvePublicRenderWithSource(
+    source({ presentation: presentationRow() }),
+    {
+      params: { shareId: "share123" },
+      mode: "embed",
+      projection: "presentation",
+      now: NOW,
+    },
+  );
 
   assert.equal(result.ok, true);
   if (!result.ok || result.projection !== "presentation") {
@@ -257,12 +404,15 @@ test("resolvePublicRenderWithSource accepts raw share IDs for presentation embed
 });
 
 test("resolvePublicRenderWithSource keeps document embeds on the document projection", async () => {
-  const result = await resolvePublicRenderWithSource(source(document()), {
-    params: { shareId: "share123" },
-    mode: "embed",
-    projection: "document",
-    now: NOW,
-  });
+  const result = await resolvePublicRenderWithSource(
+    source({ document: documentRow() }),
+    {
+      params: { shareId: "share123" },
+      mode: "embed",
+      projection: "document",
+      now: NOW,
+    },
+  );
 
   assert.equal(result.ok, true);
   if (!result.ok || result.projection !== "document") {
@@ -273,7 +423,7 @@ test("resolvePublicRenderWithSource keeps document embeds on the document projec
 });
 
 test("resolvePublicRenderWithSource returns a concealed miss for absent shares", async () => {
-  const result = await resolvePublicRenderWithSource(source(null), {
+  const result = await resolvePublicRenderWithSource(source({}), {
     params: { shareId: "missing-share" },
     mode: "og",
     projection: "metadata",
@@ -293,7 +443,7 @@ test("resolvePublicRenderWithSource returns a concealed miss for absent shares",
 
 test("resolvePublicRenderWithSource denies document projection when content is missing", async () => {
   const result = await resolvePublicRenderWithSource(
-    source(document({ contentJson: null })),
+    source({ document: documentRow({ contentJson: null }) }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "view",
@@ -309,15 +459,13 @@ test("resolvePublicRenderWithSource denies document projection when content is m
 
 test("resolvePublicRenderWithSource returns metadata defaults for older shared rows", async () => {
   const result = await resolvePublicRenderWithSource(
-    source(
-      document(
-        partialPublicRenderRow({
-          shareMetadataMode: null,
-          shareDiscoverable: null,
-          slug: null,
-        }),
-      ),
-    ),
+    source({
+      metadata: metadataRow({
+        shareMetadataMode: null,
+        shareDiscoverable: null,
+        slug: null,
+      }),
+    }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "og",
@@ -352,7 +500,9 @@ test("resolvePublicRenderWithSource builds presentation projections for present 
     },
   });
   const result = await resolvePublicRenderWithSource(
-    source(document({ deckJson: deckWithProtectedAsset })),
+    source({
+      presentation: presentationRow({ deckJson: deckWithProtectedAsset }),
+    }),
     {
       params: { shareId: "shared-doc-share123" },
       mode: "present",
@@ -374,189 +524,6 @@ test("resolvePublicRenderWithSource builds presentation projections for present 
   );
 });
 
-test("resolvePublicAssetAccessForDocument enforces share-bound mode-specific access", () => {
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(document(), "share123", "present", NOW),
-    {
-      allow: true,
-      via: "share-present",
-    },
-  );
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(document(), "share123", "embed", NOW),
-    {
-      allow: true,
-      via: "share-embed",
-    },
-  );
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(document(), "", null, NOW),
-    {
-      allow: false,
-      status: 403,
-      reason: "forbidden",
-    },
-  );
-});
-
-test("resolvePublicAssetAccessForDocument requires passcode unlock for protected shares", () => {
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ sharePasscodeHash: "hash" }),
-      "share123",
-      "present",
-      NOW,
-    ),
-    { allow: false, status: 403, reason: "forbidden" },
-  );
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ sharePasscodeHash: "hash" }),
-      "share123",
-      "present",
-      NOW,
-      true,
-    ),
-    {
-      allow: true,
-      via: "share-present",
-    },
-  );
-});
-
-test("resolvePublicAssetAccessForDocument denies regenerated, disabled, and expired share inputs", () => {
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ shareId: "rotated-share" }),
-      "share123",
-      "present",
-      NOW,
-    ),
-    { allow: false, status: 403, reason: "forbidden" },
-  );
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ sharePresentEnabled: false }),
-      "share123",
-      "present",
-      NOW,
-    ),
-    { allow: false, status: 403, reason: "forbidden" },
-  );
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ shareExpiresAt: new Date("2026-06-24T00:00:00Z") }),
-      "share123",
-      "present",
-      NOW,
-    ),
-    { allow: false, status: 403, reason: "forbidden" },
-  );
-});
-
-test("resolvePublicRenderWithSource requires share-bound params for asset mode", async () => {
-  const allowed = await resolvePublicRenderWithSource(source(document()), {
-    params: {
-      documentId: "doc-1",
-      shareId: "share123",
-      shareMode: "present",
-    },
-    mode: "asset",
-    projection: "assetAccess",
-    now: NOW,
-  });
-
-  assert.equal(allowed.projection, "assetAccess");
-  assert.equal(allowed.ok, true);
-  assert.deepEqual(allowed.publicAccess, {
-    allow: true,
-    via: "share-present",
-  });
-  assert.equal(allowed.document?.id, "doc-1");
-
-  const missingBinding = await resolvePublicRenderWithSource(
-    source(document()),
-    {
-      params: { documentId: "doc-1" },
-      mode: "asset",
-      projection: "assetAccess",
-      now: NOW,
-    },
-  );
-  if (missingBinding.projection !== "assetAccess") {
-    throw new Error("Expected asset access projection.");
-  }
-  assert.equal(missingBinding.ok, false);
-  assert.deepEqual(missingBinding.publicAccess, {
-    allow: false,
-    status: 403,
-    reason: "forbidden",
-  });
-});
-
-test("resolvePublicRenderWithSource rejects mismatched asset mode and projection", async () => {
-  await assert.rejects(
-    resolvePublicRenderWithSource(source(document()), {
-      params: { documentId: "doc-1" },
-      mode: "asset",
-      projection: "document",
-      now: NOW,
-    }),
-    /assetAccess projection/,
-  );
-});
-
-test("resolvePublicRenderWithSource returns not-found asset decisions for missing or deleted documents", async () => {
-  const missing = await resolvePublicRenderWithSource(source(null), {
-    params: {
-      documentId: "doc-missing",
-      shareId: "share123",
-      shareMode: "present",
-    },
-    mode: "asset",
-    projection: "assetAccess",
-    now: NOW,
-  });
-  assert.equal(missing.ok, false);
-  if (missing.ok || missing.projection !== "assetAccess") {
-    throw new Error("Expected missing asset access projection.");
-  }
-  assert.deepEqual(missing.publicAccess, {
-    allow: false,
-    status: 404,
-    reason: "document-not-found",
-  });
-  assert.equal(missing.decision.allow, false);
-  if (missing.decision.allow) {
-    throw new Error("Expected a denied access decision.");
-  }
-  assert.equal(missing.decision.status, 404);
-
-  const deleted = resolvePublicAssetAccessForDocument(
-    document({ deletedAt: new Date("2026-06-24T00:00:00Z") }),
-    "share123",
-    "present",
-    NOW,
-  );
-  assert.deepEqual(deleted, {
-    allow: false,
-    status: 404,
-    reason: "document-not-found",
-  });
-});
-
-test("resolvePublicAssetAccessForDocument keeps private live documents forbidden, not not-found", () => {
-  assert.deepEqual(
-    resolvePublicAssetAccessForDocument(
-      document({ isShared: false, shareId: null }),
-      "share123",
-      "present",
-      NOW,
-    ),
-    { allow: false, status: 403, reason: "forbidden" },
-  );
-});
-
 test("selectForPublicRenderProjection returns the matching Prisma select", () => {
   assert.equal(
     selectForPublicRenderProjection("metadata"),
@@ -569,9 +536,5 @@ test("selectForPublicRenderProjection returns the matching Prisma select", () =>
   assert.equal(
     selectForPublicRenderProjection("presentation"),
     PUBLIC_RENDER_PRESENTATION_SELECT,
-  );
-  assert.equal(
-    selectForPublicRenderProjection("assetAccess"),
-    PUBLIC_RENDER_ASSET_ACCESS_SELECT,
   );
 });

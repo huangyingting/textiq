@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { buildPublicPresentationModel } from "@/lib/public-render/presentation";
 import {
   resolvePublicRenderWithSource,
-  type PublicRenderDocumentRow,
+  type PublicRenderPresentationRow,
   type PublicRenderSource,
 } from "@/lib/public-render/resolver-core";
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation/neutral-theme-package";
@@ -275,17 +275,13 @@ function surfaceSignature(tree: ResolvedDeckRenderTree) {
 
 function publicDocumentForDeck(
   deck: Deck,
-  overrides: Partial<PublicRenderDocumentRow> = {},
-): PublicRenderDocumentRow {
+  overrides: Partial<PublicRenderPresentationRow> = {},
+): PublicRenderPresentationRow {
   return {
     id: "doc-parity",
     title: deck.title ?? "Parity deck",
     contentJson: { root: { children: [] } },
     deckJson: deck,
-    slug: "parity-deck",
-    ownerId: "owner-parity",
-    workspaceId: null,
-    workspace: null,
     shareId: "share123",
     isShared: true,
     deletedAt: null,
@@ -299,12 +295,46 @@ function publicDocumentForDeck(
   };
 }
 
-function publicSource(row: PublicRenderDocumentRow | null): PublicRenderSource {
+function publicSource(
+  row: PublicRenderPresentationRow | null,
+): PublicRenderSource {
   return {
-    async findByShareId() {
-      return row;
+    async findDocumentByShareId() {
+      if (!row) return null;
+      return {
+        id: row.id,
+        title: row.title,
+        contentJson: row.contentJson,
+        shareId: row.shareId,
+        isShared: row.isShared,
+        deletedAt: row.deletedAt,
+        shareExpiresAt: row.shareExpiresAt,
+        shareEmbedEnabled: row.shareEmbedEnabled,
+        sharePresentEnabled: row.sharePresentEnabled,
+        sharePasscodeHash: row.sharePasscodeHash,
+        shareMetadataMode: row.shareMetadataMode,
+        shareDiscoverable: row.shareDiscoverable,
+        owner: row.owner,
+      };
     },
-    async findByDocumentId() {
+    async findMetadataByShareId() {
+      if (!row) return null;
+      return {
+        title: row.title,
+        contentJson: row.contentJson,
+        slug: null,
+        shareId: row.shareId,
+        isShared: row.isShared,
+        deletedAt: row.deletedAt,
+        shareExpiresAt: row.shareExpiresAt,
+        shareEmbedEnabled: row.shareEmbedEnabled,
+        sharePresentEnabled: row.sharePresentEnabled,
+        sharePasscodeHash: row.sharePasscodeHash,
+        shareMetadataMode: row.shareMetadataMode,
+        shareDiscoverable: row.shareDiscoverable,
+      };
+    },
+    async findPresentationByShareId() {
       return row;
     },
   };
