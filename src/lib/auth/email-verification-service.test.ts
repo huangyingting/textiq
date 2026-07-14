@@ -8,6 +8,7 @@ import {
   type AuthEmailMessage,
 } from "@/lib/auth/email";
 import {
+  AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE,
   consumeEmailVerificationToken,
   requestEmailVerificationForUser,
 } from "@/lib/auth/email-verification-service";
@@ -101,12 +102,29 @@ function makeRequestClient(
     } | null;
     initialTokens?: VerificationTokenRow[];
     createError?: Error;
-    updateManyError?: Error;
-    deleteManyError?: Error;
+    createErrors?: Array<Error | null>;
+    beforeCreate?: (input: {
+      callIndex: number;
+      data: { userId: string; tokenHash: string; expiresAt: Date };
+    }) => Promise<void> | void;
   } = {},
 ) {
   const tokens = [...(options.initialTokens ?? [])];
   const createdTokenHashes: string[] = [];
+  const createInputs: Array<{
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }> = [];
+  const updateManyCalls: Array<{
+    where: {
+      id?: string | { not: string };
+      userId?: string;
+      usedAt?: null;
+      expiresAt?: { gt: Date };
+    };
+    data: { usedAt: Date };
+  }> = [];
   const deleteManyCalls: Array<{ id?: string; userId?: string }> = [];
   let nextId = tokens.length + 1;
 
@@ -125,8 +143,13 @@ function makeRequestClient(
         data: { userId: string; tokenHash: string; expiresAt: Date };
         select?: { id: true };
       }) => {
-        if (options.createError) {
-          throw options.createError;
+        const callIndex = createInputs.length;
+        createInputs.push(data);
+        await options.beforeCreate?.({ callIndex, data });
+        const plannedError =
+          options.createErrors?.[callIndex] ?? options.createError;
+        if (plannedError) {
+          throw plannedError;
         }
         const created = {
           id: `evt_new_${nextId++}`,
@@ -151,32 +174,8 @@ function makeRequestClient(
         };
         data: { usedAt: Date };
       }) => {
-        if (options.updateManyError) {
-          throw options.updateManyError;
-        }
-
-        let count = 0;
-        for (const token of tokens) {
-          const idMatches =
-            where.id === undefined
-              ? true
-              : typeof where.id === "string"
-                ? token.id === where.id
-                : token.id !== where.id.not;
-          const userMatches =
-            where.userId === undefined ? true : token.userId === where.userId;
-          const usedMatches =
-            where.usedAt === undefined ? true : token.usedAt === where.usedAt;
-          const expiresMatches =
-            where.expiresAt === undefined
-              ? true
-              : token.expiresAt > where.expiresAt.gt;
-          if (idMatches && userMatches && usedMatches && expiresMatches) {
-            token.usedAt = data.usedAt;
-            count += 1;
-          }
-        }
-        return { count };
+        updateManyCalls.push({ where, data });
+        return { count: 0 };
       },
       deleteMany: async ({
         where,
@@ -184,27 +183,13 @@ function makeRequestClient(
         where: { id?: string; userId?: string; usedAt?: null };
       }) => {
         deleteManyCalls.push({ id: where.id, userId: where.userId });
-        if (options.deleteManyError) {
-          throw options.deleteManyError;
-        }
-        const before = tokens.length;
-        for (let index = tokens.length - 1; index >= 0; index -= 1) {
-          const token = tokens[index];
-          const idMatches =
-            where.id === undefined ? true : token.id === where.id;
-          const userMatches =
-            where.userId === undefined ? true : token.userId === where.userId;
-          const usedMatches =
-            where.usedAt === undefined ? true : token.usedAt === where.usedAt;
-          if (idMatches && userMatches && usedMatches) {
-            tokens.splice(index, 1);
-          }
-        }
-        return { count: before - tokens.length };
+        return { count: 0 };
       },
     },
     _tokens: tokens,
     _createdTokenHashes: createdTokenHashes,
+    _createInputs: createInputs,
+    _updateManyCalls: updateManyCalls,
     _deleteManyCalls: deleteManyCalls,
   });
 
@@ -230,6 +215,16 @@ function countSentAuditLines(lines: string[]): number {
       line.includes('"message":"auth.email_verification.requested"') &&
       line.includes('"outcome":"sent"'),
   ).length;
+}
+
+function deferred<T = void>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 test("consumeEmailVerificationToken allows exactly one concurrent consumer", async () => {
@@ -341,24 +336,7 @@ test("requestEmailVerificationForUser handles missing and already-verified users
   }
 });
 
-test("requestEmailVerificationForUser returns a generic error when storage fails", async () => {
-  const client = makeRequestClient({
-    createError: new Error("database unavailable"),
-  });
-  const originalError = console.error;
-  console.error = () => {};
-
-  try {
-    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
-      ok: false,
-      error: "Could not send a verification email. Please try again.",
-    });
-  } finally {
-    console.error = originalError;
-  }
-});
-
-test("requestEmailVerificationForUser keeps only the delivered token active after success", async () => {
+test("requestEmailVerificationForUser persists the delivered token without retiring siblings", async () => {
   const oldTokenA: VerificationTokenRow = {
     id: "evt_old_1",
     userId: "user_1",
@@ -398,26 +376,31 @@ test("requestEmailVerificationForUser keeps only the delivered token active afte
   }
 
   assert.equal(delivered.length, 1);
+  const deliveredHash = verificationMessageTokenHash(
+    delivered[0] as AuthEmailMessage,
+  );
+  assert.equal(client._createInputs.length, 1);
+  assert.equal(client._createInputs[0]?.tokenHash, deliveredHash);
   const activeTokens = client._tokens.filter((token) => token.usedAt === null);
-  assert.equal(activeTokens.length, 1);
+  assert.equal(activeTokens.length, 3);
   assert.equal(
-    activeTokens[0]?.tokenHash,
-    verificationMessageTokenHash(delivered[0]),
+    activeTokens.filter((token) => token.tokenHash === deliveredHash).length,
+    1,
   );
   assert.equal(
-    client._tokens.filter((token) => token.id === "evt_old_1")[0]
-      ?.usedAt instanceof Date,
-    true,
+    activeTokens.filter((token) => token.id === "evt_old_1").length,
+    1,
   );
   assert.equal(
-    client._tokens.filter((token) => token.id === "evt_old_2")[0]
-      ?.usedAt instanceof Date,
-    true,
+    activeTokens.filter((token) => token.id === "evt_old_2").length,
+    1,
   );
+  assert.equal(client._updateManyCalls.length, 0);
+  assert.equal(client._deleteManyCalls.length, 0);
   assert.equal(countSentAuditLines(infoLines), 1);
 });
 
-test("requestEmailVerificationForUser preserves old tokens and cleans up the undelivered token", async () => {
+test("requestEmailVerificationForUser performs zero token writes when delivery fails", async () => {
   const oldToken: VerificationTokenRow = {
     id: "evt_old_1",
     userId: "user_1",
@@ -456,10 +439,12 @@ test("requestEmailVerificationForUser preserves old tokens and cleans up the und
   }
 
   assert.equal(countSentAuditLines(infoLines), 0);
+  assert.equal(client._createInputs.length, 0);
+  assert.equal(client._updateManyCalls.length, 0);
+  assert.equal(client._deleteManyCalls.length, 0);
   assert.equal(client._tokens.length, 1);
   assert.equal(client._tokens[0]?.id, "evt_old_1");
   assert.equal(client._tokens[0]?.usedAt, null);
-  assert.equal(client._deleteManyCalls.length, 1);
   assert.equal(
     errorLines.filter(
       (line) =>
@@ -470,7 +455,58 @@ test("requestEmailVerificationForUser preserves old tokens and cleans up the und
   );
 });
 
-test("requestEmailVerificationForUser retries with a fresh delivered token after delivery failure", async () => {
+test("requestEmailVerificationForUser logs canonical activation failures after delivery", async () => {
+  const client = makeRequestClient({
+    createError: new Error(
+      "provider=smtp://secret.example token=raw-verification-token recipient=person@example.com callback=https://secret.example/hook",
+    ),
+  });
+  const delivered: AuthEmailMessage[] = [];
+  const infoLines: string[] = [];
+  const errorLines: string[] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
+  console.error = (line?: unknown) => {
+    errorLines.push(String(line));
+  };
+  configureAuthEmailDeliveryPort({
+    async send(message) {
+      delivered.push(message);
+    },
+  });
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: false,
+      error: "Could not send a verification email. Please try again.",
+    });
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(delivered.length, 1);
+  assert.equal(client._createInputs.length, 1);
+  assert.equal(client._tokens.length, 0);
+  assert.equal(countSentAuditLines(infoLines), 0);
+  assert.equal(errorLines.length, 1);
+  const serialized = errorLines[0] ?? "";
+  assert.equal(serialized.includes('"outcome":"activation_failed"'), true);
+  assert.equal(
+    serialized.includes(AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE),
+    true,
+  );
+  assert.equal(serialized.includes("secret.example"), false);
+  assert.equal(serialized.includes("raw-verification-token"), false);
+  assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("/verify-email/"), false);
+});
+
+test("requestEmailVerificationForUser retries with a fresh delivered token after activation failure", async () => {
   const oldToken: VerificationTokenRow = {
     id: "evt_old_1",
     userId: "user_1",
@@ -480,29 +516,27 @@ test("requestEmailVerificationForUser retries with a fresh delivered token after
   };
   const client = makeRequestClient({
     initialTokens: [oldToken],
+    createErrors: [new Error("database unavailable"), null],
   });
   const delivered: AuthEmailMessage[] = [];
+  const infoLines: string[] = [];
   const originalInfo = console.info;
   const originalError = console.error;
-  console.info = () => {};
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
   console.error = () => {};
-
   configureAuthEmailDeliveryPort({
-    async send() {
-      throw new Error("mail transport unavailable");
+    async send(message) {
+      delivered.push(message);
     },
   });
-  try {
-    await requestEmailVerificationForUser("user_1", client);
-  } finally {
-    configureAuthEmailDeliveryPort({
-      async send(message) {
-        delivered.push(message);
-      },
-    });
-  }
 
   try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: false,
+      error: "Could not send a verification email. Please try again.",
+    });
     const retry = await requestEmailVerificationForUser("user_1", client);
     assert.equal(retry.ok, true);
     assert.deepEqual(retry.data, { status: "sent" });
@@ -512,24 +546,33 @@ test("requestEmailVerificationForUser retries with a fresh delivered token after
     configureAuthEmailDeliveryPort(null);
   }
 
-  assert.equal(client._createdTokenHashes.length, 2);
-  const firstCreatedHash = client._createdTokenHashes[0];
-  const secondCreatedHash = client._createdTokenHashes[1];
-  assert.notEqual(firstCreatedHash, secondCreatedHash);
+  assert.equal(delivered.length, 2);
+  assert.equal(client._createInputs.length, 2);
+  const firstDeliveredHash = verificationMessageTokenHash(
+    delivered[0] as AuthEmailMessage,
+  );
+  const secondDeliveredHash = verificationMessageTokenHash(
+    delivered[1] as AuthEmailMessage,
+  );
+  assert.notEqual(firstDeliveredHash, secondDeliveredHash);
   assert.equal(
-    client._tokens.some((token) => token.tokenHash === firstCreatedHash),
+    client._tokens.some((token) => token.tokenHash === firstDeliveredHash),
     false,
   );
-  const activeTokens = client._tokens.filter((token) => token.usedAt === null);
-  assert.equal(activeTokens.length, 1);
-  assert.equal(activeTokens[0]?.tokenHash, secondCreatedHash);
   assert.equal(
-    secondCreatedHash,
-    verificationMessageTokenHash(delivered[0] as AuthEmailMessage),
+    client._tokens.some((token) => token.tokenHash === secondDeliveredHash),
+    true,
   );
+  const activeTokens = client._tokens.filter((token) => token.usedAt === null);
+  assert.equal(activeTokens.length, 2);
+  assert.equal(
+    activeTokens.filter((token) => token.id === "evt_old_1").length,
+    1,
+  );
+  assert.equal(countSentAuditLines(infoLines), 1);
 });
 
-test("requestEmailVerificationForUser logs only canonical delivery errors without transport secrets", async () => {
+test("requestEmailVerificationForUser preserves canonical delivery error logging without transport secrets", async () => {
   const client = makeRequestClient();
   const errorLines: string[] = [];
   const originalError = console.error;
@@ -563,12 +606,33 @@ test("requestEmailVerificationForUser logs only canonical delivery errors withou
   assert.equal(serialized.includes("person@example.com"), false);
 });
 
-test("requestEmailVerificationForUser surfaces cleanup failures separately from delivery failures", async () => {
-  const client = makeRequestClient({
-    deleteManyError: new Error("cleanup unavailable"),
-  });
+test("requestEmailVerificationForUser allows deterministic concurrent success without mutual retirement", async () => {
+  const oldToken: VerificationTokenRow = {
+    id: "evt_old_1",
+    userId: "user_1",
+    tokenHash: hashVerificationToken("old-token"),
+    expiresAt: new Date(Date.now() + 60_000),
+    usedAt: null,
+  };
+  const delivered: AuthEmailMessage[] = [];
   const infoLines: string[] = [];
   const errorLines: string[] = [];
+  const bothDeliveriesStarted = deferred<void>();
+  const bothPersistenceStarted = deferred<void>();
+  const deliveryGates = [deferred<void>(), deferred<void>()];
+  const persistenceGates = [deferred<void>(), deferred<void>()];
+  let deliveryCalls = 0;
+  let persistenceCalls = 0;
+  const client = makeRequestClient({
+    initialTokens: [oldToken],
+    beforeCreate: async ({ callIndex }) => {
+      persistenceCalls += 1;
+      if (persistenceCalls === 2) {
+        bothPersistenceStarted.resolve();
+      }
+      await persistenceGates[callIndex]?.promise;
+    },
+  });
   const originalInfo = console.info;
   const originalError = console.error;
   console.info = (line?: unknown) => {
@@ -578,15 +642,40 @@ test("requestEmailVerificationForUser surfaces cleanup failures separately from 
     errorLines.push(String(line));
   };
   configureAuthEmailDeliveryPort({
-    async send() {
-      throw new Error("transport unavailable");
+    async send(message) {
+      delivered.push(message);
+      const callIndex = deliveryCalls;
+      deliveryCalls += 1;
+      if (deliveryCalls === 2) {
+        bothDeliveriesStarted.resolve();
+      }
+      await deliveryGates[callIndex]?.promise;
     },
   });
 
   try {
-    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
-      ok: false,
-      error: "Could not send a verification email. Please try again.",
+    const firstRequest = requestEmailVerificationForUser("user_1", client);
+    const secondRequest = requestEmailVerificationForUser("user_1", client);
+
+    await bothDeliveriesStarted.promise;
+    deliveryGates[0].resolve();
+    deliveryGates[1].resolve();
+
+    await bothPersistenceStarted.promise;
+    persistenceGates[0].resolve();
+    persistenceGates[1].resolve();
+
+    const [firstResult, secondResult] = await Promise.all([
+      firstRequest,
+      secondRequest,
+    ]);
+    assert.deepEqual(firstResult, {
+      ok: true,
+      data: { status: "sent" },
+    });
+    assert.deepEqual(secondResult, {
+      ok: true,
+      data: { status: "sent" },
     });
   } finally {
     console.info = originalInfo;
@@ -594,16 +683,107 @@ test("requestEmailVerificationForUser surfaces cleanup failures separately from 
     configureAuthEmailDeliveryPort(null);
   }
 
-  assert.equal(countSentAuditLines(infoLines), 0);
-  assert.equal(
-    errorLines.filter((line) => line.includes('"outcome":"delivery_failed"'))
-      .length,
-    1,
+  assert.equal(delivered.length, 2);
+  const deliveredHashes = delivered.map((message) =>
+    verificationMessageTokenHash(message),
   );
+  assert.equal(new Set(deliveredHashes).size, 2);
+  const activeTokens = client._tokens.filter((token) => token.usedAt === null);
+  assert.equal(activeTokens.length, 3);
   assert.equal(
-    errorLines.filter((line) =>
-      line.includes('"outcome":"delivery_cleanup_failed"'),
-    ).length,
+    activeTokens.some((token) => token.id === "evt_old_1"),
+    true,
+  );
+  for (const tokenHash of deliveredHashes) {
+    assert.equal(
+      activeTokens.some((token) => token.tokenHash === tokenHash),
+      true,
+    );
+  }
+  assert.equal(client._updateManyCalls.length, 0);
+  assert.equal(client._deleteManyCalls.length, 0);
+  assert.equal(countSentAuditLines(infoLines), 2);
+  assert.equal(
+    errorLines.filter((line) => line.includes('"scope":"email-verification"'))
+      .length,
+    0,
+  );
+});
+
+test("requestEmailVerificationForUser returns a generic error when user lookup storage fails", async () => {
+  const client = asPrismaClient({
+    user: {
+      findUnique: async () => {
+        throw new Error("database unavailable");
+      },
+    },
+  });
+  const originalError = console.error;
+  console.error = () => {};
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: false,
+      error: "Could not send a verification email. Please try again.",
+    });
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("requestEmailVerificationForUser does not write sent audit when activation fails after concurrent delivery", async () => {
+  const delivered: AuthEmailMessage[] = [];
+  const infoLines: string[] = [];
+  const errorLines: string[] = [];
+  const firstCreateGate = deferred<void>();
+  const client = makeRequestClient({
+    createErrors: [new Error("first activation failure"), null],
+    beforeCreate: async ({ callIndex }) => {
+      if (callIndex === 0) {
+        await firstCreateGate.promise;
+      }
+    },
+  });
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
+  console.error = (line?: unknown) => {
+    errorLines.push(String(line));
+  };
+  configureAuthEmailDeliveryPort({
+    async send(message) {
+      delivered.push(message);
+    },
+  });
+
+  try {
+    const firstRequest = requestEmailVerificationForUser("user_1", client);
+    const secondRequest = requestEmailVerificationForUser("user_1", client);
+    firstCreateGate.resolve();
+    const results = await Promise.all([firstRequest, secondRequest]);
+    assert.equal(results.filter((result) => result.ok).length, 1);
+    assert.equal(
+      results.filter(
+        (result) =>
+          !result.ok &&
+          result.error ===
+            "Could not send a verification email. Please try again.",
+      ).length,
+      1,
+    );
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(delivered.length, 2);
+  assert.equal(countSentAuditLines(infoLines), 1);
+  assert.equal(
+    errorLines.filter((line) => line.includes('"outcome":"activation_failed"'))
+      .length,
     1,
   );
 });

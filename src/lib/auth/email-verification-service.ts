@@ -8,8 +8,9 @@ import type { VerifyEmailResult } from "@/lib/auth/form-state";
 import {
   VERIFICATION_TOKEN_REJECTION_MESSAGE,
   VERIFICATION_TOKEN_TTL_MS,
+  buildVerificationTokenPersistenceInput,
   evaluateVerificationToken,
-  generateVerificationToken,
+  generateVerificationTokenMaterial,
   hashVerificationToken,
 } from "@/lib/auth/verification-token";
 import { singleUseTokenExpiresAt } from "@/lib/auth/single-use-token";
@@ -29,6 +30,11 @@ export type VerifyOutcome =
 
 const GENERIC_VERIFICATION_ERROR =
   "Could not send a verification email. Please try again.";
+
+export const AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE =
+  "AUTH_EMAIL_VERIFICATION_ACTIVATION_FAILED";
+const AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_MESSAGE =
+  "Could not activate a delivered email verification token.";
 
 export async function requestEmailVerificationForUser(
   userId: string,
@@ -50,31 +56,24 @@ export async function requestEmailVerificationForUser(
       return actionOk({ status: "already_verified" });
     }
 
-    const rawToken = generateVerificationToken();
-    const tokenHash = hashVerificationToken(rawToken);
+    const tokenMaterial = generateVerificationTokenMaterial();
     const expiresAt = singleUseTokenExpiresAt(VERIFICATION_TOKEN_TTL_MS);
-    const createdToken = await client.emailVerificationToken.create({
-      data: { userId, tokenHash, expiresAt },
-      select: { id: true },
+    await deliverVerificationEmail({
+      to: dbUser.email,
+      verifyUrl: buildEmailVerificationUrl(tokenMaterial.rawToken),
     });
-
     try {
-      await deliverVerificationEmail({
-        to: dbUser.email,
-        verifyUrl: buildEmailVerificationUrl(rawToken),
+      await client.emailVerificationToken.create({
+        data: buildVerificationTokenPersistenceInput({
+          userId,
+          material: tokenMaterial,
+          expiresAt,
+        }),
       });
-    } catch (deliveryError) {
-      await cleanupUndeliveredVerificationToken(client, {
-        userId,
-        tokenId: createdToken.id,
-      });
-      throw deliveryError;
+    } catch {
+      logVerificationTokenActivationFailure(userId);
+      return actionError(GENERIC_VERIFICATION_ERROR);
     }
-
-    await client.emailVerificationToken.updateMany({
-      where: { userId, usedAt: null, id: { not: createdToken.id } },
-      data: { usedAt: new Date() },
-    });
 
     logSecurityAudit("auth.email_verification.requested", {
       userId,
@@ -195,23 +194,14 @@ async function consumeVerificationTokenAndVerifyEmail(
   return true;
 }
 
-async function cleanupUndeliveredVerificationToken(
-  client: PrismaClientLike,
-  input: { userId: string; tokenId: string },
-): Promise<void> {
-  try {
-    await client.emailVerificationToken.deleteMany({
-      where: {
-        id: input.tokenId,
-        userId: input.userId,
-        usedAt: null,
-      },
-    });
-  } catch (cleanupError) {
-    logError("email-verification", cleanupError, {
-      outcome: "delivery_cleanup_failed",
-      userId: input.userId,
-      tokenId: input.tokenId,
-    });
-  }
+function logVerificationTokenActivationFailure(userId: string): void {
+  logError(
+    "email-verification",
+    new Error(AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_MESSAGE),
+    {
+      outcome: "activation_failed",
+      code: AUTH_EMAIL_VERIFICATION_ACTIVATION_ERROR_CODE,
+      userId,
+    },
+  );
 }
