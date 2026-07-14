@@ -125,7 +125,11 @@ export async function deleteAccountForUser(
       count: erasure.deletedAssetCount,
       outcome: "success",
     });
-  } /* node:coverage ignore next -- Defensive catch behavior is asserted; tsx maps the catch boundary as uncovered. */ catch {
+  } /* node:coverage ignore next -- Defensive catch behavior is asserted; tsx maps the catch boundary as uncovered. */ catch (error) {
+    log("account-deletion", error, {
+      userId: input.userId,
+      stage: "account-deletion",
+    });
     return actionError(GENERIC_DELETE_ERROR);
   }
 

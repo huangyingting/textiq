@@ -152,11 +152,30 @@ test("production fallback never logs live auth links", async () => {
   };
 
   try {
-    await deliverAuthEmail({
-      kind: "password-reset",
-      to: "ada@example.com",
-      resetUrl: "https://textiq.example/reset-password?token=secret-reset",
-    });
+    await assert.rejects(
+      () =>
+        deliverAuthEmail({
+          kind: "password-reset",
+          to: "ada@example.com",
+          resetUrl: "https://textiq.example/reset-password?token=secret-reset",
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal(
+          error instanceof Error
+            ? error.message.includes("secret-reset")
+            : false,
+          false,
+        );
+        assert.equal(
+          error instanceof Error
+            ? error.message.includes("/reset-password")
+            : false,
+          false,
+        );
+        return true;
+      },
+    );
   } finally {
     console.info = originalInfo;
     console.error = originalError;

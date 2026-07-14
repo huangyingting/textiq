@@ -227,6 +227,10 @@ test("deleteAccountForUser fails closed when erasure verification finds residual
 
 test("deleteAccountForUser fails closed when deletion dependencies throw", async () => {
   const client = makeClient("ada@example.com");
+  const logs: Array<{
+    scope: string;
+    context: Record<string, unknown>;
+  }> = [];
 
   const result = await deleteAccountForUser(
     { userId: "u1", confirmation: "DELETE" },
@@ -234,6 +238,9 @@ test("deleteAccountForUser fails closed when deletion dependencies throw", async
       client,
       getCancellationState: async () => {
         throw new Error("subscription lookup unavailable");
+      },
+      log(scope, _error, context) {
+        logs.push({ scope, context: context ?? {} });
       },
     },
   );
@@ -243,4 +250,10 @@ test("deleteAccountForUser fails closed when deletion dependencies throw", async
     error: "Could not delete your account. Please try again.",
   });
   assert.deepEqual(client._deleted, []);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].scope, "account-deletion");
+  assert.deepEqual(logs[0].context, {
+    userId: "u1",
+    stage: "account-deletion",
+  });
 });

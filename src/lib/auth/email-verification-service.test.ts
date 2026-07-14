@@ -263,6 +263,55 @@ test("requestEmailVerificationForUser revokes old tokens, creates a new token, a
   }
 });
 
+test("requestEmailVerificationForUser returns generic failure and no sent audit when delivery fails", async () => {
+  const infoLines: string[] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (line?: unknown) => {
+    infoLines.push(String(line));
+  };
+  console.error = () => {};
+  configureAuthEmailDeliveryPort({
+    async send() {
+      throw new Error("mail transport unavailable");
+    },
+  });
+
+  const client = asPrismaClient({
+    user: {
+      findUnique: async () => ({
+        email: "person@example.com",
+        emailVerified: null,
+      }),
+    },
+    emailVerificationToken: {
+      updateMany: () => Promise.resolve({ count: 1 }),
+      create: () => Promise.resolve({ id: "evt_new" }),
+    },
+    $transaction: async (ops: Array<Promise<unknown>>) => Promise.all(ops),
+  });
+
+  try {
+    assert.deepEqual(await requestEmailVerificationForUser("user_1", client), {
+      ok: false,
+      error: "Could not send a verification email. Please try again.",
+    });
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(
+    infoLines.some(
+      (line) =>
+        line.includes('"message":"auth.email_verification.requested"') &&
+        line.includes('"outcome":"sent"'),
+    ),
+    false,
+  );
+});
+
 test("consumeEmailVerificationToken rejects empty, missing, expired, and used tokens", async () => {
   assert.deepEqual(
     await consumeEmailVerificationToken("", asPrismaClient({})),
