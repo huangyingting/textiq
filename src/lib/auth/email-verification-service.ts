@@ -1,5 +1,6 @@
 import { actionError, actionOk } from "@/lib/action-result";
 import {
+  AuthEmailDeliveryError,
   buildEmailVerificationUrl,
   deliverVerificationEmail,
 } from "@/lib/auth/email";
@@ -52,21 +53,27 @@ export async function requestEmailVerificationForUser(
     const rawToken = generateVerificationToken();
     const tokenHash = hashVerificationToken(rawToken);
     const expiresAt = singleUseTokenExpiresAt(VERIFICATION_TOKEN_TTL_MS);
-    const usedAt = new Date();
+    const createdToken = await client.emailVerificationToken.create({
+      data: { userId, tokenHash, expiresAt },
+      select: { id: true },
+    });
 
-    await client.$transaction([
-      client.emailVerificationToken.updateMany({
-        where: { userId, usedAt: null },
-        data: { usedAt },
-      }),
-      client.emailVerificationToken.create({
-        data: { userId, tokenHash, expiresAt },
-      }),
-    ]);
+    try {
+      await deliverVerificationEmail({
+        to: dbUser.email,
+        verifyUrl: buildEmailVerificationUrl(rawToken),
+      });
+    } catch (deliveryError) {
+      await cleanupUndeliveredVerificationToken(client, {
+        userId,
+        tokenId: createdToken.id,
+      });
+      throw deliveryError;
+    }
 
-    await deliverVerificationEmail({
-      to: dbUser.email,
-      verifyUrl: buildEmailVerificationUrl(rawToken),
+    await client.emailVerificationToken.updateMany({
+      where: { userId, usedAt: null, id: { not: createdToken.id } },
+      data: { usedAt: new Date() },
     });
 
     logSecurityAudit("auth.email_verification.requested", {
@@ -75,7 +82,15 @@ export async function requestEmailVerificationForUser(
     });
     return actionOk({ status: "sent" });
   } catch (error) {
-    logError("email-verification", error);
+    logError("email-verification", error, {
+      ...(error instanceof AuthEmailDeliveryError
+        ? {
+            outcome: "delivery_failed",
+            emailKind: error.emailKind,
+            code: error.code,
+          }
+        : {}),
+    });
     return actionError(GENERIC_VERIFICATION_ERROR);
   }
 }
@@ -178,4 +193,25 @@ async function consumeVerificationTokenAndVerifyEmail(
   });
 
   return true;
+}
+
+async function cleanupUndeliveredVerificationToken(
+  client: PrismaClientLike,
+  input: { userId: string; tokenId: string },
+): Promise<void> {
+  try {
+    await client.emailVerificationToken.deleteMany({
+      where: {
+        id: input.tokenId,
+        userId: input.userId,
+        usedAt: null,
+      },
+    });
+  } catch (cleanupError) {
+    logError("email-verification", cleanupError, {
+      outcome: "delivery_cleanup_failed",
+      userId: input.userId,
+      tokenId: input.tokenId,
+    });
+  }
 }

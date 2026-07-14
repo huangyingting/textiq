@@ -192,7 +192,9 @@ test("requestPasswordResetForEmail preserves anti-enumeration and logs delivery 
   };
   configureAuthEmailDeliveryPort({
     async send() {
-      throw new Error("mail transport unavailable");
+      throw new Error(
+        "smtp://provider.example/failed?token=abc123 recipient=ada@example.com",
+      );
     },
   });
 
@@ -218,7 +220,12 @@ test("requestPasswordResetForEmail preserves anti-enumeration and logs delivery 
   );
   assert.equal(
     loggedErrors.some(
-      (line) => line.includes("token=") || line.includes("/reset-password"),
+      (line) =>
+        line.includes("token=") ||
+        line.includes("/reset-password") ||
+        line.includes("provider.example") ||
+        line.includes("abc123") ||
+        line.includes("ada@example.com"),
     ),
     false,
   );

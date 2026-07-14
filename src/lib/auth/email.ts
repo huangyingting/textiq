@@ -34,12 +34,15 @@ export interface AuthEmailDeliveryPort {
   send(message: AuthEmailMessage): Promise<void>;
 }
 
+export const AUTH_EMAIL_DELIVERY_ERROR_CODE = "AUTH_EMAIL_DELIVERY_FAILED";
+export const AUTH_EMAIL_DELIVERY_ERROR_MESSAGE =
+  "Could not deliver authentication email.";
+
 export class AuthEmailDeliveryError extends Error {
-  constructor(
-    public readonly emailKind: AuthEmailMessage["kind"],
-    message: string,
-  ) {
-    super(message);
+  readonly code = AUTH_EMAIL_DELIVERY_ERROR_CODE;
+
+  constructor(public readonly emailKind: AuthEmailMessage["kind"]) {
+    super(AUTH_EMAIL_DELIVERY_ERROR_MESSAGE);
     this.name = "AuthEmailDeliveryError";
   }
 }
@@ -66,10 +69,7 @@ function messageScope(message: AuthEmailMessage): string {
 const devConsoleEmailDeliveryPort: AuthEmailDeliveryPort = {
   async send(message) {
     if (process.env.NODE_ENV === "production") {
-      const error = new AuthEmailDeliveryError(
-        message.kind,
-        `No ${message.kind} email transport is configured`,
-      );
+      const error = new AuthEmailDeliveryError(message.kind);
       logError(messageScope(message), error);
       throw error;
     }
@@ -104,14 +104,8 @@ export async function deliverAuthEmail(
 ): Promise<void> {
   try {
     await getAuthEmailDeliveryPort().send(message);
-  } catch (error) {
-    if (error instanceof AuthEmailDeliveryError) {
-      throw error;
-    }
-    throw new AuthEmailDeliveryError(
-      message.kind,
-      `Could not deliver ${message.kind} email.`,
-    );
+  } catch {
+    throw new AuthEmailDeliveryError(message.kind);
   }
 }
 

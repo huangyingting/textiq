@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AUTH_EMAIL_DELIVERY_ERROR_CODE,
+  AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
+  AuthEmailDeliveryError,
   buildEmailVerificationUrl,
   buildPasswordResetUrl,
   configureAuthEmailDeliveryPort,
@@ -160,18 +163,14 @@ test("production fallback never logs live auth links", async () => {
           resetUrl: "https://textiq.example/reset-password?token=secret-reset",
         }),
       (error: unknown) => {
-        assert.equal(error instanceof Error, true);
+        assert.equal(error instanceof AuthEmailDeliveryError, true);
         assert.equal(
-          error instanceof Error
-            ? error.message.includes("secret-reset")
-            : false,
-          false,
+          error instanceof AuthEmailDeliveryError ? error.message : "",
+          AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
         );
         assert.equal(
-          error instanceof Error
-            ? error.message.includes("/reset-password")
-            : false,
-          false,
+          error instanceof AuthEmailDeliveryError ? error.code : "",
+          AUTH_EMAIL_DELIVERY_ERROR_CODE,
         );
         return true;
       },
@@ -195,4 +194,43 @@ test("production fallback never logs live auth links", async () => {
     lines.some((line) => line.includes("/reset-password")),
     false,
   );
+});
+
+test("deliverAuthEmail never forwards transport diagnostics from adapter failures", async () => {
+  configureAuthEmailDeliveryPort({
+    async send() {
+      throw new Error(
+        "smtp://provider.example/failed?token=abc123 recipient=ada@example.com",
+      );
+    },
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        deliverAuthEmail({
+          kind: "email-verification",
+          to: "ada@example.com",
+          verifyUrl: "https://textiq.example/verify-email/raw-token",
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof AuthEmailDeliveryError, true);
+        const deliveryError =
+          error instanceof AuthEmailDeliveryError ? error : null;
+        assert.equal(deliveryError?.message, AUTH_EMAIL_DELIVERY_ERROR_MESSAGE);
+        assert.equal(deliveryError?.code, AUTH_EMAIL_DELIVERY_ERROR_CODE);
+        const serialized = JSON.stringify(error);
+        assert.equal(serialized.includes("provider.example"), false);
+        assert.equal(serialized.includes("abc123"), false);
+        assert.equal(serialized.includes("ada@example.com"), false);
+        assert.equal(
+          Object.prototype.hasOwnProperty.call(error, "cause"),
+          false,
+        );
+        return true;
+      },
+    );
+  } finally {
+    configureAuthEmailDeliveryPort(null);
+  }
 });
