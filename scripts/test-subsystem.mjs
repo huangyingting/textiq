@@ -128,6 +128,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/data-contracts\//,
       /^src\/lib\/document\//,
       /^src\/lib\/presentation\/validation/,
+      /^src\/lib\/validation-primitives\.test\.ts$/,
       /^src\/lib\/schema-audit\//,
       /^src\/lib\/db\//,
       /^src\/lib\/db-provider\.test\.ts$/,

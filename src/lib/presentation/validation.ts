@@ -11,9 +11,15 @@
 import type { Deck } from "./schema";
 import { DECK_SCHEMA_VERSION } from "./schema";
 import { isValidId, isPositiveFinite } from "./ids";
-import { isFiniteNumber, isPlainObject } from "@/lib/type-guards";
 import { isStyleRef } from "./style-registry";
 import { SEMANTIC_TEMPLATE_KINDS } from "./template-registry";
+import {
+  forEachUnknownKey,
+  isLiteralMember,
+  isValidationFiniteNumber as isFiniteNumber,
+  isValidationNonEmptyString,
+  isValidationPlainObject as isPlainObject,
+} from "@/lib/validation-primitives";
 
 // ---------------------------------------------------------------------------
 // Public parse result
@@ -305,7 +311,7 @@ function validateFontAssetEntry(
     errors,
   );
   validateAssetIdField(input.id, assetId, ctx, errors);
-  if (typeof input.family !== "string" || input.family.length === 0) {
+  if (!isValidationNonEmptyString(input.family, "exact")) {
     fail(errors, `${ctx}.family must be a non-empty string`);
   }
   validateSafeUrlString(
@@ -350,7 +356,7 @@ function validateVisualAssetEntry(
     errors,
   );
   validateAssetIdField(input.id, assetId, ctx, errors);
-  if (typeof input.visualId !== "string" || input.visualId.length === 0) {
+  if (!isValidationNonEmptyString(input.visualId, "exact")) {
     fail(errors, `${ctx}.visualId must be a non-empty string`);
   }
   validateOptionalString(input.documentId, `${ctx}.documentId`, errors);
@@ -642,11 +648,9 @@ function validateKnownObjectKeys(
   fieldDescription: string,
   errors: string[],
 ): void {
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known ${fieldDescription}`);
-    }
-  }
+  forEachUnknownKey(input, allowed, (key) => {
+    fail(errors, `${ctx}.${key} is not a known ${fieldDescription}`);
+  });
 }
 
 function validateTokenRef(input: unknown, ctx: string, errors: string[]): void {
@@ -661,7 +665,7 @@ function validateTokenRef(input: unknown, ctx: string, errors: string[]): void {
     "token ref field",
     errors,
   );
-  if (typeof input.token !== "string" || input.token.length === 0) {
+  if (!isValidationNonEmptyString(input.token, "exact")) {
     fail(errors, `${ctx}.token must be a non-empty string`);
   }
 }
@@ -882,7 +886,7 @@ function validateFillStylePatch(
   validateEnumValue(input.kind, PATTERN_FILL_KINDS, `${ctx}.kind`, errors);
   if (
     input.assetId !== undefined &&
-    (typeof input.assetId !== "string" || input.assetId.length === 0)
+    !isValidationNonEmptyString(input.assetId, "exact")
   ) {
     fail(errors, `${ctx}.assetId must be a non-empty string`);
   }
@@ -1350,7 +1354,7 @@ function validateEnumValue<T extends string>(
   ctx: string,
   errors: string[],
 ): void {
-  if (value !== undefined && !allowed.includes(value as T)) {
+  if (value !== undefined && !isLiteralMember(value, allowed)) {
     fail(errors, `${ctx} must be one of: ${allowed.join(", ")}`);
   }
 }
@@ -1599,7 +1603,7 @@ function validateTextContent(
       "paragraph field",
       errors,
     );
-    if (typeof para.id !== "string" || para.id.length === 0) {
+    if (!isValidationNonEmptyString(para.id, "exact")) {
       fail(errors, `${pCtx}.id must be a non-empty string`);
     }
     if (typeof para.text !== "string") {
@@ -2883,7 +2887,7 @@ function validateDeckThemeBinding(
       fail(errors, `${ctx}.${key} is not a known theme field`);
     }
   }
-  if (typeof input.packageId !== "string" || input.packageId.length === 0) {
+  if (!isValidationNonEmptyString(input.packageId, "exact")) {
     fail(errors, `${ctx}.packageId must be a non-empty string`);
   }
   validateStringField(input.packageVersion, `${ctx}.packageVersion`, errors);

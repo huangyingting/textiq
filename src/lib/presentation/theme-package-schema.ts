@@ -74,10 +74,12 @@ import { DiagnosticCollector } from "./diagnostics";
 import { STYLE_REFS } from "./style-registry";
 import { SEMANTIC_TEMPLATE_KINDS } from "./template-registry";
 import {
-  isFiniteNumber,
-  isNonEmptyString,
-  isPlainObject,
-} from "@/lib/type-guards";
+  forEachUnknownKey,
+  isLiteralMember,
+  isValidationFiniteNumber as isFiniteNumber,
+  isValidationNonEmptyString,
+  isValidationPlainObject as isPlainObject,
+} from "@/lib/validation-primitives";
 
 function resolveTokenInValue(
   value: unknown,
@@ -209,11 +211,9 @@ function validateKnownKeys(
   description: string,
   errors: string[],
 ): void {
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      errors.push(`${ctx}.${key} is not a known ${description}`);
-    }
-  }
+  forEachUnknownKey(input, allowed, (key) => {
+    errors.push(`${ctx}.${key} is not a known ${description}`);
+  });
 }
 
 function validateDecorationLayout(
@@ -342,7 +342,7 @@ function validateDecorationStyle(
         errors,
       );
       if (input.fill.type === "image") {
-        if (!isNonEmptyString(input.fill.assetId)) {
+        if (!isValidationNonEmptyString(input.fill.assetId)) {
           errors.push(`${ctx}.fill.assetId must be a non-empty string`);
         } else {
           assetRefs.push(input.fill.assetId);
@@ -485,7 +485,7 @@ function validateDecorationContent(
       "content field",
       errors,
     );
-    if (!isNonEmptyString(input.text)) {
+    if (!isValidationNonEmptyString(input.text)) {
       errors.push(`${ctx}.text must be a non-empty string`);
     }
     if (component !== "text") {
@@ -502,7 +502,7 @@ function validateDecorationContent(
       "content field",
       errors,
     );
-    if (!isNonEmptyString(input.shape)) {
+    if (!isValidationNonEmptyString(input.shape)) {
       errors.push(`${ctx}.shape must be a non-empty string`);
     }
     if (component !== "shape") {
@@ -519,7 +519,7 @@ function validateDecorationContent(
       "content field",
       errors,
     );
-    if (!isNonEmptyString(input.assetId)) {
+    if (!isValidationNonEmptyString(input.assetId)) {
       errors.push(`${ctx}.assetId must be a non-empty string`);
       return {};
     }
@@ -571,7 +571,7 @@ function validateDecorations(
       errors,
     );
 
-    if (!isNonEmptyString(recipe.id)) {
+    if (!isValidationNonEmptyString(recipe.id)) {
       errors.push(`${recipeCtx}.id must be a non-empty string`);
     } else if (recipe.id !== decorationId) {
       errors.push(`${recipeCtx}.id must match registry key "${decorationId}"`);
@@ -661,7 +661,7 @@ function validateDecorations(
               index,
               layoutId,
             ] of recipe.appliesTo.layoutIds.entries()) {
-              if (!isNonEmptyString(layoutId)) {
+              if (!isValidationNonEmptyString(layoutId)) {
                 errors.push(
                   `${recipeCtx}.appliesTo.layoutIds.${index} must be a non-empty string`,
                 );
@@ -734,12 +734,12 @@ function validateThemeAssetManifest(
           "image asset field",
           errors,
         );
-        if (!isNonEmptyString(image.id)) {
+        if (!isValidationNonEmptyString(image.id)) {
           errors.push(`${imageCtx}.id must be a non-empty string`);
         } else if (image.id !== assetId) {
           errors.push(`${imageCtx}.id must match manifest key "${assetId}"`);
         }
-        if (!isNonEmptyString(image.src)) {
+        if (!isValidationNonEmptyString(image.src)) {
           errors.push(`${imageCtx}.src must be a non-empty string`);
         }
         if (image.alt !== undefined && typeof image.alt !== "string") {
@@ -785,15 +785,15 @@ function validateThemeAssetManifest(
           "font asset field",
           errors,
         );
-        if (!isNonEmptyString(font.id)) {
+        if (!isValidationNonEmptyString(font.id)) {
           errors.push(`${fontCtx}.id must be a non-empty string`);
         } else if (font.id !== assetId) {
           errors.push(`${fontCtx}.id must match manifest key "${assetId}"`);
         }
-        if (!isNonEmptyString(font.family)) {
+        if (!isValidationNonEmptyString(font.family)) {
           errors.push(`${fontCtx}.family must be a non-empty string`);
         }
-        if (!isNonEmptyString(font.src)) {
+        if (!isValidationNonEmptyString(font.src)) {
           errors.push(`${fontCtx}.src must be a non-empty string`);
         }
         if (font.weight !== undefined) {
@@ -831,7 +831,7 @@ function validateChromeEnum(
   ctx: string,
   errors: string[],
 ): void {
-  if (value !== undefined && !allowed.includes(value as string)) {
+  if (value !== undefined && !isLiteralMember(value, allowed)) {
     errors.push(`${ctx} must be one of: ${allowed.join(", ")}`);
   }
 }
@@ -1116,11 +1116,11 @@ export function validateThemePackage(
     });
   }
 
-  if (typeof input.id !== "string" || input.id.length === 0) {
+  if (!isValidationNonEmptyString(input.id, "exact")) {
     dc.error("unknown-field", "Theme package id must be a non-empty string");
   }
 
-  if (typeof input.version !== "string" || input.version.length === 0) {
+  if (!isValidationNonEmptyString(input.version, "exact")) {
     dc.error(
       "unknown-field",
       "Theme package version must be a non-empty string",
