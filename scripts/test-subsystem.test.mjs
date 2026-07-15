@@ -270,6 +270,13 @@ test("test naming audit handles js-like files, property calls, and nonliteral ti
     ),
     [],
   );
+  assert.deepEqual(
+    scanTestText(
+      "src/lib/example.test.tsx",
+      "test();\ntest(`renders a descriptive template title`, () => {});",
+    ),
+    [],
+  );
 });
 
 test("test coverage audit combines coverage and naming checks", () => {
@@ -397,6 +404,20 @@ test("test subsystem main supports dry runs, skipped e2e notices, and empty sele
     dryRun.logs.some((line) =>
       line.includes("No unit/script commands selected"),
     ),
+  );
+
+  const e2eAlias = captureConsole(() =>
+    main(["presentation", "--e2e", "--dry-run"], root),
+  );
+  assert.equal(e2eAlias.result, 0);
+  assert.ok(e2eAlias.logs.some((line) => line.includes("playwright test")));
+
+  const e2eLongOption = captureConsole(() =>
+    main(["presentation", "--with-e2e", "--dry-run"], root),
+  );
+  assert.equal(e2eLongOption.result, 0);
+  assert.ok(
+    e2eLongOption.logs.some((line) => line.includes("playwright test")),
   );
 
   const noCommands = captureConsole(() => main(["presentation"], root));
@@ -549,4 +570,12 @@ test("test subsystem CLI supports help mode", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Usage:/);
+
+  const shortResult = spawnSync(
+    process.execPath,
+    [join(process.cwd(), "scripts", "test-subsystem.mjs"), "-h"],
+    { encoding: "utf8" },
+  );
+  assert.equal(shortResult.status, 0);
+  assert.match(shortResult.stdout, /Usage:/);
 });
