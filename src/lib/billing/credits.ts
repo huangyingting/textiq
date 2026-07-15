@@ -12,6 +12,7 @@
 
 /* @preserve node:coverage ignore next -- Import/source-map facade artifact; runtime helpers are asserted below. */
 import { prisma } from "@/lib/prisma";
+type CreditWriteClient = Pick<typeof prisma, "user">;
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -67,7 +68,7 @@ export function hasSufficientCredits(balance: number, cost: number): boolean {
 export async function deductCredits(
   userId: string,
   cost: number,
-  client: typeof prisma = prisma,
+  client: CreditWriteClient = prisma,
 ): Promise<number> {
   if (cost <= 0) {
     const user = await client.user.findUniqueOrThrow({

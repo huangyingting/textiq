@@ -6,6 +6,12 @@
  * (authenticated, per user) + credit metering → generate via Azure OpenAI →
  * charge credits on success → return `{ candidates }`.
  *
+ * Authenticated idempotency contract:
+ *   - callers MUST send `Idempotency-Key` (8-128 chars, `[A-Za-z0-9._:-]`),
+ *   - retries for the same logical operation must reuse the same key, and
+ *   - distinct operations must send distinct keys.
+ * Missing/invalid keys are rejected with 400 before metering/generation.
+ *
  * Anonymous callers get a NON-resetting lifetime trial tracked by a signed
  * cookie AND a server-side fixed-window throttle keyed by hashed client IP, so
  * clearing the cookie does not grant unlimited generations; authenticated

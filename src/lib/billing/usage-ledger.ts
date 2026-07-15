@@ -1,61 +1,55 @@
 /**
- * Durable generation usage ledger with reserve / capture / refund lifecycle
- * (Epic #478, issue #481).
+ * Durable generation usage ledger with explicit reserve / capture / refund
+ * state transitions.
  *
- * ## Lifecycle
+ * State machine:
+ * - reserve: ∅ -> reserved (idempotent for reserved/captured/refunded)
+ * - capture: reserved -> captured (idempotent for captured, conflict on refunded)
+ * - refund: reserved -> refunded (idempotent for refunded/captured)
  *
- *   1. **reserve** — Before calling the AI model, record intent in the ledger
- *      with status `"reserved"`. Credits are NOT deducted at this point.
- *      Returns the existing entry unchanged if the idempotency key is already
- *      present (safe to retry).
- *
- *   2. **capture** — On AI success, atomically deduct credits (via the
- *      existing atomic conditional decrement in `credits.ts`) and mark the
- *      entry `"captured"`. Idempotent: returns without deducting again if the
- *      entry is already `"captured"`.
- *
- *   3. **refund** — On AI failure, mark the entry `"refunded"`. Because no
- *      credits were deducted in `reserve`, this is a pure tombstone with no
- *      balance change. Idempotent.
- *
- * ## Double-charge safety
- *
- * The idempotency key (typically the request UUID) ensures a single
- * request — even when retried — produces exactly one `"captured"` row and
- * exactly one credit deduction. The credit deduction itself uses
- * `deductCredits` which is an atomic conditional DB write (`creditBalance >=
- * cost`), so concurrent captures for the SAME user on DIFFERENT requests
- * cannot both succeed when the balance is borderline.
- *
- * ## Usage in a route
- *
- * ```ts
- * const ledgerKey = requestId;  // stable UUID, same across retries
- * let reserved = false;
- * try {
- *   await reserveUsage({ idempotencyKey: ledgerKey, userId, operation: "generate", creditCost });
- *   reserved = true;
- *   // ... call AI model ...
- *   await captureUsage({ idempotencyKey: ledgerKey, userId, creditCost });
- * } catch (err) {
- *   if (reserved) await refundUsage({ idempotencyKey: ledgerKey });
- *   throw err;
- * }
- * ```
+ * Captured/refunded are terminal states.
  */
 
-import { prisma } from "@/lib/prisma";
-import { deductCredits } from "@/lib/billing/credits";
+import { deductCredits, InsufficientCreditsError } from "@/lib/billing/credits";
+import { withP2002Fallback } from "@/lib/db/p2002-fallback";
 import {
   logUsageLedgerEvent,
   logUsageLedgerFailure,
 } from "@/lib/diagnostics/domain-events";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { prisma } from "@/lib/prisma";
 
 export type LedgerStatus = "reserved" | "captured" | "refunded";
+
+export const USAGE_LEDGER_STATE_MACHINE = {
+  reserve: {
+    creates: "reserved",
+    idempotentStatuses: ["reserved", "captured", "refunded"],
+  },
+  capture: {
+    allowedFrom: ["reserved"],
+    idempotentStatuses: ["captured"],
+    conflictingStatuses: ["refunded"],
+  },
+  refund: {
+    allowedFrom: ["reserved"],
+    idempotentStatuses: ["refunded", "captured"],
+  },
+  terminalStatuses: ["captured", "refunded"],
+} as const;
+
+export class UsageLedgerConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageLedgerConflictError";
+  }
+}
+
+export class UsageLedgerTransitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageLedgerTransitionError";
+  }
+}
 
 export interface UsageLedgerEntry {
   id: string;
@@ -90,17 +84,63 @@ export interface RefundOptions {
   client?: typeof prisma;
 }
 
-// ---------------------------------------------------------------------------
-// reserve
-// ---------------------------------------------------------------------------
+interface ReservationFingerprint {
+  userId: string;
+  operation: string;
+  creditCost: number;
+}
+
+function asUsageLedgerEntry(entry: unknown): UsageLedgerEntry {
+  return entry as UsageLedgerEntry;
+}
+
+function assertReservationFingerprint(
+  entry: Pick<
+    UsageLedgerEntry,
+    "idempotencyKey" | "userId" | "operation" | "creditCost"
+  >,
+  expected: ReservationFingerprint,
+): void {
+  if (
+    entry.userId === expected.userId &&
+    entry.operation === expected.operation &&
+    entry.creditCost === expected.creditCost
+  ) {
+    return;
+  }
+
+  throw new UsageLedgerConflictError(
+    `[usage-ledger] idempotency key "${entry.idempotencyKey}" was already used with a different reservation fingerprint.`,
+  );
+}
+
+function assertCaptureFingerprint(
+  entry: Pick<UsageLedgerEntry, "idempotencyKey" | "userId" | "creditCost">,
+  expected: Pick<ReservationFingerprint, "userId" | "creditCost">,
+): void {
+  if (
+    entry.userId === expected.userId &&
+    entry.creditCost === expected.creditCost
+  ) {
+    return;
+  }
+
+  throw new UsageLedgerConflictError(
+    `[usage-ledger] capture fingerprint mismatch for key "${entry.idempotencyKey}".`,
+  );
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (error as { code?: string }).code === "P2002";
+}
 
 /**
- * Records generation intent in the ledger (status = `"reserved"`).
+ * Records generation intent in the ledger (status = "reserved").
  *
- * Idempotent: if the key already exists the existing entry is returned without
- * any write — callers can safely retry on transient failures.
- *
- * Throws only on unexpected DB errors.
+ * Atomicity/idempotency:
+ * - validates available balance and creates the reservation in one DB transaction
+ * - concurrent create races are recovered via P2002 fallback to the winner row
+ * - repeated calls with the same key return the existing row (same fingerprint)
  */
 export async function reserveUsage(
   opts: ReserveOptions,
@@ -113,104 +153,205 @@ export async function reserveUsage(
     client = prisma,
   } = opts;
 
-  // Idempotency: return existing entry if key is already present.
-  const existing = await client.usageLedgerEntry.findUnique({
-    where: { idempotencyKey },
-  });
-  if (existing) {
-    logUsageLedgerEvent("reserve", "idempotent reserve", {
-      idempotencyKey,
-      status: existing.status,
-    });
-    return existing as UsageLedgerEntry;
-  }
+  const expected: ReservationFingerprint = { userId, operation, creditCost };
 
-  const entry = await client.usageLedgerEntry.create({
-    data: {
+  try {
+    const entry = await withP2002Fallback(
+      () =>
+        client.$transaction(async (tx) => {
+          const existing = await tx.usageLedgerEntry.findUnique({
+            where: { idempotencyKey },
+          });
+          if (existing) {
+            assertReservationFingerprint(
+              asUsageLedgerEntry(existing),
+              expected,
+            );
+            logUsageLedgerEvent("reserve", "idempotent reserve", {
+              idempotencyKey,
+              status: existing.status,
+            });
+            return asUsageLedgerEntry(existing);
+          }
+
+          if (creditCost > 0) {
+            const user = await tx.user.findUniqueOrThrow({
+              where: { id: userId },
+              select: { creditBalance: true },
+            });
+            if (user.creditBalance < creditCost) {
+              throw new InsufficientCreditsError(
+                user.creditBalance,
+                creditCost,
+              );
+            }
+          }
+
+          return asUsageLedgerEntry(
+            await tx.usageLedgerEntry.create({
+              data: {
+                idempotencyKey,
+                userId,
+                operation,
+                creditCost,
+                status: "reserved",
+              },
+            }),
+          );
+        }),
+      async () => {
+        const winner = await client.usageLedgerEntry.findUnique({
+          where: { idempotencyKey },
+        });
+        if (!winner) {
+          return null;
+        }
+        assertReservationFingerprint(asUsageLedgerEntry(winner), expected);
+        return asUsageLedgerEntry(winner);
+      },
+    );
+
+    logUsageLedgerEvent("reserve", "reserved", {
       idempotencyKey,
-      userId,
       operation,
       creditCost,
-      status: "reserved",
-    },
-  });
+      status: entry.status,
+    });
 
-  logUsageLedgerEvent("reserve", "reserved", {
-    idempotencyKey,
-    operation,
-    creditCost,
-  });
-
-  return entry as UsageLedgerEntry;
+    return entry;
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) {
+      logUsageLedgerFailure("reserve", error, {
+        idempotencyKey,
+        operation,
+        creditCost,
+      });
+    }
+    throw error;
+  }
 }
 
-// ---------------------------------------------------------------------------
-// capture
-// ---------------------------------------------------------------------------
-
 /**
- * Captures usage on successful generation: atomically deducts `creditCost`
- * from the user's balance via `deductCredits` and marks the ledger entry
- * `"captured"`.
+ * Captures a reservation by transitioning reserved -> captured and deducting
+ * credits in the same transaction.
  *
- * Idempotent: if the entry is already `"captured"`, returns it without
- * deducting again. If `creditCost <= 0`, marks captured without a deduction.
+ * Provider-neutral CAS algorithm:
+ * 1) updateMany WHERE status='reserved' (single-winner transition)
+ * 2) deduct credits inside the same transaction
+ * 3) commit only if both succeeded (otherwise rollback both)
  *
- * Throws {@link InsufficientCreditsError} when the balance cannot cover the
- * cost (concurrent depletion between reserve and capture).
+ * Works for SQLite and Postgres because CAS is encoded as a conditional update.
  */
 export async function captureUsage(
   opts: CaptureOptions,
 ): Promise<UsageLedgerEntry> {
   const { idempotencyKey, userId, creditCost, client = prisma } = opts;
 
-  const entry = await client.usageLedgerEntry.findUnique({
-    where: { idempotencyKey },
-  });
+  try {
+    return await client.$transaction(async (tx) => {
+      const existing = await tx.usageLedgerEntry.findUnique({
+        where: { idempotencyKey },
+      });
 
-  if (!entry) {
-    throw new Error(
-      `[usage-ledger] captureUsage: no ledger entry found for key "${idempotencyKey}". ` +
-        "Call reserveUsage first.",
-    );
-  }
+      if (!existing) {
+        throw new Error(
+          `[usage-ledger] captureUsage: no ledger entry found for key "${idempotencyKey}". Call reserveUsage first.`,
+        );
+      }
 
-  if (entry.status === "captured") {
-    logUsageLedgerEvent("capture", "idempotent capture", {
-      idempotencyKey,
+      const current = asUsageLedgerEntry(existing);
+      assertCaptureFingerprint(current, { userId, creditCost });
+
+      if (current.status === "captured") {
+        logUsageLedgerEvent("capture", "idempotent capture", {
+          idempotencyKey,
+          status: current.status,
+        });
+        return current;
+      }
+
+      if (current.status === "refunded") {
+        throw new UsageLedgerTransitionError(
+          `[usage-ledger] captureUsage: cannot capture refunded reservation for key "${idempotencyKey}".`,
+        );
+      }
+
+      const capturedAt = new Date();
+      const cas = await tx.usageLedgerEntry.updateMany({
+        where: {
+          idempotencyKey,
+          userId,
+          creditCost,
+          status: "reserved",
+        },
+        data: { status: "captured", capturedAt, refundedAt: null },
+      });
+
+      if (cas.count !== 1) {
+        const raced = await tx.usageLedgerEntry.findUnique({
+          where: { idempotencyKey },
+        });
+        if (!raced) {
+          throw new Error(
+            `[usage-ledger] captureUsage: ledger entry disappeared for key "${idempotencyKey}".`,
+          );
+        }
+
+        const racedEntry = asUsageLedgerEntry(raced);
+        assertCaptureFingerprint(racedEntry, { userId, creditCost });
+
+        if (racedEntry.status === "captured") {
+          logUsageLedgerEvent("capture", "idempotent capture (race)", {
+            idempotencyKey,
+            status: racedEntry.status,
+          });
+          return racedEntry;
+        }
+
+        if (racedEntry.status === "refunded") {
+          throw new UsageLedgerTransitionError(
+            `[usage-ledger] captureUsage: reservation already refunded for key "${idempotencyKey}".`,
+          );
+        }
+
+        throw new UsageLedgerTransitionError(
+          `[usage-ledger] captureUsage: compare-and-swap failed for key "${idempotencyKey}".`,
+        );
+      }
+
+      if (creditCost > 0) {
+        await deductCredits(userId, creditCost, tx);
+      }
+
+      const updated = asUsageLedgerEntry(
+        await tx.usageLedgerEntry.findUniqueOrThrow({
+          where: { idempotencyKey },
+        }),
+      );
+
+      logUsageLedgerEvent("capture", "captured", {
+        idempotencyKey,
+        creditCost,
+        status: updated.status,
+      });
+
+      return updated;
     });
-    return entry as UsageLedgerEntry;
+  } catch (error) {
+    logUsageLedgerFailure("capture", error, {
+      idempotencyKey,
+      creditCost,
+    });
+    throw error;
   }
-
-  // Deduct credits (atomic conditional write — cannot double-charge).
-  if (creditCost > 0) {
-    await deductCredits(userId, creditCost, client);
-  }
-
-  const updated = await client.usageLedgerEntry.update({
-    where: { idempotencyKey },
-    data: { status: "captured", capturedAt: new Date() },
-  });
-
-  logUsageLedgerEvent("capture", "captured", {
-    idempotencyKey,
-    creditCost,
-  });
-
-  return updated as UsageLedgerEntry;
 }
 
-// ---------------------------------------------------------------------------
-// refund
-// ---------------------------------------------------------------------------
-
 /**
- * Marks the ledger entry `"refunded"` when generation fails.
+ * Refunds a reservation by transitioning reserved -> refunded.
  *
- * Because no credits were deducted during `reserve`, this is purely a
- * tombstone operation — no balance change is needed. Idempotent: if the entry
- * is already `"refunded"` or the key is not found (defensive), this is a
- * no-op.
+ * Idempotent outcomes:
+ * - missing key: returns null
+ * - already refunded/captured: returns existing row unchanged
  */
 export async function refundUsage(
   opts: RefundOptions,
@@ -218,17 +359,66 @@ export async function refundUsage(
   const { idempotencyKey, client = prisma } = opts;
 
   try {
-    const updated = await client.usageLedgerEntry.update({
-      where: { idempotencyKey },
-      data: { status: "refunded", refundedAt: new Date() },
-    });
+    return await client.$transaction(async (tx) => {
+      const existing = await tx.usageLedgerEntry.findUnique({
+        where: { idempotencyKey },
+      });
+      if (!existing) {
+        logUsageLedgerEvent("refund", "idempotent refund (missing)", {
+          idempotencyKey,
+        });
+        return null;
+      }
 
-    logUsageLedgerEvent("refund", "refunded", { idempotencyKey });
-    return updated as UsageLedgerEntry;
-  } catch (err) {
-    // Entry may not exist (reserveUsage failed before creating it) — log and
-    // return null rather than masking the original error.
-    logUsageLedgerFailure("refund", err, { idempotencyKey });
-    return null;
+      const current = asUsageLedgerEntry(existing);
+      if (current.status === "refunded" || current.status === "captured") {
+        logUsageLedgerEvent("refund", "idempotent refund", {
+          idempotencyKey,
+          status: current.status,
+        });
+        return current;
+      }
+
+      const refundedAt = new Date();
+      const cas = await tx.usageLedgerEntry.updateMany({
+        where: { idempotencyKey, status: "reserved" },
+        data: { status: "refunded", refundedAt },
+      });
+
+      if (cas.count !== 1) {
+        const raced = await tx.usageLedgerEntry.findUnique({
+          where: { idempotencyKey },
+        });
+        if (!raced) {
+          return null;
+        }
+        const racedEntry = asUsageLedgerEntry(raced);
+        if (
+          racedEntry.status === "refunded" ||
+          racedEntry.status === "captured"
+        ) {
+          return racedEntry;
+        }
+        throw new UsageLedgerTransitionError(
+          `[usage-ledger] refundUsage: compare-and-swap failed for key "${idempotencyKey}".`,
+        );
+      }
+
+      const updated = asUsageLedgerEntry(
+        await tx.usageLedgerEntry.findUniqueOrThrow({
+          where: { idempotencyKey },
+        }),
+      );
+
+      logUsageLedgerEvent("refund", "refunded", {
+        idempotencyKey,
+        status: updated.status,
+      });
+
+      return updated;
+    });
+  } catch (error) {
+    logUsageLedgerFailure("refund", error, { idempotencyKey });
+    throw error;
   }
 }

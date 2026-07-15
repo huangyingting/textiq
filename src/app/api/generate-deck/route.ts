@@ -16,6 +16,12 @@
  *   { contentJson: <serialised Lexical editor state>, options?: { length?,
  *     tone?, audience? } }
  *
+ * Authenticated idempotency contract:
+ *   - callers MUST send `Idempotency-Key` (8-128 chars, `[A-Za-z0-9._:-]`),
+ *   - retries for the same logical operation must reuse the same key, and
+ *   - distinct operations must send distinct keys.
+ * Missing/invalid keys are rejected with 400 before metering/generation.
+ *
  * The document's VISUALS are derived from `contentJson` itself: every embedded
  * visual node carries its own `visual` payload, so {@link collectDocumentBlocks}
  * yields the `{ visualId → Visual }` map with no DB round-trip or document id.

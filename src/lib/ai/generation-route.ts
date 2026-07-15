@@ -58,6 +58,8 @@ import {
 import { readJsonObject } from "@/lib/api/route-adapters";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
 export interface GenerationRouteRequest {
   json(): Promise<unknown>;
@@ -304,12 +306,17 @@ export function createGenerationRouteHandler<TPayload, TResult>(
         return rateLimit;
       }
 
+      const operationKey = readOperationKey(request.headers);
+      if ("response" in operationKey) {
+        return operationKey.response;
+      }
+
       const credit = await checkAndReserveCredits(
         config,
         deps,
         payload,
         user,
-        requestId,
+        operationKey.value,
       );
       if ("response" in credit) {
         return credit.response;
@@ -450,17 +457,47 @@ async function checkUserRateLimit<TPayload, TResult>(
   );
 }
 
+type OperationKeyResolution =
+  | { value: string }
+  | {
+      response: NextResponse;
+    };
+
+function readOperationKey(headers: Headers): OperationKeyResolution {
+  const raw = headers.get(IDEMPOTENCY_KEY_HEADER);
+  if (!raw) {
+    return {
+      response: validationError(
+        "`Idempotency-Key` header is required for authenticated generation requests.",
+        400,
+      ),
+    };
+  }
+
+  const key = raw.trim();
+  if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
+    return {
+      response: validationError(
+        "`Idempotency-Key` must be 8-128 chars and use only letters, numbers, dot (.), underscore (_), colon (:), or hyphen (-).",
+        400,
+      ),
+    };
+  }
+
+  return { value: key };
+}
+
 async function checkAndReserveCredits<TPayload, TResult>(
   config: GenerationRouteConfig<TPayload, TResult>,
   deps: GenerationRouteDeps,
   payload: TPayload,
   user: GenerationRouteUser,
-  requestId: string,
+  operationKey: string,
 ): Promise<
   { reservation: MeteredUsageReservation } | { response: NextResponse }
 > {
   const result = await deps.reserveMeteredUsage({
-    idempotencyKey: requestId,
+    idempotencyKey: operationKey,
     userId: user.id,
     operation: config.operation,
     creditText: config.creditText(payload),

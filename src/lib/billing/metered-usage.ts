@@ -1,6 +1,5 @@
 import {
   computeCreditCost,
-  deductCredits,
   hasSufficientCredits,
   InsufficientCreditsError,
 } from "@/lib/billing/credits";
@@ -46,10 +45,44 @@ export interface ReserveMeteredUsageOptions {
   creditText: string;
 }
 
+function insufficientCreditsResult(args: {
+  idempotencyKey: string;
+  operation: string;
+  userId: string;
+  creditCost: number;
+  balance: number;
+  periodEnd: Date;
+}): ReserveMeteredUsageResult {
+  const { idempotencyKey, operation, userId, creditCost, balance, periodEnd } =
+    args;
+  const message =
+    `Insufficient credits: you need ${creditCost} but have ${balance}. ` +
+    `Your credits reset on ${periodEnd.toLocaleDateString()}. ` +
+    "Upgrade your plan or wait for your credits to reset.";
+
+  logMeteredUsageEvent("reserve", "insufficient credits", {
+    idempotencyKey,
+    operation,
+    creditCost,
+    userId,
+    status: "denied",
+  });
+
+  return {
+    ok: false,
+    reason: "insufficient-credits",
+    creditCost,
+    balance,
+    periodEnd,
+    message,
+  };
+}
+
 export async function reserveMeteredUsage(
   opts: ReserveMeteredUsageOptions,
 ): Promise<ReserveMeteredUsageResult> {
   const { idempotencyKey, userId, operation, creditText } = opts;
+
   if (isUnlimitedCreditsEnabled()) {
     return {
       ok: true,
@@ -65,40 +98,40 @@ export async function reserveMeteredUsage(
 
   const creditCost = computeCreditCost(creditText);
   const billingState = await loadAndSyncBillingState(userId);
+
   if (!hasSufficientCredits(billingState.creditBalance, creditCost)) {
-    const message =
-      `Insufficient credits: you need ${creditCost} but have ${billingState.creditBalance}. ` +
-      `Your credits reset on ${billingState.periodEnd.toLocaleDateString()}. ` +
-      "Upgrade your plan or wait for your credits to reset.";
-    logMeteredUsageEvent("reserve", "insufficient credits", {
+    return insufficientCreditsResult({
       idempotencyKey,
       operation,
-      creditCost,
       userId,
-      status: "denied",
-    });
-    return {
-      ok: false,
-      reason: "insufficient-credits",
       creditCost,
       balance: billingState.creditBalance,
       periodEnd: billingState.periodEnd,
-      message,
-    };
+    });
   }
 
-  let ledgerReserved = false;
   if (creditCost > 0) {
     try {
       await reserveUsage({ idempotencyKey, userId, operation, creditCost });
-      ledgerReserved = true;
     } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        return insufficientCreditsResult({
+          idempotencyKey,
+          operation,
+          userId,
+          creditCost,
+          balance: error.balance,
+          periodEnd: billingState.periodEnd,
+        });
+      }
+
       logMeteredUsageFailure("reserve", error, {
         idempotencyKey,
         operation,
         creditCost,
         userId,
       });
+      throw error;
     }
   }
 
@@ -109,7 +142,7 @@ export async function reserveMeteredUsage(
       userId,
       operation,
       creditCost,
-      ledgerReserved,
+      ledgerReserved: creditCost > 0,
     },
   };
 }
@@ -121,16 +154,30 @@ export async function captureMeteredUsage(
     return { ok: true };
   }
 
+  if (!reservation.ledgerReserved) {
+    const error = new Error(
+      "captureMeteredUsage requires a durable reservation for positive-cost usage.",
+    );
+    logMeteredUsageFailure("capture", error, {
+      idempotencyKey: reservation.idempotencyKey,
+      operation: reservation.operation,
+      creditCost: reservation.creditCost,
+      userId: reservation.userId,
+    });
+    return {
+      ok: false,
+      error,
+      insufficientCredits: false,
+    };
+  }
+
   try {
-    if (reservation.ledgerReserved) {
-      await captureUsage({
-        idempotencyKey: reservation.idempotencyKey,
-        userId: reservation.userId,
-        creditCost: reservation.creditCost,
-      });
-    } else {
-      await deductCredits(reservation.userId, reservation.creditCost);
-    }
+    await captureUsage({
+      idempotencyKey: reservation.idempotencyKey,
+      userId: reservation.userId,
+      creditCost: reservation.creditCost,
+    });
+
     logMeteredUsageEvent("capture", "captured", {
       idempotencyKey: reservation.idempotencyKey,
       operation: reservation.operation,
@@ -160,12 +207,15 @@ export async function refundMeteredUsage(
   if (!reservation.ledgerReserved) {
     return;
   }
-  await refundUsage({ idempotencyKey: reservation.idempotencyKey });
+
+  const refunded = await refundUsage({
+    idempotencyKey: reservation.idempotencyKey,
+  });
   logMeteredUsageEvent("refund", "refunded", {
     idempotencyKey: reservation.idempotencyKey,
     operation: reservation.operation,
     creditCost: reservation.creditCost,
     userId: reservation.userId,
-    status: "refunded",
+    status: refunded?.status ?? "missing",
   });
 }

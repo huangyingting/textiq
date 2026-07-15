@@ -241,9 +241,21 @@ function createDeps(state: FakeState): GenerationRouteDeps {
 
 function createRequest(
   body: unknown,
-  options: { headers?: HeadersInit; cookies?: Record<string, string> } = {},
+  options: {
+    headers?: HeadersInit;
+    cookies?: Record<string, string>;
+    idempotencyKey?: string | null;
+  } = {},
 ): GenerationRouteRequest {
   const cookies = new Map(Object.entries(options.cookies ?? {}));
+  const headers = new Headers(options.headers);
+  if (options.idempotencyKey === null) {
+    headers.delete("Idempotency-Key");
+  } else if (typeof options.idempotencyKey === "string") {
+    headers.set("Idempotency-Key", options.idempotencyKey);
+  } else if (!headers.has("Idempotency-Key")) {
+    headers.set("Idempotency-Key", "request-1");
+  }
   return {
     async json() {
       if (body instanceof Error) {
@@ -257,7 +269,7 @@ function createRequest(
       }
       return JSON.stringify(body) ?? "";
     },
-    headers: new Headers(options.headers),
+    headers,
     cookies: {
       get(name) {
         const value = cookies.get(name);
@@ -318,7 +330,12 @@ test("authenticated success reserves then captures credits without setting anon 
     createDeps(state),
   );
 
-  const response = await handler(createRequest({ text: "hello world" }));
+  const response = await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "auth-op-hello-world-1" },
+    ),
+  );
 
   assert.equal(response.status, 200);
   assert.deepEqual(await responseJson(response), {
@@ -330,6 +347,83 @@ test("authenticated success reserves then captures credits without setting anon 
   assert.equal(state.reserved.length, 1);
   assert.equal(state.captured.length, 1);
   assert.equal(state.refunded.length, 0);
+  assert.equal(
+    (state.reserved[0] as { idempotencyKey: string }).idempotencyKey,
+    "auth-op-hello-world-1",
+  );
+});
+
+test("authenticated requests require Idempotency-Key before reserve/generation", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(
+    createRequest({ text: "hello world" }, { idempotencyKey: null }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "`Idempotency-Key` header is required for authenticated generation requests.",
+    code: "VALIDATION_ERROR",
+  });
+  assert.equal(state.generated, 0);
+  assert.equal(state.reserved.length, 0);
+});
+
+test("authenticated requests reject invalid Idempotency-Key values", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(
+    createRequest({ text: "hello world" }, { idempotencyKey: "bad key" }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "`Idempotency-Key` must be 8-128 chars and use only letters, numbers, dot (.), underscore (_), colon (:), or hyphen (-).",
+    code: "VALIDATION_ERROR",
+  });
+  assert.equal(state.generated, 0);
+  assert.equal(state.reserved.length, 0);
+});
+
+test("authenticated retries reuse the caller-supplied Idempotency-Key", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "retry-op-0000001" },
+    ),
+  );
+  await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "retry-op-0000001" },
+    ),
+  );
+
+  assert.equal(state.reserved.length, 2);
+  assert.equal(
+    (state.reserved[0] as { idempotencyKey: string }).idempotencyKey,
+    "retry-op-0000001",
+  );
+  assert.equal(
+    (state.reserved[1] as { idempotencyKey: string }).idempotencyKey,
+    "retry-op-0000001",
+  );
 });
 
 test("authenticated checks honor deck user namespace from route config", async () => {
