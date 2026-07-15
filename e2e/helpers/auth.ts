@@ -41,8 +41,10 @@ export async function login(
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
-  await page.getByRole("button", { name: /log in/i }).click();
-  await page.waitForURL(/\/app(\/|$|\?)/);
+  await Promise.all([
+    page.waitForURL(/\/app(\/|$|\?)/, { waitUntil: "commit" }),
+    page.getByRole("button", { name: /log in/i }).click(),
+  ]);
   await expect(page).toHaveURL(/\/app/);
   if (afterLoginPath) {
     await page.goto(afterLoginPath);

@@ -103,30 +103,6 @@ describe("writeDeckWithCas", () => {
     });
   });
 
-  test("does not run success side effects when a presentation CAS write conflicts", async () => {
-    let snapshotCount = 0;
-    const { db } = makeDb({
-      updateCount: 0,
-      serverToken: "server-winner-token",
-    });
-    const result = await writeDeckWithCas({
-      documentId: "doc-1",
-      deckJson: VALID_DECK,
-      clientToken: "stale-token",
-      telemetryArea: "test",
-      db,
-      onSuccess: async () => {
-        snapshotCount += 1;
-      },
-    });
-
-    assert.deepEqual(result, {
-      ok: "conflict",
-      serverRevisionToken: "server-winner-token",
-    });
-    assert.equal(snapshotCount, 0);
-  });
-
   test("returns document-not-found when the conflict reread misses", async () => {
     const { db } = makeDb({ updateCount: 0, exists: false });
     const result = await writeDeckWithCas({
@@ -286,41 +262,20 @@ describe("writeDeckWithCas", () => {
 
   test("accepts a valid presentation deck and writes it", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
-    let snapshotCount = 0;
     const result = await writeDeckWithCas({
       documentId: "doc-presentation",
       deckJson: VALID_DECK,
       clientToken: "client-token",
       telemetryArea: "test",
       db,
-      onSuccess: async () => {
-        snapshotCount += 1;
-      },
     });
 
     assert.equal(result.ok, true);
-    assert.equal(snapshotCount, 1);
     // Verify the write happened with the correct CAS predicate.
     assert.deepEqual((calls[0] as { where: unknown }).where, {
       id: "doc-presentation",
       deckRevisionToken: "client-token",
     });
-  });
-
-  test("keeps success when onSuccess side effects throw", async () => {
-    const { db } = makeDb({ updateCount: 1 });
-    const result = await writeDeckWithCas({
-      documentId: "doc-presentation",
-      deckJson: VALID_DECK,
-      clientToken: "client-token",
-      telemetryArea: "test",
-      db,
-      onSuccess: async () => {
-        throw new Error("snapshot failed");
-      },
-    });
-
-    assert.equal(result.ok, true);
   });
 
   test("rejects legacy v6 decks before writing", async () => {

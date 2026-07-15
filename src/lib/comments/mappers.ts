@@ -1,30 +1,8 @@
-import {
-  commentAnchorFromRecord,
-  normalizeAnchorType,
-  type CommentAnchorRecord,
-} from "./anchors";
+import { commentAnchorFromRecord, normalizeAnchorType } from "./anchors";
 import type { CommentNode, CommentThread } from "./types";
+import type { CommentReplyRecord, CommentThreadRecord } from "./records";
 
-type AuthorRecord = { id: string; name: string | null; email: string };
-
-export type CommentReplyRecord = {
-  id: string;
-  body: string;
-  createdAt: Date;
-  author: AuthorRecord;
-};
-
-export type CommentThreadRecord = CommentAnchorRecord & {
-  id: string;
-  body: string;
-  resolved: boolean;
-  createdAt: Date;
-  author: AuthorRecord;
-  /* node:coverage ignore next 2 -- Type-only reply relation shape is erased by TypeScript. */
-  replies: CommentReplyRecord[];
-};
-
-function displayName(author: AuthorRecord): string {
+function displayName(author: CommentThreadRecord["author"]): string {
   return author.name ?? author.email ?? "Unknown";
 }
 

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  distDir: process.env.E2E_PROFILE_DIST_DIR || ".next",
   // Playwright probes use 127.0.0.1; allow dev client resources so public
   // presentation hydration and App Router not-found boundaries are visible.
   allowedDevOrigins: ["127.0.0.1"],
