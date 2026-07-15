@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_KEY_PATTERN,
+} from "@/lib/ai/idempotency-key";
+import {
   buildDeckGenerationBody,
   EMPTY_CONTENT_ERROR,
   parseDeckResponse,
@@ -211,9 +215,11 @@ test("requestDeckGeneration returns the parsed Deck on success", async () => {
 test("requestDeckGeneration POSTs to /api/generate-deck with the built body", async () => {
   let seenUrl = "";
   let seenBody: unknown = null;
+  let seenIdempotencyKey: string | null = null;
   const fetchImpl: typeof fetch = async (url, init) => {
     seenUrl = String(url);
     seenBody = JSON.parse(String(init?.body));
+    seenIdempotencyKey = new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER);
     return jsonResponse({ deck: VALID_DECK, truncated: false });
   };
   await requestDeckGeneration(
@@ -226,6 +232,49 @@ test("requestDeckGeneration POSTs to /api/generate-deck with the built body", as
     contentJson: CONTENT_JSON,
     options: { length: "medium", audience: "students" },
   });
+  assert.ok(seenIdempotencyKey);
+  assert.match(seenIdempotencyKey, IDEMPOTENCY_KEY_PATTERN);
+});
+
+test("requestDeckGeneration reuses caller-provided idempotency key", async () => {
+  let seenIdempotencyKey: string | null = null;
+  const fetchImpl: typeof fetch = async (_url, init) => {
+    seenIdempotencyKey = new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER);
+    return jsonResponse({ deck: VALID_DECK, truncated: false });
+  };
+
+  const result = await requestDeckGeneration(
+    CONTENT_JSON,
+    {},
+    fetchImpl,
+    undefined,
+    { idempotencyKey: "deck-op-00000001" },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(seenIdempotencyKey, "deck-op-00000001");
+});
+
+test("requestDeckGeneration rejects invalid caller-provided idempotency keys", async () => {
+  let called = false;
+  const fetchImpl: typeof fetch = async () => {
+    called = true;
+    return jsonResponse({ deck: VALID_DECK, truncated: false });
+  };
+
+  const result = await requestDeckGeneration(
+    CONTENT_JSON,
+    {},
+    fetchImpl,
+    undefined,
+    { idempotencyKey: "bad key" },
+  );
+
+  assert.equal(called, false);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.error, /idempotency key/i);
+  }
 });
 
 test("requestDeckGeneration classifies a 404 as unavailable", async () => {

@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_KEY_PATTERN,
+} from "@/lib/ai/idempotency-key";
+import {
   buildGenerateBody,
   canGenerateForSelection,
   canGenerateFromText,
@@ -213,15 +217,55 @@ test("requestVisualCandidates returns validated candidates on success", async ()
 test("requestVisualCandidates POSTs to /api/generate with the built body", async () => {
   let capturedUrl: string | undefined;
   let capturedBody: unknown;
+  let capturedIdempotencyKey: string | null = null;
   const fetchImpl = mockFetch(async (url: string, init?: RequestInit) => {
     capturedUrl = url;
     capturedBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+    capturedIdempotencyKey = new Headers(init?.headers).get(
+      IDEMPOTENCY_KEY_HEADER,
+    );
     return jsonResponse({ candidates: [VALID_VISUAL] });
   });
 
   await requestVisualCandidates("hello", { type: "timeline" }, fetchImpl);
   assert.equal(capturedUrl, "/api/generate");
   assert.deepEqual(capturedBody, { text: "hello", type: "timeline" });
+  assert.ok(capturedIdempotencyKey);
+  assert.match(capturedIdempotencyKey, IDEMPOTENCY_KEY_PATTERN);
+});
+
+test("requestVisualCandidates reuses caller-provided idempotency key", async () => {
+  let capturedIdempotencyKey: string | null = null;
+  const fetchImpl = mockFetch(async (_url: string, init?: RequestInit) => {
+    capturedIdempotencyKey = new Headers(init?.headers).get(
+      IDEMPOTENCY_KEY_HEADER,
+    );
+    return jsonResponse({ candidates: [VALID_VISUAL] });
+  });
+
+  await requestVisualCandidates("hello", { type: "timeline" }, fetchImpl, {
+    idempotencyKey: "visual-op-00000001",
+  });
+
+  assert.equal(capturedIdempotencyKey, "visual-op-00000001");
+});
+
+test("requestVisualCandidates rejects invalid caller-provided idempotency keys", async () => {
+  let called = false;
+  const fetchImpl = mockFetch(async () => {
+    called = true;
+    return jsonResponse({ candidates: [VALID_VISUAL] });
+  });
+
+  const result = await requestVisualCandidates("hello", {}, fetchImpl, {
+    idempotencyKey: "bad key",
+  });
+
+  assert.equal(called, false);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.error, /idempotency key/i);
+  }
 });
 
 test("requestVisualCandidates surfaces the server error message", async () => {

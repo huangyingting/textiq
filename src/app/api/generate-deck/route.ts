@@ -5,8 +5,9 @@
  * validate (outline length/shape, before any LLM call) → check Azure config →
  * identify the user → enforce quota (anonymous trial cookie + hashed-IP
  * throttle) or per-user rate limit + credit metering → generate via Azure
- * OpenAI (wrapped in the abort deadline, with an output-token budget) → charge
- * credits on success → return `{ deck, truncated, diagnostics }` (the
+ * OpenAI (wrapped in the abort deadline, with an output-token budget) after a
+ * durable reserve hold → capture/refund to terminal settlement → return
+ * `{ deck, truncated, diagnostics }` (the
  * `truncated` flag tells the UI when the source outline was trimmed to fit the
  * input budget, and `diagnostics` carries AI repair/compile warnings through the
  * preview handoff).

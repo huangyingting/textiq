@@ -501,7 +501,7 @@ export const PERSONAL_DATA_INVENTORY = [
     model: "UsageLedgerEntry",
     fields: {
       id: field("identifier", "delete_non_fk_identifier", "usageLedger"),
-      idempotencyKey: field("identifier", "delete_non_fk_identifier"),
+      keyHash: field("identifier", "delete_non_fk_identifier"),
       userId: field("identifier", "delete_non_fk_identifier", "usageLedger"),
       operation: field(
         "billing_metadata",
@@ -514,6 +514,11 @@ export const PERSONAL_DATA_INVENTORY = [
         "usageLedger",
       ),
       status: field(
+        "billing_metadata",
+        "delete_non_fk_identifier",
+        "usageLedger",
+      ),
+      reservationVersion: field(
         "billing_metadata",
         "delete_non_fk_identifier",
         "usageLedger",

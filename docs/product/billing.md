@@ -1,8 +1,8 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-10"
-description: "This document describes plan entitlements, AI credit metering, usage-ledger idempotency, billing provider selection, and subscription state. Brand Studio design lives in brand-studio.md."
+last_updated: "2026-07-14"
+description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing, reconciliation, billing provider selection, and subscription state."
 ---
 
 # Billing And Entitlements
@@ -41,20 +41,27 @@ decisions.
 
 ## Credit State And Usage Ledger
 
-`getBillingState` reads the user's plan and resets credit balance when the plan
-period has elapsed. Authenticated AI routes reserve a usage-ledger row before
-the model call, capture it on success, and refund it on failure.
+`loadAndSyncBillingState` and ledger writes share `syncBillingPeriodState` so
+credit-period reset uses a guarded compare-and-swap path. Authenticated AI
+routes reserve a durable hold before the model call, capture it on success, and
+refund it on failure/expiry.
 
 The usage ledger lifecycle is:
 
-1. `reserve` records intent with a stable idempotency key. Credits are not
-   deducted yet.
-2. `capture` atomically deducts credits and marks the ledger entry captured.
-3. `refund` tombstones the reserved entry without changing balance.
+1. `reserve` atomically decrements credits and writes `status="reserved"` once.
+2. `capture` compare-and-swaps `reserved -> captured` with no balance mutation.
+3. `refund` compare-and-swaps `reserved -> refunded`; new-format hold rows
+   increment balance exactly once, legacy pre-hold rows do not.
 
-This prevents double charging on retries. Concurrent captures for different
-requests still rely on `deductCredits`, which performs an atomic conditional
-update guarded by available balance.
+Rows are idempotent by scoped hash (`keyHash`) derived from
+`userId + operation + raw Idempotency-Key`; the raw key is never persisted.
+`keyHash` is Prisma-mapped to the historical `idempotencyKey` column to keep
+existing schema/indexes during cutover.
+
+Stale reserved rows are reconciled via
+`reconcileStaleReservedUsage`/`scripts/reconcile-stale-usage-reservations.ts`,
+which processes bounded TTL batches and distinguishes legacy rows so they never
+receive accidental balance increments.
 
 `BILLING_UNLIMITED_CREDITS` skips authenticated credit deduction only when
 explicitly enabled. Anonymous users are governed by the AI route quota layer,
@@ -84,16 +91,22 @@ outlive an individual subscription.
 2. Production billing never silently falls back to the mock provider.
 3. Authenticated AI generation is credit-metered unless unlimited credits are
    explicitly enabled.
-4. Ledger reserve/capture/refund is idempotent by request key.
-5. Capturing usage is the only path that deducts credits for successful AI work.
+4. Ledger reserve/capture/refund is idempotent by scoped `keyHash`.
+5. Reserve is the only path that decrements credits for metered AI usage.
+6. Capture/refund settlement failures fail closed (5xx) until terminal state.
 
 ## Primary Tests
 
 - [`src/lib/billing/entitlements.test.ts`](../../src/lib/billing/entitlements.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)
+- [`src/lib/billing/stale-reservation-reconciliation.ts`](../../src/lib/billing/stale-reservation-reconciliation.ts)
 - [`src/lib/billing/provider.test.ts`](../../src/lib/billing/provider.test.ts)
 - [`src/lib/billing/mock-provider.test.ts`](../../src/lib/billing/mock-provider.test.ts)
 - [`src/lib/billing/stripe-provider.test.ts`](../../src/lib/billing/stripe-provider.test.ts)
 - [`src/lib/billing/service.test.ts`](../../src/lib/billing/service.test.ts)
 - [`src/lib/billing/attribution.test.ts`](../../src/lib/billing/attribution.test.ts)
+
+Opt-in Postgres command:
+
+- `ENABLE_POSTGRES_BILLING_TESTS=1 DATABASE_URL=postgres://... npm run test:billing:postgres`

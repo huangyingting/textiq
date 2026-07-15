@@ -30,6 +30,7 @@
     "test:coverage-breadth": "node scripts/check-coverage-breadth.mjs",
     "test:auth": "npm run test:subsystem -- auth",
     "test:billing": "npm run test:subsystem -- billing",
+    "test:billing:postgres": "node scripts/test-billing-postgres.mjs",
     "test:collab": "npm run test:subsystem -- collaboration",
     "test:documents": "npm run test:subsystem -- documents",
     "test:editor": "npm run test:subsystem -- editor",
@@ -65,6 +66,7 @@
     "db:seed": "prisma db seed",
     "db:seed:e2e": "node --import tsx prisma/seed-e2e.ts",
     "db:reset": "node scripts/gen-sqlite-schema.mjs --if-sqlite && prisma generate && prisma db push --force-reset && prisma db seed",
+    "billing:reconcile-stale-reservations": "node --import tsx scripts/reconcile-stale-usage-reservations.ts",
     "audit:schema": "node --import tsx src/scripts/audit-persisted-schema.ts",
     "ui-matrix:check": "node --import tsx scripts/check-ui-matrix-inventory.mjs",
     "ui-matrix:write": "node --import tsx scripts/check-ui-matrix-inventory.mjs --write"

@@ -22,6 +22,10 @@ import {
   signAnonState,
   type AnonState,
 } from "@/lib/ai/quota";
+import {
+  IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_KEY_PATTERN,
+} from "@/lib/ai/idempotency-key";
 import type { ChatMessage } from "@/lib/ai/prompt";
 import { type CompleteFn } from "@/lib/ai/generation-runner";
 import { InsufficientCreditsError } from "@/lib/billing/credits";
@@ -58,8 +62,6 @@ import {
 import { readJsonObject } from "@/lib/api/route-adapters";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
-const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
-const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
 export interface GenerationRouteRequest {
   json(): Promise<unknown>;
@@ -180,7 +182,9 @@ export interface GenerationRouteDeps {
   captureMeteredUsage(
     reservation: MeteredUsageReservation,
   ): Promise<CaptureMeteredUsageResult>;
-  refundMeteredUsage(reservation: MeteredUsageReservation): Promise<void>;
+  refundMeteredUsage(
+    reservation: MeteredUsageReservation,
+  ): Promise<{ status: string } | null>;
   isAzureConfigError(error: unknown): boolean;
   isTimeoutError(error: unknown): boolean;
   isInsufficientCreditsError(error: unknown): boolean;
@@ -350,11 +354,27 @@ export function createGenerationRouteHandler<TPayload, TResult>(
       commitAnonUsage?.commit();
 
       const capture = await captureCredits(config, deps, meteredUsage);
-      if (capture.failed) {
+      if (!capture.ok) {
+        const settlement = await settleCaptureRefund(
+          config,
+          deps,
+          meteredUsage,
+        );
         captureSettled = true;
-        await settleCaptureRefund(config, deps, meteredUsage);
-        if (capture.response) {
-          return capture.response;
+        if (!settlement.terminal) {
+          return serverError(
+            "Generation completed, but billing settlement is still pending. Please retry later.",
+          );
+        }
+
+        if (capture.insufficientCredits) {
+          deps.logError(config.logScope, capture.error, {
+            requestId: meteredUsage?.keyHash,
+            reason: "credit-capture-invariant",
+          });
+          return serverError(
+            "Generation could not be settled due to a billing invariant. Please retry.",
+          );
         }
       }
 
@@ -503,6 +523,12 @@ async function checkAndReserveCredits<TPayload, TResult>(
     creditText: config.creditText(payload),
   });
   if (!result.ok) {
+    if (result.reason === "idempotency-conflict") {
+      return {
+        response: validationError(result.message, 409),
+      };
+    }
+
     deps.logRouteDenial({
       route: config.logScope,
       reason: ABUSE_CATEGORIES.CREDIT_DENIED,
@@ -582,49 +608,47 @@ async function checkAnonymousAccess<TPayload, TResult>(
 }
 
 interface CaptureResult {
-  /** HTTP response to return if the capture failed and the generation result should be withheld. */
-  response: NextResponse | null;
-  /** Whether capture failed (insufficient or generic) — the reservation needs settlement. */
-  failed: boolean;
+  ok: true;
+}
+
+interface CaptureFailureResult {
+  ok: false;
+  error: unknown;
+  insufficientCredits: boolean;
+}
+
+type CaptureOutcome = CaptureResult | CaptureFailureResult;
+
+interface CaptureSettlementResult {
+  terminal: boolean;
+  status: "captured" | "refunded" | null;
 }
 
 async function captureCredits<TPayload, TResult>(
   config: GenerationRouteConfig<TPayload, TResult>,
   deps: GenerationRouteDeps,
   meteredUsage: MeteredUsageReservation | null,
-): Promise<CaptureResult> {
+): Promise<CaptureOutcome> {
   if (!meteredUsage || meteredUsage.creditCost <= 0) {
-    return { response: null, failed: false };
+    return { ok: true };
   }
 
   const result = await deps.captureMeteredUsage(meteredUsage);
   if (result.ok) {
-    return { response: null, failed: false };
+    return { ok: true };
   }
-  if (
-    result.insufficientCredits ||
-    deps.isInsufficientCreditsError(result.error)
-  ) {
-    deps.logRouteDenial({
-      route: config.logScope,
-      reason: ABUSE_CATEGORIES.CREDIT_DENIED,
-      status: 402,
-      userId: meteredUsage.userId,
-    });
-    return {
-      response: paymentRequired(
-        result.error instanceof Error
-          ? result.error.message
-          : "Insufficient credits.",
-      ),
-      failed: true,
-    };
-  }
+
   deps.logError(config.logScope, result.error, {
-    requestId: meteredUsage.idempotencyKey,
+    requestId: meteredUsage.keyHash,
     reason: "credit-capture-failed",
   });
-  return { response: null, failed: true };
+  return {
+    ok: false,
+    error: result.error,
+    insufficientCredits:
+      result.insufficientCredits ||
+      deps.isInsufficientCreditsError(result.error),
+  };
 }
 
 /**
@@ -635,16 +659,35 @@ async function settleCaptureRefund<TPayload, TResult>(
   config: GenerationRouteConfig<TPayload, TResult>,
   deps: GenerationRouteDeps,
   meteredUsage: MeteredUsageReservation | null,
-): Promise<void> {
+): Promise<CaptureSettlementResult> {
   if (!meteredUsage?.ledgerReserved) {
-    return;
+    return { terminal: true, status: null };
   }
   try {
-    await deps.refundMeteredUsage(meteredUsage);
+    const settled = await deps.refundMeteredUsage(meteredUsage);
+    const status =
+      settled?.status === "captured" || settled?.status === "refunded"
+        ? settled.status
+        : null;
+    if (status) {
+      return { terminal: true, status };
+    }
+
+    deps.logError(
+      config.logScope,
+      new Error("Capture settlement did not reach a terminal state."),
+      {
+        requestId: meteredUsage.keyHash,
+        reason: "capture-refund-unresolved",
+        settlementStatus: settled?.status ?? "missing",
+      },
+    );
+    return { terminal: false, status: null };
   } catch (refundErr) {
     deps.logError(config.logScope, refundErr, {
-      requestId: meteredUsage.idempotencyKey,
+      requestId: meteredUsage.keyHash,
       reason: "capture-refund-failed",
     });
+    return { terminal: false, status: null };
   }
 }

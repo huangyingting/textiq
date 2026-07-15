@@ -8,6 +8,7 @@ import {
   reserveMeteredUsage,
   type MeteredUsageReservation,
 } from "@/lib/billing/metered-usage";
+import { deriveUsageLedgerKeyHash } from "@/lib/billing/usage-ledger-key";
 import { prisma } from "@/lib/prisma";
 
 function stubObjectMethod<T extends object, K extends keyof T>(
@@ -72,6 +73,14 @@ describe("metered usage unlimited-credit shortcuts", () => {
       assert.equal(result.ok, true);
       assert.equal(result.reservation.creditCost, 0);
       assert.equal(result.reservation.ledgerReserved, false);
+      assert.equal(
+        result.reservation.keyHash,
+        deriveUsageLedgerKeyHash({
+          idempotencyKey: "usage-unlimited",
+          userId: "user-metered",
+          operation: "deck-generation",
+        }),
+      );
     } finally {
       if (previous === undefined) {
         delete process.env.BILLING_UNLIMITED_CREDITS;
@@ -84,6 +93,7 @@ describe("metered usage unlimited-credit shortcuts", () => {
   it("captureMeteredUsage succeeds without writes for zero-cost reservations", async () => {
     const reservation: MeteredUsageReservation = {
       idempotencyKey: "usage-zero",
+      keyHash: "hash-zero",
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 0,
@@ -96,6 +106,7 @@ describe("metered usage unlimited-credit shortcuts", () => {
   it("refundMeteredUsage skips reservations that were not ledger-reserved", async () => {
     const reservation: MeteredUsageReservation = {
       idempotencyKey: "usage-not-reserved",
+      keyHash: "hash-not-reserved",
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 3,
@@ -139,6 +150,9 @@ describe("metered usage durable ledger behavior", () => {
         creditBalance: 10,
         creditPeriodStart: periodStart,
         subscription: null,
+      }));
+      stubObjectMethod(t, prisma.user, "updateMany", async () => ({
+        count: 1,
       }));
       stubObjectMethod(
         t,
@@ -184,6 +198,9 @@ describe("metered usage durable ledger behavior", () => {
         creditBalance: 10,
         creditPeriodStart: periodStart,
         subscription: null,
+      }));
+      stubObjectMethod(t, prisma.user, "updateMany", async () => ({
+        count: 1,
       }));
       stubObjectMethod(
         t,
@@ -234,13 +251,19 @@ describe("metered usage durable ledger behavior", () => {
     }));
 
   it("captureMeteredUsage captures a durable reservation", async (t) => {
-    stubTransactionPassthrough(t);
-    stubObjectMethod(t, prisma.usageLedgerEntry, "findUnique", async () => ({
-      id: "ledger-entry",
+    const keyHash = deriveUsageLedgerKeyHash({
       idempotencyKey: "usage-capture",
       userId: "user-metered",
       operation: "deck-generation",
+    });
+    stubTransactionPassthrough(t);
+    stubObjectMethod(t, prisma.usageLedgerEntry, "findUnique", async () => ({
+      id: "ledger-entry",
+      keyHash,
+      userId: "user-metered",
+      operation: "deck-generation",
       creditCost: 2,
+      reservationVersion: 2,
       status: "reserved",
       reservedAt: new Date("2026-01-01T00:00:00.000Z"),
       capturedAt: null,
@@ -249,20 +272,17 @@ describe("metered usage durable ledger behavior", () => {
     stubObjectMethod(t, prisma.usageLedgerEntry, "updateMany", async () => ({
       count: 1,
     }));
-    stubObjectMethod(t, prisma.user, "updateMany", async () => ({ count: 1 }));
-    stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-      creditBalance: 8,
-    }));
     const findUniqueOrThrow = stubObjectMethod(
       t,
       prisma.usageLedgerEntry,
       "findUniqueOrThrow",
       async () => ({
         id: "ledger-entry",
-        idempotencyKey: "usage-capture",
+        keyHash,
         userId: "user-metered",
         operation: "deck-generation",
         creditCost: 2,
+        reservationVersion: 2,
         status: "captured",
         reservedAt: new Date("2026-01-01T00:00:00.000Z"),
         capturedAt: new Date("2026-01-01T00:00:01.000Z"),
@@ -272,6 +292,7 @@ describe("metered usage durable ledger behavior", () => {
 
     const result = await captureMeteredUsage({
       idempotencyKey: "usage-capture",
+      keyHash,
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 2,
@@ -283,8 +304,14 @@ describe("metered usage durable ledger behavior", () => {
   });
 
   it("captureMeteredUsage fails when no durable reservation exists", async () => {
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey: "usage-direct-capture",
+      userId: "user-metered",
+      operation: "deck-generation",
+    });
     const result = await captureMeteredUsage({
       idempotencyKey: "usage-direct-capture",
+      keyHash,
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 4,
@@ -296,12 +323,18 @@ describe("metered usage durable ledger behavior", () => {
   });
 
   it("captureMeteredUsage surfaces insufficient-credit capture failures", async (t) => {
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey: "usage-insufficient",
+      userId: "user-metered",
+      operation: "deck-generation",
+    });
     stubObjectMethod(t, prisma, "$transaction", async () => {
       throw new InsufficientCreditsError(1, 4);
     });
 
     const result = await captureMeteredUsage({
       idempotencyKey: "usage-insufficient",
+      keyHash,
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 4,
@@ -313,18 +346,31 @@ describe("metered usage durable ledger behavior", () => {
   });
 
   it("refundMeteredUsage marks durable reservations as refunded", async (t) => {
-    stubTransactionPassthrough(t);
-    stubObjectMethod(t, prisma.usageLedgerEntry, "findUnique", async () => ({
-      id: "ledger-entry",
+    const keyHash = deriveUsageLedgerKeyHash({
       idempotencyKey: "usage-refund",
       userId: "user-metered",
       operation: "deck-generation",
+    });
+    stubTransactionPassthrough(t);
+    stubObjectMethod(t, prisma.usageLedgerEntry, "findUnique", async () => ({
+      id: "ledger-entry",
+      keyHash,
+      userId: "user-metered",
+      operation: "deck-generation",
       creditCost: 2,
+      reservationVersion: 2,
       status: "reserved",
       reservedAt: new Date("2026-01-01T00:00:00.000Z"),
       capturedAt: null,
       refundedAt: null,
     }));
+    stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
+      plan: "free",
+      creditBalance: 10,
+      creditPeriodStart: new Date(),
+      subscription: null,
+    }));
+    stubObjectMethod(t, prisma.user, "updateMany", async () => ({ count: 1 }));
     const updateMany = stubObjectMethod(
       t,
       prisma.usageLedgerEntry,
@@ -337,10 +383,11 @@ describe("metered usage durable ledger behavior", () => {
       "findUniqueOrThrow",
       async () => ({
         id: "ledger-entry",
-        idempotencyKey: "usage-refund",
+        keyHash,
         userId: "user-metered",
         operation: "deck-generation",
         creditCost: 2,
+        reservationVersion: 2,
         status: "refunded",
         reservedAt: new Date("2026-01-01T00:00:00.000Z"),
         capturedAt: null,
@@ -350,6 +397,7 @@ describe("metered usage durable ledger behavior", () => {
 
     await refundMeteredUsage({
       idempotencyKey: "usage-refund",
+      keyHash,
       userId: "user-metered",
       operation: "deck-generation",
       creditCost: 2,

@@ -11,6 +11,10 @@
  */
 
 import type { DetailLevel, Orientation } from "@/lib/ai/prompt";
+import {
+  IDEMPOTENCY_KEY_HEADER,
+  resolveOperationIdempotencyKey,
+} from "@/lib/ai/idempotency-key";
 import { apiErrorMessageFromPayload } from "@/lib/api/error-message";
 import {
   hashSourceText,
@@ -60,6 +64,8 @@ const FALLBACK_REQUEST_ERROR =
 const EMPTY_CANDIDATES_ERROR = "No usable visuals came back. Please try again.";
 const NETWORK_ERROR =
   "Couldn't reach the generator. Check your connection and try again.";
+const INVALID_IDEMPOTENCY_KEY_ERROR =
+  "Couldn't create a valid generation idempotency key. Please retry.";
 
 /** Pull the raw `candidates` array off a JSON payload (un-validated). */
 export function candidatesFrom(payload: unknown): unknown[] {
@@ -168,11 +174,31 @@ export async function requestVisualCandidates(
   text: string,
   opts: GenerateOptions = {},
   fetchImpl: typeof fetch = fetch,
+  request: {
+    idempotencyKey?: string;
+  } = {},
 ): Promise<GenerateResult> {
+  let operationKey: string;
   try {
+    operationKey = resolveOperationIdempotencyKey(
+      "visual-generate",
+      request.idempotencyKey,
+    );
+  } catch {
+    return {
+      ok: false,
+      error: INVALID_IDEMPOTENCY_KEY_ERROR,
+      errorKind: "other",
+    };
+  }
+
+  try {
+    const headers = new Headers({ "content-type": "application/json" });
+    headers.set(IDEMPOTENCY_KEY_HEADER, operationKey);
+
     const response = await fetchImpl("/api/generate", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(buildGenerateBody(text, opts)),
     });
     const payload: unknown = await response.json().catch(() => null);

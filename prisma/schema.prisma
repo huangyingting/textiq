@@ -503,27 +503,31 @@ model Asset {
 /**
  * Durable ledger entry for AI generation credit usage.
  * Lifecycle: reserved → captured (on success) or refunded (on failure).
- * Idempotent by `idempotencyKey`: callers must supply a stable per-request
- * key (e.g. a request UUID) so retries never double-charge.
+ * Idempotent by a versioned scoped hash (`keyHash`) derived from
+ * userId + operation + raw `Idempotency-Key`.
  * Status values:
- * "reserved"  — intent recorded; credits NOT yet deducted.
- * "captured"  — generation succeeded; credits atomically deducted.
- * "refunded"  — generation failed; entry tombstoned; credits unchanged.
+ * "reserved"  — hold recorded and credits reserved.
+ * "captured"  — generation succeeded; hold settled.
+ * "refunded"  — generation failed/expired; hold released.
  */
 model UsageLedgerEntry {
-  id             String    @id @default(cuid())
-  /// Stable per-request key — prevents double-charge on retry.
-  idempotencyKey String    @unique
-  userId         String
+  id                 String    @id @default(cuid())
+  /// Versioned scoped hash from userId + operation + raw Idempotency-Key.
+  /// Mapped to the historical `idempotencyKey` column to preserve schema/index.
+  keyHash            String    @unique @map("idempotencyKey")
+  userId             String
   /// Logical operation name, e.g. "generate" or "generate-deck".
-  operation      String
-  creditCost     Int
+  operation          String
+  creditCost         Int
   /// One of: "reserved" | "captured" | "refunded"
-  status         String    @default("reserved")
-  reservedAt     DateTime  @default(now())
-  capturedAt     DateTime?
-  refundedAt     DateTime?
+  status             String    @default("reserved")
+  /// 0 = legacy pre-hold row, 1 = hold-on-reserve row.
+  reservationVersion Int       @default(0)
+  reservedAt         DateTime  @default(now())
+  capturedAt         DateTime?
+  refundedAt         DateTime?
 
   @@index([userId])
   @@index([status])
+  @@index([status, reservedAt])
 }

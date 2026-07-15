@@ -3,8 +3,9 @@
  *
  * Flow: parse → validate (length/type, before any LLM call) → check Azure config
  * → identify the user → enforce quota (anonymous trial cookie) or rate limit
- * (authenticated, per user) + credit metering → generate via Azure OpenAI →
- * charge credits on success → return `{ candidates }`.
+ * (authenticated, per user) + credit metering → reserve durable hold via usage
+ * ledger → generate via Azure OpenAI → capture hold on success (or refund on
+ * failure) → return `{ candidates }` only after terminal billing settlement.
  *
  * Authenticated idempotency contract:
  *   - callers MUST send `Idempotency-Key` (8-128 chars, `[A-Za-z0-9._:-]`),

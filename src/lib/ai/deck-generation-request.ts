@@ -10,6 +10,10 @@
  */
 
 import type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
+import {
+  IDEMPOTENCY_KEY_HEADER,
+  resolveOperationIdempotencyKey,
+} from "@/lib/ai/idempotency-key";
 import { apiErrorMessageFromPayload } from "@/lib/api/error-message";
 import {
   isThemePackageId,
@@ -83,6 +87,8 @@ const NETWORK_ERROR =
   "Couldn't reach the generator. Check your connection and try again.";
 const BAD_PAYLOAD_ERROR =
   "The generator returned an unexpected response. Please try again.";
+const INVALID_IDEMPOTENCY_KEY_ERROR =
+  "Couldn't create a valid deck-generation idempotency key. Please retry.";
 /** Shown when the document has no usable outline content yet (issue #280). */
 export const EMPTY_CONTENT_ERROR =
   "Add some content to your document first, then generate slides.";
@@ -454,13 +460,31 @@ export async function requestDeckGeneration(
   signal?: AbortSignal,
   request?: {
     themePackageId?: ThemePackageId;
+    idempotencyKey?: string;
   },
 ): Promise<DeckGenerateResult> {
+  let operationKey: string;
+  try {
+    operationKey = resolveOperationIdempotencyKey(
+      "deck-generate",
+      request?.idempotencyKey,
+    );
+  } catch {
+    return {
+      ok: false,
+      error: INVALID_IDEMPOTENCY_KEY_ERROR,
+      errorKind: "other",
+    };
+  }
+
   let response: Response;
   try {
+    const headers = new Headers({ "content-type": "application/json" });
+    headers.set(IDEMPOTENCY_KEY_HEADER, operationKey);
+
     response = await fetchImpl("/api/generate-deck", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(
         buildDeckGenerationBody(contentJson, options, request),
       ),

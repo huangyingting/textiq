@@ -9,7 +9,10 @@ import {
   captureUsage,
   refundUsage,
   reserveUsage,
+  type UsageLedgerEntry,
+  UsageLedgerConflictError,
 } from "@/lib/billing/usage-ledger";
+import { deriveUsageLedgerKeyHash } from "@/lib/billing/usage-ledger-key";
 import {
   logMeteredUsageEvent,
   logMeteredUsageFailure,
@@ -17,6 +20,7 @@ import {
 
 export interface MeteredUsageReservation {
   idempotencyKey: string;
+  keyHash: string;
   userId: string;
   operation: string;
   creditCost: number;
@@ -32,6 +36,11 @@ export type ReserveMeteredUsageResult =
       balance: number;
       periodEnd: Date;
       message: string;
+    }
+  | {
+      ok: false;
+      reason: "idempotency-conflict";
+      message: string;
     };
 
 export type CaptureMeteredUsageResult =
@@ -46,22 +55,21 @@ export interface ReserveMeteredUsageOptions {
 }
 
 function insufficientCreditsResult(args: {
-  idempotencyKey: string;
+  keyHash: string;
   operation: string;
   userId: string;
   creditCost: number;
   balance: number;
   periodEnd: Date;
 }): ReserveMeteredUsageResult {
-  const { idempotencyKey, operation, userId, creditCost, balance, periodEnd } =
-    args;
+  const { keyHash, operation, userId, creditCost, balance, periodEnd } = args;
   const message =
     `Insufficient credits: you need ${creditCost} but have ${balance}. ` +
     `Your credits reset on ${periodEnd.toLocaleDateString()}. ` +
     "Upgrade your plan or wait for your credits to reset.";
 
   logMeteredUsageEvent("reserve", "insufficient credits", {
-    idempotencyKey,
+    keyHash,
     operation,
     creditCost,
     userId,
@@ -82,12 +90,18 @@ export async function reserveMeteredUsage(
   opts: ReserveMeteredUsageOptions,
 ): Promise<ReserveMeteredUsageResult> {
   const { idempotencyKey, userId, operation, creditText } = opts;
+  const keyHash = deriveUsageLedgerKeyHash({
+    idempotencyKey,
+    userId,
+    operation,
+  });
 
   if (isUnlimitedCreditsEnabled()) {
     return {
       ok: true,
       reservation: {
         idempotencyKey,
+        keyHash,
         userId,
         operation,
         creditCost: 0,
@@ -101,7 +115,7 @@ export async function reserveMeteredUsage(
 
   if (!hasSufficientCredits(billingState.creditBalance, creditCost)) {
     return insufficientCreditsResult({
-      idempotencyKey,
+      keyHash,
       operation,
       userId,
       creditCost,
@@ -116,7 +130,7 @@ export async function reserveMeteredUsage(
     } catch (error) {
       if (error instanceof InsufficientCreditsError) {
         return insufficientCreditsResult({
-          idempotencyKey,
+          keyHash,
           operation,
           userId,
           creditCost,
@@ -125,8 +139,17 @@ export async function reserveMeteredUsage(
         });
       }
 
+      if (error instanceof UsageLedgerConflictError) {
+        return {
+          ok: false,
+          reason: "idempotency-conflict",
+          message:
+            "The provided Idempotency-Key was already used for a different operation fingerprint.",
+        };
+      }
+
       logMeteredUsageFailure("reserve", error, {
-        idempotencyKey,
+        keyHash,
         operation,
         creditCost,
         userId,
@@ -139,6 +162,7 @@ export async function reserveMeteredUsage(
     ok: true,
     reservation: {
       idempotencyKey,
+      keyHash,
       userId,
       operation,
       creditCost,
@@ -159,7 +183,7 @@ export async function captureMeteredUsage(
       "captureMeteredUsage requires a durable reservation for positive-cost usage.",
     );
     logMeteredUsageFailure("capture", error, {
-      idempotencyKey: reservation.idempotencyKey,
+      keyHash: reservation.keyHash,
       operation: reservation.operation,
       creditCost: reservation.creditCost,
       userId: reservation.userId,
@@ -175,11 +199,12 @@ export async function captureMeteredUsage(
     await captureUsage({
       idempotencyKey: reservation.idempotencyKey,
       userId: reservation.userId,
+      operation: reservation.operation,
       creditCost: reservation.creditCost,
     });
 
     logMeteredUsageEvent("capture", "captured", {
-      idempotencyKey: reservation.idempotencyKey,
+      keyHash: reservation.keyHash,
       operation: reservation.operation,
       creditCost: reservation.creditCost,
       userId: reservation.userId,
@@ -188,7 +213,7 @@ export async function captureMeteredUsage(
     return { ok: true };
   } catch (error) {
     logMeteredUsageFailure("capture", error, {
-      idempotencyKey: reservation.idempotencyKey,
+      keyHash: reservation.keyHash,
       operation: reservation.operation,
       creditCost: reservation.creditCost,
       userId: reservation.userId,
@@ -203,19 +228,24 @@ export async function captureMeteredUsage(
 
 export async function refundMeteredUsage(
   reservation: MeteredUsageReservation,
-): Promise<void> {
+): Promise<UsageLedgerEntry | null> {
   if (!reservation.ledgerReserved) {
-    return;
+    return null;
   }
 
   const refunded = await refundUsage({
     idempotencyKey: reservation.idempotencyKey,
+    userId: reservation.userId,
+    operation: reservation.operation,
+    creditCost: reservation.creditCost,
   });
   logMeteredUsageEvent("refund", "refunded", {
-    idempotencyKey: reservation.idempotencyKey,
+    keyHash: reservation.keyHash,
     operation: reservation.operation,
     creditCost: reservation.creditCost,
     userId: reservation.userId,
     status: refunded?.status ?? "missing",
+    reservationVersion: refunded?.reservationVersion,
   });
+  return refunded;
 }

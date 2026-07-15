@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
-import { getEntitlements, resolvePlan, type Plan } from "./catalog";
+import { getEntitlements, type Plan } from "./catalog";
+import { syncBillingPeriodState } from "./period-reset";
 
 type PrismaClientLike = typeof prisma;
+type BillingStateReadClient = Pick<PrismaClientLike, "user"> & {
+  subscription?: Pick<PrismaClientLike["subscription"], "findUnique">;
+};
 type BillingWriteClient = Pick<PrismaClientLike, "subscription" | "user">;
 
 export interface BillingSubscriptionState {
@@ -47,15 +51,15 @@ export interface LocalPlanChangeOptions {
 
 export async function loadAndSyncBillingState(
   userId: string,
-  client: PrismaClientLike = prisma,
+  client: BillingStateReadClient = prisma,
 ): Promise<BillingState> {
-  const user = await client.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: {
-      plan: true,
-      creditBalance: true,
-      creditPeriodStart: true,
-      subscription: {
+  const billingPeriod = await syncBillingPeriodState({
+    userId,
+    userClient: client.user,
+  });
+  const subscription = client.subscription
+    ? await client.subscription.findUnique({
+        where: { userId },
         select: {
           plan: true,
           status: true,
@@ -65,40 +69,19 @@ export async function loadAndSyncBillingState(
           currentPeriodEnd: true,
           cancelAtPeriodEnd: true,
         },
-      },
-    },
-  });
-
-  const plan = resolvePlan(user.plan);
-  const entitlements = getEntitlements(plan);
-  const now = new Date();
-  const periodMs = entitlements.periodDays * 24 * 60 * 60 * 1000;
-
-  let periodStart = user.creditPeriodStart;
-  let creditBalance = user.creditBalance;
-
-  if (!periodStart || now.getTime() - periodStart.getTime() >= periodMs) {
-    periodStart = now;
-    creditBalance = entitlements.creditsPerPeriod;
-    await client.user.update({
-      where: { id: userId },
-      data: {
-        creditBalance,
-        creditPeriodStart: periodStart,
-      },
-    });
-  }
+      })
+    : null;
 
   return {
     userId,
-    plan,
-    rawPlan: user.plan,
-    creditBalance,
-    creditPeriodStart: periodStart,
-    periodStart,
-    periodEnd: new Date(periodStart.getTime() + periodMs),
-    creditsPerPeriod: entitlements.creditsPerPeriod,
-    subscription: user.subscription ?? null,
+    plan: billingPeriod.plan,
+    rawPlan: billingPeriod.rawPlan,
+    creditBalance: billingPeriod.creditBalance,
+    creditPeriodStart: billingPeriod.creditPeriodStart,
+    periodStart: billingPeriod.periodStart,
+    periodEnd: billingPeriod.periodEnd,
+    creditsPerPeriod: billingPeriod.creditsPerPeriod,
+    subscription: subscription ?? null,
   };
 }
 

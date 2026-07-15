@@ -62,17 +62,55 @@ function makeFakeClient(initial: Partial<FakeRow> & { creditBalance: number }) {
         where,
         data,
       }: {
-        where: { creditBalance?: { gte: number } };
-        data: { creditBalance?: { decrement: number } };
+        where: {
+          id?: string;
+          plan?: string;
+          creditBalance?: { gte: number } | number;
+          creditPeriodStart?: Date | null;
+        };
+        data: {
+          creditBalance?: number | { decrement?: number; increment?: number };
+          creditPeriodStart?: Date;
+        };
       }) {
         calls.updateMany++;
-        const gte = where.creditBalance?.gte ?? 0;
-        if (row.creditBalance >= gte) {
-          const decrement = data.creditBalance?.decrement ?? 0;
-          row.creditBalance -= decrement;
-          return { count: 1 };
+        if (where.plan !== undefined && row.plan !== where.plan) {
+          return { count: 0 };
         }
-        return { count: 0 };
+        if (where.creditPeriodStart !== undefined) {
+          const expected = where.creditPeriodStart?.getTime() ?? null;
+          const current = row.creditPeriodStart?.getTime() ?? null;
+          if (expected !== current) {
+            return { count: 0 };
+          }
+        }
+        if (
+          typeof where.creditBalance === "number" &&
+          row.creditBalance !== where.creditBalance
+        ) {
+          return { count: 0 };
+        }
+        if (
+          typeof where.creditBalance === "object" &&
+          where.creditBalance !== null &&
+          "gte" in where.creditBalance &&
+          row.creditBalance < where.creditBalance.gte
+        ) {
+          return { count: 0 };
+        }
+
+        if (typeof data.creditBalance === "number") {
+          row.creditBalance = data.creditBalance;
+        } else if (data.creditBalance?.decrement !== undefined) {
+          row.creditBalance -= data.creditBalance.decrement;
+        } else if (data.creditBalance?.increment !== undefined) {
+          row.creditBalance += data.creditBalance.increment;
+        }
+        if (data.creditPeriodStart !== undefined) {
+          row.creditPeriodStart = data.creditPeriodStart;
+        }
+
+        return { count: 1 };
       },
     },
   };
