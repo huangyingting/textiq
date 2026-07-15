@@ -12,8 +12,8 @@ import type {
 
 // This suite exercises the comments-actions.ts action boundary only: DI
 // wiring into `@/lib/comments`, revalidation-path derivation from the
-// service's *returned* documentId (not any caller-supplied id), and error
-// propagation. Ownership/validation rules (own-comment edit/delete, empty
+// service's *returned* documentId (not any caller-supplied id), and safe error
+// adaptation. Ownership/validation rules (own-comment edit/delete, empty
 // body, orphaned anchors, etc.) are the comment service's responsibility and
 // are already covered by src/lib/comments/service.test.ts; they are not
 // re-asserted here.
@@ -58,6 +58,7 @@ type CommentsActionsState = {
   requireDocumentActionContext: RequireCommentDocumentContext;
   service: FakeCommentService;
   revalidatePath: (path: string) => void;
+  logError: (scope: string, error: unknown) => void;
 };
 
 function thread(id: string): CommentThread {
@@ -143,6 +144,9 @@ function createDefaultState(): CommentsActionsState {
     revalidatePath(path) {
       calls.push(["revalidatePath", path]);
     },
+    logError(scope, error) {
+      calls.push(["logError", scope, error]);
+    },
   };
 }
 
@@ -160,6 +164,27 @@ const stubbedModules = new Map<string, string>([
     `
       export function revalidatePath(path) {
         globalThis.__commentsActionsState.revalidatePath(path);
+      }
+    `,
+  ],
+  [
+    "next/navigation",
+    `
+      export function unstable_rethrow(error) {
+        if (
+          error?.message === "NEXT_REDIRECT" ||
+          String(error?.digest ?? "").startsWith("NEXT_REDIRECT")
+        ) {
+          throw error;
+        }
+      }
+    `,
+  ],
+  [
+    "@/lib/log",
+    `
+      export function logError(scope, error) {
+        globalThis.__commentsActionsState.logError(scope, error);
       }
     `,
   ],
@@ -215,8 +240,13 @@ registerHooks({
 });
 
 let commentsActions: typeof import("./comments-actions");
+let CommentErrorCtor: typeof import("@/lib/comments/errors").CommentError;
+let DocumentPermissionErrorCtor: typeof import("@/lib/auth/document-permissions").DocumentPermissionError;
 
 before(async () => {
+  ({ CommentError: CommentErrorCtor } = await import("@/lib/comments/errors"));
+  ({ DocumentPermissionError: DocumentPermissionErrorCtor } =
+    await import("@/lib/auth/document-permissions"));
   commentsActions = await import("./comments-actions");
 });
 
@@ -258,7 +288,10 @@ describe("comments actions read path", () => {
       slideId: "slide-1",
     });
 
-    assert.deepEqual(result, [thread("comment-list")]);
+    assert.deepEqual(result, {
+      ok: true,
+      data: [thread("comment-list")],
+    });
     assert.deepEqual(state().calls, [
       ["requireDocumentActionContext", "doc-1", "view"],
       [
@@ -269,23 +302,22 @@ describe("comments actions read path", () => {
     ]);
   });
 
-  it("propagates read denial without touching revalidation", async () => {
-    state().requireDocumentActionContext = async (documentId, capability) => {
-      state().calls.push([
-        "requireDocumentActionContext",
-        documentId,
-        capability,
-      ]);
-      throw new Error("View access denied.");
+  it("adapts read denial without exposing authorization details", async () => {
+    state().requireDocumentActionContext = async () => {
+      throw new DocumentPermissionErrorCtor(
+        "Document permissions are misconfigured.",
+        "view",
+      );
     };
 
-    await assert.rejects(
-      () => commentsActions.listComments("doc-1"),
-      /View access denied\./,
-    );
-    assert.deepEqual(state().calls, [
-      ["requireDocumentActionContext", "doc-1", "view"],
-    ]);
+    assert.deepEqual(await commentsActions.listComments("doc-1"), {
+      ok: false,
+      error: {
+        code: "access_denied",
+        message: "You don't have access to this document.",
+      },
+    });
+    assert.deepEqual(state().calls, []);
   });
 });
 
@@ -295,7 +327,10 @@ describe("comments actions mutation revalidation", () => {
       body: "Hello",
     });
 
-    assert.deepEqual(threads, [thread("comment-created")]);
+    assert.deepEqual(threads, {
+      ok: true,
+      data: [thread("comment-created")],
+    });
     assert.deepEqual(state().calls, [
       ["requireDocumentActionContext", "doc-1", "view"],
       ["service.createComment", "doc-1", { body: "Hello" }],
@@ -308,7 +343,10 @@ describe("comments actions mutation revalidation", () => {
       "comment-9",
       "Updated body",
     );
-    assert.deepEqual(editedThreads, [thread("comment-edited")]);
+    assert.deepEqual(editedThreads, {
+      ok: true,
+      data: [thread("comment-edited")],
+    });
     assert.deepEqual(state().calls.at(-1), [
       "revalidatePath",
       "/app/documents/doc-owning",
@@ -316,7 +354,10 @@ describe("comments actions mutation revalidation", () => {
 
     state().calls.length = 0;
     const deletedThreads = await commentsActions.deleteComment("comment-9");
-    assert.deepEqual(deletedThreads, [thread("comment-after-delete")]);
+    assert.deepEqual(deletedThreads, {
+      ok: true,
+      data: [thread("comment-after-delete")],
+    });
     assert.deepEqual(state().calls.at(-1), [
       "revalidatePath",
       "/app/documents/doc-owning",
@@ -327,7 +368,10 @@ describe("comments actions mutation revalidation", () => {
       "comment-9",
       true,
     );
-    assert.deepEqual(resolvedThreads, [thread("comment-resolved")]);
+    assert.deepEqual(resolvedThreads, {
+      ok: true,
+      data: [thread("comment-resolved")],
+    });
     assert.deepEqual(state().calls, [
       ["service.setCommentResolved", "comment-9", true],
       ["requireDocumentActionContext", "doc-owning", "view"],
@@ -335,14 +379,23 @@ describe("comments actions mutation revalidation", () => {
     ]);
   });
 
-  it("propagates comment service errors without revalidating", async () => {
+  it("returns typed comment service errors without revalidating", async () => {
     state().service.createComment = async () => {
-      throw new Error("Parent comment not found.");
+      throw new CommentErrorCtor(
+        "parent_not_found",
+        "Parent comment not found.",
+      );
     };
 
-    await assert.rejects(
-      () => commentsActions.createComment("doc-1", { body: "Hello" }),
-      /Parent comment not found\./,
+    assert.deepEqual(
+      await commentsActions.createComment("doc-1", { body: "Hello" }),
+      {
+        ok: false,
+        error: {
+          code: "parent_not_found",
+          message: "Parent comment not found.",
+        },
+      },
     );
     assert.deepEqual(
       state().calls.filter(
@@ -352,11 +405,20 @@ describe("comments actions mutation revalidation", () => {
     );
 
     state().service.editComment = async () => {
-      throw new Error("You can only edit your own comments.");
+      throw new CommentErrorCtor(
+        "edit_forbidden",
+        "You can only edit your own comments.",
+      );
     };
-    await assert.rejects(
-      () => commentsActions.editComment("comment-9", "New body"),
-      /You can only edit your own comments\./,
+    assert.deepEqual(
+      await commentsActions.editComment("comment-9", "New body"),
+      {
+        ok: false,
+        error: {
+          code: "edit_forbidden",
+          message: "You can only edit your own comments.",
+        },
+      },
     );
     assert.deepEqual(
       state().calls.filter(
@@ -364,5 +426,38 @@ describe("comments actions mutation revalidation", () => {
       ),
       [],
     );
+  });
+
+  it("logs unknown persistence failures and returns a sanitized result", async () => {
+    const persistenceError = new Error(
+      "connection failed for postgres://private-host",
+    );
+    state().service.deleteComment = async () => {
+      throw persistenceError;
+    };
+
+    assert.deepEqual(await commentsActions.deleteComment("comment-9"), {
+      ok: false,
+      error: {
+        code: "unexpected",
+        message: "Couldn't update comments. Please try again.",
+      },
+    });
+    assert.deepEqual(state().calls, [
+      ["logError", "comments.delete", persistenceError],
+    ]);
+  });
+
+  it("rethrows framework redirect control flow", async () => {
+    const redirect = new Error("NEXT_REDIRECT");
+    state().service.createComment = async () => {
+      throw redirect;
+    };
+
+    await assert.rejects(
+      () => commentsActions.createComment("doc-1", { body: "Hello" }),
+      redirect,
+    );
+    assert.deepEqual(state().calls, []);
   });
 });

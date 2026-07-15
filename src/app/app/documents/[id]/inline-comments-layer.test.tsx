@@ -68,7 +68,7 @@ import {
 } from "@lexical/react/LexicalComposerContext";
 import type { LexicalEditor } from "lexical";
 
-import type { CommentThread } from "@/lib/comments";
+import type { CommentActionResult, CommentThread } from "@/lib/comments";
 
 // Imported for its module-level side effects only: flips
 // `IS_REACT_ACT_ENVIRONMENT` on (required for `act()` in this file) and
@@ -108,7 +108,7 @@ type CommentsActionsTestState = {
   impl: (
     documentId: string,
     input: CreateCommentCall["input"],
-  ) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -118,7 +118,7 @@ const globalForActions = globalThis as typeof globalThis & {
 function resetActionsState(): void {
   globalForActions.__inlineCommentsActionsTestState = {
     calls: [],
-    impl: async () => [],
+    impl: async () => ({ ok: true, data: [] }),
   };
 }
 resetActionsState();
@@ -921,7 +921,9 @@ describe("submit", () => {
         act(() => textarea.props.onChange({ target: { value: "A reply" } }));
         assert.equal(commentButton().props.disabled, false);
 
-        let resolveCreate!: (threads: CommentThread[]) => void;
+        let resolveCreate!: (
+          result: CommentActionResult<CommentThread[]>,
+        ) => void;
         globalForActions.__inlineCommentsActionsTestState.impl = () =>
           new Promise((resolve) => {
             resolveCreate = resolve;
@@ -935,7 +937,7 @@ describe("submit", () => {
         );
 
         await act(async () => {
-          resolveCreate(buildThreads());
+          resolveCreate({ ok: true, data: buildThreads() });
           await flushMicrotasks();
         });
       } finally {
@@ -970,8 +972,10 @@ describe("submit", () => {
             anchor: { kind: "text", text: FIRST_TEXT, nodeId: null },
           }),
         ];
-        globalForActions.__inlineCommentsActionsTestState.impl = async () =>
-          nextThreads;
+        globalForActions.__inlineCommentsActionsTestState.impl = async () => ({
+          ok: true,
+          data: nextThreads,
+        });
 
         const commentButton = renderer.root.find(
           (el) => el.type === "button" && textOf(el) === "Comment",
@@ -1045,6 +1049,46 @@ describe("submit", () => {
           "Couldn't post your comment. Please try again.",
         );
         assert.ok(findDialogCard(renderer.root), "the card should stay open");
+        assert.equal(findDialogCard(renderer.root)!.props.value, "A reply");
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a typed action failure shows its safe message and keeps the draft open", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const renderer = mount(editor);
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (el) => el.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+
+        const textarea = findDialogCard(renderer.root)!;
+        act(() => textarea.props.onChange({ target: { value: "A reply" } }));
+        globalForActions.__inlineCommentsActionsTestState.impl = async () => ({
+          ok: false,
+          error: {
+            code: "parent_not_found",
+            message: "Parent comment not found.",
+          },
+        });
+
+        const commentButton = renderer.root.find(
+          (el) => el.type === "button" && textOf(el) === "Comment",
+        );
+        await act(async () => {
+          commentButton.props.onClick();
+          await flushMicrotasks();
+        });
+
+        assert.equal(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          "Parent comment not found.",
+        );
+        assert.ok(findDialogCard(renderer.root));
         assert.equal(findDialogCard(renderer.root)!.props.value, "A reply");
       } finally {
         act(() => renderer.unmount());

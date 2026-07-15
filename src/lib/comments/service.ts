@@ -19,7 +19,7 @@ import {
 import { CommentError } from "./errors";
 import { mapCommentThreadRecord } from "./mappers";
 import { canDeleteComment, canEditComment } from "./policy";
-import { isCommentUnread, type UnreadCountScope } from "./read-state";
+import { isCommentUnreadForScope, type UnreadCountScope } from "./read-state";
 import { commentThreadSelect } from "./records";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import type {
@@ -78,16 +78,6 @@ function scopedCommentWhere(options: ListCommentsOptions) {
   }
 
   return scopeWhere;
-}
-
-function scopedUnreadWhere(scope: UnreadCountScope): Prisma.CommentWhereInput {
-  if (scope === "slide") {
-    return { slideId: { not: null } };
-  }
-  if (scope === "text") {
-    return { slideId: null };
-  }
-  return {};
 }
 
 export function createCommentService({
@@ -154,22 +144,27 @@ export function createCommentService({
       throw new CommentError("empty_body", "Comment cannot be empty.");
     }
 
-    if (input.parentId) {
-      const parent = await db.comment.findFirst({
-        where: { id: input.parentId, documentId, parentId: null },
-        select: { id: true },
-      });
-      if (!parent) {
-        throw new CommentError("parent_not_found", "Parent comment not found.");
-      }
-
-      await db.comment.create({
-        data: {
-          documentId,
-          authorId: user.id,
-          body,
-          parentId: parent.id,
-        },
+    const parentId = input.parentId;
+    if (parentId) {
+      await runSerializableTransaction(db, async (tx) => {
+        const parent = await tx.comment.updateMany({
+          where: { id: parentId, documentId, parentId: null },
+          data: { resolved: false },
+        });
+        if (parent.count !== 1) {
+          throw new CommentError(
+            "parent_not_found",
+            "Parent comment not found.",
+          );
+        }
+        await tx.comment.create({
+          data: {
+            documentId,
+            authorId: user.id,
+            body,
+            parentId,
+          },
+        });
       });
     } else {
       const slideId = validateSlideId(input.slideId);
@@ -263,10 +258,13 @@ export function createCommentService({
       throw new CommentError("empty_body", "Comment cannot be empty.");
     }
 
-    await db.comment.update({
+    const updated = await db.comment.updateMany({
       where: { id: commentId },
       data: { body },
     });
+    if (updated.count !== 1) {
+      throw new CommentError("comment_not_found", "Comment not found.");
+    }
 
     return {
       documentId: comment.documentId,
@@ -293,7 +291,10 @@ export function createCommentService({
       );
     }
 
-    await db.comment.delete({ where: { id: commentId } });
+    const deleted = await db.comment.deleteMany({ where: { id: commentId } });
+    if (deleted.count !== 1) {
+      throw new CommentError("comment_not_found", "Comment not found.");
+    }
 
     return {
       documentId: comment.documentId,
@@ -320,10 +321,13 @@ export function createCommentService({
       );
     }
 
-    await db.comment.update({
-      where: { id: commentId },
+    const updated = await db.comment.updateMany({
+      where: { id: commentId, parentId: null },
       data: { resolved },
     });
+    if (updated.count !== 1) {
+      throw new CommentError("comment_not_found", "Comment not found.");
+    }
 
     return {
       documentId: comment.documentId,
@@ -346,15 +350,18 @@ export function createCommentService({
     const comments = await db.comment.findMany({
       where: {
         documentId,
-        parentId: null,
         authorId: { not: user.id },
-        ...scopedUnreadWhere(scope),
       },
-      select: { createdAt: true, authorId: true },
+      select: {
+        createdAt: true,
+        authorId: true,
+        slideId: true,
+        parent: { select: { slideId: true } },
+      },
     });
 
     return comments.filter((comment) =>
-      isCommentUnread(comment, user.id, lastReadAt),
+      isCommentUnreadForScope(comment, user.id, lastReadAt, scope),
     ).length;
   }
 

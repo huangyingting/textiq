@@ -44,12 +44,26 @@ export {
 export type { CommentReplyRecord, CommentThreadRecord } from "./records";
 
 export { CommentError, type CommentErrorCode } from "./errors";
+export {
+  adaptKnownCommentActionError,
+  commentActionError,
+  commentActionOk,
+} from "./action-result";
+export type {
+  CommentActionError,
+  CommentActionErrorCode,
+  CommentActionResult,
+} from "./action-result";
 
 export { canEditComment, canDeleteComment } from "./policy";
 export type { CommentOwnership } from "./policy";
 
-export { isCommentUnread } from "./read-state";
-export type { UnreadCountScope } from "./read-state";
+export {
+  commentUnreadScope,
+  isCommentUnread,
+  isCommentUnreadForScope,
+} from "./read-state";
+export type { CommentUnreadRecord, UnreadCountScope } from "./read-state";
 
 export { createCommentService } from "./service";
 /* node:coverage ignore next 6 -- Service type-only facade exports are erased by tsx. */

@@ -1,6 +1,7 @@
 import type { ActionResult } from "@/lib/action-result";
 import type { BrandStyle } from "@/lib/brand/schema";
 import type {
+  CommentActionResult,
   CommentThread,
   CreateCommentInput,
   ListCommentsOptions,
@@ -126,15 +127,20 @@ export interface CommentsActionPort {
   listComments: (
     documentId: string,
     options?: ListCommentsOptions,
-  ) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
   createComment: (
     documentId: string,
     input: CreateCommentInput,
-  ) => Promise<CommentThread[]>;
-  editComment: (commentId: string, newBody: string) => Promise<CommentThread[]>;
-  deleteComment: (commentId: string) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  editComment: (
+    commentId: string,
+    newBody: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  deleteComment: (
+    commentId: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
   setCommentResolved: (
     commentId: string,
     resolved: boolean,
-  ) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
 }

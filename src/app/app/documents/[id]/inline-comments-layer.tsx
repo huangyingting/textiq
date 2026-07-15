@@ -227,12 +227,16 @@ export function InlineCommentsLayer({
     setError(null);
     startTransition(async () => {
       try {
-        const next = await commentsActions.createComment(documentId, {
+        const result = await commentsActions.createComment(documentId, {
           body: trimmed,
           anchorType: "text",
           anchorText: anchor.text,
         });
-        setThreads(next);
+        if (!result.ok) {
+          setError(result.error.message);
+          return;
+        }
+        setThreads(result.data);
         setBody("");
         setActiveAnchor(null);
         setHoverAnchor(null);

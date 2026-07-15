@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
 
-import { Prisma } from "@/generated/prisma/client";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import {
   createCommentService,
   type LoadDeckForDocument,
@@ -10,6 +16,10 @@ import {
 import { CommentError } from "./errors";
 import type { Deck } from "@/lib/presentation/schema";
 import { isRetryableSerializableTransactionError } from "@/lib/serializable-transaction";
+
+const execFileAsync = promisify(execFile);
+const REPO_ROOT = process.cwd();
+const SQLITE_TEST_DB_DIRECTORY = resolvePath(REPO_ROOT, "prisma", ".test-dbs");
 
 type FakeAuthor = { id: string; name: string | null; email: string };
 
@@ -172,6 +182,9 @@ class FakeDb {
         )
         .map((comment) => ({
           ...comment,
+          parent:
+            this.comments.find((parent) => parent.id === comment.parentId) ??
+            null,
           replies: this.comments
             .filter((reply) => reply.parentId === comment.id)
             .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
@@ -218,6 +231,17 @@ class FakeDb {
         (item) => item.parentId !== deleted.id,
       );
       return deleted;
+    },
+    deleteMany: async (args: { where: FakeWhere }) => {
+      const deletedIds = this.comments
+        .filter((comment) => matchesWhere(comment, args.where))
+        .map((comment) => comment.id);
+      this.comments = this.comments.filter(
+        (comment) =>
+          !deletedIds.includes(comment.id) &&
+          !deletedIds.includes(comment.parentId ?? ""),
+      );
+      return { count: deletedIds.length };
     },
     updateMany: async (args: { where: FakeWhere; data: FakeData }) => {
       let count = 0;
@@ -269,7 +293,18 @@ class FakeDb {
 
   $transaction: FakeTransaction = async (operation, options = {}) => {
     this.transactionOptions.push(options);
-    return operation(this as never);
+    const commentsBefore = this.comments.map((comment) => ({
+      ...comment,
+      author: { ...comment.author },
+    }));
+    const readsBefore = this.reads.map((read) => ({ ...read }));
+    try {
+      return await operation(this as never);
+    } catch (error) {
+      this.comments = commentsBefore;
+      this.reads = readsBefore;
+      throw error;
+    }
   };
 }
 
@@ -515,7 +550,7 @@ test("comment service filters list results by anchor scope and slide", async () 
   );
 });
 
-test("comment service creates replies and rejects missing parent comments", async () => {
+test("comment service creates replies atomically and rejects missing parent comments", async () => {
   const db = new FakeDb([rootComment({ id: "thread-1" })]);
   const { service } = makeService(db, "author-2");
 
@@ -527,6 +562,9 @@ test("comment service creates replies and rejects missing parent comments", asyn
     db.comments.some((comment) => comment.parentId === "thread-1"),
     true,
   );
+  assert.deepEqual(db.transactionOptions, [
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  ]);
 
   await assert.rejects(
     () =>
@@ -536,6 +574,91 @@ test("comment service creates replies and rejects missing parent comments", asyn
       }),
     /Parent comment not found/,
   );
+});
+
+test("comment service atomically reopens a resolved root when adding a reply", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", resolved: true, authorId: "author-1" }),
+  ]);
+  const { service } = makeService(db, "author-2");
+
+  const result = await service.createComment("doc-1", {
+    parentId: "thread-1",
+    body: "New activity",
+  });
+
+  assert.equal(db.comments[0].resolved, false);
+  assert.equal(db.comments[1].parentId, "thread-1");
+  assert.equal(result.threads[0].resolved, false);
+  assert.equal(result.threads[0].replies.length, 1);
+});
+
+test("comment service retries a reply/delete race and returns parent_not_found without an orphan", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", resolved: true, authorId: "author-1" }),
+  ]);
+  let attempt = 0;
+  db.$transaction = async (operation, options = {}) => {
+    db.transactionOptions.push(options);
+    attempt += 1;
+    const beforeAttempt = db.comments.map((comment) => ({
+      ...comment,
+      author: { ...comment.author },
+    }));
+    try {
+      const result = await operation(db as never);
+      if (attempt === 1) {
+        db.comments = beforeAttempt.filter(
+          (comment) => comment.id !== "thread-1",
+        );
+        throw Object.assign(new Error("serialization conflict"), {
+          code: "P2034",
+        });
+      }
+      return result;
+    } catch (error) {
+      if (attempt !== 1) {
+        db.comments = beforeAttempt;
+      }
+      throw error;
+    }
+  };
+  const { service } = makeService(db, "author-2");
+
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        parentId: "thread-1",
+        body: "Racing reply",
+      }),
+    (error: unknown) =>
+      error instanceof CommentError && error.code === "parent_not_found",
+  );
+
+  assert.equal(attempt, 2);
+  assert.equal(db.comments.length, 0);
+});
+
+test("comment service rolls back root reopening when reply insertion fails", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", resolved: true, authorId: "author-1" }),
+  ]);
+  db.comment.create = async () => {
+    throw new Error("reply insert failed");
+  };
+  const { service } = makeService(db, "author-2");
+
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        parentId: "thread-1",
+        body: "Reply",
+      }),
+    /reply insert failed/,
+  );
+
+  assert.equal(db.comments.length, 1);
+  assert.equal(db.comments[0].resolved, true);
 });
 
 test("comment service creates table anchor root comment persisting anchorNodeId and anchorText", async () => {
@@ -838,16 +961,41 @@ test("comment service rejects resolving a reply because resolved state belongs t
   assert.equal(db.comments[1].resolved, false);
 });
 
-test("comment service counts unread and marks document comments read", async () => {
+test("comment service keeps resolution root-owned across reply deletion", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", authorId: "author-1" }),
+    rootComment({
+      id: "reply-1",
+      parentId: "thread-1",
+      authorId: "author-2",
+    }),
+  ]);
+  const viewer = makeService(db, "viewer").service;
+  const replyAuthor = makeService(db, "author-2").service;
+
+  await viewer.setCommentResolved("thread-1", true);
+  await replyAuthor.deleteComment("reply-1");
+
+  assert.equal(db.comments.length, 1);
+  assert.equal(db.comments[0].resolved, true);
+});
+
+test("comment service counts unread roots and replies in their root anchor scope", async () => {
   const db = new FakeDb(
     [
       rootComment({
-        id: "old",
+        id: "text-root",
         authorId: "author-1",
         createdAt: new Date("2024-01-01T00:00:00Z"),
       }),
       rootComment({
-        id: "new",
+        id: "text-reply",
+        parentId: "text-root",
+        authorId: "author-2",
+        createdAt: new Date("2024-01-03T00:00:00Z"),
+      }),
+      rootComment({
+        id: "slide-root",
         authorId: "author-1",
         slideId: "sl-1",
         createdAt: new Date("2024-01-03T00:00:00Z"),
@@ -868,12 +1016,127 @@ test("comment service counts unread and marks document comments read", async () 
   );
   const { service } = makeService(db, "viewer");
 
-  assert.equal(await service.getUnreadCommentCount("doc-1"), 1);
+  assert.equal(await service.getUnreadCommentCount("doc-1"), 2);
   assert.equal(await service.getUnreadCommentCount("doc-1", "slide"), 1);
+  assert.equal(await service.getUnreadCommentCount("doc-1", "text"), 1);
 
   await service.markDocumentCommentsRead("doc-1");
   assert.equal(
     db.reads[0].lastReadAt.toISOString(),
     "2024-01-02T00:00:00.000Z",
+  );
+});
+
+test("comment service integration keeps reply races atomic and rolls back reopening", async (t) => {
+  await mkdir(SQLITE_TEST_DB_DIRECTORY, { recursive: true });
+  const databaseFilePath = resolvePath(
+    SQLITE_TEST_DB_DIRECTORY,
+    `comment-reply-${randomUUID()}.db`,
+  );
+  const databaseUrl = `file:${databaseFilePath}`;
+  await execFileAsync(
+    "npx",
+    ["prisma", "db", "push", "--schema", "prisma/schema.sqlite.prisma"],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        DB_PROVIDER: "sqlite",
+        DATABASE_URL: databaseUrl,
+      },
+    },
+  );
+
+  const firstClient = new PrismaClient({
+    adapter: new PrismaBetterSqlite3({ url: databaseUrl }),
+  });
+  const secondClient = new PrismaClient({
+    adapter: new PrismaBetterSqlite3({ url: databaseUrl }),
+  });
+  t.after(async () => {
+    await Promise.all([firstClient.$disconnect(), secondClient.$disconnect()]);
+    await rm(databaseFilePath, { force: true });
+    await rm(`${databaseFilePath}-journal`, { force: true });
+    await rm(`${databaseFilePath}-wal`, { force: true });
+    await rm(`${databaseFilePath}-shm`, { force: true });
+  });
+
+  const ownerId = `owner-${randomUUID()}`;
+  const replyAuthorId = `reply-author-${randomUUID()}`;
+  const documentId = `document-${randomUUID()}`;
+  await firstClient.user.createMany({
+    data: [
+      { id: ownerId, email: `${ownerId}@example.test` },
+      { id: replyAuthorId, email: `${replyAuthorId}@example.test` },
+    ],
+  });
+  await firstClient.document.create({
+    data: {
+      id: documentId,
+      ownerId,
+      title: "Comment integration",
+    },
+  });
+
+  const rollbackRoot = await firstClient.comment.create({
+    data: {
+      documentId,
+      authorId: ownerId,
+      body: "Resolved root",
+      resolved: true,
+    },
+  });
+  const ghostService = createCommentService({
+    db: firstClient,
+    requireDocumentContext: async () => ({
+      user: { id: `missing-${randomUUID()}` },
+    }),
+  });
+  await assert.rejects(() =>
+    ghostService.createComment(documentId, {
+      parentId: rollbackRoot.id,
+      body: "Cannot persist",
+    }),
+  );
+  assert.deepEqual(
+    await firstClient.comment.findUnique({
+      where: { id: rollbackRoot.id },
+      select: { resolved: true, replies: { select: { id: true } } },
+    }),
+    { resolved: true, replies: [] },
+  );
+
+  const racingRoot = await firstClient.comment.create({
+    data: {
+      documentId,
+      authorId: ownerId,
+      body: "Racing root",
+      resolved: true,
+    },
+  });
+  const replyService = createCommentService({
+    db: firstClient,
+    requireDocumentContext: async () => ({
+      user: { id: replyAuthorId },
+    }),
+  });
+  const [replyOutcome, deleteOutcome] = await Promise.allSettled([
+    replyService.createComment(documentId, {
+      parentId: racingRoot.id,
+      body: "Concurrent reply",
+    }),
+    secondClient.comment.delete({ where: { id: racingRoot.id } }),
+  ]);
+
+  assert.equal(deleteOutcome.status, "fulfilled");
+  if (replyOutcome.status === "rejected") {
+    assert.ok(replyOutcome.reason instanceof CommentError);
+    assert.equal(replyOutcome.reason.code, "parent_not_found");
+  }
+  assert.equal(
+    await firstClient.comment.count({
+      where: { OR: [{ id: racingRoot.id }, { parentId: racingRoot.id }] },
+    }),
+    0,
   );
 });

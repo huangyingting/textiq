@@ -14,6 +14,7 @@ This document describes comment threads and their document/slide anchors.
 | Area                          | Source                                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Comment actions               | [`src/app/app/documents/[id]/comments-actions.ts`](../../src/app/app/documents/%5Bid%5D/comments-actions.ts)             |
+| Comment action results        | [`src/lib/comments/action-result.ts`](../../src/lib/comments/action-result.ts)                                           |
 | Comment service               | [`src/lib/comments/service.ts`](../../src/lib/comments/service.ts)                                                       |
 | Comment errors                | [`src/lib/comments/errors.ts`](../../src/lib/comments/errors.ts)                                                         |
 | Prisma projection             | [`src/lib/comments/records.ts`](../../src/lib/comments/records.ts)                                                       |
@@ -40,9 +41,17 @@ Editing and deleting a comment requires authorship. Any viewer may resolve a
 top-level thread, but replies cannot carry lifecycle state. Mutations return
 refreshed server truth.
 
-Validation and lifecycle failures use `CommentError` codes while preserving the
-existing user-facing messages. Document authorization errors remain owned by the
-shared document capability layer.
+Reply validation, root reopening, and insertion share one retryable serializable
+transaction. A new reply always reopens its root thread. Resolving or reopening
+targets only the root; deleting a reply does not change the root's current
+resolved state, while deleting a root cascades to its replies.
+
+Validation and lifecycle failures use `CommentError` codes. Server actions
+return a discriminated `CommentActionResult`: known comment failures preserve
+their safe code/message, document permission failures map to a concealed
+`access_denied` result, and unknown persistence failures are logged before a
+generic `unexpected` result is returned. Framework redirect control flow is
+re-thrown rather than adapted.
 
 ## Anchor Types
 
@@ -98,7 +107,10 @@ Slide-aware comment behavior is exposed through the comment service filters,
 anchor helpers, lifecycle helpers, and the presentation slide-anchor facade so
 slide-specific callers do not duplicate anchor logic.
 
-Unread helpers compute per-comment/thread read state for slide comment surfaces.
+Unread counts include both roots and replies created after `lastReadAt`, excluding
+the viewer's own comments. Replies inherit their root's text/slide scope, so a
+reply on a slide thread contributes to the slide count even though the reply row
+does not duplicate anchor fields.
 
 ## Invariants
 
@@ -113,6 +125,8 @@ Unread helpers compute per-comment/thread read state for slide comment surfaces.
 9. Slide-anchor validation and comment insertion share a serializable transaction
    with bounded retries for PostgreSQL serialization failures and SQLite lock
    conflicts.
+10. Reply root validation, reopening, and insertion commit or roll back together.
+11. New replies reopen their root and inherit its unread anchor scope.
 
 ## Primary Tests
 
