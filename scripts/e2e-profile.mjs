@@ -10,26 +10,11 @@ import { isDeepStrictEqual } from "node:util";
 
 import { resolveE2EOriginConfig } from "./e2e-origin.mjs";
 
-const installBrowserArgs = [
-  "playwright",
-  "install",
-  ...(process.env.E2E_INSTALL_BROWSER_DEPS === "1" ? ["--with-deps"] : []),
-  "chromium",
-];
-
-export const E2E_PROFILE_STEPS = [
-  ["Generate Prisma client", "npm", ["run", "db:generate"]],
-  ["Push SQLite schema", "npm", ["run", "db:push"]],
-  ["Seed deterministic profile", "npm", ["run", "db:seed:e2e"]],
-  ["Install Chromium", "npx", installBrowserArgs],
-  ["Run deterministic E2E profile", "npx", ["playwright", "test"]],
-];
-
 export function buildE2EProfileEnv(
-  processEnv = process.env,
+  env = process.env,
   { runId = `${process.pid}-${randomUUID()}` } = {},
 ) {
-  const origin = resolveE2EOriginConfig(processEnv);
+  const origin = resolveE2EOriginConfig(env);
   if (!origin.origin.startsWith("http://")) {
     throw new Error(
       "The self-contained E2E server requires an http:// E2E_BASE_URL.",
@@ -37,11 +22,11 @@ export function buildE2EProfileEnv(
   }
 
   return {
-    ...processEnv,
-    DB_PROVIDER: processEnv.DB_PROVIDER ?? "sqlite",
-    DATABASE_URL: processEnv.DATABASE_URL ?? "file:./prisma/dev.db",
-    AUTH_SECRET: processEnv.AUTH_SECRET ?? "ci-placeholder",
-    AUTH_LOGIN_RATE_LIMIT: processEnv.AUTH_LOGIN_RATE_LIMIT ?? "100",
+    ...env,
+    DB_PROVIDER: env.DB_PROVIDER ?? "sqlite",
+    DATABASE_URL: env.DATABASE_URL ?? "file:./prisma/dev.db",
+    AUTH_SECRET: env.AUTH_SECRET ?? "ci-placeholder",
+    AUTH_LOGIN_RATE_LIMIT: env.AUTH_LOGIN_RATE_LIMIT ?? "100",
     E2E_BASE_URL: origin.origin,
     AUTH_URL: origin.origin,
     NEXT_PUBLIC_APP_URL: origin.origin,
@@ -50,12 +35,30 @@ export function buildE2EProfileEnv(
     E2E_PROFILE_DIST_DIR: join(".next", "e2e-profile", runId),
     E2E_PROFILE: "1",
     E2E_WEB_SERVER: "1",
-    E2E_PROFILE_SERVER: processEnv.E2E_PROFILE_SERVER ?? "dev",
-    E2E_WEB_SERVER_COMMAND:
-      processEnv.E2E_WEB_SERVER_COMMAND ?? "node server.mjs",
-    E2E_WEB_SERVER_TIMEOUT_MS: processEnv.E2E_WEB_SERVER_TIMEOUT_MS ?? "480000",
+    E2E_PROFILE_SERVER: env.E2E_PROFILE_SERVER ?? "dev",
+    E2E_WEB_SERVER_COMMAND: env.E2E_WEB_SERVER_COMMAND ?? "node server.mjs",
+    E2E_WEB_SERVER_TIMEOUT_MS: env.E2E_WEB_SERVER_TIMEOUT_MS ?? "480000",
     E2E_REUSE_EXISTING_SERVER: "0",
   };
+}
+
+export function buildE2EProfileSteps(env = process.env) {
+  return [
+    ["Generate Prisma client", "npm", ["run", "db:generate"]],
+    ["Push SQLite schema", "npm", ["run", "db:push"]],
+    ["Seed deterministic profile", "npm", ["run", "db:seed:e2e"]],
+    [
+      "Install Chromium",
+      "npx",
+      [
+        "playwright",
+        "install",
+        ...(env.E2E_INSTALL_BROWSER_DEPS === "1" ? ["--with-deps"] : []),
+        "chromium",
+      ],
+    ],
+    ["Run deterministic E2E profile", "npx", ["playwright", "test"]],
+  ];
 }
 
 export function runE2EProfile({
@@ -69,10 +72,11 @@ export function runE2EProfile({
   exit = process.exit,
 } = {}) {
   const env = buildE2EProfileEnv(processEnv);
+  const steps = buildE2EProfileSteps(processEnv);
   const configSnapshot = captureConfig();
 
   if (argv.includes("--list")) {
-    for (const [label, command, args] of E2E_PROFILE_STEPS) {
+    for (const [label, command, args] of steps) {
       stdout(`${label}: ${command} ${args.join(" ")}`);
     }
     return;
@@ -80,7 +84,7 @@ export function runE2EProfile({
 
   let exitCode;
   try {
-    for (const [label, command, args] of E2E_PROFILE_STEPS) {
+    for (const [label, command, args] of steps) {
       stdout(`\n[e2e-profile] ${label}`);
       const result = runCommand(command, args, { stdio: "inherit", env });
       if (result.status !== 0) {

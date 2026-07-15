@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
@@ -8,7 +8,8 @@ import { pathToFileURL } from "node:url";
 import { resolveE2EOrigin, resolveE2EOriginConfig } from "./e2e-origin.mjs";
 import {
   buildE2EProfileEnv,
-  E2E_PROFILE_STEPS,
+  buildE2EProfileSteps,
+  captureE2EProfileConfigFiles,
   removeGeneratedTypeIncludes,
   restoreE2EProfileConfigFiles,
   runE2EProfile,
@@ -32,6 +33,30 @@ test("E2E origin defaults to one loopback origin and honors host/port overrides"
   assert.equal(
     resolveE2EOrigin({ HOST: "0.0.0.0", PORT: "4666" }),
     "http://127.0.0.1:4666",
+  );
+  assert.equal(
+    resolveE2EOrigin({ HOST: "[::]", PORT: "4667" }),
+    "http://127.0.0.1:4667",
+  );
+  assert.equal(
+    resolveE2EOrigin({ HOST: "::1", PORT: "4668" }),
+    "http://[::1]:4668",
+  );
+  assert.equal(
+    resolveE2EOrigin({ HOST: "[::1]", PORT: "4669" }),
+    "http://[::1]:4669",
+  );
+  assert.equal(
+    resolveE2EOrigin({ BASE_URL: "http://localhost:4670" }),
+    "http://localhost:4670",
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({ E2E_BASE_URL: "http://localhost" }),
+    {
+      origin: "http://localhost",
+      port: "80",
+      serverHost: "localhost",
+    },
   );
 });
 
@@ -69,6 +94,75 @@ test("E2E origin safely normalizes explicit base URL overrides", () => {
     () => resolveE2EOrigin({ E2E_BASE_URL: "file:///workspace" }),
     /must use http: or https:/,
   );
+  assert.throws(
+    () => resolveE2EOrigin({ E2E_BASE_URL: "not a URL" }),
+    /must be an absolute HTTP\(S\) URL/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ E2E_BASE_URL: "http://user:pass@localhost" }),
+    /must not contain credentials/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ E2E_BASE_URL: "http://:pass@localhost" }),
+    /must not contain credentials/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ E2E_BASE_URL: "http://localhost/?query=1" }),
+    /must be an origin/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ E2E_BASE_URL: "http://localhost/#fragment" }),
+    /must be an origin/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ PORT: "0" }),
+    /PORT must be an integer/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ PORT: "12.5" }),
+    /PORT must be an integer/,
+  );
+  assert.throws(
+    () => resolveE2EOrigin({ PORT: "65536" }),
+    /PORT must be an integer/,
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({
+      E2E_BASE_URL: "http://localhost:4777",
+      PORT: "4777",
+      HOST: "0.0.0.0",
+    }),
+    {
+      origin: "http://localhost:4777",
+      port: "4777",
+      serverHost: "0.0.0.0",
+    },
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({
+      E2E_BASE_URL: "https://[::1]/",
+      HOST: "::",
+    }),
+    {
+      origin: "https://[::1]",
+      port: "443",
+      serverHost: "::",
+    },
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({
+      E2E_BASE_URL: "https://[::1]/",
+    }),
+    {
+      origin: "https://[::1]",
+      port: "443",
+      serverHost: "::1",
+    },
+  );
+  assert.equal(
+    resolveE2EOrigin({ HOST: "::", PORT: "4998" }),
+    "http://127.0.0.1:4998",
+  );
 });
 
 test("self-contained runner propagates one canonical origin to every boundary", () => {
@@ -92,6 +186,41 @@ test("self-contained runner propagates one canonical origin to every boundary", 
     env.E2E_PROFILE_DIST_DIR,
     join(".next", "e2e-profile", "runner-test"),
   );
+  assert.throws(
+    () => buildE2EProfileEnv({ E2E_BASE_URL: "https://localhost" }),
+    /requires an http:\/\//,
+  );
+  assert.deepEqual(buildE2EProfileSteps({})[3], [
+    "Install Chromium",
+    "npx",
+    ["playwright", "install", "chromium"],
+  ]);
+  assert.deepEqual(buildE2EProfileSteps({ E2E_INSTALL_BROWSER_DEPS: "1" })[3], [
+    "Install Chromium",
+    "npx",
+    ["playwright", "install", "--with-deps", "chromium"],
+  ]);
+  const explicit = buildE2EProfileEnv(
+    {
+      DB_PROVIDER: "postgres",
+      DATABASE_URL: "postgresql://example.test/db",
+      AUTH_SECRET: "test-secret",
+      AUTH_LOGIN_RATE_LIMIT: "42",
+      E2E_PROFILE_SERVER: "custom",
+      E2E_WEB_SERVER_COMMAND: "node custom-server.mjs",
+      E2E_WEB_SERVER_TIMEOUT_MS: "12345",
+      PORT: "4997",
+    },
+    { runId: "explicit-env" },
+  );
+  assert.equal(explicit.DB_PROVIDER, "postgres");
+  assert.equal(explicit.DATABASE_URL, "postgresql://example.test/db");
+  assert.equal(explicit.AUTH_SECRET, "test-secret");
+  assert.equal(explicit.AUTH_LOGIN_RATE_LIMIT, "42");
+  assert.equal(explicit.E2E_PROFILE_SERVER, "custom");
+  assert.equal(explicit.E2E_WEB_SERVER_COMMAND, "node custom-server.mjs");
+  assert.equal(explicit.E2E_WEB_SERVER_TIMEOUT_MS, "12345");
+  assert.equal(buildE2EProfileSteps()[3][2].at(-1), "chromium");
 });
 
 test("self-contained runner passes the canonical env to every command and cleans its dist dir", () => {
@@ -112,7 +241,7 @@ test("self-contained runner passes the canonical env to every command and cleans
       cleanupEvents.push(["config", snapshot, path]),
   });
 
-  assert.equal(commands.length, E2E_PROFILE_STEPS.length);
+  assert.equal(commands.length, buildE2EProfileSteps({}).length);
   for (const command of commands) {
     assert.equal(command.env.E2E_BASE_URL, "http://127.0.0.1:5111");
     assert.equal(command.env.AUTH_URL, command.env.E2E_BASE_URL);
@@ -122,6 +251,23 @@ test("self-contained runner passes the canonical env to every command and cleans
     ["dist", commands[0].env.E2E_PROFILE_DIST_DIR],
     ["config", { snapshot: "config" }, commands[0].env.E2E_PROFILE_DIST_DIR],
   ]);
+});
+
+test("self-contained runner lists its command plan without running commands", () => {
+  const output = [];
+  const commands = [];
+
+  runE2EProfile({
+    argv: ["node", "scripts/e2e-profile.mjs", "--list"],
+    processEnv: {},
+    runCommand: (...args) => commands.push(args),
+    stdout: (line) => output.push(line),
+    captureConfig: () => ({}),
+  });
+
+  assert.deepEqual(commands, []);
+  assert.equal(output.length, 5);
+  assert.match(output[3], /playwright install chromium/);
 });
 
 test("self-contained runner cleans its dist dir before reporting a command failure", () => {
@@ -143,6 +289,25 @@ test("self-contained runner cleans its dist dir before reporting a command failu
 
   assert.equal(exitCode, 7);
   assert.equal(cleaned.length, 1);
+});
+
+test("self-contained runner maps a signaled command failure to exit code one", () => {
+  let exitCode;
+
+  runE2EProfile({
+    argv: ["node", "scripts/e2e-profile.mjs"],
+    processEnv: { PORT: "5113" },
+    runCommand: () => ({ status: null }),
+    stdout: () => {},
+    cleanup: () => {},
+    captureConfig: () => ({}),
+    restoreConfig: () => {},
+    exit: (code) => {
+      exitCode = code;
+    },
+  });
+
+  assert.equal(exitCode, 1);
 });
 
 test("profile cleanup removes only the generated Next type includes", () => {
@@ -205,6 +370,48 @@ test("profile cleanup restores Next-generated config drift", (t) => {
 
   assert.equal(readFileSync(tsconfigPath, "utf8"), originalTsconfig);
   assert.equal(readFileSync(nextEnvPath, "utf8"), originalNextEnv);
+});
+
+test("profile config capture and cleanup handle missing and concurrent files", (t) => {
+  const root = createTestFixtureRoot("e2e-profile-config-edges", t);
+  const tsconfigPath = join(root, "tsconfig.json");
+  const nextEnvPath = join(root, "next-env.d.ts");
+  const originalTsconfig = '{"include":["**/*.ts"]}\n';
+  writeFileSync(tsconfigPath, originalTsconfig);
+
+  const snapshot = captureE2EProfileConfigFiles(root);
+  assert.equal(snapshot[tsconfigPath], originalTsconfig);
+  assert.equal(snapshot[nextEnvPath], undefined);
+
+  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
+  assert.equal(readFileSync(tsconfigPath, "utf8"), originalTsconfig);
+
+  writeFileSync(tsconfigPath, "{invalid");
+  writeFileSync(
+    nextEnvPath,
+    'import "./.next/e2e-profile/run/dev/types/routes.d.ts";\n',
+  );
+  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
+  assert.equal(readFileSync(tsconfigPath, "utf8"), "{invalid");
+  assert.equal(existsSync(nextEnvPath), false);
+
+  rmSync(tsconfigPath);
+  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
+});
+
+test("profile CLI entry point supports list mode", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/e2e-profile.mjs", "--list"],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, PORT: "5333" },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Run deterministic E2E profile/);
 });
 
 test("Playwright baseURL and webServer use the same normalized origin", () => {
