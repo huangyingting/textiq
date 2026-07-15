@@ -23,7 +23,7 @@ import {
   createTranslator,
   DEFAULT_LOCALE,
   type Locale,
-  type Messages,
+  type Translator,
 } from "./index";
 
 type LocaleContextValue = {
@@ -65,10 +65,7 @@ export function useSetLocaleOptimistic(): (next: Locale) => void {
 /**
  * Returns a typed `t()` translator bound to the currently active locale.
  */
-export function useTranslation(): <K extends keyof Messages>(
-  key: K,
-  ...args: Messages[K] extends (...a: infer A) => string ? A : []
-) => string {
+export function useTranslation(): Translator {
   const { locale } = useContext(LocaleContext);
   return createTranslator(locale);
 }

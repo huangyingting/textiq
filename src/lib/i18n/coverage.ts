@@ -1,14 +1,12 @@
 import {
   catalogBySurface,
-  DEFAULT_LOCALE,
   I18N_CATALOG_SURFACES,
-  SUPPORTED_LOCALES,
   type I18nCatalogSurface,
-  type Locale,
 } from "./messages";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "./locales";
 
 export const I18N_USER_ACTIVATION_THRESHOLD =
-  "100% translated coverage for app shell, dashboard, template picker, document editor core, import/export, and auth/billing settings in every non-default locale.";
+  "100% translated catalog coverage and completed source migration for app shell, dashboard, template picker, document editor core, import/export, and auth/billing settings in every non-default locale.";
 
 export const I18N_REQUIRED_UNCATALOGUED_SURFACES = [
   "documentEditor",
@@ -46,6 +44,13 @@ const SURFACE_LABELS: Record<I18nActivationSurface, string> = {
   authBilling: "Authentication and billing settings",
 };
 
+const IMPLEMENTATION_COMPLETE_BY_CATALOGUED_SURFACE = {
+  appShell: false,
+  dashboard: false,
+  templatePicker: false,
+  languageSwitcher: true,
+} as const satisfies Record<I18nCatalogSurface, boolean>;
+
 export interface I18nSurfaceCoverage {
   surface: I18nActivationSurface;
   label: string;
@@ -55,6 +60,8 @@ export interface I18nSurfaceCoverage {
   translatedMessages: number;
   totalMessages: number;
   coverage: number;
+  catalogComplete: boolean;
+  implementationComplete: boolean;
   complete: boolean;
 }
 
@@ -88,6 +95,9 @@ function cataloguedCoverage(
     locale === DEFAULT_LOCALE
       ? keys.length
       : keys.filter((key) => hasMessageValue(localeMessages[key])).length;
+  const catalogComplete = keys.length > 0 && translatedMessages === keys.length;
+  const implementationComplete =
+    IMPLEMENTATION_COMPLETE_BY_CATALOGUED_SURFACE[surface];
 
   /* Coverage rationale: activation DTO fields are asserted; tsx maps object literal tail as uncovered. */
   /* node:coverage ignore next 6 */
@@ -101,7 +111,9 @@ function cataloguedCoverage(
     translatedMessages,
     totalMessages: keys.length,
     coverage: keys.length === 0 ? 0 : translatedMessages / keys.length,
-    complete: keys.length > 0 && translatedMessages === keys.length,
+    catalogComplete,
+    implementationComplete,
+    complete: catalogComplete && implementationComplete,
   };
 }
 
@@ -118,6 +130,8 @@ function uncataloguedCoverage(
     translatedMessages: 0,
     totalMessages: 0,
     coverage: 0,
+    catalogComplete: false,
+    implementationComplete: false,
     complete: false,
   };
 }

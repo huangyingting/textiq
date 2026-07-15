@@ -7,10 +7,12 @@ import {
   DEFAULT_LOCALE,
   getI18nActivationStatus,
   getI18nCoverageBySurface,
+  getLocaleDefinition,
   getMessages,
   I18N_ACTIVATION_REQUIRED_SURFACES,
   I18N_USER_ACTIVATION_THRESHOLD,
   isSupportedLocale,
+  LOCALE_DEFINITIONS,
   normaliseLocale,
   SUPPORTED_LOCALES,
 } from "@/lib/i18n";
@@ -37,6 +39,23 @@ test("isSupportedLocale rejects unknown values", () => {
   }
 });
 
+test("locale definitions are the canonical ordered supported-locale registry", () => {
+  assert.deepEqual(
+    LOCALE_DEFINITIONS.map(({ locale }) => locale),
+    SUPPORTED_LOCALES,
+  );
+  assert.deepEqual(getLocaleDefinition("en"), {
+    locale: "en",
+    displayName: "English",
+    intlLocale: "en-US",
+  });
+  assert.deepEqual(getLocaleDefinition("es"), {
+    locale: "es",
+    displayName: "Español",
+    intlLocale: "es",
+  });
+});
+
 // ── normaliseLocale ──────────────────────────────────────────────────────────
 
 test("normaliseLocale returns the locale as-is when it is a valid exact match", () => {
@@ -57,6 +76,8 @@ test("normaliseLocale falls back to DEFAULT_LOCALE for unrecognised input", () =
   assert.equal(normaliseLocale(""), DEFAULT_LOCALE);
   assert.equal(normaliseLocale(null), DEFAULT_LOCALE);
   assert.equal(normaliseLocale(undefined), DEFAULT_LOCALE);
+  assert.equal(normaliseLocale(42), DEFAULT_LOCALE);
+  assert.equal(normaliseLocale({ locale: "es" }), DEFAULT_LOCALE);
 });
 
 // ── getMessages ──────────────────────────────────────────────────────────────
@@ -82,6 +103,7 @@ test("getMessages objects expose all required keys", () => {
     "dashboard.action.newDocument",
     "languageSwitcher.label",
     "languageSwitcher.selectLanguage",
+    "languageSwitcher.persistenceError",
   ] as const;
 
   for (const locale of SUPPORTED_LOCALES) {
@@ -107,6 +129,21 @@ test("catalog is split into surface-owned sections", () => {
     catalogBySurface.appShell.es["header.nav.documents"],
     "Documentos",
   );
+});
+
+test("merged locale catalogs contain every surface-owned message exactly once", () => {
+  for (const locale of SUPPORTED_LOCALES) {
+    const expected = Object.assign(
+      {},
+      ...Object.values(catalogBySurface).map((surface) => surface[locale]),
+    );
+    const surfaceKeyCount = Object.values(catalogBySurface).reduce(
+      (count, surface) => count + Object.keys(surface[locale]).length,
+      0,
+    );
+    assert.equal(Object.keys(expected).length, surfaceKeyCount);
+    assert.deepEqual(getMessages(locale), expected);
+  }
 });
 
 // ── createTranslator / t() ───────────────────────────────────────────────────
@@ -171,14 +208,16 @@ test("t() returns a non-empty string for every key in every locale", () => {
 
 // ── i18n coverage / activation ────────────────────────────────────────────────
 
-test("getI18nCoverageBySurface tracks catalogued coverage per surface", () => {
+test("getI18nCoverageBySurface distinguishes catalog translation from source migration", () => {
   const coverage = getI18nCoverageBySurface("es");
   const dashboard = coverage.find((row) => row.surface === "dashboard");
 
   assert.ok(dashboard);
   assert.equal(dashboard.catalogued, true);
   assert.equal(dashboard.translatedMessages, dashboard.totalMessages);
-  assert.equal(dashboard.complete, true);
+  assert.equal(dashboard.catalogComplete, true);
+  assert.equal(dashboard.implementationComplete, false);
+  assert.equal(dashboard.complete, false);
 });
 
 test("getI18nActivationStatus keeps user activation blocked until required surfaces are translated", () => {
@@ -191,6 +230,14 @@ test("getI18nActivationStatus keeps user activation blocked until required surfa
     status.blockingSurfaces.some(
       (surface) =>
         surface.surface === "documentEditor" && surface.catalogued === false,
+    ),
+  );
+  assert.ok(
+    status.blockingSurfaces.some(
+      (surface) =>
+        surface.surface === "dashboard" &&
+        surface.catalogued === true &&
+        surface.implementationComplete === false,
     ),
   );
 });
