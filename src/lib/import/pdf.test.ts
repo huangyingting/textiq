@@ -268,3 +268,63 @@ test("parsePdf reports destroy cleanup errors without changing a successful pars
   assert.equal(text, "ok");
   assert.equal(cleanupErrors.length, 1);
 });
+
+test("parsePdf reports destroy cleanup errors while preserving the original parse failure", async () => {
+  const cleanupErrors: unknown[] = [];
+  const parseFailure = new Error("pdf parse failed");
+  const deps = {
+    createParser: () => ({
+      getText: async () => {
+        throw parseFailure;
+      },
+      destroy: async () => {
+        throw new Error("cleanup failed");
+      },
+    }),
+  };
+
+  await assert.rejects(
+    () =>
+      parsePdf(Buffer.from("ignored"), {
+        deps,
+        onCleanupError: (error) => {
+          cleanupErrors.push(error);
+        },
+      }),
+    (error: unknown) => error === parseFailure,
+  );
+  assert.equal(cleanupErrors.length, 1);
+});
+
+test("parsePdf abort path reports destroy cleanup errors exactly once", async () => {
+  const cleanupErrors: unknown[] = [];
+  let destroyCount = 0;
+  let rejectGetText: ((reason?: unknown) => void) | null = null;
+  const deps = {
+    createParser: () => ({
+      getText: async () =>
+        new Promise<{ text: string }>((_resolve, reject) => {
+          rejectGetText = reject;
+        }),
+      destroy: async () => {
+        destroyCount += 1;
+        rejectGetText?.(new Error("aborted"));
+        throw new Error("cleanup failed");
+      },
+    }),
+  };
+
+  const controller = new AbortController();
+  const parsing = parsePdf(Buffer.from("ignored"), {
+    deps,
+    signal: controller.signal,
+    onCleanupError: (error) => {
+      cleanupErrors.push(error);
+    },
+  });
+  controller.abort();
+
+  await assert.rejects(() => parsing);
+  assert.equal(destroyCount, 1);
+  assert.equal(cleanupErrors.length, 1);
+});

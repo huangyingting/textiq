@@ -23,6 +23,7 @@ import {
   type AcceptedMimeType,
   type ValidationResult,
 } from "./validate";
+import type { ParseImportedFileOptions } from "./index";
 
 const LOG_SCOPE = "api.import";
 
@@ -33,7 +34,7 @@ export type ImportUploadResult =
 type ParseImportedFile = (
   mime: AcceptedMimeType,
   buffer: Buffer,
-  signal?: AbortSignal,
+  options?: ParseImportedFileOptions,
 ) => Promise<string>;
 
 interface ImportUploadDeps {
@@ -170,6 +171,9 @@ export async function processImportUpload(
   const timeoutOptions: WithTimeoutOptions = {
     signal: options.signal,
     onCleanupError: (error) => {
+      if (error instanceof ParseAbortedError) {
+        return;
+      }
       deps.logError(LOG_SCOPE, error, {
         reason: "parse-cleanup",
       });
@@ -181,7 +185,15 @@ export async function processImportUpload(
 
   try {
     const markdown = await deps.withTimeout(
-      (signal) => deps.parseImportedFile(mime, buffer, signal),
+      (signal) =>
+        deps.parseImportedFile(mime, buffer, {
+          signal,
+          onPdfCleanupError: (error) => {
+            deps.logError(LOG_SCOPE, error, {
+              reason: "parse-cleanup",
+            });
+          },
+        }),
       timeoutOptions,
     );
 

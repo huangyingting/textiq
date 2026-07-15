@@ -211,6 +211,41 @@ test("route response: failure payload status mismatch is treated as malformed re
   }
 });
 
+test("route response: failure payload with a non-canonical code/status pair is treated as malformed response", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        ok: false,
+        error: {
+          code: "malformed",
+          status: 500,
+          message: "Could not parse file.",
+        },
+      }),
+      {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const { ref, unmount } = renderWorkflow({});
+  try {
+    await act(async () => {
+      await ref.current!.processFile(
+        fakeFile(1024, "notes.md", "text/markdown"),
+      );
+    });
+    assert.equal(ref.current!.state.status, "error");
+    if (ref.current!.state.status === "error") {
+      assert.match(ref.current!.state.message, /invalid import response/i);
+    }
+  } finally {
+    unmount();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("route response: flat create success payload is accepted", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>

@@ -22,7 +22,12 @@ export const IMPORT_ERROR_CODES = {
 export type ImportErrorCode =
   (typeof IMPORT_ERROR_CODES)[keyof typeof IMPORT_ERROR_CODES];
 
-export const IMPORT_ERROR_STATUS_BY_CODE: Record<ImportErrorCode, number> = {
+export type ImportErrorStatus = 401 | 403 | 408 | 409 | 413 | 415 | 422 | 500;
+
+export const IMPORT_ERROR_STATUS_BY_CODE: Record<
+  ImportErrorCode,
+  ImportErrorStatus
+> = {
   [IMPORT_ERROR_CODES.UNSUPPORTED]: 415,
   [IMPORT_ERROR_CODES.TOO_LARGE]: 413,
   [IMPORT_ERROR_CODES.MALFORMED]: 422,
@@ -36,8 +41,6 @@ export const IMPORT_ERROR_STATUS_BY_CODE: Record<ImportErrorCode, number> = {
   [IMPORT_ERROR_CODES.CONFLICT]: 409,
   [IMPORT_ERROR_CODES.INTERNAL]: 500,
 };
-
-export type ImportErrorStatus = 401 | 403 | 408 | 409 | 413 | 415 | 422 | 500;
 
 export type ImportRouteError = {
   code: ImportErrorCode;
@@ -67,26 +70,10 @@ export type ParsedImportUpload = {
   target: ImportCreationTarget;
 };
 
-function asImportErrorStatus(status: number): ImportErrorStatus | null {
-  if (
-    status === 401 ||
-    status === 403 ||
-    status === 408 ||
-    status === 409 ||
-    status === 413 ||
-    status === 415 ||
-    status === 422 ||
-    status === 500
-  ) {
-    return status;
-  }
-  return null;
-}
-
 export function importErrorStatusForCode(
   code: ImportErrorCode,
 ): ImportErrorStatus {
-  return IMPORT_ERROR_STATUS_BY_CODE[code] as ImportErrorStatus;
+  return IMPORT_ERROR_STATUS_BY_CODE[code];
 }
 
 export function importFailure(
@@ -103,28 +90,44 @@ export function importFailure(
 export function isImportErrorCode(value: unknown): value is ImportErrorCode {
   return (
     typeof value === "string" &&
-    Object.values(IMPORT_ERROR_CODES).includes(value as ImportErrorCode)
+    Object.values(IMPORT_ERROR_CODES).some((code) => code === value)
+  );
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  const presentKeys = Object.keys(value);
+  return (
+    presentKeys.length === keys.length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
   );
 }
 
 export function isImportRouteFailure(
   value: unknown,
 ): value is ImportRouteFailure {
-  if (!isPlainObject(value) || value.ok !== false) {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  if (!hasExactKeys(value, ["ok", "error"]) || value.ok !== false) {
     return false;
   }
   const error = value.error;
   if (!isPlainObject(error)) {
     return false;
   }
-  const status = asImportErrorStatus(
-    isFiniteNumber(error.status) ? error.status : Number.NaN,
-  );
-  return (
-    status !== null &&
-    isImportErrorCode(error.code) &&
-    isNonEmptyString(error.message)
-  );
+  if (!hasExactKeys(error, ["code", "status", "message"])) {
+    return false;
+  }
+  if (!isImportErrorCode(error.code)) {
+    return false;
+  }
+  if (!isFiniteNumber(error.status) || !isNonEmptyString(error.message)) {
+    return false;
+  }
+  return error.status === importErrorStatusForCode(error.code);
 }
 
 export function parseImportRouteResult(
@@ -135,10 +138,23 @@ export function parseImportRouteResult(
   }
 
   if (value.ok === false) {
-    return isImportRouteFailure(value) ? value : null;
+    if (!isImportRouteFailure(value)) {
+      return null;
+    }
+    return {
+      ok: false,
+      error: {
+        code: value.error.code,
+        status: value.error.status,
+        message: value.error.message,
+      },
+    };
   }
 
   if (value.ok !== true) {
+    return null;
+  }
+  if (!hasExactKeys(value, ["ok", "documentId", "documentPath"])) {
     return null;
   }
 

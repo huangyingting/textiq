@@ -19,6 +19,11 @@ import { parsePdf } from "./pdf";
 
 export { validateImportFile, formatValidationError } from "./validate";
 
+export type ParseImportedFileOptions = {
+  signal?: AbortSignal;
+  onPdfCleanupError?(error: unknown): void;
+};
+
 /**
  * Parses an uploaded file buffer and returns the extracted text, normalized
  * and ready for insertion into a Lexical editor state.
@@ -31,8 +36,9 @@ export { validateImportFile, formatValidationError } from "./validate";
 export async function parseImportedFile(
   mime: AcceptedMimeType,
   buffer: Buffer,
-  signal?: AbortSignal,
+  options: ParseImportedFileOptions = {},
 ): Promise<string> {
+  const { signal, onPdfCleanupError } = options;
   let raw: string;
 
   switch (mime) {
@@ -56,7 +62,10 @@ export async function parseImportedFile(
       break;
 
     case "application/pdf":
-      raw = await parsePdf(buffer, { signal });
+      raw = await parsePdf(buffer, {
+        signal,
+        onCleanupError: onPdfCleanupError,
+      });
       break;
 
     default: {

@@ -42,12 +42,12 @@ export interface ParsePdfDeps {
 
 const defaultParsePdfDeps: ParsePdfDeps = {
   createParser: (buffer) => new PDFParse({ data: buffer }),
-  onCleanupError: () => undefined,
 };
 
 export type ParsePdfOptions = {
   deps?: ParsePdfDeps;
   signal?: AbortSignal;
+  onCleanupError?(error: unknown): void;
 };
 
 /**
@@ -59,6 +59,7 @@ export async function parsePdf(
   options: ParsePdfOptions = {},
 ): Promise<string> {
   const deps = options.deps ?? defaultParsePdfDeps;
+  const onCleanupError = options.onCleanupError ?? deps.onCleanupError;
   const signal = options.signal;
   const parser = deps.createParser(buffer);
   let destroyed = false;
@@ -68,7 +69,7 @@ export async function parsePdf(
     try {
       await parser.destroy();
     } catch (error) {
-      deps.onCleanupError?.(error);
+      onCleanupError?.(error);
     }
   };
   const handleAbort = () => {

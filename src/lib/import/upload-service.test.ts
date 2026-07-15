@@ -214,6 +214,8 @@ test("processImportUpload: threads caller signal and deadline into withTimeout",
   const controller = new AbortController();
   let capturedSignal: AbortSignal | undefined;
   let capturedTimeoutMs: number | undefined;
+  let capturedParserSignal: AbortSignal | undefined;
+  let capturedCleanupReporter: ((error: unknown) => void) | undefined;
 
   const result = await processImportUpload(
     fakeFile("doc.md", "text/markdown"),
@@ -227,7 +229,11 @@ test("processImportUpload: threads caller signal and deadline into withTimeout",
           capturedTimeoutMs = options?.timeoutMs;
           return factory(options?.signal ?? new AbortController().signal);
         },
-        parseImportedFile: async () => "# Threaded",
+        parseImportedFile: async (_mime, _buffer, options) => {
+          capturedParserSignal = options?.signal;
+          capturedCleanupReporter = options?.onPdfCleanupError;
+          return "# Threaded";
+        },
         logError: () => {},
         logRouteDenial: () => {},
       },
@@ -237,6 +243,8 @@ test("processImportUpload: threads caller signal and deadline into withTimeout",
   assert.equal(result.ok, true);
   assert.equal(capturedSignal, controller.signal);
   assert.ok(capturedTimeoutMs !== undefined && capturedTimeoutMs > 0);
+  assert.equal(capturedParserSignal, controller.signal);
+  assert.equal(typeof capturedCleanupReporter, "function");
 });
 
 test("processImportUpload: whitespace-only markdown result returns status 422", async () => {
@@ -298,6 +306,175 @@ test("processImportUpload: cleanup callback logs safely and timeout outcome is u
   );
   assert.ok(
     logErrorCalls.some((context) => context?.reason === "parse-timeout"),
+  );
+});
+
+test("processImportUpload: successful parse with PDF cleanup rejection returns success and logs cleanup once", async () => {
+  const cleanupError = new Error("pdf cleanup failed");
+  const logContexts: Array<Record<string, unknown> | undefined> = [];
+  const result = await processImportUpload(
+    fakeFile("doc.pdf", "application/pdf"),
+    {
+      subjectHash: "h1",
+      deps: {
+        validateImportFile: () => ({
+          ok: true,
+          mime: "application/pdf" as const,
+        }),
+        readFile: async () => Buffer.alloc(4),
+        withTimeout: async (factory) => factory(new AbortController().signal),
+        parseImportedFile: async (_mime, _buffer, options) => {
+          options?.onPdfCleanupError?.(cleanupError);
+          return "# Parsed";
+        },
+        logError: (_scope, _error, context) => {
+          logContexts.push(context);
+        },
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.markdown, "# Parsed");
+  }
+  assert.equal(logContexts.length, 1);
+  assert.equal(logContexts[0]?.reason, "parse-cleanup");
+});
+
+test("processImportUpload: parse failure with PDF cleanup rejection stays malformed and logs cleanup", async () => {
+  const logContexts: Array<Record<string, unknown> | undefined> = [];
+  const result = await processImportUpload(
+    fakeFile("doc.pdf", "application/pdf"),
+    {
+      subjectHash: "h1",
+      deps: {
+        validateImportFile: () => ({
+          ok: true,
+          mime: "application/pdf" as const,
+        }),
+        readFile: async () => Buffer.alloc(4),
+        withTimeout: async (factory) => factory(new AbortController().signal),
+        parseImportedFile: async (_mime, _buffer, options) => {
+          options?.onPdfCleanupError?.(new Error("cleanup failed"));
+          throw new Error("parser failed");
+        },
+        logError: (_scope, _error, context) => {
+          logContexts.push(context);
+        },
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "malformed");
+    assert.equal(result.error.status, 422);
+  }
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-cleanup").length,
+    1,
+  );
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-failed").length,
+    1,
+  );
+});
+
+test("processImportUpload: aborted parse with PDF cleanup rejection stays aborted and logs cleanup", async () => {
+  const logContexts: Array<Record<string, unknown> | undefined> = [];
+  const result = await processImportUpload(
+    fakeFile("doc.pdf", "application/pdf"),
+    {
+      subjectHash: "h1",
+      deps: {
+        validateImportFile: () => ({
+          ok: true,
+          mime: "application/pdf" as const,
+        }),
+        readFile: async () => Buffer.alloc(4),
+        withTimeout: async (factory) => factory(new AbortController().signal),
+        parseImportedFile: async (_mime, _buffer, options) => {
+          options?.onPdfCleanupError?.(new Error("cleanup failed"));
+          throw new ParseAbortedError();
+        },
+        logError: (_scope, _error, context) => {
+          logContexts.push(context);
+        },
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "aborted");
+    assert.equal(result.error.status, 408);
+  }
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-cleanup").length,
+    1,
+  );
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-aborted").length,
+    1,
+  );
+});
+
+test("processImportUpload: timeout with PDF cleanup rejection stays timeout and logs cleanup once", async () => {
+  const logContexts: Array<Record<string, unknown> | undefined> = [];
+  const result = await processImportUpload(
+    fakeFile("doc.pdf", "application/pdf"),
+    {
+      subjectHash: "h1",
+      deps: {
+        validateImportFile: () => ({
+          ok: true,
+          mime: "application/pdf" as const,
+        }),
+        readFile: async () => Buffer.alloc(4),
+        parseImportedFile: async (_mime, _buffer, options) => {
+          await new Promise<void>((resolve) => {
+            options?.signal?.addEventListener("abort", () => resolve(), {
+              once: true,
+            });
+          });
+          options?.onPdfCleanupError?.(new Error("cleanup failed"));
+          throw new ParseAbortedError();
+        },
+        withTimeout: async (factory, timeoutOptions) => {
+          const controller = new AbortController();
+          const operation = factory(controller.signal);
+          controller.abort();
+          try {
+            await operation;
+          } catch (error) {
+            timeoutOptions?.onCleanupError?.(error);
+          }
+          throw new ParseTimeoutError(25);
+        },
+        logError: (_scope, _error, context) => {
+          logContexts.push(context);
+        },
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "timeout");
+    assert.equal(result.error.status, 408);
+  }
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-cleanup").length,
+    1,
+  );
+  assert.equal(
+    logContexts.filter((context) => context?.reason === "parse-timeout").length,
+    1,
   );
 });
 

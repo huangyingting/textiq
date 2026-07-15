@@ -441,15 +441,108 @@ test("persistImportedDocument (sqlite): creates document and initial version in 
   assert.equal(versions[0]?.createdById, userId);
 });
 
-test("persistImportedDocument (sqlite): rolls back document when version insert fails", async (t) => {
+test("persistImportedDocument (sqlite): writes workspaceId and version rows for workspace owner and editor imports", async (t) => {
+  const harness = await createSqliteHarness("import-application-workspace");
+  t.after(async () => {
+    await disposeSqliteHarness(harness);
+  });
+
+  const ownerId = seededUserId("owner");
+  const editorId = seededUserId("editor");
+  await harness.client.user.createMany({
+    data: [
+      { id: ownerId, email: `${ownerId}@example.com` },
+      { id: editorId, email: `${editorId}@example.com` },
+    ],
+  });
+
+  const workspaceId = seededUserId("workspace");
+  await harness.client.workspace.create({
+    data: {
+      id: workspaceId,
+      name: "Import Workspace",
+      ownerId,
+      members: {
+        create: [{ userId: editorId, role: "EDITOR" }],
+      },
+    },
+  });
+
+  const ownerDocument = await persistImportedDocument(
+    {
+      userId: ownerId,
+      fileName: "owner-workspace.md",
+      markdown: "# Owner Workspace",
+      target: { kind: "workspace", workspaceId },
+    },
+    harness.client,
+  );
+  const editorDocument = await persistImportedDocument(
+    {
+      userId: editorId,
+      fileName: "editor-workspace.md",
+      markdown: "# Editor Workspace",
+      target: { kind: "workspace", workspaceId },
+    },
+    harness.client,
+  );
+
+  const documents = await harness.client.document.findMany({
+    where: { id: { in: [ownerDocument.id, editorDocument.id] } },
+    select: { id: true, ownerId: true, workspaceId: true },
+  });
+  const versions = await harness.client.documentVersion.findMany({
+    where: { documentId: { in: [ownerDocument.id, editorDocument.id] } },
+    select: { documentId: true, createdById: true },
+  });
+
+  assert.equal(documents.length, 2);
+  const ownerWorkspaceDocument = documents.find(
+    (document) => document.ownerId === ownerId,
+  );
+  const editorWorkspaceDocument = documents.find(
+    (document) => document.ownerId === editorId,
+  );
+  assert.equal(ownerWorkspaceDocument?.id, ownerDocument.id);
+  assert.equal(ownerWorkspaceDocument?.workspaceId, workspaceId);
+  assert.equal(editorWorkspaceDocument?.id, editorDocument.id);
+  assert.equal(editorWorkspaceDocument?.workspaceId, workspaceId);
+
+  assert.equal(versions.length, 2);
+  const ownerVersion = versions.find(
+    (version) => version.documentId === ownerDocument.id,
+  );
+  const editorVersion = versions.find(
+    (version) => version.documentId === editorDocument.id,
+  );
+  assert.equal(ownerVersion?.createdById, ownerId);
+  assert.equal(editorVersion?.createdById, editorId);
+});
+
+test("persistImportedDocument (sqlite): rolls back workspace document when version insert fails", async (t) => {
   const harness = await createSqliteHarness("import-application-rollback");
   t.after(async () => {
     await disposeSqliteHarness(harness);
   });
 
-  const userId = seededUserId("user");
-  await harness.client.user.create({
-    data: { id: userId, email: `${userId}@example.com` },
+  const ownerId = seededUserId("owner");
+  const editorId = seededUserId("editor");
+  await harness.client.user.createMany({
+    data: [
+      { id: ownerId, email: `${ownerId}@example.com` },
+      { id: editorId, email: `${editorId}@example.com` },
+    ],
+  });
+  const workspaceId = seededUserId("workspace");
+  await harness.client.workspace.create({
+    data: {
+      id: workspaceId,
+      name: "Rollback Workspace",
+      ownerId,
+      members: {
+        create: [{ userId: editorId, role: "EDITOR" }],
+      },
+    },
   });
 
   const triggerName = `DocumentVersionFail_${randomUUID().replace(/-/g, "_")}`;
@@ -469,17 +562,17 @@ test("persistImportedDocument (sqlite): rolls back document when version insert 
   await assert.rejects(
     persistImportedDocument(
       {
-        userId,
+        userId: editorId,
         fileName: "rollback.md",
         markdown: "# Rollback",
-        target: { kind: "personal" },
+        target: { kind: "workspace", workspaceId },
       },
       harness.client,
     ),
   );
 
   const documentCount = await harness.client.document.count({
-    where: { ownerId: userId },
+    where: { ownerId: editorId, workspaceId },
   });
   const versionCount = await harness.client.documentVersion.count();
   assert.equal(documentCount, 0);
