@@ -28,10 +28,22 @@ export {
   applySlideDeleteToAnchors,
   applyElementDeleteToAnchors,
   findOrphanedAnchors,
+  planSlideCommentAnchorRepairs,
+} from "./lifecycle";
+export type {
+  PersistedSlideCommentAnchor,
+  SlideCommentAnchorRepairPlan,
 } from "./lifecycle";
 
 export { mapCommentThreadRecord } from "./mappers";
-export type { CommentReplyRecord, CommentThreadRecord } from "./mappers";
+export {
+  reconcileSlideCommentAnchors,
+  type CommentAnchorPersistenceDb,
+  type CommentAnchorReconciliationResult,
+} from "./persistence";
+export type { CommentReplyRecord, CommentThreadRecord } from "./records";
+
+export { CommentError, type CommentErrorCode } from "./errors";
 
 export { canEditComment, canDeleteComment } from "./policy";
 export type { CommentOwnership } from "./policy";

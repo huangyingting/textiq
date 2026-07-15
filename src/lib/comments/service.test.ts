@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { Prisma } from "@/generated/prisma/client";
 import {
   createCommentService,
   type LoadDeckForDocument,
   type RequireCommentDocumentContext,
 } from "./service";
+import { CommentError } from "./errors";
 import type { Deck } from "@/lib/presentation/schema";
+import { isRetryableSerializableTransactionError } from "@/lib/serializable-transaction";
 
 type FakeAuthor = { id: string; name: string | null; email: string };
 
@@ -49,6 +52,11 @@ type FakeRead = {
   documentId: string;
   lastReadAt: Date;
 };
+
+type FakeTransaction = <T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+) => Promise<T>;
 
 function user(id: string): FakeAuthor {
   return { id, name: id, email: `${id}@example.test` };
@@ -144,6 +152,9 @@ class FakeDb {
   comments: FakeComment[];
   reads: FakeRead[];
   nextId = 1;
+  transactionOptions: Array<{
+    isolationLevel?: Prisma.TransactionIsolationLevel;
+  }> = [];
 
   constructor(comments: FakeComment[] = [], reads: FakeRead[] = []) {
     this.comments = comments;
@@ -255,6 +266,11 @@ class FakeDb {
       return args.create;
     },
   };
+
+  $transaction: FakeTransaction = async (operation, options = {}) => {
+    this.transactionOptions.push(options);
+    return operation(this as never);
+  };
 }
 
 function makeService(
@@ -280,6 +296,168 @@ function makeService(
     seenContexts,
   };
 }
+
+function prismaAdapterTimeoutError(
+  originalCode: string,
+  originalMessage: string,
+): Prisma.PrismaClientKnownRequestError {
+  const driverAdapterError = Object.assign(new Error("SocketTimeout"), {
+    name: "DriverAdapterError",
+    cause: {
+      originalCode,
+      originalMessage,
+      kind: "SocketTimeout",
+    },
+  });
+
+  return new Prisma.PrismaClientKnownRequestError("Operation has timed out", {
+    code: "P1008",
+    clientVersion: "7.8.0",
+    meta: {
+      modelName: "Comment",
+      driverAdapterError,
+    },
+  });
+}
+
+test("serializable transaction retry classification keeps PostgreSQL write conflicts retryable", () => {
+  assert.equal(
+    isRetryableSerializableTransactionError({ code: "P2034" }),
+    true,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      cause: {
+        cause: new Prisma.PrismaClientKnownRequestError(
+          "Transaction failed due to a write conflict or a deadlock",
+          {
+            code: "P2034",
+            clientVersion: "7.8.0",
+          },
+        ),
+      },
+    }),
+    true,
+  );
+});
+
+test("serializable transaction retry classification recognizes Prisma SQLite adapter lock timeouts", () => {
+  assert.equal(
+    isRetryableSerializableTransactionError(
+      prismaAdapterTimeoutError("SQLITE_BUSY", "database is locked"),
+    ),
+    true,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError(
+      prismaAdapterTimeoutError(
+        "SQLITE_LOCKED",
+        "database table is locked: Comment",
+      ),
+    ),
+    true,
+  );
+});
+
+test("serializable transaction retry classification rejects generic Prisma timeouts", () => {
+  assert.equal(
+    isRetryableSerializableTransactionError(
+      new Prisma.PrismaClientKnownRequestError("Operation has timed out", {
+        code: "P1008",
+        clientVersion: "7.8.0",
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError({ code: "P2002" }),
+    false,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      code: "P1008",
+      meta: {
+        driverAdapterError: {
+          name: "DriverAdapterError",
+          cause: {
+            kind: "SocketTimeout",
+            originalCode: "SQLITE_BUSY",
+          },
+        },
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      cause: { code: "SQLITE_BUSY" },
+    }),
+    false,
+  );
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      code: "P1008",
+      meta: {
+        name: "DriverAdapterError",
+        kind: "SocketTimeout",
+        originalCode: "SQLITE_BUSY",
+        originalMessage: "database is locked",
+      },
+    }),
+    false,
+  );
+});
+
+test("serializable transaction retry classification safely rejects cyclic metadata", () => {
+  const cyclicCause: Record<string, unknown> = {};
+  cyclicCause.cause = cyclicCause;
+
+  const cyclicAdapterError: Record<string, unknown> = {
+    name: "DriverAdapterError",
+  };
+  cyclicAdapterError.cause = cyclicAdapterError;
+
+  assert.equal(isRetryableSerializableTransactionError(cyclicCause), false);
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      code: "P1008",
+      meta: { driverAdapterError: cyclicAdapterError },
+    }),
+    false,
+  );
+});
+
+test("serializable transaction retry classification bounds cause and adapter inspection depth", () => {
+  const deeplyNestedP2034: Record<string, unknown> = { code: "P2034" };
+  let causeChain = deeplyNestedP2034;
+  for (let depth = 0; depth < 100; depth += 1) {
+    causeChain = { cause: causeChain };
+  }
+
+  const deeplyNestedSqliteMetadata: Record<string, unknown> = {
+    kind: "SocketTimeout",
+    originalCode: "SQLITE_LOCKED",
+    originalMessage: "database table is locked: Comment",
+  };
+  let adapterCauseChain = deeplyNestedSqliteMetadata;
+  for (let depth = 0; depth < 100; depth += 1) {
+    adapterCauseChain = { cause: adapterCauseChain };
+  }
+
+  assert.equal(isRetryableSerializableTransactionError(causeChain), false);
+  assert.equal(
+    isRetryableSerializableTransactionError({
+      code: "P1008",
+      meta: {
+        driverAdapterError: {
+          name: "DriverAdapterError",
+          cause: adapterCauseChain,
+        },
+      },
+    }),
+    false,
+  );
+});
 
 test("comment service lists canonical threads after injected view context", async () => {
   const db = new FakeDb([
@@ -401,8 +579,13 @@ test("comment service creates trimmed text and visual root comments", async () =
 
 test("comment service creates slide root comments with geometry", async () => {
   const db = new FakeDb();
-  const { service } = makeService(db, "author-1", async () =>
-    buildDeck([{ id: "slide-1", elementIds: ["element-1"] }]),
+  const { service } = makeService(
+    db,
+    "author-1",
+    async (_documentId, transactionDb) => {
+      assert.equal(transactionDb, db as never);
+      return buildDeck([{ id: "slide-1", elementIds: ["element-1"] }]);
+    },
   );
 
   const anchorGeometry = { x: 1, y: 2, width: 3, height: 4 };
@@ -416,6 +599,60 @@ test("comment service creates slide root comments with geometry", async () => {
   assert.equal(db.comments[0].slideId, "slide-1");
   assert.equal(db.comments[0].elementId, "element-1");
   assert.deepEqual(db.comments[0].anchorGeometry, { x: 1, y: 2 });
+  assert.deepEqual(db.transactionOptions, [
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  ]);
+});
+
+test("comment service retries a serialization conflict and rejects an anchor removed by the concurrent deck save", async () => {
+  const db = new FakeDb();
+  let attempt = 0;
+  db.$transaction = async (operation, options = {}) => {
+    db.transactionOptions.push(options);
+    attempt += 1;
+    const beforeAttempt = [...db.comments];
+    const result = await operation(db as never);
+    if (attempt === 1) {
+      assert.equal(db.comments.length, 1);
+      db.comments = beforeAttempt;
+      throw Object.assign(new Error("serialization conflict"), {
+        code: "P2034",
+      });
+    }
+    return result;
+  };
+  const { service } = makeService(
+    db,
+    "author-1",
+    async (_documentId, transactionDb) => {
+      assert.equal(transactionDb, db as never);
+      return attempt === 1
+        ? buildDeck([{ id: "slide-1", elementIds: ["element-1"] }])
+        : buildDeck([{ id: "slide-1" }]);
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        body: "Racing anchor",
+        slideId: "slide-1",
+        elementId: "element-1",
+      }),
+    (error: unknown) =>
+      error instanceof CommentError && error.code === "slide_anchor_orphaned",
+  );
+
+  assert.equal(attempt, 2);
+  assert.equal(db.comments.length, 0);
+  assert.equal(
+    db.transactionOptions.every(
+      (options) =>
+        options.isolationLevel ===
+        Prisma.TransactionIsolationLevel.Serializable,
+    ),
+    true,
+  );
 });
 
 test("comment service rejects slide root comments with non-finite geometry", async () => {
@@ -521,11 +758,15 @@ test("comment service rejects empty created and edited comments", async () => {
 
   await assert.rejects(
     () => service.createComment("doc-1", { body: "   " }),
-    /Comment cannot be empty/,
+    (error: unknown) =>
+      error instanceof CommentError &&
+      error.code === "empty_body" &&
+      error.message === "Comment cannot be empty.",
   );
   await assert.rejects(
     () => service.editComment("thread-1", "   "),
-    /Comment cannot be empty/,
+    (error: unknown) =>
+      error instanceof CommentError && error.code === "empty_body",
   );
 });
 
@@ -575,6 +816,26 @@ test("comment service allows any viewer to resolve a thread", async () => {
   await service.setCommentResolved("thread-1", true);
 
   assert.equal(db.comments[0].resolved, true);
+});
+
+test("comment service rejects resolving a reply because resolved state belongs to roots", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", authorId: "author-1" }),
+    rootComment({
+      id: "reply-1",
+      parentId: "thread-1",
+      authorId: "author-2",
+    }),
+  ]);
+  const { service } = makeService(db, "viewer");
+
+  await assert.rejects(
+    () => service.setCommentResolved("reply-1", true),
+    (error: unknown) =>
+      error instanceof CommentError && error.code === "thread_required",
+  );
+
+  assert.equal(db.comments[1].resolved, false);
 });
 
 test("comment service counts unread and marks document comments read", async () => {

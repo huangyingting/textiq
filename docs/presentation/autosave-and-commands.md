@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-15"
 description: "Slide editor autosave, durable latest-snapshot queue, optimistic save conflicts, and deck command execution boundaries."
 ---
 
@@ -85,9 +85,15 @@ visible.
 
 `saveDeckJson` is the active presentation write path. It requires edit access,
 then delegates to `persistDeck`, which validates current Deck JSON, writes with
-optimistic revision-token compare-and-swap, snapshots a document version after
-a confirmed write, and reconciles slide comment anchors that now point at
-deleted slides or deleted nodes.
+optimistic revision-token compare-and-swap, reconciles slide comment anchors,
+and snapshots a document version. The deck write and required comment-anchor
+repairs share one transaction: missing-slide anchors float to deck level,
+missing-node anchors float to their surviving slide, and reconciliation failure
+returns a retryable storage error instead of silently reporting save success.
+The invariant-critical transaction is serializable and retries bounded provider
+conflicts. Version snapshots run only after that transaction commits and remain
+best-effort, so snapshot storage failures cannot poison or roll back the deck
+save transaction.
 
 `fetchDeckJson` returns the freshest saved deck and revision token for editor
 startup or conflict recovery. There is no presentation `saveDeckPatch` server

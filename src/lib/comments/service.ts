@@ -16,9 +16,12 @@ import {
   validateElementId,
   validateSlideId,
 } from "./anchors";
-import { mapCommentThreadRecord, type CommentThreadRecord } from "./mappers";
+import { CommentError } from "./errors";
+import { mapCommentThreadRecord } from "./mappers";
 import { canDeleteComment, canEditComment } from "./policy";
 import { isCommentUnread, type UnreadCountScope } from "./read-state";
+import { commentThreadSelect } from "./records";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import type {
   CommentThread,
   CreateCommentInput,
@@ -26,14 +29,11 @@ import type {
 } from "./types";
 import { resolveAnchorState } from "@/lib/comments/slide-comment-anchors";
 
-type CommentDb = Pick<typeof prisma, "comment" | "commentRead">;
-
-const SLIDE_COMMENT_DECK_MISSING_ERROR =
-  "Slide comments require a saved deck on this document.";
-const SLIDE_COMMENT_DECK_INVALID_ERROR =
-  "Slide comments require a valid saved presentation deck.";
-const SLIDE_COMMENT_ANCHOR_ORPHANED_ERROR =
-  "Slide comment anchor must reference an existing slide or element in the saved deck.";
+type CommentDb = Pick<
+  typeof prisma,
+  "$transaction" | "comment" | "commentRead"
+>;
+type DeckLoadDb = Pick<Prisma.TransactionClient, "document">;
 
 export type CommentCapabilityContext = {
   user: { id: string };
@@ -51,7 +51,10 @@ export type CommentMutationResult = {
 
 export type CommentService = ReturnType<typeof createCommentService>;
 
-export type LoadDeckForDocument = (documentId: string) => Promise<Deck>;
+export type LoadDeckForDocument = (
+  documentId: string,
+  db?: DeckLoadDb,
+) => Promise<Deck>;
 
 type CommentServiceDeps = {
   db?: CommentDb;
@@ -59,31 +62,6 @@ type CommentServiceDeps = {
   requireDocumentContext: RequireCommentDocumentContext;
   loadDeckForDocument?: LoadDeckForDocument;
 };
-
-function commentSelect() {
-  return {
-    id: true,
-    body: true,
-    resolved: true,
-    anchorType: true,
-    anchorText: true,
-    anchorNodeId: true,
-    slideId: true,
-    elementId: true,
-    anchorGeometry: true,
-    createdAt: true,
-    author: { select: { id: true, name: true, email: true } },
-    replies: {
-      orderBy: { createdAt: "asc" as const },
-      select: {
-        id: true,
-        body: true,
-        createdAt: true,
-        author: { select: { id: true, name: true, email: true } },
-      },
-    },
-  };
-}
 
 function scopedCommentWhere(options: ListCommentsOptions) {
   const { anchorScope = "all" } = options;
@@ -116,17 +94,26 @@ export function createCommentService({
   db = prisma,
   now = () => new Date(),
   requireDocumentContext,
-  loadDeckForDocument = async (documentId: string): Promise<Deck> => {
-    const document = await prisma.document.findUnique({
+  loadDeckForDocument = async (
+    documentId: string,
+    db: DeckLoadDb = prisma,
+  ): Promise<Deck> => {
+    const document = await db.document.findUnique({
       where: { id: documentId },
       select: { deckJson: true },
     });
     if (!document?.deckJson) {
-      throw new Error(SLIDE_COMMENT_DECK_MISSING_ERROR);
+      throw new CommentError(
+        "slide_deck_missing",
+        "Slide comments require a saved deck on this document.",
+      );
     }
     const parsed = safeParseDeck(document.deckJson);
     if (!parsed.success) {
-      throw new Error(SLIDE_COMMENT_DECK_INVALID_ERROR);
+      throw new CommentError(
+        "slide_deck_invalid",
+        "Slide comments require a valid saved presentation deck.",
+      );
     }
     return parsed.data;
   },
@@ -142,12 +129,10 @@ export function createCommentService({
         ...scopedCommentWhere(options),
       },
       orderBy: { createdAt: "asc" },
-      select: commentSelect(),
+      select: commentThreadSelect,
     });
 
-    return roots.map((root) =>
-      mapCommentThreadRecord(root as CommentThreadRecord),
-    );
+    return roots.map(mapCommentThreadRecord);
   }
 
   async function listComments(
@@ -166,7 +151,7 @@ export function createCommentService({
 
     const body = input.body.trim().slice(0, COMMENT_BODY_MAX_LENGTH);
     if (body.length === 0) {
-      throw new Error("Comment cannot be empty.");
+      throw new CommentError("empty_body", "Comment cannot be empty.");
     }
 
     if (input.parentId) {
@@ -175,7 +160,7 @@ export function createCommentService({
         select: { id: true },
       });
       if (!parent) {
-        throw new Error("Parent comment not found.");
+        throw new CommentError("parent_not_found", "Parent comment not found.");
       }
 
       await db.comment.create({
@@ -197,23 +182,28 @@ export function createCommentService({
           elementId,
           geometry,
         };
-        const deck = await loadDeckForDocument(documentId);
-        if (resolveAnchorState(slideAnchor, deck) !== "attached") {
-          throw new Error(SLIDE_COMMENT_ANCHOR_ORPHANED_ERROR);
-        }
         const anchorRecord = slideAnchorToRecord(slideAnchor);
-        await db.comment.create({
-          data: {
-            documentId,
-            authorId: user.id,
-            body,
-            slideId: anchorRecord.slideId,
-            elementId: anchorRecord.elementId,
-            anchorGeometry:
-              anchorRecord.anchorGeometry != null
-                ? (anchorRecord.anchorGeometry as Prisma.InputJsonValue)
-                : Prisma.DbNull,
-          },
+        await runSerializableTransaction(db, async (tx) => {
+          const deck = await loadDeckForDocument(documentId, tx);
+          if (resolveAnchorState(slideAnchor, deck) !== "attached") {
+            throw new CommentError(
+              "slide_anchor_orphaned",
+              "Slide comment anchor must reference an existing slide or element in the saved deck.",
+            );
+          }
+          await tx.comment.create({
+            data: {
+              documentId,
+              authorId: user.id,
+              body,
+              slideId: anchorRecord.slideId,
+              elementId: anchorRecord.elementId,
+              anchorGeometry:
+                anchorRecord.anchorGeometry != null
+                  ? (anchorRecord.anchorGeometry as Prisma.InputJsonValue)
+                  : Prisma.DbNull,
+            },
+          });
         });
       } else {
         const anchorType = normalizeAnchorType(input.anchorType ?? null);
@@ -257,17 +247,20 @@ export function createCommentService({
       select: { id: true, documentId: true, authorId: true },
     });
     if (!comment) {
-      throw new Error("Comment not found.");
+      throw new CommentError("comment_not_found", "Comment not found.");
     }
 
     const { user } = await requireDocumentContext(comment.documentId, "view");
     if (!canEditComment(user.id, comment)) {
-      throw new Error("You can only edit your own comments.");
+      throw new CommentError(
+        "edit_forbidden",
+        "You can only edit your own comments.",
+      );
     }
 
     const body = newBody.trim().slice(0, COMMENT_BODY_MAX_LENGTH);
     if (body.length === 0) {
-      throw new Error("Comment cannot be empty.");
+      throw new CommentError("empty_body", "Comment cannot be empty.");
     }
 
     await db.comment.update({
@@ -289,12 +282,15 @@ export function createCommentService({
       select: { id: true, documentId: true, authorId: true },
     });
     if (!comment) {
-      throw new Error("Comment not found.");
+      throw new CommentError("comment_not_found", "Comment not found.");
     }
 
     const { user } = await requireDocumentContext(comment.documentId, "view");
     if (!canDeleteComment(user.id, comment)) {
-      throw new Error("You can only delete your own comments.");
+      throw new CommentError(
+        "delete_forbidden",
+        "You can only delete your own comments.",
+      );
     }
 
     await db.comment.delete({ where: { id: commentId } });
@@ -311,13 +307,19 @@ export function createCommentService({
   ): Promise<CommentMutationResult> {
     const comment = await db.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, documentId: true },
+      select: { id: true, documentId: true, parentId: true },
     });
     if (!comment) {
-      throw new Error("Comment not found.");
+      throw new CommentError("comment_not_found", "Comment not found.");
+    }
+    await requireDocumentContext(comment.documentId, "view");
+    if (comment.parentId !== null) {
+      throw new CommentError(
+        "thread_required",
+        "Only top-level comment threads can be resolved.",
+      );
     }
 
-    await requireDocumentContext(comment.documentId, "view");
     await db.comment.update({
       where: { id: commentId },
       data: { resolved },

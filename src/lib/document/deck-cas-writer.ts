@@ -23,7 +23,7 @@ export type DeckCasWriteOptions = {
   clientToken?: string | null;
   telemetryArea: string;
   db?: DeckCasDb;
-  onSuccess?: () => Promise<void>;
+  throwOnStorageError?: boolean;
 };
 
 function fail(
@@ -48,7 +48,7 @@ export async function writeDeckWithCas({
   clientToken,
   telemetryArea,
   db = prisma,
-  onSuccess,
+  throwOnStorageError = false,
 }: DeckCasWriteOptions): Promise<SaveDeckResult> {
   const presentationResult = safeParseDeck(deckJson);
   if (!presentationResult.success) {
@@ -85,6 +85,9 @@ export async function writeDeckWithCas({
     });
     count = update.count;
   } catch (error) {
+    if (throwOnStorageError) {
+      throw error;
+    }
     logError("deck.cas", error, {
       documentId,
       operation: "updateMany",
@@ -105,6 +108,9 @@ export async function writeDeckWithCas({
         select: { deckRevisionToken: true },
       });
     } catch (error) {
+      if (throwOnStorageError) {
+        throw error;
+      }
       logError("deck.cas", error, {
         documentId,
         operation: "findUnique",
@@ -122,18 +128,6 @@ export async function writeDeckWithCas({
       ok: "conflict",
       serverRevisionToken: latest.deckRevisionToken,
     };
-  }
-
-  if (onSuccess) {
-    try {
-      await onSuccess();
-    } catch (error) {
-      logError("deck.cas", error, {
-        documentId,
-        operation: "onSuccess",
-        telemetryArea,
-      });
-    }
   }
 
   /* node:coverage ignore next -- CAS success return is asserted; tsx maps the tail as uncovered. */
