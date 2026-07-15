@@ -249,6 +249,49 @@ test("leaveWorkspaceForUser deletes a non-owner member row", async (t) => {
   assert.deepEqual(deleted, [{ where: { id: "member-1" } }]);
 });
 
+test("leaveWorkspaceForUser lets malformed or OWNER membership rows exit without role coercion", async (t) => {
+  const deleted: unknown[] = [];
+  let documentUpdateCalls = 0;
+  const membershipRows: Array<{ id: string; role: string }> = [
+    { id: "member-owner-role", role: "OWNER" },
+    { id: "member-malformed-role", role: "BROKEN_ROLE" },
+  ];
+
+  replacePrismaProperty(t, "workspace", {
+    async findFirst() {
+      return { ownerId: "workspace-owner-1" };
+    },
+  });
+  replacePrismaProperty(t, "workspaceMember", {
+    async findFirst() {
+      return membershipRows.shift() ?? null;
+    },
+    async delete(args: unknown) {
+      deleted.push(args);
+      return {};
+    },
+  });
+  replacePrismaProperty(t, "document", {
+    async updateMany() {
+      documentUpdateCalls += 1;
+      return { count: 0 };
+    },
+  });
+
+  await leaveWorkspaceForUser("workspace-1", "member-user-1");
+  await leaveWorkspaceForUser("workspace-1", "member-user-1");
+
+  assert.deepEqual(deleted, [
+    { where: { id: "member-owner-role" } },
+    { where: { id: "member-malformed-role" } },
+  ]);
+  assert.equal(
+    documentUpdateCalls,
+    0,
+    "leave should not rewrite owned document rows when removing membership",
+  );
+});
+
 test("transferWorkspaceOwnership validates target membership and applies owner CAS with demotion", async (t) => {
   await assert.rejects(
     transferWorkspaceOwnership({

@@ -1,67 +1,39 @@
-import type { WorkspaceRole } from "./roles";
+import type { EffectiveWorkspaceRole } from "./roles";
 
-/**
- * Returns true when the role allows creating documents in a workspace.
- * Owners and editors may mutate; viewers and unknown values are denied.
- */
-export function canCreateInWorkspace(
-  role: WorkspaceRole | null | undefined,
-): boolean {
-  return role === "OWNER" || role === "EDITOR";
+export type WorkspaceCapabilityFlags = {
+  readonly canView: boolean;
+  readonly canMutate: boolean;
+  readonly canManage: boolean;
+};
+
+export type WorkspaceAccessRole = EffectiveWorkspaceRole | "none";
+export type WorkspaceCapabilityMode = "view" | "mutate" | "manage";
+
+// Private frozen canonical map — not exported to prevent runtime mutation of shared state.
+// Callers must use the exported query functions below.
+const CAPABILITIES = Object.freeze({
+  owner: Object.freeze({ canView: true, canMutate: true, canManage: true }),
+  editor: Object.freeze({ canView: true, canMutate: true, canManage: false }),
+  viewer: Object.freeze({ canView: true, canMutate: false, canManage: false }),
+  none: Object.freeze({ canView: false, canMutate: false, canManage: false }),
+} as const satisfies Record<WorkspaceAccessRole, WorkspaceCapabilityFlags>);
+
+export function capabilitiesForWorkspaceAccessRole(
+  role: WorkspaceAccessRole,
+): Readonly<WorkspaceCapabilityFlags> {
+  return CAPABILITIES[role];
 }
 
-/**
- * Returns true when the role allows importing documents into a workspace.
- * Owners and editors may mutate; viewers and unknown values are denied.
- */
-export function canImportInWorkspace(
-  role: WorkspaceRole | null | undefined,
+export function workspaceRoleCan(
+  role: WorkspaceAccessRole,
+  capability: WorkspaceCapabilityMode,
 ): boolean {
-  return role === "OWNER" || role === "EDITOR";
+  const capabilities = CAPABILITIES[role];
+  if (capability === "view") {
+    return capabilities.canView;
+  }
+  if (capability === "mutate") {
+    return capabilities.canMutate;
+  }
+  return capabilities.canManage;
 }
-
-/**
- * Returns true when the role allows renaming a workspace. Owner-only: editors,
- * viewers, non-members, and unknown values are denied.
- */
-export function canRenameWorkspace(
-  role: WorkspaceRole | null | undefined,
-): boolean {
-  return role === "OWNER";
-}
-
-/**
- * Returns true when the role allows deleting a workspace. Owner-only: editors,
- * viewers, non-members, and unknown values are denied.
- */
-export function canDeleteWorkspace(
-  role: WorkspaceRole | null | undefined,
-): boolean {
-  return role === "OWNER";
-}
-
-/**
- * Returns true when the caller may leave a workspace. Any non-owner member
- * (editor or viewer) may leave by deleting their own membership. The owner may
- * NOT leave — they must transfer ownership first — so this returns false when
- * `isOwner` is true regardless of role. Non-members (null/unknown) are denied.
- *
- * `isOwner` is derived server-side from `Workspace.ownerId`; the `role` guard
- * additionally rejects a stale `OWNER` membership row that no longer matches.
- */
-export function canLeaveWorkspace(
-  role: WorkspaceRole | null | undefined,
-  isOwner: boolean,
-): boolean {
-  if (isOwner) return false;
-  return role === "EDITOR" || role === "VIEWER";
-}
-
-/* node:coverage disable */
-// Transfer capability behavior is asserted; tsx maps this tiny facade as uncovered.
-export function canTransferOwnership(
-  role: WorkspaceRole | null | undefined,
-): boolean {
-  return role === "OWNER";
-}
-/* node:coverage enable */

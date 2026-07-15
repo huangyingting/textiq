@@ -1,10 +1,10 @@
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import type { InvitableWorkspaceRole } from "@/lib/workspace/roles";
 import type { InviteDenyReason } from "@/lib/invite-access";
 
 export type InviteLink = {
   id: string;
   token: string;
-  role: WorkspaceRole;
+  role: InvitableWorkspaceRole;
   createdAt: Date;
   expiresAt: Date | null;
   maxUses: number | null;

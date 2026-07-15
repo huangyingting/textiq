@@ -5,11 +5,22 @@ import Link from "next/link";
 import { EMPTY_STATE_CHROME, PANEL_CHROME, cx } from "@/components/ui";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import {
+  assertPersistedWorkspaceMemberRole,
+  type EffectiveWorkspaceRole,
+  persistedMemberRoleToEffectiveRole,
+} from "@/lib/workspace/roles";
 
 import { CreateWorkspaceButton } from "./create-workspace-button";
 
 export const metadata: Metadata = {
   title: "Workspaces — TextIQ",
+};
+
+const ROLE_BADGE_LABELS: Record<EffectiveWorkspaceRole, string> = {
+  owner: "OWNER",
+  editor: "EDITOR",
+  viewer: "VIEWER",
 };
 
 export default async function WorkspacesPage() {
@@ -50,10 +61,23 @@ export default async function WorkspacesPage() {
   });
 
   const allWorkspaces = [
-    ...ownedWorkspaces.map((w) => ({ ...w, userRole: "OWNER" as const })),
+    ...ownedWorkspaces.map((workspace) => ({
+      ...workspace,
+      userRole: "owner" as const,
+    })),
     ...memberWorkspaces.map((w) => ({
       ...w,
-      userRole: w.members[0]?.role || ("VIEWER" as const),
+      userRole: (() => {
+        const membershipRole = w.members[0]?.role;
+        if (!membershipRole) {
+          throw new Error(
+            `Workspace ${w.id} is missing the caller membership row.`,
+          );
+        }
+        return persistedMemberRoleToEffectiveRole(
+          assertPersistedWorkspaceMemberRole(membershipRole),
+        );
+      })(),
       members: undefined,
     })),
   ];
@@ -109,7 +133,7 @@ export default async function WorkspacesPage() {
                         {workspace.name}
                       </h3>
                       <span className="shrink-0 rounded-full bg-ds-surface-sunken px-2 py-0.5 text-xs font-medium text-ds-text-secondary">
-                        {workspace.userRole}
+                        {ROLE_BADGE_LABELS[workspace.userRole]}
                       </span>
                     </div>
                     <div className="flex flex-col gap-1 text-xs text-ds-text-muted">

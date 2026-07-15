@@ -2,32 +2,16 @@
 /**
  * Centralized, role-aware workspace permission helper.
  *
- * Mirrors `src/lib/auth/document-permissions.ts` so workspace authorization
- * follows the same structure and can be reasoned about in the same way.
- *
  * A user's effective role for a workspace is derived from workspace ownership
  * and their `WorkspaceMember` row:
  *
- *   - owner  — is the workspace `ownerId`
- *   - editor — `EDITOR` member of the workspace
- *   - viewer — `VIEWER` member (or any other recognized member)
- *   - none   — no relationship to the workspace at all
+ *   - owner  — `Workspace.ownerId === userId`
+ *   - editor — persisted `WorkspaceMember.role = EDITOR`
+ *   - viewer — persisted `WorkspaceMember.role = VIEWER`
+ *   - none   — no relationship to the workspace
  *
- * Capabilities map from the role:
- *
- *   - canView   — owner | editor | viewer (list/read workspace documents)
- *   - canMutate — owner | editor (create, import, or duplicate documents)
- *   - canManage — owner only (rename, delete, transfer, invite, revoke links,
- *                             remove/demote members)
- *
- * The pure functions (`deriveWorkspaceRole`, `capabilitiesForWorkspaceRole`,
- * `workspaceCapabilities`, `assertWorkspaceCapability`) are DB-free and
- * exhaustively unit tested. The async wrappers fetch the workspace with the
- * membership context and apply the same logic.
- *
- * Replacing the local `requireWorkspaceOwner`/`requireWorkspaceMutator`
- * helpers in `actions.ts` with `requireWorkspaceCapability` centralises access
- * rules without changing any existing access decision.
+ * Persisted `OWNER`/unknown membership rows are treated as data-integrity
+ * violations and surfaced explicitly (never coerced to viewer/owner).
  */
 /* @preserve node:coverage ignore stop */
 
@@ -38,16 +22,22 @@ import {
   type AccessDeniedDecision,
 } from "@/lib/access-policy/taxonomy";
 import {
-  type ResourceRole,
+  capabilitiesForWorkspaceAccessRole,
+  workspaceRoleCan,
+  type WorkspaceCapabilityMode,
+  type WorkspaceAccessRole,
+} from "@/lib/workspace/capabilities";
+import {
   createPermissionBuilder,
   deriveRoleFromOwnerAndMembers,
+  RoleResolutionDataIntegrityError,
 } from "./permission-builder";
 
-/** Effective role of a user for a single workspace. */
-export type WorkspaceRole = ResourceRole;
+/** Effective access role of a user for a single workspace. */
+export type WorkspaceRole = WorkspaceAccessRole;
 
-/** A workspace capability that a mutation/action can require. */
-export type WorkspaceCapability = "view" | "mutate" | "manage";
+/** A workspace capability that an action can require. */
+export type WorkspaceCapability = WorkspaceCapabilityMode;
 
 /** The resolved capability set for a (user, workspace) pair. */
 export type WorkspaceCapabilities = {
@@ -59,15 +49,14 @@ export type WorkspaceCapabilities = {
 
 /**
  * Minimal workspace shape needed to derive a role. The `members` list should
- * contain the membership row(s) for the acting user (each carrying its
- * `userId` and `role`), mirroring the relation as stored in the database.
+ * contain membership row(s) for the acting user.
  */
 export type WorkspaceRoleInput = {
   ownerId: string;
   members: { userId: string; role: string }[];
 };
 
-/** Minimal workspace identity returned by the async permission lookups. */
+/** Minimal workspace identity returned by async permission lookups. */
 export type WorkspaceIdentity = {
   id: string;
   ownerId: string;
@@ -75,8 +64,7 @@ export type WorkspaceIdentity = {
 
 /**
  * Thrown when a user attempts a workspace action they are not authorized to
- * perform. The `capability` is `null` for a pure "no access" case (the user
- * cannot even view the workspace).
+ * perform. The `capability` is `null` for pure no-access/not-found checks.
  */
 export class WorkspacePermissionError extends Error {
   readonly capability: WorkspaceCapability | null;
@@ -94,6 +82,35 @@ export class WorkspacePermissionError extends Error {
   }
 }
 
+function workspaceInvalidMembershipDecision(
+  capability: WorkspaceCapability,
+): AccessDeniedDecision {
+  return denyAccess({
+    resource: { kind: "workspace" },
+    capability,
+    reason: "invalid-role",
+    status: 403,
+    safeMessage:
+      "Workspace membership data is invalid and must be repaired before this action can proceed.",
+    concealResource: false,
+  });
+}
+
+function asWorkspaceDataIntegrityPermissionError(
+  capability: WorkspaceCapability,
+  error: unknown,
+): WorkspacePermissionError | null {
+  if (!(error instanceof RoleResolutionDataIntegrityError)) {
+    return null;
+  }
+  const decision = workspaceInvalidMembershipDecision(capability);
+  return new WorkspacePermissionError(
+    decision.safeMessage,
+    capability,
+    decision,
+  );
+}
+
 export function deriveWorkspaceRole(
   workspace: WorkspaceRoleInput,
   userId: string,
@@ -105,7 +122,7 @@ export function deriveWorkspaceRole(
   );
 }
 
-/** Permission-builder instance for the workspace resource type. */
+/** Permission-builder instance for workspace access decisions. */
 const _wsBuilder = createPermissionBuilder({
   resource: "workspace",
   /*! @preserve node:coverage ignore next 8 -- Builder metadata is asserted via workspace decision tests; tsx maps object-literal fields as uncovered. */
@@ -117,37 +134,37 @@ const _wsBuilder = createPermissionBuilder({
       "Only workspace owners and editors may create or import documents.",
     manageDenied: "Only the workspace owner may perform this action.",
   },
+  isCapabilityAllowed: (caps, capability) => {
+    if (
+      capability !== "view" &&
+      capability !== "mutate" &&
+      capability !== "manage"
+    ) {
+      return true;
+    }
+    return workspaceRoleCan(caps.role, capability);
+  },
 });
 
-/** Maps a {@link WorkspaceRole} to its concrete capability flags. */
+/** Maps a {@link WorkspaceRole} to concrete capability flags. */
 export function capabilitiesForWorkspaceRole(
-  /*! @preserve node:coverage ignore next -- Role inputs are covered by the capability matrix; tsx maps this wrapper signature as uncovered. */
   role: WorkspaceRole,
 ): WorkspaceCapabilities {
-  /*! @preserve node:coverage ignore next -- Capability matrix executes this wrapper; tsx maps the delegation as uncovered. */
-  return _wsBuilder.capabilitiesForRole(role);
+  const capabilities = capabilitiesForWorkspaceAccessRole(role);
+  return { role, ...capabilities };
 }
 
-/**
- * Convenience: derive the role from a workspace shape and map it to
- * capabilities in one call. Pure and DB-free.
- */
+/** Convenience: derive role and map capabilities in one pure call. */
 export function workspaceCapabilities(
-  /* node:coverage ignore next -- End-to-end workspace role tests execute this facade; tsx maps the signature as uncovered. */
   workspace: WorkspaceRoleInput,
-  /* node:coverage ignore next -- End-to-end workspace role tests execute this facade; tsx maps the signature as uncovered. */
   userId: string,
 ): WorkspaceCapabilities {
-  /* node:coverage ignore next -- End-to-end workspace role tests execute this facade; tsx maps the return as uncovered. */
   return capabilitiesForWorkspaceRole(deriveWorkspaceRole(workspace, userId));
 }
 
 /**
- * Throws a {@link WorkspacePermissionError} when `capabilities` does not
- * satisfy the required `capability`. A user who cannot even view the workspace
- * gets the generic "Workspace not found." message (so the action never leaks
- * whether a workspace exists to an unrelated user); a viewer who lacks
- * `mutate` or `manage` gets a clear permission error.
+ * Throws a {@link WorkspacePermissionError} when `capabilities` does not satisfy
+ * `capability`.
  */
 export function assertWorkspaceCapability(
   capabilities: WorkspaceCapabilities,
@@ -174,16 +191,11 @@ export function workspaceCapabilityAccessDecision(
   return _wsBuilder.capabilityAccessDecision(capabilities, capability);
 }
 
-/**
- * Fetches the workspace (with the acting user's membership context) and
- * resolves its capabilities. Returns a `none` capability set with
- * `workspace: null` when the workspace does not exist.
- */
 async function getWorkspaceCapabilities(
   userId: string,
   workspaceId: string,
 ): Promise<WorkspaceCapabilities & { workspace: WorkspaceIdentity | null }> {
-  const ws = await prisma.workspace.findUnique({
+  const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: {
       id: true,
@@ -195,32 +207,38 @@ async function getWorkspaceCapabilities(
     },
   });
 
-  if (!ws) {
+  if (!workspace) {
     return { ...capabilitiesForWorkspaceRole("none"), workspace: null };
   }
 
-  const capabilities = workspaceCapabilities(ws, userId);
+  const capabilities = workspaceCapabilities(workspace, userId);
   return {
     ...capabilities,
-    workspace: { id: ws.id, ownerId: ws.ownerId },
+    workspace: { id: workspace.id, ownerId: workspace.ownerId },
   };
 }
 
 /**
- * Authorizes the current user for `capability` on a workspace, throwing a
- * clear {@link WorkspacePermissionError} when not allowed. Returns the
- * workspace identity and resolved capabilities on success so the caller can
- * proceed with the mutation.
- *
- * This is the single entry point for workspace authorization and replaces the
- * local `requireWorkspaceOwner`/`requireWorkspaceMutator` helpers.
+ * Authorizes the current user for `capability` on a workspace.
  */
 export async function requireWorkspaceCapability(
   userId: string,
   workspaceId: string,
   capability: WorkspaceCapability,
 ): Promise<WorkspaceCapabilities & { workspace: WorkspaceIdentity }> {
-  const result = await getWorkspaceCapabilities(userId, workspaceId);
+  let result: WorkspaceCapabilities & { workspace: WorkspaceIdentity | null };
+  try {
+    result = await getWorkspaceCapabilities(userId, workspaceId);
+  } catch (error) {
+    const integrityError = asWorkspaceDataIntegrityPermissionError(
+      capability,
+      error,
+    );
+    if (integrityError) {
+      throw integrityError;
+    }
+    throw error;
+  }
 
   if (!result.workspace) {
     throw new WorkspacePermissionError(

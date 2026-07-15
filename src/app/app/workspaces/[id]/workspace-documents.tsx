@@ -13,10 +13,8 @@ import {
   cx,
 } from "@/components/ui";
 import { TEMPLATE_CATALOG } from "@/lib/templates/catalog";
-import {
-  canCreateInWorkspace,
-  canImportInWorkspace,
-} from "@/lib/workspace/capabilities";
+import { capabilitiesForWorkspaceAccessRole } from "@/lib/workspace/capabilities";
+import type { EffectiveWorkspaceRole } from "@/lib/workspace/roles";
 import {
   DOCUMENT_IMPORT_ACCEPT,
   useDocumentImportWorkflow,
@@ -220,7 +218,7 @@ export function WorkspaceDocuments({
   userRole,
 }: {
   workspaceId: string;
-  userRole: "OWNER" | "EDITOR" | "VIEWER";
+  userRole: EffectiveWorkspaceRole;
 }) {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -228,8 +226,9 @@ export function WorkspaceDocuments({
   const [error, setError] = useState<string | null>(null);
   const [loadKey, setLoadKey] = useState(0);
 
-  const canCreate = canCreateInWorkspace(userRole);
-  const canImport = canImportInWorkspace(userRole);
+  const roleCapabilities = capabilitiesForWorkspaceAccessRole(userRole);
+  const canCreate = roleCapabilities.canMutate;
+  const canImport = roleCapabilities.canMutate;
 
   const retry = () => {
     setError(null);

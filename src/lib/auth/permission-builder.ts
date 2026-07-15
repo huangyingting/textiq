@@ -12,12 +12,17 @@
  *
  * This module provides the shared primitives so both consumers produce
  * structurally identical results from one implementation.
- *
- * `DocumentRole` and `WorkspaceRole` are aliases of `ResourceRole`; the
- * four-member union is defined once here.
  */
 
-import { asWorkspaceRole } from "@/lib/workspace/roles";
+import {
+  parsePersistedWorkspaceMemberRole,
+  persistedMemberRoleToEffectiveRole,
+  type WorkspaceMemberRoleParseError,
+} from "@/lib/workspace/roles";
+import {
+  capabilitiesForWorkspaceAccessRole,
+  type WorkspaceAccessRole,
+} from "@/lib/workspace/capabilities";
 import {
   allowAccess,
   denyAccess,
@@ -26,23 +31,42 @@ import {
   type AccessResourceKind,
 } from "@/lib/access-policy/taxonomy";
 
-/**
- * The four effective resource roles used across all permission modules.
- * `DocumentRole` and `WorkspaceRole` are re-exported aliases of this type.
- */
-export type ResourceRole = "owner" | "editor" | "viewer" | "none";
+/** Shared access-role union (`none` means no relationship to the resource). */
+export type ResourceRole = WorkspaceAccessRole;
 
 /** Membership row shape shared by both resource types. */
 export type MemberRow = { userId: string; role: string };
 
+export type RoleResolutionDataIntegrity = {
+  ownerId: string;
+  userId: string;
+  membershipRole: unknown;
+  parseError: WorkspaceMemberRoleParseError;
+};
+
+/**
+ * Raised when a persisted membership role cannot be interpreted safely.
+ *
+ * This is a data-integrity signal: permission consumers must surface it
+ * explicitly (never coerce to viewer/owner and continue).
+ */
+export class RoleResolutionDataIntegrityError extends Error {
+  readonly details: RoleResolutionDataIntegrity;
+
+  constructor(details: RoleResolutionDataIntegrity) {
+    super(details.parseError.message);
+    this.name = "RoleResolutionDataIntegrityError";
+    this.details = details;
+  }
+}
+
 /**
  * Derives a `ResourceRole` from a flat owner-id and member list.
  *
- * Shared implementation used by both `deriveDocumentRole` (workspace
- * membership path) and `deriveWorkspaceRole`.
- *
- * Unknown or garbled membership role strings are coerced to the
- * least-privilege `VIEWER` via {@link asWorkspaceRole}.
+ * - `owner` is derived ONLY from `ownerId`.
+ * - membership rows may only contribute `editor` or `viewer`.
+ * - malformed or `OWNER` membership rows throw
+ *   {@link RoleResolutionDataIntegrityError}.
  */
 export function deriveRoleFromOwnerAndMembers(
   ownerId: string,
@@ -50,14 +74,24 @@ export function deriveRoleFromOwnerAndMembers(
   userId: string,
 ): ResourceRole {
   if (ownerId === userId) return "owner";
-  const membership = members.find((m) => m.userId === userId);
-  if (membership) {
-    const role = asWorkspaceRole(membership.role);
-    if (role === "OWNER") return "owner";
-    if (role === "EDITOR") return "editor";
-    return "viewer";
+  const membership = members.find((member) => member.userId === userId);
+  if (!membership) {
+    return "none";
   }
-  return "none";
+
+  const parsedMembershipRole = parsePersistedWorkspaceMemberRole(
+    membership.role,
+  );
+  if (!parsedMembershipRole.success) {
+    throw new RoleResolutionDataIntegrityError({
+      ownerId,
+      userId,
+      membershipRole: membership.role,
+      parseError: parsedMembershipRole.error,
+    });
+  }
+
+  return persistedMemberRoleToEffectiveRole(parsedMembershipRole.value);
 }
 
 /**
@@ -92,6 +126,10 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
     midCapDenied: string;
     manageDenied: string;
   };
+  isCapabilityAllowed?: (
+    caps: ResourceCapabilities<TMidCapKey>,
+    capability: AccessCapabilityMode,
+  ) => boolean;
 }): {
   capabilitiesForRole: (role: ResourceRole) => ResourceCapabilities<TMidCapKey>;
   capabilityAccessDecision: (
@@ -99,17 +137,18 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
     capability: AccessCapabilityMode,
   ) => AccessDecision;
 } {
-  const { resource, midCapKey, midCapMode, messages } = config;
+  const { resource, midCapKey, midCapMode, messages, isCapabilityAllowed } =
+    config;
 
   function capabilitiesForRole(
     role: ResourceRole,
   ): ResourceCapabilities<TMidCapKey> {
-    const canMid = role === "owner" || role === "editor";
+    const wsFlags = capabilitiesForWorkspaceAccessRole(role);
     return {
       role,
-      canView: role !== "none",
-      [midCapKey]: canMid,
-      canManage: role === "owner",
+      canView: wsFlags.canView,
+      [midCapKey]: wsFlags.canMutate,
+      canManage: wsFlags.canManage,
     } as ResourceCapabilities<TMidCapKey>;
   }
 
@@ -128,7 +167,17 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
       });
     }
     const canMid = (caps as { [K in TMidCapKey]: boolean })[midCapKey];
-    if (capability === midCapMode && !canMid) {
+    const defaultAllowed =
+      capability === midCapMode
+        ? canMid
+        : capability === "manage"
+          ? caps.canManage
+          : true;
+    const allowed = isCapabilityAllowed
+      ? isCapabilityAllowed(caps, capability)
+      : defaultAllowed;
+
+    if (!allowed && capability === midCapMode) {
       return denyAccess({
         resource: { kind: resource },
         capability,
@@ -138,7 +187,7 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
         concealResource: false,
       });
     }
-    if (capability === "manage" && !caps.canManage) {
+    if (!allowed && capability === "manage") {
       return denyAccess({
         resource: { kind: resource },
         capability,

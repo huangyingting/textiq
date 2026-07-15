@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-14"
 description: "This document defines document-level access control and public share behavior. It covers authenticated app permissions, public share/embed/present routes, and collaboration upgrade authorization."
 ---
 
@@ -13,19 +13,19 @@ collaboration upgrade authorization.
 
 ## Source Files
 
-| Area                    | Source                                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
-| Access taxonomy         | [`src/lib/access-policy/taxonomy.ts`](../../src/lib/access-policy/taxonomy.ts)                   |
-| Access adapters         | [`src/lib/access-policy/adapters.ts`](../../src/lib/access-policy/adapters.ts)                   |
-| Document capabilities   | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)             |
-| Workspace role coercion | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                 |
-| Share access policy     | [`src/lib/share-access.ts`](../../src/lib/share-access.ts)                                       |
-| Share route             | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                 |
-| Embed route             | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                 |
-| Present route           | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)             |
-| Present embed route     | [`src/app/present/[shareId]/embed/page.tsx`](../../src/app/present/%5BshareId%5D/embed/page.tsx) |
-| Collab authorize route  | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)           |
-| Share actions           | [`src/app/app/documents/[id]/actions.ts`](../../src/app/app/documents/%5Bid%5D/actions.ts)       |
+| Area                   | Source                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| Access taxonomy        | [`src/lib/access-policy/taxonomy.ts`](../../src/lib/access-policy/taxonomy.ts)                   |
+| Access adapters        | [`src/lib/access-policy/adapters.ts`](../../src/lib/access-policy/adapters.ts)                   |
+| Document capabilities  | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)             |
+| Workspace role policy  | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                 |
+| Share access policy    | [`src/lib/share-access.ts`](../../src/lib/share-access.ts)                                       |
+| Share route            | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                 |
+| Embed route            | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                 |
+| Present route          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)             |
+| Present embed route    | [`src/app/present/[shareId]/embed/page.tsx`](../../src/app/present/%5BshareId%5D/embed/page.tsx) |
+| Collab authorize route | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)           |
+| Share actions          | [`src/app/app/documents/[id]/actions.ts`](../../src/app/app/documents/%5Bid%5D/actions.ts)       |
 
 ## Authenticated Document Roles
 
@@ -35,12 +35,19 @@ collaboration upgrade authorization.
 2. workspace ownership;
 3. workspace membership role.
 
-| Role     | Source                                              | Capabilities       |
-| -------- | --------------------------------------------------- | ------------------ |
-| `owner`  | Document owner, workspace owner, or `OWNER` member. | view, edit, manage |
-| `editor` | `EDITOR` workspace member.                          | view, edit         |
-| `viewer` | `VIEWER` workspace member.                          | view               |
-| `none`   | No relationship.                                    | none               |
+| Role     | Source                             | Capabilities       |
+| -------- | ---------------------------------- | ------------------ |
+| `owner`  | Document owner or workspace owner. | view, edit, manage |
+| `editor` | `EDITOR` workspace member.         | view, edit         |
+| `viewer` | `VIEWER` workspace member.         | view               |
+| `none`   | No relationship.                   | none               |
+
+Persisted `OWNER`/malformed membership roles are explicit data-integrity
+failures; they are never coerced into a least-privilege role.
+
+Workspace role conversion (`EDITOR`/`VIEWER` → `editor`/`viewer`) and workspace
+capability checks come from one canonical policy reused by server authorization
+and workspace UI surfaces.
 
 Capabilities are intentionally coarse:
 
@@ -163,6 +170,8 @@ from viewer connections.
 5. Passcode-protected public links and slide assets require a valid unlock cookie.
 6. Collaboration upgrades require authorization.
 7. Read-list scopes are read-only; write paths use capability checks.
+8. Invalid persisted workspace role rows render integrity-invalid join/detail
+   states and never silently coerce to viewer.
 
 ## Primary Tests
 

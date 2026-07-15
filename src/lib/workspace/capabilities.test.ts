@@ -1,151 +1,167 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
-  canCreateInWorkspace,
-  canDeleteWorkspace,
-  canImportInWorkspace,
-  canLeaveWorkspace,
-  canRenameWorkspace,
-  canTransferOwnership,
+  capabilitiesForWorkspaceAccessRole,
+  type WorkspaceAccessRole,
+  type WorkspaceCapabilityMode,
+  workspaceRoleCan,
 } from "./capabilities";
 
-// ── canCreateInWorkspace ─────────────────────────────────────────────────────
-
-test("canCreateInWorkspace: owner is allowed", () => {
-  assert.equal(canCreateInWorkspace("OWNER"), true);
+test("capabilitiesForWorkspaceAccessRole maps every role to canonical flags", () => {
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("owner"), {
+    canView: true,
+    canMutate: true,
+    canManage: true,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("editor"), {
+    canView: true,
+    canMutate: true,
+    canManage: false,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("viewer"), {
+    canView: true,
+    canMutate: false,
+    canManage: false,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("none"), {
+    canView: false,
+    canMutate: false,
+    canManage: false,
+  });
 });
 
-test("canCreateInWorkspace: editor is allowed", () => {
-  assert.equal(canCreateInWorkspace("EDITOR"), true);
+test("capabilitiesForWorkspaceAccessRole covers every access role without throwing", () => {
+  const roles: WorkspaceAccessRole[] = ["owner", "editor", "viewer", "none"];
+  for (const role of roles) {
+    assert.doesNotThrow(() => capabilitiesForWorkspaceAccessRole(role));
+  }
 });
 
-test("canCreateInWorkspace: viewer is denied", () => {
-  assert.equal(canCreateInWorkspace("VIEWER"), false);
+test("workspaceRoleCan stays consistent with capability flags", () => {
+  const roles: WorkspaceAccessRole[] = ["owner", "editor", "viewer", "none"];
+  const capabilities: WorkspaceCapabilityMode[] = ["view", "mutate", "manage"];
+
+  for (const role of roles) {
+    const flags = capabilitiesForWorkspaceAccessRole(role);
+    for (const capability of capabilities) {
+      const expected =
+        capability === "view"
+          ? flags.canView
+          : capability === "mutate"
+            ? flags.canMutate
+            : flags.canManage;
+      assert.equal(workspaceRoleCan(role, capability), expected);
+    }
+  }
 });
 
-test("canCreateInWorkspace: null is denied", () => {
-  assert.equal(canCreateInWorkspace(null), false);
+test("auth and UI callers consume canonical workspace capability helpers", () => {
+  const authSource = readFileSync(
+    resolve(process.cwd(), "src/lib/auth/workspace-capabilities.ts"),
+    "utf8",
+  );
+  const uiSource = readFileSync(
+    resolve(
+      process.cwd(),
+      "src/app/app/workspaces/[id]/workspace-documents.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.match(authSource, /capabilitiesForWorkspaceAccessRole/);
+  assert.match(authSource, /workspaceRoleCan/);
+  assert.match(uiSource, /capabilitiesForWorkspaceAccessRole/);
+
+  const inlineCapabilityMapPattern =
+    /owner:\s*\{\s*canView:\s*true,\s*canMutate:\s*true,\s*canManage:\s*true/;
+  assert.equal(
+    inlineCapabilityMapPattern.test(authSource),
+    false,
+    "auth workspace capabilities should not redefine the role capability map",
+  );
+  assert.equal(
+    inlineCapabilityMapPattern.test(uiSource),
+    false,
+    "workspace UI should not redefine the role capability map",
+  );
 });
 
-test("canCreateInWorkspace: undefined is denied", () => {
-  assert.equal(canCreateInWorkspace(undefined), false);
+test("returned capability flags are runtime-frozen: direct assignment cannot escalate viewer", () => {
+  const flags = capabilitiesForWorkspaceAccessRole("viewer");
+  // Assignment to a frozen property throws in strict mode; we absorb the error.
+  try {
+    (flags as { canManage: boolean }).canManage = true;
+  } catch {
+    // TypeError expected in strict mode — the mutation was rejected.
+  }
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canManage,
+    false,
+    "viewer canManage must remain false after direct-assignment attempt",
+  );
+  assert.equal(
+    workspaceRoleCan("viewer", "manage"),
+    false,
+    "workspaceRoleCan must remain false after direct-assignment attempt",
+  );
 });
 
-// ── canImportInWorkspace ─────────────────────────────────────────────────────
-
-test("canImportInWorkspace: owner is allowed", () => {
-  assert.equal(canImportInWorkspace("OWNER"), true);
+test("returned capability flags are runtime-frozen: Reflect.defineProperty cannot escalate viewer", () => {
+  const flags = capabilitiesForWorkspaceAccessRole("viewer");
+  // Reflect.defineProperty on a frozen object returns false and throws in strict mode.
+  try {
+    Reflect.defineProperty(flags, "canManage", {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
+  } catch {
+    // TypeError expected — mutation was rejected.
+  }
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canManage,
+    false,
+    "viewer canManage must remain false after Reflect.defineProperty attempt",
+  );
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canView,
+    true,
+    "viewer canView must remain true after Reflect.defineProperty attempt",
+  );
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canMutate,
+    false,
+    "viewer canMutate must remain false after Reflect.defineProperty attempt",
+  );
 });
 
-test("canImportInWorkspace: editor is allowed", () => {
-  assert.equal(canImportInWorkspace("EDITOR"), true);
-});
-
-test("canImportInWorkspace: viewer is denied", () => {
-  assert.equal(canImportInWorkspace("VIEWER"), false);
-});
-
-test("canImportInWorkspace: null is denied", () => {
-  assert.equal(canImportInWorkspace(null), false);
-});
-
-test("canImportInWorkspace: undefined is denied", () => {
-  assert.equal(canImportInWorkspace(undefined), false);
-});
-
-// ── canRenameWorkspace (owner-only) ──────────────────────────────────────────
-
-test("canRenameWorkspace: owner is allowed", () => {
-  assert.equal(canRenameWorkspace("OWNER"), true);
-});
-
-test("canRenameWorkspace: editor is denied", () => {
-  assert.equal(canRenameWorkspace("EDITOR"), false);
-});
-
-test("canRenameWorkspace: viewer is denied", () => {
-  assert.equal(canRenameWorkspace("VIEWER"), false);
-});
-
-test("canRenameWorkspace: non-member (null) is denied", () => {
-  assert.equal(canRenameWorkspace(null), false);
-});
-
-test("canRenameWorkspace: undefined is denied", () => {
-  assert.equal(canRenameWorkspace(undefined), false);
-});
-
-// ── canDeleteWorkspace (owner-only) ──────────────────────────────────────────
-
-test("canDeleteWorkspace: owner is allowed", () => {
-  assert.equal(canDeleteWorkspace("OWNER"), true);
-});
-
-test("canDeleteWorkspace: editor is denied", () => {
-  assert.equal(canDeleteWorkspace("EDITOR"), false);
-});
-
-test("canDeleteWorkspace: viewer is denied", () => {
-  assert.equal(canDeleteWorkspace("VIEWER"), false);
-});
-
-test("canDeleteWorkspace: non-member (null) is denied", () => {
-  assert.equal(canDeleteWorkspace(null), false);
-});
-
-test("canDeleteWorkspace: undefined is denied", () => {
-  assert.equal(canDeleteWorkspace(undefined), false);
-});
-
-// ── canLeaveWorkspace (any non-owner member) ─────────────────────────────────
-
-test("canLeaveWorkspace: owner cannot leave", () => {
-  assert.equal(canLeaveWorkspace("OWNER", true), false);
-});
-
-test("canLeaveWorkspace: editor (non-owner) may leave", () => {
-  assert.equal(canLeaveWorkspace("EDITOR", false), true);
-});
-
-test("canLeaveWorkspace: viewer (non-owner) may leave", () => {
-  assert.equal(canLeaveWorkspace("VIEWER", false), true);
-});
-
-test("canLeaveWorkspace: non-member (null) cannot leave", () => {
-  assert.equal(canLeaveWorkspace(null, false), false);
-});
-
-test("canLeaveWorkspace: undefined cannot leave", () => {
-  assert.equal(canLeaveWorkspace(undefined, false), false);
-});
-
-test("canLeaveWorkspace: stale OWNER membership flagged owner cannot leave", () => {
-  assert.equal(canLeaveWorkspace("OWNER", false), false);
-});
-
-test("canLeaveWorkspace: editor flagged owner cannot leave", () => {
-  assert.equal(canLeaveWorkspace("EDITOR", true), false);
-});
-
-// ── canTransferOwnership (owner-only) ────────────────────────────────────────
-
-test("canTransferOwnership: owner is allowed", () => {
-  assert.equal(canTransferOwnership("OWNER"), true);
-});
-
-test("canTransferOwnership: editor is denied", () => {
-  assert.equal(canTransferOwnership("EDITOR"), false);
-});
-
-test("canTransferOwnership: viewer is denied", () => {
-  assert.equal(canTransferOwnership("VIEWER"), false);
-});
-
-test("canTransferOwnership: non-member (null) is denied", () => {
-  assert.equal(canTransferOwnership(null), false);
-});
-
-test("canTransferOwnership: undefined is denied", () => {
-  assert.equal(canTransferOwnership(undefined), false);
+test("canonical flags are frozen: owner/editor/none immutability is preserved after viewer mutation attempt", () => {
+  // Confirm mutation attempts on one role do not contaminate others.
+  try {
+    (
+      capabilitiesForWorkspaceAccessRole("viewer") as {
+        canManage: boolean;
+      }
+    ).canManage = true;
+  } catch {
+    // expected
+  }
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("owner"), {
+    canView: true,
+    canMutate: true,
+    canManage: true,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("editor"), {
+    canView: true,
+    canMutate: true,
+    canManage: false,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("none"), {
+    canView: false,
+    canMutate: false,
+    canManage: false,
+  });
 });

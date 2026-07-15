@@ -25,7 +25,7 @@
  * real `Button`/tokens but no-ops `Dialog` — see those files for why) so
  * `./actions` loads without touching a real database or a real `Dialog`
  * portal. `@/lib/access-query` (`accessibleWorkspaceWhere`) and
- * `@/lib/workspace/roles` (`asWorkspaceRole`) are pure and already covered
+ * `@/lib/workspace/roles` (strict role parsing) are pure and already covered
  * (`access-query.test.ts`, `roles.test.ts`) so they are imported for real.
  */
 import assert from "node:assert/strict";
@@ -463,7 +463,7 @@ describe("WorkspacePage", () => {
       byComponentName("WorkspaceDocuments"),
     );
     assert.equal(documents.props.workspaceId, "ws-1");
-    assert.equal(documents.props.userRole, "OWNER");
+    assert.equal(documents.props.userRole, "owner");
 
     const settings = firstElement(result, byComponentName("WorkspaceSettings"));
     assert.equal(settings.props.workspaceId, "ws-1");
@@ -495,7 +495,7 @@ describe("WorkspacePage", () => {
       result,
       byComponentName("WorkspaceDocuments"),
     );
-    assert.equal(documents.props.userRole, "EDITOR");
+    assert.equal(documents.props.userRole, "editor");
 
     const settings = firstElement(result, byComponentName("WorkspaceSettings"));
     assert.equal(settings.props.isOwner, false);
@@ -508,7 +508,7 @@ describe("WorkspacePage", () => {
     );
   });
 
-  it("coerces an unrecognized stored member role to the least-privilege VIEWER default", async () => {
+  it("renders a stable integrity-invalid state for an unrecognized stored member role", async () => {
     state().user = { id: "user-1" };
     state().workspace = {
       ...defaultWorkspace(),
@@ -521,11 +521,34 @@ describe("WorkspacePage", () => {
     };
 
     const result = (await invoke()) as ReactElement;
-    const documents = firstElement(
+    const invalidState = firstElement(
       result,
-      byComponentName("WorkspaceDocuments"),
+      byComponentName("WorkspaceMembershipIntegrityInvalid"),
     );
-    assert.equal(documents.props.userRole, "VIEWER");
+    assert.equal(invalidState.props.workspaceId, "ws-1");
+    assert.equal(invalidState.props.errorCode, "invalid-workspace-member-role");
+  });
+
+  it("renders a stable integrity-invalid state for a non-owner OWNER membership row", async () => {
+    state().user = { id: "user-1" };
+    state().workspace = {
+      ...defaultWorkspace(),
+      ownerId: "owner-1",
+      members: [
+        {
+          ...defaultWorkspace().members[0],
+          role: "OWNER",
+        },
+      ],
+    };
+
+    const result = (await invoke()) as ReactElement;
+    const invalidState = firstElement(
+      result,
+      byComponentName("WorkspaceMembershipIntegrityInvalid"),
+    );
+    assert.equal(invalidState.props.workspaceId, "ws-1");
+    assert.equal(invalidState.props.errorCode, "owner-membership-row");
   });
 
   it("renders singular document/member copy at counts of exactly one", async () => {

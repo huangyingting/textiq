@@ -311,7 +311,7 @@ function waitForAsyncDrain(): Promise<void> {
 
 function mountWorkspaceDocuments(props: {
   workspaceId: string;
-  userRole: "OWNER" | "EDITOR" | "VIEWER";
+  userRole: "owner" | "editor" | "viewer";
 }): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
   const WorkspaceDocuments = mod.WorkspaceDocuments;
@@ -332,7 +332,7 @@ describe("WorkspaceDocuments", () => {
   test("shows a loading status immediately on mount", () => {
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       const status = renderer.root.findByProps({ role: "status" });
@@ -352,7 +352,7 @@ describe("WorkspaceDocuments", () => {
     });
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -380,7 +380,7 @@ describe("WorkspaceDocuments", () => {
   test("shows an empty-state message, with a create/import hint only when the caller can create", async () => {
     const owner = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -396,7 +396,7 @@ describe("WorkspaceDocuments", () => {
 
     const viewer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "VIEWER",
+      userRole: "viewer",
     });
     try {
       await act(async () => {
@@ -431,7 +431,7 @@ describe("WorkspaceDocuments", () => {
     };
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -463,7 +463,7 @@ describe("WorkspaceDocuments", () => {
   test("owners/editors see New + Import actions; viewers see neither", async () => {
     const owner = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -477,7 +477,7 @@ describe("WorkspaceDocuments", () => {
 
     const viewer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "VIEWER",
+      userRole: "viewer",
     });
     try {
       await act(async () => {
@@ -497,7 +497,7 @@ describe("WorkspaceDocuments", () => {
   test("choosing a template calls createWorkspaceDocument and shows the pending 'Creating…' label", async () => {
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -536,7 +536,7 @@ describe("WorkspaceDocuments", () => {
   test("Close/Cancel dismiss the template picker without creating a document", async () => {
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -562,7 +562,7 @@ describe("WorkspaceDocuments", () => {
       jsonResponse({ markdown: "# Imported" })) as typeof fetch;
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {
@@ -605,7 +605,7 @@ describe("WorkspaceDocuments", () => {
       jsonResponse({ error: "Unsupported file format." }, 400)) as typeof fetch;
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
-      userRole: "OWNER",
+      userRole: "owner",
     });
     try {
       await act(async () => {

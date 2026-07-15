@@ -28,11 +28,11 @@ import {
 } from "@/lib/workspace/service";
 import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import { isWorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import type { InvitableWorkspaceRole } from "@/lib/workspace/roles";
 
 export async function createInviteLink(
   workspaceId: string,
-  role: WorkspaceRole,
+  role: InvitableWorkspaceRole,
   options: CreateInviteLinkOptions = {},
 ): Promise<InviteLink> {
   const user = await requireUser(redirect);
@@ -135,11 +135,10 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 /**
  * Lets the current user leave a workspace by deleting their own membership.
  *
- * Any non-owner member (EDITOR or VIEWER) may leave. The OWNER cannot leave —
- * doing so would orphan the workspace — so they receive a clear error directing
- * them to transfer ownership first. Documents the leaving member authored keep
- * their `ownerId`, so they remain accessible to that member in their personal
- * lists; only the membership row is removed.
+ * Any non-owner membership row may leave. The OWNER cannot leave — doing so
+ * would orphan the workspace — so they receive a clear error directing them to
+ * transfer ownership first. Role values are intentionally ignored so malformed
+ * persisted rows can still be cleaned up by the affected user.
  */
 export async function leaveWorkspace(workspaceId: string): Promise<void> {
   const user = await requireUser(redirect);

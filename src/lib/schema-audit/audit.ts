@@ -25,10 +25,13 @@ import {
   parsePlanLiteral,
   parseSubscriptionStatusLiteral,
   parseUsageLedgerStatusLiteral,
-  parseWorkspaceRoleLiteral,
 } from "@/lib/data-contracts/literals";
 import { getPersistedJsonContract } from "@/lib/data-contracts/persisted-json";
 import { isCurrentTagSlug } from "@/lib/data-contracts/prisma-row-mappers";
+import {
+  parsePersistedWorkspaceMemberRole,
+  type WorkspaceMemberRoleParseErrorCode,
+} from "@/lib/workspace/roles";
 
 /** Schema areas the audit covers. */
 export const SCHEMA_AREAS = [
@@ -66,6 +69,11 @@ export interface SchemaViolation {
   anchorId?: string;
   /** Opaque validator failure reason (describes schema, not content). */
   reason: string;
+  /**
+   * Structured role-integrity code for workspace-role areas.
+   * Present only for WorkspaceMember/InviteLink/InviteLinkUse role violations.
+   */
+  roleCode?: WorkspaceMemberRoleParseErrorCode;
 }
 
 /** Minimal projection of a `Document` row needed for the audit. */
@@ -411,8 +419,17 @@ function auditWorkspaceRole(
   >,
   row: WorkspaceRoleAuditRow,
 ): SchemaViolation[] {
-  const role = parseWorkspaceRoleLiteral(row.role);
-  return role.success ? [] : [{ area, rowId: row.id, reason: role.error }];
+  const role = parsePersistedWorkspaceMemberRole(row.role);
+  return role.success
+    ? []
+    : [
+        {
+          area,
+          rowId: row.id,
+          reason: role.error.message,
+          roleCode: role.error.code,
+        },
+      ];
 }
 
 export function auditUserPlan(row: UserPlanAuditRow): SchemaViolation[] {
@@ -614,6 +631,7 @@ export function formatAuditReport(report: AuditReport): string[] {
       v.documentId ? `document=${v.documentId}` : null,
       v.rowId && v.rowId !== v.documentId ? `row=${v.rowId}` : null,
       v.anchorId ? `anchor=${v.anchorId}` : null,
+      v.roleCode ? `roleCode=${v.roleCode}` : null,
     ]
       .filter(Boolean)
       .join(" ");

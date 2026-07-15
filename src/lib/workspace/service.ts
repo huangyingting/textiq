@@ -89,6 +89,13 @@ export async function deleteWorkspaceAndDetachDocuments(
   ]);
 }
 
+/**
+ * Removes the caller's membership row when they are not the workspace owner.
+ *
+ * Role values are intentionally ignored for this cleanup path so malformed or
+ * persisted OWNER membership rows can be removed safely by the affected user.
+ * Authored documents remain owned by the same user; only membership is deleted.
+ */
 export async function leaveWorkspaceForUser(
   workspaceId: string,
   userId: string,
