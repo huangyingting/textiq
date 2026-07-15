@@ -16,8 +16,6 @@ import { cookies } from "next/headers";
 import { normaliseLocale, type Locale } from "./index";
 import { LOCALE_COOKIE } from "./preferences";
 
-export { LOCALE_COOKIE };
-
 /**
  * Returns the current locale for the incoming request.
  *

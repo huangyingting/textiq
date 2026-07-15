@@ -89,10 +89,6 @@ beforeEach(() => {
   globalForLocaleServer.__localeServerCookie = undefined;
 });
 
-test("LOCALE_COOKIE exposes the canonical cookie name", () => {
-  assert.equal(server.LOCALE_COOKIE, "textiq-locale");
-});
-
 test("getLocale returns the cookie value when it is a supported locale", async () => {
   globalForLocaleServer.__localeServerCookie = "es";
   assert.equal(await server.getLocale(), "es");

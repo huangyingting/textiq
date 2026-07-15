@@ -32,21 +32,31 @@ export function LanguageSwitcher() {
   const setLocaleOptimistic = useSetLocaleOptimistic();
   const t = useTranslation();
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
   const switchTo = (next: Locale) => {
-    if (next === locale) {
+    if (isPending || next === locale) {
       setOpen(false);
       return;
     }
+    const confirmedLocale = locale;
     setOpen(false);
+    setError(null);
     startTransition(async () => {
       setLocaleOptimistic(next);
       try {
-        await setLocaleCookie(next);
+        const result = await setLocaleCookie(next);
+        if (!result.ok) {
+          setLocaleOptimistic(confirmedLocale);
+          setError(result.error);
+          return;
+        }
       } catch {
-        // Refreshing re-applies the last server-confirmed locale when persistence fails.
+        setLocaleOptimistic(confirmedLocale);
+        setError(t("languageSwitcher.persistenceError"));
+        return;
       }
       router.refresh();
     });
@@ -58,8 +68,13 @@ export function LanguageSwitcher() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-busy={isPending || undefined}
         aria-label={`${t("languageSwitcher.label")}: ${getLocaleDefinition(locale).displayName}`}
-        onClick={() => setOpen((v) => !v)}
+        disabled={isPending}
+        onClick={() => {
+          if (!open) setError(null);
+          setOpen((value) => !value);
+        }}
         className="flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary"
       >
         <svg
@@ -99,6 +114,7 @@ export function LanguageSwitcher() {
               <li key={option} role="option" aria-selected={option === locale}>
                 <button
                   type="button"
+                  disabled={isPending}
                   onClick={() => switchTo(option)}
                   className={cx(
                     MENU_ITEM,
@@ -129,6 +145,15 @@ export function LanguageSwitcher() {
           </ul>
         </>
       )}
+
+      {error ? (
+        <p
+          role="alert"
+          className="absolute right-0 top-full z-dropdown mt-2 w-64 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text shadow-ds-overlay"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

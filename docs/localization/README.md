@@ -64,10 +64,12 @@ locale selection to users.
 Server components and route handlers read `textiq-locale` from cookies through
 `getLocale()`. Invalid or missing values fall back to the default locale. Client
 components use the locale context and translator helpers instead of reading the
-cookie directly. The server action treats its input as untrusted, normalizes it,
-and writes a shared, HTTP-only cookie policy. If persistence fails, the language
-switcher contains the transition failure and refreshes the server tree to
-restore the last confirmed locale.
+cookie directly. The server action treats its input as untrusted and accepts only
+an exact supported locale; invalid values are rejected before the cookie store
+is accessed. It writes the shared, HTTP-only cookie policy only after validation.
+If persistence fails or the action rejects, the language switcher restores the
+last confirmed locale, keeps the server tree unchanged, and displays an
+accessible retryable error instead of reporting success.
 
 ## Adding A Surface
 
