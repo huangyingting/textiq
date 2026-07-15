@@ -38,11 +38,15 @@ const { registerHooks } = createRequire(import.meta.url)(
 ) as ModuleHooks;
 
 const NEXT_HEADERS_STUB = "next-headers:locale-server-stub";
+const SERVER_ONLY_STUB = "server-only:locale-server-stub";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "next/headers") {
       return { url: NEXT_HEADERS_STUB, shortCircuit: true };
+    }
+    if (specifier === "server-only") {
+      return { url: SERVER_ONLY_STUB, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
@@ -59,6 +63,13 @@ registerHooks({
     },
   }),
 };`,
+        shortCircuit: true,
+      };
+    }
+    if (url === SERVER_ONLY_STUB) {
+      return {
+        format: "module" as const,
+        source: "",
         shortCircuit: true,
       };
     }

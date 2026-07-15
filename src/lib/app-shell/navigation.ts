@@ -1,9 +1,4 @@
-import type { Messages } from "@/lib/i18n";
-
-type Translator = <K extends keyof Messages>(
-  key: K,
-  ...args: Messages[K] extends (...a: infer A) => string ? A : []
-) => string;
+import type { Messages, Translator } from "@/lib/i18n";
 
 type StringMessageKey = {
   [K in keyof Messages]: Messages[K] extends string ? K : never;

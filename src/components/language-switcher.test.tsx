@@ -376,14 +376,7 @@ describe("LanguageSwitcher", () => {
     act(() => renderer.unmount());
   });
 
-  test("when setLocaleCookie rejects, router.refresh is never called", async () => {
-    // `switchTo` has no try/catch around `await setLocaleCookie(next)`, so a
-    // rejection here is genuinely unhandled in production too. React 19
-    // routes an async transition's uncaught rejection to the nearest Error
-    // Boundary, so mounting behind `ErrorBoundary` (test-only wrapper)
-    // captures it deterministically via `componentDidCatch`, alongside the
-    // one behavior this component actually guarantees: a failed persist
-    // never reaches `router.refresh()`.
+  test("when setLocaleCookie rejects, the failure is contained and the server locale is refreshed", async () => {
     state().setLocaleCookieImpl = () =>
       Promise.reject(new Error("network down"));
 
@@ -400,16 +393,13 @@ describe("LanguageSwitcher", () => {
       await waitForAsyncDrain();
     });
 
-    assert.ok(capturedError, "expected the failed persist to be reported");
-    assert.match(
-      String((capturedError as Error)?.message ?? capturedError),
-      /network down/,
-    );
-    assert.equal(state().routerRefreshCount, 0);
-    assert.ok(
-      state().calls.some((call) => call[0] === "setLocaleCookie"),
-      "expected setLocaleCookie to still have been invoked",
-    );
+    assert.equal(capturedError, undefined);
+    assert.equal(state().routerRefreshCount, 1);
+    assert.deepEqual(state().calls, [
+      ["setLocaleOptimistic", "es"],
+      ["setLocaleCookie", "es"],
+      ["router.refresh"],
+    ]);
     act(() => renderer.unmount());
   });
 

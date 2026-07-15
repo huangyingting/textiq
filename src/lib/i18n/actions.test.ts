@@ -89,15 +89,20 @@ test("setLocaleCookie persists a supported locale unchanged", async () => {
 });
 
 test("setLocaleCookie normalises an unsupported locale to the default before writing", async () => {
-  await actions.setLocaleCookie(
-    "fr" as unknown as Parameters<typeof actions.setLocaleCookie>[0],
-  );
+  await actions.setLocaleCookie("fr");
 
   const [, value] = globalForLocaleAction.__localeActionCalls[0];
   assert.equal(value, "en");
 });
 
-test("setLocaleCookie writes cookie options required for optimistic client reads", async () => {
+test("setLocaleCookie treats non-string action input as untrusted and persists the default", async () => {
+  await actions.setLocaleCookie(42);
+
+  const [, value] = globalForLocaleAction.__localeActionCalls[0];
+  assert.equal(value, "en");
+});
+
+test("setLocaleCookie writes the shared server-owned cookie policy", async () => {
   await actions.setLocaleCookie("en");
 
   const [, , options] = globalForLocaleAction.__localeActionCalls[0];
@@ -105,6 +110,6 @@ test("setLocaleCookie writes cookie options required for optimistic client reads
     maxAge: 60 * 60 * 24 * 365,
     path: "/",
     sameSite: "lax",
-    httpOnly: false,
+    httpOnly: true,
   });
 });
