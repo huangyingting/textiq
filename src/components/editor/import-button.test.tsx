@@ -1,20 +1,9 @@
-/**
- * Direct contract coverage for `ImportButton` (issue #1933).
- *
- * `ImportButton` has no Lexical/context dependency, so it is mounted with a
- * plain `react-test-renderer` tree (no `document`/`window` globals are
- * installed — `Tooltip` inside `EditorToolbarButton` safely no-ops when
- * `document` is undefined). Upload/error transitions come from
- * `useDocumentImportWorkflow`, which always uses its default
- * `routeDocumentImportPort` (calling the global `fetch`) since `ImportButton`
- * does not expose an injectable port — so `globalThis.fetch` is mocked per
- * scenario.
- */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import "@/test/react-render-harness";
+import type { ImportActionResult } from "@/lib/action-ports";
 
 import { ImportButton } from "./import-button";
 
@@ -22,15 +11,9 @@ function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
 function mountImportButton(props: {
   onImport: (markdown: string) => void;
+  importFile: (file: File) => Promise<ImportActionResult<{ markdown: string }>>;
   label?: string;
   compact?: boolean;
   iconOnly?: boolean;
@@ -67,7 +50,10 @@ async function selectFile(
 
 describe("ImportButton (drop-zone / full mode)", () => {
   test("idle render exposes the drop-zone, hidden file input, and no error alert", () => {
-    const renderer = mountImportButton({ onImport: () => undefined });
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: async () => ({ ok: true, data: { markdown: "# Ok" } }),
+    });
     try {
       const dropZone = renderer.root.findByProps({ role: "button" });
       assert.equal(
@@ -86,7 +72,10 @@ describe("ImportButton (drop-zone / full mode)", () => {
   });
 
   test("drag-over/drag-leave toggle the dragging affordance without uploading", () => {
-    const renderer = mountImportButton({ onImport: () => undefined });
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: async () => ({ ok: true, data: { markdown: "# Ok" } }),
+    });
     try {
       const preventDefault = () => undefined;
       act(() => {
@@ -114,17 +103,11 @@ describe("ImportButton (drop-zone / full mode)", () => {
     }
   });
 
-  test("dropping a file uploads it and calls onImport with the extracted markdown", async () => {
+  test("dropping a file imports it and calls onImport with the extracted markdown", async () => {
     const imported: string[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      jsonResponse({
-        ok: true,
-        mode: "parse",
-        markdown: "# Hello",
-      })) as typeof fetch;
     const renderer = mountImportButton({
       onImport: (markdown) => imported.push(markdown),
+      importFile: async () => ({ ok: true, data: { markdown: "# Hello" } }),
     });
     try {
       const file = new File(["# Hello"], "notes.md", { type: "text/markdown" });
@@ -138,27 +121,21 @@ describe("ImportButton (drop-zone / full mode)", () => {
         await waitForAsyncDrain();
       });
       assert.deepEqual(imported, ["# Hello"]);
-      // After a successful import the workflow returns to idle: no alert,
-      // no persistent "Importing…" label.
       assert.throws(() => findAlert(renderer));
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 
-  test("an oversized file is rejected client-side with a retryable error and no upload", async () => {
-    let fetchCalls = 0;
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      fetchCalls += 1;
-      return jsonResponse({
-        ok: true,
-        mode: "parse",
-        markdown: "unused",
-      });
-    }) as typeof fetch;
-    const renderer = mountImportButton({ onImport: () => undefined });
+  test("an oversized file is rejected client-side with a retryable error and no import call", async () => {
+    let importCalls = 0;
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: async () => {
+        importCalls += 1;
+        return { ok: true, data: { markdown: "unused" } };
+      },
+    });
     try {
       const huge = new File(["x"], "huge.pdf", { type: "application/pdf" });
       Object.defineProperty(huge, "size", { value: 21 * 1024 * 1024 });
@@ -168,9 +145,8 @@ describe("ImportButton (drop-zone / full mode)", () => {
         alert.props.children[0].props?.children ?? alert.props.children,
         /too large/i,
       );
-      assert.equal(fetchCalls, 0);
+      assert.equal(importCalls, 0);
 
-      // "Try again" re-opens the file picker; "Dismiss error" clears state.
       const dismiss = renderer.root.findByProps({
         "aria-label": "Dismiss error",
       });
@@ -178,25 +154,21 @@ describe("ImportButton (drop-zone / full mode)", () => {
       assert.throws(() => findAlert(renderer));
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 
-  test("a failed import shows the server error message and supports retry via the file picker", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      jsonResponse(
-        {
-          ok: false,
-          error: {
-            code: "unsupported",
-            status: 415,
-            message: "Unsupported file format.",
-          },
+  test("a failed import shows the server error message", async () => {
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: async () => ({
+        ok: false,
+        error: {
+          code: "malformed",
+          status: 422,
+          message: "bad file",
         },
-        415,
-      )) as typeof fetch;
-    const renderer = mountImportButton({ onImport: () => undefined });
+      }),
+    });
     try {
       const file = new File(["bad"], "bad.docx", {
         type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -205,23 +177,21 @@ describe("ImportButton (drop-zone / full mode)", () => {
       const alert = findAlert(renderer);
       const text =
         alert.props.children[0].props?.children ?? alert.props.children;
-      assert.match(text, /Unsupported file format\./);
-      const tryAgain = renderer.root.findByProps({ children: "Try again" });
-      assert.equal(tryAgain.type, "button");
+      assert.match(text, /bad file/);
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 
-  test("a rejected fetch (network failure) recovers with a friendly, dismissible error", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      throw new Error("network down");
-    }) as typeof fetch;
-    const renderer = mountImportButton({ onImport: () => undefined });
+  test("a thrown import error shows the network fallback message", async () => {
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: async () => Promise.reject(new Error("network down")),
+    });
     try {
-      const file = new File(["x"], "notes.md", { type: "text/markdown" });
+      const file = new File(["bad"], "bad.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
       await selectFile(renderer, file);
       const alert = findAlert(renderer);
       const text =
@@ -229,36 +199,21 @@ describe("ImportButton (drop-zone / full mode)", () => {
       assert.match(text, /Could not reach the server/);
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 
-  test("a malformed JSON success payload is treated as a typed import failure", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      jsonResponse({ markdown: "# legacy-shape" })) as typeof fetch;
-    const renderer = mountImportButton({ onImport: () => undefined });
-    try {
-      const file = new File(["x"], "notes.md", { type: "text/markdown" });
-      await selectFile(renderer, file);
-      const alert = findAlert(renderer);
-      const text =
-        alert.props.children[0].props?.children ?? alert.props.children;
-      assert.match(text, /invalid import response/i);
-    } finally {
-      act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  test("shows the uploading status while a request is in flight", async () => {
-    let resolveFetch!: (value: Response) => void;
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() =>
-      new Promise<Response>((resolve) => {
-        resolveFetch = resolve;
-      })) as unknown as typeof fetch;
-    const renderer = mountImportButton({ onImport: () => undefined });
+  test("shows the uploading status while an import is in flight", async () => {
+    let resolveImport!: (value: {
+      ok: true;
+      data: { markdown: string };
+    }) => void;
+    const renderer = mountImportButton({
+      onImport: () => undefined,
+      importFile: () =>
+        new Promise((resolve) => {
+          resolveImport = resolve;
+        }),
+    });
     try {
       const file = new File(["x"], "notes.md", { type: "text/markdown" });
       act(() => {
@@ -278,20 +233,13 @@ describe("ImportButton (drop-zone / full mode)", () => {
       );
 
       await act(async () => {
-        resolveFetch(
-          jsonResponse({
-            ok: true,
-            mode: "parse",
-            markdown: "done",
-          }),
-        );
+        resolveImport({ ok: true, data: { markdown: "done" } });
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
       assert.throws(() => renderer.root.findByProps({ role: "status" }));
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 });
@@ -300,6 +248,7 @@ describe("ImportButton (compact/toolbar mode)", () => {
   test("compact idle render shows an icon+label toolbar button, no drop-zone", () => {
     const renderer = mountImportButton({
       onImport: () => undefined,
+      importFile: async () => ({ ok: true, data: { markdown: "# Ok" } }),
       compact: true,
       label: "Import",
     });
@@ -317,21 +266,10 @@ describe("ImportButton (compact/toolbar mode)", () => {
   });
 
   test("compact error state renders a dismissible inline alert instead of the button", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      jsonResponse(
-        {
-          ok: false,
-          error: {
-            code: "malformed",
-            status: 422,
-            message: "bad file",
-          },
-        },
-        422,
-      )) as typeof fetch;
     const renderer = mountImportButton({
       onImport: () => undefined,
+      importFile: async () =>
+        Promise.reject(new Error("simulated network failure")),
       compact: true,
     });
     try {
@@ -344,7 +282,6 @@ describe("ImportButton (compact/toolbar mode)", () => {
       );
     } finally {
       act(() => renderer.unmount());
-      globalThis.fetch = originalFetch;
     }
   });
 });

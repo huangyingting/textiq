@@ -7,11 +7,9 @@
  * via `node:module` `registerHooks` to assert navigation happens only after
  * the route reports durable success.
  *
- * `useDocumentImportWorkflow` always uses its default `routeDocumentImportPort`
- * (calling the global `fetch`) since `ImportDocumentButton` does not expose
- * an injectable port — matching `src/components/editor/import-button.test.tsx`'s
- * approach of mocking `globalThis.fetch` per scenario instead of duplicating
- * `document-import-workflow.test.ts`'s coverage of the hook/port itself.
+ * `useDocumentImportCreationWorkflow` uses its default route port (global
+ * `fetch`) since `ImportDocumentButton` does not expose an injectable port,
+ * so these tests mock `globalThis.fetch` per scenario.
  *
  * Mounted directly with `react-test-renderer` (no `document`/`window`
  * globals needed — this component renders no Tooltip/portal content).
@@ -195,7 +193,6 @@ describe("ImportDocumentButton", () => {
     globalThis.fetch = (async () =>
       jsonResponse({
         ok: true,
-        mode: "create",
         documentId: "doc-1",
         documentPath: "/app/documents/doc-1",
       })) as typeof fetch;
@@ -245,7 +242,6 @@ describe("ImportDocumentButton", () => {
         resolveFetch(
           jsonResponse({
             ok: true,
-            mode: "create",
             documentId: "doc-2",
             documentPath: "/app/documents/doc-2",
           }),
@@ -263,13 +259,12 @@ describe("ImportDocumentButton", () => {
     }
   });
 
-  test("a parse-mode success payload is rejected in create workflow and does not navigate", async () => {
+  test("a malformed success payload is rejected in create workflow and does not navigate", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       jsonResponse({
         ok: true,
-        mode: "parse",
-        markdown: "# Unexpected parse mode",
+        markdown: "# Missing durable metadata",
       })) as typeof fetch;
     const renderer = mountButton();
     try {
@@ -279,7 +274,7 @@ describe("ImportDocumentButton", () => {
       await selectFile(renderer, file);
 
       const alert = findAlert(renderer);
-      assert.match(textOf(alert), /document metadata was missing/i);
+      assert.match(textOf(alert), /invalid import response/i);
       assert.equal(globalForRouter.__importRouterTestState.pushes.length, 0);
     } finally {
       act(() => renderer.unmount());
@@ -346,7 +341,6 @@ describe("ImportDocumentButton", () => {
       fetchCalls += 1;
       return jsonResponse({
         ok: true,
-        mode: "create",
         documentId: "unused",
         documentPath: "/app/documents/unused",
       });

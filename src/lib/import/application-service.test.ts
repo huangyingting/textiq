@@ -124,6 +124,112 @@ test("createDocumentFromImportUpload passes through parse failures without persi
   assert.equal(persisted, false);
 });
 
+test("createDocumentFromImportUpload threads signal and deadline to processImportUpload", async () => {
+  const controller = new AbortController();
+  const deadlineAt = Date.now() + 30_000;
+  let capturedSignal: AbortSignal | undefined;
+  let capturedDeadlineAt: number | undefined;
+
+  const result = await createDocumentFromImportUpload(
+    {
+      file: fakeFile("doc.md"),
+      subjectHash: "subject",
+      target: { kind: "personal" },
+      signal: controller.signal,
+      deadlineAt,
+    },
+    {
+      getCurrentUser: async () => ({ id: "user-1" }),
+      processImportUpload: async (_file, options) => {
+        capturedSignal = options.signal;
+        capturedDeadlineAt = options.deadlineAt;
+        return importFailure("too_large", "File is too large.", 413);
+      },
+      persistImportedDocument: async () => ({ id: "unused" }),
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "too_large",
+      status: 413,
+      message: "File is too large.",
+    },
+  });
+  assert.equal(capturedSignal, controller.signal);
+  assert.equal(capturedDeadlineAt, deadlineAt);
+});
+
+test("createDocumentFromImportUpload rechecks abort signal before persistence", async () => {
+  let persisted = false;
+  const controller = new AbortController();
+
+  const result = await createDocumentFromImportUpload(
+    {
+      file: fakeFile("doc.md"),
+      subjectHash: "subject",
+      target: { kind: "personal" },
+      signal: controller.signal,
+    },
+    {
+      getCurrentUser: async () => ({ id: "user-1" }),
+      processImportUpload: async () => {
+        controller.abort();
+        return { ok: true, markdown: "# Imported" };
+      },
+      persistImportedDocument: async () => {
+        persisted = true;
+        return { id: "doc-1" };
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "aborted",
+      status: 408,
+      message: "The import was interrupted before parsing finished.",
+    },
+  });
+  assert.equal(persisted, false);
+});
+
+test("createDocumentFromImportUpload rechecks deadline before persistence", async () => {
+  let persisted = false;
+  const result = await createDocumentFromImportUpload(
+    {
+      file: fakeFile("doc.md"),
+      subjectHash: "subject",
+      target: { kind: "personal" },
+      deadlineAt: Date.now() + 5,
+    },
+    {
+      getCurrentUser: async () => ({ id: "user-1" }),
+      processImportUpload: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { ok: true, markdown: "# Imported" };
+      },
+      persistImportedDocument: async () => {
+        persisted = true;
+        return { id: "doc-1" };
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "timeout",
+      status: 408,
+      message:
+        "The file took too long to parse. Try a smaller or simpler document.",
+    },
+  });
+  assert.equal(persisted, false);
+});
+
 test("createDocumentFromImportUpload returns create-mode success after durable persistence", async () => {
   const result = await createDocumentFromImportUpload(
     {
@@ -153,7 +259,6 @@ test("createDocumentFromImportUpload returns create-mode success after durable p
 
   assert.deepEqual(result, {
     ok: true,
-    mode: "create",
     documentId: "doc-123",
     documentPath: "/app/documents/doc-123",
   });

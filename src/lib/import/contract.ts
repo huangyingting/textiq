@@ -1,4 +1,8 @@
-import { isFiniteNumber, isNonEmptyString, isPlainObject } from "@/lib/type-guards";
+import {
+  isFiniteNumber,
+  isNonEmptyString,
+  isPlainObject,
+} from "@/lib/type-guards";
 
 export const IMPORT_ERROR_CODES = {
   UNSUPPORTED: "unsupported",
@@ -46,23 +50,13 @@ export type ImportRouteFailure = {
   error: ImportRouteError;
 };
 
-export type ImportRouteParseSuccess = {
+export type ImportRouteSuccess = {
   ok: true;
-  mode: "parse";
-  markdown: string;
-};
-
-export type ImportRouteCreateSuccess = {
-  ok: true;
-  mode: "create";
   documentId: string;
   documentPath: string;
 };
 
-export type ImportRouteResult =
-  | ImportRouteParseSuccess
-  | ImportRouteCreateSuccess
-  | ImportRouteFailure;
+export type ImportRouteResult = ImportRouteSuccess | ImportRouteFailure;
 
 export type ImportCreationTarget =
   | { kind: "personal" }
@@ -70,7 +64,7 @@ export type ImportCreationTarget =
 
 export type ParsedImportUpload = {
   file: File;
-  target: ImportCreationTarget | null;
+  target: ImportCreationTarget;
 };
 
 function asImportErrorStatus(status: number): ImportErrorStatus | null {
@@ -89,7 +83,9 @@ function asImportErrorStatus(status: number): ImportErrorStatus | null {
   return null;
 }
 
-export function importErrorStatusForCode(code: ImportErrorCode): ImportErrorStatus {
+export function importErrorStatusForCode(
+  code: ImportErrorCode,
+): ImportErrorStatus {
   return IMPORT_ERROR_STATUS_BY_CODE[code] as ImportErrorStatus;
 }
 
@@ -111,7 +107,9 @@ export function isImportErrorCode(value: unknown): value is ImportErrorCode {
   );
 }
 
-export function isImportRouteFailure(value: unknown): value is ImportRouteFailure {
+export function isImportRouteFailure(
+  value: unknown,
+): value is ImportRouteFailure {
   if (!isPlainObject(value) || value.ok !== false) {
     return false;
   }
@@ -129,7 +127,9 @@ export function isImportRouteFailure(value: unknown): value is ImportRouteFailur
   );
 }
 
-export function parseImportRouteResult(value: unknown): ImportRouteResult | null {
+export function parseImportRouteResult(
+  value: unknown,
+): ImportRouteResult | null {
   if (!isPlainObject(value)) {
     return null;
   }
@@ -138,32 +138,19 @@ export function parseImportRouteResult(value: unknown): ImportRouteResult | null
     return isImportRouteFailure(value) ? value : null;
   }
 
-  if (value.ok !== true || value.mode === undefined) {
+  if (value.ok !== true) {
     return null;
   }
 
-  if (value.mode === "parse") {
-    if (!isNonEmptyString(value.markdown)) {
-      return null;
-    }
-    return {
-      ok: true,
-      mode: "parse",
-      markdown: value.markdown,
-    };
+  if (
+    !isNonEmptyString(value.documentId) ||
+    !isNonEmptyString(value.documentPath)
+  ) {
+    return null;
   }
-
-  if (value.mode === "create") {
-    if (!isNonEmptyString(value.documentId) || !isNonEmptyString(value.documentPath)) {
-      return null;
-    }
-    return {
-      ok: true,
-      mode: "create",
-      documentId: value.documentId,
-      documentPath: value.documentPath,
-    };
-  }
-
-  return null;
+  return {
+    ok: true,
+    documentId: value.documentId,
+    documentPath: value.documentPath,
+  };
 }

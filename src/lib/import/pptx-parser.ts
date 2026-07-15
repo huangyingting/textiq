@@ -18,6 +18,7 @@ import type JSZip from "jszip";
 
 import { disposeZip, loadZipWithinBudget } from "./archive-budget";
 import { EncryptedImportError } from "./import-errors";
+import { hasOleCompoundFileSignature } from "./office-signature";
 import { throwIfAborted } from "./timeout";
 
 /** Regex to match all `<a:t>…</a:t>` text runs. */
@@ -205,11 +206,19 @@ function slideOrdinal(name: string): number {
  * Extracts slide text from a PPTX `Buffer` and returns a structured plain-text
  * outline (each slide separated by a blank line, titles as `## Heading`).
  */
+export type ParsePptxOptions = {
+  signal?: AbortSignal;
+};
+
 export async function parsePptx(
   buffer: Buffer,
-  signal?: AbortSignal,
+  options: ParsePptxOptions = {},
 ): Promise<string> {
+  const { signal } = options;
   throwIfAborted(signal);
+  if (hasOleCompoundFileSignature(buffer)) {
+    throw new EncryptedImportError();
+  }
   const zip = await loadZipWithinBudget(buffer, signal);
 
   try {
@@ -259,7 +268,9 @@ export async function parsePptx(
       }
     }
 
-    return slideBlocks.join("\n\n");
+    const markdown = slideBlocks.join("\n\n");
+    throwIfAborted(signal);
+    return markdown;
   } finally {
     disposeZip(zip);
   }

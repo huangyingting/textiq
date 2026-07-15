@@ -1,13 +1,12 @@
 /**
- * POST /api/import — parse an uploaded document, and optionally create a
- * persisted document in one server-side operation.
+ * POST /api/import — parse an uploaded document and create a persisted document
+ * in one server-side operation.
  *
  * Accepts `multipart/form-data` with a `file` field containing one of:
  * .md, .html, .docx, .pptx, .pdf (up to 20 MB per file; multipart overhead has
- * a separate bounded allowance). With no `target` field, this route returns
- * parsed Markdown (`{ ok: true, mode: "parse", markdown }`). With
- * `target=personal|workspace`, it parses + normalizes + persists and returns the
- * new document id/path (`{ ok: true, mode: "create", ... }`).
+ * a separate bounded allowance). Requires `target=personal|workspace` (plus
+ * `workspaceId` for workspace target), then parses + normalizes + persists and
+ * returns the new document id/path (`{ ok: true, documentId, documentPath }`).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -21,9 +20,8 @@ import {
   IMPORT_ERROR_CODES,
   importFailure,
   type ImportRouteFailure,
-  type ImportRouteResult,
 } from "@/lib/import/contract";
-import { processImportUpload } from "@/lib/import/upload-service";
+import { IMPORT_PARSE_TIMEOUT_MS } from "@/lib/import/format-registry";
 import { logError } from "@/lib/log";
 import {
   bucketBytes,
@@ -86,6 +84,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { file, target } = parsed.parsed;
+  const deadlineAt = Date.now() + IMPORT_PARSE_TIMEOUT_MS;
   const startedAt = Date.now();
   const fileType = classifyFileType(file);
   const fileSizeBucket = bucketBytes(file.size);
@@ -95,21 +94,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     surface: "api",
   });
 
-  let result: ImportRouteResult;
-  if (!target) {
-    const parsedUpload = await processImportUpload(file, {
-      subjectHash: ipCheck.subjectHash,
-    });
-    result = parsedUpload.ok
-      ? { ok: true, mode: "parse", markdown: parsedUpload.markdown }
-      : parsedUpload;
-  } else {
-    result = await createDocumentFromImportUpload({
-      file,
-      subjectHash: ipCheck.subjectHash,
-      target,
-    });
-  }
+  const result = await createDocumentFromImportUpload({
+    file,
+    subjectHash: ipCheck.subjectHash,
+    target,
+    signal: request.signal,
+    deadlineAt,
+  });
 
   if (!result.ok) {
     emitProductTelemetry("product.import.failed", {

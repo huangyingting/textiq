@@ -101,6 +101,57 @@ test("processImportUpload: oversized file returns status 413", async () => {
   }
 });
 
+test("processImportUpload: already-aborted signal returns aborted 408 before parsing", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let parseCalled = false;
+
+  const result = await processImportUpload(
+    fakeFile("doc.md", "text/markdown"),
+    {
+      subjectHash: "h1",
+      signal: controller.signal,
+      deps: {
+        parseImportedFile: async () => {
+          parseCalled = true;
+          return "# should not parse";
+        },
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.status, 408);
+    assert.equal(result.error.code, "aborted");
+  }
+  assert.equal(parseCalled, false);
+});
+
+test("processImportUpload: expired deadline returns timeout 408 before parsing", async () => {
+  let parseCalled = false;
+  const result = await processImportUpload(
+    fakeFile("doc.md", "text/markdown"),
+    {
+      subjectHash: "h1",
+      deadlineAt: Date.now() - 1,
+      deps: {
+        parseImportedFile: async () => {
+          parseCalled = true;
+          return "# should not parse";
+        },
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.status, 408);
+    assert.equal(result.error.code, "timeout");
+  }
+  assert.equal(parseCalled, false);
+});
+
 // ── read failure path ─────────────────────────────────────────────────────────
 
 test("processImportUpload: readFile throws returns malformed 422 and calls logError once", async () => {
@@ -159,6 +210,35 @@ test("processImportUpload: non-empty markdown result returns ok:true with markdo
   }
 });
 
+test("processImportUpload: threads caller signal and deadline into withTimeout", async () => {
+  const controller = new AbortController();
+  let capturedSignal: AbortSignal | undefined;
+  let capturedTimeoutMs: number | undefined;
+
+  const result = await processImportUpload(
+    fakeFile("doc.md", "text/markdown"),
+    {
+      subjectHash: "h1",
+      signal: controller.signal,
+      deadlineAt: Date.now() + 5_000,
+      deps: {
+        withTimeout: async (factory, options) => {
+          capturedSignal = options?.signal;
+          capturedTimeoutMs = options?.timeoutMs;
+          return factory(options?.signal ?? new AbortController().signal);
+        },
+        parseImportedFile: async () => "# Threaded",
+        logError: () => {},
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(capturedSignal, controller.signal);
+  assert.ok(capturedTimeoutMs !== undefined && capturedTimeoutMs > 0);
+});
+
 test("processImportUpload: whitespace-only markdown result returns status 422", async () => {
   const file = fakeFile("empty.html", "text/html", "   ");
   const result = await processImportUpload(file, {
@@ -182,6 +262,43 @@ test("processImportUpload: whitespace-only markdown result returns status 422", 
       "error must mention no readable text",
     );
   }
+});
+
+test("processImportUpload: cleanup callback logs safely and timeout outcome is unchanged", async () => {
+  const logErrorCalls: Array<Record<string, unknown> | undefined> = [];
+  const result = await processImportUpload(
+    fakeFile("doc.pdf", "application/pdf"),
+    {
+      subjectHash: "h1",
+      deps: {
+        validateImportFile: () => ({
+          ok: true,
+          mime: "application/pdf" as const,
+        }),
+        readFile: async () => Buffer.alloc(4),
+        withTimeout: async (_factory, options) => {
+          options?.onCleanupError?.(new Error("cleanup failed"));
+          throw new ParseTimeoutError(15_000);
+        },
+        logError: (_scope, _error, context) => {
+          logErrorCalls.push(context);
+        },
+        logRouteDenial: () => {},
+      },
+    },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "timeout");
+    assert.equal(result.error.status, 408);
+  }
+  assert.ok(
+    logErrorCalls.some((context) => context?.reason === "parse-cleanup"),
+  );
+  assert.ok(
+    logErrorCalls.some((context) => context?.reason === "parse-timeout"),
+  );
 });
 
 // ── parse error paths ─────────────────────────────────────────────────────────

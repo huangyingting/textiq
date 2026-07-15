@@ -18,8 +18,8 @@ import {
   IMPORT_ERROR_CODES,
   importFailure,
   type ImportCreationTarget,
-  type ImportRouteCreateSuccess,
   type ImportRouteFailure,
+  type ImportRouteSuccess,
 } from "./contract";
 import { deriveImportedDocumentTitle } from "./title";
 import { processImportUpload, type ImportUploadResult } from "./upload-service";
@@ -70,6 +70,33 @@ export async function persistImportedDocument(
   });
 }
 
+function timeoutFailure(): ImportRouteFailure {
+  return importFailure(
+    IMPORT_ERROR_CODES.TIMEOUT,
+    "The file took too long to parse. Try a smaller or simpler document.",
+  );
+}
+
+function abortedFailure(): ImportRouteFailure {
+  return importFailure(
+    IMPORT_ERROR_CODES.ABORTED,
+    "The import was interrupted before parsing finished.",
+  );
+}
+
+function cancellationFailure(
+  signal: AbortSignal | undefined,
+  deadlineAt: number | undefined,
+): ImportRouteFailure | null {
+  if (signal?.aborted) {
+    return abortedFailure();
+  }
+  if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+    return timeoutFailure();
+  }
+  return null;
+}
+
 function isPrismaConflictError(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -92,11 +119,13 @@ interface ImportApplicationDeps {
   requireWorkspaceCapability: typeof requireWorkspaceCapability;
   processImportUpload: (
     file: File,
-    options: { subjectHash: string },
+    options: {
+      subjectHash: string;
+      signal?: AbortSignal;
+      deadlineAt?: number;
+    },
   ) => Promise<ImportUploadResult>;
-  persistImportedDocument: (
-    args: PersistImportArgs,
-  ) => Promise<{ id: string }>;
+  persistImportedDocument: (args: PersistImportArgs) => Promise<{ id: string }>;
   logError: typeof logError;
 }
 
@@ -113,10 +142,16 @@ export async function createDocumentFromImportUpload(
     file: File;
     subjectHash: string;
     target: ImportCreationTarget;
+    signal?: AbortSignal;
+    deadlineAt?: number;
   },
   deps: Partial<ImportApplicationDeps> = {},
-): Promise<ImportRouteCreateSuccess | ImportRouteFailure> {
+): Promise<ImportRouteSuccess | ImportRouteFailure> {
   const resolvedDeps = { ...defaultDeps, ...deps };
+  const cancelledEarly = cancellationFailure(input.signal, input.deadlineAt);
+  if (cancelledEarly) {
+    return cancelledEarly;
+  }
   const user = await resolvedDeps.getCurrentUser();
 
   if (!user?.id) {
@@ -153,9 +188,19 @@ export async function createDocumentFromImportUpload(
 
   const parsed = await resolvedDeps.processImportUpload(input.file, {
     subjectHash: input.subjectHash,
+    signal: input.signal,
+    deadlineAt: input.deadlineAt,
   });
   if (!parsed.ok) {
     return parsed;
+  }
+
+  const cancelledBeforePersist = cancellationFailure(
+    input.signal,
+    input.deadlineAt,
+  );
+  if (cancelledBeforePersist) {
+    return cancelledBeforePersist;
   }
 
   try {
@@ -167,7 +212,6 @@ export async function createDocumentFromImportUpload(
     });
     return {
       ok: true,
-      mode: "create",
       documentId: document.id,
       documentPath: `/app/documents/${document.id}`,
     };

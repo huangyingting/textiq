@@ -36,22 +36,73 @@ export function throwIfAborted(signal?: AbortSignal): void {
   throw new ParseAbortedError();
 }
 
+export type WithTimeoutOptions = {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  abortCleanupWaitMs?: number;
+  onCleanupError?: (error: unknown) => void;
+};
+
+type ResolvedTimeoutOptions = {
+  timeoutMs: number;
+  signal?: AbortSignal;
+  abortCleanupWaitMs: number;
+  onCleanupError?: (error: unknown) => void;
+};
+
+function reportCleanupError(
+  callback: ((error: unknown) => void) | undefined,
+  error: unknown,
+): void {
+  if (!callback) return;
+  try {
+    callback(error);
+  } catch {
+    // Cleanup logging must never surface into product behavior.
+  }
+}
+
 async function waitForAbortCleanup(
-  operation: Promise<unknown>,
+  operation: Promise<unknown> | null,
   maxWaitMs: number,
+  onCleanupError?: (error: unknown) => void,
 ): Promise<void> {
-  if (maxWaitMs <= 0) {
+  if (!operation || maxWaitMs <= 0) {
     return;
   }
-  await Promise.race([
-    operation.then(
-      () => undefined,
-      () => undefined,
-    ),
-    new Promise<void>((resolve) => {
-      setTimeout(resolve, maxWaitMs);
-    }),
-  ]);
+  try {
+    await Promise.race([
+      operation.then(
+        () => undefined,
+        () => undefined,
+      ),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, maxWaitMs);
+      }),
+    ]);
+  } catch (error) {
+    reportCleanupError(onCleanupError, error);
+  }
+}
+
+function resolveOptions(
+  timeoutOrOptions: number | WithTimeoutOptions | undefined,
+  abortCleanupWaitMs: number | undefined,
+): ResolvedTimeoutOptions {
+  if (typeof timeoutOrOptions === "number") {
+    return {
+      timeoutMs: timeoutOrOptions,
+      abortCleanupWaitMs: abortCleanupWaitMs ?? DEFAULT_ABORT_CLEANUP_WAIT_MS,
+    };
+  }
+  const options = timeoutOrOptions ?? {};
+  return {
+    timeoutMs: options.timeoutMs ?? DEFAULT_PARSE_TIMEOUT_MS,
+    signal: options.signal,
+    abortCleanupWaitMs:
+      options.abortCleanupWaitMs ?? DEFAULT_ABORT_CLEANUP_WAIT_MS,
+    onCleanupError: options.onCleanupError,
+  };
 }
 
 /**
@@ -61,43 +112,108 @@ async function waitForAbortCleanup(
  */
 export function withTimeout<T>(
   factory: (signal: AbortSignal) => Promise<T>,
-  timeoutMs: number = DEFAULT_PARSE_TIMEOUT_MS,
-  abortCleanupWaitMs: number = DEFAULT_ABORT_CLEANUP_WAIT_MS,
+  timeoutOrOptions: number | WithTimeoutOptions = DEFAULT_PARSE_TIMEOUT_MS,
+  abortCleanupWaitMs?: number,
 ): Promise<T> {
+  const options = resolveOptions(timeoutOrOptions, abortCleanupWaitMs);
   const controller = new AbortController();
-  const operation = Promise.resolve().then(() => factory(controller.signal));
-  let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let operation: Promise<T> | null = null;
+  let settled = false;
+  let terminal: "none" | "timeout" | "aborted" = "none";
+  let externalAbortListener: (() => void) | undefined;
 
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(async () => {
-      timedOut = true;
+  const clearTimer = () => {
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    timer = undefined;
+  };
+
+  const removeExternalAbortListener = () => {
+    if (!options.signal || !externalAbortListener) return;
+    options.signal.removeEventListener("abort", externalAbortListener);
+    externalAbortListener = undefined;
+  };
+
+  const cleanup = () => {
+    clearTimer();
+    removeExternalAbortListener();
+  };
+
+  return new Promise<T>((resolve, reject) => {
+    const settleResolve = (value: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const settleReject = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const rejectTerminal = (reason: "timeout" | "aborted") => {
+      if (settled || terminal !== "none") return;
+      terminal = reason;
       controller.abort();
-      await waitForAbortCleanup(operation, abortCleanupWaitMs);
-      reject(new ParseTimeoutError(timeoutMs));
-    }, timeoutMs);
-  });
+      void waitForAbortCleanup(
+        operation,
+        options.abortCleanupWaitMs,
+        options.onCleanupError,
+      ).then(() => {
+        settleReject(
+          reason === "timeout"
+            ? new ParseTimeoutError(options.timeoutMs)
+            : new ParseAbortedError(),
+        );
+      });
+    };
 
-  const guardedOperation = operation.catch((error: unknown) => {
-    if (timedOut) {
-      throw new ParseTimeoutError(timeoutMs);
+    if (options.signal?.aborted) {
+      rejectTerminal("aborted");
+      return;
     }
-    if (error instanceof ParseAbortedError) {
-      throw error;
+    if (options.signal) {
+      externalAbortListener = () => {
+        rejectTerminal("aborted");
+      };
+      options.signal.addEventListener("abort", externalAbortListener, {
+        once: true,
+      });
     }
-    if (
-      controller.signal.aborted &&
-      error instanceof DOMException &&
-      error.name === "AbortError"
-    ) {
-      throw new ParseAbortedError();
-    }
-    throw error;
-  });
 
-  return Promise.race([guardedOperation, timeout]).finally(() => {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
+    timer = setTimeout(() => {
+      rejectTerminal("timeout");
+    }, options.timeoutMs);
+
+    operation = Promise.resolve().then(() => factory(controller.signal));
+    operation.then(
+      (value) => {
+        if (terminal !== "none") return;
+        settleResolve(value);
+      },
+      (error: unknown) => {
+        if (terminal !== "none") {
+          reportCleanupError(options.onCleanupError, error);
+          return;
+        }
+        if (error instanceof ParseAbortedError) {
+          settleReject(error);
+          return;
+        }
+        if (
+          controller.signal.aborted &&
+          error instanceof DOMException &&
+          error.name === "AbortError"
+        ) {
+          settleReject(new ParseAbortedError());
+          return;
+        }
+        settleReject(error);
+      },
+    );
   });
 }

@@ -4,60 +4,61 @@ import { createElement } from "react";
 import { act, create } from "react-test-renderer";
 
 import type {
-  DocumentImportActionPort,
-  ImportedDocumentPayload,
+  DocumentImportCreateActionPort,
+  ImportedDocumentCreationPayload,
 } from "@/lib/action-ports";
 import { IMPORT_MAX_UPLOAD_BYTES } from "@/lib/limits/assets";
 
 import {
   DOCUMENT_IMPORT_MAX_SIZE_LABEL,
-  useDocumentImportWorkflow,
+  useDocumentImportCreationWorkflow,
 } from "./document-import-workflow";
 
-const origConsoleError = console.error.bind(console);
+const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
-  const [msg] = args;
+  const [message] = args;
   if (
-    typeof msg === "string" &&
-    msg.startsWith("react-test-renderer is deprecated")
-  )
+    typeof message === "string" &&
+    message.startsWith("react-test-renderer is deprecated")
+  ) {
     return;
-  origConsoleError(...args);
+  }
+  originalConsoleError(...args);
 };
 
 after(() => {
-  console.error = origConsoleError;
+  console.error = originalConsoleError;
 });
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Creates a File stub reporting a specific size without allocating large buffers. */
 function fakeFile(
   size: number,
   name = "test.pdf",
   type = "application/pdf",
 ): File {
-  const f = new File([], name, { type });
-  Object.defineProperty(f, "size", { value: size, configurable: true });
-  return f;
+  const file = new File([], name, { type });
+  Object.defineProperty(file, "size", { value: size, configurable: true });
+  return file;
 }
 
-type HookResult = ReturnType<typeof useDocumentImportWorkflow>;
+type HookResult = ReturnType<typeof useDocumentImportCreationWorkflow>;
 
-/** Renders the hook in a minimal component and returns a live reference. */
-function renderWorkflow(
-  port: DocumentImportActionPort,
-  onImported: (p: ImportedDocumentPayload) => void = () => {},
-): { ref: { current: HookResult | null }; unmount: () => void } {
+function renderWorkflow(input: {
+  port?: DocumentImportCreateActionPort;
+  onCreated?: (payload: ImportedDocumentCreationPayload) => void;
+  target?: { kind: "personal" } | { kind: "workspace"; workspaceId: string };
+}) {
   const hookRef: { current: HookResult | null } = { current: null };
 
   function Harness() {
-    hookRef.current = useDocumentImportWorkflow({
-      onImported,
+    hookRef.current = useDocumentImportCreationWorkflow({
+      onCreated: input.onCreated ?? (() => undefined),
       surface: "dashboard",
-      port,
+      target: input.target ?? { kind: "personal" },
+      port: input.port,
     });
     return null;
   }
@@ -73,72 +74,66 @@ function renderWorkflow(
   };
 }
 
-// ── client preflight boundary ─────────────────────────────────────────────────
-
-test("client preflight: file at exactly IMPORT_MAX_UPLOAD_BYTES is not rejected and port is called", async () => {
+test("client preflight: file at exactly IMPORT_MAX_UPLOAD_BYTES is not rejected", async () => {
   let importFileCalled = false;
-  const port: DocumentImportActionPort = {
-    async importFile() {
+  const port: DocumentImportCreateActionPort = {
+    async importFile(_file, target) {
       importFileCalled = true;
-      return { ok: true, data: { markdown: "# Test", title: "Test" } };
+      assert.equal(target.kind, "personal");
+      return {
+        ok: true,
+        data: { documentId: "doc-1", documentPath: "/app/documents/doc-1" },
+      };
     },
   };
 
-  const { ref, unmount } = renderWorkflow(port);
+  const { ref, unmount } = renderWorkflow({ port });
 
   await act(async () => {
     await ref.current!.processFile(fakeFile(IMPORT_MAX_UPLOAD_BYTES));
   });
 
-  assert.ok(
-    importFileCalled,
-    "port.importFile must be called for a file at exactly IMPORT_MAX_UPLOAD_BYTES",
-  );
-  assert.notEqual(
-    ref.current!.state.status,
-    "error",
-    "state must not be error for a file at exactly IMPORT_MAX_UPLOAD_BYTES",
-  );
+  assert.equal(importFileCalled, true);
+  assert.notEqual(ref.current!.state.status, "error");
 
   unmount();
 });
 
 test("client preflight: file at IMPORT_MAX_UPLOAD_BYTES + 1 is rejected before upload", async () => {
   let importFileCalled = false;
-  const port: DocumentImportActionPort = {
+  const port: DocumentImportCreateActionPort = {
     async importFile() {
       importFileCalled = true;
-      return { ok: true, data: { markdown: "# Test", title: "Test" } };
+      return {
+        ok: true,
+        data: { documentId: "doc-1", documentPath: "/app/documents/doc-1" },
+      };
     },
   };
 
-  const { ref, unmount } = renderWorkflow(port);
+  const { ref, unmount } = renderWorkflow({ port });
 
   await act(async () => {
     await ref.current!.processFile(fakeFile(IMPORT_MAX_UPLOAD_BYTES + 1));
   });
 
-  assert.ok(
-    !importFileCalled,
-    "port.importFile must NOT be called for a file exceeding IMPORT_MAX_UPLOAD_BYTES",
-  );
-  assert.equal(
-    ref.current!.state.status,
-    "error",
-    "state must be error when file exceeds IMPORT_MAX_UPLOAD_BYTES",
-  );
+  assert.equal(importFileCalled, false);
+  assert.equal(ref.current!.state.status, "error");
 
   unmount();
 });
 
-test("client preflight: rejection error message includes '20 MB' wording", async () => {
-  const port: DocumentImportActionPort = {
+test("client preflight: rejection message includes '20 MB' wording", async () => {
+  const port: DocumentImportCreateActionPort = {
     async importFile() {
-      return { ok: true, data: { markdown: "", title: "" } };
+      return {
+        ok: true,
+        data: { documentId: "doc-1", documentPath: "/app/documents/doc-1" },
+      };
     },
   };
 
-  const { ref, unmount } = renderWorkflow(port);
+  const { ref, unmount } = renderWorkflow({ port });
 
   await act(async () => {
     await ref.current!.processFile(fakeFile(IMPORT_MAX_UPLOAD_BYTES + 1));
@@ -156,35 +151,100 @@ test("client preflight: rejection error message includes '20 MB' wording", async
   unmount();
 });
 
-test("client preflight: no upload call occurs for an oversized file", async () => {
-  const uploadLog: string[] = [];
-  const port: DocumentImportActionPort = {
-    async importFile(f) {
-      uploadLog.push(f.name);
-      return {
+test("route response: malformed JSON is treated as a typed malformed_response error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response("<not-json>", {
+      status: 502,
+      headers: { "content-type": "text/plain" },
+    })) as typeof fetch;
+
+  const { ref, unmount } = renderWorkflow({});
+  try {
+    await act(async () => {
+      await ref.current!.processFile(
+        fakeFile(1024, "notes.md", "text/markdown"),
+      );
+    });
+    assert.equal(ref.current!.state.status, "error");
+    if (ref.current!.state.status === "error") {
+      assert.match(ref.current!.state.message, /invalid import response/i);
+    }
+  } finally {
+    unmount();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("route response: failure payload status mismatch is treated as malformed response", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
         ok: false,
         error: {
-          code: "internal",
-          status: 500,
-          message: "should not reach upload",
+          code: "malformed",
+          status: 422,
+          message: "Could not parse file.",
         },
-      };
-    },
-  };
+      }),
+      {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
 
-  const { ref, unmount } = renderWorkflow(port);
+  const { ref, unmount } = renderWorkflow({});
+  try {
+    await act(async () => {
+      await ref.current!.processFile(
+        fakeFile(1024, "notes.md", "text/markdown"),
+      );
+    });
+    assert.equal(ref.current!.state.status, "error");
+    if (ref.current!.state.status === "error") {
+      assert.match(ref.current!.state.message, /invalid import response/i);
+    }
+  } finally {
+    unmount();
+    globalThis.fetch = originalFetch;
+  }
+});
 
-  await act(async () => {
-    await ref.current!.processFile(
-      fakeFile(IMPORT_MAX_UPLOAD_BYTES + 1, "huge.pdf"),
-    );
+test("route response: flat create success payload is accepted", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        documentId: "doc-123",
+        documentPath: "/app/documents/doc-123",
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const created: ImportedDocumentCreationPayload[] = [];
+  const { ref, unmount } = renderWorkflow({
+    onCreated: (payload) => created.push(payload),
   });
-
-  assert.deepEqual(
-    uploadLog,
-    [],
-    "upload must not be attempted for oversized file",
-  );
-
-  unmount();
+  try {
+    await act(async () => {
+      await ref.current!.processFile(
+        fakeFile(1024, "notes.md", "text/markdown"),
+      );
+    });
+    assert.deepEqual(created, [
+      {
+        documentId: "doc-123",
+        documentPath: "/app/documents/doc-123",
+      },
+    ]);
+    assert.equal(ref.current!.state.status, "idle");
+  } finally {
+    unmount();
+    globalThis.fetch = originalFetch;
+  }
 });

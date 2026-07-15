@@ -8,10 +8,10 @@
 import { formatImportFileTooLargeError } from "@/lib/limits";
 import {
   IMPORT_ACCEPTED_MIME_TYPES,
-  IMPORT_MAX_BYTES_BY_MIME,
   IMPORT_MAX_UPLOAD_BYTES,
   importResourceForExtension,
   importResourceForMime,
+  maxBytesForImportMime,
   type ImportAcceptedMimeType,
 } from "@/lib/import/format-registry";
 
@@ -21,7 +21,7 @@ export type AcceptedMimeType = ImportAcceptedMimeType;
 
 /** Returns the per-type upload ceiling for a resolved MIME type. */
 export function maxBytesForMime(mime: AcceptedMimeType): number {
-  return IMPORT_MAX_BYTES_BY_MIME[mime];
+  return maxBytesForImportMime(mime);
 }
 
 /**

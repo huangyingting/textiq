@@ -2,13 +2,15 @@
  * Shared import format/resource registry.
  *
  * Pure constants + helpers only (no server-only dependencies) so both client
- * and server can use one authoritative source for extensions, MIME aliases,
- * telemetry labels, and budgets.
+ * and server can derive MIME allowlists, picker accept strings, telemetry
+ * labels, and budgets from one authoritative readonly list.
  */
 
 export const IMPORT_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 export const IMPORT_TEXT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const IMPORT_MULTIPART_ENVELOPE_MAX_BYTES = 256 * 1024;
+export const IMPORT_MULTIPART_MAX_PARTS = 4;
+export const IMPORT_MULTIPART_TEXT_MAX_BYTES = 4 * 1024;
 export const IMPORT_PARSE_TIMEOUT_MS = 15_000;
 
 export const IMPORT_ARCHIVE_BUDGET = {
@@ -17,55 +19,27 @@ export const IMPORT_ARCHIVE_BUDGET = {
   maxEntryBytes: 20 * 1024 * 1024,
 } as const;
 
-export const IMPORT_ACCEPT = ".md,.html,.htm,.docx,.pptx,.pdf";
-export const IMPORT_ACCEPT_LABEL = ".md, .html, .docx, .pptx, .pdf";
-export const IMPORT_MAX_SIZE_LABEL = "20 MB";
-
-export const IMPORT_ACCEPTED_MIME_TYPES = [
-  "text/markdown",
-  "text/x-markdown",
-  "text/plain",
-  "text/html",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/pdf",
-] as const;
-
-export type ImportAcceptedMimeType =
-  (typeof IMPORT_ACCEPTED_MIME_TYPES)[number];
-
-export const IMPORT_MAX_BYTES_BY_MIME: Record<ImportAcceptedMimeType, number> =
-  {
-    "text/markdown": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/x-markdown": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/plain": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/html": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      IMPORT_MAX_UPLOAD_BYTES,
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-      IMPORT_MAX_UPLOAD_BYTES,
-    "application/pdf": IMPORT_MAX_UPLOAD_BYTES,
-  };
-
 type ImportResourceId = "markdown" | "html" | "docx" | "pptx" | "pdf" | "text";
 
 export type ImportTelemetryFileType = "md" | "html" | "docx" | "pptx" | "pdf";
 
-export type ImportResource = {
+type ImportResourceDefinition = {
   id: ImportResourceId;
   telemetryFileType: ImportTelemetryFileType;
-  mimes: readonly ImportAcceptedMimeType[];
+  mimes: readonly string[];
   extensions: readonly string[];
+  pickerExtensions?: readonly string[];
   maxFileBytes: number;
   archiveBudget?: typeof IMPORT_ARCHIVE_BUDGET;
 };
 
-const IMPORT_RESOURCES: readonly ImportResource[] = [
+export const IMPORT_RESOURCES = [
   {
     id: "markdown",
     telemetryFileType: "md",
     mimes: ["text/markdown", "text/x-markdown"],
     extensions: [".md", ".markdown"],
+    pickerExtensions: [".md"],
     maxFileBytes: IMPORT_TEXT_MAX_UPLOAD_BYTES,
   },
   {
@@ -73,6 +47,7 @@ const IMPORT_RESOURCES: readonly ImportResource[] = [
     telemetryFileType: "md",
     mimes: ["text/plain"],
     extensions: [],
+    pickerExtensions: [],
     maxFileBytes: IMPORT_TEXT_MAX_UPLOAD_BYTES,
   },
   {
@@ -80,6 +55,7 @@ const IMPORT_RESOURCES: readonly ImportResource[] = [
     telemetryFileType: "html",
     mimes: ["text/html"],
     extensions: [".html", ".htm"],
+    pickerExtensions: [".html", ".htm"],
     maxFileBytes: IMPORT_TEXT_MAX_UPLOAD_BYTES,
   },
   {
@@ -89,6 +65,7 @@ const IMPORT_RESOURCES: readonly ImportResource[] = [
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ],
     extensions: [".docx"],
+    pickerExtensions: [".docx"],
     maxFileBytes: IMPORT_MAX_UPLOAD_BYTES,
     archiveBudget: IMPORT_ARCHIVE_BUDGET,
   },
@@ -99,6 +76,7 @@ const IMPORT_RESOURCES: readonly ImportResource[] = [
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ],
     extensions: [".pptx"],
+    pickerExtensions: [".pptx"],
     maxFileBytes: IMPORT_MAX_UPLOAD_BYTES,
     archiveBudget: IMPORT_ARCHIVE_BUDGET,
   },
@@ -107,31 +85,58 @@ const IMPORT_RESOURCES: readonly ImportResource[] = [
     telemetryFileType: "pdf",
     mimes: ["application/pdf"],
     extensions: [".pdf"],
+    pickerExtensions: [".pdf"],
     maxFileBytes: IMPORT_MAX_UPLOAD_BYTES,
   },
-] as const;
+] as const satisfies readonly ImportResourceDefinition[];
 
-const RESOURCE_BY_MIME: Record<ImportAcceptedMimeType, ImportResource> =
-  IMPORT_RESOURCES.reduce(
-    (map, resource) => {
-      for (const mime of resource.mimes) {
-        map[mime] = resource;
-      }
-      return map;
-    },
-    {} as Record<ImportAcceptedMimeType, ImportResource>,
-  );
+export type ImportAcceptedMimeType =
+  (typeof IMPORT_RESOURCES)[number]["mimes"][number];
 
-const RESOURCE_BY_EXTENSION: Record<string, ImportResource> =
-  IMPORT_RESOURCES.reduce(
-    (map, resource) => {
-      for (const extension of resource.extensions) {
-        map[extension] = resource;
-      }
-      return map;
-    },
-    {} as Record<string, ImportResource>,
-  );
+export type ImportResource = (typeof IMPORT_RESOURCES)[number];
+
+function collectUniqueValues<T extends string>(
+  groups: readonly (readonly T[])[],
+): readonly T[] {
+  const seen = new Set<T>();
+  const values: T[] = [];
+  for (const group of groups) {
+    for (const value of group) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+function pickerExtensions(resource: ImportResource): readonly string[] {
+  return resource.pickerExtensions ?? resource.extensions;
+}
+
+export const IMPORT_ACCEPTED_MIME_TYPES = collectUniqueValues(
+  IMPORT_RESOURCES.map((resource) => resource.mimes),
+);
+
+const IMPORT_PICKER_EXTENSIONS = collectUniqueValues(
+  IMPORT_RESOURCES.map((resource) => pickerExtensions(resource)),
+);
+
+export const IMPORT_ACCEPT = IMPORT_PICKER_EXTENSIONS.join(",");
+export const IMPORT_ACCEPT_LABEL = IMPORT_PICKER_EXTENSIONS.join(", ");
+export const IMPORT_MAX_SIZE_LABEL = `${Math.floor(IMPORT_MAX_UPLOAD_BYTES / (1024 * 1024))} MB`;
+
+const RESOURCE_BY_MIME = new Map<string, ImportResource>();
+const RESOURCE_BY_EXTENSION = new Map<string, ImportResource>();
+
+for (const resource of IMPORT_RESOURCES) {
+  for (const mime of resource.mimes) {
+    RESOURCE_BY_MIME.set(mime, resource);
+  }
+  for (const extension of resource.extensions) {
+    RESOURCE_BY_EXTENSION.set(extension, resource);
+  }
+}
 
 function normalizeMimeType(mimeType: string): string {
   return mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
@@ -143,21 +148,18 @@ function extensionFromFileName(fileName: string): string {
   return fileName.slice(index).toLowerCase();
 }
 
-export function importResourceForMime(
-  mimeType: string,
-): ImportResource | null {
+export function importResourceForMime(mimeType: string): ImportResource | null {
   const normalized = normalizeMimeType(mimeType);
   if (!normalized) return null;
-  if (!IMPORT_ACCEPTED_MIME_TYPES.includes(normalized as ImportAcceptedMimeType)) {
-    return null;
-  }
-  return RESOURCE_BY_MIME[normalized as ImportAcceptedMimeType] ?? null;
+  return RESOURCE_BY_MIME.get(normalized) ?? null;
 }
 
-export function importResourceForExtension(fileName: string): ImportResource | null {
+export function importResourceForExtension(
+  fileName: string,
+): ImportResource | null {
   const extension = extensionFromFileName(fileName);
   if (!extension) return null;
-  return RESOURCE_BY_EXTENSION[extension] ?? null;
+  return RESOURCE_BY_EXTENSION.get(extension) ?? null;
 }
 
 export function resolveImportResource(
@@ -165,24 +167,37 @@ export function resolveImportResource(
   fileName: string,
 ): ImportResource | null {
   const byMime = importResourceForMime(mimeType);
-  if (byMime) {
-    return byMime;
-  }
+  if (byMime) return byMime;
   return importResourceForExtension(fileName);
 }
+
+export function maxBytesForImportMime(
+  mimeType: ImportAcceptedMimeType,
+): number {
+  const resource = importResourceForMime(mimeType);
+  if (!resource) {
+    throw new Error(`Unsupported MIME type: ${mimeType}`);
+  }
+  return resource.maxFileBytes;
+}
+
+export const IMPORT_MAX_BYTES_BY_MIME = Object.freeze(
+  Object.fromEntries(
+    IMPORT_ACCEPTED_MIME_TYPES.map((mimeType) => [
+      mimeType,
+      maxBytesForImportMime(mimeType),
+    ]),
+  ),
+);
 
 export function telemetryFileTypeForImport(
   input: Pick<File, "name" | "type">,
 ): ImportTelemetryFileType | "unknown" {
   const byMime = importResourceForMime(input.type);
-  if (byMime) {
-    return byMime.telemetryFileType;
-  }
+  if (byMime) return byMime.telemetryFileType;
 
   const byExtension = importResourceForExtension(input.name);
-  if (byExtension) {
-    return byExtension.telemetryFileType;
-  }
+  if (byExtension) return byExtension.telemetryFileType;
 
   return "unknown";
 }

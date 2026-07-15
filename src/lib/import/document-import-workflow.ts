@@ -3,19 +3,15 @@
 import { useCallback, useRef, useState } from "react";
 
 import type {
-  DocumentImportActionPort,
   DocumentImportCreateActionPort,
   ImportActionError,
   ImportActionResult,
   ImportedDocumentCreationPayload,
-  ImportedDocumentPayload,
 } from "@/lib/action-ports";
 import {
-  importErrorStatusForCode,
   isImportErrorCode,
   parseImportRouteResult,
   type ImportCreationTarget,
-  type ImportRouteResult,
 } from "@/lib/import/contract";
 import {
   IMPORT_ACCEPT,
@@ -23,20 +19,12 @@ import {
   IMPORT_MAX_SIZE_LABEL,
   IMPORT_MAX_UPLOAD_BYTES,
 } from "@/lib/import/format-registry";
-import { deriveImportedDocumentTitle } from "@/lib/import/title";
 import {
   bucketBytes,
   bucketDurationMs,
   classifyFileType,
   emitProductTelemetry,
-  reasonFromImportError,
-  reasonFromStatus,
 } from "@/lib/telemetry/product";
-import {
-  isFiniteNumber,
-  isNonEmptyString,
-  isPlainObject,
-} from "@/lib/type-guards";
 
 export const DOCUMENT_IMPORT_ACCEPT = IMPORT_ACCEPT;
 export const DOCUMENT_IMPORT_ACCEPT_LABEL = IMPORT_ACCEPT_LABEL;
@@ -49,47 +37,20 @@ export type DocumentImportState =
   | { status: "uploading" }
   | { status: "error"; message: string };
 
-type ParsedErrorBody = {
-  code: string;
-  message: string;
-};
+type ParsedImportRouteSuccess = Extract<
+  NonNullable<ReturnType<typeof parseImportRouteResult>>,
+  { ok: true }
+>;
 
 type ImportRouteRequestResult =
-  | { ok: true; data: Exclude<ImportRouteResult, { ok: false }> }
+  | { ok: true; data: ParsedImportRouteSuccess }
   | { ok: false; error: ImportActionError };
-
-function parseErrorBody(value: unknown): ParsedErrorBody | null {
-  if (!isPlainObject(value) || !isNonEmptyString(value.error)) {
-    return null;
-  }
-  return {
-    code: isNonEmptyString(value.code) ? value.code : "unknown_error",
-    message: value.error,
-  };
-}
-
-function statusOrFallback(status: number): number {
-  return isFiniteNumber(status) && status > 0 ? status : 500;
-}
 
 function malformedResponseError(status: number): ImportActionError {
   return {
     code: "malformed_response",
-    status: statusOrFallback(status),
+    status,
     message: "The server returned an invalid import response.",
-  };
-}
-
-function unexpectedSuccessModeError(
-  expectedMode: "parse" | "create",
-): ImportActionError {
-  return {
-    code: "unexpected_mode",
-    status: 500,
-    message:
-      expectedMode === "parse"
-        ? "Import succeeded, but markdown content was missing."
-        : "Import succeeded, but document metadata was missing.",
   };
 }
 
@@ -110,33 +71,26 @@ async function callImportRoute(
     }
 
     const parsed = parseImportRouteResult(payload);
-    if (parsed) {
-      if (!parsed.ok) {
-        return {
-          ok: false,
-          error: {
-            code: parsed.error.code,
-            status: parsed.error.status,
-            message: parsed.error.message,
-          },
-        };
-      }
-      return { ok: true, data: parsed };
+    if (!parsed) {
+      return { ok: false, error: malformedResponseError(response.status) };
     }
-
-    const fallback = parseErrorBody(payload);
-    if (fallback) {
+    if (!parsed.ok) {
+      if (parsed.error.status !== response.status) {
+        return { ok: false, error: malformedResponseError(response.status) };
+      }
       return {
         ok: false,
         error: {
-          code: fallback.code,
-          status: statusOrFallback(response.status),
-          message: fallback.message,
+          code: parsed.error.code,
+          status: parsed.error.status,
+          message: parsed.error.message,
         },
       };
     }
-
-    return { ok: false, error: malformedResponseError(response.status) };
+    if (response.status < 200 || response.status >= 300) {
+      return { ok: false, error: malformedResponseError(response.status) };
+    }
+    return { ok: true, data: parsed };
   } catch {
     return {
       ok: false,
@@ -154,35 +108,10 @@ function importFailureReason(error: ImportActionError): string {
     return "network";
   }
   if (isImportErrorCode(error.code)) {
-    return reasonFromImportError({
-      code: error.code,
-      status: importErrorStatusForCode(error.code),
-      message: error.message,
-    });
+    return error.code;
   }
-  return reasonFromStatus(error.status);
+  return "unknown";
 }
-
-const routeDocumentImportPort: DocumentImportActionPort = {
-  async importFile(file) {
-    const formData = new FormData();
-    formData.append("file", file);
-    const result = await callImportRoute(formData);
-    if (!result.ok) {
-      return result;
-    }
-    if (result.data.mode !== "parse") {
-      return { ok: false, error: unexpectedSuccessModeError("parse") };
-    }
-    return {
-      ok: true,
-      data: {
-        markdown: result.data.markdown,
-        title: deriveImportedDocumentTitle(file.name),
-      },
-    };
-  },
-};
 
 const routeDocumentImportCreatePort: DocumentImportCreateActionPort = {
   async importFile(file, target) {
@@ -196,9 +125,6 @@ const routeDocumentImportCreatePort: DocumentImportCreateActionPort = {
     const result = await callImportRoute(formData);
     if (!result.ok) {
       return result;
-    }
-    if (result.data.mode !== "create") {
-      return { ok: false, error: unexpectedSuccessModeError("create") };
     }
     return {
       ok: true,
@@ -281,22 +207,6 @@ function useImportWorkflow<TPayload>(input: {
     },
     openFilePicker: () => inputRef.current?.click(),
   };
-}
-
-export function useDocumentImportWorkflow({
-  onImported,
-  surface,
-  port = routeDocumentImportPort,
-}: {
-  onImported: (payload: ImportedDocumentPayload) => void;
-  surface: ImportSurface;
-  port?: DocumentImportActionPort;
-}) {
-  return useImportWorkflow({
-    onSuccess: onImported,
-    surface,
-    importFile: (file) => port.importFile(file),
-  });
 }
 
 export function useDocumentImportCreationWorkflow({

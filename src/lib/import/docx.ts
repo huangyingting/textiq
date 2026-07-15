@@ -15,17 +15,27 @@ import mammoth from "mammoth";
 import { disposeZip, loadZipWithinBudget } from "./archive-budget";
 import { htmlToMarkdown } from "./html";
 import { EncryptedImportError } from "./import-errors";
+import { hasOleCompoundFileSignature } from "./office-signature";
 import { throwIfAborted } from "./timeout";
 
 /**
  * Extracts text from a DOCX `Buffer` and returns it as Markdown-compatible text.
  * Throws when `mammoth` cannot parse the buffer (e.g. corrupt file).
  */
+export type ParseDocxOptions = {
+  signal?: AbortSignal;
+};
+
 export async function parseDocx(
   buffer: Buffer,
-  signal?: AbortSignal,
+  options: ParseDocxOptions = {},
 ): Promise<string> {
+  const { signal } = options;
   throwIfAborted(signal);
+  if (hasOleCompoundFileSignature(buffer)) {
+    throw new EncryptedImportError();
+  }
+
   const zip = await loadZipWithinBudget(buffer, signal);
   try {
     if (zip.files["EncryptionInfo"] && zip.files["EncryptedPackage"]) {
@@ -34,7 +44,9 @@ export async function parseDocx(
     throwIfAborted(signal);
     const result = await mammoth.convertToHtml({ buffer });
     throwIfAborted(signal);
-    return htmlToMarkdown(result.value);
+    const markdown = htmlToMarkdown(result.value);
+    throwIfAborted(signal);
+    return markdown;
   } finally {
     disposeZip(zip);
   }

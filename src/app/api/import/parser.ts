@@ -8,6 +8,8 @@ import {
   type ParsedImportUpload,
 } from "@/lib/import/contract";
 import {
+  IMPORT_MULTIPART_MAX_PARTS,
+  IMPORT_MULTIPART_TEXT_MAX_BYTES,
   IMPORT_MAX_UPLOAD_BYTES,
   IMPORT_MULTIPART_ENVELOPE_MAX_BYTES,
 } from "@/lib/import/format-registry";
@@ -16,6 +18,21 @@ function importFailureResponse(
   failure: ImportRouteFailure,
 ): NextResponse<ImportRouteFailure> {
   return NextResponse.json(failure, { status: failure.error.status });
+}
+
+const FORM_FIELD_ALLOWLIST = new Set(["file", "target", "workspaceId"]);
+const utf8Encoder = new TextEncoder();
+
+function malformedResponse(message: string): NextResponse<ImportRouteFailure> {
+  return importFailureResponse(
+    importFailure(IMPORT_ERROR_CODES.MALFORMED, message, 422),
+  );
+}
+
+function tooLargeResponse(message: string): NextResponse<ImportRouteFailure> {
+  return importFailureResponse(
+    importFailure(IMPORT_ERROR_CODES.TOO_LARGE, message),
+  );
 }
 
 export async function parseImportUploadRequest(
@@ -28,10 +45,7 @@ export async function parseImportUploadRequest(
   const form = await readFormData(
     request,
     "Request must be multipart/form-data.",
-    (message) =>
-      importFailureResponse(
-        importFailure(IMPORT_ERROR_CODES.MALFORMED, message, 422),
-      ),
+    (message) => malformedResponse(message),
     {
       maxBytes: IMPORT_MAX_UPLOAD_BYTES + IMPORT_MULTIPART_ENVELOPE_MAX_BYTES,
       tooLargeMessage: "Uploaded file is too large.",
@@ -41,76 +55,118 @@ export async function parseImportUploadRequest(
     if (form.response.status === 413) {
       return {
         ok: false,
-        response: importFailureResponse(
-          importFailure(
-            IMPORT_ERROR_CODES.TOO_LARGE,
-            "Uploaded file is too large.",
-          ),
-        ),
+        response: tooLargeResponse("Uploaded file is too large."),
       };
     }
     return {
       ok: false,
-      response: importFailureResponse(
-        importFailure(
-          IMPORT_ERROR_CODES.MALFORMED,
-          "Request must be multipart/form-data.",
-          422,
-        ),
-      ),
+      response: malformedResponse("Request must be multipart/form-data."),
     };
   }
 
-  const file = form.formData.get("file");
+  const entries = Array.from(form.formData.entries());
+  if (entries.length > IMPORT_MULTIPART_MAX_PARTS) {
+    return {
+      ok: false,
+      response: malformedResponse("Too many form-data fields in upload."),
+    };
+  }
+
+  let file: File | null = null;
+  let targetRaw: string | null = null;
+  let workspaceIdRaw: string | null = null;
+  const seenFields = new Set<string>();
+
+  for (const [key, value] of entries) {
+    if (!FORM_FIELD_ALLOWLIST.has(key)) {
+      return {
+        ok: false,
+        response: malformedResponse(`Unknown \`${key}\` field in form data.`),
+      };
+    }
+    if (seenFields.has(key)) {
+      return {
+        ok: false,
+        response: malformedResponse(`Duplicate \`${key}\` field in form data.`),
+      };
+    }
+    seenFields.add(key);
+
+    if (value instanceof File) {
+      if (key !== "file") {
+        return {
+          ok: false,
+          response: malformedResponse(`Field \`${key}\` must be a text value.`),
+        };
+      }
+      file = value;
+      continue;
+    }
+
+    const textSize = utf8Encoder.encode(value).byteLength;
+    if (textSize > IMPORT_MULTIPART_TEXT_MAX_BYTES) {
+      return {
+        ok: false,
+        response: malformedResponse(`Field \`${key}\` is too large.`),
+      };
+    }
+
+    if (key === "file") {
+      return {
+        ok: false,
+        response: malformedResponse("Invalid `file` field in form data."),
+      };
+    }
+    if (key === "target") {
+      targetRaw = value;
+      continue;
+    }
+    if (key === "workspaceId") {
+      workspaceIdRaw = value;
+    }
+  }
+
   if (!(file instanceof File)) {
     return {
       ok: false,
-      response: importFailureResponse(
-        importFailure(
-          IMPORT_ERROR_CODES.MALFORMED,
-          "Missing `file` field in form data.",
-          422,
-        ),
-      ),
+      response: malformedResponse("Missing `file` field in form data."),
+    };
+  }
+  if (file.size > IMPORT_MAX_UPLOAD_BYTES) {
+    return {
+      ok: false,
+      response: tooLargeResponse("Uploaded file is too large."),
     };
   }
 
-  const targetRaw = form.formData.get("target");
-  if (targetRaw === null || targetRaw === "") {
-    return {
-      ok: true,
-      parsed: { file, target: null },
-    };
-  }
-  if (typeof targetRaw !== "string") {
+  if (targetRaw === null || targetRaw.trim().length === 0) {
     return {
       ok: false,
-      response: importFailureResponse(
-        importFailure(
-          IMPORT_ERROR_CODES.MALFORMED,
-          "Invalid `target` field in form data.",
-          422,
-        ),
-      ),
+      response: malformedResponse("Missing `target` field in form data."),
     };
   }
-  if (targetRaw === "personal") {
+  const target = targetRaw.trim();
+
+  if (target === "personal") {
+    if (workspaceIdRaw !== null && workspaceIdRaw.trim().length > 0) {
+      return {
+        ok: false,
+        response: malformedResponse(
+          "Unexpected `workspaceId` for personal import target.",
+        ),
+      };
+    }
     return {
       ok: true,
       parsed: { file, target: { kind: "personal" } },
     };
   }
-  if (targetRaw === "workspace") {
-    const workspaceId = form.formData.get("workspaceId");
-    if (typeof workspaceId !== "string" || workspaceId.trim().length === 0) {
+  if (target === "workspace") {
+    if (workspaceIdRaw === null || workspaceIdRaw.trim().length === 0) {
       return {
         ok: false,
-        response: importFailureResponse(
-          importFailure(
-            IMPORT_ERROR_CODES.MALFORMED,
-            "Missing `workspaceId` for workspace import target.",
-            422,
-          ),
+        response: malformedResponse(
+          "Missing `workspaceId` for workspace import target.",
         ),
       };
     }
@@ -118,19 +174,13 @@ export async function parseImportUploadRequest(
       ok: true,
       parsed: {
         file,
-        target: { kind: "workspace", workspaceId: workspaceId.trim() },
+        target: { kind: "workspace", workspaceId: workspaceIdRaw.trim() },
       },
     };
   }
 
   return {
     ok: false,
-    response: importFailureResponse(
-      importFailure(
-        IMPORT_ERROR_CODES.MALFORMED,
-        "Invalid `target` field in form data.",
-        422,
-      ),
-    ),
+    response: malformedResponse("Invalid `target` field in form data."),
   };
 }

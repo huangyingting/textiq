@@ -11,7 +11,12 @@ import {
   type ImportRouteFailure,
 } from "./contract";
 import { isEncryptedImportError } from "./import-errors";
-import { ParseAbortedError, ParseTimeoutError, withTimeout } from "./timeout";
+import {
+  type WithTimeoutOptions,
+  ParseAbortedError,
+  ParseTimeoutError,
+  withTimeout,
+} from "./timeout";
 import {
   formatValidationError,
   validateImportFile,
@@ -39,7 +44,10 @@ interface ImportUploadDeps {
   ): ValidationResult;
   readFile(file: File): Promise<Buffer>;
   parseImportedFile: ParseImportedFile;
-  withTimeout<T>(factory: (signal: AbortSignal) => Promise<T>): Promise<T>;
+  withTimeout<T>(
+    factory: (signal: AbortSignal) => Promise<T>,
+    options?: WithTimeoutOptions,
+  ): Promise<T>;
   logError(
     scope: string,
     error: unknown,
@@ -77,14 +85,50 @@ function validationFailure(
   );
 }
 
+function timeoutFailure(): ImportRouteFailure {
+  return importFailure(
+    IMPORT_ERROR_CODES.TIMEOUT,
+    "The file took too long to parse. Try a smaller or simpler document.",
+  );
+}
+
+function abortedFailure(): ImportRouteFailure {
+  return importFailure(
+    IMPORT_ERROR_CODES.ABORTED,
+    "The import was interrupted before parsing finished.",
+  );
+}
+
+function cancellationFailure(
+  signal: AbortSignal | undefined,
+  deadlineAt: number | undefined,
+): ImportRouteFailure | null {
+  if (signal?.aborted) {
+    return abortedFailure();
+  }
+  if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+    return timeoutFailure();
+  }
+  return null;
+}
+
 export async function processImportUpload(
   file: File,
   options: {
     subjectHash: string;
+    signal?: AbortSignal;
+    deadlineAt?: number;
     deps?: Partial<ImportUploadDeps>;
   },
 ): Promise<ImportUploadResult> {
   const deps = { ...defaultDeps, ...options.deps };
+  const cancelledEarly = cancellationFailure(
+    options.signal,
+    options.deadlineAt,
+  );
+  if (cancelledEarly) {
+    return cancelledEarly;
+  }
   const validation = deps.validateImportFile(file.type, file.name, file.size);
   if (!validation.ok) {
     return (
@@ -111,10 +155,43 @@ export async function processImportUpload(
     return failure;
   }
 
+  const cancelledAfterRead = cancellationFailure(
+    options.signal,
+    options.deadlineAt,
+  );
+  if (cancelledAfterRead) {
+    return cancelledAfterRead;
+  }
+
+  const timeoutMs =
+    options.deadlineAt === undefined
+      ? undefined
+      : Math.max(1, options.deadlineAt - Date.now());
+  const timeoutOptions: WithTimeoutOptions = {
+    signal: options.signal,
+    onCleanupError: (error) => {
+      deps.logError(LOG_SCOPE, error, {
+        reason: "parse-cleanup",
+      });
+    },
+  };
+  if (timeoutMs !== undefined) {
+    timeoutOptions.timeoutMs = timeoutMs;
+  }
+
   try {
-    const markdown = await deps.withTimeout((signal) =>
-      deps.parseImportedFile(mime, buffer, signal),
+    const markdown = await deps.withTimeout(
+      (signal) => deps.parseImportedFile(mime, buffer, signal),
+      timeoutOptions,
     );
+
+    const cancelledAfterParse = cancellationFailure(
+      options.signal,
+      options.deadlineAt,
+    );
+    if (cancelledAfterParse) {
+      return cancelledAfterParse;
+    }
 
     if (!markdown.trim()) {
       return importFailure(
@@ -126,10 +203,7 @@ export async function processImportUpload(
     return { ok: true, markdown };
   } catch (error) {
     if (error instanceof ParseTimeoutError) {
-      const failure = importFailure(
-        IMPORT_ERROR_CODES.TIMEOUT,
-        "The file took too long to parse. Try a smaller or simpler document.",
-      );
+      const failure = timeoutFailure();
       deps.logError(LOG_SCOPE, error, {
         reason: "parse-timeout",
         code: failure.error.code,
@@ -144,10 +218,7 @@ export async function processImportUpload(
       return failure;
     }
     if (error instanceof ParseAbortedError) {
-      const failure = importFailure(
-        IMPORT_ERROR_CODES.ABORTED,
-        "The import was interrupted before parsing finished.",
-      );
+      const failure = abortedFailure();
       deps.logError(LOG_SCOPE, error, {
         reason: "parse-aborted",
         code: failure.error.code,

@@ -25,7 +25,7 @@
  * coverage in `src/components/ui/ui-interactions-coverage.test.ts`. `Button`/
  * `IconButton`/tokens are re-exported for real.
  *
- * `useDocumentImportWorkflow`'s own upload/validation/error logic is fully
+ * `useDocumentImportCreationWorkflow`'s own upload/validation/error logic is fully
  * covered by `document-import-workflow.test.ts` and `import-button.test.tsx`;
  * here only the wiring (selecting a file drives `importWorkspaceDocument`,
  * and the hook's error state renders through `WorkspaceDocumentActions`) is
@@ -546,7 +546,6 @@ describe("WorkspaceDocuments", () => {
     globalThis.fetch = (async () =>
       jsonResponse({
         ok: true,
-        mode: "create",
         documentId: "doc-2",
         documentPath: "/app/documents/doc-2",
       })) as typeof fetch;

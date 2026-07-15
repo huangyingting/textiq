@@ -1,54 +1,133 @@
 "use client";
 
 import { Upload, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
+import type { ImportActionError, ImportActionResult } from "@/lib/action-ports";
 import {
   DOCUMENT_IMPORT_ACCEPT,
   DOCUMENT_IMPORT_ACCEPT_LABEL,
   DOCUMENT_IMPORT_MAX_SIZE_LABEL,
-  useDocumentImportWorkflow,
 } from "@/lib/import/document-import-workflow";
+import { IMPORT_MAX_UPLOAD_BYTES } from "@/lib/import/format-registry";
+import {
+  bucketBytes,
+  bucketDurationMs,
+  classifyFileType,
+  emitProductTelemetry,
+} from "@/lib/telemetry/product";
+
+type ImportSurface = "toolbar" | "dropzone";
+
+type ImportButtonState =
+  | { status: "idle" }
+  | { status: "uploading" }
+  | { status: "error"; message: string };
+
+function networkError(): ImportActionError {
+  return {
+    code: "network",
+    status: 0,
+    message: "Could not reach the server. Please try again.",
+  };
+}
+
+function importFailureReason(error: ImportActionError): string {
+  if (error.code === "network") {
+    return "network";
+  }
+  return error.code || "unknown";
+}
 
 /**
- * A drag-and-drop + file-picker button that uploads a document to
- * `POST /api/import` and calls `onImport` with the extracted Markdown text.
- *
- * - Validates file type/size before uploading (a server-side re-check still
- *   happens in the route handler).
- * - Shows a retryable error state on failure.
- * - Uses `--ds-*` design tokens for all colors and spacing so it adapts to
- *   light/dark automatically.
+ * A drag-and-drop + file-picker button that imports a document into Markdown
+ * through an injected server-owned parse port.
  */
 export function ImportButton({
   onImport,
+  importFile,
   label = "Import document",
   compact = false,
   iconOnly = false,
 }: {
-  /** Called with the extracted Markdown text when parsing succeeds. */
   onImport: (markdown: string) => void;
-  /** Button label text. */
+  importFile: (file: File) => Promise<ImportActionResult<{ markdown: string }>>;
   label?: string;
-  /** When true, renders a smaller inline button instead of the drop-zone card. */
   compact?: boolean;
-  /** When true with compact, renders only the icon while keeping the label accessible. */
   iconOnly?: boolean;
 }) {
   const [isDragging, setIsDragging] = useState(false);
-  const { inputRef, state, isUploading, processFile, dismissError } =
-    useDocumentImportWorkflow({
-      onImported: ({ markdown }) => onImport(markdown),
-      surface: compact ? "toolbar" : "dropzone",
-    });
+  const [state, setState] = useState<ImportButtonState>({ status: "idle" });
+  const isUploading = state.status === "uploading";
+  const surface: ImportSurface = compact ? "toolbar" : "dropzone";
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const processFile = useCallback(
+    async (file: File) => {
+      const fileType = classifyFileType(file);
+      const fileSizeBucket = bucketBytes(file.size);
+      if (file.size > IMPORT_MAX_UPLOAD_BYTES) {
+        emitProductTelemetry("product.import.failed", {
+          failureReason: "too_large",
+          fileSizeBucket,
+          fileType,
+          surface,
+        });
+        setState({
+          status: "error",
+          message: `File is too large. Maximum allowed size is ${DOCUMENT_IMPORT_MAX_SIZE_LABEL}.`,
+        });
+        return;
+      }
+
+      setState({ status: "uploading" });
+      const startedAt = performance.now();
+      emitProductTelemetry("product.import.started", {
+        fileSizeBucket,
+        fileType,
+        surface,
+      });
+
+      let result: ImportActionResult<{ markdown: string }>;
+      try {
+        result = await importFile(file);
+      } catch {
+        result = { ok: false, error: networkError() };
+      }
+
+      if (result.ok) {
+        emitProductTelemetry("product.import.succeeded", {
+          durationBucket: bucketDurationMs(performance.now() - startedAt),
+          fileSizeBucket,
+          fileType,
+          surface,
+        });
+        setState({ status: "idle" });
+        onImport(result.data.markdown);
+        return;
+      }
+
+      emitProductTelemetry("product.import.failed", {
+        durationBucket: bucketDurationMs(performance.now() - startedAt),
+        failureReason: importFailureReason(result.error),
+        fileSizeBucket,
+        fileType,
+        status: result.error.status,
+        surface,
+      });
+      setState({ status: "error", message: result.error.message });
+    },
+    [importFile, onImport, surface],
+  );
+
+  const dismissError = () => setState({ status: "idle" });
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       void processFile(file);
     }
-    // Reset so the same file can be re-picked after an error.
     event.target.value = "";
   };
 

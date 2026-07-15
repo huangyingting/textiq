@@ -199,10 +199,13 @@ test.describe("document import round-trip", () => {
   test("rejects an unsupported file type with a graceful error", async ({
     page,
   }) => {
-    // The import route is public; exercise the unsupported-type branch directly
-    // so the negative path is asserted deterministically (HTTP 415).
+    await login(page, profileOwnerCredentials());
+
+    // The create-only import route validates unsupported payloads for signed-in
+    // users before persistence.
     const response = await page.request.post("/api/import", {
       multipart: {
+        target: "personal",
         file: {
           name: "not-a-document.xyz",
           mimeType: "application/octet-stream",
@@ -215,9 +218,11 @@ test.describe("document import round-trip", () => {
       response.status(),
       "parse: unsupported upload should be rejected with 415",
     ).toBe(415);
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as {
+      error?: { message?: string };
+    };
     expect(
-      body.error,
+      body.error?.message,
       "parse: unsupported upload should return an error message",
     ).toBeTruthy();
   });

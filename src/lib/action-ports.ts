@@ -100,11 +100,6 @@ export interface DocumentListActionPort {
   restoreDocument: (documentId: string) => Promise<void>;
 }
 
-export interface ImportedDocumentPayload {
-  markdown: string;
-  title: string;
-}
-
 export interface ImportedDocumentCreationPayload {
   documentId: string;
   documentPath: string;
@@ -119,12 +114,6 @@ export interface ImportActionError {
 export type ImportActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: ImportActionError };
-
-export interface DocumentImportActionPort {
-  importFile: (
-    file: File,
-  ) => Promise<ImportActionResult<ImportedDocumentPayload>>;
-}
 
 export interface DocumentImportCreateActionPort {
   importFile: (

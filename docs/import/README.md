@@ -1,7 +1,7 @@
 ---
 Type: "architecture"
 Status: "current"
-Last updated: "2026-07-14"
+Last updated: "2026-07-15"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -14,34 +14,40 @@ validation and abuse controls are part of the design contract.
 
 ## Source Anchors
 
-| Area                     | Source                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| Client workflow          | [`src/lib/import/document-import-workflow.ts`](../../src/lib/import/document-import-workflow.ts) |
-| Import API route         | [`src/app/api/import/route.ts`](../../src/app/api/import/route.ts)                               |
-| Multipart parser         | [`src/app/api/import/parser.ts`](../../src/app/api/import/parser.ts)                             |
-| Import contract          | [`src/lib/import/contract.ts`](../../src/lib/import/contract.ts)                                 |
-| Format/resource registry | [`src/lib/import/format-registry.ts`](../../src/lib/import/format-registry.ts)                   |
-| Upload service           | [`src/lib/import/upload-service.ts`](../../src/lib/import/upload-service.ts)                     |
-| Import application       | [`src/lib/import/application-service.ts`](../../src/lib/import/application-service.ts)           |
-| MIME and size validation | [`src/lib/import/validate.ts`](../../src/lib/import/validate.ts)                                 |
-| Format dispatcher        | [`src/lib/import/index.ts`](../../src/lib/import/index.ts)                                       |
-| Text normalization       | [`src/lib/import/normalize.ts`](../../src/lib/import/normalize.ts)                               |
-| Parse timeout            | [`src/lib/import/timeout.ts`](../../src/lib/import/timeout.ts)                                   |
-| Archive budget           | [`src/lib/import/archive-budget.ts`](../../src/lib/import/archive-budget.ts)                     |
-| Document creation        | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                 |
+| Area                     | Source                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Client workflow          | [`src/lib/import/document-import-workflow.ts`](../../src/lib/import/document-import-workflow.ts)     |
+| Import API route         | [`src/app/api/import/route.ts`](../../src/app/api/import/route.ts)                                   |
+| Multipart parser         | [`src/app/api/import/parser.ts`](../../src/app/api/import/parser.ts)                                 |
+| Editor parse action      | [`src/app/app/documents/[id]/import-actions.ts`](../../src/app/app/documents/[id]/import-actions.ts) |
+| Import contract          | [`src/lib/import/contract.ts`](../../src/lib/import/contract.ts)                                     |
+| Format/resource registry | [`src/lib/import/format-registry.ts`](../../src/lib/import/format-registry.ts)                       |
+| Upload service           | [`src/lib/import/upload-service.ts`](../../src/lib/import/upload-service.ts)                         |
+| Import application       | [`src/lib/import/application-service.ts`](../../src/lib/import/application-service.ts)               |
+| MIME and size validation | [`src/lib/import/validate.ts`](../../src/lib/import/validate.ts)                                     |
+| Format dispatcher        | [`src/lib/import/index.ts`](../../src/lib/import/index.ts)                                           |
+| Text normalization       | [`src/lib/import/normalize.ts`](../../src/lib/import/normalize.ts)                                   |
+| Parse timeout            | [`src/lib/import/timeout.ts`](../../src/lib/import/timeout.ts)                                       |
+| Archive budget           | [`src/lib/import/archive-budget.ts`](../../src/lib/import/archive-budget.ts)                         |
+| Document creation        | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                     |
 
 ## Flow
 
 ```text
-File picker / dropzone
-  -> useDocumentImportWorkflow / useDocumentImportCreationWorkflow
-  -> POST /api/import multipart form-data
+Dashboard/workspace import
+  -> useDocumentImportCreationWorkflow
+  -> POST /api/import multipart form-data (target required)
   -> parseImportUploadRequest (src/app/api/import/parser.ts)
-  -> parse mode: processImportUpload -> { ok: true, mode: "parse", markdown }
-  -> create mode: createDocumentFromImportUpload
+  -> createDocumentFromImportUpload
        -> processImportUpload (parse/normalize/convert)
        -> transactional persist (Document + DocumentVersion)
-       -> { ok: true, mode: "create", documentId, documentPath }
+       -> { ok: true, documentId, documentPath }
+
+Editor in-place import
+  -> ImportButton
+  -> parseDocumentImportForEditor server action
+  -> processImportUpload (parse/normalize/convert)
+  -> { ok: true, markdown } -> useInsertImportedMarkdown
 ```
 
 The client rejects files above the global import ceiling before upload and emits
@@ -63,6 +69,10 @@ send a generic MIME type for office files, the validator falls back to the file
 extension. Each accepted MIME type has its own byte ceiling, all at or below the
 global upload limit.
 
+DOCX/PPTX parsers check abort state at each major phase and drop late results
+after cancellation. The PDF parser destroys its parser handle exactly once, even
+on timeout/abort paths.
+
 ## Abuse Controls
 
 `POST /api/import` is public and runs heavyweight parsers, so the route is
@@ -70,10 +80,15 @@ protected by:
 
 - DB-backed per-IP fixed-window rate limiting;
 - `AUTH_SECRET`-backed hashing for the rate-limit subject;
-- typed import failure contract (`{ ok: false, error: { code, status, message } }`);
+- typed import failure contract (`{ ok: false, error: { code, status, message } }`)
+  with route HTTP status always matching `error.status`;
 - parser timeout/abort responses (`408`) with cooperative parser cancellation;
+- multipart policy: allowlisted fields only (`file`, `target`, `workspaceId`),
+  max 4 parts, text field cap 4KiB, exactly one file part;
 - Office archive budgets for entry count, per-entry uncompressed bytes, and
   total uncompressed bytes;
+- Office encryption detection both before ZIP parsing (OLE compound-file
+  signature) and after valid ZIP parse (`EncryptionInfo` + `EncryptedPackage`);
 - allowlisted abuse diagnostics for rate-limit hits and parser budget/timeout
   failures.
 
@@ -98,9 +113,11 @@ blank imported document accidentally.
 1. Heavy parsers stay server-only and never enter the client bundle.
 2. Server validation is authoritative even when the client pre-validates.
 3. Parser work is bounded by rate limits, timeout, and archive budgets.
-4. The route has two explicit success modes: parse-only and durable-create.
+4. `/api/import` is create-only and requires an explicit target.
 5. Durable imports only report success after transactional persistence commits.
-6. Import telemetry uses file type, size/duration buckets, surface, and stable
+6. Editor parse-only imports run through a document-scoped server action, not
+   through `/api/import`.
+7. Import telemetry uses file type, size/duration buckets, surface, and stable
    failure reasons; it does not include document content.
 
 ## Primary Tests

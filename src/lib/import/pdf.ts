@@ -37,10 +37,17 @@ export interface PdfParserHandle {
  */
 export interface ParsePdfDeps {
   createParser(buffer: Buffer): PdfParserHandle;
+  onCleanupError?(error: unknown): void;
 }
 
 const defaultParsePdfDeps: ParsePdfDeps = {
   createParser: (buffer) => new PDFParse({ data: buffer }),
+  onCleanupError: () => undefined,
+};
+
+export type ParsePdfOptions = {
+  deps?: ParsePdfDeps;
+  signal?: AbortSignal;
 };
 
 /**
@@ -49,18 +56,23 @@ const defaultParsePdfDeps: ParsePdfDeps = {
  */
 export async function parsePdf(
   buffer: Buffer,
-  deps: ParsePdfDeps = defaultParsePdfDeps,
-  signal?: AbortSignal,
+  options: ParsePdfOptions = {},
 ): Promise<string> {
+  const deps = options.deps ?? defaultParsePdfDeps;
+  const signal = options.signal;
   const parser = deps.createParser(buffer);
   let destroyed = false;
   const destroyParser = async () => {
     if (destroyed) return;
     destroyed = true;
-    await parser.destroy();
+    try {
+      await parser.destroy();
+    } catch (error) {
+      deps.onCleanupError?.(error);
+    }
   };
   const handleAbort = () => {
-    void destroyParser().catch(() => undefined);
+    void destroyParser();
   };
   signal?.addEventListener("abort", handleAbort, { once: true });
   try {

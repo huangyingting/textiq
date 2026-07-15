@@ -2,7 +2,7 @@
  * Direct behavior coverage for `ImportPlugin` (#1958).
  *
  * `ImportPlugin` wires three already-independently-tested collaborators
- * (`ImportButton` + `useDocumentImportWorkflow`'s upload/parse workflow,
+ * (`ImportButton` + editor import workflow's upload/parse flow,
  * `resolveImportStep`'s pure empty/confirmed decision, and
  * `useInsertImportedMarkdown`'s markdown->Lexical-state replacement) into one
  * plugin-level contract: an empty document imports immediately, a non-empty
@@ -34,6 +34,11 @@ import {
 } from "@/test/lexical-component-harness";
 
 import { ImportPlugin } from "./import-plugin";
+
+const importFileStub = async () => ({
+  ok: true as const,
+  data: { markdown: "" },
+});
 
 function makeEditor(): LexicalEditor {
   return makeHeadlessEditor({ namespace: "import-plugin-test" });
@@ -94,7 +99,11 @@ describe("ImportPlugin", () => {
     const editor = makeEditor();
     renderer = mountWithComposer(
       editor,
-      createElement(ImportPlugin, { iconOnly: true }),
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+        iconOnly: true,
+      }),
     );
 
     const button = findImportButton(renderer);
@@ -107,7 +116,13 @@ describe("ImportPlugin", () => {
   test("importing into an empty document inserts immediately with no confirm dialog", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
-    renderer = mountWithComposer(editor, createElement(ImportPlugin, {}));
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+      }),
+    );
 
     assert.equal(rootText(editor), "");
     triggerImport(renderer, "Hello from import");
@@ -120,7 +135,13 @@ describe("ImportPlugin", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     fillWithText(editor, "Existing content");
-    renderer = mountWithComposer(editor, createElement(ImportPlugin, {}));
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+      }),
+    );
 
     triggerImport(renderer, "Replacement content");
 
@@ -135,7 +156,13 @@ describe("ImportPlugin", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     fillWithText(editor, "Existing content");
-    renderer = mountWithComposer(editor, createElement(ImportPlugin, {}));
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+      }),
+    );
     triggerImport(renderer, "Replacement content");
 
     const cancelButton = renderer.root.find(
@@ -154,7 +181,13 @@ describe("ImportPlugin", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     fillWithText(editor, "Existing content");
-    renderer = mountWithComposer(editor, createElement(ImportPlugin, {}));
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+      }),
+    );
     triggerImport(renderer, "Replacement content");
 
     const replaceButton = renderer.root.find(
@@ -189,7 +222,13 @@ describe("ImportPlugin", () => {
       if (type === "keydown") escapeListener = listener;
     };
 
-    renderer = mountWithComposer(editor, createElement(ImportPlugin, {}));
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-1",
+        importFile: importFileStub,
+      }),
+    );
     triggerImport(renderer, "Replacement content");
     assert.equal(findDialog(renderer as ReactTestRenderer).length, 1);
     assert.ok(

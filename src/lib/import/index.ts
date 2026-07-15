@@ -48,15 +48,15 @@ export async function parseImportedFile(
       break;
 
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      raw = await parseDocx(buffer, signal);
+      raw = await parseDocx(buffer, { signal });
       break;
 
     case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-      raw = await parsePptx(buffer, signal);
+      raw = await parsePptx(buffer, { signal });
       break;
 
     case "application/pdf":
-      raw = await parsePdf(buffer, undefined, signal);
+      raw = await parsePdf(buffer, { signal });
       break;
 
     default: {
