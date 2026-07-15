@@ -117,6 +117,7 @@ outlive an individual subscription.
 - [`src/lib/billing/entitlements.test.ts`](../../src/lib/billing/entitlements.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)
+- [`src/lib/billing/usage-ledger.postgres.integration.ts`](../../src/lib/billing/usage-ledger.postgres.integration.ts) (opt-in Postgres harness)
 - [`src/lib/billing/legacy-key-backfill.test.ts`](../../src/lib/billing/legacy-key-backfill.test.ts)
 - [`src/lib/billing/stale-reservation-reconciliation.ts`](../../src/lib/billing/stale-reservation-reconciliation.ts)
 - [`src/lib/billing/provider.test.ts`](../../src/lib/billing/provider.test.ts)
@@ -128,3 +129,8 @@ outlive an individual subscription.
 Opt-in Postgres command:
 
 - `ENABLE_POSTGRES_BILLING_TESTS=1 DATABASE_URL=postgres://... npm run test:billing:postgres`
+  - generates only `billingPostgresTestClient` into `.test-generated/prisma-postgres-billing`
+  - provisions a unique test-scoped Postgres database, runs
+    `test:billing:postgres:integration`, then drops the database
+  - refuses non-test targets unless the `DATABASE_URL` database or schema name
+    contains `test`/`ci`

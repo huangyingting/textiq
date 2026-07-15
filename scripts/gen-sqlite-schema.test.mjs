@@ -84,6 +84,31 @@ test("SQLite schema generator rewrites only the datasource provider", () => {
   );
 });
 
+test("SQLite schema generator preserves secondary generator blocks", () => {
+  const canonical = `
+    generator client {
+      provider = "prisma-client"
+      output = "../src/generated/prisma"
+    }
+    generator billingPostgresTestClient {
+      provider = "prisma-client"
+      output = "../.test-generated/prisma-postgres-billing"
+    }
+    datasource db {
+      provider = "postgresql"
+      url = env("DATABASE_URL")
+    }
+  `;
+
+  const result = generateSqliteSchema(canonical);
+
+  assert.match(
+    result.schema,
+    /generator billingPostgresTestClient \{[\s\S]*output = "\.\.\/\.test-generated\/prisma-postgres-billing"/,
+  );
+  assert.match(result.schema, /datasource db \{[\s\S]*provider = "sqlite"/);
+});
+
 test("SQLite schema generator explains missing datasource providers and first diffs", () => {
   assert.throws(
     () => generateSqliteSchema("generator client {}"),

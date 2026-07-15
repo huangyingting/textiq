@@ -7,6 +7,13 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+// Opt-in Postgres billing harness generator. This is only invoked by
+// scripts/test-billing-postgres.mjs with `prisma generate --generator`.
+generator billingPostgresTestClient {
+  provider = "prisma-client"
+  output   = "../.test-generated/prisma-postgres-billing"
+}
+
 datasource db {
   provider = "postgresql"
 }

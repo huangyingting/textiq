@@ -80,6 +80,7 @@ progress.txt
 # Repo-local test scratch files
 .tmp/
 test-results/
+.test-generated/
 
 # Local worktrees
 .worktrees/
