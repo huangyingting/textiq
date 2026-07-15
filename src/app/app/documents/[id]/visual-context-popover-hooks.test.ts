@@ -353,7 +353,8 @@ describe("usePopoverGeneration", () => {
   });
 
   test("runGenerate reuses key on same prompt retry and rotates for distinct prompts", async () => {
-    const visualRef = { current: buildVisual({ title: "Flow" }) };
+    const firstVisual = buildVisual({ title: "Flow" });
+    const visualRef = { current: firstVisual };
     const { port, calls } = makePort({
       ok: true,
       candidates: [buildVisual({ title: "Variation A" })],
@@ -371,16 +372,20 @@ describe("usePopoverGeneration", () => {
           }),
         );
 
+      let hook = render();
       await act(async () => {
-        await render().runGenerate();
+        await hook.runGenerate();
       });
+      hook = render();
       await act(async () => {
-        await render().runGenerate();
+        await hook.runGenerate();
       });
       visualRef.current = buildVisual({ title: "New Flow" });
+      hook = render();
       await act(async () => {
-        await render().runGenerate();
+        await hook.runGenerate();
       });
+      render();
 
       const keys = calls.map((call) => call.key ?? "");
       assert.equal(keys.length, 3);

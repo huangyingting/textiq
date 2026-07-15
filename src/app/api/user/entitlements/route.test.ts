@@ -100,6 +100,10 @@ type PrismaUserDelegate = {
   findUniqueOrThrow: (...args: unknown[]) => unknown;
   [key: string]: unknown;
 };
+type PrismaSubscriptionDelegate = {
+  findUnique: (...args: unknown[]) => unknown;
+  [key: string]: unknown;
+};
 
 type TestContext = { after(fn: () => void): void };
 
@@ -132,15 +136,20 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
 
 let GET: () => Promise<Response>;
 let prismaUser: PrismaUserDelegate;
+let prismaSubscription: PrismaSubscriptionDelegate;
 
 before(async () => {
   const route = await import("./route");
   GET = route.GET as () => Promise<Response>;
 
   const { prisma } = (await import("@/lib/prisma")) as unknown as {
-    prisma: { user: PrismaUserDelegate };
+    prisma: {
+      user: PrismaUserDelegate;
+      subscription: PrismaSubscriptionDelegate;
+    };
   };
   prismaUser = prisma.user;
+  prismaSubscription = prisma.subscription;
 });
 
 // ---------------------------------------------------------------------------
@@ -156,6 +165,12 @@ function makePrismaUserRow(plan: string, balance: number) {
     creditPeriodStart: NOW, // recent — no period-rollover update triggered
     subscription: null,
   };
+}
+
+function stubNoSubscriptionLookup(t: TestContext): void {
+  stubPrismaMethod(t, prismaSubscription, "findUnique", async () => {
+    throw new Error("subscription lookup should not run in entitlements route");
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +205,7 @@ test("#1853: authenticated free-plan caller receives 200 with free entitlements"
   stubPrismaMethod(t, prismaUser, "findUniqueOrThrow", async () =>
     makePrismaUserRow("free", 500),
   );
+  stubNoSubscriptionLookup(t);
 
   const resp = await GET();
 
@@ -231,6 +247,7 @@ test("#1853: authenticated plus-plan caller receives 200 with plus entitlements 
   stubPrismaMethod(t, prismaUser, "findUniqueOrThrow", async () =>
     makePrismaUserRow("plus", 10_000),
   );
+  stubNoSubscriptionLookup(t);
 
   const resp = await GET();
 
@@ -271,6 +288,7 @@ test("#1853: authenticated pro-plan caller receives 200 with all paid entitlemen
   stubPrismaMethod(t, prismaUser, "findUniqueOrThrow", async () =>
     makePrismaUserRow("pro", 50_000),
   );
+  stubNoSubscriptionLookup(t);
 
   const resp = await GET();
 
@@ -316,6 +334,7 @@ test("#1853: billing provider failure propagates out of the handler", async (t) 
   stubPrismaMethod(t, prismaUser, "findUniqueOrThrow", async () => {
     throw new Error("Billing DB unreachable");
   });
+  stubNoSubscriptionLookup(t);
 
   await assert.rejects(GET(), (err: Error) => {
     assert.match(err.message, /Billing DB unreachable/);

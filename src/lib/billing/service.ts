@@ -4,8 +4,8 @@ import { getEntitlements, type Plan } from "./catalog";
 import { syncBillingPeriodState } from "./period-reset";
 
 type PrismaClientLike = typeof prisma;
-type BillingStateReadClient = Pick<PrismaClientLike, "user"> & {
-  subscription?: Pick<PrismaClientLike["subscription"], "findUnique">;
+export type BillingStateReadClient = Pick<PrismaClientLike, "user"> & {
+  subscription?: Pick<PrismaClientLike["subscription"], "findUnique"> | null;
 };
 type BillingWriteClient = Pick<PrismaClientLike, "subscription" | "user">;
 

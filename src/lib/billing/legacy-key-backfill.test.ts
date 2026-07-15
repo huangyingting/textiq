@@ -12,6 +12,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 import {
   backfillLegacyUsageLedgerKeys,
   DEFAULT_LEGACY_KEY_BACKFILL_BATCH_SIZE,
+  type LegacyKeyBackfillOptions,
 } from "./legacy-key-backfill";
 import {
   deriveUsageLedgerKeyHash,
@@ -254,5 +255,84 @@ describe("legacy usage-ledger key backfill", () => {
     });
     assert.equal(legacyRow.keyHashVersion, 0);
     assert.equal(legacyRow.reservationVersion, 0);
+  });
+
+  it("classifies an interleaved P2002 apply race as collision and remains idempotent on retry", async () => {
+    const candidate = {
+      id: "legacy-row",
+      keyHash: "legacy-raw-idempotency-key",
+      userId: "legacy-user-1",
+      operation: "generate",
+      keyHashVersion: 0,
+      reservationVersion: 0,
+    };
+    const derivedKeyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey: candidate.keyHash,
+      userId: candidate.userId,
+      operation: candidate.operation,
+    });
+    const winner = { id: "winner-row", keyHash: derivedKeyHash };
+    let winnerVisible = false;
+    let updateManyCalls = 0;
+
+    type BackfillClient = NonNullable<LegacyKeyBackfillOptions["client"]>;
+    const client = {
+      usageLedgerEntry: {
+        async findMany() {
+          return [
+            {
+              id: candidate.id,
+              keyHash: candidate.keyHash,
+              userId: candidate.userId,
+              operation: candidate.operation,
+            },
+          ];
+        },
+        async findUnique({
+          where,
+        }: {
+          where: { keyHash: string };
+          select?: { id: true };
+        }) {
+          if (where.keyHash !== derivedKeyHash) {
+            return null;
+          }
+          return winnerVisible ? { id: winner.id } : null;
+        },
+        async updateMany() {
+          updateManyCalls += 1;
+          winnerVisible = true;
+          throw Object.assign(new Error("unique collision"), { code: "P2002" });
+        },
+      },
+    } as unknown as BackfillClient;
+
+    const first = await backfillLegacyUsageLedgerKeys({
+      client,
+      apply: true,
+      batchSize: 1,
+    });
+    assert.equal(first.scanned, 1);
+    assert.equal(first.eligible, 0);
+    assert.equal(first.updated, 0);
+    assert.equal(first.skippedCollision, 1);
+    assert.equal(first.skippedRace, 0);
+    assert.equal(first.rows[0]?.outcome, "skipped-collision");
+    assert.equal(first.rows[0]?.keyHash, derivedKeyHash);
+    assert.equal(JSON.stringify(first).includes(candidate.keyHash), false);
+
+    const second = await backfillLegacyUsageLedgerKeys({
+      client,
+      apply: true,
+      batchSize: 1,
+    });
+    assert.equal(second.scanned, 1);
+    assert.equal(second.skippedCollision, 1);
+    assert.equal(second.skippedRace, 0);
+    assert.equal(second.rows[0]?.outcome, "skipped-collision");
+    assert.equal(updateManyCalls, 1, "retry should not attempt another write");
+    assert.equal(candidate.keyHashVersion, 0);
+    assert.equal(candidate.reservationVersion, 0);
+    assert.equal(JSON.stringify(second).includes(candidate.keyHash), false);
   });
 });

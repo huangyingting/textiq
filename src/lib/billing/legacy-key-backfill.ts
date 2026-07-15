@@ -40,6 +40,26 @@ export interface LegacyKeyBackfillResult {
   rows: LegacyKeyBackfillRow[];
 }
 
+function isPrismaP2002(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code === "P2002";
+}
+
+async function classifyBackfillWriteOutcome(
+  client: LegacyKeyBackfillClient,
+  candidateId: string,
+  keyHash: string,
+): Promise<"skipped-collision" | "skipped-race"> {
+  const winner = await client.usageLedgerEntry.findUnique({
+    where: { keyHash },
+    select: { id: true },
+  });
+  if (winner && winner.id !== candidateId) {
+    return "skipped-collision";
+  }
+  return "skipped-race";
+}
+
 function normalizeBatchSize(batchSize: number | undefined): number {
   if (batchSize === undefined) {
     return DEFAULT_LEGACY_KEY_BACKFILL_BATCH_SIZE;
@@ -108,8 +128,8 @@ export async function backfillLegacyUsageLedgerKeys(
       continue;
     }
 
-    eligible += 1;
     if (!apply) {
+      eligible += 1;
       rows.push({
         keyHash: nextKeyHash,
         userId: candidate.userId,
@@ -119,20 +139,47 @@ export async function backfillLegacyUsageLedgerKeys(
       continue;
     }
 
-    const write = await client.usageLedgerEntry.updateMany({
-      where: {
-        id: candidate.id,
-        keyHashVersion: {
-          lt: USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
+    let writeCount = 0;
+    try {
+      const write = await client.usageLedgerEntry.updateMany({
+        where: {
+          id: candidate.id,
+          keyHashVersion: {
+            lt: USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
+          },
         },
-      },
-      data: {
+        data: {
+          keyHash: nextKeyHash,
+          keyHashVersion: USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
+        },
+      });
+      writeCount = write.count;
+    } catch (error) {
+      if (!isPrismaP2002(error)) {
+        throw error;
+      }
+      const outcome = await classifyBackfillWriteOutcome(
+        client,
+        candidate.id,
+        nextKeyHash,
+      );
+      if (outcome === "skipped-collision") {
+        skippedCollision += 1;
+      } else {
+        eligible += 1;
+        skippedRace += 1;
+      }
+      rows.push({
         keyHash: nextKeyHash,
-        keyHashVersion: USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
-      },
-    });
+        userId: candidate.userId,
+        operation: candidate.operation,
+        outcome,
+      });
+      continue;
+    }
 
-    if (write.count === 1) {
+    if (writeCount === 1) {
+      eligible += 1;
       updated += 1;
       rows.push({
         keyHash: nextKeyHash,
@@ -143,12 +190,22 @@ export async function backfillLegacyUsageLedgerKeys(
       continue;
     }
 
-    skippedRace += 1;
+    const outcome = await classifyBackfillWriteOutcome(
+      client,
+      candidate.id,
+      nextKeyHash,
+    );
+    if (outcome === "skipped-collision") {
+      skippedCollision += 1;
+    } else {
+      eligible += 1;
+      skippedRace += 1;
+    }
     rows.push({
       keyHash: nextKeyHash,
       userId: candidate.userId,
       operation: candidate.operation,
-      outcome: "skipped-race",
+      outcome,
     });
   }
 
