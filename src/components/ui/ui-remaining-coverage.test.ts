@@ -6,6 +6,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { compile } from "tailwindcss";
 
 import {
   BottomSheetSurface,
@@ -99,6 +100,27 @@ function restoreGlobal(
   } else {
     Reflect.deleteProperty(globalThis, name);
   }
+}
+
+function compiledUtilityBlock(css: string, candidate: string) {
+  const selector = `.${candidate.replaceAll(":", "\\:")} {`;
+  const start = css.indexOf(selector);
+  assert.notEqual(start, -1, `expected Tailwind to compile ${candidate}`);
+
+  let depth = 0;
+  for (
+    let index = start + selector.length - 1;
+    index < css.length;
+    index += 1
+  ) {
+    if (css[index] === "{") depth += 1;
+    if (css[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return css.slice(start, index + 1);
+    }
+  }
+
+  assert.fail(`expected a complete Tailwind block for ${candidate}`);
 }
 
 function rect(left = 10, top = 20, width = 120, height = 32) {
@@ -710,6 +732,88 @@ test("ColorPicker covers fallback colors, red HSV branches, focus trap, and pres
 
   assert.ok(changes.includes("bad-color"));
   assert.ok(changes.length >= 4);
+});
+
+test("ColorPicker swatches keep normal hover feedback but never scale with reduced motion", async () => {
+  installDom();
+  const tree = withFakeReact(
+    {
+      states: [
+        true,
+        { top: 10, left: 12 },
+        { source: "#123456", value: "#123456" },
+        "swatches",
+        0,
+      ],
+      refs: [fakeElement(), fakeElement(), fakeElement(), false],
+      runEffects: true,
+    },
+    () =>
+      resolveKnown(
+        ColorPicker({
+          color: "#123456",
+          onChange: () => undefined,
+          "aria-label": "Selected color",
+          allowCustom: false,
+          presets: ["#123456"],
+        }),
+      ),
+  );
+  const swatch = findAll(
+    tree,
+    (element) =>
+      element.type === "button" && element.props["aria-label"] === "#123456",
+  )[0];
+  const className = String(swatch.props.className);
+  const candidates = className.split(/\s+/);
+
+  assert.equal(swatch.props["aria-pressed"], true);
+  assert.match(className, /\bring-2\b/);
+  assert.match(className, /\bfocus-visible:ring-2\b/);
+  assert.ok(candidates.includes("hover:scale-110"));
+  assert.ok(candidates.includes("motion-reduce:scale-100"));
+  assert.ok(candidates.includes("motion-reduce:hover:scale-100"));
+  assert.ok(candidates.includes("motion-reduce:transition-none"));
+  for (const motionProp of [
+    "initial",
+    "animate",
+    "whileHover",
+    "whileTap",
+    "transition",
+    "exit",
+  ]) {
+    assert.equal(swatch.props[motionProp], undefined);
+  }
+
+  const motionCandidates = candidates.filter(
+    (candidate) =>
+      candidate.includes("scale-") ||
+      candidate === "motion-reduce:transition-none",
+  );
+  const compiler = await compile(`
+    @theme { --scale-110: 110%; }
+    @tailwind utilities;
+  `);
+  const css = compiler.build(motionCandidates);
+  const normalHover = compiledUtilityBlock(css, "hover:scale-110");
+  const reducedBase = compiledUtilityBlock(css, "motion-reduce:scale-100");
+  const reducedHover = compiledUtilityBlock(
+    css,
+    "motion-reduce:hover:scale-100",
+  );
+  const reducedTransition = compiledUtilityBlock(
+    css,
+    "motion-reduce:transition-none",
+  );
+
+  assert.match(normalHover, /--tw-scale-x: var\(--scale-110\)/);
+  assert.match(reducedBase, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(reducedBase, /--tw-scale-x: 100%/);
+  assert.match(reducedBase, /\bscale:/);
+  assert.match(reducedHover, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(reducedHover, /&:hover/);
+  assert.match(reducedHover, /--tw-scale-x: 100%/);
+  assert.match(reducedTransition, /transition-property: none/);
 });
 
 test("Tooltip top placement and overlay stack escape/focus branches remain accessible", () => {

@@ -15,7 +15,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { DURATION, EASE } from "@/components/motion/tokens";
+import { resolveOverlayMotion } from "@/components/motion/presets";
 import { useReducedMotion } from "@/components/motion/use-reduced-motion";
 
 import { getTabbableElements, nextFocusIndex } from "@/lib/a11y/tabbable";
@@ -176,7 +176,7 @@ export function ModalSurface({
   "aria-labelledby": labelledBy,
   "aria-busy": busy,
 }: OverlaySurfaceProps) {
-  const reduceMotion = useReducedMotion();
+  const motionPreset = resolveOverlayMotion(Boolean(useReducedMotion())).modal;
   const { panelRef, onKeyDown } = useFocusTrap(open);
   useOverlayStack(open, onClose);
 
@@ -202,12 +202,10 @@ export function ModalSurface({
             aria-labelledby={labelledBy}
             aria-busy={busy}
             tabIndex={-1}
-            initial={
-              reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.98 }
-            }
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
-            transition={{ duration: DURATION.modal, ease: EASE.out }}
+            initial={motionPreset.initial}
+            animate={motionPreset.animate}
+            exit={motionPreset.exit}
+            transition={motionPreset.transition}
             onKeyDown={onKeyDown}
             className={cx(
               "relative z-raised w-full max-w-lg border p-6 outline-none",
@@ -234,6 +232,7 @@ export function DrawerSurface({
   "aria-label": ariaLabel,
   "aria-labelledby": labelledBy,
 }: OverlaySurfaceProps) {
+  const motionPresets = resolveOverlayMotion(Boolean(useReducedMotion()));
   const { panelRef, onKeyDown } = useFocusTrap(open);
   useOverlayStack(open, onClose);
 
@@ -246,10 +245,10 @@ export function DrawerSurface({
           <motion.div
             key="drawer-backdrop"
             aria-hidden="true"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: DURATION.backdrop }}
+            initial={motionPresets.backdrop.initial}
+            animate={motionPresets.backdrop.animate}
+            exit={motionPresets.backdrop.exit}
+            transition={motionPresets.backdrop.transition}
             onClick={onClose}
             className="fixed inset-0 z-overlay bg-ds-backdrop md:hidden"
           />
@@ -261,10 +260,10 @@ export function DrawerSurface({
             aria-label={ariaLabel}
             aria-labelledby={labelledBy}
             tabIndex={-1}
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: DURATION.drawer, ease: EASE.out }}
+            initial={motionPresets.drawer.initial}
+            animate={motionPresets.drawer.animate}
+            exit={motionPresets.drawer.exit}
+            transition={motionPresets.drawer.transition}
             onKeyDown={onKeyDown}
             className={cx(
               "tiq-full-viewport fixed right-0 top-0 z-panel flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto border-l border-ds-border-strong bg-ds-surface-base shadow-ds-popover outline-none md:hidden",
@@ -288,7 +287,7 @@ export function BottomSheetSurface({
   "aria-label": ariaLabel,
   "aria-labelledby": labelledBy,
 }: OverlaySurfaceProps) {
-  const reduceMotion = useReducedMotion();
+  const motionPresets = resolveOverlayMotion(Boolean(useReducedMotion()));
   const { panelRef, onKeyDown } = useFocusTrap(open);
   useOverlayStack(open, onClose);
 
@@ -301,10 +300,10 @@ export function BottomSheetSurface({
           <motion.div
             key="bottom-sheet-backdrop"
             aria-hidden="true"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: DURATION.backdrop }}
+            initial={motionPresets.backdrop.initial}
+            animate={motionPresets.backdrop.animate}
+            exit={motionPresets.backdrop.exit}
+            transition={motionPresets.backdrop.transition}
             onClick={onClose}
             className="fixed inset-0 z-overlay bg-ds-backdrop"
           />
@@ -316,10 +315,10 @@ export function BottomSheetSurface({
             aria-label={ariaLabel}
             aria-labelledby={labelledBy}
             tabIndex={-1}
-            initial={reduceMotion ? { opacity: 1, y: 0 } : { y: "100%" }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduceMotion ? { opacity: 0, y: 0 } : { y: "100%" }}
-            transition={{ duration: DURATION.sheet, ease: EASE.out }}
+            initial={motionPresets.sheet.initial}
+            animate={motionPresets.sheet.animate}
+            exit={motionPresets.sheet.exit}
+            transition={motionPresets.sheet.transition}
             onKeyDown={onKeyDown}
             className={cx(
               "tiq-mobile-sheet fixed bottom-0 left-0 right-0 z-panel flex flex-col overflow-hidden rounded-t-ds-xl border-t border-ds-border-subtle bg-ds-surface-base shadow-ds-popover outline-none",
