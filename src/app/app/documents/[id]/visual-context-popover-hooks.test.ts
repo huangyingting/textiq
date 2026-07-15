@@ -249,12 +249,16 @@ describe("useBrandContext", () => {
 
 describe("usePopoverGeneration", () => {
   function makePort(result: GenerateResult) {
-    const calls: string[] = [];
+    const calls: Array<{ text: string; key: string | undefined }> = [];
     return {
       calls,
       port: {
-        requestVisualCandidates: (text: string) => {
-          calls.push(text);
+        requestVisualCandidates: (
+          text: string,
+          _options?: unknown,
+          request?: { idempotencyKey?: string },
+        ) => {
+          calls.push({ text, key: request?.idempotencyKey });
           return Promise.resolve(result);
         },
       },
@@ -338,7 +342,51 @@ describe("usePopoverGeneration", () => {
       assert.equal(settled.genCreditError, false);
       assert.deepEqual(settled.candidates, [candidate]);
       assert.deepEqual(sections, ["variations"]);
-      assert.deepEqual(calls, [visualPromptText(visual)]);
+      assert.deepEqual(
+        calls.map((call) => call.text),
+        [visualPromptText(visual)],
+      );
+      assert.ok(calls[0]?.key?.startsWith("visual-generate-"));
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test("runGenerate reuses key on same prompt retry and rotates for distinct prompts", async () => {
+    const visualRef = { current: buildVisual({ title: "Flow" }) };
+    const { port, calls } = makePort({
+      ok: true,
+      candidates: [buildVisual({ title: "Variation A" })],
+    });
+    const harness = createReactRenderHarness();
+    try {
+      const render = () =>
+        harness.run(() =>
+          usePopoverGeneration({
+            visualRef,
+            visualGenerationPort: port,
+            visual: visualRef.current,
+            onChange: () => {},
+            onSectionChange: () => {},
+          }),
+        );
+
+      await act(async () => {
+        await render().runGenerate();
+      });
+      await act(async () => {
+        await render().runGenerate();
+      });
+      visualRef.current = buildVisual({ title: "New Flow" });
+      await act(async () => {
+        await render().runGenerate();
+      });
+
+      const keys = calls.map((call) => call.key ?? "");
+      assert.equal(keys.length, 3);
+      assert.equal(keys[0], keys[1]);
+      assert.notEqual(keys[1], keys[2]);
+      assert.ok(keys.every((key) => key.startsWith("visual-generate-")));
     } finally {
       harness.cleanup();
     }
@@ -549,12 +597,16 @@ describe("usePopoverGeneration", () => {
 
 describe("useVisualSync", () => {
   function makePort(result: GenerateResult) {
-    const calls: string[] = [];
+    const calls: Array<{ text: string; key: string | undefined }> = [];
     return {
       calls,
       port: {
-        requestVisualCandidates: (text: string) => {
-          calls.push(text);
+        requestVisualCandidates: (
+          text: string,
+          _options?: unknown,
+          request?: { idempotencyKey?: string },
+        ) => {
+          calls.push({ text, key: request?.idempotencyKey });
           return Promise.resolve(result);
         },
       },
@@ -622,7 +674,11 @@ describe("useVisualSync", () => {
         await hook.runSync();
       });
 
-      assert.deepEqual(calls, ["Some source paragraph."]);
+      assert.deepEqual(
+        calls.map((call) => call.text),
+        ["Some source paragraph."],
+      );
+      assert.ok(calls[0]?.key?.startsWith("visual-sync-"));
       assert.equal(changed.length, 1);
       assert.equal(changed[0]?.sourceText, "Some source paragraph.");
       assert.deepEqual(sections, [null]);

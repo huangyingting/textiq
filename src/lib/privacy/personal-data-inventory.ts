@@ -502,6 +502,7 @@ export const PERSONAL_DATA_INVENTORY = [
     fields: {
       id: field("identifier", "delete_non_fk_identifier", "usageLedger"),
       keyHash: field("identifier", "delete_non_fk_identifier"),
+      keyHashVersion: field("billing_metadata", "delete_non_fk_identifier"),
       userId: field("identifier", "delete_non_fk_identifier", "usageLedger"),
       operation: field(
         "billing_metadata",

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 export const USAGE_LEDGER_KEY_VERSION = "v1";
+export const USAGE_LEDGER_KEY_HASH_VERSION_CURRENT = 1;
 
 export interface UsageLedgerScopedKeyInput {
   userId: string;

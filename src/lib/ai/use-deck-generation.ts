@@ -17,6 +17,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import {
   requestDeckGeneration,
   type DeckGenerateError,
@@ -42,14 +43,22 @@ export type {
 /** Lifecycle of a deck-generation request. */
 export type DeckGenerationStatus = "idle" | "loading" | "success" | "error";
 
+interface DeckGenerationRequest {
+  themePackageId?: ThemePackageId;
+  idempotencyKey?: string;
+}
+
+interface OperationIdempotencyState {
+  fingerprint: string;
+  key: string;
+}
+
 export interface UseDeckGenerationResult {
   /** Kick off a generation for the given document content + options. */
   generate: (
     contentJson: unknown,
     options?: DeckGenerationOptions,
-    request?: {
-      themePackageId?: ThemePackageId;
-    },
+    request?: DeckGenerationRequest,
   ) => Promise<DeckGenerateResult>;
   /** Current lifecycle status. */
   status: DeckGenerationStatus;
@@ -81,6 +90,9 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<DeckGenerateError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
+    null,
+  );
 
   const { stageLabel, showEta, etaHint } = useGenerationStatus(
     status === "loading",
@@ -89,6 +101,7 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    operationIdempotencyRef.current = null;
     setStatus("idle");
     setDeck(null);
     setTruncated(false);
@@ -99,9 +112,7 @@ export function useDeckGeneration(): UseDeckGenerationResult {
     async (
       contentJson: unknown,
       options: DeckGenerationOptions = {},
-      request?: {
-        themePackageId?: ThemePackageId;
-      },
+      request?: DeckGenerationRequest,
     ): Promise<DeckGenerateResult> => {
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -115,6 +126,34 @@ export function useDeckGeneration(): UseDeckGenerationResult {
         typeof contentJson === "string"
           ? contentJson.length
           : (JSON.stringify(contentJson)?.length ?? 0);
+      const operationFingerprint = JSON.stringify({
+        contentJson:
+          typeof contentJson === "string"
+            ? contentJson
+            : (JSON.stringify(contentJson) ?? "null"),
+        options: {
+          length: options.length ?? null,
+          tone: options.tone?.trim() ?? "",
+          audience: options.audience?.trim() ?? "",
+          mode: options.mode ?? null,
+        },
+        themePackageId: request?.themePackageId ?? null,
+      });
+      const nextOperationIdempotency =
+        request?.idempotencyKey?.trim() &&
+        request.idempotencyKey.trim().length > 0
+          ? {
+              fingerprint: operationFingerprint,
+              key: request.idempotencyKey.trim(),
+            }
+          : operationIdempotencyRef.current?.fingerprint ===
+              operationFingerprint
+            ? operationIdempotencyRef.current
+            : {
+                fingerprint: operationFingerprint,
+                key: createOperationIdempotencyKey("deck-generate"),
+              };
+      operationIdempotencyRef.current = nextOperationIdempotency;
       const inputSizeBucket = bucketBytes(serializedLength);
       const startedAt = performance.now();
       emitProductTelemetry("product.ai.deck.started", {
@@ -128,7 +167,10 @@ export function useDeckGeneration(): UseDeckGenerationResult {
         options,
         fetch,
         controller.signal,
-        request,
+        {
+          themePackageId: request?.themePackageId,
+          idempotencyKey: nextOperationIdempotency.key,
+        },
       );
 
       // A newer request (or a reset) superseded this one — ignore the result.

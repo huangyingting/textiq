@@ -215,11 +215,12 @@ test("requestDeckGeneration returns the parsed Deck on success", async () => {
 test("requestDeckGeneration POSTs to /api/generate-deck with the built body", async () => {
   let seenUrl = "";
   let seenBody: unknown = null;
-  let seenIdempotencyKey: string | null = null;
+  let seenIdempotencyKey = "";
   const fetchImpl: typeof fetch = async (url, init) => {
     seenUrl = String(url);
     seenBody = JSON.parse(String(init?.body));
-    seenIdempotencyKey = new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER);
+    seenIdempotencyKey =
+      new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER) ?? "";
     return jsonResponse({ deck: VALID_DECK, truncated: false });
   };
   await requestDeckGeneration(
@@ -232,8 +233,9 @@ test("requestDeckGeneration POSTs to /api/generate-deck with the built body", as
     contentJson: CONTENT_JSON,
     options: { length: "medium", audience: "students" },
   });
-  assert.ok(seenIdempotencyKey);
+  assert.ok(seenIdempotencyKey.length > 0);
   assert.match(seenIdempotencyKey, IDEMPOTENCY_KEY_PATTERN);
+  assert.ok(seenIdempotencyKey.startsWith("deck-generate-"));
 });
 
 test("requestDeckGeneration reuses caller-provided idempotency key", async () => {

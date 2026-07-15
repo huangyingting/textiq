@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { ACCOUNT_EXPORT_USAGE_LEDGER_FIELDS } from "@/lib/account/export";
 import {
   PERSONAL_DATA_EXPORT_SECTIONS,
   PERSONAL_DATA_INVENTORY,
@@ -60,4 +61,23 @@ test("account export manifest sections stay synced to exportable inventory", () 
     [...PERSONAL_DATA_EXPORT_SECTIONS].sort(),
     inventoryExportSections(),
   );
+});
+
+test("usageLedger export fields stay in sync with inventory and exclude keyHash", () => {
+  const usageLedgerInventory = PERSONAL_DATA_INVENTORY.find(
+    (entry) => entry.model === "UsageLedgerEntry",
+  );
+  assert.ok(usageLedgerInventory);
+
+  const exportedUsageLedgerFields = Object.entries(usageLedgerInventory.fields)
+    .flatMap(([field, inventory]) =>
+      inventory.exportSection === "usageLedger" ? [field] : [],
+    )
+    .sort();
+
+  assert.deepEqual(
+    exportedUsageLedgerFields,
+    [...ACCOUNT_EXPORT_USAGE_LEDGER_FIELDS].sort(),
+  );
+  assert.equal(usageLedgerInventory.fields.keyHash.exportSection, undefined);
 });

@@ -22,7 +22,10 @@ import { prisma } from "@/lib/prisma";
 
 import { InsufficientCreditsError } from "./credits";
 import { syncBillingPeriodState } from "./period-reset";
-import { deriveUsageLedgerKeyHash } from "./usage-ledger-key";
+import {
+  deriveUsageLedgerKeyHash,
+  USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
+} from "./usage-ledger-key";
 
 export type LedgerStatus = "reserved" | "captured" | "refunded";
 
@@ -308,6 +311,7 @@ export async function reserveUsage(
           const created = await tx.usageLedgerEntry.create({
             data: {
               keyHash,
+              keyHashVersion: USAGE_LEDGER_KEY_HASH_VERSION_CURRENT,
               userId,
               operation,
               creditCost,

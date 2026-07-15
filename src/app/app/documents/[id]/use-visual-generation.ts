@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import {
   isCreditError,
   requestVisualCandidates,
@@ -93,8 +94,31 @@ interface GenerateOptions {
 }
 
 const routeVisualGenerationActions: VisualGenerationActionPort = {
-  requestVisualCandidates,
+  requestVisualCandidates: (text, options, request) =>
+    requestVisualCandidates(text, options, fetch, request),
 };
+
+interface OperationIdempotencyState {
+  fingerprint: string;
+  key: string;
+}
+
+function visualOperationFingerprint(input: {
+  text: string;
+  sourceKind: "block" | "selection";
+  options: GenOptions;
+}): string {
+  return JSON.stringify({
+    text: input.text.trim(),
+    sourceKind: input.sourceKind,
+    options: {
+      type: input.options.type,
+      orientation: input.options.orientation,
+      detailLevel: input.options.detailLevel,
+      stayCloserToText: input.options.stayCloserToText,
+    },
+  });
+}
 
 export function useVisualGeneration(
   actions: VisualGenerationActionPort = routeVisualGenerationActions,
@@ -111,6 +135,9 @@ export function useVisualGeneration(
   >({});
   const [genOptions, setGenOptions] = useState<GenOptions>(DEFAULT_GEN_OPTIONS);
   const sourceTextRef = useRef("");
+  const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
+    null,
+  );
 
   const resetGeneration = useCallback((keepOptions = true) => {
     setGeneratedVisualsBySection({});
@@ -120,6 +147,7 @@ export function useVisualGeneration(
     setActiveGenerationSection(null);
     setCreditError(false);
     sourceTextRef.current = "";
+    operationIdempotencyRef.current = null;
     if (!keepOptions) {
       setGenOptions(DEFAULT_GEN_OPTIONS);
     }
@@ -139,6 +167,20 @@ export function useVisualGeneration(
         target.text.trim() === "" ? 0 : target.text.trim().split(/\s+/).length,
       );
       const startedAt = performance.now();
+      const operationFingerprint = visualOperationFingerprint({
+        text: target.text,
+        sourceKind,
+        options: opts,
+      });
+      const operationIdempotency = operationIdempotencyRef.current;
+      const idempotencyKey =
+        operationIdempotency?.fingerprint === operationFingerprint
+          ? operationIdempotency.key
+          : createOperationIdempotencyKey("visual-generate");
+      operationIdempotencyRef.current = {
+        fingerprint: operationFingerprint,
+        key: idempotencyKey,
+      };
 
       sourceTextRef.current = target.text.trim();
       setStatus("loading");
@@ -154,12 +196,18 @@ export function useVisualGeneration(
         visualKind: opts.type,
       });
 
-      const result = await actions.requestVisualCandidates(target.text, {
-        type: opts.type,
-        orientation: opts.orientation,
-        detailLevel: opts.detailLevel,
-        stayCloserToText: opts.stayCloserToText,
-      });
+      const result = await actions.requestVisualCandidates(
+        target.text,
+        {
+          type: opts.type,
+          orientation: opts.orientation,
+          detailLevel: opts.detailLevel,
+          stayCloserToText: opts.stayCloserToText,
+        },
+        {
+          idempotencyKey,
+        },
+      );
 
       setStatus("idle");
       setActiveGenerationSection(null);

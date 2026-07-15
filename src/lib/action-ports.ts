@@ -66,6 +66,9 @@ export interface VisualGenerationActionPort {
   requestVisualCandidates: (
     text: string,
     options?: GenerateOptions,
+    request?: {
+      idempotencyKey?: string;
+    },
   ) => Promise<GenerateResult>;
 }
 

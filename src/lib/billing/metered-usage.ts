@@ -1,14 +1,19 @@
 import {
   computeCreditCost,
-  hasSufficientCredits,
   InsufficientCreditsError,
 } from "@/lib/billing/credits";
 import { isUnlimitedCreditsEnabled } from "@/lib/billing/config";
-import { loadAndSyncBillingState } from "@/lib/billing/service";
 import {
-  captureUsage,
-  refundUsage,
-  reserveUsage,
+  loadAndSyncBillingState,
+  type BillingState,
+} from "@/lib/billing/service";
+import {
+  captureUsage as captureUsageInLedger,
+  refundUsage as refundUsageInLedger,
+  reserveUsage as reserveUsageInLedger,
+  type CaptureOptions,
+  type RefundOptions,
+  type ReserveOptions,
   type UsageLedgerEntry,
   UsageLedgerConflictError,
 } from "@/lib/billing/usage-ledger";
@@ -54,6 +59,26 @@ export interface ReserveMeteredUsageOptions {
   creditText: string;
 }
 
+type MeteredBillingState = Pick<BillingState, "creditBalance" | "periodEnd">;
+
+export interface MeteredUsageDeps {
+  isUnlimitedCreditsEnabled(): boolean;
+  computeCreditCost(creditText: string): number;
+  loadAndSyncBillingState(userId: string): Promise<MeteredBillingState>;
+  reserveUsage(opts: ReserveOptions): Promise<UsageLedgerEntry>;
+  captureUsage(opts: CaptureOptions): Promise<UsageLedgerEntry>;
+  refundUsage(opts: RefundOptions): Promise<UsageLedgerEntry | null>;
+}
+
+const defaultMeteredUsageDeps: MeteredUsageDeps = {
+  isUnlimitedCreditsEnabled,
+  computeCreditCost,
+  loadAndSyncBillingState,
+  reserveUsage: reserveUsageInLedger,
+  captureUsage: captureUsageInLedger,
+  refundUsage: refundUsageInLedger,
+};
+
 function insufficientCreditsResult(args: {
   keyHash: string;
   operation: string;
@@ -88,6 +113,7 @@ function insufficientCreditsResult(args: {
 
 export async function reserveMeteredUsage(
   opts: ReserveMeteredUsageOptions,
+  deps: MeteredUsageDeps = defaultMeteredUsageDeps,
 ): Promise<ReserveMeteredUsageResult> {
   const { idempotencyKey, userId, operation, creditText } = opts;
   const keyHash = deriveUsageLedgerKeyHash({
@@ -96,7 +122,7 @@ export async function reserveMeteredUsage(
     operation,
   });
 
-  if (isUnlimitedCreditsEnabled()) {
+  if (deps.isUnlimitedCreditsEnabled()) {
     return {
       ok: true,
       reservation: {
@@ -110,25 +136,19 @@ export async function reserveMeteredUsage(
     };
   }
 
-  const creditCost = computeCreditCost(creditText);
-  const billingState = await loadAndSyncBillingState(userId);
-
-  if (!hasSufficientCredits(billingState.creditBalance, creditCost)) {
-    return insufficientCreditsResult({
-      keyHash,
-      operation,
-      userId,
-      creditCost,
-      balance: billingState.creditBalance,
-      periodEnd: billingState.periodEnd,
-    });
-  }
+  const creditCost = deps.computeCreditCost(creditText);
 
   if (creditCost > 0) {
     try {
-      await reserveUsage({ idempotencyKey, userId, operation, creditCost });
+      await deps.reserveUsage({
+        idempotencyKey,
+        userId,
+        operation,
+        creditCost,
+      });
     } catch (error) {
       if (error instanceof InsufficientCreditsError) {
+        const billingState = await deps.loadAndSyncBillingState(userId);
         return insufficientCreditsResult({
           keyHash,
           operation,
@@ -173,6 +193,7 @@ export async function reserveMeteredUsage(
 
 export async function captureMeteredUsage(
   reservation: MeteredUsageReservation,
+  deps: MeteredUsageDeps = defaultMeteredUsageDeps,
 ): Promise<CaptureMeteredUsageResult> {
   if (reservation.creditCost <= 0) {
     return { ok: true };
@@ -196,7 +217,7 @@ export async function captureMeteredUsage(
   }
 
   try {
-    await captureUsage({
+    await deps.captureUsage({
       idempotencyKey: reservation.idempotencyKey,
       userId: reservation.userId,
       operation: reservation.operation,
@@ -228,12 +249,13 @@ export async function captureMeteredUsage(
 
 export async function refundMeteredUsage(
   reservation: MeteredUsageReservation,
+  deps: MeteredUsageDeps = defaultMeteredUsageDeps,
 ): Promise<UsageLedgerEntry | null> {
   if (!reservation.ledgerReserved) {
     return null;
   }
 
-  const refunded = await refundUsage({
+  const refunded = await deps.refundUsage({
     idempotencyKey: reservation.idempotencyKey,
     userId: reservation.userId,
     operation: reservation.operation,

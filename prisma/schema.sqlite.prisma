@@ -515,6 +515,8 @@ model UsageLedgerEntry {
   /// Versioned scoped hash from userId + operation + raw Idempotency-Key.
   /// Mapped to the historical `idempotencyKey` column to preserve schema/index.
   keyHash            String    @unique @map("idempotencyKey")
+  /// 0 = legacy/raw key storage, 1 = versioned scoped hash storage.
+  keyHashVersion     Int       @default(0)
   userId             String
   /// Logical operation name, e.g. "generate" or "generate-deck".
   operation          String
@@ -528,6 +530,7 @@ model UsageLedgerEntry {
   refundedAt         DateTime?
 
   @@index([userId])
+  @@index([keyHashVersion])
   @@index([status])
   @@index([status, reservedAt])
 }

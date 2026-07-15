@@ -700,6 +700,11 @@ describe("usage-ledger sqlite integration", () => {
       creditCost: 3,
       client: usageClient,
     });
+    const debited = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(debited.creditBalance, 7);
 
     await harness.client.usageLedgerEntry.update({
       where: { keyHash: reserved.keyHash },
@@ -722,6 +727,12 @@ describe("usage-ledger sqlite integration", () => {
     assert.equal(first.refunded, 1);
     assert.equal(first.refundedLegacy, 0);
     assert.equal(second.refunded, 0);
+
+    const row = await harness.client.usageLedgerEntry.findUniqueOrThrow({
+      where: { keyHash: reserved.keyHash },
+      select: { status: true },
+    });
+    assert.equal(row.status, "refunded");
 
     const user = await harness.client.user.findUniqueOrThrow({
       where: { id: userId },

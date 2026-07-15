@@ -4,10 +4,12 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type RefObject,
 } from "react";
 
+import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import { computeAnchoredPosition } from "@/lib/anchored-position";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
 import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
@@ -66,6 +68,25 @@ function findVisualNodeElement(
     }
   }
   return null;
+}
+
+interface OperationIdempotencyState {
+  fingerprint: string;
+  key: string;
+}
+
+function resolveOperationIdempotencyKey(args: {
+  current: OperationIdempotencyState | null;
+  operation: "visual-generate" | "visual-sync";
+  fingerprint: string;
+}): OperationIdempotencyState {
+  if (args.current?.fingerprint === args.fingerprint) {
+    return args.current;
+  }
+  return {
+    fingerprint: args.fingerprint,
+    key: createOperationIdempotencyKey(args.operation),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -139,11 +160,15 @@ export function usePopoverGeneration({
   const [genError, setGenError] = useState<string | null>(null);
   const [genCreditError, setGenCreditError] = useState(false);
   const [candidates, setCandidates] = useState<Visual[]>([]);
+  const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
+    null,
+  );
 
   const reset = useCallback(() => {
     setCandidates([]);
     setGenError(null);
     setGenCreditError(false);
+    operationIdempotencyRef.current = null;
   }, []);
 
   const runGenerate = useCallback(async () => {
@@ -157,8 +182,17 @@ export function usePopoverGeneration({
     setGenError(null);
     setGenCreditError(false);
     setCandidates([]);
-    const result =
-      await visualGenerationPort.requestVisualCandidates(promptText);
+    const nextOperationIdempotency = resolveOperationIdempotencyKey({
+      current: operationIdempotencyRef.current,
+      operation: "visual-generate",
+      fingerprint: promptText.trim(),
+    });
+    operationIdempotencyRef.current = nextOperationIdempotency;
+    const result = await visualGenerationPort.requestVisualCandidates(
+      promptText,
+      undefined,
+      { idempotencyKey: nextOperationIdempotency.key },
+    );
     if (result.ok) {
       setCandidates(result.candidates);
       onSectionChange("variations");
@@ -223,9 +257,13 @@ export function useVisualSync({
 }: UseVisualSyncOptions) {
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
+    null,
+  );
 
   const reset = useCallback(() => {
     setSyncError(null);
+    operationIdempotencyRef.current = null;
   }, []);
 
   const runSync = useCallback(async () => {
@@ -240,7 +278,17 @@ export function useVisualSync({
     }
     setSyncStatus("loading");
     setSyncError(null);
-    const result = await visualGenerationPort.requestVisualCandidates(syncText);
+    const nextOperationIdempotency = resolveOperationIdempotencyKey({
+      current: operationIdempotencyRef.current,
+      operation: "visual-sync",
+      fingerprint: syncText,
+    });
+    operationIdempotencyRef.current = nextOperationIdempotency;
+    const result = await visualGenerationPort.requestVisualCandidates(
+      syncText,
+      undefined,
+      { idempotencyKey: nextOperationIdempotency.key },
+    );
     if (result.ok) {
       const refreshed = stampSourceText(result.candidates[0], syncText);
       if (onCommand) {

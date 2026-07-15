@@ -198,7 +198,10 @@ describe("loadAccountExport — query scoping", () => {
       findUnique: subscriptionFindUnique.fn,
     });
     replacePrismaProperty(t, "inviteLinkUse", { findMany: async () => [] });
-    replacePrismaProperty(t, "usageLedgerEntry", { findMany: async () => [] });
+    const usageLedgerFindMany = trackedCalls(async () => []);
+    replacePrismaProperty(t, "usageLedgerEntry", {
+      findMany: usageLedgerFindMany.fn,
+    });
 
     await loadAccountExport("user-9", NOW);
 
@@ -254,6 +257,17 @@ describe("loadAccountExport — query scoping", () => {
       { where: { userId: string } },
     ];
     assert.deepEqual(subscriptionArgs.where, { userId: "user-9" });
+
+    const [usageLedgerArgs] = usageLedgerFindMany.calls[0] as [
+      {
+        where: { userId: string };
+        select: Record<string, unknown>;
+      },
+    ];
+    assert.deepEqual(usageLedgerArgs.where, { userId: "user-9" });
+    assert.equal(usageLedgerArgs.select.userId, true);
+    assert.equal(usageLedgerArgs.select.reservationVersion, true);
+    assert.equal("keyHash" in usageLedgerArgs.select, false);
   });
 });
 

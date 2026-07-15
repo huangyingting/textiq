@@ -217,21 +217,21 @@ test("requestVisualCandidates returns validated candidates on success", async ()
 test("requestVisualCandidates POSTs to /api/generate with the built body", async () => {
   let capturedUrl: string | undefined;
   let capturedBody: unknown;
-  let capturedIdempotencyKey: string | null = null;
+  let capturedIdempotencyKey = "";
   const fetchImpl = mockFetch(async (url: string, init?: RequestInit) => {
     capturedUrl = url;
     capturedBody = init?.body ? JSON.parse(String(init.body)) : undefined;
-    capturedIdempotencyKey = new Headers(init?.headers).get(
-      IDEMPOTENCY_KEY_HEADER,
-    );
+    capturedIdempotencyKey =
+      new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER) ?? "";
     return jsonResponse({ candidates: [VALID_VISUAL] });
   });
 
   await requestVisualCandidates("hello", { type: "timeline" }, fetchImpl);
   assert.equal(capturedUrl, "/api/generate");
   assert.deepEqual(capturedBody, { text: "hello", type: "timeline" });
-  assert.ok(capturedIdempotencyKey);
+  assert.ok(capturedIdempotencyKey.length > 0);
   assert.match(capturedIdempotencyKey, IDEMPOTENCY_KEY_PATTERN);
+  assert.ok(capturedIdempotencyKey.startsWith("visual-generate-"));
 });
 
 test("requestVisualCandidates reuses caller-provided idempotency key", async () => {

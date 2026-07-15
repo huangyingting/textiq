@@ -1,8 +1,8 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-14"
-description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing, reconciliation, billing provider selection, and subscription state."
+last_updated: "2026-07-15"
+description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
 # Billing And Entitlements
@@ -13,17 +13,18 @@ design lives in [brand-studio.md](brand-studio.md).
 
 ## Source Files
 
-| Area                       | Source                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------- |
-| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                       |
-| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts) |
-| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                       |
-| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)             |
-| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                       |
-| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                     |
-| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)       |
-| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)           |
-| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)               |
+| Area                       | Source                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                         |
+| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts)   |
+| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                         |
+| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)               |
+| Legacy key backfill        | [`src/lib/billing/legacy-key-backfill.ts`](../../src/lib/billing/legacy-key-backfill.ts) |
+| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                         |
+| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                       |
+| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)         |
+| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)             |
+| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)                 |
 
 ## Plans And Entitlements
 
@@ -54,14 +55,28 @@ The usage ledger lifecycle is:
    increment balance exactly once, legacy pre-hold rows do not.
 
 Rows are idempotent by scoped hash (`keyHash`) derived from
-`userId + operation + raw Idempotency-Key`; the raw key is never persisted.
-`keyHash` is Prisma-mapped to the historical `idempotencyKey` column to keep
-existing schema/indexes during cutover.
+`userId + operation + raw Idempotency-Key`; raw keys are never written by new
+reserve paths. `keyHash` is Prisma-mapped to the historical `idempotencyKey`
+column to keep existing schema/indexes during cutover.
+
+`keyHashVersion` tracks key cutover independently from `reservationVersion`:
+
+- `keyHashVersion=0` legacy/raw key storage
+- `keyHashVersion=1` scoped hash storage
+
+`reservationVersion` remains the hold-accounting marker (`0` pre-hold legacy,
+`1` hold-on-reserve), so key migration never reclassifies legacy rows as hold
+rows.
 
 Stale reserved rows are reconciled via
 `reconcileStaleReservedUsage`/`scripts/reconcile-stale-usage-reservations.ts`,
 which processes bounded TTL batches and distinguishes legacy rows so they never
 receive accidental balance increments.
+
+Legacy key cutover is handled by
+`backfillLegacyUsageLedgerKeys`/`scripts/backfill-usage-ledger-key-hash.ts`:
+dry-run by default, explicit `--apply` to mutate, bounded batches, and
+collision-safe skips that preserve the original row.
 
 `BILLING_UNLIMITED_CREDITS` skips authenticated credit deduction only when
 explicitly enabled. Anonymous users are governed by the AI route quota layer,
@@ -94,12 +109,15 @@ outlive an individual subscription.
 4. Ledger reserve/capture/refund is idempotent by scoped `keyHash`.
 5. Reserve is the only path that decrements credits for metered AI usage.
 6. Capture/refund settlement failures fail closed (5xx) until terminal state.
+7. Legacy key backfill never changes `reservationVersion`; it updates
+   `keyHashVersion`/`keyHash` only.
 
 ## Primary Tests
 
 - [`src/lib/billing/entitlements.test.ts`](../../src/lib/billing/entitlements.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)
+- [`src/lib/billing/legacy-key-backfill.test.ts`](../../src/lib/billing/legacy-key-backfill.test.ts)
 - [`src/lib/billing/stale-reservation-reconciliation.ts`](../../src/lib/billing/stale-reservation-reconciliation.ts)
 - [`src/lib/billing/provider.test.ts`](../../src/lib/billing/provider.test.ts)
 - [`src/lib/billing/mock-provider.test.ts`](../../src/lib/billing/mock-provider.test.ts)
