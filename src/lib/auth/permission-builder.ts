@@ -19,7 +19,10 @@ import {
   persistedMemberRoleToEffectiveRole,
   type WorkspaceMemberRoleParseError,
 } from "@/lib/workspace/roles";
-import type { WorkspaceAccessRole } from "@/lib/workspace/capabilities";
+import {
+  capabilitiesForWorkspaceAccessRole,
+  type WorkspaceAccessRole,
+} from "@/lib/workspace/capabilities";
 import {
   allowAccess,
   denyAccess,
@@ -140,12 +143,12 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
   function capabilitiesForRole(
     role: ResourceRole,
   ): ResourceCapabilities<TMidCapKey> {
-    const canMid = role === "owner" || role === "editor";
+    const wsFlags = capabilitiesForWorkspaceAccessRole(role);
     return {
       role,
-      canView: role !== "none",
-      [midCapKey]: canMid,
-      canManage: role === "owner",
+      canView: wsFlags.canView,
+      [midCapKey]: wsFlags.canMutate,
+      canManage: wsFlags.canManage,
     } as ResourceCapabilities<TMidCapKey>;
   }
 

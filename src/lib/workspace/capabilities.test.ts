@@ -5,7 +5,6 @@ import { resolve } from "node:path";
 
 import {
   capabilitiesForWorkspaceAccessRole,
-  WORKSPACE_CAPABILITIES_BY_ROLE,
   type WorkspaceAccessRole,
   type WorkspaceCapabilityMode,
   workspaceRoleCan,
@@ -34,17 +33,11 @@ test("capabilitiesForWorkspaceAccessRole maps every role to canonical flags", ()
   });
 });
 
-test("WORKSPACE_CAPABILITIES_BY_ROLE stays exhaustive for all access roles", () => {
+test("capabilitiesForWorkspaceAccessRole covers every access role without throwing", () => {
   const roles: WorkspaceAccessRole[] = ["owner", "editor", "viewer", "none"];
   for (const role of roles) {
     assert.doesNotThrow(() => capabilitiesForWorkspaceAccessRole(role));
   }
-  assert.deepEqual(Object.keys(WORKSPACE_CAPABILITIES_BY_ROLE).sort(), [
-    "editor",
-    "none",
-    "owner",
-    "viewer",
-  ]);
 });
 
 test("workspaceRoleCan stays consistent with capability flags", () => {
@@ -94,4 +87,81 @@ test("auth and UI callers consume canonical workspace capability helpers", () =>
     false,
     "workspace UI should not redefine the role capability map",
   );
+});
+
+test("returned capability flags are runtime-frozen: direct assignment cannot escalate viewer", () => {
+  const flags = capabilitiesForWorkspaceAccessRole("viewer");
+  // Assignment to a frozen property throws in strict mode; we absorb the error.
+  try {
+    (flags as { canManage: boolean }).canManage = true;
+  } catch {
+    // TypeError expected in strict mode — the mutation was rejected.
+  }
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canManage,
+    false,
+    "viewer canManage must remain false after direct-assignment attempt",
+  );
+  assert.equal(
+    workspaceRoleCan("viewer", "manage"),
+    false,
+    "workspaceRoleCan must remain false after direct-assignment attempt",
+  );
+});
+
+test("returned capability flags are runtime-frozen: Reflect.defineProperty cannot escalate viewer", () => {
+  const flags = capabilitiesForWorkspaceAccessRole("viewer");
+  // Reflect.defineProperty on a frozen object returns false and throws in strict mode.
+  try {
+    Reflect.defineProperty(flags, "canManage", {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
+  } catch {
+    // TypeError expected — mutation was rejected.
+  }
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canManage,
+    false,
+    "viewer canManage must remain false after Reflect.defineProperty attempt",
+  );
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canView,
+    true,
+    "viewer canView must remain true after Reflect.defineProperty attempt",
+  );
+  assert.equal(
+    capabilitiesForWorkspaceAccessRole("viewer").canMutate,
+    false,
+    "viewer canMutate must remain false after Reflect.defineProperty attempt",
+  );
+});
+
+test("canonical flags are frozen: owner/editor/none immutability is preserved after viewer mutation attempt", () => {
+  // Confirm mutation attempts on one role do not contaminate others.
+  try {
+    (
+      capabilitiesForWorkspaceAccessRole("viewer") as {
+        canManage: boolean;
+      }
+    ).canManage = true;
+  } catch {
+    // expected
+  }
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("owner"), {
+    canView: true,
+    canMutate: true,
+    canManage: true,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("editor"), {
+    canView: true,
+    canMutate: true,
+    canManage: false,
+  });
+  assert.deepEqual(capabilitiesForWorkspaceAccessRole("none"), {
+    canView: false,
+    canMutate: false,
+    canManage: false,
+  });
 });

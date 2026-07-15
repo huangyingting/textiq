@@ -156,8 +156,8 @@ test("capabilitiesForWorkspaceRole: none can do nothing", () => {
 });
 
 test("workspace capability map stays in parity with UI capability helpers", () => {
-  const effectiveRoles = ["owner", "editor", "viewer"] as const;
-  for (const role of effectiveRoles) {
+  const roles: WorkspaceRole[] = ["owner", "editor", "viewer", "none"];
+  for (const role of roles) {
     assert.deepEqual(capabilitiesForWorkspaceRole(role), {
       role,
       ...capabilitiesForWorkspaceAccessRole(role),
@@ -178,6 +178,28 @@ test("workspace capability decisions stay in parity with canonical role decision
         decision.allow,
         workspaceRoleCan(role, capability),
         `${role}:${capability}`,
+      );
+    }
+  }
+});
+
+test("permission-builder output matches canonical capability matrix for every role and capability", () => {
+  // Verifies that permission-builder delegates to the canonical policy and
+  // does not maintain an independent role→capability algorithm.
+  const roles: WorkspaceRole[] = ["owner", "editor", "viewer", "none"];
+  const capabilityKeys: WorkspaceCapability[] = ["view", "mutate", "manage"];
+  for (const role of roles) {
+    const caps = capabilitiesForWorkspaceRole(role);
+    const canonical = capabilitiesForWorkspaceAccessRole(role);
+    assert.equal(caps.canView, canonical.canView, `${role}: canView`);
+    assert.equal(caps.canMutate, canonical.canMutate, `${role}: canMutate`);
+    assert.equal(caps.canManage, canonical.canManage, `${role}: canManage`);
+    for (const capability of capabilityKeys) {
+      const decision = workspaceCapabilityAccessDecision(caps, capability);
+      assert.equal(
+        decision.allow,
+        workspaceRoleCan(role, capability),
+        `permission-builder decision ${role}:${capability} must match canonical workspaceRoleCan`,
       );
     }
   }

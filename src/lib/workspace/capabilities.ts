@@ -1,48 +1,34 @@
 import type { EffectiveWorkspaceRole } from "./roles";
 
 export type WorkspaceCapabilityFlags = {
-  canView: boolean;
-  canMutate: boolean;
-  canManage: boolean;
+  readonly canView: boolean;
+  readonly canMutate: boolean;
+  readonly canManage: boolean;
 };
 
 export type WorkspaceAccessRole = EffectiveWorkspaceRole | "none";
 export type WorkspaceCapabilityMode = "view" | "mutate" | "manage";
 
-export const WORKSPACE_CAPABILITIES_BY_ROLE = {
-  owner: {
-    canView: true,
-    canMutate: true,
-    canManage: true,
-  },
-  editor: {
-    canView: true,
-    canMutate: true,
-    canManage: false,
-  },
-  viewer: {
-    canView: true,
-    canMutate: false,
-    canManage: false,
-  },
-  none: {
-    canView: false,
-    canMutate: false,
-    canManage: false,
-  },
-} as const satisfies Record<WorkspaceAccessRole, WorkspaceCapabilityFlags>;
+// Private frozen canonical map — not exported to prevent runtime mutation of shared state.
+// Callers must use the exported query functions below.
+const CAPABILITIES = Object.freeze({
+  owner: Object.freeze({ canView: true, canMutate: true, canManage: true }),
+  editor: Object.freeze({ canView: true, canMutate: true, canManage: false }),
+  viewer: Object.freeze({ canView: true, canMutate: false, canManage: false }),
+  none: Object.freeze({ canView: false, canMutate: false, canManage: false }),
+} as const satisfies Record<WorkspaceAccessRole, WorkspaceCapabilityFlags>);
 
 export function capabilitiesForWorkspaceAccessRole(
   role: WorkspaceAccessRole,
-): WorkspaceCapabilityFlags {
-  return WORKSPACE_CAPABILITIES_BY_ROLE[role];
+): Readonly<WorkspaceCapabilityFlags> {
+  return CAPABILITIES[role];
 }
 
 export function workspaceRoleCan(
   role: WorkspaceAccessRole,
   capability: WorkspaceCapabilityMode,
 ): boolean {
-  const capabilities = capabilitiesForWorkspaceAccessRole(role);
+  const capabilities = CAPABILITIES[role];
   if (capability === "view") {
     return capabilities.canView;
   }
