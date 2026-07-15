@@ -5,10 +5,11 @@ import { DocumentPermissionError } from "@/lib/auth/document-permissions";
 
 import {
   adaptKnownCommentActionError,
+  commentActionObservation,
   commentActionError,
   commentActionOk,
 } from "./action-result";
-import { CommentError } from "./errors";
+import { CommentError, CommentUnavailableError } from "./errors";
 
 test("comment action adapter preserves typed domain failures", () => {
   assert.deepEqual(
@@ -35,6 +36,25 @@ test("comment action adapter conceals document permission details", () => {
       message: "You don't have access to this document.",
     },
   );
+});
+
+test("comment action adapter exposes one safe mutation outcome while retaining identifier-free classification", () => {
+  for (const classification of [
+    "document_not_visible",
+    "target_missing_in_document",
+    "target_changed",
+  ] as const) {
+    const error = new CommentUnavailableError(classification);
+    assert.deepEqual(adaptKnownCommentActionError(error), {
+      code: "comment_unavailable",
+      message: "Comment is unavailable.",
+    });
+    assert.deepEqual(commentActionObservation(error), {
+      message: "Comment mutation target unavailable.",
+      context: { classification },
+    });
+  }
+  assert.equal(commentActionObservation(new Error("unknown")), null);
 });
 
 test("comment action adapter leaves unknown persistence failures for logging", () => {

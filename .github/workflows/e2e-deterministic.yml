@@ -18,8 +18,12 @@ jobs:
       DB_PROVIDER: sqlite
       DATABASE_URL: "file:./prisma/dev.db"
       AUTH_SECRET: ci-placeholder-secret-not-used-in-production
+      # The required profile performs 11 owner logins; production's limit is 10/minute.
+      AUTH_LOGIN_RATE_LIMIT: "100"
       PORT: "4000"
       E2E_BASE_URL: http://127.0.0.1:4000
+      AUTH_URL: http://127.0.0.1:4000
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:4000
       E2E_PROFILE: "1"
       E2E_PROFILE_GREP: "@required-profile"
       E2E_PROFILE_SERVER: dev

@@ -43,11 +43,16 @@ type FakeCommentService = {
     input: CreateCommentInput,
   ): Promise<CommentMutationResult>;
   editComment(
+    documentId: string,
     commentId: string,
     newBody: string,
   ): Promise<CommentMutationResult>;
-  deleteComment(commentId: string): Promise<CommentMutationResult>;
+  deleteComment(
+    documentId: string,
+    commentId: string,
+  ): Promise<CommentMutationResult>;
   setCommentResolved(
+    documentId: string,
     commentId: string,
     resolved: boolean,
   ): Promise<CommentMutationResult>;
@@ -59,6 +64,11 @@ type CommentsActionsState = {
   service: FakeCommentService;
   revalidatePath: (path: string) => void;
   logError: (scope: string, error: unknown) => void;
+  logInfo: (
+    scope: string,
+    message: string,
+    context: Record<string, unknown>,
+  ) => void;
 };
 
 function thread(id: string): CommentThread {
@@ -108,30 +118,32 @@ function createDefaultState(): CommentsActionsState {
       calls.push(["service.createComment", documentId, input]);
       return { documentId, threads: [thread("comment-created")] };
     },
-    async editComment(commentId, newBody) {
-      calls.push(["service.editComment", commentId, newBody]);
-      // The real service resolves the owning document from the comment
-      // record itself, which the caller never supplies for edit/delete/
-      // resolve — it may differ from any id the caller happens to hold.
-      await state().requireDocumentActionContext("doc-owning", "view");
+    async editComment(documentId, commentId, newBody) {
+      calls.push(["service.editComment", documentId, commentId, newBody]);
+      await state().requireDocumentActionContext(documentId, "view");
       return {
-        documentId: "doc-owning",
+        documentId,
         threads: [thread("comment-edited")],
       };
     },
-    async deleteComment(commentId) {
-      calls.push(["service.deleteComment", commentId]);
-      await state().requireDocumentActionContext("doc-owning", "view");
+    async deleteComment(documentId, commentId) {
+      calls.push(["service.deleteComment", documentId, commentId]);
+      await state().requireDocumentActionContext(documentId, "view");
       return {
-        documentId: "doc-owning",
+        documentId,
         threads: [thread("comment-after-delete")],
       };
     },
-    async setCommentResolved(commentId, resolved) {
-      calls.push(["service.setCommentResolved", commentId, resolved]);
-      await state().requireDocumentActionContext("doc-owning", "view");
+    async setCommentResolved(documentId, commentId, resolved) {
+      calls.push([
+        "service.setCommentResolved",
+        documentId,
+        commentId,
+        resolved,
+      ]);
+      await state().requireDocumentActionContext(documentId, "view");
       return {
-        documentId: "doc-owning",
+        documentId,
         threads: [thread("comment-resolved")],
       };
     },
@@ -146,6 +158,9 @@ function createDefaultState(): CommentsActionsState {
     },
     logError(scope, error) {
       calls.push(["logError", scope, error]);
+    },
+    logInfo(scope, message, context) {
+      calls.push(["logInfo", scope, message, context]);
     },
   };
 }
@@ -185,6 +200,9 @@ const stubbedModules = new Map<string, string>([
     `
       export function logError(scope, error) {
         globalThis.__commentsActionsState.logError(scope, error);
+      }
+      export function logInfo(scope, message, context) {
+        globalThis.__commentsActionsState.logInfo(scope, message, context);
       }
     `,
   ],
@@ -241,10 +259,14 @@ registerHooks({
 
 let commentsActions: typeof import("./comments-actions");
 let CommentErrorCtor: typeof import("@/lib/comments/errors").CommentError;
+let CommentUnavailableErrorCtor: typeof import("@/lib/comments/errors").CommentUnavailableError;
 let DocumentPermissionErrorCtor: typeof import("@/lib/auth/document-permissions").DocumentPermissionError;
 
 before(async () => {
-  ({ CommentError: CommentErrorCtor } = await import("@/lib/comments/errors"));
+  ({
+    CommentError: CommentErrorCtor,
+    CommentUnavailableError: CommentUnavailableErrorCtor,
+  } = await import("@/lib/comments/errors"));
   ({ DocumentPermissionError: DocumentPermissionErrorCtor } =
     await import("@/lib/auth/document-permissions"));
   commentsActions = await import("./comments-actions");
@@ -338,8 +360,9 @@ describe("comments actions mutation revalidation", () => {
     ]);
   });
 
-  it("edits, deletes, and resolves using the owning document returned by the service, not the commentId", async () => {
+  it("edits, deletes, and resolves within the caller-supplied document boundary", async () => {
     const editedThreads = await commentsActions.editComment(
+      "doc-owning",
       "comment-9",
       "Updated body",
     );
@@ -353,7 +376,10 @@ describe("comments actions mutation revalidation", () => {
     ]);
 
     state().calls.length = 0;
-    const deletedThreads = await commentsActions.deleteComment("comment-9");
+    const deletedThreads = await commentsActions.deleteComment(
+      "doc-owning",
+      "comment-9",
+    );
     assert.deepEqual(deletedThreads, {
       ok: true,
       data: [thread("comment-after-delete")],
@@ -365,6 +391,7 @@ describe("comments actions mutation revalidation", () => {
 
     state().calls.length = 0;
     const resolvedThreads = await commentsActions.setCommentResolved(
+      "doc-owning",
       "comment-9",
       true,
     );
@@ -373,7 +400,7 @@ describe("comments actions mutation revalidation", () => {
       data: [thread("comment-resolved")],
     });
     assert.deepEqual(state().calls, [
-      ["service.setCommentResolved", "comment-9", true],
+      ["service.setCommentResolved", "doc-owning", "comment-9", true],
       ["requireDocumentActionContext", "doc-owning", "view"],
       ["revalidatePath", "/app/documents/doc-owning"],
     ]);
@@ -411,7 +438,7 @@ describe("comments actions mutation revalidation", () => {
       );
     };
     assert.deepEqual(
-      await commentsActions.editComment("comment-9", "New body"),
+      await commentsActions.editComment("doc-1", "comment-9", "New body"),
       {
         ok: false,
         error: {
@@ -436,16 +463,107 @@ describe("comments actions mutation revalidation", () => {
       throw persistenceError;
     };
 
-    assert.deepEqual(await commentsActions.deleteComment("comment-9"), {
-      ok: false,
-      error: {
-        code: "unexpected",
-        message: "Couldn't update comments. Please try again.",
+    assert.deepEqual(
+      await commentsActions.deleteComment("doc-1", "comment-9"),
+      {
+        ok: false,
+        error: {
+          code: "unexpected",
+          message: "Couldn't update comments. Please try again.",
+        },
       },
-    });
+    );
+
     assert.deepEqual(state().calls, [
       ["logError", "comments.delete", persistenceError],
     ]);
+  });
+
+  it("returns one safe outcome for missing, cross-document, and inaccessible mutation targets while logging identifier-free classification", async () => {
+    const outcomes = [];
+    const classifications = [
+      "target_missing_in_document",
+      "document_not_visible",
+      "target_changed",
+    ] as const;
+    const operations = [
+      {
+        name: "edit",
+        setFailure(classification: (typeof classifications)[number]) {
+          state().service.editComment = async () => {
+            throw new CommentUnavailableErrorCtor(classification);
+          };
+        },
+        run: () =>
+          commentsActions.editComment(
+            "doc-current",
+            "comment-secret",
+            "Updated",
+          ),
+      },
+      {
+        name: "delete",
+        setFailure(classification: (typeof classifications)[number]) {
+          state().service.deleteComment = async () => {
+            throw new CommentUnavailableErrorCtor(classification);
+          };
+        },
+        run: () =>
+          commentsActions.deleteComment("doc-current", "comment-secret"),
+      },
+      {
+        name: "resolve",
+        setFailure(classification: (typeof classifications)[number]) {
+          state().service.setCommentResolved = async () => {
+            throw new CommentUnavailableErrorCtor(classification);
+          };
+        },
+        run: () =>
+          commentsActions.setCommentResolved(
+            "doc-current",
+            "comment-secret",
+            true,
+          ),
+      },
+    ] as const;
+    for (const operation of operations) {
+      for (const classification of classifications) {
+        operation.setFailure(classification);
+        outcomes.push(await operation.run());
+      }
+    }
+
+    assert.deepEqual(
+      outcomes,
+      Array.from(
+        { length: operations.length * classifications.length },
+        () => ({
+          ok: false,
+          error: {
+            code: "comment_unavailable",
+            message: "Comment is unavailable.",
+          },
+        }),
+      ),
+    );
+    const observations = state().calls.filter(
+      (call) => (call as unknown[])[0] === "logInfo",
+    );
+    assert.deepEqual(
+      observations,
+      operations.flatMap((operation) =>
+        classifications.map((classification) => [
+          "logInfo",
+          `comments.${operation.name}`,
+          "Comment mutation target unavailable.",
+          { classification },
+        ]),
+      ),
+    );
+    assert.doesNotMatch(
+      JSON.stringify(observations),
+      /doc-current|comment-secret/,
+    );
   });
 
   it("rethrows framework redirect control flow", async () => {

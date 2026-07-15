@@ -39,7 +39,8 @@ Creating or listing comments requires document `view` capability.
 
 Editing and deleting a comment requires authorship. Any viewer may resolve a
 top-level thread, but replies cannot carry lifecycle state. Mutations return
-refreshed server truth.
+refreshed server truth. ID-based mutations also take the active document ID,
+authorize that document, and only query comments within it.
 
 Reply validation, root reopening, and insertion share one retryable serializable
 transaction. A new reply always reopens its root thread. Resolving or reopening
@@ -48,10 +49,13 @@ resolved state, while deleting a root cascades to its replies.
 
 Validation and lifecycle failures use `CommentError` codes. Server actions
 return a discriminated `CommentActionResult`: known comment failures preserve
-their safe code/message, document permission failures map to a concealed
-`access_denied` result, and unknown persistence failures are logged before a
-generic `unexpected` result is returned. Framework redirect control flow is
-re-thrown rather than adapted.
+their safe code/message, while a missing ID, an ID from another document or
+workspace, and a target in an inaccessible document all return the same
+`comment_unavailable` result. Internal structured logs retain only an
+identifier-free availability classification. Read/create document permission
+failures map to `access_denied`, and unknown persistence failures are logged
+before a generic `unexpected` result is returned. Framework redirect control
+flow is re-thrown rather than adapted.
 
 ## Anchor Types
 
@@ -102,7 +106,11 @@ committing an orphaned anchor.
 - `slideId` filter;
 - `anchorScope: "all" | "text" | "slide"`.
 
-The document editor uses inline comment surfaces for text/visual anchors.
+The document editor uses inline comment surfaces for text/visual anchors. Each
+root renders its replies directly beneath it. Selecting a root's accessible
+Reply control sends its ID as `parentId`; a successful response keeps the anchor
+card open and renders refreshed server truth, while typed or transport failures
+retain the draft for retry.
 Slide-aware comment behavior is exposed through the comment service filters,
 anchor helpers, lifecycle helpers, and the presentation slide-anchor facade so
 slide-specific callers do not duplicate anchor logic.
@@ -127,6 +135,8 @@ does not duplicate anchor fields.
    conflicts.
 10. Reply root validation, reopening, and insertion commit or roll back together.
 11. New replies reopen their root and inherit its unread anchor scope.
+12. Comment-ID mutations are document-scoped and conceal missing, cross-document,
+    and inaccessible targets behind one external outcome.
 
 ## Primary Tests
 

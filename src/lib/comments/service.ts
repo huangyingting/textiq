@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import { DocumentPermissionError } from "@/lib/auth/document-permissions";
 import { prisma } from "@/lib/prisma";
 import type { Deck } from "@/lib/presentation/schema";
 import { safeParseDeck } from "@/lib/presentation/validation";
@@ -16,7 +17,7 @@ import {
   validateElementId,
   validateSlideId,
 } from "./anchors";
-import { CommentError } from "./errors";
+import { CommentError, CommentUnavailableError } from "./errors";
 import { mapCommentThreadRecord } from "./mappers";
 import { canDeleteComment, canEditComment } from "./policy";
 import { isCommentUnreadForScope, type UnreadCountScope } from "./read-state";
@@ -108,6 +109,33 @@ export function createCommentService({
     return parsed.data;
   },
 }: CommentServiceDeps) {
+  async function requireMutationDocumentContext(documentId: string) {
+    try {
+      return await requireDocumentContext(documentId, "view");
+    } catch (error) {
+      if (error instanceof DocumentPermissionError) {
+        throw new CommentUnavailableError("document_not_visible");
+      }
+      throw error;
+    }
+  }
+
+  async function findMutationTarget(documentId: string, commentId: string) {
+    const comment = await db.comment.findFirst({
+      where: { id: commentId, documentId },
+      select: {
+        id: true,
+        documentId: true,
+        authorId: true,
+        parentId: true,
+      },
+    });
+    if (!comment) {
+      throw new CommentUnavailableError("target_missing_in_document");
+    }
+    return comment;
+  }
+
   async function listCommentsForAuthorizedDocument(
     documentId: string,
     options: ListCommentsOptions = {},
@@ -234,18 +262,17 @@ export function createCommentService({
   }
 
   async function editComment(
+    documentId: string,
     commentId: string,
     newBody: string,
   ): Promise<CommentMutationResult> {
-    const comment = await db.comment.findUnique({
-      where: { id: commentId },
-      select: { id: true, documentId: true, authorId: true },
-    });
-    if (!comment) {
-      throw new CommentError("comment_not_found", "Comment not found.");
+    const body = newBody.trim().slice(0, COMMENT_BODY_MAX_LENGTH);
+    if (body.length === 0) {
+      throw new CommentError("empty_body", "Comment cannot be empty.");
     }
 
-    const { user } = await requireDocumentContext(comment.documentId, "view");
+    const { user } = await requireMutationDocumentContext(documentId);
+    const comment = await findMutationTarget(documentId, commentId);
     if (!canEditComment(user.id, comment)) {
       throw new CommentError(
         "edit_forbidden",
@@ -253,37 +280,26 @@ export function createCommentService({
       );
     }
 
-    const body = newBody.trim().slice(0, COMMENT_BODY_MAX_LENGTH);
-    if (body.length === 0) {
-      throw new CommentError("empty_body", "Comment cannot be empty.");
-    }
-
     const updated = await db.comment.updateMany({
-      where: { id: commentId },
+      where: { id: commentId, documentId },
       data: { body },
     });
     if (updated.count !== 1) {
-      throw new CommentError("comment_not_found", "Comment not found.");
+      throw new CommentUnavailableError("target_changed");
     }
 
     return {
-      documentId: comment.documentId,
-      threads: await listCommentsForAuthorizedDocument(comment.documentId),
+      documentId,
+      threads: await listCommentsForAuthorizedDocument(documentId),
     };
   }
 
   async function deleteComment(
+    documentId: string,
     commentId: string,
   ): Promise<CommentMutationResult> {
-    const comment = await db.comment.findUnique({
-      where: { id: commentId },
-      select: { id: true, documentId: true, authorId: true },
-    });
-    if (!comment) {
-      throw new CommentError("comment_not_found", "Comment not found.");
-    }
-
-    const { user } = await requireDocumentContext(comment.documentId, "view");
+    const { user } = await requireMutationDocumentContext(documentId);
+    const comment = await findMutationTarget(documentId, commentId);
     if (!canDeleteComment(user.id, comment)) {
       throw new CommentError(
         "delete_forbidden",
@@ -291,29 +307,26 @@ export function createCommentService({
       );
     }
 
-    const deleted = await db.comment.deleteMany({ where: { id: commentId } });
+    const deleted = await db.comment.deleteMany({
+      where: { id: commentId, documentId },
+    });
     if (deleted.count !== 1) {
-      throw new CommentError("comment_not_found", "Comment not found.");
+      throw new CommentUnavailableError("target_changed");
     }
 
     return {
-      documentId: comment.documentId,
-      threads: await listCommentsForAuthorizedDocument(comment.documentId),
+      documentId,
+      threads: await listCommentsForAuthorizedDocument(documentId),
     };
   }
 
   async function setCommentResolved(
+    documentId: string,
     commentId: string,
     resolved: boolean,
   ): Promise<CommentMutationResult> {
-    const comment = await db.comment.findUnique({
-      where: { id: commentId },
-      select: { id: true, documentId: true, parentId: true },
-    });
-    if (!comment) {
-      throw new CommentError("comment_not_found", "Comment not found.");
-    }
-    await requireDocumentContext(comment.documentId, "view");
+    await requireMutationDocumentContext(documentId);
+    const comment = await findMutationTarget(documentId, commentId);
     if (comment.parentId !== null) {
       throw new CommentError(
         "thread_required",
@@ -322,16 +335,16 @@ export function createCommentService({
     }
 
     const updated = await db.comment.updateMany({
-      where: { id: commentId, parentId: null },
+      where: { id: commentId, documentId, parentId: null },
       data: { resolved },
     });
     if (updated.count !== 1) {
-      throw new CommentError("comment_not_found", "Comment not found.");
+      throw new CommentUnavailableError("target_changed");
     }
 
     return {
-      documentId: comment.documentId,
-      threads: await listCommentsForAuthorizedDocument(comment.documentId),
+      documentId,
+      threads: await listCommentsForAuthorizedDocument(documentId),
     };
   }
 

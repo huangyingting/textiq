@@ -5,13 +5,18 @@ import process from "node:process";
 
 const configuredBaseUrl = process.env.E2E_BASE_URL ?? process.env.BASE_URL;
 const profileServer = process.env.E2E_PROFILE_SERVER ?? "dev";
+const port = process.env.PORT ?? portFromUrl(configuredBaseUrl) ?? "4000";
+const baseUrl = configuredBaseUrl ?? `http://127.0.0.1:${port}`;
 
 const env = {
   ...process.env,
   DB_PROVIDER: process.env.DB_PROVIDER ?? "sqlite",
   DATABASE_URL: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
   AUTH_SECRET: process.env.AUTH_SECRET ?? "ci-placeholder",
-  PORT: process.env.PORT ?? portFromUrl(configuredBaseUrl) ?? "4000",
+  AUTH_LOGIN_RATE_LIMIT: process.env.AUTH_LOGIN_RATE_LIMIT ?? "100",
+  AUTH_URL: process.env.AUTH_URL ?? baseUrl,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? baseUrl,
+  PORT: port,
   E2E_PROFILE: "1",
   E2E_WEB_SERVER: "1",
   E2E_PROFILE_SERVER: profileServer,

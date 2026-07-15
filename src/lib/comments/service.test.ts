@@ -8,12 +8,13 @@ import { promisify } from "node:util";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { DocumentPermissionError } from "@/lib/auth/document-permissions";
 import {
   createCommentService,
   type LoadDeckForDocument,
   type RequireCommentDocumentContext,
 } from "./service";
-import { CommentError } from "./errors";
+import { CommentError, CommentUnavailableError } from "./errors";
 import type { Deck } from "@/lib/presentation/schema";
 import { isRetryableSerializableTransactionError } from "@/lib/serializable-transaction";
 
@@ -887,25 +888,57 @@ test("comment service rejects empty created and edited comments", async () => {
       error.message === "Comment cannot be empty.",
   );
   await assert.rejects(
-    () => service.editComment("thread-1", "   "),
+    () => service.editComment("doc-1", "thread-1", "   "),
     (error: unknown) =>
       error instanceof CommentError && error.code === "empty_body",
   );
 });
 
-test("comment service reports missing comments for mutation helpers", async () => {
-  const db = new FakeDb();
-  const { service } = makeService(db, "viewer");
+test("comment service scopes mutations to an authorized document and conceals missing, cross-document, and inaccessible targets", async () => {
+  const db = new FakeDb([
+    rootComment({
+      id: "other-comment",
+      documentId: "doc-other-workspace",
+      authorId: "viewer",
+    }),
+  ]);
+  const authorized = makeService(db, "viewer").service;
 
+  for (const mutate of [
+    () => authorized.editComment("doc-current", "missing", "Updated"),
+    () => authorized.deleteComment("doc-current", "other-comment"),
+    () => authorized.setCommentResolved("doc-current", "other-comment", true),
+  ]) {
+    await assert.rejects(
+      mutate,
+      (error: unknown) =>
+        error instanceof CommentUnavailableError &&
+        error.code === "comment_unavailable" &&
+        error.message === "Comment is unavailable." &&
+        error.classification === "target_missing_in_document",
+    );
+  }
+
+  const inaccessible = createCommentService({
+    db: db as never,
+    requireDocumentContext: async () => {
+      throw new DocumentPermissionError("Document not found.", null);
+    },
+  });
   await assert.rejects(
-    () => service.editComment("missing", "Updated"),
-    /not found/,
+    () =>
+      inaccessible.editComment(
+        "doc-other-workspace",
+        "other-comment",
+        "Updated",
+      ),
+    (error: unknown) =>
+      error instanceof CommentUnavailableError &&
+      error.code === "comment_unavailable" &&
+      error.message === "Comment is unavailable." &&
+      error.classification === "document_not_visible",
   );
-  await assert.rejects(() => service.deleteComment("missing"), /not found/);
-  await assert.rejects(
-    () => service.setCommentResolved("missing", true),
-    /not found/,
-  );
+  assert.equal(db.comments[0].body, "Comment");
 });
 
 test("comment service preserves author-only edit and delete policy", async () => {
@@ -915,18 +948,18 @@ test("comment service preserves author-only edit and delete policy", async () =>
   const nonAuthor = makeService(db, "viewer").service;
 
   await assert.rejects(
-    () => nonAuthor.editComment("thread-1", "Updated"),
+    () => nonAuthor.editComment("doc-1", "thread-1", "Updated"),
     /own comments/,
   );
   await assert.rejects(
-    () => nonAuthor.deleteComment("thread-1"),
+    () => nonAuthor.deleteComment("doc-1", "thread-1"),
     /own comments/,
   );
 
   const author = makeService(db, "author-1").service;
-  await author.editComment("thread-1", "Updated");
+  await author.editComment("doc-1", "thread-1", "Updated");
   assert.equal(db.comments[0].body, "Updated");
-  await author.deleteComment("thread-1");
+  await author.deleteComment("doc-1", "thread-1");
   assert.equal(db.comments.length, 0);
 });
 
@@ -936,7 +969,7 @@ test("comment service allows any viewer to resolve a thread", async () => {
   ]);
   const { service } = makeService(db, "viewer");
 
-  await service.setCommentResolved("thread-1", true);
+  await service.setCommentResolved("doc-1", "thread-1", true);
 
   assert.equal(db.comments[0].resolved, true);
 });
@@ -953,7 +986,7 @@ test("comment service rejects resolving a reply because resolved state belongs t
   const { service } = makeService(db, "viewer");
 
   await assert.rejects(
-    () => service.setCommentResolved("reply-1", true),
+    () => service.setCommentResolved("doc-1", "reply-1", true),
     (error: unknown) =>
       error instanceof CommentError && error.code === "thread_required",
   );
@@ -973,11 +1006,27 @@ test("comment service keeps resolution root-owned across reply deletion", async 
   const viewer = makeService(db, "viewer").service;
   const replyAuthor = makeService(db, "author-2").service;
 
-  await viewer.setCommentResolved("thread-1", true);
-  await replyAuthor.deleteComment("reply-1");
+  await viewer.setCommentResolved("doc-1", "thread-1", true);
+  await replyAuthor.deleteComment("doc-1", "reply-1");
 
   assert.equal(db.comments.length, 1);
   assert.equal(db.comments[0].resolved, true);
+});
+
+test("comment service deletes an existing root and all of its replies", async () => {
+  const db = new FakeDb([
+    rootComment({ id: "thread-1", authorId: "author-1" }),
+    rootComment({
+      id: "reply-1",
+      parentId: "thread-1",
+      authorId: "author-2",
+    }),
+  ]);
+  const service = makeService(db, "author-1").service;
+
+  await service.deleteComment("doc-1", "thread-1");
+
+  assert.deepEqual(db.comments, []);
 });
 
 test("comment service counts unread roots and replies in their root anchor scope", async () => {
@@ -1104,6 +1153,34 @@ test("comment service integration keeps reply races atomic and rolls back reopen
       select: { resolved: true, replies: { select: { id: true } } },
     }),
     { resolved: true, replies: [] },
+  );
+
+  const cascadeRoot = await firstClient.comment.create({
+    data: {
+      documentId,
+      authorId: ownerId,
+      body: "Root with existing reply",
+      replies: {
+        create: {
+          documentId,
+          authorId: replyAuthorId,
+          body: "Existing reply",
+        },
+      },
+    },
+  });
+  const cascadeService = createCommentService({
+    db: firstClient,
+    requireDocumentContext: async () => ({
+      user: { id: ownerId },
+    }),
+  });
+  await cascadeService.deleteComment(documentId, cascadeRoot.id);
+  assert.equal(
+    await firstClient.comment.count({
+      where: { OR: [{ id: cascadeRoot.id }, { parentId: cascadeRoot.id }] },
+    }),
+    0,
   );
 
   const racingRoot = await firstClient.comment.create({

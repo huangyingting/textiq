@@ -12,11 +12,12 @@ import {
 } from "@/lib/comments";
 import {
   adaptKnownCommentActionError,
+  commentActionObservation,
   commentActionError,
   commentActionOk,
   type CommentActionResult,
 } from "@/lib/comments/action-result";
-import { logError } from "@/lib/log";
+import { logError, logInfo } from "@/lib/log";
 
 const commentService = createCommentService({
   requireDocumentContext: requireDocumentActionContext,
@@ -33,6 +34,14 @@ async function runCommentAction<T>(
     return commentActionOk(await execute());
   } catch (error) {
     unstable_rethrow(error);
+    const observation = commentActionObservation(error);
+    if (observation) {
+      logInfo(
+        `comments.${operation}`,
+        observation.message,
+        observation.context,
+      );
+    }
     const knownError = adaptKnownCommentActionError(error);
     if (knownError) {
       return commentActionError(knownError);
@@ -66,32 +75,43 @@ export async function createComment(
 }
 
 export async function editComment(
+  documentId: string,
   commentId: string,
   newBody: string,
 ): Promise<CommentActionResult<CommentThread[]>> {
   return runCommentAction("edit", async () => {
-    const result = await commentService.editComment(commentId, newBody);
+    const result = await commentService.editComment(
+      documentId,
+      commentId,
+      newBody,
+    );
     revalidatePath(`/app/documents/${result.documentId}`);
     return result.threads;
   });
 }
 
 export async function deleteComment(
+  documentId: string,
   commentId: string,
 ): Promise<CommentActionResult<CommentThread[]>> {
   return runCommentAction("delete", async () => {
-    const result = await commentService.deleteComment(commentId);
+    const result = await commentService.deleteComment(documentId, commentId);
     revalidatePath(`/app/documents/${result.documentId}`);
     return result.threads;
   });
 }
 
 export async function setCommentResolved(
+  documentId: string,
   commentId: string,
   resolved: boolean,
 ): Promise<CommentActionResult<CommentThread[]>> {
   return runCommentAction("resolve", async () => {
-    const result = await commentService.setCommentResolved(commentId, resolved);
+    const result = await commentService.setCommentResolved(
+      documentId,
+      commentId,
+      resolved,
+    );
     revalidatePath(`/app/documents/${result.documentId}`);
     return result.threads;
   });

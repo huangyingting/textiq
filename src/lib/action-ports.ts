@@ -133,13 +133,16 @@ export interface CommentsActionPort {
     input: CreateCommentInput,
   ) => Promise<CommentActionResult<CommentThread[]>>;
   editComment: (
+    documentId: string,
     commentId: string,
     newBody: string,
   ) => Promise<CommentActionResult<CommentThread[]>>;
   deleteComment: (
+    documentId: string,
     commentId: string,
   ) => Promise<CommentActionResult<CommentThread[]>>;
   setCommentResolved: (
+    documentId: string,
     commentId: string,
     resolved: boolean,
   ) => Promise<CommentActionResult<CommentThread[]>>;

@@ -1,6 +1,11 @@
 import { DocumentPermissionError } from "@/lib/auth/document-permissions";
 
-import { CommentError, type CommentErrorCode } from "./errors";
+import {
+  CommentError,
+  CommentUnavailableError,
+  type CommentErrorCode,
+  type CommentUnavailableClassification,
+} from "./errors";
 
 export type CommentActionErrorCode =
   | CommentErrorCode
@@ -15,6 +20,11 @@ export type CommentActionError = {
 export type CommentActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: CommentActionError };
+
+export type CommentActionObservation = {
+  message: string;
+  context: { classification: CommentUnavailableClassification };
+};
 
 export function commentActionOk<T>(data: T): CommentActionResult<T> {
   return { ok: true, data };
@@ -39,4 +49,16 @@ export function adaptKnownCommentActionError(
     };
   }
   return null;
+}
+
+export function commentActionObservation(
+  error: unknown,
+): CommentActionObservation | null {
+  if (!(error instanceof CommentUnavailableError)) {
+    return null;
+  }
+  return {
+    message: "Comment mutation target unavailable.",
+    context: { classification: error.classification },
+  };
 }

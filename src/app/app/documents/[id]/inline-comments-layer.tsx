@@ -90,6 +90,7 @@ export function InlineCommentsLayer({
   const [hoverAnchor, setHoverAnchor] = useState<AnchorPosition | null>(null);
   const [activeAnchor, setActiveAnchor] = useState<AnchorPosition | null>(null);
   const [body, setBody] = useState("");
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cardPosition, setCardPosition] = useState<CommentCardPosition | null>(
     null,
@@ -102,6 +103,7 @@ export function InlineCommentsLayer({
   const closeDialog = useCallback(() => {
     setActiveAnchor(null);
     setBody("");
+    setReplyingToId(null);
     setError(null);
   }, []);
 
@@ -224,31 +226,42 @@ export function InlineCommentsLayer({
     const anchor = activeAnchor;
     const trimmed = body.trim();
     if (!anchor || !trimmed) return;
+    const parentId = replyingToId;
     setError(null);
     startTransition(async () => {
       try {
-        const result = await commentsActions.createComment(documentId, {
-          body: trimmed,
-          anchorType: "text",
-          anchorText: anchor.text,
-        });
+        const result = await commentsActions.createComment(
+          documentId,
+          parentId
+            ? { body: trimmed, parentId }
+            : {
+                body: trimmed,
+                anchorType: "text",
+                anchorText: anchor.text,
+              },
+        );
         if (!result.ok) {
           setError(result.error.message);
           return;
         }
         setThreads(result.data);
         setBody("");
-        setActiveAnchor(null);
-        setHoverAnchor(null);
+        setReplyingToId(null);
+        if (!parentId) {
+          setActiveAnchor(null);
+          setHoverAnchor(null);
+        }
       } catch {
         setError("Couldn't post your comment. Please try again.");
       }
     });
-  }, [activeAnchor, body, documentId]);
+  }, [activeAnchor, body, documentId, replyingToId]);
 
   const activeThreads = activeAnchor
     ? (byAnchor.get(activeAnchor.text) ?? [])
     : [];
+  const replyingToThread =
+    activeThreads.find((thread) => thread.id === replyingToId) ?? null;
   const visibleHoverAnchor =
     hoverAnchor &&
     (byAnchor.get(hoverAnchor.text) ?? []).some((thread) => !thread.resolved)
@@ -295,7 +308,7 @@ export function InlineCommentsLayer({
     const observer = new ResizeObserver(updateCardPosition);
     observer.observe(card);
     return () => observer.disconnect();
-  }, [activeAnchor, activeThreads.length, body, error]);
+  }, [activeAnchor, activeThreads.length, body, error, replyingToId]);
 
   const measuredCardPosition =
     cardPosition?.anchorText === activeAnchor?.text ? cardPosition : null;
@@ -399,19 +412,51 @@ export function InlineCommentsLayer({
                 {activeThreads.map((thread) => (
                   <li
                     key={thread.id}
-                    className="flex gap-2 rounded-md bg-ds-surface-raised px-2 py-1.5 text-xs"
+                    className="rounded-md bg-ds-surface-raised px-2 py-1.5 text-xs"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ds-surface-overlay text-ds-text-muted ring-1 ring-ds-border-subtle">
-                      <UserRound aria-hidden="true" className="h-3 w-3" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <span className="font-medium text-ds-text-primary">
-                        {thread.author.name}
+                    <div className="flex gap-2">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ds-surface-overlay text-ds-text-muted ring-1 ring-ds-border-subtle">
+                        <UserRound aria-hidden="true" className="h-3 w-3" />
                       </span>
-                      <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
-                        {thread.body}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-ds-text-primary">
+                          {thread.author.name}
+                        </span>
+                        <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
+                          {thread.body}
+                        </p>
+                        <button
+                          type="button"
+                          className="mt-1 text-[11px] font-semibold text-ds-accent hover:underline"
+                          aria-label={`Reply to comment by ${thread.author.name}`}
+                          onClick={() => {
+                            setReplyingToId(thread.id);
+                            setBody("");
+                            setError(null);
+                          }}
+                          disabled={isPending}
+                        >
+                          Reply
+                        </button>
+                      </div>
                     </div>
+                    {thread.replies.length > 0 ? (
+                      <ul
+                        aria-label={`Replies to ${thread.author.name}`}
+                        className="ml-7 mt-1.5 space-y-1 border-l border-ds-border-subtle pl-2"
+                      >
+                        {thread.replies.map((reply) => (
+                          <li key={reply.id} className="py-1">
+                            <span className="font-medium text-ds-text-primary">
+                              {reply.author.name}
+                            </span>
+                            <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
+                              {reply.body}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -420,7 +465,22 @@ export function InlineCommentsLayer({
             <div className="rounded-md bg-ds-surface-base p-1.5">
               <div className="mb-1 flex items-center gap-1.5 px-0.5 text-[11px] font-semibold text-ds-text-muted">
                 <MessageCircle aria-hidden="true" className="h-3 w-3" />
-                Reply
+                {replyingToThread
+                  ? `Reply to ${replyingToThread.author.name}`
+                  : "New comment"}
+                {replyingToThread ? (
+                  <button
+                    type="button"
+                    className="ml-auto text-[10px] font-semibold text-ds-accent hover:underline"
+                    onClick={() => {
+                      setReplyingToId(null);
+                      setBody("");
+                      setError(null);
+                    }}
+                  >
+                    Cancel reply
+                  </button>
+                ) : null}
               </div>
               <textarea
                 aria-label="Inline comment"
@@ -453,7 +513,7 @@ export function InlineCommentsLayer({
               onClick={submit}
               disabled={isPending || body.trim().length === 0}
             >
-              Comment
+              {replyingToThread ? "Reply" : "Comment"}
             </Button>
           </div>
         </div>

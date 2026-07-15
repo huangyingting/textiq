@@ -43,15 +43,22 @@ export {
 } from "./persistence";
 export type { CommentReplyRecord, CommentThreadRecord } from "./records";
 
-export { CommentError, type CommentErrorCode } from "./errors";
+export {
+  CommentError,
+  CommentUnavailableError,
+  type CommentErrorCode,
+  type CommentUnavailableClassification,
+} from "./errors";
 export {
   adaptKnownCommentActionError,
+  commentActionObservation,
   commentActionError,
   commentActionOk,
 } from "./action-result";
 export type {
   CommentActionError,
   CommentActionErrorCode,
+  CommentActionObservation,
   CommentActionResult,
 } from "./action-result";
 

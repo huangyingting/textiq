@@ -68,7 +68,11 @@ import {
 } from "@lexical/react/LexicalComposerContext";
 import type { LexicalEditor } from "lexical";
 
-import type { CommentActionResult, CommentThread } from "@/lib/comments";
+import type {
+  CommentActionResult,
+  CommentThread,
+  CreateCommentInput,
+} from "@/lib/comments";
 
 // Imported for its module-level side effects only: flips
 // `IS_REACT_ACT_ENVIRONMENT` on (required for `act()` in this file) and
@@ -100,7 +104,7 @@ type ModuleHooks = {
 
 type CreateCommentCall = {
   documentId: string;
-  input: { body: string; anchorType: string; anchorText: string };
+  input: CreateCommentInput;
 };
 
 type CommentsActionsTestState = {
@@ -816,6 +820,40 @@ describe("card expansion/selection — thread listing", () => {
     });
   });
 
+  test("renders replies beneath their root thread instead of as sibling roots", () => {
+    withCommentsDom(() => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      threads[0] = {
+        ...threads[0]!,
+        replies: [
+          {
+            id: "reply-first-a",
+            body: "Nested reply body",
+            author: { id: "user-c", name: "Carol" },
+            createdAt: new Date(1).toISOString(),
+          },
+        ],
+      };
+      const renderer = mount(editor, threads);
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (el) => el.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+
+        const replies = renderer.root.findByProps({
+          "aria-label": "Replies to Alice",
+        });
+        assert.match(textOf(replies), /Carol/);
+        assert.match(textOf(replies), /Nested reply body/);
+        assert.equal(replies.parent?.type, "li");
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("clicking the add-comment icon for a hover anchor also opens the card, with no threads listed (no 'N open' line) if there are none", () => {
     withCommentsDom((registry) => {
       const { editor } = makeFakeEditor(buildRoot());
@@ -1011,6 +1049,137 @@ describe("submit", () => {
         assert.ok(
           updatedFirst,
           "expected the dot count to reflect the new threads",
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("creates a reply for the selected root and renders the server-confirmed nested reply without closing the anchor card", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const initialThreads = buildThreads();
+      const renderer = mount(editor, initialThreads);
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (el) => el.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        const replyButton = renderer.root.findByProps({
+          "aria-label": "Reply to comment by Alice",
+        });
+        act(() => replyButton.props.onClick());
+        assert.match(textOf(renderer.root), /Reply to Alice/);
+
+        const textarea = findDialogCard(renderer.root)!;
+        act(() =>
+          textarea.props.onChange({
+            target: { value: "  Nested answer  " },
+          }),
+        );
+        const nextThreads = initialThreads.map((thread) =>
+          thread.id === "thread-first-a"
+            ? {
+                ...thread,
+                replies: [
+                  ...thread.replies,
+                  {
+                    id: "reply-created",
+                    body: "Nested answer",
+                    author: { id: "user-c", name: "Carol" },
+                    createdAt: new Date(1).toISOString(),
+                  },
+                ],
+              }
+            : thread,
+        );
+        globalForActions.__inlineCommentsActionsTestState.impl = async () => ({
+          ok: true,
+          data: nextThreads,
+        });
+
+        const submitReply = renderer.root
+          .findAll((el) => el.type === "button" && textOf(el) === "Reply")
+          .at(-1)!;
+        await act(async () => {
+          submitReply.props.onClick();
+          await flushMicrotasks();
+        });
+
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.calls,
+          [
+            {
+              documentId: "doc-1",
+              input: {
+                body: "Nested answer",
+                parentId: "thread-first-a",
+              },
+            },
+          ],
+        );
+        assert.ok(findDialogCard(renderer.root), "reply keeps the thread open");
+        assert.equal(findDialogCard(renderer.root)!.props.value, "");
+        assert.match(textOf(renderer.root), /Carol/);
+        assert.match(textOf(renderer.root), /Nested answer/);
+        assert.match(textOf(renderer.root), /New comment/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("keeps a reply draft selected when the typed action outcome conceals an unavailable target", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const renderer = mount(editor);
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (el) => el.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        act(() =>
+          renderer.root
+            .findByProps({
+              "aria-label": "Reply to comment by Alice",
+            })
+            .props.onClick(),
+        );
+        const textarea = findDialogCard(renderer.root)!;
+        act(() =>
+          textarea.props.onChange({ target: { value: "Private reply" } }),
+        );
+        globalForActions.__inlineCommentsActionsTestState.impl = async () => ({
+          ok: false,
+          error: {
+            code: "comment_unavailable",
+            message: "Comment is unavailable.",
+          },
+        });
+
+        const submitReply = renderer.root
+          .findAll((el) => el.type === "button" && textOf(el) === "Reply")
+          .at(-1)!;
+        await act(async () => {
+          submitReply.props.onClick();
+          await flushMicrotasks();
+        });
+
+        assert.equal(
+          findDialogCard(renderer.root)!.props.value,
+          "Private reply",
+        );
+        assert.match(textOf(renderer.root), /Reply to Alice/);
+        assert.equal(
+          renderer.root.findByProps({ role: "alert" }).children.join(""),
+          "Comment is unavailable.",
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Replies to Alice",
+          }).length,
+          0,
         );
       } finally {
         act(() => renderer.unmount());

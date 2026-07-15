@@ -1,7 +1,7 @@
 export type CommentErrorCode =
   | "empty_body"
   | "parent_not_found"
-  | "comment_not_found"
+  | "comment_unavailable"
   | "edit_forbidden"
   | "delete_forbidden"
   | "thread_required"
@@ -19,5 +19,20 @@ export class CommentError extends Error {
     super(message);
     this.name = "CommentError";
     this.code = code;
+  }
+}
+
+export type CommentUnavailableClassification =
+  | "document_not_visible"
+  | "target_missing_in_document"
+  | "target_changed";
+
+export class CommentUnavailableError extends CommentError {
+  readonly classification: CommentUnavailableClassification;
+
+  constructor(classification: CommentUnavailableClassification) {
+    super("comment_unavailable", "Comment is unavailable.");
+    this.name = "CommentUnavailableError";
+    this.classification = classification;
   }
 }
