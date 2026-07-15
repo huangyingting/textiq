@@ -700,6 +700,10 @@ test("workspace document helpers require capabilities and map document rows", as
     ),
     /Process overview/,
   );
+  assert.match(
+    (creates[0] as { data: { content: string } }).data.content,
+    /Process overview/,
+  );
   assert.deepEqual((creates[0] as { select: unknown }).select, { id: true });
 });
 

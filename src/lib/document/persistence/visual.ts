@@ -20,6 +20,7 @@ import {
   type VisualMirrorOutcome,
 } from "@/lib/visual/mirror-diff";
 import { logInfo, logError } from "@/lib/log";
+import { projectDocumentContent } from "@/lib/document/content-projection";
 import { snapshotDocumentVersion } from "./helpers";
 
 // Re-export so the barrel can surface it via `export *`
@@ -270,11 +271,7 @@ export async function atomicSaveDocumentLexical(
 
     await tx.document.updateMany({
       where: { id: documentId },
-      data: {
-        contentJson: parsedState as Prisma.InputJsonValue,
-        // Document.content (the plaintext mirror) is deprecated — no longer
-        // written here. Physical column drop is a follow-up migration.
-      },
+      data: projectDocumentContent(parsedState),
     });
 
     outcome = await mirrorVisualNodesInTx(tx, documentId, parsedState);

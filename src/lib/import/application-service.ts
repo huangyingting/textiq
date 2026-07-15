@@ -10,6 +10,7 @@ import {
   clampDocumentTitle,
   importedMarkdownToContentJson,
 } from "@/lib/document/create";
+import { projectDocumentContent } from "@/lib/document/content-projection";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -49,7 +50,7 @@ export async function persistImportedDocument(
       data: {
         ownerId: args.userId,
         title,
-        contentJson,
+        ...projectDocumentContent(contentJson),
         ...(args.target.kind === "workspace"
           ? { workspaceId: args.target.workspaceId }
           : {}),

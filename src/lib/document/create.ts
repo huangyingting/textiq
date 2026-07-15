@@ -6,6 +6,7 @@ import {
 } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { BLANK_TEMPLATE_ID, getTemplateOrBlank } from "@/lib/templates/catalog";
+import { projectDocumentContent } from "./content-projection";
 
 type DocumentCreateDb = Pick<typeof prisma, "document">;
 
@@ -42,10 +43,11 @@ export async function createDocumentFromTemplateForUser(
 ): Promise<CreatedDocument> {
   const contentJson = templateContentJsonForId(templateId);
 
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
   return db.document.create({
-    data: { ownerId: userId, ...(contentJson ? { contentJson } : {}) },
+    data: {
+      ownerId: userId,
+      ...(contentJson ? projectDocumentContent(contentJson) : {}),
+    },
     select: { id: true },
   });
 }

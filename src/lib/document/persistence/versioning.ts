@@ -18,6 +18,7 @@ import {
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
+import { projectDocumentContent } from "@/lib/document/content-projection";
 import type { RestoredDocumentVersion } from "@/lib/document/persistence-types";
 import { snapshotDocumentVersion } from "./helpers";
 import { mirrorVisualNodesInTx, reconcileDeckAfterMirror } from "./visual";
@@ -200,7 +201,7 @@ export async function restoreVersion(
     await tx.document.updateMany({
       where: { id: documentId },
       data: {
-        contentJson: restoredContent as Prisma.InputJsonValue,
+        ...projectDocumentContent(restoredContent),
         deckJson: restoredDeck,
         deckRevisionToken: restoredDeckRevisionToken,
       },

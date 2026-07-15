@@ -105,11 +105,8 @@ export function excerpt(
 
 /**
  * Derives display statistics from a serialized Lexical editor state
- * (Document.contentJson), superseding reads of the deprecated
- * Document.content plaintext mirror.
- *
- * Physical removal of the `content` column is deferred to a follow-up
- * migration.
+ * (Document.contentJson). Persisted `Document.content` is the same plain-text
+ * projection, maintained atomically for database-backed document search.
  *
  * @returns { excerpt, readingMinutes, plaintext } — all derived on-the-fly
  *   from contentJson.

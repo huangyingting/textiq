@@ -1635,6 +1635,7 @@ describe("document snapshot and restore operations", () => {
   });
 
   test("restoreVersion writes sanitized state, rebuilds visual rows, and revalidates shares", async (t) => {
+    const documentUpdates: unknown[] = [];
     stubPrismaMethod(
       t,
       prisma.documentVersion,
@@ -1663,7 +1664,10 @@ describe("document snapshot and restore operations", () => {
     const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1677,6 +1681,10 @@ describe("document snapshot and restore operations", () => {
     );
 
     assert.equal(result.documentId, "doc-restore");
+    assert.equal(
+      (documentUpdates[0] as { data: { content: string } }).data.content,
+      "",
+    );
   });
 
   test("restoreVersion rotates deck tokens so pre-restore CAS writes conflict", async (t) => {
@@ -1772,6 +1780,7 @@ describe("document snapshot and restore operations", () => {
 describe("visual persistence exported flows", () => {
   test("atomicSaveDocumentLexical snapshots, writes content, mirrors visuals, and logs outcome", async (t) => {
     const txBase = makeStubTx();
+    const documentUpdates: unknown[] = [];
     const tx = prismaTransaction<TransactionWithCalls>({
       ...txBase,
       documentVersion: {
@@ -1788,7 +1797,10 @@ describe("visual persistence exported flows", () => {
           contentJson: EMPTY_LEXICAL_STATE,
           deckJson: null,
         }),
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1802,6 +1814,10 @@ describe("visual persistence exported flows", () => {
     );
 
     assert.equal(outcome.created, 0);
+    assert.deepEqual((documentUpdates[0] as { data: unknown }).data, {
+      contentJson: EMPTY_LEXICAL_STATE,
+      content: "",
+    });
     assert.ok(tx._calls.includes("documentVersion.create"));
     assert.ok(tx._calls.includes("visual.findMany"));
   });

@@ -2,6 +2,7 @@ import "server-only";
 
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
 import { templateContentJsonForId } from "@/lib/document/create";
+import { projectDocumentContent } from "@/lib/document/content-projection";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
@@ -219,13 +220,11 @@ export async function createWorkspaceDocumentForUser(
 
   const contentJson = templateContentJsonForId(templateId);
 
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
   return prisma.document.create({
     data: {
       ownerId: userId,
       workspaceId,
-      ...(contentJson ? { contentJson } : {}),
+      ...(contentJson ? projectDocumentContent(contentJson) : {}),
     },
     select: { id: true },
   });

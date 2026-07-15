@@ -23,6 +23,7 @@ const sourceRef = {
 type SourceRef = typeof sourceRef;
 type DeckWithSourceRefs = ReturnType<typeof deckWithSourceRefs>;
 type DuplicateCreateData = {
+  content: string;
   contentJson: {
     root: {
       children: Array<{ bid: string }>;
@@ -156,6 +157,7 @@ test("duplicate create data is private and clones visuals without comments or sh
 
   assert.equal(data.ownerId, "user-1");
   assert.equal(data.title, "Source (copy)");
+  assert.equal(data.content, "");
   assert.equal(data.visuals.create[0]!.anchorBlockId, "new-bid");
   assert.equal("isShared" in data, false);
   assert.equal("shareId" in data, false);
@@ -216,7 +218,13 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
   const sourceContent = {
     root: {
       type: "root",
-      children: [{ type: "paragraph", bid: "old-bid", children: [] }],
+      children: [
+        {
+          type: "paragraph",
+          bid: "old-bid",
+          children: [{ type: "text", text: "Copied body" }],
+        },
+      ],
     },
   };
   const db = {
@@ -271,6 +279,7 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
   const createData = createdData[0]!;
   const newBid = createData.contentJson.root.children[0].bid;
   assert.notEqual(newBid, "old-bid");
+  assert.equal(createData.content, "Copied body");
   assert.equal(createData.visuals.create[0].anchorBlockId, newBid);
   const deckUpdate = updatedData[0]!;
   assert.equal(

@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import { projectDocumentContent } from "@/lib/document/content-projection";
 import { generateBlockId } from "@/lib/lexical/block-id";
 import { buildSeedContentJson } from "@/lib/lexical/seed-content";
 import { prisma } from "@/lib/prisma";
@@ -79,8 +80,7 @@ export async function seedSampleDocument(userId: string): Promise<void> {
     await prisma.document.create({
       data: {
         title: SAMPLE_DOCUMENT_TITLE,
-        content: SAMPLE_DOCUMENT_CONTENT,
-        contentJson: toPrismaJsonInput(
+        ...projectDocumentContent(
           buildSeedContentJson(SAMPLE_DOCUMENT_CONTENT, sampleVisual, visualId),
         ),
         ownerId: userId,

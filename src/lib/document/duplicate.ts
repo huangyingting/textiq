@@ -11,6 +11,7 @@ import type {
 import type { Deck, SlideElement, SourceRef } from "@/lib/document/deck-model";
 import { mapNodes } from "@/lib/presentation/node-tree-ops";
 import { prisma } from "@/lib/prisma";
+import { projectDocumentContent } from "./content-projection";
 
 const duplicateDocumentSourceSelect = {
   /* Coverage rationale: duplicate source select literal is asserted through duplicate tests; tsx maps literal head as uncovered. */
@@ -152,13 +153,11 @@ export function buildDuplicateDocumentCreateData(
   contentJson: Prisma.JsonValue | null,
   bidMap: Map<string, string>,
 ) {
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
   return {
     ownerId,
     title: `${source.title} (copy)`,
     ...(contentJson != null && {
-      contentJson: cloneJsonForCreate(contentJson),
+      ...projectDocumentContent(contentJson),
     }),
     visuals: {
       create: source.visuals.map((visual) => ({

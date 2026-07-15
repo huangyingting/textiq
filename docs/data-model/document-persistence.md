@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-15"
 description: "This document describes the service boundary that persists editable document state, rebuilds visual projections, writes decks, snapshots versions, restores versions, and reconciles document-to-deck dependencies. CRUD/listing behavior lives in ../documents/README.md; JSON schema contracts live in deck.md and visual-mirror.md."
 ---
 
@@ -25,6 +25,7 @@ live in [deck.md](deck.md) and [visual-mirror.md](visual-mirror.md).
 | Lexical visual extraction    | [`src/lib/lexical/visual-nodes.ts`](../../src/lib/lexical/visual-nodes.ts)                 |
 | Document version policy      | [`src/lib/document-versions.ts`](../../src/lib/document-versions.ts)                       |
 | Persisted schema telemetry   | [`src/lib/diagnostics/schema-telemetry.ts`](../../src/lib/diagnostics/schema-telemetry.ts) |
+| Plain-text search projection | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)   |
 
 ## Service Boundary
 
@@ -40,14 +41,15 @@ only. Document text, prompts, cookies, and raw payloads are not logged.
 
 `atomicSaveDocumentLexical(documentId, parsedState, userId)` writes the current
 Lexical `contentJson` and rebuilds the `Visual` table in one Prisma transaction.
-The deprecated `Document.content` plaintext column is no longer maintained and
-must not be used by new readers or writers.
+The same document update rebuilds `Document.content` as a derived plain-text
+projection used by database-backed list search.
 
 ```text
 parsed Lexical state
   -> snapshotDocumentVersion(...)
   -> transaction:
      update Document.contentJson
+     update derived Document.content
        mirrorVisualNodesInTx(...)
   -> safe structured mirror summary log
 ```
@@ -91,8 +93,8 @@ maximum. Snapshot failure never breaks the caller's save.
 1. Verify the version belongs to the requested document.
 2. Force a pre-restore snapshot labelled `Before restore`.
 3. Sanitize restored `deckJson` against restored content.
-4. Write restored `contentJson` and deck; leave deprecated `Document.content`
-   untouched.
+4. Write restored `contentJson`, rebuild its derived `Document.content`
+   projection, and write the deck.
 5. Rebuild the visual mirror in the same transaction.
 6. Reconcile the deck again against actual DB visual rows.
 7. Revalidate public share, embed, and present cache paths.
@@ -126,8 +128,8 @@ invalidation.
 ## Invariants
 
 1. `contentJson` writes and visual mirror rebuilds are atomic.
-2. `Document.content` is a deprecated, unmaintained column and is not a valid
-   content source.
+2. `Document.content` is a derived search projection, never a source of truth;
+   every canonical `contentJson` write updates it in the same create/update.
 3. Deck writes must parse as the current deck schema and fit the deck JSON
    budget before persistence.
 4. Deck saves are guarded by revision-token compare-and-swap.
