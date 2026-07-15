@@ -377,18 +377,33 @@ test.describe("document import round-trip", () => {
 
   test("workspace import by viewer is forbidden and creates zero documents @required-profile", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await login(page, profileViewerCredentials());
-    const blockedTitle = `viewer-blocked-${Date.now()}`;
+    const blockedFileStem = [
+      "viewer-blocked-import",
+      testInfo.project.name,
+      testInfo.parallelIndex,
+      testInfo.repeatEachIndex,
+      testInfo.retry,
+    ].join("-");
+    const persistedTitle = blockedFileStem.replace(/[-_]/g, " ");
+    const workspacePath = `/app/workspaces/${E2E_PROFILE_FIXTURE.workspaceId}`;
+
+    await page.goto(workspacePath);
+    await expect(page.getByText("Loading documents...")).toHaveCount(0);
+    const persistedTitleCountBefore = await page
+      .getByText(persistedTitle, { exact: true })
+      .count();
+
     const response = await page.request.post("/api/import", {
       multipart: {
         target: "workspace",
         workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
         file: {
-          name: `${blockedTitle}.md`,
+          name: `${blockedFileStem}.md`,
           mimeType: "text/markdown",
           buffer: Buffer.from(
-            `# ${blockedTitle}\n\nviewer should be blocked\n`,
+            `# ${persistedTitle}\n\nviewer should be blocked\n`,
             "utf8",
           ),
         },
@@ -400,11 +415,12 @@ test.describe("document import round-trip", () => {
     expect(failure.code).toBe("forbidden");
     expect(failure.status).toBe(403);
 
-    await page.goto(`/app/workspaces/${E2E_PROFILE_FIXTURE.workspaceId}`);
+    await page.reload();
+    await expect(page.getByText("Loading documents...")).toHaveCount(0);
     await expect(
-      page.getByText(blockedTitle, { exact: true }),
-      "forbidden workspace import must not create a new document row",
-    ).toHaveCount(0);
+      page.getByText(persistedTitle, { exact: true }),
+      "forbidden workspace import must not change the normalized-title row count",
+    ).toHaveCount(persistedTitleCountBefore);
   });
 
   test("rejects an unsupported file type with a graceful error", async ({
