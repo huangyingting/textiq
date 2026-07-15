@@ -55,7 +55,7 @@ spec is missing from the inventory or when the generated README section drifts.
 npm run test:e2e
 ```
 
-By default the specs target `http://localhost:4000`. Override with
+By default the specs target `http://127.0.0.1:4000`. Override with
 `E2E_BASE_URL` (or `BASE_URL`). To have Playwright start the dev server for you,
 set `E2E_WEB_SERVER=1`:
 
@@ -71,7 +71,7 @@ credentials:
 
 | Variable                        | Used by                            | Purpose                                                                        |
 | ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| `E2E_BASE_URL` / `BASE_URL`     | all                                | App base URL (default `http://localhost:4000`)                                 |
+| `E2E_BASE_URL` / `BASE_URL`     | all                                | Canonical app origin (default `http://127.0.0.1:4000`)                         |
 | `E2E_WEB_SERVER`                | config                             | `1` to let Playwright run the app                                              |
 | `E2E_WEB_SERVER_COMMAND`        | config                             | Server command when `E2E_WEB_SERVER=1` (defaults to `npm run dev`)             |
 | `E2E_WEB_SERVER_TIMEOUT_MS`     | config                             | Server readiness timeout override (defaults to 240000)                         |
@@ -151,8 +151,11 @@ It generates the Prisma client, pushes the SQLite schema, seeds the deterministi
 fixture, installs Chromium, starts the dev server through Playwright, and runs
 only the deterministic profile specs. CI uses the same required hard gate in
 `.github/workflows/e2e-deterministic.yml`; profile failures fail the workflow.
-If `E2E_BASE_URL` includes an explicit port, the wrapper passes the same `PORT`
-to the app server unless `PORT` is already set.
+The wrapper normalizes `E2E_BASE_URL`, exports it to Playwright and the auth/app
+runtime variables, derives the server host/port from it, disables server reuse,
+and uses an isolated Next output directory for each invocation. A conflicting
+explicit `PORT` is rejected instead of starting browser and server processes on
+different origins.
 
 Under the profile (`E2E_PROFILE=1`, set by `test:e2e:profile`) the
 profile-dependent specs **do not skip** — they run for real. Without
