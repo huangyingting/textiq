@@ -4,7 +4,6 @@ import { test } from "node:test";
 import {
   clampDocumentContent,
   clampDocumentTitle,
-  createDocumentFromImportForUser,
   createDocumentFromTemplateForUser,
   importedMarkdownToContentJson,
   templateContentJsonForId,
@@ -87,31 +86,5 @@ test("createDocumentFromTemplateForUser persists named template contentJson", as
   assert.equal(calls[0]!.data.ownerId, "user-1");
   assert.equal(typeof calls[0]!.data.contentJson, "object");
   assert.match(JSON.stringify(calls[0]!.data.contentJson), /Process overview/);
-  assert.deepEqual(calls[0]!.select, { id: true });
-});
-
-test("createDocumentFromImportForUser clamps title and content before persisting JSON", async () => {
-  const calls: Array<{ data: Record<string, unknown>; select: unknown }> = [];
-  const db = {
-    document: {
-      async create(args: { data: Record<string, unknown>; select: unknown }) {
-        calls.push(args);
-        return { id: "doc-import" };
-      },
-    },
-  };
-
-  assert.deepEqual(
-    await createDocumentFromImportForUser(
-      "user-1",
-      "# " + "x".repeat(DOCUMENT_CONTENT_MAX_LENGTH + 20),
-      "  ",
-      db as never,
-    ),
-    { id: "doc-import" },
-  );
-  assert.equal(calls[0]!.data.ownerId, "user-1");
-  assert.equal(calls[0]!.data.title, "Imported document");
-  assert.equal(typeof calls[0]!.data.contentJson, "object");
   assert.deepEqual(calls[0]!.select, { id: true });
 });

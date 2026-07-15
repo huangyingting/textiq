@@ -37,6 +37,8 @@ export const ABUSE_CATEGORIES = {
   ANON_QUOTA_DENIED: "anon-quota-denied",
   /** A document parse exceeded its timeout budget → 422. */
   PARSER_TIMEOUT: "parser-timeout",
+  /** A document archive exceeded parser-complexity budgets → 422. */
+  PARSER_BUDGET: "parser-budget",
   /** An AI generation call exceeded its abort deadline → 504. */
   AI_TIMEOUT: "ai-timeout",
   /** A metered caller had insufficient credits → 402. */

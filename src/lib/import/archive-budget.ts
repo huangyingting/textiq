@@ -1,8 +1,11 @@
 import JSZip from "jszip";
+import { IMPORT_ARCHIVE_BUDGET } from "@/lib/import/format-registry";
+import { throwIfAborted } from "@/lib/import/timeout";
 
-export const IMPORT_ZIP_MAX_ENTRIES = 2_000;
-const IMPORT_ZIP_MAX_UNCOMPRESSED_BYTES = 80 * 1024 * 1024;
-const IMPORT_ZIP_MAX_ENTRY_BYTES = 20 * 1024 * 1024;
+export const IMPORT_ZIP_MAX_ENTRIES = IMPORT_ARCHIVE_BUDGET.maxEntries;
+const IMPORT_ZIP_MAX_UNCOMPRESSED_BYTES =
+  IMPORT_ARCHIVE_BUDGET.maxUncompressedBytes;
+const IMPORT_ZIP_MAX_ENTRY_BYTES = IMPORT_ARCHIVE_BUDGET.maxEntryBytes;
 
 type ZipEntryWithSize = {
   _data?: {
@@ -17,8 +20,19 @@ export class ImportBudgetError extends Error {
   }
 }
 
-export async function loadZipWithinBudget(buffer: Buffer): Promise<JSZip> {
+export function disposeZip(zip: JSZip): void {
+  for (const fileName of Object.keys(zip.files)) {
+    delete zip.files[fileName];
+  }
+}
+
+export async function loadZipWithinBudget(
+  buffer: Buffer,
+  signal?: AbortSignal,
+): Promise<JSZip> {
+  throwIfAborted(signal);
   const zip = await JSZip.loadAsync(buffer);
+  throwIfAborted(signal);
   const entries = Object.values(zip.files);
   if (entries.length > IMPORT_ZIP_MAX_ENTRIES) {
     throw new ImportBudgetError("Archive contains too many files.");
@@ -26,6 +40,7 @@ export async function loadZipWithinBudget(buffer: Buffer): Promise<JSZip> {
 
   let total = 0;
   for (const entry of entries) {
+    throwIfAborted(signal);
     const data = (entry as ZipEntryWithSize)._data;
     const size =
       typeof data?.uncompressedSize === "number" ? data.uncompressedSize : 0;

@@ -109,7 +109,7 @@ test("parsePdf uses `total` when `totalPages` is absent and stays within budget"
       }),
   };
 
-  const text = await parsePdf(Buffer.from("ignored"), deps);
+  const text = await parsePdf(Buffer.from("ignored"), { deps });
   assert.equal(text, "short doc");
   assert.equal(destroyed, true, "parser.destroy() must always be called");
 });
@@ -138,7 +138,7 @@ test("parsePdf throws ImportBudgetError when the page count exceeds the budget",
   };
 
   await assert.rejects(
-    () => parsePdf(Buffer.from("ignored"), deps),
+    () => parsePdf(Buffer.from("ignored"), { deps }),
     (error: unknown) => {
       assert.ok(error instanceof ImportBudgetError);
       assert.match((error as Error).message, /too many pages/i);
@@ -156,7 +156,7 @@ test("parsePdf allows a page count exactly at the budget", async () => {
   const deps = {
     createParser: () => fakeParser({ text: "at the edge", totalPages: 250 }),
   };
-  const text = await parsePdf(Buffer.from("ignored"), deps);
+  const text = await parsePdf(Buffer.from("ignored"), { deps });
   assert.equal(text, "at the edge");
 });
 
@@ -165,7 +165,7 @@ test("parsePdf ignores a non-finite page count and falls through to the text-len
     createParser: () =>
       fakeParser({ text: "no usable page count", totalPages: Number.NaN }),
   };
-  const text = await parsePdf(Buffer.from("ignored"), deps);
+  const text = await parsePdf(Buffer.from("ignored"), { deps });
   assert.equal(text, "no usable page count");
 });
 
@@ -181,7 +181,7 @@ test("parsePdf throws ImportBudgetError when extracted text exceeds the characte
   };
 
   await assert.rejects(
-    () => parsePdf(Buffer.from("ignored"), deps),
+    () => parsePdf(Buffer.from("ignored"), { deps }),
     (error: unknown) => {
       assert.ok(error instanceof ImportBudgetError);
       assert.match((error as Error).message, /too much text/i);
@@ -200,7 +200,7 @@ test("parsePdf allows text exactly at the character budget", async () => {
     createParser: () =>
       fakeParser({ text: "x".repeat(500_000), totalPages: 1 }),
   };
-  const text = await parsePdf(Buffer.from("ignored"), deps);
+  const text = await parsePdf(Buffer.from("ignored"), { deps });
   assert.equal(text.length, 500_000);
 });
 
@@ -219,6 +219,112 @@ test("parsePdf destroys the parser even when getText() rejects", async () => {
     }),
   };
 
-  await assert.rejects(() => parsePdf(Buffer.from("ignored"), deps));
+  await assert.rejects(() => parsePdf(Buffer.from("ignored"), { deps }));
   assert.equal(destroyed, true);
+});
+
+test("parsePdf abort signal destroys parser and rejects without continuing", async () => {
+  let destroyCount = 0;
+  let rejectGetText: ((reason?: unknown) => void) | null = null;
+  const deps = {
+    createParser: () => ({
+      getText: async () =>
+        new Promise<{ text: string }>((_resolve, reject) => {
+          rejectGetText = reject;
+        }),
+      destroy: async () => {
+        destroyCount += 1;
+        rejectGetText?.(new Error("aborted"));
+      },
+    }),
+  };
+
+  const controller = new AbortController();
+  const parsing = parsePdf(Buffer.from("ignored"), {
+    deps,
+    signal: controller.signal,
+  });
+  controller.abort();
+
+  await assert.rejects(() => parsing);
+  assert.equal(destroyCount, 1);
+});
+
+test("parsePdf reports destroy cleanup errors without changing a successful parse result", async () => {
+  const cleanupErrors: unknown[] = [];
+  const deps = {
+    createParser: () => ({
+      getText: async () => ({ text: "ok" }),
+      destroy: async () => {
+        throw new Error("cleanup failed");
+      },
+    }),
+    onCleanupError: (error: unknown) => {
+      cleanupErrors.push(error);
+    },
+  };
+
+  const text = await parsePdf(Buffer.from("ignored"), { deps });
+  assert.equal(text, "ok");
+  assert.equal(cleanupErrors.length, 1);
+});
+
+test("parsePdf reports destroy cleanup errors while preserving the original parse failure", async () => {
+  const cleanupErrors: unknown[] = [];
+  const parseFailure = new Error("pdf parse failed");
+  const deps = {
+    createParser: () => ({
+      getText: async () => {
+        throw parseFailure;
+      },
+      destroy: async () => {
+        throw new Error("cleanup failed");
+      },
+    }),
+  };
+
+  await assert.rejects(
+    () =>
+      parsePdf(Buffer.from("ignored"), {
+        deps,
+        onCleanupError: (error) => {
+          cleanupErrors.push(error);
+        },
+      }),
+    (error: unknown) => error === parseFailure,
+  );
+  assert.equal(cleanupErrors.length, 1);
+});
+
+test("parsePdf abort path reports destroy cleanup errors exactly once", async () => {
+  const cleanupErrors: unknown[] = [];
+  let destroyCount = 0;
+  let rejectGetText: ((reason?: unknown) => void) | null = null;
+  const deps = {
+    createParser: () => ({
+      getText: async () =>
+        new Promise<{ text: string }>((_resolve, reject) => {
+          rejectGetText = reject;
+        }),
+      destroy: async () => {
+        destroyCount += 1;
+        rejectGetText?.(new Error("aborted"));
+        throw new Error("cleanup failed");
+      },
+    }),
+  };
+
+  const controller = new AbortController();
+  const parsing = parsePdf(Buffer.from("ignored"), {
+    deps,
+    signal: controller.signal,
+    onCleanupError: (error) => {
+      cleanupErrors.push(error);
+    },
+  });
+  controller.abort();
+
+  await assert.rejects(() => parsing);
+  assert.equal(destroyCount, 1);
+  assert.equal(cleanupErrors.length, 1);
 });

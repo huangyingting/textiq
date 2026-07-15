@@ -5,46 +5,24 @@
  * (server) and unit tests without any framework dependency.
  */
 
+import { formatImportFileTooLargeError } from "@/lib/limits";
 import {
   IMPORT_ACCEPTED_MIME_TYPES,
-  IMPORT_MAX_BYTES_BY_MIME,
   IMPORT_MAX_UPLOAD_BYTES,
-  formatImportFileTooLargeError,
+  importResourceForExtension,
+  importResourceForMime,
+  maxBytesForImportMime,
   type ImportAcceptedMimeType,
-} from "@/lib/limits";
+} from "@/lib/import/format-registry";
 
 export const MAX_UPLOAD_BYTES = IMPORT_MAX_UPLOAD_BYTES;
 export const ACCEPTED_MIME_TYPES = IMPORT_ACCEPTED_MIME_TYPES;
 export type AcceptedMimeType = ImportAcceptedMimeType;
 
-/**
- * Per-type upload ceilings, in bytes (#96, criterion 3). Plain-text formats are
- * cheap to store but expensive to abuse with multi-megabyte payloads, so they
- * get a tighter limit than the binary office/PDF formats whose useful documents
- * are legitimately larger. Every value stays at or below {@link MAX_UPLOAD_BYTES}.
- */
-const MAX_BYTES_BY_MIME = IMPORT_MAX_BYTES_BY_MIME;
-
 /** Returns the per-type upload ceiling for a resolved MIME type. */
 export function maxBytesForMime(mime: AcceptedMimeType): number {
-  return MAX_BYTES_BY_MIME[mime];
+  return maxBytesForImportMime(mime);
 }
-
-/**
- * File extensions that map to a supported import format even when the browser
- * sends a generic MIME type (e.g. `application/octet-stream`).
- */
-const EXT_TO_MIME: Record<string, AcceptedMimeType> = {
-  ".md": "text/markdown",
-  ".markdown": "text/markdown",
-  ".html": "text/html",
-  ".htm": "text/html",
-  ".docx":
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".pptx":
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  ".pdf": "application/pdf",
-};
 
 /**
  * Resolves the effective MIME type for an uploaded file.
@@ -58,14 +36,17 @@ export function resolveImportMime(
   mimeType: string,
   filename: string,
 ): AcceptedMimeType | null {
-  const lower = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
-  if (ACCEPTED_MIME_TYPES.includes(lower as AcceptedMimeType)) {
-    return lower as AcceptedMimeType;
+  const byMime = importResourceForMime(mimeType);
+  if (byMime) {
+    const normalized = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
+    const resolved = byMime.mimes.find((mime) => mime === normalized);
+    if (resolved) {
+      return resolved;
+    }
   }
 
-  // Fall back to extension.
-  const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
-  return EXT_TO_MIME[ext] ?? null;
+  const byExtension = importResourceForExtension(filename);
+  return byExtension?.mimes[0] ?? null;
 }
 
 export type ValidationError =

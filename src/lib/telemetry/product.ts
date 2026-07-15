@@ -1,4 +1,6 @@
 import redaction from "@/lib/log-redaction-core.cjs";
+import type { ImportRouteError } from "@/lib/import/contract";
+import { telemetryFileTypeForImport } from "@/lib/import/format-registry";
 
 export type SafeTelemetryValue = string | number | boolean;
 
@@ -227,15 +229,35 @@ export function reasonFromStatus(status: number | undefined): string {
   return "unknown";
 }
 
+export function reasonFromImportError(error: ImportRouteError): string {
+  switch (error.code) {
+    case "unsupported":
+      return "unsupported";
+    case "too_large":
+      return "too_large";
+    case "malformed":
+      return "malformed";
+    case "encrypted":
+      return "encrypted";
+    case "archive_limits":
+      return "archive_limits";
+    case "timeout":
+      return "timeout";
+    case "aborted":
+      return "aborted";
+    case "unauthorized":
+      return "unauthorized";
+    case "forbidden":
+      return "forbidden";
+    case "persistence":
+      return "persistence";
+    case "conflict":
+      return "conflict";
+    case "internal":
+      return "internal";
+  }
+}
+
 export function classifyFileType(file: Pick<File, "name" | "type">): string {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (extension === "md") return "md";
-  if (extension === "html" || extension === "htm") return "html";
-  if (extension === "docx") return "docx";
-  if (extension === "pptx") return "pptx";
-  if (extension === "pdf") return "pdf";
-  if (file.type === "text/markdown") return "md";
-  if (file.type === "text/html") return "html";
-  if (file.type === "application/pdf") return "pdf";
-  return "unknown";
+  return telemetryFileTypeForImport(file);
 }

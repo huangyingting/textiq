@@ -28,9 +28,9 @@ import { createScriptPrismaClient } from "./script-prisma-client";
 /**
  * Deterministic E2E seed (Epic #517, issue #518).
  *
- * Creates a fixed owner + viewer user (passwords hashed via the same bcrypt
- * path the app uses), a workspace granting the viewer read-only access, and a
- * single document with:
+ * Creates fixed owner/editor/viewer users (passwords hashed via the same bcrypt
+ * path the app uses), a workspace granting editor mutating access and viewer
+ * read-only access, and a single document with:
  *   - an intro paragraph + embedded VisualNode in `contentJson`,
  *   - a persisted `deckJson` (current schema version) whose first slide carries
  *     known title/body text and an ImageElement backed by a slide Asset,
@@ -60,10 +60,11 @@ async function writeAssetBytes(
 
 async function main() {
   // -------------------------------------------------------------------------
-  // 1. Users — owner + viewer, passwords hashed with bcrypt (cost 12, matching
+  // 1. Users — owner + editor + viewer, passwords hashed with bcrypt (cost 12, matching
   //    src/app/signup/actions.ts) so the Credentials provider authenticates.
   // -------------------------------------------------------------------------
   const ownerHash = await bcrypt.hash(F.owner.password, 12);
+  const editorHash = await bcrypt.hash(F.editor.password, 12);
   const viewerHash = await bcrypt.hash(F.viewer.password, 12);
   const now = new Date();
 
@@ -93,9 +94,24 @@ async function main() {
     },
   });
 
+  const editor = await prisma.user.upsert({
+    where: { email: F.editor.email },
+    update: {
+      passwordHash: editorHash,
+      name: F.editor.name,
+      emailVerified: now,
+    },
+    create: {
+      email: F.editor.email,
+      name: F.editor.name,
+      passwordHash: editorHash,
+      emailVerified: now,
+    },
+  });
+
   // -------------------------------------------------------------------------
-  // 2. Workspace — owned by the owner, with the viewer as a VIEWER member so
-  //    the viewer has read-only document capability.
+  // 2. Workspace — owned by the owner, with editor + viewer memberships so
+  //    editor can mutate documents while viewer remains read-only.
   // -------------------------------------------------------------------------
   await prisma.workspace.upsert({
     where: { id: F.workspaceId },
@@ -105,6 +121,14 @@ async function main() {
       ownerId: owner.id,
       name: "E2E Fixture Workspace",
     },
+  });
+
+  await prisma.workspaceMember.upsert({
+    where: {
+      workspaceId_userId: { workspaceId: F.workspaceId, userId: editor.id },
+    },
+    update: { role: "EDITOR" },
+    create: { workspaceId: F.workspaceId, userId: editor.id, role: "EDITOR" },
   });
 
   await prisma.workspaceMember.upsert({
@@ -412,7 +436,7 @@ async function main() {
   );
 
   console.log(
-    `Seeded E2E profile: owner "${owner.email}", viewer "${viewer.email}", ` +
+    `Seeded E2E profile: owner "${owner.email}", editor "${editor.email}", viewer "${viewer.email}", ` +
       `document "${F.documentId}" (share ${F.shareId}, slug ${F.slug}), ` +
       `asset ${asset.id} (${pngBytes.byteLength} bytes at ${storageKey}). ` +
       `Fixture written to e2e/.e2e-fixture.json.`,

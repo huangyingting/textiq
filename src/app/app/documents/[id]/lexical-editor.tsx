@@ -31,7 +31,11 @@ import {
   type VisualNodeRendererProps,
 } from "@/lib/lexical/visual-node";
 
-import { fetchDeckJson, saveDocumentLexical } from "./actions";
+import {
+  fetchDeckJson,
+  parseDocumentImportForEditor,
+  saveDocumentLexical,
+} from "./actions";
 import { BlockSparkPlugin } from "./block-spark";
 import { DocumentExportButton } from "@/components/editor/document-export-button";
 import { PageBreakIndicator } from "@/components/editor/page-break-indicator";
@@ -516,7 +520,10 @@ export function LexicalEditor({
                     </div>
                     {canEdit && (
                       <EditorToolbarGroup label="Edit document">
-                        <ImportPlugin />
+                        <ImportPlugin
+                          documentId={documentId}
+                          importFile={parseDocumentImportForEditor}
+                        />
                         <UndoRedoControls
                           editable={editable}
                           initialStateJson={initialStateJson}

@@ -19,7 +19,6 @@ import {
   createWorkspaceDocumentForUser,
   deleteWorkspaceAndDetachDocuments,
   getWorkspaceMemberRemovalTarget,
-  importWorkspaceDocumentForUser,
   leaveWorkspaceForUser,
   listWorkspaceDocumentsForUser,
   removeWorkspaceMemberAndDetachDocuments,
@@ -211,33 +210,6 @@ export async function createWorkspaceDocument(
     user.id,
     workspaceId,
     templateId,
-  );
-
-  revalidatePath("/app");
-  revalidatePath(`/app/workspaces/${workspaceId}`);
-  redirect(`/app/documents/${document.id}`);
-}
-
-/**
- * Creates a document from pre-extracted import text inside a workspace, then
- * redirects to its editor.
- *
- * The caller's workspace role is checked server-side: only OWNER and EDITOR
- * may proceed; a VIEWER (or non-member) receives an authorization error.
- * `workspaceId` is stored on the document so it appears in both the workspace
- * document list and the dashboard lists.
- */
-export async function importWorkspaceDocument(
-  workspaceId: string,
-  content: string,
-  rawTitle: string,
-): Promise<void> {
-  const user = await requireUser(redirect);
-  const document = await importWorkspaceDocumentForUser(
-    user.id,
-    workspaceId,
-    content,
-    rawTitle,
   );
 
   revalidatePath("/app");
