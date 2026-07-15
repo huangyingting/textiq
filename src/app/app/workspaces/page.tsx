@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/session";
 import {
   assertPersistedWorkspaceMemberRole,
   type EffectiveWorkspaceRole,
-  type PersistedWorkspaceMemberRole,
+  persistedMemberRoleToEffectiveRole,
 } from "@/lib/workspace/roles";
 
 import { CreateWorkspaceButton } from "./create-workspace-button";
@@ -16,12 +16,6 @@ import { CreateWorkspaceButton } from "./create-workspace-button";
 export const metadata: Metadata = {
   title: "Workspaces — TextIQ",
 };
-
-function toEffectiveWorkspaceRole(
-  role: PersistedWorkspaceMemberRole,
-): Exclude<EffectiveWorkspaceRole, "owner"> {
-  return role === "EDITOR" ? "editor" : "viewer";
-}
 
 const ROLE_BADGE_LABELS: Record<EffectiveWorkspaceRole, string> = {
   owner: "OWNER",
@@ -80,7 +74,7 @@ export default async function WorkspacesPage() {
             `Workspace ${w.id} is missing the caller membership row.`,
           );
         }
-        return toEffectiveWorkspaceRole(
+        return persistedMemberRoleToEffectiveRole(
           assertPersistedWorkspaceMemberRole(membershipRole),
         );
       })(),

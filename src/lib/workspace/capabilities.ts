@@ -7,8 +7,9 @@ export type WorkspaceCapabilityFlags = {
 };
 
 export type WorkspaceAccessRole = EffectiveWorkspaceRole | "none";
+export type WorkspaceCapabilityMode = "view" | "mutate" | "manage";
 
-export const WORKSPACE_CAPABILITIES_BY_EFFECTIVE_ROLE = {
+export const WORKSPACE_CAPABILITIES_BY_ROLE = {
   owner: {
     canView: true,
     canMutate: true,
@@ -24,25 +25,29 @@ export const WORKSPACE_CAPABILITIES_BY_EFFECTIVE_ROLE = {
     canMutate: false,
     canManage: false,
   },
-} as const satisfies Record<EffectiveWorkspaceRole, WorkspaceCapabilityFlags>;
-
-const NO_WORKSPACE_CAPABILITIES: WorkspaceCapabilityFlags = {
-  canView: false,
-  canMutate: false,
-  canManage: false,
-};
-
-export function capabilitiesForEffectiveWorkspaceRole(
-  role: EffectiveWorkspaceRole,
-): WorkspaceCapabilityFlags {
-  return WORKSPACE_CAPABILITIES_BY_EFFECTIVE_ROLE[role];
-}
+  none: {
+    canView: false,
+    canMutate: false,
+    canManage: false,
+  },
+} as const satisfies Record<WorkspaceAccessRole, WorkspaceCapabilityFlags>;
 
 export function capabilitiesForWorkspaceAccessRole(
   role: WorkspaceAccessRole,
 ): WorkspaceCapabilityFlags {
-  if (role === "none") {
-    return NO_WORKSPACE_CAPABILITIES;
+  return WORKSPACE_CAPABILITIES_BY_ROLE[role];
+}
+
+export function workspaceRoleCan(
+  role: WorkspaceAccessRole,
+  capability: WorkspaceCapabilityMode,
+): boolean {
+  const capabilities = capabilitiesForWorkspaceAccessRole(role);
+  if (capability === "view") {
+    return capabilities.canView;
   }
-  return capabilitiesForEffectiveWorkspaceRole(role);
+  if (capability === "mutate") {
+    return capabilities.canMutate;
+  }
+  return capabilities.canManage;
 }

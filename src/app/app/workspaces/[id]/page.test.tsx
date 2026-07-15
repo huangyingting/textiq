@@ -508,7 +508,7 @@ describe("WorkspacePage", () => {
     );
   });
 
-  it("fails explicitly when a stored member role is unrecognized", async () => {
+  it("renders a stable integrity-invalid state for an unrecognized stored member role", async () => {
     state().user = { id: "user-1" };
     state().workspace = {
       ...defaultWorkspace(),
@@ -520,13 +520,16 @@ describe("WorkspacePage", () => {
       ],
     };
 
-    await assert.rejects(
-      () => invoke(),
-      /Workspace member role must be one of: EDITOR, VIEWER/,
+    const result = (await invoke()) as ReactElement;
+    const invalidState = firstElement(
+      result,
+      byComponentName("WorkspaceMembershipIntegrityInvalid"),
     );
+    assert.equal(invalidState.props.workspaceId, "ws-1");
+    assert.equal(invalidState.props.errorCode, "invalid-workspace-member-role");
   });
 
-  it("fails explicitly when a non-owner membership row is persisted as OWNER", async () => {
+  it("renders a stable integrity-invalid state for a non-owner OWNER membership row", async () => {
     state().user = { id: "user-1" };
     state().workspace = {
       ...defaultWorkspace(),
@@ -539,10 +542,13 @@ describe("WorkspacePage", () => {
       ],
     };
 
-    await assert.rejects(
-      () => invoke(),
-      /must not be OWNER; ownership is derived from Workspace\.ownerId/i,
+    const result = (await invoke()) as ReactElement;
+    const invalidState = firstElement(
+      result,
+      byComponentName("WorkspaceMembershipIntegrityInvalid"),
     );
+    assert.equal(invalidState.props.workspaceId, "ws-1");
+    assert.equal(invalidState.props.errorCode, "owner-membership-row");
   });
 
   it("renders singular document/member copy at counts of exactly one", async () => {

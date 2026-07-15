@@ -7,6 +7,7 @@ import type {
   EffectiveWorkspaceRole,
   PersistedWorkspaceMemberRole,
 } from "@/lib/workspace/roles";
+import { persistedMemberRoleToEffectiveRole } from "@/lib/workspace/roles";
 
 import { removeMember, transferOwnership } from "./actions";
 
@@ -37,12 +38,6 @@ const roleLabels: Record<EffectiveWorkspaceRole, string> = {
   viewer: "Viewer",
 };
 
-function toEffectiveWorkspaceRole(
-  role: PersistedWorkspaceMemberRole,
-): Exclude<EffectiveWorkspaceRole, "owner"> {
-  return role === "EDITOR" ? "editor" : "viewer";
-}
-
 export function MembersList({
   workspace,
   isOwner,
@@ -67,7 +62,7 @@ export function MembersList({
     },
     ...workspace.members.map((member) => ({
       ...member,
-      role: toEffectiveWorkspaceRole(member.role),
+      role: persistedMemberRoleToEffectiveRole(member.role),
     })),
   ];
 

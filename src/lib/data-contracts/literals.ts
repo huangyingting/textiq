@@ -1,7 +1,7 @@
 import { isPlan, type Plan } from "@/lib/billing/catalog";
 import { VISUAL_KINDS, type VisualKind } from "@/lib/visual/schema";
 import {
-  PERSISTED_WORKSPACE_MEMBER_ROLES,
+  assertPersistedWorkspaceMemberRole,
   parsePersistedWorkspaceMemberRole,
   type InvitableWorkspaceRole,
   type PersistedWorkspaceMemberRole,
@@ -71,21 +71,16 @@ export function parseWorkspaceRoleLiteral(
 export function assertWorkspaceRoleLiteral(
   value: unknown,
 ): PersistedWorkspaceMemberRole {
-  const parsed = parseWorkspaceRoleLiteral(value);
-  if (!parsed.success) {
-    throw new Error(parsed.error);
-  }
-  return parsed.value;
+  return assertPersistedWorkspaceMemberRole(value);
 }
 
 export function parseInvitableWorkspaceRoleLiteral(
   value: unknown,
 ): LiteralValidationResult<InvitableWorkspaceRole> {
-  return parseLiteral(
-    value,
-    PERSISTED_WORKSPACE_MEMBER_ROLES,
-    "Invitable workspace role",
-  );
+  const parsed = parsePersistedWorkspaceMemberRole(value);
+  return parsed.success
+    ? { success: true, value: parsed.value }
+    : { success: false, error: parsed.error.message };
 }
 
 export function parsePlanLiteral(

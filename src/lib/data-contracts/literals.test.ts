@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { WorkspaceRoleDataIntegrityError } from "@/lib/workspace/roles";
 
 import {
   assertPlanLiteral,
@@ -56,7 +57,15 @@ test("literal assertions return valid values and throw parser errors", () => {
   assert.equal(assertPlanLiteral("free"), "free");
   assert.throws(
     () => assertWorkspaceRoleLiteral("ADMIN"),
-    /Workspace member role/,
+    (error: unknown) =>
+      error instanceof WorkspaceRoleDataIntegrityError &&
+      error.code === "invalid-workspace-member-role",
+  );
+  assert.throws(
+    () => assertWorkspaceRoleLiteral("OWNER"),
+    (error: unknown) =>
+      error instanceof WorkspaceRoleDataIntegrityError &&
+      error.code === "owner-membership-row",
   );
   assert.throws(() => assertPlanLiteral("enterprise"), /Plan must be one of/);
 });

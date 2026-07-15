@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
+import { WorkspaceRoleDataIntegrityError } from "@/lib/workspace/roles";
 
 import {
   mapCommentRowToDto,
@@ -205,7 +206,9 @@ test("maps comment, tag, workspace, and literal rows", () => {
           { id: "member-1", userId: "user-1", role: "ADMIN", createdAt: now },
         ],
       } as WorkspaceDtoRow),
-    /Workspace member role/,
+    (error: unknown) =>
+      error instanceof WorkspaceRoleDataIntegrityError &&
+      error.code === "invalid-workspace-member-role",
   );
   assert.throws(
     () => mapSubscriptionLiterals({ plan: "enterprise", status: "active" }),

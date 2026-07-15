@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { prisma } from "@/lib/prisma";
-import { capabilitiesForEffectiveWorkspaceRole } from "@/lib/workspace/capabilities";
+import {
+  capabilitiesForWorkspaceAccessRole,
+  workspaceRoleCan,
+} from "@/lib/workspace/capabilities";
 
 import {
   assertWorkspaceCapability,
@@ -157,8 +160,26 @@ test("workspace capability map stays in parity with UI capability helpers", () =
   for (const role of effectiveRoles) {
     assert.deepEqual(capabilitiesForWorkspaceRole(role), {
       role,
-      ...capabilitiesForEffectiveWorkspaceRole(role),
+      ...capabilitiesForWorkspaceAccessRole(role),
     });
+  }
+});
+
+test("workspace capability decisions stay in parity with canonical role decision helper", () => {
+  const roles: WorkspaceRole[] = ["owner", "editor", "viewer", "none"];
+  const capabilities: WorkspaceCapability[] = ["view", "mutate", "manage"];
+  for (const role of roles) {
+    for (const capability of capabilities) {
+      const decision = workspaceCapabilityAccessDecision(
+        capabilitiesForWorkspaceRole(role),
+        capability,
+      );
+      assert.equal(
+        decision.allow,
+        workspaceRoleCan(role, capability),
+        `${role}:${capability}`,
+      );
+    }
   }
 });
 

@@ -23,6 +23,8 @@ import {
 } from "@/lib/access-policy/taxonomy";
 import {
   capabilitiesForWorkspaceAccessRole,
+  workspaceRoleCan,
+  type WorkspaceCapabilityMode,
   type WorkspaceAccessRole,
 } from "@/lib/workspace/capabilities";
 import {
@@ -35,7 +37,7 @@ import {
 export type WorkspaceRole = WorkspaceAccessRole;
 
 /** A workspace capability that an action can require. */
-export type WorkspaceCapability = "view" | "mutate" | "manage";
+export type WorkspaceCapability = WorkspaceCapabilityMode;
 
 /** The resolved capability set for a (user, workspace) pair. */
 export type WorkspaceCapabilities = {
@@ -131,6 +133,16 @@ const _wsBuilder = createPermissionBuilder({
     midCapDenied:
       "Only workspace owners and editors may create or import documents.",
     manageDenied: "Only the workspace owner may perform this action.",
+  },
+  isCapabilityAllowed: (caps, capability) => {
+    if (
+      capability !== "view" &&
+      capability !== "mutate" &&
+      capability !== "manage"
+    ) {
+      return true;
+    }
+    return workspaceRoleCan(caps.role, capability);
   },
 });
 

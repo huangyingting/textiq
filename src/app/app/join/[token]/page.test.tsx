@@ -79,11 +79,13 @@ type JoinPageTestState = {
   calls: unknown[][];
   user: { id: string } | null;
   inviteLink: InviteLinkRow | null;
-  existingMember: { id: string } | null;
+  existingMember: { id: string; role: string } | null;
   acceptResult: AcceptResult;
   requireUser: (redirect: (url: string) => never) => Promise<{ id: string }>;
   findUniqueInviteLink: (args: unknown) => Promise<InviteLinkRow | null>;
-  findFirstMember: (args: unknown) => Promise<{ id: string } | null>;
+  findFirstMember: (
+    args: unknown,
+  ) => Promise<{ id: string; role: string } | null>;
   acceptWorkspaceInvite: (args: unknown) => Promise<AcceptResult>;
 };
 
@@ -302,7 +304,7 @@ describe("JoinWorkspacePage", () => {
   });
 
   it("redirects an existing workspace member straight to the workspace without accepting again", async () => {
-    state().existingMember = { id: "member-1" };
+    state().existingMember = { id: "member-1", role: "VIEWER" };
 
     await assert.rejects(
       () => invoke(),
@@ -311,7 +313,7 @@ describe("JoinWorkspacePage", () => {
 
     assert.deepEqual(callsOf("prisma.workspaceMember.findFirst")[0]?.[1], {
       where: { workspaceId: "ws-1", userId: "user-1" },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
@@ -343,13 +345,25 @@ describe("JoinWorkspacePage", () => {
 
   it("redirects existing members before rendering revoked-link invalid state", async () => {
     state().inviteLink = { ...defaultInviteLink(), isRevoked: true };
-    state().existingMember = { id: "member-1" };
+    state().existingMember = { id: "member-1", role: "EDITOR" };
 
     await assert.rejects(
       () => invoke(),
       /NEXT_REDIRECT:\/app\/workspaces\/ws-1/,
     );
 
+    assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
+  });
+
+  it("renders membership-integrity invalid state for an existing OWNER member row", async () => {
+    state().existingMember = { id: "member-1", role: "OWNER" };
+
+    const result = (await invoke()) as ReactElement;
+    const text = renderText(result);
+
+    assert.match(text, /Workspace membership needs repair/);
+    assert.match(text, /Integrity code/);
+    assert.match(text, /owner-membership-row/);
     assert.equal(callsOf("acceptWorkspaceInvite").length, 0);
   });
 

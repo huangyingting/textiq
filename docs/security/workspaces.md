@@ -8,8 +8,8 @@ description: "This document describes canonical workspace role/capability policy
 # Workspaces And Membership
 
 This document describes workspace ownership, membership, invite links, and the
-canonical workspace role/capability policy used by both server authorization
-and workspace UI helpers.
+canonical workspace role/capability policy shared by server authorization,
+workspace UI helpers, and join/detail integrity-safe states.
 
 ## Source Files
 
@@ -37,7 +37,8 @@ Workspace role handling is strict and split into two layers:
    `VIEWER`.
 2. **Effective workspace role**: `owner`, `editor`, or `viewer`.
    - `owner` is derived only from `Workspace.ownerId`.
-   - `editor`/`viewer` come from validated membership roles.
+   - `editor`/`viewer` come from the canonical
+     `persistedMemberRoleToEffectiveRole` converter.
 
 Persisted `OWNER` membership rows and malformed role strings are explicit
 data-integrity failures. They are never normalized to viewer and never treated
@@ -50,7 +51,8 @@ audit (`npm run audit:schema -- --ci`) rather than destructive coercion.
 ## Workspace Capabilities
 
 Workspace server actions use `requireWorkspaceCapability`, and workspace UI
-helpers use the same pure map from `src/lib/workspace/capabilities.ts`.
+helpers use the same pure policy from `src/lib/workspace/capabilities.ts`
+(`capabilitiesForWorkspaceAccessRole` + `workspaceRoleCan`).
 
 | Capability | Required role       |
 | ---------- | ------------------- |
@@ -90,7 +92,9 @@ In one transaction, acceptance checks owner/membership, consumes capacity with a
 CAS update, creates membership, and appends the invite-use audit row. Any deny
 path (revoked/expired/exhausted/invalid-role/owner/member) exits without member
 creation or invite-use audit writes. Invalid persisted invite roles are denied
-explicitly; they are never coerced to viewer for acceptance.
+explicitly; they are never coerced to viewer for acceptance. If a user already
+has a malformed membership row (including persisted `OWNER`), join preview
+renders a stable integrity-invalid state and does not attempt acceptance.
 
 The membership replay classifier is provider-neutral but narrow by design:
 `P2002` maps to `already-member` only when the unique target resolves to the
@@ -141,9 +145,17 @@ semantics.
 7. Invite denials perform no membership/audit writes.
 8. Ownership transfer uses transactional owner CAS; stale-owner conflicts do not
    partially apply membership writes.
-9. Persisted workspace role drift (`OWNER`/malformed values) is blocked by
-   runtime strict parsing and detected by the schema-audit gate
-   (`npm run audit:schema -- --ci`).
+9. Leaving a workspace is `ownerId`/membership-existence gated and role-value
+   independent. Non-owner malformed/`OWNER` membership rows can still leave for
+   cleanup; leaving removes only membership and preserves document ownership.
+10. Persisted workspace role drift (`OWNER`/malformed values) is blocked by
+    runtime strict parsing and detected by the schema-audit gate
+    (`npm run audit:schema -- --ci`).
+11. Join/detail surfaces never coerce invalid role rows; they render explicit
+    integrity-invalid states with no view/mutate/manage grant.
+12. Remediation of malformed role rows follows
+    [workspace-role-remediation-plan.md](workspace-role-remediation-plan.md)
+    with explicit operator choice and no destructive default mapping.
 
 ## Primary Tests
 

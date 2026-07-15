@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   assertPersistedWorkspaceMemberRole,
   isInvitableWorkspaceRole,
   parsePersistedWorkspaceMemberRole,
+  persistedMemberRoleToEffectiveRole,
   WorkspaceRoleDataIntegrityError,
 } from "./roles";
 
@@ -50,6 +53,32 @@ test("assertPersistedWorkspaceMemberRole returns valid roles and throws typed in
       error.code === "owner-membership-row" &&
       error.value === "OWNER",
   );
+});
+
+test("persistedMemberRoleToEffectiveRole maps persisted roles exhaustively", () => {
+  assert.equal(persistedMemberRoleToEffectiveRole("EDITOR"), "editor");
+  assert.equal(persistedMemberRoleToEffectiveRole("VIEWER"), "viewer");
+});
+
+test("workspace callers use the canonical persisted-to-effective converter", () => {
+  const files = [
+    "src/app/app/workspaces/page.tsx",
+    "src/app/app/workspaces/[id]/page.tsx",
+    "src/app/app/workspaces/[id]/members-list.tsx",
+    "src/lib/auth/permission-builder.ts",
+  ];
+  const localConverterPattern =
+    /role\s*===\s*"EDITOR"\s*\?\s*"editor"\s*:\s*"viewer"/;
+
+  for (const relativePath of files) {
+    const source = readFileSync(resolve(process.cwd(), relativePath), "utf8");
+    assert.match(source, /persistedMemberRoleToEffectiveRole/);
+    assert.equal(
+      localConverterPattern.test(source),
+      false,
+      `local persisted-to-effective converter found in ${relativePath}`,
+    );
+  }
 });
 
 test("isInvitableWorkspaceRole matches the persisted member-role policy", () => {

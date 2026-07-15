@@ -46,6 +46,7 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { Prisma } from "@/generated/prisma/client";
 import { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { WorkspaceRoleDataIntegrityError } from "@/lib/workspace/roles";
 
 type InviteServiceModule = typeof import("./invite-service");
 let MAX_INVITE_EXPIRY_DAYS: InviteServiceModule["MAX_INVITE_EXPIRY_DAYS"];
@@ -149,7 +150,18 @@ test("normalizeInviteMaxUses validates integer usage caps", () => {
 test("assertInvitableWorkspaceRole accepts only invite-grantable roles", () => {
   assert.doesNotThrow(() => assertInvitableWorkspaceRole("EDITOR"));
   assert.doesNotThrow(() => assertInvitableWorkspaceRole("VIEWER"));
-  assert.throws(() => assertInvitableWorkspaceRole("OWNER"), /Invalid invite/);
+  assert.throws(
+    () => assertInvitableWorkspaceRole("OWNER"),
+    (error: unknown) =>
+      error instanceof WorkspaceRoleDataIntegrityError &&
+      error.code === "owner-membership-row",
+  );
+  assert.throws(
+    () => assertInvitableWorkspaceRole("ADMIN"),
+    (error: unknown) =>
+      error instanceof WorkspaceRoleDataIntegrityError &&
+      error.code === "invalid-workspace-member-role",
+  );
 });
 
 // ---------------------------------------------------------------------------

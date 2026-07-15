@@ -45,6 +45,10 @@ collaboration upgrade authorization.
 Persisted `OWNER`/malformed membership roles are explicit data-integrity
 failures; they are never coerced into a least-privilege role.
 
+Workspace role conversion (`EDITOR`/`VIEWER` → `editor`/`viewer`) and workspace
+capability checks come from one canonical policy reused by server authorization
+and workspace UI surfaces.
+
 Capabilities are intentionally coarse:
 
 - `view`: read the document, comment, duplicate, join read-only collab;
@@ -166,6 +170,8 @@ from viewer connections.
 5. Passcode-protected public links and slide assets require a valid unlock cookie.
 6. Collaboration upgrades require authorization.
 7. Read-list scopes are read-only; write paths use capability checks.
+8. Invalid persisted workspace role rows render integrity-invalid join/detail
+   states and never silently coerce to viewer.
 
 ## Primary Tests
 

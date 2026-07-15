@@ -6,7 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { evaluateInviteAccess, toInviteAccessInput } from "@/lib/invite-access";
 import { prisma } from "@/lib/prisma";
 import {
-  isInvitableWorkspaceRole,
+  assertPersistedWorkspaceMemberRole,
   type InvitableWorkspaceRole,
 } from "@/lib/workspace/roles";
 import type {
@@ -189,18 +189,13 @@ export function normalizeInviteMaxUses(maxUses?: number | null): number | null {
 export function assertInvitableWorkspaceRole(
   role: unknown,
 ): asserts role is InvitableWorkspaceRole {
-  if (!isInvitableWorkspaceRole(role)) {
-    throw new Error(`Invalid invite role: ${String(role)}.`);
-  }
+  assertPersistedWorkspaceMemberRole(role);
 }
 
 function assertPersistedInvitableWorkspaceRole(
   role: unknown,
 ): InvitableWorkspaceRole {
-  if (!isInvitableWorkspaceRole(role)) {
-    throw new Error(`Invalid persisted invite role: ${String(role)}.`);
-  }
-  return role;
+  return assertPersistedWorkspaceMemberRole(role);
 }
 
 export async function createWorkspaceInviteLink({

@@ -14,6 +14,10 @@ export type PersistedWorkspaceMemberRole =
   (typeof PERSISTED_WORKSPACE_MEMBER_ROLES)[number];
 export type InvitableWorkspaceRole = PersistedWorkspaceMemberRole;
 export type EffectiveWorkspaceRole = "owner" | "editor" | "viewer";
+export type MemberEffectiveWorkspaceRole = Exclude<
+  EffectiveWorkspaceRole,
+  "owner"
+>;
 /* node:coverage ignore stop */
 
 export type WorkspaceMemberRoleParseErrorCode =
@@ -97,9 +101,19 @@ export function assertPersistedWorkspaceMemberRole(
   return parsed.value;
 }
 
+/**
+ * Converts a validated persisted membership role to a non-owner effective role.
+ * This is the single canonical persisted→effective role conversion.
+ */
+export function persistedMemberRoleToEffectiveRole(
+  role: PersistedWorkspaceMemberRole,
+): MemberEffectiveWorkspaceRole {
+  return role === "EDITOR" ? "editor" : "viewer";
+}
+
 /** Whether `value` is a role that an invite link is allowed to grant. */
 export function isInvitableWorkspaceRole(
   value: unknown,
-): value is InvitableWorkspaceRole {
+): value is PersistedWorkspaceMemberRole {
   return parsePersistedWorkspaceMemberRole(value).success;
 }

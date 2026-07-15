@@ -13,7 +13,7 @@ import {
   cx,
 } from "@/components/ui";
 import { TEMPLATE_CATALOG } from "@/lib/templates/catalog";
-import { capabilitiesForEffectiveWorkspaceRole } from "@/lib/workspace/capabilities";
+import { capabilitiesForWorkspaceAccessRole } from "@/lib/workspace/capabilities";
 import type { EffectiveWorkspaceRole } from "@/lib/workspace/roles";
 import {
   DOCUMENT_IMPORT_ACCEPT,
@@ -226,7 +226,7 @@ export function WorkspaceDocuments({
   const [error, setError] = useState<string | null>(null);
   const [loadKey, setLoadKey] = useState(0);
 
-  const roleCapabilities = capabilitiesForEffectiveWorkspaceRole(userRole);
+  const roleCapabilities = capabilitiesForWorkspaceAccessRole(userRole);
   const canCreate = roleCapabilities.canMutate;
   const canImport = roleCapabilities.canMutate;
 

@@ -16,8 +16,10 @@
 
 import {
   parsePersistedWorkspaceMemberRole,
+  persistedMemberRoleToEffectiveRole,
   type WorkspaceMemberRoleParseError,
 } from "@/lib/workspace/roles";
+import type { WorkspaceAccessRole } from "@/lib/workspace/capabilities";
 import {
   allowAccess,
   denyAccess,
@@ -26,11 +28,8 @@ import {
   type AccessResourceKind,
 } from "@/lib/access-policy/taxonomy";
 
-/**
- * The four access roles used by permission checks.
- * `none` means "no relationship to the resource", not an effective role.
- */
-export type ResourceRole = "owner" | "editor" | "viewer" | "none";
+/** Shared access-role union (`none` means no relationship to the resource). */
+export type ResourceRole = WorkspaceAccessRole;
 
 /** Membership row shape shared by both resource types. */
 export type MemberRow = { userId: string; role: string };
@@ -89,7 +88,7 @@ export function deriveRoleFromOwnerAndMembers(
     });
   }
 
-  return parsedMembershipRole.value === "EDITOR" ? "editor" : "viewer";
+  return persistedMemberRoleToEffectiveRole(parsedMembershipRole.value);
 }
 
 /**
@@ -124,6 +123,10 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
     midCapDenied: string;
     manageDenied: string;
   };
+  isCapabilityAllowed?: (
+    caps: ResourceCapabilities<TMidCapKey>,
+    capability: AccessCapabilityMode,
+  ) => boolean;
 }): {
   capabilitiesForRole: (role: ResourceRole) => ResourceCapabilities<TMidCapKey>;
   capabilityAccessDecision: (
@@ -131,7 +134,8 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
     capability: AccessCapabilityMode,
   ) => AccessDecision;
 } {
-  const { resource, midCapKey, midCapMode, messages } = config;
+  const { resource, midCapKey, midCapMode, messages, isCapabilityAllowed } =
+    config;
 
   function capabilitiesForRole(
     role: ResourceRole,
@@ -160,7 +164,17 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
       });
     }
     const canMid = (caps as { [K in TMidCapKey]: boolean })[midCapKey];
-    if (capability === midCapMode && !canMid) {
+    const defaultAllowed =
+      capability === midCapMode
+        ? canMid
+        : capability === "manage"
+          ? caps.canManage
+          : true;
+    const allowed = isCapabilityAllowed
+      ? isCapabilityAllowed(caps, capability)
+      : defaultAllowed;
+
+    if (!allowed && capability === midCapMode) {
       return denyAccess({
         resource: { kind: resource },
         capability,
@@ -170,7 +184,7 @@ export function createPermissionBuilder<TMidCapKey extends string>(config: {
         concealResource: false,
       });
     }
-    if (capability === "manage" && !caps.canManage) {
+    if (!allowed && capability === "manage") {
       return denyAccess({
         resource: { kind: resource },
         capability,
