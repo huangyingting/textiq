@@ -68,6 +68,16 @@ test("test subsystem map classifies files by owning subsystem", () => {
       "data-model",
     ),
   );
+  assert.deepEqual(
+    classifyTestFile("src/components/motion/presets.test.ts"),
+    ["system", "ui"],
+    "shared motion behavior must run in both cross-cutting UI buckets",
+  );
+  assert.deepEqual(
+    classifyTestFile("src/components/ui/button.test.tsx"),
+    ["system", "ui"],
+    "UI primitives must retain their existing cross-cutting ownership",
+  );
   assert.ok(
     classifyTestFile("src/lib/validation-primitives.test.ts").includes(
       "data-model",
