@@ -10,7 +10,7 @@ export function Skeleton({
   return (
     <div
       className={cx(
-        "animate-pulse rounded-[var(--ds-radius-sm,8px)] bg-[var(--ds-surface-raised,#f3f4f6)]",
+        "animate-pulse rounded-[var(--ds-radius-sm,8px)] bg-[var(--ds-surface-raised,#f3f4f6)] motion-reduce:animate-none",
         className,
       )}
       {...props}

@@ -584,7 +584,7 @@ export function ColorPicker({
                       onMouseDown={onPointerDownCapture}
                       onClick={() => pick(preset)}
                       className={cx(
-                        "aspect-square w-full rounded-full border transition-transform hover:scale-110",
+                        "aspect-square w-full rounded-full border transition-transform hover:scale-110 motion-reduce:transform-none motion-reduce:transition-none",
                         selected
                           ? "border-transparent ring-2 ring-ds-accent ring-offset-1 ring-offset-ds-surface-base"
                           : "border-ds-border-subtle",

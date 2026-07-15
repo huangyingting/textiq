@@ -61,7 +61,7 @@ export default async function RootLayout({
       data-theme={DEFAULT_APP_THEME_MODE}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={`${inter.variable} h-full scroll-smooth antialiased`}
+      className={`${inter.variable} h-full scroll-smooth antialiased motion-reduce:scroll-auto`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

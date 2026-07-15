@@ -47,8 +47,16 @@ test("renders role=switch with aria-checked=false and the off-state track/thumb 
   assert.equal(button.props["aria-checked"], false);
   assert.equal(button.props.type, "button");
   assert.match(button.props.className as string, /bg-ds-state-active/);
+  assert.match(
+    button.props.className as string,
+    /motion-reduce:transition-none/,
+  );
   const thumb = renderer.root.findByType("span");
   assert.match(thumb.props.className as string, /translate-x-1/);
+  assert.match(
+    thumb.props.className as string,
+    /motion-reduce:transition-none/,
+  );
 });
 
 test("renders aria-checked=true and the on-state track/thumb classes when checked is true", () => {

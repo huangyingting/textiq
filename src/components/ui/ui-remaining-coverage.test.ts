@@ -706,6 +706,14 @@ test("ColorPicker covers fallback colors, red HSV branches, focus trap, and pres
     (element) =>
       element.type === "button" && element.props["aria-label"] === "bad-color",
   )[0];
+  assert.match(
+    String(badPreset.props.className),
+    /motion-reduce:transform-none/,
+  );
+  assert.match(
+    String(badPreset.props.className),
+    /motion-reduce:transition-none/,
+  );
   (badPreset.props.onClick as () => void)();
 
   assert.ok(changes.includes("bad-color"));
