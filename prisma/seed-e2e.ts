@@ -6,6 +6,10 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 
 import { Prisma } from "../src/generated/prisma/client";
+import {
+  projectDocumentContent,
+  projectDocumentMarkdown,
+} from "../src/lib/document/content-projection";
 import { openDeckFromJson } from "../src/lib/presentation/open-deck";
 import { safeParseDeck } from "../src/lib/presentation/validation";
 import { deriveStorageKey } from "../src/lib/slides/asset-storage";
@@ -158,7 +162,7 @@ async function main() {
     where: { id: F.dashboardDocuments.alphaFavorite.id },
     update: {
       title: F.dashboardDocuments.alphaFavorite.title,
-      content: F.dashboardDocuments.alphaFavorite.content,
+      ...projectDocumentMarkdown(F.dashboardDocuments.alphaFavorite.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: true,
@@ -168,7 +172,7 @@ async function main() {
     create: {
       id: F.dashboardDocuments.alphaFavorite.id,
       title: F.dashboardDocuments.alphaFavorite.title,
-      content: F.dashboardDocuments.alphaFavorite.content,
+      ...projectDocumentMarkdown(F.dashboardDocuments.alphaFavorite.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: true,
@@ -179,7 +183,7 @@ async function main() {
     where: { id: F.dashboardDocuments.betaTagged.id },
     update: {
       title: F.dashboardDocuments.betaTagged.title,
-      content: F.dashboardDocuments.betaTagged.content,
+      ...projectDocumentMarkdown(F.dashboardDocuments.betaTagged.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: false,
@@ -189,7 +193,7 @@ async function main() {
     create: {
       id: F.dashboardDocuments.betaTagged.id,
       title: F.dashboardDocuments.betaTagged.title,
-      content: F.dashboardDocuments.betaTagged.content,
+      ...projectDocumentMarkdown(F.dashboardDocuments.betaTagged.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: false,
@@ -229,8 +233,7 @@ async function main() {
     where: { id: F.documentId },
     update: {
       title: F.documentTitle,
-      content: F.documentBodyText,
-      contentJson,
+      ...projectDocumentContent(contentJson),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: F.shareId,
@@ -245,8 +248,7 @@ async function main() {
     create: {
       id: F.documentId,
       title: F.documentTitle,
-      content: F.documentBodyText,
-      contentJson,
+      ...projectDocumentContent(contentJson),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: F.shareId,
@@ -337,8 +339,7 @@ async function main() {
     where: { id: F.layoutDocumentId },
     update: {
       title: F.layoutDocumentTitle,
-      content: `${F.documentBodyText} (layout fixture)`,
-      contentJson: layoutContentJson,
+      ...projectDocumentContent(layoutContentJson),
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
@@ -354,8 +355,7 @@ async function main() {
     create: {
       id: F.layoutDocumentId,
       title: F.layoutDocumentTitle,
-      content: `${F.documentBodyText} (layout fixture)`,
-      contentJson: layoutContentJson,
+      ...projectDocumentContent(layoutContentJson),
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
@@ -383,7 +383,7 @@ async function main() {
     where: { id: F.privateDocumentId },
     update: {
       title: "E2E Private Fixture",
-      content: "Private fixture document (never shared).",
+      ...projectDocumentMarkdown("Private fixture document (never shared)."),
       ownerId: owner.id,
       workspaceId: null,
       isShared: false,
@@ -394,7 +394,7 @@ async function main() {
     create: {
       id: F.privateDocumentId,
       title: "E2E Private Fixture",
-      content: "Private fixture document (never shared).",
+      ...projectDocumentMarkdown("Private fixture document (never shared)."),
       ownerId: owner.id,
       isShared: false,
     },

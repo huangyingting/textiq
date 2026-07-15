@@ -27,6 +27,13 @@ import { revalidateSharePaths } from "./sharing";
 // Re-export so the barrel can surface it via `export *`
 export type { RestoredDocumentVersion };
 
+type RestoreVersionDeps = {
+  db?: Pick<typeof prisma, "documentVersion" | "$transaction">;
+  snapshot?: typeof snapshotDocumentVersion;
+  reconcile?: typeof reconcileDeckAfterMirror;
+  revalidate?: typeof revalidateSharePaths;
+};
+
 // ---------------------------------------------------------------------------
 // Exported service operations
 // ---------------------------------------------------------------------------
@@ -165,8 +172,13 @@ export async function restoreVersion(
   documentId: string,
   versionId: string,
   userId?: string | null,
+  deps: RestoreVersionDeps = {},
 ): Promise<RestoredDocumentVersion> {
-  const version = await prisma.documentVersion.findUniqueOrThrow({
+  const db = deps.db ?? prisma;
+  const snapshot = deps.snapshot ?? snapshotDocumentVersion;
+  const reconcile = deps.reconcile ?? reconcileDeckAfterMirror;
+  const revalidate = deps.revalidate ?? revalidateSharePaths;
+  const version = await db.documentVersion.findUniqueOrThrow({
     where: { id: versionId },
     select: {
       documentId: true,
@@ -184,7 +196,7 @@ export async function restoreVersion(
   }
 
   /* node:coverage ignore next 5 */
-  await snapshotDocumentVersion(documentId, {
+  await snapshot(documentId, {
     userId,
     force: true,
     label: "Before restore",
@@ -194,10 +206,9 @@ export async function restoreVersion(
   const restoredDeck = sanitizeRestoredDeck(version.deckJson, restoredContent);
   const restoredDeckRevisionToken = generateRevisionToken();
 
-  // Write the restored document state + atomically rebuild the Visual mirror.
-  // Document.content (the plaintext mirror) is deprecated — no longer written
-  // here. Physical column drop is a follow-up migration.
-  await prisma.$transaction(async (tx) => {
+  // Write the restored document state and its search projection, then atomically
+  // rebuild the Visual mirror.
+  await db.$transaction(async (tx) => {
     await tx.document.updateMany({
       where: { id: documentId },
       data: {
@@ -210,8 +221,8 @@ export async function restoreVersion(
     await mirrorVisualNodesInTx(tx, documentId, restoredContent);
   });
 
-  await reconcileDeckAfterMirror(documentId);
-  await revalidateSharePaths(documentId);
+  await reconcile(documentId);
+  await revalidate(documentId);
 
   return { documentId, contentJson: restoredContent };
 }

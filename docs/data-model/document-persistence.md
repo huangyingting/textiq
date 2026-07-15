@@ -137,6 +137,18 @@ invalidation.
 6. Restore sanitizes deck visual references against restored content and then
    reconciles against actual DB visual rows.
 7. Schema failures are reported with safe identifiers only.
+8. Projection backfills derive text from a selected `contentJson` snapshot and
+   condition writes on both that JSON value and its selected `updatedAt`; a
+   concurrent canonical edit must make the stale write miss.
+
+## Search Projection Repair
+
+`npm run db:backfill-document-content` defaults to dry-run. It scans in bounded
+id-ordered batches, reports drift counts and a bounded list of document ids, and
+does not log titles or content. Mutating execution requires both `--execute` and
+`DOCUMENT_CONTENT_BACKFILL_CONFIRM=write-projections`. Batch size, retry count,
+and sample count are validated before scanning; configuration, execution, and
+disconnect failures set a non-zero exit status.
 
 ## Primary Tests
 

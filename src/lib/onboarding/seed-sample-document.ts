@@ -51,6 +51,8 @@ function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
   return value as unknown as Prisma.InputJsonValue;
 }
 
+type SeedSampleDocumentDb = Pick<typeof prisma, "document">;
+
 /**
  * Seeds a single first-run sample document (with one pre-attached visual) for a
  * brand-new user.
@@ -61,12 +63,15 @@ function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
  * swallowed (and logged) so a seeding hiccup can never block sign-up or first
  * login.
  */
-export async function seedSampleDocument(userId: string): Promise<void> {
+export async function seedSampleDocument(
+  userId: string,
+  db: SeedSampleDocumentDb = prisma,
+): Promise<void> {
   try {
     // Guard: never re-seed a user who already has documents (existing accounts
     // or a previous seed). Include soft-deleted rows so a user who deleted the
     // sample is not re-seeded.
-    const existing = await prisma.document.findFirst({
+    const existing = await db.document.findFirst({
       where: { ownerId: userId },
       select: { id: true },
     });
@@ -77,7 +82,7 @@ export async function seedSampleDocument(userId: string): Promise<void> {
     const sampleVisual = FIXTURES.flowchart;
     const visualId = generateBlockId();
 
-    await prisma.document.create({
+    await db.document.create({
       data: {
         title: SAMPLE_DOCUMENT_TITLE,
         ...projectDocumentContent(

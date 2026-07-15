@@ -263,10 +263,11 @@ export async function atomicSaveDocumentLexical(
   documentId: string,
   parsedState: unknown,
   userId?: string | null,
+  db: Pick<typeof prisma, "$transaction"> = prisma,
 ): Promise<VisualMirrorOutcome> {
   let outcome: VisualMirrorOutcome;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await snapshotDocumentVersion(documentId, { userId, tx });
 
     await tx.document.updateMany({

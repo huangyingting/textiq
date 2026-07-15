@@ -72,9 +72,26 @@ projection with provider-aware case-insensitive contains. Every canonical
 restore rebuilds that projection in the same database write.
 
 Deployments upgrading from a build that did not maintain the projection should
-run `npm run db:backfill-document-content` once. The backfill pages through
-documents, derives text through the same canonical projector, and uses a
-compare-and-swap guard so it cannot overwrite a concurrent editor save.
+preview the repair first:
+
+```bash
+npm run db:backfill-document-content -- --dry-run
+```
+
+Dry-run is the default and performs zero writes. It reports bounded counts and
+sample document ids only; titles and document content are never logged. Execute
+with an explicit safety confirmation:
+
+```bash
+DOCUMENT_CONTENT_BACKFILL_CONFIRM=write-projections \
+  npm run db:backfill-document-content -- --execute
+```
+
+`--batch-size=1..1000`, `--max-retries=0..10`, and `--sample-limit=0..100`
+bound database and log volume. Invalid configuration, backfill failures, and
+disconnect failures exit non-zero. Each write compares both the canonical JSON
+snapshot and its `updatedAt` version; concurrent editor saves make stale writes
+miss and trigger a bounded re-read rather than overwriting newer text.
 
 ## Query Policies
 
@@ -118,6 +135,8 @@ revoked, or exhausted invite links under the same lock policy.
 - [`src/lib/document/create.test.ts`](../../src/lib/document/create.test.ts)
 - [`src/lib/document/content-projection.test.ts`](../../src/lib/document/content-projection.test.ts)
 - [`src/lib/document/content-projection-backfill.test.ts`](../../src/lib/document/content-projection-backfill.test.ts)
+- [`src/lib/document/search-projection.integration.test.ts`](../../src/lib/document/search-projection.integration.test.ts)
+- [`src/lib/document/seed-write-paths.test.ts`](../../src/lib/document/seed-write-paths.test.ts)
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)

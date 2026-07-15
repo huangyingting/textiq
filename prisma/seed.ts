@@ -1,6 +1,10 @@
 import "dotenv/config";
 
 import { Prisma } from "../src/generated/prisma/client";
+import {
+  projectDocumentContent,
+  projectDocumentMarkdown,
+} from "../src/lib/document/content-projection";
 import { buildSeedContentJson } from "../src/lib/lexical/seed-content";
 import { FIXTURES } from "../src/lib/visual/fixtures";
 import {
@@ -12,6 +16,8 @@ import { createScriptPrismaClient } from "./script-prisma-client";
 const prisma = createScriptPrismaClient();
 
 async function main() {
+  const initialDocumentContent =
+    "Paste your text here, then generate a flowchart, mind map, or chart.";
   const demoUser = await prisma.user.upsert({
     where: { email: "demo@textiq.test" },
     update: {},
@@ -30,8 +36,7 @@ async function main() {
     (await prisma.document.create({
       data: {
         title: "Welcome to TextIQ",
-        content:
-          "Paste your text here, then generate a flowchart, mind map, or chart.",
+        ...projectDocumentMarkdown(initialDocumentContent),
         ownerId: demoUser.id,
       },
     }));
@@ -88,7 +93,7 @@ async function main() {
 
   await prisma.document.update({
     where: { id: demoDocument.id },
-    data: { contentJson: contentJsonValue },
+    data: projectDocumentContent(contentJsonValue),
   });
 
   console.log(

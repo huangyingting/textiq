@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { markdownToLexicalStateObject } from "@/lib/content/from-markdown";
 import { lexicalStateToPlainText } from "@/lib/content/plain-text";
 
 export type DocumentContentProjection = {
@@ -20,4 +21,10 @@ export function projectDocumentContent(
     contentJson: contentJson as Prisma.InputJsonValue,
     content: lexicalStateToPlainText(contentJson),
   };
+}
+
+export function projectDocumentMarkdown(
+  markdown: string,
+): DocumentContentProjection {
+  return projectDocumentContent(markdownToLexicalStateObject(markdown));
 }
