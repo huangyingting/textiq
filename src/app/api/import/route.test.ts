@@ -63,7 +63,14 @@ type IpCheckResult = {
 
 type ProcessImportUploadResult =
   | { ok: true; markdown: string }
-  | { ok: false; status: 400 | 413 | 415 | 422; error: string };
+  | {
+      ok: false;
+      error: {
+        code: string;
+        status: number;
+        message: string;
+      };
+    };
 
 type ImportRouteTestState = {
   ipCheckResult: IpCheckResult;
@@ -106,6 +113,7 @@ const { registerHooks } = createRequire(import.meta.url)(
 
 const stubPrefix = "textiq-import-route-test:";
 const stubbedModules = new Map<string, string>([
+  ["server-only", ""],
   [
     "@/lib/abuse-budget",
     `
@@ -249,8 +257,14 @@ test("#1880: missing AUTH_SECRET returns 500 and never checks the rate limit or 
 
   assert.strictEqual(response.status, 500);
   const body = await response.json();
-  assert.strictEqual(body.code, "SERVER_ERROR");
-  assert.match(body.error, /misconfigured/i);
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: "internal",
+      status: 500,
+      message: "Server is misconfigured (missing AUTH_SECRET).",
+    },
+  });
 
   const state = globalForImportRoute.__importRouteTestState;
   assert.strictEqual(
@@ -337,13 +351,19 @@ test("#1880: rate-limit denial with no retryAfterSeconds omits the Retry-After h
 // Malformed upload — parser-level rejection passes through untouched
 // ---------------------------------------------------------------------------
 
-test("#1880: a request with no `file` field returns the parser's 400 response and never delegates", async () => {
+test("#1880: a request with no `file` field returns malformed import failure and never delegates", async () => {
   const response = await POST(makeRequest());
 
-  assert.strictEqual(response.status, 400);
+  assert.strictEqual(response.status, 422);
   const body = await response.json();
-  assert.strictEqual(body.code, "VALIDATION_ERROR");
-  assert.strictEqual(body.error, "Missing `file` field in form data.");
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: "malformed",
+      status: 422,
+      message: "Missing `file` field in form data.",
+    },
+  });
 
   const state = globalForImportRoute.__importRouteTestState;
   assert.strictEqual(
@@ -357,13 +377,16 @@ test("#1880: a request with no `file` field returns the parser's 400 response an
 // processImportUpload failure — status/error mapping + failure telemetry
 // ---------------------------------------------------------------------------
 
-test("#1880: a processImportUpload failure maps to validationError(status) and emits failure telemetry", async (t) => {
+test("#1880: a processImportUpload failure returns typed import error and emits failure telemetry", async (t) => {
   const events = await collectTelemetry(t);
   const state = globalForImportRoute.__importRouteTestState;
   state.processImportUploadImpl = async () => ({
     ok: false,
-    status: 422,
-    error: "Could not parse the file.",
+    error: {
+      code: "malformed",
+      status: 422,
+      message: "Could not parse the file.",
+    },
   });
 
   const file = fakeFile("doc.pdf", "application/pdf", "pdf-bytes");
@@ -371,8 +394,14 @@ test("#1880: a processImportUpload failure maps to validationError(status) and e
 
   assert.strictEqual(response.status, 422);
   const body = await response.json();
-  assert.strictEqual(body.code, "VALIDATION_ERROR");
-  assert.strictEqual(body.error, "Could not parse the file.");
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: "malformed",
+      status: 422,
+      message: "Could not parse the file.",
+    },
+  });
 
   assert.strictEqual(state.processImportUploadCalls.length, 1);
   assert.strictEqual(
@@ -387,7 +416,7 @@ test("#1880: a processImportUpload failure maps to validationError(status) and e
   assert.strictEqual(started?.fields.fileType, "pdf");
   assert.strictEqual(started?.fields.surface, "api");
   assert.strictEqual(failed?.fields.status, 422);
-  assert.strictEqual(failed?.fields.failureReason, "client");
+  assert.strictEqual(failed?.fields.failureReason, "malformed");
   assert.strictEqual(failed?.fields.fileType, "pdf");
   assert.strictEqual(failed?.fields.surface, "api");
   assert.ok(typeof failed?.fields.durationBucket === "string");
@@ -401,7 +430,7 @@ test("#1880: a processImportUpload failure maps to validationError(status) and e
 // Successful delegation
 // ---------------------------------------------------------------------------
 
-test("#1880: a successful processImportUpload returns 200 with the markdown body and emits success telemetry", async (t) => {
+test("#1880: a successful processImportUpload returns parse-mode success and emits success telemetry", async (t) => {
   const events = await collectTelemetry(t);
   const state = globalForImportRoute.__importRouteTestState;
   state.ipCheckResult = { allowed: true, subjectHash: "success-subject" };
@@ -415,7 +444,11 @@ test("#1880: a successful processImportUpload returns 200 with the markdown body
 
   assert.strictEqual(response.status, 200);
   const body = await response.json();
-  assert.deepEqual(body, { markdown: "# Imported\n\nContent." });
+  assert.deepEqual(body, {
+    ok: true,
+    mode: "parse",
+    markdown: "# Imported\n\nContent.",
+  });
 
   assert.strictEqual(state.processImportUploadCalls.length, 1);
   assert.strictEqual(state.processImportUploadCalls[0]?.file.name, "notes.md");

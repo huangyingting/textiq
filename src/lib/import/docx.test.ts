@@ -16,6 +16,8 @@ import { test } from "node:test";
 import JSZip from "jszip";
 
 import { ImportBudgetError, IMPORT_ZIP_MAX_ENTRIES } from "./archive-budget";
+import { EncryptedImportError } from "./import-errors";
+import { ParseAbortedError } from "./timeout";
 
 // ── server-only shim ─────────────────────────────────────────────────────────
 const serverOnlyPath = require.resolve("server-only");
@@ -97,6 +99,29 @@ test("parseDocx rejects a valid zip that is missing the Word document part", asy
   await assert.rejects(
     () => parseDocx(buffer),
     /main document part|valid \.docx/i,
+  );
+});
+
+test("parseDocx rejects encrypted Office documents with a typed error", async () => {
+  const zip = new JSZip();
+  zip.file("EncryptionInfo", "info");
+  zip.file("EncryptedPackage", "payload");
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+
+  await assert.rejects(
+    () => parseDocx(buffer),
+    (error: unknown) => error instanceof EncryptedImportError,
+  );
+});
+
+test("parseDocx observes an already-aborted signal before parsing", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const buffer = await minimalDocx(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`);
+
+  await assert.rejects(
+    () => parseDocx(buffer, controller.signal),
+    (error: unknown) => error instanceof ParseAbortedError,
   );
 });
 

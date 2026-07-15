@@ -75,6 +75,7 @@ type ModuleHooks = {
 
 type TestState = {
   calls: unknown[][];
+  push: (url: string) => void;
   redirect: (url: string) => never;
   revalidatePath: (path: string) => void;
   requireUser: (redirect: (url: string) => never) => Promise<{ id: string }>;
@@ -87,12 +88,6 @@ type TestState = {
     workspaceId: string,
     templateId: string,
   ) => Promise<{ id: string }>;
-  importWorkspaceDocumentForUser: (
-    userId: string,
-    workspaceId: string,
-    content: string,
-    rawTitle: string,
-  ) => Promise<{ id: string }>;
 };
 
 const globalForTest = globalThis as typeof globalThis & {
@@ -103,6 +98,9 @@ function createDefaultState(): TestState {
   const calls: unknown[][] = [];
   return {
     calls,
+    push(url: string) {
+      calls.push(["router.push", url]);
+    },
     redirect(url: string): never {
       calls.push(["redirect", url]);
       throw new Error(`NEXT_REDIRECT:${url}`);
@@ -126,21 +124,6 @@ function createDefaultState(): TestState {
         templateId,
       ]);
       return { id: "doc-1" };
-    },
-    async importWorkspaceDocumentForUser(
-      userId,
-      workspaceId,
-      content,
-      rawTitle,
-    ) {
-      calls.push([
-        "importWorkspaceDocumentForUser",
-        userId,
-        workspaceId,
-        content,
-        rawTitle,
-      ]);
-      return { id: "doc-2" };
     },
   };
 }
@@ -204,6 +187,13 @@ const stubbedModules = new Map<string, string>([
   [
     "next/navigation",
     `
+      export function useRouter() {
+        return {
+          push(url) {
+            globalThis.__workspaceDocumentsTestState.push(url);
+          },
+        };
+      }
       export function redirect(url) {
         return globalThis.__workspaceDocumentsTestState.redirect(url);
       }
@@ -235,11 +225,6 @@ const stubbedModules = new Map<string, string>([
       }
       export async function deleteWorkspaceAndDetachDocuments() {}
       export async function getWorkspaceMemberRemovalTarget() { return null; }
-      export async function importWorkspaceDocumentForUser(userId, workspaceId, content, rawTitle) {
-        return globalThis.__workspaceDocumentsTestState.importWorkspaceDocumentForUser(
-          userId, workspaceId, content, rawTitle,
-        );
-      }
       export async function leaveWorkspaceForUser() {}
       export async function listWorkspaceDocumentsForUser(userId, workspaceId) {
         return globalThis.__workspaceDocumentsTestState.listWorkspaceDocumentsForUser(
@@ -556,10 +541,15 @@ describe("WorkspaceDocuments", () => {
     }
   });
 
-  test("selecting a file imports it and calls importWorkspaceDocument with the extracted markdown", async () => {
+  test("selecting a file imports it and navigates after durable persistence", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ markdown: "# Imported" })) as typeof fetch;
+      jsonResponse({
+        ok: true,
+        mode: "create",
+        documentId: "doc-2",
+        documentPath: "/app/documents/doc-2",
+      })) as typeof fetch;
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
       userRole: "owner",
@@ -574,24 +564,16 @@ describe("WorkspaceDocuments", () => {
       const file = new File(["# Imported"], "notes.md", {
         type: "text/markdown",
       });
-      await assert.rejects(async () => {
-        await act(async () => {
-          input.props.onChange({
-            target: { files: [file], value: "notes.md" },
-          } as unknown as React.ChangeEvent<HTMLInputElement>);
-          await waitForAsyncDrain();
-          await waitForAsyncDrain();
-          await waitForAsyncDrain();
-        });
-      }, /NEXT_REDIRECT:\/app\/documents\/doc-2$/);
-      assert.deepEqual(callsOf("importWorkspaceDocumentForUser"), [
-        [
-          "importWorkspaceDocumentForUser",
-          "user-1",
-          "workspace-1",
-          "# Imported",
-          "notes",
-        ],
+      await act(async () => {
+        input.props.onChange({
+          target: { files: [file], value: "notes.md" },
+        } as unknown as React.ChangeEvent<HTMLInputElement>);
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.deepEqual(callsOf("router.push"), [
+        ["router.push", "/app/documents/doc-2"],
       ]);
     } finally {
       act(() => renderer.unmount());
@@ -602,7 +584,17 @@ describe("WorkspaceDocuments", () => {
   test("a failed import shows a retryable inline error", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ error: "Unsupported file format." }, 400)) as typeof fetch;
+      jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "unsupported",
+            status: 415,
+            message: "Unsupported file format.",
+          },
+        },
+        415,
+      )) as typeof fetch;
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
       userRole: "owner",
@@ -627,7 +619,7 @@ describe("WorkspaceDocuments", () => {
       const text = JSON.stringify(renderer.toJSON());
       assert.match(text, /Unsupported file format\./);
       assert.match(text, /"retry"/);
-      assert.equal(callsOf("importWorkspaceDocumentForUser").length, 0);
+      assert.equal(callsOf("router.push").length, 0);
     } finally {
       act(() => renderer.unmount());
       globalThis.fetch = originalFetch;

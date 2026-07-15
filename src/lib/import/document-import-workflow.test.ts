@@ -161,7 +161,14 @@ test("client preflight: no upload call occurs for an oversized file", async () =
   const port: DocumentImportActionPort = {
     async importFile(f) {
       uploadLog.push(f.name);
-      return { ok: false, error: "should not reach upload" };
+      return {
+        ok: false,
+        error: {
+          code: "internal",
+          status: 500,
+          message: "should not reach upload",
+        },
+      };
     },
   };
 

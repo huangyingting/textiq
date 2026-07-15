@@ -1,7 +1,7 @@
 ---
-type: "architecture"
-status: "current"
-last_updated: "2026-07-11"
+Type: "architecture"
+Status: "current"
+Last updated: "2026-07-14"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -19,7 +19,10 @@ validation and abuse controls are part of the design contract.
 | Client workflow          | [`src/lib/import/document-import-workflow.ts`](../../src/lib/import/document-import-workflow.ts) |
 | Import API route         | [`src/app/api/import/route.ts`](../../src/app/api/import/route.ts)                               |
 | Multipart parser         | [`src/app/api/import/parser.ts`](../../src/app/api/import/parser.ts)                             |
+| Import contract          | [`src/lib/import/contract.ts`](../../src/lib/import/contract.ts)                                 |
+| Format/resource registry | [`src/lib/import/format-registry.ts`](../../src/lib/import/format-registry.ts)                   |
 | Upload service           | [`src/lib/import/upload-service.ts`](../../src/lib/import/upload-service.ts)                     |
+| Import application       | [`src/lib/import/application-service.ts`](../../src/lib/import/application-service.ts)           |
 | MIME and size validation | [`src/lib/import/validate.ts`](../../src/lib/import/validate.ts)                                 |
 | Format dispatcher        | [`src/lib/import/index.ts`](../../src/lib/import/index.ts)                                       |
 | Text normalization       | [`src/lib/import/normalize.ts`](../../src/lib/import/normalize.ts)                               |
@@ -31,15 +34,14 @@ validation and abuse controls are part of the design contract.
 
 ```text
 File picker / dropzone
-  -> useDocumentImportWorkflow
+  -> useDocumentImportWorkflow / useDocumentImportCreationWorkflow
   -> POST /api/import multipart form-data
   -> parseImportUploadRequest (src/app/api/import/parser.ts)
-  -> processImportUpload
-  -> validateImportFile
-  -> parseImportedFile
-  -> normalizeImportedText
-  -> { markdown }
-  -> createDocumentFromImportForUser / editor insertion
+  -> parse mode: processImportUpload -> { ok: true, mode: "parse", markdown }
+  -> create mode: createDocumentFromImportUpload
+       -> processImportUpload (parse/normalize/convert)
+       -> transactional persist (Document + DocumentVersion)
+       -> { ok: true, mode: "create", documentId, documentPath }
 ```
 
 The client rejects files above the global import ceiling before upload and emits
@@ -68,8 +70,8 @@ protected by:
 
 - DB-backed per-IP fixed-window rate limiting;
 - `AUTH_SECRET`-backed hashing for the rate-limit subject;
-- shared API error bodies for validation, too-many-requests, and server errors;
-- parser timeout with a clear 422 response;
+- typed import failure contract (`{ ok: false, error: { code, status, message } }`);
+- parser timeout/abort responses (`408`) with cooperative parser cancellation;
 - Office archive budgets for entry count, per-entry uncompressed bytes, and
   total uncompressed bytes;
 - allowlisted abuse diagnostics for rate-limit hits and parser budget/timeout
@@ -96,8 +98,8 @@ blank imported document accidentally.
 1. Heavy parsers stay server-only and never enter the client bundle.
 2. Server validation is authoritative even when the client pre-validates.
 3. Parser work is bounded by rate limits, timeout, and archive budgets.
-4. The API returns normalized Markdown-compatible text, not persisted state.
-5. Document creation converts imported text to current Lexical JSON before save.
+4. The route has two explicit success modes: parse-only and durable-create.
+5. Durable imports only report success after transactional persistence commits.
 6. Import telemetry uses file type, size/duration buckets, surface, and stable
    failure reasons; it does not include document content.
 
@@ -112,5 +114,7 @@ blank imported document accidentally.
 - [`src/lib/import/archive-budget.test.ts`](../../src/lib/import/archive-budget.test.ts)
 - [`src/lib/import/html.test.ts`](../../src/lib/import/html.test.ts)
 - [`src/lib/import/docx.test.ts`](../../src/lib/import/docx.test.ts)
+- [`src/lib/import/pptx.test.ts`](../../src/lib/import/pptx.test.ts)
 - [`src/lib/import/pdf.test.ts`](../../src/lib/import/pdf.test.ts)
+- [`src/lib/import/application-service.test.ts`](../../src/lib/import/application-service.test.ts)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)

@@ -222,3 +222,27 @@ test("parsePdf destroys the parser even when getText() rejects", async () => {
   await assert.rejects(() => parsePdf(Buffer.from("ignored"), deps));
   assert.equal(destroyed, true);
 });
+
+test("parsePdf abort signal destroys parser and rejects without continuing", async () => {
+  let destroyCount = 0;
+  let rejectGetText: ((reason?: unknown) => void) | null = null;
+  const deps = {
+    createParser: () => ({
+      getText: async () =>
+        new Promise<{ text: string }>((_resolve, reject) => {
+          rejectGetText = reject;
+        }),
+      destroy: async () => {
+        destroyCount += 1;
+        rejectGetText?.(new Error("aborted"));
+      },
+    }),
+  };
+
+  const controller = new AbortController();
+  const parsing = parsePdf(Buffer.from("ignored"), deps, controller.signal);
+  controller.abort();
+
+  await assert.rejects(() => parsing);
+  assert.ok(destroyCount >= 1);
+});

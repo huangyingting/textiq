@@ -12,15 +12,30 @@ import "server-only";
 
 import mammoth from "mammoth";
 
-import { loadZipWithinBudget } from "./archive-budget";
+import { disposeZip, loadZipWithinBudget } from "./archive-budget";
 import { htmlToMarkdown } from "./html";
+import { EncryptedImportError } from "./import-errors";
+import { throwIfAborted } from "./timeout";
 
 /**
  * Extracts text from a DOCX `Buffer` and returns it as Markdown-compatible text.
  * Throws when `mammoth` cannot parse the buffer (e.g. corrupt file).
  */
-export async function parseDocx(buffer: Buffer): Promise<string> {
-  await loadZipWithinBudget(buffer);
-  const result = await mammoth.convertToHtml({ buffer });
-  return htmlToMarkdown(result.value);
+export async function parseDocx(
+  buffer: Buffer,
+  signal?: AbortSignal,
+): Promise<string> {
+  throwIfAborted(signal);
+  const zip = await loadZipWithinBudget(buffer, signal);
+  try {
+    if (zip.files["EncryptionInfo"] && zip.files["EncryptedPackage"]) {
+      throw new EncryptedImportError();
+    }
+    throwIfAborted(signal);
+    const result = await mammoth.convertToHtml({ buffer });
+    throwIfAborted(signal);
+    return htmlToMarkdown(result.value);
+  } finally {
+    disposeZip(zip);
+  }
 }

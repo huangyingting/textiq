@@ -118,7 +118,11 @@ describe("ImportButton (drop-zone / full mode)", () => {
     const imported: string[] = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ markdown: "# Hello" })) as typeof fetch;
+      jsonResponse({
+        ok: true,
+        mode: "parse",
+        markdown: "# Hello",
+      })) as typeof fetch;
     const renderer = mountImportButton({
       onImport: (markdown) => imported.push(markdown),
     });
@@ -148,7 +152,11 @@ describe("ImportButton (drop-zone / full mode)", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => {
       fetchCalls += 1;
-      return jsonResponse({ markdown: "unused" });
+      return jsonResponse({
+        ok: true,
+        mode: "parse",
+        markdown: "unused",
+      });
     }) as typeof fetch;
     const renderer = mountImportButton({ onImport: () => undefined });
     try {
@@ -177,7 +185,17 @@ describe("ImportButton (drop-zone / full mode)", () => {
   test("a failed import shows the server error message and supports retry via the file picker", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ error: "Unsupported file format." }, 400)) as typeof fetch;
+      jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "unsupported",
+            status: 415,
+            message: "Unsupported file format.",
+          },
+        },
+        415,
+      )) as typeof fetch;
     const renderer = mountImportButton({ onImport: () => undefined });
     try {
       const file = new File(["bad"], "bad.docx", {
@@ -215,6 +233,24 @@ describe("ImportButton (drop-zone / full mode)", () => {
     }
   });
 
+  test("a malformed JSON success payload is treated as a typed import failure", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse({ markdown: "# legacy-shape" })) as typeof fetch;
+    const renderer = mountImportButton({ onImport: () => undefined });
+    try {
+      const file = new File(["x"], "notes.md", { type: "text/markdown" });
+      await selectFile(renderer, file);
+      const alert = findAlert(renderer);
+      const text =
+        alert.props.children[0].props?.children ?? alert.props.children;
+      assert.match(text, /invalid import response/i);
+    } finally {
+      act(() => renderer.unmount());
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("shows the uploading status while a request is in flight", async () => {
     let resolveFetch!: (value: Response) => void;
     const originalFetch = globalThis.fetch;
@@ -242,7 +278,13 @@ describe("ImportButton (drop-zone / full mode)", () => {
       );
 
       await act(async () => {
-        resolveFetch(jsonResponse({ markdown: "done" }));
+        resolveFetch(
+          jsonResponse({
+            ok: true,
+            mode: "parse",
+            markdown: "done",
+          }),
+        );
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
@@ -277,7 +319,17 @@ describe("ImportButton (compact/toolbar mode)", () => {
   test("compact error state renders a dismissible inline alert instead of the button", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ error: "bad file" }, 400)) as typeof fetch;
+      jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "malformed",
+            status: 422,
+            message: "bad file",
+          },
+        },
+        422,
+      )) as typeof fetch;
     const renderer = mountImportButton({
       onImport: () => undefined,
       compact: true,

@@ -39,11 +39,6 @@ type DashboardActionsTestState = {
     userId: string,
     templateId: string,
   ) => Promise<{ id: string }>;
-  createDocumentFromImportForUser: (
-    userId: string,
-    content: string,
-    rawTitle: string,
-  ) => Promise<{ id: string }>;
   duplicateDocumentForUser: (
     userId: string,
     id: string,
@@ -104,15 +99,6 @@ function createDefaultState(): DashboardActionsTestState {
     async createDocumentFromTemplateForUser(userId, templateId) {
       calls.push(["createDocumentFromTemplateForUser", userId, templateId]);
       return { id: "doc-template-1" };
-    },
-    async createDocumentFromImportForUser(userId, content, rawTitle) {
-      calls.push([
-        "createDocumentFromImportForUser",
-        userId,
-        content,
-        rawTitle,
-      ]);
-      return { id: "doc-import-1" };
     },
     async duplicateDocumentForUser(userId, id) {
       calls.push(["duplicateDocumentForUser", userId, id]);
@@ -205,11 +191,6 @@ const stubbedModules = new Map<string, string>([
       export async function createDocumentFromTemplateForUser(userId, templateId) {
         return globalThis.__dashboardActionsTestState.createDocumentFromTemplateForUser(
           userId, templateId,
-        );
-      }
-      export async function createDocumentFromImportForUser(userId, content, rawTitle) {
-        return globalThis.__dashboardActionsTestState.createDocumentFromImportForUser(
-          userId, content, rawTitle,
         );
       }
     `,
@@ -336,38 +317,6 @@ describe("createDocumentFromTemplate", () => {
 
     assert.deepEqual(callsOf("createDocumentFromTemplateForUser"), [
       ["createDocumentFromTemplateForUser", "user-1", "starter-1"],
-    ]);
-    assert.deepEqual(callsOf("revalidatePath"), [["revalidatePath", "/app"]]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// createDocumentFromImport
-// ---------------------------------------------------------------------------
-
-describe("createDocumentFromImport", () => {
-  it("redirects unauthenticated callers without importing a document", async () => {
-    denyAuth();
-    await assert.rejects(
-      () => actions.createDocumentFromImport("# Doc", "Imported"),
-      /NEXT_REDIRECT:\/login/,
-    );
-    assert.equal(callsOf("createDocumentFromImportForUser").length, 0);
-  });
-
-  it("imports the document for the session user, revalidates, and redirects to the editor", async () => {
-    await assert.rejects(
-      () => actions.createDocumentFromImport("# Doc body", "Imported title"),
-      /NEXT_REDIRECT:\/app\/documents\/doc-import-1/,
-    );
-
-    assert.deepEqual(callsOf("createDocumentFromImportForUser"), [
-      [
-        "createDocumentFromImportForUser",
-        "user-1",
-        "# Doc body",
-        "Imported title",
-      ],
     ]);
     assert.deepEqual(callsOf("revalidatePath"), [["revalidatePath", "/app"]]);
   });

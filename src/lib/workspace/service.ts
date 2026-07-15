@@ -1,12 +1,7 @@
 import "server-only";
 
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
-import {
-  clampDocumentContent,
-  clampDocumentTitle,
-  importedMarkdownToContentJson,
-  templateContentJsonForId,
-} from "@/lib/document/create";
+import { templateContentJsonForId } from "@/lib/document/create";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
@@ -231,31 +226,6 @@ export async function createWorkspaceDocumentForUser(
       ownerId: userId,
       workspaceId,
       ...(contentJson ? { contentJson } : {}),
-    },
-    select: { id: true },
-  });
-}
-
-export async function importWorkspaceDocumentForUser(
-  userId: string,
-  workspaceId: string,
-  content: string,
-  rawTitle: string,
-): Promise<{ id: string }> {
-  await requireWorkspaceCapability(userId, workspaceId, "mutate");
-
-  const title = clampDocumentTitle(rawTitle, "Imported document");
-  const safeContent = clampDocumentContent(content);
-  const contentJson = importedMarkdownToContentJson(safeContent);
-
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return prisma.document.create({
-    data: {
-      ownerId: userId,
-      workspaceId,
-      title,
-      contentJson,
     },
     select: { id: true },
   });

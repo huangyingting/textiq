@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_PARSE_TIMEOUT_MS,
+  ParseAbortedError,
   ParseTimeoutError,
   withTimeout,
 } from "./timeout";
@@ -48,4 +49,48 @@ test("withTimeout resolves a slow-but-in-time factory without firing the timeout
 
 test("DEFAULT_PARSE_TIMEOUT_MS is a sane positive default", () => {
   assert.ok(DEFAULT_PARSE_TIMEOUT_MS > 0);
+});
+
+test("withTimeout aborts the parser signal when timing out", async () => {
+  let sawAbort = false;
+  await assert.rejects(
+    () =>
+      withTimeout(
+        (signal) =>
+          new Promise<string>((_resolve, reject) => {
+            signal.addEventListener("abort", () => {
+              sawAbort = true;
+              reject(new ParseAbortedError());
+            });
+          }),
+        10,
+        0,
+      ),
+    (error: unknown) => error instanceof ParseTimeoutError,
+  );
+  assert.equal(sawAbort, true);
+});
+
+test("withTimeout waits briefly for abort cleanup before rejecting timeout", async () => {
+  let cleanupFinished = false;
+  const startedAt = Date.now();
+  await assert.rejects(
+    () =>
+      withTimeout(
+        (signal) =>
+          new Promise<string>((_resolve, reject) => {
+            signal.addEventListener("abort", () => {
+              setTimeout(() => {
+                cleanupFinished = true;
+                reject(new ParseAbortedError());
+              }, 20);
+            });
+          }),
+        5,
+        40,
+      ),
+    (error: unknown) => error instanceof ParseTimeoutError,
+  );
+  assert.equal(cleanupFinished, true);
+  assert.ok(Date.now() - startedAt >= 20);
 });

@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { ImportBudgetError } from "./archive-budget";
-import { ParseTimeoutError } from "./timeout";
+import { EncryptedImportError } from "./import-errors";
+import { ParseAbortedError, ParseTimeoutError } from "./timeout";
 
 // ── server-only shim ─────────────────────────────────────────────────────────
 // tsx compiles TypeScript imports to CJS require() calls in order, so we can
@@ -64,8 +65,12 @@ test("processImportUpload: unsupported MIME type returns status 415", async () =
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 415);
-    assert.ok(result.error.length > 0, "error message must be non-empty");
+    assert.equal(result.error.status, 415);
+    assert.equal(result.error.code, "unsupported");
+    assert.ok(
+      result.error.message.length > 0,
+      "error message must be non-empty",
+    );
   }
 });
 
@@ -87,14 +92,18 @@ test("processImportUpload: oversized file returns status 413", async () => {
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 413);
-    assert.ok(result.error.length > 0, "error message must be non-empty");
+    assert.equal(result.error.status, 413);
+    assert.equal(result.error.code, "too_large");
+    assert.ok(
+      result.error.message.length > 0,
+      "error message must be non-empty",
+    );
   }
 });
 
 // ── read failure path ─────────────────────────────────────────────────────────
 
-test("processImportUpload: readFile throws returns status 400 and calls logError once", async () => {
+test("processImportUpload: readFile throws returns malformed 422 and calls logError once", async () => {
   const file = fakeFile("doc.md", "text/markdown");
   const logErrorCalls: Array<{
     scope: string;
@@ -117,7 +126,8 @@ test("processImportUpload: readFile throws returns status 400 and calls logError
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 400);
+    assert.equal(result.error.status, 422);
+    assert.equal(result.error.code, "malformed");
   }
   assert.equal(logErrorCalls.length, 1, "logError must be called exactly once");
   assert.equal(logErrorCalls[0]?.scope, "api.import");
@@ -137,7 +147,7 @@ test("processImportUpload: non-empty markdown result returns ok:true with markdo
       validateImportFile: () => ({ ok: true, mime: "text/markdown" as const }),
       readFile: async () => Buffer.from("# Hello"),
       parseImportedFile: async () => "# Hello World",
-      withTimeout: async (factory) => factory(),
+      withTimeout: async (factory) => factory(new AbortController().signal),
       logError: () => {},
       logRouteDenial: () => {},
     },
@@ -157,7 +167,7 @@ test("processImportUpload: whitespace-only markdown result returns status 422", 
       validateImportFile: () => ({ ok: true, mime: "text/html" as const }),
       readFile: async () => Buffer.from("   "),
       parseImportedFile: async () => "   ",
-      withTimeout: async (factory) => factory(),
+      withTimeout: async (factory) => factory(new AbortController().signal),
       logError: () => {},
       logRouteDenial: () => {},
     },
@@ -165,9 +175,10 @@ test("processImportUpload: whitespace-only markdown result returns status 422", 
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 422);
+    assert.equal(result.error.status, 422);
+    assert.equal(result.error.code, "malformed");
     assert.ok(
-      result.error.toLowerCase().includes("no readable text"),
+      result.error.message.toLowerCase().includes("no readable text"),
       "error must mention no readable text",
     );
   }
@@ -175,7 +186,7 @@ test("processImportUpload: whitespace-only markdown result returns status 422", 
 
 // ── parse error paths ─────────────────────────────────────────────────────────
 
-test("processImportUpload: ParseTimeoutError returns 422 and calls logRouteDenial with subjectHash", async () => {
+test("processImportUpload: ParseTimeoutError returns timeout 408 and calls logRouteDenial with subjectHash", async () => {
   const file = fakeFile("doc.pdf", "application/pdf");
   const logRouteDenialCalls: Array<Record<string, unknown>> = [];
   const logErrorCalls: unknown[] = [];
@@ -202,7 +213,8 @@ test("processImportUpload: ParseTimeoutError returns 422 and calls logRouteDenia
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 422);
+    assert.equal(result.error.status, 408);
+    assert.equal(result.error.code, "timeout");
   }
   assert.equal(
     logErrorCalls.length,
@@ -226,7 +238,43 @@ test("processImportUpload: ParseTimeoutError returns 422 and calls logRouteDenia
   );
 });
 
-test("processImportUpload: ImportBudgetError returns 422 and calls logRouteDenial with subjectHash", async () => {
+test("processImportUpload: ParseAbortedError returns aborted 408 without abuse denial", async () => {
+  const file = fakeFile("doc.pdf", "application/pdf");
+  const logRouteDenialCalls: Array<Record<string, unknown>> = [];
+  const logErrorCalls: Array<{ context: Record<string, unknown> | undefined }> =
+    [];
+
+  const result = await processImportUpload(file, {
+    subjectHash: "aborted-hash",
+    deps: {
+      validateImportFile: () => ({
+        ok: true,
+        mime: "application/pdf" as const,
+      }),
+      readFile: async () => Buffer.alloc(4),
+      withTimeout: async () => {
+        throw new ParseAbortedError();
+      },
+      logError: (_scope, _error, context) => {
+        logErrorCalls.push({ context });
+      },
+      logRouteDenial: (event) => {
+        logRouteDenialCalls.push(event as unknown as Record<string, unknown>);
+      },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.status, 408);
+    assert.equal(result.error.code, "aborted");
+  }
+  assert.equal(logErrorCalls.length, 1);
+  assert.equal(logErrorCalls[0]?.context?.reason, "parse-aborted");
+  assert.equal(logRouteDenialCalls.length, 0);
+});
+
+test("processImportUpload: ImportBudgetError returns archive-limits 422 and calls logRouteDenial with subjectHash", async () => {
   const file = fakeFile(
     "slides.pptx",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -256,7 +304,8 @@ test("processImportUpload: ImportBudgetError returns 422 and calls logRouteDenia
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 422);
+    assert.equal(result.error.status, 422);
+    assert.equal(result.error.code, "archive_limits");
   }
   assert.equal(
     logErrorCalls.length,
@@ -270,14 +319,46 @@ test("processImportUpload: ImportBudgetError returns 422 and calls logRouteDenia
   );
   assert.equal(
     logRouteDenialCalls[0]?.["reason"],
-    "parser-timeout",
-    "denial reason for budget error must be parser-timeout",
+    "parser-budget",
+    "denial reason for budget error must be parser-budget",
   );
   assert.equal(
     logRouteDenialCalls[0]?.["subjectHash"],
     "cafebabe",
     "denial must carry the caller-supplied subjectHash",
   );
+});
+
+test("processImportUpload: encrypted documents map to encrypted 422", async () => {
+  const file = fakeFile(
+    "secret.docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  );
+  const logRouteDenialCalls: unknown[] = [];
+  const result = await processImportUpload(file, {
+    subjectHash: "encrypted-subject",
+    deps: {
+      validateImportFile: () => ({
+        ok: true,
+        mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const,
+      }),
+      readFile: async () => Buffer.alloc(4),
+      withTimeout: async () => {
+        throw new EncryptedImportError();
+      },
+      logError: () => {},
+      logRouteDenial: (event) => {
+        logRouteDenialCalls.push(event);
+      },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.status, 422);
+    assert.equal(result.error.code, "encrypted");
+  }
+  assert.equal(logRouteDenialCalls.length, 0);
 });
 
 test("processImportUpload: generic parse error returns 422, logError called, logRouteDenial NOT called", async () => {
@@ -304,7 +385,8 @@ test("processImportUpload: generic parse error returns 422, logError called, log
 
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.status, 422);
+    assert.equal(result.error.status, 422);
+    assert.equal(result.error.code, "malformed");
   }
   assert.equal(
     logErrorCalls.length,
@@ -331,7 +413,7 @@ test("processImportUpload: clean success calls neither logError nor logRouteDeni
       validateImportFile: () => ({ ok: true, mime: "text/markdown" as const }),
       readFile: async () => Buffer.from("# Title\n\nBody text."),
       parseImportedFile: async () => "# Title\n\nBody text.",
-      withTimeout: async (factory) => factory(),
+      withTimeout: async (factory) => factory(new AbortController().signal),
       logError: () => {
         logErrorCalls.push(null);
       },

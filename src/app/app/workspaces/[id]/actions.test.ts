@@ -64,12 +64,6 @@ type TestState = {
   getWorkspaceMemberRemovalTarget: (
     memberId: string,
   ) => Promise<MemberTarget | null>;
-  importWorkspaceDocumentForUser: (
-    userId: string,
-    workspaceId: string,
-    content: string,
-    rawTitle: string,
-  ) => Promise<{ id: string }>;
   leaveWorkspaceForUser: (workspaceId: string, userId: string) => Promise<void>;
   listWorkspaceDocumentsForUser: (
     userId: string,
@@ -158,21 +152,6 @@ function createDefaultState(): TestState {
     async getWorkspaceMemberRemovalTarget(memberId) {
       calls.push(["getWorkspaceMemberRemovalTarget", memberId]);
       return { workspaceId: "workspace-1", userId: "user-2" };
-    },
-    async importWorkspaceDocumentForUser(
-      userId,
-      workspaceId,
-      content,
-      rawTitle,
-    ) {
-      calls.push([
-        "importWorkspaceDocumentForUser",
-        userId,
-        workspaceId,
-        content,
-        rawTitle,
-      ]);
-      return { id: "doc-2" };
     },
     async leaveWorkspaceForUser(workspaceId, userId) {
       calls.push(["leaveWorkspaceForUser", workspaceId, userId]);
@@ -273,11 +252,6 @@ const stubbedModules = new Map<string, string>([
       }
       export async function getWorkspaceMemberRemovalTarget(memberId) {
         return globalThis.__workspaceActionsTestState.getWorkspaceMemberRemovalTarget(memberId);
-      }
-      export async function importWorkspaceDocumentForUser(userId, workspaceId, content, rawTitle) {
-        return globalThis.__workspaceActionsTestState.importWorkspaceDocumentForUser(
-          userId, workspaceId, content, rawTitle,
-        );
       }
       export async function leaveWorkspaceForUser(workspaceId, userId) {
         return globalThis.__workspaceActionsTestState.leaveWorkspaceForUser(workspaceId, userId);
@@ -871,47 +845,6 @@ describe("createWorkspaceDocument", () => {
       ["revalidatePath", "/app"],
       ["revalidatePath", "/app/workspaces/ws-1"],
       ["redirect", "/app/documents/doc-1"],
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// importWorkspaceDocument
-// ---------------------------------------------------------------------------
-
-describe("importWorkspaceDocument", () => {
-  it("redirects unauthenticated callers and makes no import calls", async () => {
-    denyAuth();
-    await assert.rejects(
-      () =>
-        actions.importWorkspaceDocument("ws-1", "# Content", "Imported Doc"),
-      /NEXT_REDIRECT:\/login/,
-    );
-    assert.equal(
-      state().calls.filter(
-        (c) => (c as unknown[])[0] === "importWorkspaceDocumentForUser",
-      ).length,
-      0,
-    );
-  });
-
-  it("imports content into workspace, revalidates routes, and redirects to document editor", async () => {
-    await assert.rejects(
-      () => actions.importWorkspaceDocument("ws-1", "# Hello", "  My Import  "),
-      /NEXT_REDIRECT:\/app\/documents\/doc-2$/,
-    );
-    assert.deepEqual(state().calls, [
-      ["requireUser"],
-      [
-        "importWorkspaceDocumentForUser",
-        "user-1",
-        "ws-1",
-        "# Hello",
-        "  My Import  ",
-      ],
-      ["revalidatePath", "/app"],
-      ["revalidatePath", "/app/workspaces/ws-1"],
-      ["redirect", "/app/documents/doc-2"],
     ]);
   });
 });

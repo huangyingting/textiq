@@ -12,6 +12,7 @@ import "server-only";
 import { PDFParse } from "pdf-parse";
 
 import { ImportBudgetError } from "./archive-budget";
+import { throwIfAborted } from "./timeout";
 
 const PDF_MAX_PAGES = 250;
 const PDF_MAX_TEXT_CHARS = 500_000;
@@ -49,10 +50,23 @@ const defaultParsePdfDeps: ParsePdfDeps = {
 export async function parsePdf(
   buffer: Buffer,
   deps: ParsePdfDeps = defaultParsePdfDeps,
+  signal?: AbortSignal,
 ): Promise<string> {
   const parser = deps.createParser(buffer);
+  let destroyed = false;
+  const destroyParser = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    await parser.destroy();
+  };
+  const handleAbort = () => {
+    void destroyParser().catch(() => undefined);
+  };
+  signal?.addEventListener("abort", handleAbort, { once: true });
   try {
+    throwIfAborted(signal);
     const result: PdfTextResult = await parser.getText();
+    throwIfAborted(signal);
     const pageCount = Number(result.totalPages ?? result.total);
     if (Number.isFinite(pageCount) && pageCount > PDF_MAX_PAGES) {
       throw new ImportBudgetError("PDF contains too many pages.");
@@ -62,6 +76,7 @@ export async function parsePdf(
     }
     return result.text;
   } finally {
-    await parser.destroy();
+    signal?.removeEventListener("abort", handleAbort);
+    await destroyParser();
   }
 }

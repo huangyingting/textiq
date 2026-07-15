@@ -31,6 +31,7 @@ export { validateImportFile, formatValidationError } from "./validate";
 export async function parseImportedFile(
   mime: AcceptedMimeType,
   buffer: Buffer,
+  signal?: AbortSignal,
 ): Promise<string> {
   let raw: string;
 
@@ -47,15 +48,15 @@ export async function parseImportedFile(
       break;
 
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      raw = await parseDocx(buffer);
+      raw = await parseDocx(buffer, signal);
       break;
 
     case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-      raw = await parsePptx(buffer);
+      raw = await parsePptx(buffer, signal);
       break;
 
     case "application/pdf":
-      raw = await parsePdf(buffer);
+      raw = await parsePdf(buffer, undefined, signal);
       break;
 
     default: {

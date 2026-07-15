@@ -18,6 +18,7 @@ import type {
   BrandKitDraftV1,
 } from "@/lib/presentation/brand-kit/schema";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type { ImportCreationTarget } from "@/lib/import/contract";
 
 export interface DeckFetchPort {
   fetchDeckJson: (documentId: string) => Promise<FetchDeckResult>;
@@ -104,8 +105,32 @@ export interface ImportedDocumentPayload {
   title: string;
 }
 
+export interface ImportedDocumentCreationPayload {
+  documentId: string;
+  documentPath: string;
+}
+
+export interface ImportActionError {
+  code: string;
+  status: number;
+  message: string;
+}
+
+export type ImportActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ImportActionError };
+
 export interface DocumentImportActionPort {
-  importFile: (file: File) => Promise<ActionResult<ImportedDocumentPayload>>;
+  importFile: (
+    file: File,
+  ) => Promise<ImportActionResult<ImportedDocumentPayload>>;
+}
+
+export interface DocumentImportCreateActionPort {
+  importFile: (
+    file: File,
+    target: ImportCreationTarget,
+  ) => Promise<ImportActionResult<ImportedDocumentCreationPayload>>;
 }
 
 export interface CommentsActionPort {

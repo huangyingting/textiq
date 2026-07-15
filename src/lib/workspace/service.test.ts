@@ -60,7 +60,6 @@ let removeWorkspaceMemberAndDetachDocuments: ServiceModule["removeWorkspaceMembe
 let renameWorkspaceRecord: ServiceModule["renameWorkspaceRecord"];
 let transferWorkspaceOwnership: ServiceModule["transferWorkspaceOwnership"];
 let createWorkspaceDocumentForUser: ServiceModule["createWorkspaceDocumentForUser"];
-let importWorkspaceDocumentForUser: ServiceModule["importWorkspaceDocumentForUser"];
 
 before(async () => {
   const mod = await import("./service");
@@ -76,7 +75,6 @@ before(async () => {
   renameWorkspaceRecord = mod.renameWorkspaceRecord;
   transferWorkspaceOwnership = mod.transferWorkspaceOwnership;
   createWorkspaceDocumentForUser = mod.createWorkspaceDocumentForUser;
-  importWorkspaceDocumentForUser = mod.importWorkspaceDocumentForUser;
 });
 
 const NOW = new Date("2026-06-25T00:00:00Z");
@@ -683,15 +681,6 @@ test("workspace document helpers require capabilities and map document rows", as
     await createWorkspaceDocumentForUser("user-1", "workspace-1", "flowchart"),
     { id: "doc-2" },
   );
-  assert.deepEqual(
-    await importWorkspaceDocumentForUser(
-      "user-1",
-      "workspace-1",
-      "# Imported",
-      "  Imported title  ",
-    ),
-    { id: "doc-3" },
-  );
 
   assert.equal(
     (creates[0] as { data: { ownerId: string } }).data.ownerId,
@@ -712,14 +701,6 @@ test("workspace document helpers require capabilities and map document rows", as
     /Process overview/,
   );
   assert.deepEqual((creates[0] as { select: unknown }).select, { id: true });
-  assert.equal(
-    (creates[1] as { data: { title: string } }).data.title,
-    "Imported title",
-  );
-  assert.equal(
-    typeof (creates[1] as { data: { contentJson: unknown } }).data.contentJson,
-    "object",
-  );
 });
 
 test("listWorkspaceDocumentsForUser returns 200 items and hasMore:true when 201 rows exist", async (t) => {
@@ -749,32 +730,6 @@ test("listWorkspaceDocumentsForUser returns 200 items and hasMore:true when 201 
     result.documents[DOCUMENT_LIST_LIMIT - 1].id,
     `doc-${DOCUMENT_LIST_LIMIT - 1}`,
   );
-});
-
-test("importWorkspaceDocumentForUser persists 'Imported document' for whitespace-only title", async (t) => {
-  const created: Array<{ data: { title: string } }> = [];
-
-  replacePrismaProperty(t, "workspace", {
-    async findUnique() {
-      return { id: "workspace-1", ownerId: "user-1", members: [] };
-    },
-  });
-  replacePrismaProperty(t, "document", {
-    async create(args: { data: { title: string } }) {
-      created.push(args);
-      return { id: "doc-1" };
-    },
-  });
-
-  await importWorkspaceDocumentForUser(
-    "user-1",
-    "workspace-1",
-    "# Content",
-    "   ",
-  );
-
-  assert.equal(created.length, 1);
-  assert.equal(created[0].data.title, "Imported document");
 });
 
 type WorkspaceTransferIntegrationHarness = {
