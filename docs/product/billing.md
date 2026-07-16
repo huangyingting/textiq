@@ -117,7 +117,7 @@ outlive an individual subscription.
 - [`src/lib/billing/entitlements.test.ts`](../../src/lib/billing/entitlements.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)
-- [`src/lib/billing/usage-ledger.postgres.integration.ts`](../../src/lib/billing/usage-ledger.postgres.integration.ts) (opt-in Postgres harness)
+- [`scripts/usage-ledger-postgres-integration.test.ts`](../../scripts/usage-ledger-postgres-integration.test.ts) (opt-in Postgres harness)
 - [`src/lib/billing/legacy-key-backfill.test.ts`](../../src/lib/billing/legacy-key-backfill.test.ts)
 - [`src/lib/billing/stale-reservation-reconciliation.ts`](../../src/lib/billing/stale-reservation-reconciliation.ts)
 - [`src/lib/billing/provider.test.ts`](../../src/lib/billing/provider.test.ts)

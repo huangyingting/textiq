@@ -32,7 +32,7 @@
     "test:auth": "npm run test:subsystem -- auth",
     "test:billing": "npm run test:subsystem -- billing",
     "test:billing:postgres": "node scripts/test-billing-postgres.mjs",
-    "test:billing:postgres:integration": "node --import tsx --test scripts/usage-ledger.postgres.integration.ts",
+    "test:billing:postgres:integration": "node --import tsx --test scripts/usage-ledger-postgres-integration.test.ts",
     "test:collab": "npm run test:subsystem -- collaboration",
     "test:documents": "npm run test:subsystem -- documents",
     "test:editor": "npm run test:subsystem -- editor",
