@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { DocumentPermissionError } from "@/lib/auth/document-permissions";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import type { Deck } from "@/lib/presentation/schema";
 import { safeParseDeck } from "@/lib/presentation/validation";
 
@@ -34,7 +34,7 @@ type CommentDb = Pick<
   typeof prisma,
   "$transaction" | "comment" | "commentRead"
 >;
-type DeckLoadDb = Pick<Prisma.TransactionClient, "document">;
+type DeckLoadDb = Pick<PrismaTransactionClient, "document">;
 
 export type CommentCapabilityContext = {
   user: { id: string };

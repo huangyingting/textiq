@@ -1,5 +1,4 @@
-import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 
 import { reconcileBrandAssets } from "./asset-orphan";
 import { BRAND_SELECT, type BrandRow } from "./serialize";
@@ -29,7 +28,7 @@ export function brandAssetBelongsToOwner(
 }
 
 async function assertAssignableBrandAssets(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   ownerId: string,
   assetIds: string[],
 ): Promise<void> {
@@ -56,7 +55,7 @@ async function assertAssignableBrandAssets(
 }
 
 async function linkAndReconcileBrandAssets(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   ownerId: string,
   brandId: string,
   assetIds: string[],

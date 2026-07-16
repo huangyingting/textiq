@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 
 const DEFAULT_MAX_ATTEMPTS = 4;
 const MAX_ERROR_INSPECTION_DEPTH = 16;
@@ -109,7 +109,7 @@ export function isRetryableSerializableTransactionError(
 
 export async function runSerializableTransaction<T>(
   db: TransactionRunner,
-  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  operation: (tx: PrismaTransactionClient) => Promise<T>,
   options: { maxAttempts?: number } = {},
 ): Promise<T> {
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;

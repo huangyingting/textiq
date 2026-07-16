@@ -27,6 +27,7 @@ live in [deck.md](deck.md) and [visual-mirror.md](visual-mirror.md).
 | Persisted schema telemetry   | [`src/lib/diagnostics/schema-telemetry.ts`](../../src/lib/diagnostics/schema-telemetry.ts) |
 | Plain-text search projection | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)   |
 | Document write port          | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts) |
+| Restricted Prisma surface    | [`src/lib/prisma-surface.ts`](../../src/lib/prisma-surface.ts)                             |
 
 ## Service Boundary
 
@@ -39,9 +40,20 @@ All production, seed, bootstrap, and operational Prisma `Document` mutations
 cross `document-write-port.ts`. Callers provide canonical content snapshots and
 projection-free metadata; the port clones and seals the snapshot, derives
 `contentJson` plus searchable `content`, and invokes Prisma without exposing the
-derived payload. Transactional callers pass the same typed transaction client to
-the port. Metadata, deck, collaboration-recovery, trash, and delete operations
-also cross the port so raw `Document` mutation access has one structural owner.
+derived payload. The public Prisma singleton and interactive transaction
+callbacks expose a `Document` delegate with query methods only; mutation
+members, raw SQL, and client extension methods are absent from the TypeScript
+surface. Transactional callers pass that restricted transaction client to the
+port, which recovers the internal mutation delegate without changing the
+runtime client or transaction. Metadata, deck, collaboration-recovery, trash,
+and delete operations also cross the port so raw `Document` mutation access has
+one structural owner.
+
+The raw singleton and isolated seed client construction live in
+`prisma-internal.ts`. Import rules allow only the public facade, the document
+write port, the isolated script-client facade, and the fixed invite-link
+retention adapter to import that internal module. The latter exposes one
+non-document maintenance statement rather than a public raw SQL client.
 
 Structured logs from this layer include ids, counts, status, and stable reasons
 only. Document text, prompts, cookies, and raw payloads are not logged.
@@ -137,8 +149,9 @@ invalidation.
 ## Invariants
 
 1. Raw Prisma `Document` mutation access is owned only by
-   `document-write-port.ts`; callers cannot provide `content` or `contentJson`
-   through metadata writes.
+   `document-write-port.ts`. Production, seed, bootstrap, and transaction
+   callers receive a query-only `Document` delegate and cannot provide
+   `content` or `contentJson` through metadata writes.
 2. `contentJson` writes and visual mirror rebuilds are atomic.
 3. `Document.content` is a derived search projection, never a source of truth;
    every canonical `contentJson` write updates it in the same create/update.
@@ -168,7 +181,8 @@ disconnect failures set a non-zero exit status.
 - [`src/lib/document/persistence-service.test.ts`](../../src/lib/document/persistence-service.test.ts)
 - [`src/lib/document/deck-cas-writer.test.ts`](../../src/lib/document/deck-cas-writer.test.ts)
 - [`src/lib/document/document-write-port.test.ts`](../../src/lib/document/document-write-port.test.ts)
-- [`src/lib/document/document-write-boundary.test.ts`](../../src/lib/document/document-write-boundary.test.ts)
+- [`scripts/prisma-boundary.test.mjs`](../../scripts/prisma-boundary.test.mjs)
+- [`type-tests/document-prisma-boundary/contract.ts`](../../type-tests/document-prisma-boundary/contract.ts)
 - [`src/lib/document/source-ref-model.test.ts`](../../src/lib/document/source-ref-model.test.ts)
 - [`src/lib/visual/mirror-diff.test.ts`](../../src/lib/visual/mirror-diff.test.ts)
 - [`src/lib/document-versions.test.ts`](../../src/lib/document-versions.test.ts)

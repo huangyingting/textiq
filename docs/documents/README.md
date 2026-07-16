@@ -19,6 +19,7 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 | Create from template/import | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                 |
 | Search-text projection      | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)         |
 | Document write port         | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts)       |
+| Restricted Prisma surface   | [`src/lib/prisma-surface.ts`](../../src/lib/prisma-surface.ts)                                   |
 | Duplicate document          | [`src/lib/document/duplicate.ts`](../../src/lib/document/duplicate.ts)                           |
 | List and search documents   | [`src/lib/document/list.ts`](../../src/lib/document/list.ts)                                     |
 | Query policy builder        | [`src/lib/document/query.ts`](../../src/lib/document/query.ts)                                   |
@@ -73,6 +74,8 @@ projection with provider-aware case-insensitive contains. Every canonical
 restore supplies one canonical snapshot to the document write port. The port
 clones and seals that snapshot, derives both persisted fields immediately before
 the Prisma mutation, and does not accept caller-supplied projection fields.
+Outside the port, the public singleton and transaction callbacks expose
+`Document` reads but no `create`, `update`, `upsert`, or delete members.
 
 Deployments upgrading from a build that did not maintain the projection should
 preview the repair first:
@@ -130,8 +133,9 @@ revoked, or exhausted invite links under the same lock policy.
 4. Imported content is converted to current Lexical JSON before persistence.
 5. Tag slugs are stable, owner-scoped, and collision-bounded.
 6. Permanent purge is maintenance-driven; user delete is soft delete first.
-7. Raw Prisma `Document` mutations are confined to the document write port and
-   enforced by an AST source boundary.
+7. Raw Prisma `Document` mutations are confined to the document write port by a
+   restricted client/transaction type, raw-module import rules, compile-time
+   negative fixtures, and a narrow escape-hatch AST guard.
 8. `Document.content` is derived from canonical `contentJson` and is written
    atomically with every document-body transition.
 
@@ -142,7 +146,8 @@ revoked, or exhausted invite links under the same lock policy.
 - [`src/lib/document/content-projection-backfill.test.ts`](../../src/lib/document/content-projection-backfill.test.ts)
 - [`src/lib/document/search-projection.integration.test.ts`](../../src/lib/document/search-projection.integration.test.ts)
 - [`src/lib/document/document-write-port.test.ts`](../../src/lib/document/document-write-port.test.ts)
-- [`src/lib/document/document-write-boundary.test.ts`](../../src/lib/document/document-write-boundary.test.ts)
+- [`scripts/prisma-boundary.test.mjs`](../../scripts/prisma-boundary.test.mjs)
+- [`type-tests/document-prisma-boundary/contract.ts`](../../type-tests/document-prisma-boundary/contract.ts)
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)

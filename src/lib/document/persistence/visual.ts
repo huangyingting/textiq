@@ -8,7 +8,7 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import { safeParseDeck } from "@/lib/document/deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
@@ -65,7 +65,7 @@ function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
  * overwritten, so each edit is restorable (US-016).
  */
 async function snapshotVisualRevision(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   previous: {
     id: string;
     data: Prisma.JsonValue;
@@ -112,7 +112,7 @@ async function snapshotVisualRevision(
  * `prisma.$transaction(async tx => mirrorVisualNodesInTx(tx, ...))`.
  */
 export async function mirrorVisualNodesInTx(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   documentId: string,
   parsedState: unknown,
 ): Promise<VisualMirrorOutcome> {

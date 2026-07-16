@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { getBrandStorageAdapter } from "@/lib/brand/asset-storage";
 import { prisma } from "@/lib/prisma";
 import { getDefaultStorageAdapter } from "@/lib/slides/asset-storage";
@@ -139,7 +140,42 @@ const noopLogger: RetentionLogger = {
 let runInFlight = false;
 
 function defaultDb(): RetentionDb {
-  return prisma as unknown as RetentionDb;
+  return {
+    rateLimitHit: {
+      findMany: (args) =>
+        prisma.rateLimitHit.findMany(args as Prisma.RateLimitHitFindManyArgs),
+      deleteMany: (args) =>
+        prisma.rateLimitHit.deleteMany(
+          args as Prisma.RateLimitHitDeleteManyArgs,
+        ),
+    },
+    passwordResetToken: {
+      findMany: (args) =>
+        prisma.passwordResetToken.findMany(
+          args as Prisma.PasswordResetTokenFindManyArgs,
+        ),
+      deleteMany: (args) =>
+        prisma.passwordResetToken.deleteMany(
+          args as Prisma.PasswordResetTokenDeleteManyArgs,
+        ),
+    },
+    emailVerificationToken: {
+      findMany: (args) =>
+        prisma.emailVerificationToken.findMany(
+          args as Prisma.EmailVerificationTokenFindManyArgs,
+        ),
+      deleteMany: (args) =>
+        prisma.emailVerificationToken.deleteMany(
+          args as Prisma.EmailVerificationTokenDeleteManyArgs,
+        ),
+    },
+    asset: {
+      findMany: (args) =>
+        prisma.asset.findMany(args as Prisma.AssetFindManyArgs),
+      deleteMany: (args) =>
+        prisma.asset.deleteMany(args as Prisma.AssetDeleteManyArgs),
+    },
+  };
 }
 
 function resolvePositiveInteger(value: number, label: string): number {

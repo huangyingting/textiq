@@ -10,7 +10,6 @@ import { safeParseDeck } from "@/lib/document/persistence/current-deck-schema";
 
 export type DeckCasDb = {
   document: {
-    updateMany(args: Prisma.DocumentUpdateManyArgs): Promise<{ count: number }>;
     findUnique(args: {
       where: { id: string };
       select: { deckRevisionToken: true };

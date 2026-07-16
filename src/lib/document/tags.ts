@@ -29,14 +29,6 @@ type DocumentFindUniqueArgs = {
   select: typeof documentTagsSelect;
 };
 
-type DocumentUpdateArgs = {
-  where: { id: string };
-  data: {
-    tags: { connect: { id: string } } | { disconnect: { id: string } };
-  };
-  /* node:coverage ignore stop */
-};
-
 type DocumentTagDb = {
   tag: {
     findFirst(args: TagFindFirstArgs): Promise<DocumentTag | null>;
@@ -46,9 +38,9 @@ type DocumentTagDb = {
     findUnique(
       args: DocumentFindUniqueArgs,
     ): Promise<{ tags: DocumentTag[] } | null>;
-    update(args: DocumentUpdateArgs): Promise<unknown>;
   };
 };
+/* node:coverage ignore stop */
 
 const tagSelect = { id: true, name: true, slug: true } as const;
 

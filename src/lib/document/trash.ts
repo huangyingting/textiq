@@ -1,5 +1,5 @@
-import type { Prisma } from "@/generated/prisma/client";
 import { acquirePurgeLock, INVITE_LINK_RETENTION_MS } from "@/lib/maintenance";
+import { deleteRetainedInviteLinks } from "@/lib/maintenance/invite-link-retention-write-port";
 import { prisma } from "@/lib/prisma";
 import { getTrashStatus, SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
 import {
@@ -8,7 +8,7 @@ import {
 } from "./document-write-port";
 
 type TrashDb = Pick<typeof prisma, "document">;
-type MaintenanceDb = Pick<typeof prisma, "document" | "$executeRaw">;
+type MaintenanceDb = Pick<typeof prisma, "document">;
 
 export type TrashDocument = {
   id: string;
@@ -102,15 +102,7 @@ export async function runDocumentMaintenance(
       where: { deletedAt: { lt: docCutoff } },
     }),
 
-    db.$executeRaw`
-      DELETE FROM "InviteLink"
-      WHERE "createdAt" < ${inviteCutoff}
-        AND (
-          "isRevoked" = ${true}
-          OR ("expiresAt" IS NOT NULL AND "expiresAt" < ${inviteCutoff})
-          OR ("maxUses" IS NOT NULL AND "useCount" >= "maxUses")
-        )
-    ` as Prisma.PrismaPromise<unknown>,
+    deleteRetainedInviteLinks(db, inviteCutoff),
   ]);
 
   return { policy, skipped: false };

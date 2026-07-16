@@ -1,5 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { projectDocumentContent } from "@/lib/document/content-projection";
+import { documentWriteDelegate } from "@/lib/prisma-internal";
+import type { DocumentWriteTarget } from "@/lib/prisma-surface";
 
 type CanonicalProjectionField = "content" | "contentJson";
 
@@ -9,12 +11,6 @@ type WithoutCanonicalProjection<T> = T extends object
       contentJson?: never;
     }
   : T;
-
-type DocumentMethodClient<Method extends string> = {
-  document: {
-    [Key in Method]: (args: never) => PromiseLike<unknown>;
-  };
-};
 
 export type DocumentCreateMetadata = WithoutCanonicalProjection<
   Prisma.DocumentCreateArgs["data"]
@@ -132,7 +128,7 @@ function contentJsonSnapshotFilter(
 }
 
 export async function createDocumentWithCanonicalContent<TResult>(
-  db: DocumentMethodClient<"create">,
+  db: DocumentWriteTarget,
   args: CreateDocumentWithCanonicalContentArgs,
 ): Promise<TResult> {
   const { contentSnapshot, data, ...query } = args;
@@ -140,43 +136,43 @@ export async function createDocumentWithCanonicalContent<TResult>(
     contentSnapshot === undefined
       ? sealProjectionFreeData(data)
       : projectionData(data, contentSnapshot);
-  return (await db.document.create({
+  return (await documentWriteDelegate(db).create({
     ...query,
     data: persistedData,
   } as never)) as TResult;
 }
 
 export async function updateDocumentWithCanonicalContent<TResult>(
-  db: DocumentMethodClient<"update">,
+  db: DocumentWriteTarget,
   args: UpdateDocumentWithCanonicalContentArgs,
 ): Promise<TResult> {
   const { contentSnapshot, data = {}, ...query } = args;
-  return (await db.document.update({
+  return (await documentWriteDelegate(db).update({
     ...query,
     data: projectionData(data, contentSnapshot),
   } as never)) as TResult;
 }
 
 export async function updateDocumentsWithCanonicalContent(
-  db: DocumentMethodClient<"updateMany">,
+  db: DocumentWriteTarget,
   args: UpdateDocumentsWithCanonicalContentArgs,
 ): Promise<{ count: number }> {
   const { contentSnapshot, data = {}, ...query } = args;
-  return (await db.document.updateMany({
+  return (await documentWriteDelegate(db).updateMany({
     ...query,
     data: projectionData(data, contentSnapshot),
   } as never)) as { count: number };
 }
 
 export async function upsertDocumentWithCanonicalContent<TResult>(
-  db: DocumentMethodClient<"upsert">,
+  db: DocumentWriteTarget,
   args: UpsertDocumentWithCanonicalContentArgs,
 ): Promise<TResult> {
   const { contentSnapshot, create, update, ...query } = args;
   const projection = sealCanonicalProjection(contentSnapshot);
   const createMetadata = sealProjectionFreeData(create);
   const updateMetadata = sealProjectionFreeData(update);
-  return (await db.document.upsert({
+  return (await documentWriteDelegate(db).upsert({
     ...query,
     create: Object.freeze({ ...createMetadata, ...projection }),
     update: Object.freeze({ ...updateMetadata, ...projection }),
@@ -184,38 +180,40 @@ export async function upsertDocumentWithCanonicalContent<TResult>(
 }
 
 export async function updateDocumentMetadata<TResult>(
-  db: DocumentMethodClient<"update">,
+  db: DocumentWriteTarget,
   args: Omit<Prisma.DocumentUpdateArgs, "data"> & {
     data: DocumentUpdateMetadata;
   },
 ): Promise<TResult> {
-  return (await db.document.update({
+  return (await documentWriteDelegate(db).update({
     ...args,
     data: sealProjectionFreeData(args.data),
   } as never)) as TResult;
 }
 
 export async function updateDocumentsMetadata(
-  db: DocumentMethodClient<"updateMany">,
+  db: DocumentWriteTarget,
   args: Omit<Prisma.DocumentUpdateManyArgs, "data"> & {
     data: DocumentUpdateManyMetadata;
   },
 ): Promise<{ count: number }> {
-  return (await db.document.updateMany({
+  return (await documentWriteDelegate(db).updateMany({
     ...args,
     data: sealProjectionFreeData(args.data),
   } as never)) as { count: number };
 }
 
 export async function deleteDocuments(
-  db: DocumentMethodClient<"deleteMany">,
+  db: DocumentWriteTarget,
   args: Prisma.DocumentDeleteManyArgs,
 ): Promise<{ count: number }> {
-  return (await db.document.deleteMany(args as never)) as { count: number };
+  return (await documentWriteDelegate(db).deleteMany(args as never)) as {
+    count: number;
+  };
 }
 
 export async function backfillDocumentContentProjectionCas(
-  db: DocumentMethodClient<"updateMany">,
+  db: DocumentWriteTarget,
   snapshot: DocumentContentBackfillSnapshot,
 ): Promise<{ count: number }> {
   const immutableSnapshot = {
@@ -227,7 +225,7 @@ export async function backfillDocumentContentProjectionCas(
   } as const;
   const projection = sealCanonicalProjection(immutableSnapshot.contentJson);
 
-  return (await db.document.updateMany({
+  return (await documentWriteDelegate(db).updateMany({
     where: {
       id: immutableSnapshot.id,
       updatedAt: immutableSnapshot.updatedAt,
