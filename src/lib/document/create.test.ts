@@ -68,7 +68,7 @@ test("createDocumentFromTemplateForUser keeps blank documents owner-only", async
   ]);
 });
 
-test("createDocumentFromTemplateForUser persists named template contentJson", async () => {
+test("createDocumentFromTemplateForUser persists named template JSON and searchable text", async () => {
   const calls: Array<{ data: Record<string, unknown>; select: unknown }> = [];
   const db = {
     document: {
@@ -86,5 +86,6 @@ test("createDocumentFromTemplateForUser persists named template contentJson", as
   assert.equal(calls[0]!.data.ownerId, "user-1");
   assert.equal(typeof calls[0]!.data.contentJson, "object");
   assert.match(JSON.stringify(calls[0]!.data.contentJson), /Process overview/);
+  assert.match(String(calls[0]!.data.content), /Process overview/);
   assert.deepEqual(calls[0]!.select, { id: true });
 });

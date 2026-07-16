@@ -1,10 +1,11 @@
 import { Prisma } from "@/generated/prisma/client";
+import type { PrismaTransactionClient } from "@/lib/prisma";
 import type { Deck } from "@/lib/presentation/schema";
 
 import { planSlideCommentAnchorRepairs } from "./lifecycle";
 
 export type CommentAnchorPersistenceDb = Pick<
-  Prisma.TransactionClient,
+  PrismaTransactionClient,
   "comment"
 >;
 

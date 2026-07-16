@@ -31,10 +31,10 @@ import {
   updateDocumentSharePolicyData,
 } from "./persistence-service";
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/test/prisma-raw";
 import type { CurrentDeck, CurrentSlideChildNode } from "./deck-schema";
 import * as persistenceService from "./persistence-service";
-import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
+import { writeDeckWithCas } from "./deck-cas-writer";
 import { snapshotDocumentVersion } from "./persistence/helpers";
 
 // ---------------------------------------------------------------------------
@@ -1635,6 +1635,7 @@ describe("document snapshot and restore operations", () => {
   });
 
   test("restoreVersion writes sanitized state, rebuilds visual rows, and revalidates shares", async (t) => {
+    const documentUpdates: unknown[] = [];
     stubPrismaMethod(
       t,
       prisma.documentVersion,
@@ -1663,7 +1664,10 @@ describe("document snapshot and restore operations", () => {
     const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1677,6 +1681,10 @@ describe("document snapshot and restore operations", () => {
     );
 
     assert.equal(result.documentId, "doc-restore");
+    assert.equal(
+      (documentUpdates[0] as { data: { content: string } }).data.content,
+      "",
+    );
   });
 
   test("restoreVersion rotates deck tokens so pre-restore CAS writes conflict", async (t) => {
@@ -1731,9 +1739,7 @@ describe("document snapshot and restore operations", () => {
 
     const casDb = {
       document: {
-        updateMany: async (
-          args: Parameters<DeckCasDb["document"]["updateMany"]>[0],
-        ) => {
+        updateMany: async (args: Prisma.DocumentUpdateManyArgs) => {
           const where = args.where as Record<string, unknown>;
           const whereToken = where.deckRevisionToken;
           if (whereToken !== currentRevisionToken) {
@@ -1748,7 +1754,7 @@ describe("document snapshot and restore operations", () => {
         },
         findUnique: async () => ({ deckRevisionToken: currentRevisionToken }),
       },
-    } satisfies DeckCasDb;
+    };
 
     const staleWriteResult = await writeDeckWithCas({
       documentId: "doc-restore",
@@ -1772,6 +1778,7 @@ describe("document snapshot and restore operations", () => {
 describe("visual persistence exported flows", () => {
   test("atomicSaveDocumentLexical snapshots, writes content, mirrors visuals, and logs outcome", async (t) => {
     const txBase = makeStubTx();
+    const documentUpdates: unknown[] = [];
     const tx = prismaTransaction<TransactionWithCalls>({
       ...txBase,
       documentVersion: {
@@ -1788,7 +1795,10 @@ describe("visual persistence exported flows", () => {
           contentJson: EMPTY_LEXICAL_STATE,
           deckJson: null,
         }),
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1802,6 +1812,10 @@ describe("visual persistence exported flows", () => {
     );
 
     assert.equal(outcome.created, 0);
+    assert.deepEqual((documentUpdates[0] as { data: unknown }).data, {
+      contentJson: EMPTY_LEXICAL_STATE,
+      content: "",
+    });
     assert.ok(tx._calls.includes("documentVersion.create"));
     assert.ok(tx._calls.includes("visual.findMany"));
   });

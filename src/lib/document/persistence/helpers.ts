@@ -13,7 +13,7 @@ import {
   shouldSnapshot,
   staleVersionIds,
 } from "@/lib/document-versions";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 
 // ---------------------------------------------------------------------------
 // Private utilities
@@ -60,7 +60,7 @@ export async function snapshotDocumentVersion(
     userId?: string | null;
     force?: boolean;
     label?: string | null;
-    tx?: Prisma.TransactionClient;
+    tx?: PrismaTransactionClient;
   } = {},
 ): Promise<void> {
   try {

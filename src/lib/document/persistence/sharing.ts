@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 
 import { Prisma } from "@/generated/prisma/client";
+import { updateDocumentMetadata } from "@/lib/document/document-write-port";
 import { app as appEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { buildShareSegment, buildSlugCandidate } from "@/lib/slug";
@@ -72,6 +73,8 @@ function toShareSettings(row: {
   };
 }
 
+type PersistedShareSettings = Parameters<typeof toShareSettings>[0];
+
 function generateShareSlugCandidate(title: string): string | null {
   const suffix = generateSlugSuffix();
   const candidate = buildSlugCandidate(title, suffix);
@@ -95,7 +98,7 @@ async function writeShareData(
   shareDiscoverable?: boolean;
 }> {
   if (!isShared) {
-    return prisma.document.update({
+    return updateDocumentMetadata<PersistedShareSettings>(prisma, {
       where: { id },
       data: {
         isShared,
@@ -115,14 +118,14 @@ async function writeShareData(
         shareMetadataMode: true,
         shareDiscoverable: true,
       },
-    } as never);
+    });
   }
 
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_SLUG_WRITE_ATTEMPTS; attempt++) {
     const slug = title ? generateShareSlugCandidate(title) : null;
     try {
-      return await prisma.document.update({
+      return await updateDocumentMetadata<PersistedShareSettings>(prisma, {
         where: { id },
         /* node:coverage ignore next */
         /* Share update payload is asserted through sharing DTO tests; tsx maps this literal head as uncovered. */
@@ -139,7 +142,7 @@ async function writeShareData(
           shareMetadataMode: true,
           shareDiscoverable: true,
         },
-      } as never);
+      });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -213,7 +216,7 @@ export async function updateDocumentSharePolicyData(
     shareDiscoverable?: boolean;
   },
 ): Promise<ShareSettings> {
-  const updated = await prisma.document.update({
+  const updated = await updateDocumentMetadata<PersistedShareSettings>(prisma, {
     where: { id },
     data,
     select: {
@@ -227,7 +230,7 @@ export async function updateDocumentSharePolicyData(
       shareMetadataMode: true,
       shareDiscoverable: true,
     },
-  } as never);
+  });
 
   return toShareSettings(updated);
 }

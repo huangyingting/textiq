@@ -426,6 +426,8 @@ test("persistImportedDocument (sqlite): creates document and initial version in 
       ownerId: true,
       title: true,
       workspaceId: true,
+      content: true,
+      contentJson: true,
     },
   });
   const versions = await harness.client.documentVersion.findMany({
@@ -437,6 +439,8 @@ test("persistImportedDocument (sqlite): creates document and initial version in 
   assert.equal(document?.ownerId, userId);
   assert.equal(document?.title, "roadmap");
   assert.equal(document?.workspaceId, null);
+  assert.equal(document?.content, "Roadmap");
+  assert.ok(document?.contentJson);
   assert.equal(versions.length, 1);
   assert.equal(versions[0]?.createdById, userId);
 });

@@ -151,25 +151,33 @@ test("workspace record helpers delegate sanitized data to prisma", async (t) => 
 
 test("workspace transaction helpers detach documents before destructive changes", async (t) => {
   const operations: unknown[] = [];
-  replacePrismaProperty(t, "document", {
+  const document = {
     updateMany(args: unknown) {
       operations.push(["document.updateMany", args]);
       return Promise.resolve({ count: 2 });
     },
-  });
-  replacePrismaProperty(t, "workspaceMember", {
+  };
+  const workspaceMember = {
     delete(args: unknown) {
       operations.push(["workspaceMember.delete", args]);
       return Promise.resolve({});
     },
-  });
-  replacePrismaProperty(t, "workspace", {
+  };
+  const workspace = {
     delete(args: unknown) {
       operations.push(["workspace.delete", args]);
       return Promise.resolve({});
     },
-  });
-  replacePrismaProperty(t, "$transaction", async (items: unknown) => items);
+  };
+  replacePrismaProperty(t, "document", document);
+  replacePrismaProperty(t, "workspaceMember", workspaceMember);
+  replacePrismaProperty(t, "workspace", workspace);
+  replacePrismaProperty(
+    t,
+    "$transaction",
+    async (operation: (tx: unknown) => unknown) =>
+      operation({ document, workspaceMember, workspace }),
+  );
 
   await removeWorkspaceMemberAndDetachDocuments("member-1", {
     workspaceId: "workspace-1",
@@ -698,6 +706,10 @@ test("workspace document helpers require capabilities and map document rows", as
     JSON.stringify(
       (creates[0] as { data: { contentJson: unknown } }).data.contentJson,
     ),
+    /Process overview/,
+  );
+  assert.match(
+    (creates[0] as { data: { content: string } }).data.content,
     /Process overview/,
   );
   assert.deepEqual((creates[0] as { select: unknown }).select, { id: true });

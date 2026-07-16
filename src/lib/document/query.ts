@@ -29,6 +29,7 @@ export function buildDocumentTextSearchOr(
   query: string,
 ): Prisma.DocumentWhereInput[] {
   const filter = caseInsensitiveContains(query);
+  // `content` is the plain-text projection written atomically with contentJson.
   return [{ title: filter }, { content: filter }];
 }
 
