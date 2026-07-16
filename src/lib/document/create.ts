@@ -6,7 +6,7 @@ import {
 } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { BLANK_TEMPLATE_ID, getTemplateOrBlank } from "@/lib/templates/catalog";
-import { projectDocumentContent } from "./content-projection";
+import { createDocumentWithCanonicalContent } from "./document-write-port";
 
 type DocumentCreateDb = Pick<typeof prisma, "document">;
 
@@ -43,11 +43,11 @@ export async function createDocumentFromTemplateForUser(
 ): Promise<CreatedDocument> {
   const contentJson = templateContentJsonForId(templateId);
 
-  return db.document.create({
+  return createDocumentWithCanonicalContent<CreatedDocument>(db, {
     data: {
       ownerId: userId,
-      ...(contentJson ? projectDocumentContent(contentJson) : {}),
     },
+    ...(contentJson ? { contentSnapshot: contentJson } : {}),
     select: { id: true },
   });
 }

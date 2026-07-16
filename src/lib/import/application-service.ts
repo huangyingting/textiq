@@ -10,7 +10,7 @@ import {
   clampDocumentTitle,
   importedMarkdownToContentJson,
 } from "@/lib/document/create";
-import { projectDocumentContent } from "@/lib/document/content-projection";
+import { createDocumentWithCanonicalContent } from "@/lib/document/document-write-port";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -46,17 +46,20 @@ export async function persistImportedDocument(
   const contentJson = importedMarkdownToContentJson(safeContent);
 
   return db.$transaction(async (tx) => {
-    const document = await tx.document.create({
-      data: {
-        ownerId: args.userId,
-        title,
-        ...projectDocumentContent(contentJson),
-        ...(args.target.kind === "workspace"
-          ? { workspaceId: args.target.workspaceId }
-          : {}),
+    const document = await createDocumentWithCanonicalContent<{ id: string }>(
+      tx,
+      {
+        contentSnapshot: contentJson,
+        data: {
+          ownerId: args.userId,
+          title,
+          ...(args.target.kind === "workspace"
+            ? { workspaceId: args.target.workspaceId }
+            : {}),
+        },
+        select: { id: true },
       },
-      select: { id: true },
-    });
+    );
 
     await tx.documentVersion.create({
       data: {

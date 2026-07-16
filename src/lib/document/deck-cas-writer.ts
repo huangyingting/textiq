@@ -5,6 +5,7 @@ import { MAX_DECK_JSON_BYTES, formatDeckTooLargeError } from "@/lib/limits";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
+import { updateDocumentsMetadata } from "@/lib/document/document-write-port";
 import { safeParseDeck } from "@/lib/document/persistence/current-deck-schema";
 
 export type DeckCasDb = {
@@ -71,7 +72,7 @@ export async function writeDeckWithCas({
   const newToken = generateRevisionToken();
   let count: number;
   try {
-    const update = await db.document.updateMany({
+    const update = await updateDocumentsMetadata(db, {
       where:
         /* Coverage rationale: CAS/no-CAS update predicates are asserted; tsx maps ternary rows as uncovered. */
         /* node:coverage ignore next 3 */

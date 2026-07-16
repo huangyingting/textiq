@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-16"
 description: "This subsystem covers document creation, duplication, dashboard listing, search, tags, favorites, trash, and dashboard-load maintenance. Editor content state is documented in ../editor/; persisted document and deck shapes are documented in ../data-model/."
 ---
 
@@ -18,6 +18,7 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 | --------------------------- | ------------------------------------------------------------------------------------------------ |
 | Create from template/import | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                 |
 | Search-text projection      | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)         |
+| Document write port         | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts)       |
 | Duplicate document          | [`src/lib/document/duplicate.ts`](../../src/lib/document/duplicate.ts)                           |
 | List and search documents   | [`src/lib/document/list.ts`](../../src/lib/document/list.ts)                                     |
 | Query policy builder        | [`src/lib/document/query.ts`](../../src/lib/document/query.ts)                                   |
@@ -69,7 +70,9 @@ Search normalizes the query and reuses the accessible-document query policy.
 Text search matches title and the persisted `Document.content` plain-text
 projection with provider-aware case-insensitive contains. Every canonical
 `contentJson` create, save, duplicate, import, onboarding seed, and version
-restore rebuilds that projection in the same database write.
+restore supplies one canonical snapshot to the document write port. The port
+clones and seals that snapshot, derives both persisted fields immediately before
+the Prisma mutation, and does not accept caller-supplied projection fields.
 
 Deployments upgrading from a build that did not maintain the projection should
 preview the repair first:
@@ -127,7 +130,9 @@ revoked, or exhausted invite links under the same lock policy.
 4. Imported content is converted to current Lexical JSON before persistence.
 5. Tag slugs are stable, owner-scoped, and collision-bounded.
 6. Permanent purge is maintenance-driven; user delete is soft delete first.
-7. `Document.content` is derived from canonical `contentJson` and is written
+7. Raw Prisma `Document` mutations are confined to the document write port and
+   enforced by an AST source boundary.
+8. `Document.content` is derived from canonical `contentJson` and is written
    atomically with every document-body transition.
 
 ## Primary Tests
@@ -136,7 +141,8 @@ revoked, or exhausted invite links under the same lock policy.
 - [`src/lib/document/content-projection.test.ts`](../../src/lib/document/content-projection.test.ts)
 - [`src/lib/document/content-projection-backfill.test.ts`](../../src/lib/document/content-projection-backfill.test.ts)
 - [`src/lib/document/search-projection.integration.test.ts`](../../src/lib/document/search-projection.integration.test.ts)
-- [`src/lib/document/seed-write-paths.test.ts`](../../src/lib/document/seed-write-paths.test.ts)
+- [`src/lib/document/document-write-port.test.ts`](../../src/lib/document/document-write-port.test.ts)
+- [`src/lib/document/document-write-boundary.test.ts`](../../src/lib/document/document-write-boundary.test.ts)
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)

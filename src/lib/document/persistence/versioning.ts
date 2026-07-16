@@ -18,7 +18,7 @@ import {
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
-import { projectDocumentContent } from "@/lib/document/content-projection";
+import { updateDocumentsWithCanonicalContent } from "@/lib/document/document-write-port";
 import type { RestoredDocumentVersion } from "@/lib/document/persistence-types";
 import { snapshotDocumentVersion } from "./helpers";
 import { mirrorVisualNodesInTx, reconcileDeckAfterMirror } from "./visual";
@@ -209,10 +209,10 @@ export async function restoreVersion(
   // Write the restored document state and its search projection, then atomically
   // rebuild the Visual mirror.
   await db.$transaction(async (tx) => {
-    await tx.document.updateMany({
+    await updateDocumentsWithCanonicalContent(tx, {
       where: { id: documentId },
+      contentSnapshot: restoredContent,
       data: {
-        ...projectDocumentContent(restoredContent),
         deckJson: restoredDeck,
         deckRevisionToken: restoredDeckRevisionToken,
       },

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-16"
 description: "This document describes the service boundary that persists editable document state, rebuilds visual projections, writes decks, snapshots versions, restores versions, and reconciles document-to-deck dependencies. CRUD/listing behavior lives in ../documents/README.md; JSON schema contracts live in deck.md and visual-mirror.md."
 ---
 
@@ -26,6 +26,7 @@ live in [deck.md](deck.md) and [visual-mirror.md](visual-mirror.md).
 | Document version policy      | [`src/lib/document-versions.ts`](../../src/lib/document-versions.ts)                       |
 | Persisted schema telemetry   | [`src/lib/diagnostics/schema-telemetry.ts`](../../src/lib/diagnostics/schema-telemetry.ts) |
 | Plain-text search projection | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)   |
+| Document write port          | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts) |
 
 ## Service Boundary
 
@@ -33,6 +34,14 @@ Server actions own session, permission, and argument validation. The persistence
 service owns transaction boundaries and cross-projection consistency. This keeps
 the write orchestration testable without React, route handlers, or browser
 fixtures.
+
+All production, seed, bootstrap, and operational Prisma `Document` mutations
+cross `document-write-port.ts`. Callers provide canonical content snapshots and
+projection-free metadata; the port clones and seals the snapshot, derives
+`contentJson` plus searchable `content`, and invokes Prisma without exposing the
+derived payload. Transactional callers pass the same typed transaction client to
+the port. Metadata, deck, collaboration-recovery, trash, and delete operations
+also cross the port so raw `Document` mutation access has one structural owner.
 
 Structured logs from this layer include ids, counts, status, and stable reasons
 only. Document text, prompts, cookies, and raw payloads are not logged.
@@ -127,17 +136,21 @@ invalidation.
 
 ## Invariants
 
-1. `contentJson` writes and visual mirror rebuilds are atomic.
-2. `Document.content` is a derived search projection, never a source of truth;
+1. Raw Prisma `Document` mutation access is owned only by
+   `document-write-port.ts`; callers cannot provide `content` or `contentJson`
+   through metadata writes.
+2. `contentJson` writes and visual mirror rebuilds are atomic.
+3. `Document.content` is a derived search projection, never a source of truth;
    every canonical `contentJson` write updates it in the same create/update.
-3. Deck writes must parse as the current deck schema and fit the deck JSON
+4. Deck writes must parse as the current deck schema and fit the deck JSON
    budget before persistence.
-4. Deck saves are guarded by revision-token compare-and-swap.
-5. Version snapshots are best-effort and never fail the user write path.
-6. Restore sanitizes deck visual references against restored content and then
+5. Deck saves are guarded by revision-token compare-and-swap.
+6. Version snapshots are best-effort and never fail the user write path.
+7. Restore sanitizes deck visual references against restored content and then
    reconciles against actual DB visual rows.
-7. Schema failures are reported with safe identifiers only.
-8. Projection backfills derive text from a selected `contentJson` snapshot and
+8. Schema failures are reported with safe identifiers only.
+9. Projection backfills clone one selected `contentJson`/`updatedAt` snapshot in
+   the write port, derive text from that sealed value, and
    condition writes on both that JSON value and its selected `updatedAt`; a
    concurrent canonical edit must make the stale write miss.
 
@@ -154,6 +167,8 @@ disconnect failures set a non-zero exit status.
 
 - [`src/lib/document/persistence-service.test.ts`](../../src/lib/document/persistence-service.test.ts)
 - [`src/lib/document/deck-cas-writer.test.ts`](../../src/lib/document/deck-cas-writer.test.ts)
+- [`src/lib/document/document-write-port.test.ts`](../../src/lib/document/document-write-port.test.ts)
+- [`src/lib/document/document-write-boundary.test.ts`](../../src/lib/document/document-write-boundary.test.ts)
 - [`src/lib/document/source-ref-model.test.ts`](../../src/lib/document/source-ref-model.test.ts)
 - [`src/lib/visual/mirror-diff.test.ts`](../../src/lib/visual/mirror-diff.test.ts)
 - [`src/lib/document-versions.test.ts`](../../src/lib/document-versions.test.ts)

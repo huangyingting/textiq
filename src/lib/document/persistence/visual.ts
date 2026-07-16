@@ -20,7 +20,10 @@ import {
   type VisualMirrorOutcome,
 } from "@/lib/visual/mirror-diff";
 import { logInfo, logError } from "@/lib/log";
-import { projectDocumentContent } from "@/lib/document/content-projection";
+import {
+  updateDocumentsMetadata,
+  updateDocumentsWithCanonicalContent,
+} from "@/lib/document/document-write-port";
 import { snapshotDocumentVersion } from "./helpers";
 
 // Re-export so the barrel can surface it via `export *`
@@ -270,9 +273,9 @@ export async function atomicSaveDocumentLexical(
   await db.$transaction(async (tx) => {
     await snapshotDocumentVersion(documentId, { userId, tx });
 
-    await tx.document.updateMany({
+    await updateDocumentsWithCanonicalContent(tx, {
       where: { id: documentId },
-      data: projectDocumentContent(parsedState),
+      contentSnapshot: parsedState,
     });
 
     outcome = await mirrorVisualNodesInTx(tx, documentId, parsedState);
@@ -358,7 +361,7 @@ export async function reconcileDeckAfterMirror(
 
     if (!changed) return;
 
-    await prisma.document.updateMany({
+    await updateDocumentsMetadata(prisma, {
       where: { id: documentId },
       data: { deckJson: toPrismaJsonInput(reconciled) },
     });

@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import { projectDocumentContent } from "@/lib/document/content-projection";
+import { createDocumentWithCanonicalContent } from "@/lib/document/document-write-port";
 import { generateBlockId } from "@/lib/lexical/block-id";
 import { buildSeedContentJson } from "@/lib/lexical/seed-content";
 import { prisma } from "@/lib/prisma";
@@ -82,12 +82,14 @@ export async function seedSampleDocument(
     const sampleVisual = FIXTURES.flowchart;
     const visualId = generateBlockId();
 
-    await db.document.create({
+    await createDocumentWithCanonicalContent(db, {
+      contentSnapshot: buildSeedContentJson(
+        SAMPLE_DOCUMENT_CONTENT,
+        sampleVisual,
+        visualId,
+      ),
       data: {
         title: SAMPLE_DOCUMENT_TITLE,
-        ...projectDocumentContent(
-          buildSeedContentJson(SAMPLE_DOCUMENT_CONTENT, sampleVisual, visualId),
-        ),
         ownerId: userId,
         visuals: {
           create: {

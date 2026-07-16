@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  buildDuplicateDocumentCreateData,
+  buildDuplicateDocumentCreateInput,
   duplicateDocumentForUser,
   remapDeckSourceRefs,
 } from "./duplicate";
@@ -135,7 +135,7 @@ test("remapDeckSourceRefs preserves source refs when the block id was not regene
 });
 
 test("duplicate create data is private and clones visuals without comments or share state", () => {
-  const data = buildDuplicateDocumentCreateData(
+  const input = buildDuplicateDocumentCreateInput(
     {
       title: "Source",
       contentJson: { root: { children: [] } },
@@ -154,10 +154,13 @@ test("duplicate create data is private and clones visuals without comments or sh
     { root: { children: [] } },
     new Map([["old-bid", "new-bid"]]),
   );
+  const { data } = input;
 
   assert.equal(data.ownerId, "user-1");
   assert.equal(data.title, "Source (copy)");
-  assert.equal(data.content, "");
+  assert.deepEqual(input.contentSnapshot, { root: { children: [] } });
+  assert.equal("content" in data, false);
+  assert.equal("contentJson" in data, false);
   assert.equal(data.visuals.create[0]!.anchorBlockId, "new-bid");
   assert.equal("isShared" in data, false);
   assert.equal("shareId" in data, false);
@@ -166,7 +169,7 @@ test("duplicate create data is private and clones visuals without comments or sh
 });
 
 test("duplicate create data omits contentJson when source content is null", () => {
-  const data = buildDuplicateDocumentCreateData(
+  const input = buildDuplicateDocumentCreateInput(
     {
       title: "Draft",
       contentJson: null,
@@ -185,7 +188,9 @@ test("duplicate create data omits contentJson when source content is null", () =
     null,
     new Map(),
   );
+  const { data } = input;
 
+  assert.equal("contentSnapshot" in input, false);
   assert.equal("contentJson" in data, false);
   assert.equal(data.visuals.create[0]!.anchorBlockId, null);
 });

@@ -6,10 +6,11 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 
 import { Prisma } from "../src/generated/prisma/client";
+import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
 import {
-  projectDocumentContent,
-  projectDocumentMarkdown,
-} from "../src/lib/document/content-projection";
+  updateDocumentMetadata,
+  upsertDocumentWithCanonicalContent,
+} from "../src/lib/document/document-write-port";
 import { openDeckFromJson } from "../src/lib/presentation/open-deck";
 import { safeParseDeck } from "../src/lib/presentation/validation";
 import { deriveStorageKey } from "../src/lib/slides/asset-storage";
@@ -158,11 +159,13 @@ async function main() {
     },
   });
 
-  await prisma.document.upsert({
+  await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.dashboardDocuments.alphaFavorite.id },
+    contentSnapshot: markdownToLexicalStateObject(
+      F.dashboardDocuments.alphaFavorite.content,
+    ),
     update: {
       title: F.dashboardDocuments.alphaFavorite.title,
-      ...projectDocumentMarkdown(F.dashboardDocuments.alphaFavorite.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: true,
@@ -172,18 +175,19 @@ async function main() {
     create: {
       id: F.dashboardDocuments.alphaFavorite.id,
       title: F.dashboardDocuments.alphaFavorite.title,
-      ...projectDocumentMarkdown(F.dashboardDocuments.alphaFavorite.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: true,
     },
   });
 
-  await prisma.document.upsert({
+  await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.dashboardDocuments.betaTagged.id },
+    contentSnapshot: markdownToLexicalStateObject(
+      F.dashboardDocuments.betaTagged.content,
+    ),
     update: {
       title: F.dashboardDocuments.betaTagged.title,
-      ...projectDocumentMarkdown(F.dashboardDocuments.betaTagged.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: false,
@@ -193,7 +197,6 @@ async function main() {
     create: {
       id: F.dashboardDocuments.betaTagged.id,
       title: F.dashboardDocuments.betaTagged.title,
-      ...projectDocumentMarkdown(F.dashboardDocuments.betaTagged.content),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: false,
@@ -229,11 +232,11 @@ async function main() {
     parsedVisual.data,
   ) as unknown as Prisma.InputJsonValue;
 
-  await prisma.document.upsert({
+  await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.documentId },
+    contentSnapshot: contentJson,
     update: {
       title: F.documentTitle,
-      ...projectDocumentContent(contentJson),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: F.shareId,
@@ -248,7 +251,6 @@ async function main() {
     create: {
       id: F.documentId,
       title: F.documentTitle,
-      ...projectDocumentContent(contentJson),
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: F.shareId,
@@ -316,7 +318,7 @@ async function main() {
     throw new Error(`Fixture deck failed open boundary: ${openedDeck.error}`);
   }
   const deck = openedDeck.deck;
-  await prisma.document.update({
+  await updateDocumentMetadata(prisma, {
     where: { id: F.documentId },
     data: { deckJson: deck as unknown as Prisma.InputJsonValue },
   });
@@ -335,11 +337,11 @@ async function main() {
     parsedVisual.data,
   ) as unknown as Prisma.InputJsonValue;
 
-  await prisma.document.upsert({
+  await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.layoutDocumentId },
+    contentSnapshot: layoutContentJson,
     update: {
       title: F.layoutDocumentTitle,
-      ...projectDocumentContent(layoutContentJson),
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
@@ -355,7 +357,6 @@ async function main() {
     create: {
       id: F.layoutDocumentId,
       title: F.layoutDocumentTitle,
-      ...projectDocumentContent(layoutContentJson),
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
@@ -379,11 +380,13 @@ async function main() {
   );
   await writeAssetBytes(privateStorageKey, pngBytes);
 
-  await prisma.document.upsert({
+  await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.privateDocumentId },
+    contentSnapshot: markdownToLexicalStateObject(
+      "Private fixture document (never shared).",
+    ),
     update: {
       title: "E2E Private Fixture",
-      ...projectDocumentMarkdown("Private fixture document (never shared)."),
       ownerId: owner.id,
       workspaceId: null,
       isShared: false,
@@ -394,7 +397,6 @@ async function main() {
     create: {
       id: F.privateDocumentId,
       title: "E2E Private Fixture",
-      ...projectDocumentMarkdown("Private fixture document (never shared)."),
       ownerId: owner.id,
       isShared: false,
     },

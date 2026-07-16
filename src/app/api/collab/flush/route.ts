@@ -38,6 +38,7 @@ import {
   unauthorized,
   validationError,
 } from "@/lib/api/errors";
+import { updateDocumentMetadata } from "@/lib/document/document-write-port";
 import { logError, logInfo } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { readJsonValue } from "@/lib/api/route-adapters";
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    await prisma.document.update({
+    await updateDocumentMetadata(prisma, {
       where: { id: documentId },
       data: {
         collabRecoverySnapshot: update,

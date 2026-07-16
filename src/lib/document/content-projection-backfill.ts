@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { projectDocumentContent } from "./content-projection";
+import { backfillDocumentContentProjectionCas } from "./document-write-port";
 
 type ContentProjectionBackfillDb = Pick<typeof prisma, "document">;
 
@@ -77,17 +78,6 @@ export function resolveContentProjectionBackfillOptions(
   };
 }
 
-function contentJsonSnapshotFilter(
-  contentJson: Prisma.JsonValue,
-): Prisma.JsonNullableFilter<"Document"> {
-  return {
-    equals:
-      contentJson === null
-        ? Prisma.JsonNull
-        : (contentJson as Prisma.InputJsonValue),
-  };
-}
-
 export async function backfillDocumentContentProjection(
   db: ContentProjectionBackfillDb = prisma,
   options: ContentProjectionBackfillOptions = {},
@@ -141,14 +131,7 @@ export async function backfillDocumentContentProjection(
           break;
         }
 
-        const update = await db.document.updateMany({
-          where: {
-            id: snapshot.id,
-            updatedAt: snapshot.updatedAt,
-            contentJson: contentJsonSnapshotFilter(snapshot.contentJson),
-          },
-          data: { content: projected.content },
-        });
+        const update = await backfillDocumentContentProjectionCas(db, snapshot);
         if (update.count === 1) {
           result.updated += 1;
           break;

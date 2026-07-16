@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { updateDocumentMetadata } from "./document-write-port";
 import {
   deriveTagSlug,
   normalizeTagName,
@@ -120,7 +121,7 @@ export async function connectDocumentTag(
   tagId: string,
   db: DocumentTagDb = prisma,
 ): Promise<DocumentTag[]> {
-  await db.document.update({
+  await updateDocumentMetadata(db, {
     where: { id: documentId },
     data: { tags: { connect: { id: tagId } } },
   });
@@ -146,7 +147,7 @@ export async function disconnectDocumentTag(
 ): Promise<DocumentTag[]> {
   /* Coverage rationale: disconnect behavior is asserted; tsx maps the Prisma update literal as uncovered. */
   /* node:coverage ignore next 4 */
-  await db.document.update({
+  await updateDocumentMetadata(db, {
     where: { id: documentId },
     data: { tags: { disconnect: { id: tagId } } },
   });
