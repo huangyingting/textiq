@@ -14,6 +14,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { resolveProvider } from "@/lib/db-provider";
 import { withP2002Fallback } from "@/lib/db/p2002-fallback";
+import type { PrismaTransactionClient } from "@/lib/prisma-surface";
 import {
   logUsageLedgerEvent,
   logUsageLedgerFailure,
@@ -57,7 +58,7 @@ type UsageLedgerClient = Pick<
   "$transaction" | "usageLedgerEntry" | "user"
 >;
 
-type UsageLedgerTransactionClient = Prisma.TransactionClient;
+type UsageLedgerTransactionClient = PrismaTransactionClient;
 
 export class UsageLedgerConflictError extends Error {
   constructor(message: string) {
