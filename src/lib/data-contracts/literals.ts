@@ -1,6 +1,11 @@
 import { isPlan, type Plan } from "@/lib/billing/catalog";
 import { VISUAL_KINDS, type VisualKind } from "@/lib/visual/schema";
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import {
+  assertPersistedWorkspaceMemberRole,
+  parsePersistedWorkspaceMemberRole,
+  type InvitableWorkspaceRole,
+  type PersistedWorkspaceMemberRole,
+} from "@/lib/workspace/roles";
 
 export type LiteralValidationResult<T extends string> =
   | { success: true; value: T }
@@ -23,30 +28,6 @@ function parseLiteral<T extends string>(
     error: `${label} must be one of: ${allowed.join(", ")}`,
   };
 }
-
-function assertLiteral<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  label: string,
-): T {
-  const parsed = parseLiteral(value, allowed, label);
-  if (!parsed.success) {
-    throw new Error(parsed.error);
-  }
-  /* node:coverage disable -- Assertion success branch is covered; tsx maps the generic return as uncovered. */
-  return parsed.value;
-  /* node:coverage enable */
-}
-
-export const WORKSPACE_ROLE_LITERALS = [
-  /* Coverage rationale: literal tuple values are asserted by parser tests; tsx maps tuple rows as uncovered. */
-  /* node:coverage ignore next 6 */
-  "OWNER",
-  "EDITOR",
-  "VIEWER",
-] as const satisfies readonly WorkspaceRole[];
-
-export const INVITABLE_WORKSPACE_ROLE_LITERALS = ["EDITOR", "VIEWER"] as const;
 
 export const COMMENT_ANCHOR_TYPE_LITERALS = ["text", "visual"] as const;
 
@@ -80,22 +61,26 @@ export type SubscriptionStatusLiteral =
 
 export function parseWorkspaceRoleLiteral(
   value: unknown,
-): LiteralValidationResult<WorkspaceRole> {
-  return parseLiteral(value, WORKSPACE_ROLE_LITERALS, "Workspace role");
+): LiteralValidationResult<PersistedWorkspaceMemberRole> {
+  const parsed = parsePersistedWorkspaceMemberRole(value);
+  return parsed.success
+    ? { success: true, value: parsed.value }
+    : { success: false, error: parsed.error.message };
 }
 
-export function assertWorkspaceRoleLiteral(value: unknown): WorkspaceRole {
-  return assertLiteral(value, WORKSPACE_ROLE_LITERALS, "Workspace role");
+export function assertWorkspaceRoleLiteral(
+  value: unknown,
+): PersistedWorkspaceMemberRole {
+  return assertPersistedWorkspaceMemberRole(value);
 }
 
 export function parseInvitableWorkspaceRoleLiteral(
   value: unknown,
-): LiteralValidationResult<(typeof INVITABLE_WORKSPACE_ROLE_LITERALS)[number]> {
-  return parseLiteral(
-    value,
-    INVITABLE_WORKSPACE_ROLE_LITERALS,
-    "Invitable workspace role",
-  );
+): LiteralValidationResult<InvitableWorkspaceRole> {
+  const parsed = parsePersistedWorkspaceMemberRole(value);
+  return parsed.success
+    ? { success: true, value: parsed.value }
+    : { success: false, error: parsed.error.message };
 }
 
 export function parsePlanLiteral(

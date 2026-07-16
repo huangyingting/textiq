@@ -9,6 +9,10 @@ import type {
   CurrentSlideChildNode,
 } from "@/lib/document/deck-schema";
 import type { Deck, SlideElement, SourceRef } from "@/lib/document/deck-model";
+import {
+  createDocumentWithCanonicalContent,
+  updateDocumentMetadata,
+} from "@/lib/document/document-write-port";
 import { mapNodes } from "@/lib/presentation/node-tree-ops";
 import { prisma } from "@/lib/prisma";
 
@@ -146,20 +150,15 @@ export function remapDeckSourceRefs(
   return deck;
 }
 
-export function buildDuplicateDocumentCreateData(
+export function buildDuplicateDocumentCreateInput(
   source: DuplicateDocumentSource,
   ownerId: string,
   contentJson: Prisma.JsonValue | null,
   bidMap: Map<string, string>,
 ) {
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return {
+  const data = {
     ownerId,
     title: `${source.title} (copy)`,
-    ...(contentJson != null && {
-      contentJson: cloneJsonForCreate(contentJson),
-    }),
     visuals: {
       create: source.visuals.map((visual) => ({
         anchorBlockId: remapAnchorBlockId(visual.anchorBlockId, bidMap),
@@ -170,6 +169,9 @@ export function buildDuplicateDocumentCreateData(
       })),
     },
   };
+  return contentJson == null
+    ? { data }
+    : { data, contentSnapshot: contentJson };
 }
 
 export async function duplicateDocumentForUser(
@@ -197,17 +199,20 @@ export async function duplicateDocumentForUser(
       bidMap = result.bidMap;
     }
 
-    const document = await tx.document.create({
-      /* Coverage rationale: duplicate create payload is asserted; tsx maps multiline helper args as uncovered. */
-      /* node:coverage ignore next 6 */
-      data: buildDuplicateDocumentCreateData(
-        source,
-        userId,
-        contentJson,
-        bidMap,
-      ),
-      select: { id: true },
-    });
+    const document = await createDocumentWithCanonicalContent<{ id: string }>(
+      tx,
+      {
+        /* Coverage rationale: duplicate create payload is asserted; tsx maps multiline helper args as uncovered. */
+        /* node:coverage ignore next 5 */
+        ...buildDuplicateDocumentCreateInput(
+          source,
+          userId,
+          contentJson,
+          bidMap,
+        ),
+        select: { id: true },
+      },
+    );
 
     if (source.deckJson != null) {
       const deckJson = remapDeckSourceRefs(
@@ -217,7 +222,7 @@ export async function duplicateDocumentForUser(
         bidMap,
       ) as Prisma.JsonValue;
 
-      await tx.document.update({
+      await updateDocumentMetadata(tx, {
         where: { id: document.id },
         data: { deckJson: cloneJsonForCreate(deckJson) },
         select: { id: true },

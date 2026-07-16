@@ -8,7 +8,7 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import { safeParseDeck } from "@/lib/document/deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
@@ -20,6 +20,10 @@ import {
   type VisualMirrorOutcome,
 } from "@/lib/visual/mirror-diff";
 import { logInfo, logError } from "@/lib/log";
+import {
+  updateDocumentsMetadata,
+  updateDocumentsWithCanonicalContent,
+} from "@/lib/document/document-write-port";
 import { snapshotDocumentVersion } from "./helpers";
 
 // Re-export so the barrel can surface it via `export *`
@@ -61,7 +65,7 @@ function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue {
  * overwritten, so each edit is restorable (US-016).
  */
 async function snapshotVisualRevision(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   previous: {
     id: string;
     data: Prisma.JsonValue;
@@ -108,7 +112,7 @@ async function snapshotVisualRevision(
  * `prisma.$transaction(async tx => mirrorVisualNodesInTx(tx, ...))`.
  */
 export async function mirrorVisualNodesInTx(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   documentId: string,
   parsedState: unknown,
 ): Promise<VisualMirrorOutcome> {
@@ -262,19 +266,16 @@ export async function atomicSaveDocumentLexical(
   documentId: string,
   parsedState: unknown,
   userId?: string | null,
+  db: Pick<typeof prisma, "$transaction"> = prisma,
 ): Promise<VisualMirrorOutcome> {
   let outcome: VisualMirrorOutcome;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await snapshotDocumentVersion(documentId, { userId, tx });
 
-    await tx.document.updateMany({
+    await updateDocumentsWithCanonicalContent(tx, {
       where: { id: documentId },
-      data: {
-        contentJson: parsedState as Prisma.InputJsonValue,
-        // Document.content (the plaintext mirror) is deprecated — no longer
-        // written here. Physical column drop is a follow-up migration.
-      },
+      contentSnapshot: parsedState,
     });
 
     outcome = await mirrorVisualNodesInTx(tx, documentId, parsedState);
@@ -360,7 +361,7 @@ export async function reconcileDeckAfterMirror(
 
     if (!changed) return;
 
-    await prisma.document.updateMany({
+    await updateDocumentsMetadata(prisma, {
       where: { id: documentId },
       data: { deckJson: toPrismaJsonInput(reconciled) },
     });

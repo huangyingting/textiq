@@ -33,6 +33,19 @@ export interface AuthEmailDeliveryPort {
   /** Delivers a concrete auth/account email message. */
   send(message: AuthEmailMessage): Promise<void>;
 }
+
+export const AUTH_EMAIL_DELIVERY_ERROR_CODE = "AUTH_EMAIL_DELIVERY_FAILED";
+export const AUTH_EMAIL_DELIVERY_ERROR_MESSAGE =
+  "Could not deliver authentication email.";
+
+export class AuthEmailDeliveryError extends Error {
+  readonly code = AUTH_EMAIL_DELIVERY_ERROR_CODE;
+
+  constructor(public readonly emailKind: AuthEmailMessage["kind"]) {
+    super(AUTH_EMAIL_DELIVERY_ERROR_MESSAGE);
+    this.name = "AuthEmailDeliveryError";
+  }
+}
 /* @preserve node:coverage ignore stop */
 
 function trimTrailingSlash(baseUrl: string): string {
@@ -56,12 +69,9 @@ function messageScope(message: AuthEmailMessage): string {
 const devConsoleEmailDeliveryPort: AuthEmailDeliveryPort = {
   async send(message) {
     if (process.env.NODE_ENV === "production") {
-      logError(
-        messageScope(message),
-        new Error(`No ${message.kind} email transport is configured`),
-      );
-      /* node:coverage ignore next -- Production fallback early return is asserted; tsx maps the return boundary as uncovered. */
-      return;
+      const error = new AuthEmailDeliveryError(message.kind);
+      logError(messageScope(message), error);
+      throw error;
     }
 
     if (message.kind === "password-reset") {
@@ -94,8 +104,8 @@ export async function deliverAuthEmail(
 ): Promise<void> {
   try {
     await getAuthEmailDeliveryPort().send(message);
-  } catch (error) {
-    logError(messageScope(message), error);
+  } catch {
+    throw new AuthEmailDeliveryError(message.kind);
   }
 }
 

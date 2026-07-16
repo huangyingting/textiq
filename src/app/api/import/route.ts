@@ -1,35 +1,34 @@
 /**
- * POST /api/import — parse an uploaded document and return its text content.
+ * POST /api/import — parse an uploaded document and create a persisted document
+ * in one server-side operation.
  *
- * Accepts a `multipart/form-data` request with a `file` field containing one
- * of: .md, .html, .docx, .pptx, .pdf (up to 20 MB). Returns the extracted
- * text as `{ markdown: string }` — a Markdown-compatible string ready for
- * `markdownToLexicalState`. Heavy parsers (mammoth, jszip, pdf-parse) run
- * server-side only; they never touch the client bundle.
- *
- * Validation errors use the shared `{ error, code }` API error body. The route
- * is public, so it is throttled per client IP (429 + `Retry-After` on exceed)
- * and each parse runs under a timeout to bound abuse (#96).
+ * Accepts `multipart/form-data` with a `file` field containing one of:
+ * .md, .html, .docx, .pptx, .pdf (up to 20 MB per file; multipart overhead has
+ * a separate bounded allowance). Requires `target=personal|workspace` (plus
+ * `workspaceId` for workspace target), then parses + normalizes + persists and
+ * returns the new document id/path (`{ ok: true, documentId, documentPath }`).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  serverError,
-  tooManyRequests,
-  validationError,
-} from "@/lib/api/errors";
-import { logError } from "@/lib/log";
-import { ABUSE_CATEGORIES, logRouteDenial } from "@/lib/diagnostics/api-abuse";
-import { processImportUpload } from "@/lib/import/upload-service";
+import { tooManyRequests } from "@/lib/api/errors";
 import { checkIpRateLimit } from "@/lib/abuse-budget";
+import { ABUSE_CATEGORIES, logRouteDenial } from "@/lib/diagnostics/api-abuse";
 import { auth as authEnv } from "@/lib/env";
+import { createDocumentFromImportUpload } from "@/lib/import/application-service";
+import {
+  IMPORT_ERROR_CODES,
+  importFailure,
+  type ImportRouteFailure,
+} from "@/lib/import/contract";
+import { IMPORT_PARSE_TIMEOUT_MS } from "@/lib/import/format-registry";
+import { logError } from "@/lib/log";
 import {
   bucketBytes,
   bucketDurationMs,
   classifyFileType,
   emitProductTelemetry,
-  reasonFromStatus,
+  reasonFromImportError,
 } from "@/lib/telemetry/product";
 
 import { parseImportUploadRequest } from "./parser";
@@ -39,18 +38,25 @@ export const runtime = "nodejs";
 
 const LOG_SCOPE = "api.import";
 
+function importFailureResponse(
+  failure: ImportRouteFailure,
+): NextResponse<ImportRouteFailure> {
+  return NextResponse.json(failure, { status: failure.error.status });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Abuse control (#96): the import route is public and runs heavy parsers, so
-  // throttle by client IP. A missing/forged secret is a server misconfig, and a
-  // missing client IP is treated as a single shared bucket so the limit can
-  // never be bypassed by stripping the forwarding header.
   const secret = authEnv.secret();
   if (!secret) {
+    const failure = importFailure(
+      IMPORT_ERROR_CODES.INTERNAL,
+      "Server is misconfigured (missing AUTH_SECRET).",
+    );
     logError(LOG_SCOPE, new Error("Missing AUTH_SECRET"), {
       reason: "missing-auth-secret",
-      status: 500,
+      code: failure.error.code,
+      status: failure.error.status,
     });
-    return serverError("Server is misconfigured (missing AUTH_SECRET).");
+    return importFailureResponse(failure);
   }
 
   const ipCheck = await checkIpRateLimit({
@@ -76,8 +82,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!parsed.ok) {
     return parsed.response;
   }
-  const { file } = parsed;
 
+  const { file, target } = parsed.parsed;
+  const deadlineAt = Date.now() + IMPORT_PARSE_TIMEOUT_MS;
   const startedAt = Date.now();
   const fileType = classifyFileType(file);
   const fileSizeBucket = bucketBytes(file.size);
@@ -86,19 +93,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     fileType,
     surface: "api",
   });
-  const result = await processImportUpload(file, {
+
+  const result = await createDocumentFromImportUpload({
+    file,
     subjectHash: ipCheck.subjectHash,
+    target,
+    signal: request.signal,
+    deadlineAt,
   });
+
   if (!result.ok) {
     emitProductTelemetry("product.import.failed", {
       durationBucket: bucketDurationMs(Date.now() - startedAt),
-      failureReason: reasonFromStatus(result.status),
+      failureReason: reasonFromImportError(result.error),
       fileSizeBucket,
       fileType,
-      status: result.status,
+      status: result.error.status,
       surface: "api",
     });
-    return validationError(result.error, result.status);
+    return importFailureResponse(result);
   }
 
   emitProductTelemetry("product.import.succeeded", {
@@ -107,5 +120,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     fileType,
     surface: "api",
   });
-  return NextResponse.json({ markdown: result.markdown });
+  return NextResponse.json(result);
 }

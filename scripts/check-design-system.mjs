@@ -2,7 +2,7 @@
 
 import process from "node:process";
 import {
-  extensionOf,
+  makeShouldScanFile,
   scanRepositoryRoots,
   toPosix,
 } from "./source-scan-utils.mjs";
@@ -18,16 +18,9 @@ const RAW_SHADOW_ARBITRARY_CLASS = /\bshadow-\[(?!var\()[^\]]+\]/g;
 const NON_DS_NEUTRAL_CLASS =
   /\b(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral|stone)-\d{2,3}(?:\/\d{1,3})?\b/g;
 
-function shouldScanFile(filePath) {
-  const normalized = toPosix(filePath);
-  if (!SOURCE_EXTENSIONS.has(extensionOf(normalized))) {
-    return false;
-  }
-  if (normalized.includes("/node_modules/") || normalized.includes("/.next/")) {
-    return false;
-  }
-  return true;
-}
+const shouldScanFile = makeShouldScanFile({
+  sourceExtensions: SOURCE_EXTENSIONS,
+});
 
 function shouldScanRawHex(filePath) {
   const normalized = toPosix(filePath);

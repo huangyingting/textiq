@@ -468,6 +468,40 @@ describe("auditRows — invalid rows", () => {
     assert.equal(report.summary.byArea["InviteLink.role"], 1);
     assert.equal(report.summary.byArea["InviteLinkUse.role"], 1);
     assert.equal(report.summary.byArea["Subscription.status"], 1);
+    assert.ok(
+      report.violations
+        .filter(
+          (violation) =>
+            violation.area === "WorkspaceMember.role" ||
+            violation.area === "InviteLink.role" ||
+            violation.area === "InviteLinkUse.role",
+        )
+        .every(
+          (violation) => violation.roleCode === "invalid-workspace-member-role",
+        ),
+    );
+  });
+
+  test("flags persisted OWNER role rows in workspace membership/invite tables", () => {
+    const report = auditRows({
+      workspaceMembers: [{ id: "member-owner", role: "OWNER" }],
+      inviteLinks: [{ id: "invite-owner", role: "OWNER" }],
+      inviteLinkUses: [{ id: "invite-use-owner", role: "OWNER" }],
+    });
+
+    assert.equal(report.summary.byArea["WorkspaceMember.role"], 1);
+    assert.equal(report.summary.byArea["InviteLink.role"], 1);
+    assert.equal(report.summary.byArea["InviteLinkUse.role"], 1);
+    assert.ok(
+      report.violations.every((violation) =>
+        violation.reason.includes("must not be OWNER"),
+      ),
+    );
+    assert.ok(
+      report.violations.every(
+        (violation) => violation.roleCode === "owner-membership-row",
+      ),
+    );
   });
 
   test("counts violations by area in the summary", () => {
@@ -545,6 +579,22 @@ describe("audit output never contains document content", () => {
     );
     assert.ok(
       lines.some((l) => l.includes("· Document.contentJson:visual: 1")),
+    );
+  });
+
+  test("formatAuditReport includes structured role code for role-integrity violations", () => {
+    const lines = formatAuditReport(
+      auditRows({
+        workspaceMembers: [{ id: "member-owner", role: "OWNER" }],
+      }),
+    );
+
+    assert.ok(
+      lines.some((line) =>
+        line.includes(
+          "[WorkspaceMember.role] row=member-owner roleCode=owner-membership-row",
+        ),
+      ),
     );
   });
 });

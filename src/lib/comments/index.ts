@@ -28,16 +28,49 @@ export {
   applySlideDeleteToAnchors,
   applyElementDeleteToAnchors,
   findOrphanedAnchors,
+  planSlideCommentAnchorRepairs,
+} from "./lifecycle";
+export type {
+  PersistedSlideCommentAnchor,
+  SlideCommentAnchorRepairPlan,
 } from "./lifecycle";
 
 export { mapCommentThreadRecord } from "./mappers";
-export type { CommentReplyRecord, CommentThreadRecord } from "./mappers";
+export {
+  reconcileSlideCommentAnchors,
+  type CommentAnchorPersistenceDb,
+  type CommentAnchorReconciliationResult,
+} from "./persistence";
+export type { CommentReplyRecord, CommentThreadRecord } from "./records";
+
+export {
+  CommentError,
+  CommentUnavailableError,
+  type CommentErrorCode,
+  type CommentUnavailableClassification,
+} from "./errors";
+export {
+  adaptKnownCommentActionError,
+  commentActionObservation,
+  commentActionError,
+  commentActionOk,
+} from "./action-result";
+export type {
+  CommentActionError,
+  CommentActionErrorCode,
+  CommentActionObservation,
+  CommentActionResult,
+} from "./action-result";
 
 export { canEditComment, canDeleteComment } from "./policy";
 export type { CommentOwnership } from "./policy";
 
-export { isCommentUnread } from "./read-state";
-export type { UnreadCountScope } from "./read-state";
+export {
+  commentUnreadScope,
+  isCommentUnread,
+  isCommentUnreadForScope,
+} from "./read-state";
+export type { CommentUnreadRecord, UnreadCountScope } from "./read-state";
 
 export { createCommentService } from "./service";
 /* node:coverage ignore next 6 -- Service type-only facade exports are erased by tsx. */

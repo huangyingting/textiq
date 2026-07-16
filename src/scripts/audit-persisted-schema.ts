@@ -38,8 +38,9 @@
  * module importable for tests while leaving CLI behavior unchanged.
  */
 
-import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { resolveProvider } from "@/lib/db-provider";
+import { prisma } from "@/lib/prisma";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
 import {
@@ -116,7 +117,61 @@ export interface AuditDb {
 }
 
 function defaultDb(): AuditDb {
-  return prisma as unknown as AuditDb;
+  return {
+    document: {
+      findMany: (args) =>
+        prisma.document.findMany(args as Prisma.DocumentFindManyArgs),
+    },
+    visual: {
+      findMany: (args) =>
+        prisma.visual.findMany(args as Prisma.VisualFindManyArgs),
+    },
+    documentVersion: {
+      findMany: (args) =>
+        prisma.documentVersion.findMany(
+          args as Prisma.DocumentVersionFindManyArgs,
+        ),
+    },
+    comment: {
+      findMany: (args) =>
+        prisma.comment.findMany(args as Prisma.CommentFindManyArgs),
+    },
+    tag: {
+      findMany: (args) => prisma.tag.findMany(args as Prisma.TagFindManyArgs),
+    },
+    workspaceMember: {
+      findMany: (args) =>
+        prisma.workspaceMember.findMany(
+          args as Prisma.WorkspaceMemberFindManyArgs,
+        ),
+    },
+    inviteLink: {
+      findMany: (args) =>
+        prisma.inviteLink.findMany(args as Prisma.InviteLinkFindManyArgs),
+    },
+    inviteLinkUse: {
+      findMany: (args) =>
+        prisma.inviteLinkUse.findMany(args as Prisma.InviteLinkUseFindManyArgs),
+    },
+    user: {
+      findMany: (args) => prisma.user.findMany(args as Prisma.UserFindManyArgs),
+    },
+    subscription: {
+      findMany: (args) =>
+        prisma.subscription.findMany(args as Prisma.SubscriptionFindManyArgs),
+    },
+    usageLedgerEntry: {
+      findMany: (args) =>
+        prisma.usageLedgerEntry.findMany(
+          args as Prisma.UsageLedgerEntryFindManyArgs,
+        ),
+    },
+    asset: {
+      findMany: (args) =>
+        prisma.asset.findMany(args as Prisma.AssetFindManyArgs),
+    },
+    $disconnect: () => prisma.$disconnect(),
+  };
 }
 
 async function paginate<Row extends { id: string }>(

@@ -12,6 +12,10 @@ import {
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { acceptWorkspaceInvite } from "@/lib/workspace/invite-service";
+import {
+  parsePersistedWorkspaceMemberRole,
+  type WorkspaceMemberRoleParseErrorCode,
+} from "@/lib/workspace/roles";
 
 export const metadata: Metadata = {
   title: "Join Workspace — TextIQ",
@@ -30,6 +34,36 @@ function InviteInvalid({ reason }: { reason: InviteDenyReason }) {
         </p>
         <p className="text-xs text-ds-text-muted">
           Ask a workspace owner for a new invite link.
+        </p>
+        <Link
+          href="/app"
+          className="mt-2 self-center rounded-full bg-ds-control px-4 py-2 text-sm font-medium text-ds-control-text transition hover:bg-ds-control-hover"
+        >
+          Back to dashboard
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+/** Safe state when an existing membership row is malformed and requires repair. */
+function MembershipIntegrityInvalid({
+  code,
+}: {
+  code: WorkspaceMemberRoleParseErrorCode;
+}) {
+  return (
+    <main className="flex flex-1 flex-col items-center justify-center bg-ds-surface-sunken px-6 py-12">
+      <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-ds-border-subtle bg-ds-surface-raised p-8 text-center">
+        <h1 className="text-lg font-semibold text-ds-text-primary">
+          Workspace membership needs repair
+        </h1>
+        <p className="text-sm text-ds-text-secondary">
+          Your workspace membership row is invalid and cannot be used for access
+          until a workspace owner repairs it.
+        </p>
+        <p className="text-xs text-ds-text-muted">
+          Integrity code: <code>{code}</code>
         </p>
         <Link
           href="/app"
@@ -73,11 +107,19 @@ export default async function JoinWorkspacePage({
 
   const existingMember = await prisma.workspaceMember.findFirst({
     where: { workspaceId: inviteLink.workspaceId, userId: user.id },
-    select: { id: true },
+    select: { id: true, role: true },
   });
 
   if (existingMember) {
-    redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+    const parsedMembershipRole = parsePersistedWorkspaceMemberRole(
+      existingMember.role,
+    );
+    if (parsedMembershipRole.success) {
+      redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+    }
+    return (
+      <MembershipIntegrityInvalid code={parsedMembershipRole.error.code} />
+    );
   }
 
   // Validate the link (revocation, expiry, usage cap) AND the role server-side
@@ -90,15 +132,12 @@ export default async function JoinWorkspacePage({
 
   const result = await acceptWorkspaceInvite({
     inviteLinkId: inviteLink.id,
-    maxUses: inviteLink.maxUses,
-    workspaceId: inviteLink.workspaceId,
     userId: user.id,
-    role: decision.role,
   });
 
-  if (result.outcome === "cap-exhausted") {
-    return <InviteInvalid reason="exhausted" />;
+  if (result.outcome === "denied") {
+    return <InviteInvalid reason={result.reason} />;
   }
 
-  redirect(`/app/workspaces/${inviteLink.workspaceId}`);
+  redirect(`/app/workspaces/${result.workspaceId}`);
 }

@@ -5,6 +5,7 @@ import {
   applyElementDeleteToAnchors,
   applySlideDeleteToAnchors,
   findOrphanedAnchors,
+  planSlideCommentAnchorRepairs,
 } from "./lifecycle";
 import type { SlideCommentAnchor } from "./slide-comment-anchors";
 import type { Deck } from "@/lib/presentation/schema";
@@ -175,4 +176,27 @@ test("findOrphanedAnchors returns empty array when all anchors are valid", () =>
   ];
   const result = findOrphanedAnchors(records, deck);
   assert.deepEqual(result, []);
+});
+
+test("planSlideCommentAnchorRepairs preserves slide attachment for missing elements", () => {
+  const deck = buildDeck([{ id: "sl-1", elementIds: ["el-kept"] }]);
+
+  assert.deepEqual(
+    planSlideCommentAnchorRepairs(
+      [
+        { id: "missing-slide", slideId: "sl-gone", elementId: null },
+        {
+          id: "missing-element",
+          slideId: "sl-1",
+          elementId: "el-gone",
+        },
+        { id: "attached", slideId: "sl-1", elementId: "el-kept" },
+      ],
+      deck,
+    ),
+    {
+      floatToDeckIds: ["missing-slide"],
+      floatToSlideIds: ["missing-element"],
+    },
+  );
 });

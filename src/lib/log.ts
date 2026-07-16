@@ -26,36 +26,8 @@ export const normalizeLogKey = redaction.normalizeLogKey;
 
 /** True when a context key should be redacted before logging. */
 export const isSensitiveKey = redaction.isSensitiveKey;
-const sanitizeLogString = redaction.sanitizeLogString;
-
-/* node:coverage ignore next -- covered through buildErrorLog/buildInfoLog; tsx maps the CJS alias as uncovered. */
-const redactContext = redaction.redactContext;
-
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function normalizeError(error: unknown): {
-  name: string;
-  message: string;
-  stack?: string;
-} {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: sanitizeLogString(error.message),
-      ...(error.stack ? { stack: sanitizeLogString(error.stack) } : {}),
-    };
-  }
-  if (typeof error === "string") {
-    return { name: "Error", message: sanitizeLogString(error) };
-  }
-  return { name: "Error", message: sanitizeLogString(safeStringify(error)) };
-}
+const buildLogRecord = redaction.buildLogRecord;
+const normalizeErrorForLog = redaction.normalizeErrorForLog;
 
 export interface ErrorLogRecord {
   level: "error";
@@ -80,16 +52,17 @@ export function buildErrorLog(
   error: unknown,
   context: Record<string, unknown> = {},
 ): ErrorLogRecord {
-  const { name, message, stack } = normalizeError(error);
-  return {
-    ...redactContext(context),
+  const { errorName, message, stack } = normalizeErrorForLog(error);
+  return buildLogRecord({
     level: "error",
     scope,
-    timestamp: new Date().toISOString(),
-    errorName: name,
-    message,
-    ...(stack ? { stack } : {}),
-  };
+    context,
+    fields: {
+      errorName,
+      message,
+      ...(stack ? { stack } : {}),
+    },
+  });
 }
 
 /* node:coverage disable */
@@ -135,13 +108,12 @@ export function buildInfoLog(
   message: string,
   context: Record<string, unknown> = {},
 ): InfoLogRecord {
-  return {
-    ...redactContext(context),
+  return buildLogRecord({
     level: "info",
     scope,
-    timestamp: new Date().toISOString(),
-    message,
-  };
+    context,
+    fields: { message },
+  });
 }
 
 /**

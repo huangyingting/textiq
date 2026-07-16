@@ -211,8 +211,8 @@ export type ShareAccessFields = {
   shareEmbedEnabled: boolean;
   sharePresentEnabled: boolean;
   sharePasscodeHash?: string | null;
-  shareMetadataMode?: string;
-  shareDiscoverable?: boolean;
+  shareMetadataMode?: string | null;
+  shareDiscoverable?: boolean | null;
 };
 
 /**

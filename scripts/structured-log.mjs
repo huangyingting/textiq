@@ -6,32 +6,7 @@
  */
 import redaction from "../src/lib/log-redaction-core.cjs";
 
-const { redactContext, sanitizeLogString } = redaction;
-
-function safeStringify(value) {
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function normalizeError(error) {
-  if (error instanceof Error) {
-    return {
-      errorName: error.name,
-      message: sanitizeLogString(error.message),
-      ...(error.stack ? { stack: sanitizeLogString(error.stack) } : {}),
-    };
-  }
-  if (typeof error === "string") {
-    return { errorName: "Error", message: sanitizeLogString(error) };
-  }
-  return {
-    errorName: "Error",
-    message: sanitizeLogString(safeStringify(error)),
-  };
-}
+const { buildLogRecord, normalizeErrorForLog } = redaction;
 
 function emit(writer, record) {
   try {
@@ -42,24 +17,22 @@ function emit(writer, record) {
 }
 
 export function buildScriptLogRecord(level, scope, message, context = {}) {
-  return {
-    ...redactContext(context),
+  return buildLogRecord({
     level,
     scope,
-    timestamp: new Date().toISOString(),
-    message,
-  };
+    context,
+    fields: { message },
+  });
 }
 
 export function buildScriptErrorLog(scope, error, context = {}) {
-  const normalized = normalizeError(error);
-  return {
-    ...redactContext(context),
+  const normalized = normalizeErrorForLog(error);
+  return buildLogRecord({
     level: "error",
     scope,
-    timestamp: new Date().toISOString(),
-    ...normalized,
-  };
+    context,
+    fields: normalized,
+  });
 }
 
 export function logScriptInfo(scope, message, context = {}) {

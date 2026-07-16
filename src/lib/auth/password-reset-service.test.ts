@@ -181,6 +181,56 @@ test("requestPasswordResetForEmail stores only a hash and sends the raw-token UR
   }
 });
 
+test("requestPasswordResetForEmail preserves anti-enumeration and logs delivery failures", async () => {
+  const client = makeClient({ id: "u1", email: "ada@example.com" });
+  const loggedErrors: string[] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = () => {};
+  console.error = (line?: unknown) => {
+    loggedErrors.push(String(line));
+  };
+  configureAuthEmailDeliveryPort({
+    async send() {
+      throw new Error(
+        "smtp://provider.example/failed?token=abc123 recipient=ada@example.com",
+      );
+    },
+  });
+
+  try {
+    const result = await requestPasswordResetForEmail(
+      "ada@example.com",
+      client,
+    );
+    assert.deepEqual(result, {
+      status: "sent",
+      message: GENERIC_PASSWORD_RESET_SENT_MESSAGE,
+    });
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+    configureAuthEmailDeliveryPort(null);
+  }
+
+  assert.equal(client._tokens.length, 1);
+  assert.equal(
+    loggedErrors.some((line) => line.includes('"scope":"password-reset"')),
+    true,
+  );
+  assert.equal(
+    loggedErrors.some(
+      (line) =>
+        line.includes("token=") ||
+        line.includes("/reset-password") ||
+        line.includes("provider.example") ||
+        line.includes("abc123") ||
+        line.includes("ada@example.com"),
+    ),
+    false,
+  );
+});
+
 test("requestPasswordResetForEmail validates email and preserves generic response on storage errors", async () => {
   assert.deepEqual(
     await requestPasswordResetForEmail("not-an-email", asPrismaClient({})),

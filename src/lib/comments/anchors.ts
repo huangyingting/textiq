@@ -1,4 +1,5 @@
 import type { SlideCommentAnchor } from "@/lib/comments/slide-comment-anchors";
+import { CommentError } from "./errors";
 
 export type CommentAnchorType = "text" | "visual" | "table";
 
@@ -100,7 +101,10 @@ export function validateAnchorGeometry(
   }
 
   if (!isFiniteCoordinate(raw.x) || !isFiniteCoordinate(raw.y)) {
-    throw new Error("Anchor geometry must have numeric x and y coordinates.");
+    throw new CommentError(
+      "invalid_anchor_geometry",
+      "Anchor geometry must have numeric x and y coordinates.",
+    );
   }
 
   if (
@@ -109,7 +113,8 @@ export function validateAnchorGeometry(
     raw.y < COORD_MIN ||
     raw.y > COORD_MAX
   ) {
-    throw new Error(
+    throw new CommentError(
+      "invalid_anchor_geometry",
       `Anchor geometry coordinates must be between ${COORD_MIN} and ${COORD_MAX}.`,
     );
   }
@@ -141,7 +146,7 @@ export function validateSlideId(raw: unknown): string | null {
     return null;
   }
   if (typeof raw !== "string") {
-    throw new Error("slideId must be a string.");
+    throw new CommentError("invalid_slide_id", "slideId must be a string.");
   }
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -152,7 +157,7 @@ export function validateElementId(raw: unknown): string | null {
     return null;
   }
   if (typeof raw !== "string") {
-    throw new Error("elementId must be a string.");
+    throw new CommentError("invalid_element_id", "elementId must be a string.");
   }
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;

@@ -78,11 +78,11 @@ type TestState = {
     memberId: string,
     member: MemberTarget,
   ) => Promise<void>;
-  transferWorkspaceOwnership: (
-    workspaceId: string,
-    currentOwnerId: string,
-    newOwnerUserId: string,
-  ) => Promise<void>;
+  transferWorkspaceOwnership: (input: {
+    workspaceId: string;
+    actorUserId: string;
+    targetUserId: string;
+  }) => Promise<void>;
 };
 
 const globalForTest = globalThis as typeof globalThis & {
@@ -125,17 +125,8 @@ function createDefaultState(): TestState {
     async removeWorkspaceMemberAndDetachDocuments(memberId, member) {
       calls.push(["removeWorkspaceMemberAndDetachDocuments", memberId, member]);
     },
-    async transferWorkspaceOwnership(
-      workspaceId,
-      currentOwnerId,
-      newOwnerUserId,
-    ) {
-      calls.push([
-        "transferWorkspaceOwnership",
-        workspaceId,
-        currentOwnerId,
-        newOwnerUserId,
-      ]);
+    async transferWorkspaceOwnership(input) {
+      calls.push(["transferWorkspaceOwnership", input]);
     },
   };
 }
@@ -253,9 +244,9 @@ const stubbedModules = new Map<string, string>([
         );
       }
       export async function renameWorkspaceRecord() {}
-      export async function transferWorkspaceOwnership(workspaceId, currentOwnerId, newOwnerUserId) {
+      export async function transferWorkspaceOwnership(input) {
         return globalThis.__membersListTestState.transferWorkspaceOwnership(
-          workspaceId, currentOwnerId, newOwnerUserId,
+          input,
         );
       }
     `,
@@ -312,7 +303,7 @@ function waitForAsyncDrain(): Promise<void> {
 type Member = {
   id: string;
   userId: string;
-  role: "OWNER" | "EDITOR" | "VIEWER";
+  role: "EDITOR" | "VIEWER";
   user: { email: string; name: string | null };
 };
 
@@ -667,12 +658,19 @@ describe("MembersList", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      // `transferOwnership`'s `currentOwnerId` argument comes from
+      // `transferOwnership`'s actor id comes from
       // `requireUser()` (the *authenticated caller*), not from the
       // `currentUserId` prop passed to the component for UI gating — the
       // stub `requireUser` always resolves to `{ id: "user-1" }`.
       assert.deepEqual(callsOf("transferWorkspaceOwnership"), [
-        ["transferWorkspaceOwnership", "workspace-1", "user-1", "user-3"],
+        [
+          "transferWorkspaceOwnership",
+          {
+            workspaceId: "workspace-1",
+            actorUserId: "user-1",
+            targetUserId: "user-3",
+          },
+        ],
       ]);
       assert.equal(callsOf("reload").length, 1);
     } finally {

@@ -1,16 +1,19 @@
 import "server-only";
 
 import { requireWorkspaceCapability } from "@/lib/auth/workspace-capabilities";
+import { templateContentJsonForId } from "@/lib/document/create";
 import {
-  clampDocumentContent,
-  clampDocumentTitle,
-  importedMarkdownToContentJson,
-  templateContentJsonForId,
-} from "@/lib/document/create";
+  createDocumentWithCanonicalContent,
+  updateDocumentsMetadata,
+} from "@/lib/document/document-write-port";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import { type WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
+import {
+  type TransferWorkspaceOwnershipInput,
+  WorkspaceOwnershipTransferConflictError,
+} from "@/lib/workspace/ownership-transfer-types";
 
 export type WorkspaceMemberRemovalTarget = {
   workspaceId: string;
@@ -54,13 +57,13 @@ export async function removeWorkspaceMemberAndDetachDocuments(
   memberId: string,
   member: WorkspaceMemberRemovalTarget,
 ): Promise<void> {
-  await prisma.$transaction([
-    prisma.document.updateMany({
+  await prisma.$transaction(async (tx) => {
+    await updateDocumentsMetadata(tx, {
       where: { workspaceId: member.workspaceId, ownerId: member.userId },
       data: { workspaceId: null },
-    }),
-    prisma.workspaceMember.delete({ where: { id: memberId } }),
-  ]);
+    });
+    await tx.workspaceMember.delete({ where: { id: memberId } });
+  });
 }
 
 export async function renameWorkspaceRecord(
@@ -76,15 +79,22 @@ export async function renameWorkspaceRecord(
 export async function deleteWorkspaceAndDetachDocuments(
   workspaceId: string,
 ): Promise<void> {
-  await prisma.$transaction([
-    prisma.document.updateMany({
+  await prisma.$transaction(async (tx) => {
+    await updateDocumentsMetadata(tx, {
       where: { workspaceId },
       data: { workspaceId: null },
-    }),
-    prisma.workspace.delete({ where: { id: workspaceId } }),
-  ]);
+    });
+    await tx.workspace.delete({ where: { id: workspaceId } });
+  });
 }
 
+/**
+ * Removes the caller's membership row when they are not the workspace owner.
+ *
+ * Role values are intentionally ignored for this cleanup path so malformed or
+ * persisted OWNER membership rows can be removed safely by the affected user.
+ * Authored documents remain owned by the same user; only membership is deleted.
+ */
 export async function leaveWorkspaceForUser(
   workspaceId: string,
   userId: string,
@@ -117,35 +127,73 @@ export async function leaveWorkspaceForUser(
 }
 
 export async function transferWorkspaceOwnership(
-  workspaceId: string,
-  currentOwnerId: string,
-  newOwnerUserId: string,
+  input: TransferWorkspaceOwnershipInput,
 ): Promise<void> {
-  if (newOwnerUserId === currentOwnerId) {
+  if (input.targetUserId === input.actorUserId) {
     throw new Error("You already own this workspace.");
   }
 
-  const newOwnerMembership = await prisma.workspaceMember.findFirst({
-    where: { workspaceId, userId: newOwnerUserId },
-    select: { id: true },
-  });
+  await prisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: { ownerId: true },
+    });
 
-  if (!newOwnerMembership) {
-    throw new Error("New owner must be an existing member of the workspace.");
-  }
+    if (!workspace || workspace.ownerId !== input.actorUserId) {
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    }
 
-  await prisma.$transaction([
-    prisma.workspace.update({
-      where: { id: workspaceId },
-      data: { ownerId: newOwnerUserId },
-    }),
-    prisma.workspaceMember.delete({ where: { id: newOwnerMembership.id } }),
-    prisma.workspaceMember.upsert({
-      where: { workspaceId_userId: { workspaceId, userId: currentOwnerId } },
-      create: { workspaceId, userId: currentOwnerId, role: "EDITOR" },
+    const newOwnerMembership = await tx.workspaceMember.findFirst({
+      where: { workspaceId: input.workspaceId, userId: input.targetUserId },
+      select: { id: true },
+    });
+
+    if (!newOwnerMembership) {
+      throw new Error("New owner must be an existing member of the workspace.");
+    }
+
+    const casOwnerUpdate = await tx.workspace.updateMany({
+      where: { id: input.workspaceId, ownerId: input.actorUserId },
+      data: { ownerId: input.targetUserId },
+    });
+
+    if (casOwnerUpdate.count !== 1) {
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    }
+
+    const removedTargetMembership = await tx.workspaceMember.deleteMany({
+      where: {
+        id: newOwnerMembership.id,
+        workspaceId: input.workspaceId,
+        userId: input.targetUserId,
+      },
+    });
+
+    if (removedTargetMembership.count !== 1) {
+      throw new Error("New owner must be an existing member of the workspace.");
+    }
+
+    await tx.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: input.workspaceId,
+          userId: input.actorUserId,
+        },
+      },
+      create: {
+        workspaceId: input.workspaceId,
+        userId: input.actorUserId,
+        role: "EDITOR",
+      },
       update: { role: "EDITOR" },
-    }),
-  ]);
+    });
+  });
 }
 
 export async function listWorkspaceDocumentsForUser(
@@ -175,39 +223,12 @@ export async function createWorkspaceDocumentForUser(
 
   const contentJson = templateContentJsonForId(templateId);
 
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return prisma.document.create({
+  return createDocumentWithCanonicalContent<{ id: string }>(prisma, {
     data: {
       ownerId: userId,
       workspaceId,
-      ...(contentJson ? { contentJson } : {}),
     },
-    select: { id: true },
-  });
-}
-
-export async function importWorkspaceDocumentForUser(
-  userId: string,
-  workspaceId: string,
-  content: string,
-  rawTitle: string,
-): Promise<{ id: string }> {
-  await requireWorkspaceCapability(userId, workspaceId, "mutate");
-
-  const title = clampDocumentTitle(rawTitle, "Imported document");
-  const safeContent = clampDocumentContent(content);
-  const contentJson = importedMarkdownToContentJson(safeContent);
-
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return prisma.document.create({
-    data: {
-      ownerId: userId,
-      workspaceId,
-      title,
-      contentJson,
-    },
+    ...(contentJson ? { contentSnapshot: contentJson } : {}),
     select: { id: true },
   });
 }

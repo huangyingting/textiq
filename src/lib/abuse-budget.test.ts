@@ -266,3 +266,392 @@ test("requireAbuseBudgetSecret reads the optional auth secret", () => {
     }
   }
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Facade-level atomic-consume regression tests (#1997 gate)
+//
+// These tests exercise checkAbuseBudget / checkIpRateLimit through
+// InMemoryAbuseBudgetStore and must fail on the pre-ecec78bf optional-fallback
+// implementation (where concurrent callers each saw stale count=0 and all
+// returned allowed=true, allowing overshoot).
+// ──────────────────────────────────────────────────────────────────────────────
+
+test("checkAbuseBudget concurrent same-key allows exact limit and blocks excess atomically", async () => {
+  process.env.COLLAB_FLUSH_RATE_LIMIT = "2";
+  process.env.COLLAB_FLUSH_RATE_WINDOW_MS = "60000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const now = 1000;
+    const base = {
+      namespace: "collab.flush.room" as const,
+      subject: "room-concurrent-9001",
+      secret: SECRET,
+      store,
+      now,
+    };
+
+    const [r1, r2, r3] = await Promise.all([
+      checkAbuseBudget(base),
+      checkAbuseBudget(base),
+      checkAbuseBudget(base),
+    ]);
+
+    const results = [r1, r2, r3];
+    const allowed = results.filter((r) => r.allowed);
+    const blocked = results.filter((r) => !r.allowed);
+
+    // Derive limit from actual result (configured via env to 2)
+    const limit = r1.result.limit;
+    assert.equal(limit, 2);
+
+    assert.equal(
+      allowed.length,
+      2,
+      "exactly limit=2 concurrent requests allowed",
+    );
+    assert.equal(blocked.length, 1, "exactly one concurrent request blocked");
+
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("room-concurrent-9001", "abuse-budget-test-secret") = "a0209bf4fc80d4854fdc957139d71ae5"
+    const expectedSubjectHash = "a0209bf4fc80d4854fdc957139d71ae5";
+    const expectedKey = "collab.flush.room:a0209bf4fc80d4854fdc957139d71ae5";
+
+    // All results carry the literal expected subjectHash and key
+    assert.ok(
+      results.every((r) => r.subjectHash === expectedSubjectHash),
+      "all concurrent results carry the literal expected subjectHash",
+    );
+    assert.ok(
+      results.every((r) => r.key === expectedKey),
+      "all concurrent results carry the literal expected key",
+    );
+
+    // Sorted remaining values of allowed results: [0, 1]
+    const sortedRemaining = allowed
+      .map((r) => r.result.remaining)
+      .sort((a, b) => a - b);
+    assert.deepEqual(sortedRemaining, [0, 1]);
+
+    // All results carry the same resetAt (single shared window)
+    const expectedResetAt = now + 60000;
+    assert.ok(
+      results.every((r) => r.result.resetAt === expectedResetAt),
+      "all results share the same resetAt",
+    );
+
+    // Allowed results must not carry retryAfterSeconds
+    assert.ok(
+      allowed.every((r) => r.retryAfterSeconds === undefined),
+      "allowed results omit retryAfterSeconds",
+    );
+
+    // Blocked result carries exact field values including retryAfterSeconds
+    const blockedResult = blocked[0]!;
+    assert.equal(blockedResult.result.remaining, 0);
+    assert.equal(blockedResult.result.limit, limit);
+    assert.equal(blockedResult.result.resetAt, expectedResetAt);
+    assert.equal(
+      blockedResult.retryAfterSeconds,
+      Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
+    );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=2
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 2, resetAt: expectedResetAt });
+  } finally {
+    delete process.env.COLLAB_FLUSH_RATE_LIMIT;
+    delete process.env.COLLAB_FLUSH_RATE_WINDOW_MS;
+  }
+});
+
+test("checkIpRateLimit concurrent same-IP allows exact limit and blocks excess with normalized key", async () => {
+  process.env.IMPORT_RATE_LIMIT = "2";
+  process.env.IMPORT_RATE_WINDOW_MS = "60000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const now = 2000;
+    const ipHeaders = new Headers({
+      "x-forwarded-for": "203.0.113.50, 10.0.0.1",
+    });
+    const clientIp = {
+      remoteAddress: "10.0.0.5",
+      trustedProxyCidrs: ["10.0.0.0/8"],
+    };
+
+    // Confirm normalized IP extraction before the concurrent probe
+    assert.equal(
+      getClientSubject(ipHeaders, clientIp),
+      "203.0.113.50",
+      "trusted forwarded IP extracted correctly",
+    );
+
+    const base = {
+      namespace: "import.ip" as const,
+      headers: ipHeaders,
+      secret: SECRET,
+      store,
+      now,
+      clientIp,
+    };
+
+    const [r1, r2, r3] = await Promise.all([
+      checkIpRateLimit(base),
+      checkIpRateLimit(base),
+      checkIpRateLimit(base),
+    ]);
+
+    const results = [r1, r2, r3];
+    const allowed = results.filter((r) => r.allowed);
+    const blocked = results.filter((r) => !r.allowed);
+
+    // Derive limit from actual result
+    const limit = r1.result.limit;
+    assert.equal(limit, 2);
+
+    assert.equal(allowed.length, 2);
+    assert.equal(blocked.length, 1);
+
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("203.0.113.50", "abuse-budget-test-secret") = "a5b8bb321c928821ca7cf8db5ff55c62"
+    const expectedSubjectHash = "a5b8bb321c928821ca7cf8db5ff55c62";
+    const expectedKey = "import.ip:a5b8bb321c928821ca7cf8db5ff55c62";
+
+    // All results carry the literal expected subjectHash and key
+    assert.ok(results.every((r) => r.subjectHash === expectedSubjectHash));
+    assert.ok(results.every((r) => r.key === expectedKey));
+
+    // Key is namespace-prefixed hashed identifier — never contains the raw IP
+    assert.ok(
+      !expectedKey.includes("203.0.113.50"),
+      "key must not contain the raw client IP",
+    );
+    assert.equal(r1.key, expectedKey);
+    assert.equal(r1.subjectHash, expectedSubjectHash);
+
+    // Sorted remaining values of allowed results: [0, 1]
+    const sortedRemaining = allowed
+      .map((r) => r.result.remaining)
+      .sort((a, b) => a - b);
+    assert.deepEqual(sortedRemaining, [0, 1]);
+
+    // ResetAt and limit are consistent across all results
+    const expectedResetAt = now + 60000;
+    assert.ok(results.every((r) => r.result.resetAt === expectedResetAt));
+    assert.ok(results.every((r) => r.result.limit === limit));
+
+    // Allowed results omit retryAfterSeconds
+    assert.ok(allowed.every((r) => r.retryAfterSeconds === undefined));
+
+    // Blocked result carries exact retryAfterSeconds
+    const blockedResult = blocked[0]!;
+    assert.equal(blockedResult.result.remaining, 0);
+    assert.equal(blockedResult.result.resetAt, expectedResetAt);
+    assert.equal(
+      blockedResult.retryAfterSeconds,
+      Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
+    );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=2
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 2, resetAt: expectedResetAt });
+  } finally {
+    delete process.env.IMPORT_RATE_LIMIT;
+    delete process.env.IMPORT_RATE_WINDOW_MS;
+  }
+});
+
+test("checkAbuseBudget concurrent new-window limit=1 allows exactly one and blocks excess atomically", async () => {
+  process.env.AUTH_LOGIN_RATE_LIMIT = "1";
+  process.env.AUTH_LOGIN_RATE_WINDOW_MS = "60000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const now = 3000;
+    const base = {
+      namespace: "auth.login.email" as const,
+      subject: "concurrent-limit1-7777",
+      secret: SECRET,
+      store,
+      now,
+    };
+
+    // Pre-computed literal subjectHash and key:
+    // hashIdentifier("concurrent-limit1-7777", "abuse-budget-test-secret") = "48c67db244cfddd5ef45fc34fbabd9d2"
+    const expectedSubjectHash = "48c67db244cfddd5ef45fc34fbabd9d2";
+    const expectedKey = "auth.login.email:48c67db244cfddd5ef45fc34fbabd9d2";
+    const expectedResetAt = now + 60000;
+
+    const [r1, r2] = await Promise.all([
+      checkAbuseBudget(base),
+      checkAbuseBudget(base),
+    ]);
+
+    const results = [r1, r2];
+    const allowed = results.filter((r) => r.allowed);
+    const blocked = results.filter((r) => !r.allowed);
+
+    // Exactly one allowed, one blocked at limit=1
+    assert.equal(
+      allowed.length,
+      1,
+      "exactly one concurrent request allowed at limit=1",
+    );
+    assert.equal(
+      blocked.length,
+      1,
+      "exactly one concurrent request blocked at limit=1",
+    );
+
+    // All results carry the literal expected subjectHash and key
+    assert.equal(r1.subjectHash, expectedSubjectHash);
+    assert.equal(r2.subjectHash, expectedSubjectHash);
+    assert.equal(r1.key, expectedKey);
+    assert.equal(r2.key, expectedKey);
+
+    // Exact sorted remaining multiset: both remaining=0 at limit=1
+    const sortedRemaining = results
+      .map((r) => r.result.remaining)
+      .sort((a, b) => a - b);
+    assert.deepEqual(sortedRemaining, [0, 0]);
+
+    // Exact limit and resetAt for both results
+    assert.ok(results.every((r) => r.result.limit === 1));
+    assert.ok(results.every((r) => r.result.resetAt === expectedResetAt));
+
+    // Allowed result omits retryAfterSeconds
+    assert.equal(allowed[0]!.retryAfterSeconds, undefined);
+
+    // Blocked result carries exact retryAfterSeconds
+    assert.equal(
+      blocked[0]!.retryAfterSeconds,
+      Math.max(1, Math.ceil((expectedResetAt - now) / 1000)),
+    );
+
+    // Authoritative persisted state via public store.get — count must not exceed limit=1
+    const stored = await store.get(expectedKey);
+    assert.deepEqual(stored, { count: 1, resetAt: expectedResetAt });
+  } finally {
+    delete process.env.AUTH_LOGIN_RATE_LIMIT;
+    delete process.env.AUTH_LOGIN_RATE_WINDOW_MS;
+  }
+});
+
+test("checkAbuseBudget expired-window resets fresh via public facade and authoritative store state", async () => {
+  const store = new InMemoryAbuseBudgetStore();
+  const ns = getAbuseBudgetNamespace("account.export.user");
+  const limit = ns.defaultLimit;
+  const windowMs = ns.defaultWindowMs;
+  const subject = "export-user-expired-7777";
+
+  // First call at t=0 to derive the deterministic key through the public facade
+  const first = await checkAbuseBudget({
+    namespace: "account.export.user",
+    subject,
+    secret: SECRET,
+    store,
+    now: 0,
+  });
+  assert.equal(first.allowed, true);
+  const key = first.key;
+
+  // Seed an exhausted-and-expired window via the public set API (no private cast)
+  await store.set(key, { count: limit, resetAt: 100 });
+
+  // Advance time to exactly the boundary — atomicConsume resets when now >= resetAt
+  const now2 = 100;
+
+  const reset = await checkAbuseBudget({
+    namespace: "account.export.user",
+    subject,
+    secret: SECRET,
+    store,
+    now: now2,
+  });
+
+  assert.equal(reset.allowed, true);
+  assert.equal(reset.result.remaining, limit - 1);
+  assert.equal(reset.result.limit, limit);
+  assert.equal(reset.result.resetAt, now2 + windowMs);
+
+  // Authoritative stored state via the intentional public get API
+  const stored = await store.get(key);
+  assert.deepEqual(stored, { count: 1, resetAt: now2 + windowMs });
+});
+
+test("checkAbuseBudget namespace isolation: same subject yields same hash but independent budgets", async () => {
+  process.env.AUTH_LOGIN_RATE_LIMIT = "1";
+  process.env.AUTH_LOGIN_RATE_WINDOW_MS = "60000";
+  process.env.AUTH_SIGNUP_RATE_LIMIT = "2";
+  process.env.AUTH_SIGNUP_RATE_WINDOW_MS = "60000";
+  try {
+    const store = new InMemoryAbuseBudgetStore();
+    const subject = "isolation-subject-5555";
+    const now = 0;
+
+    const r1a = await checkAbuseBudget({
+      namespace: "auth.login.email",
+      subject,
+      secret: SECRET,
+      store,
+      now,
+    });
+    const r2a = await checkAbuseBudget({
+      namespace: "auth.signup.email",
+      subject,
+      secret: SECRET,
+      store,
+      now,
+    });
+
+    // Same subject + secret → same subjectHash regardless of namespace
+    assert.equal(r1a.subjectHash, r2a.subjectHash);
+
+    // Different namespaces → different namespace-prefixed keys
+    assert.notEqual(r1a.key, r2a.key);
+    assert.equal(r1a.key, `auth.login.email:${r1a.subjectHash}`);
+    assert.equal(r2a.key, `auth.signup.email:${r2a.subjectHash}`);
+
+    assert.equal(r1a.allowed, true);
+    assert.equal(r2a.allowed, true);
+    assert.equal(r1a.result.limit, 1);
+    assert.equal(r2a.result.limit, 2);
+
+    // Exhaust auth.login.email (limit=1)
+    const r1b = await checkAbuseBudget({
+      namespace: "auth.login.email",
+      subject,
+      secret: SECRET,
+      store,
+      now,
+    });
+    assert.equal(
+      r1b.allowed,
+      false,
+      "auth.login.email is exhausted at limit=1",
+    );
+
+    // auth.signup.email has an independent budget — second call still allowed
+    const r2b = await checkAbuseBudget({
+      namespace: "auth.signup.email",
+      subject,
+      secret: SECRET,
+      store,
+      now,
+    });
+    assert.equal(
+      r2b.allowed,
+      true,
+      "auth.signup.email retains independent budget after auth.login.email is blocked",
+    );
+
+    // Stored state is independent at different keys via the public get API
+    const stored1 = await store.get(r1a.key);
+    const stored2 = await store.get(r2a.key);
+    assert.ok(stored1 !== undefined && stored1.count === 1);
+    assert.ok(stored2 !== undefined && stored2.count === 2);
+  } finally {
+    delete process.env.AUTH_LOGIN_RATE_LIMIT;
+    delete process.env.AUTH_LOGIN_RATE_WINDOW_MS;
+    delete process.env.AUTH_SIGNUP_RATE_LIMIT;
+    delete process.env.AUTH_SIGNUP_RATE_WINDOW_MS;
+  }
+});

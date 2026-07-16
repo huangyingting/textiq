@@ -5,6 +5,7 @@ import { $getRoot } from "lexical";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import type { ImportActionResult } from "@/lib/action-ports";
 import { useInsertImportedMarkdown } from "@/lib/lexical/use-insert-imported-markdown";
 import { resolveImportStep } from "@/lib/content";
 import { ImportButton } from "@/components/editor/import-button";
@@ -86,10 +87,25 @@ function ImportConfirmDialog({
  * import itself is tagged so autosave persists it — see
  * `useInsertImportedMarkdown`.
  */
-export function ImportPlugin({ iconOnly = false }: { iconOnly?: boolean }) {
+export function ImportPlugin({
+  documentId,
+  importFile: parseImportFile,
+  iconOnly = false,
+}: {
+  documentId: string;
+  importFile: (
+    documentId: string,
+    file: File,
+  ) => Promise<ImportActionResult<{ markdown: string }>>;
+  iconOnly?: boolean;
+}) {
   const [editor] = useLexicalComposerContext();
   const insertMarkdown = useInsertImportedMarkdown();
   const [pendingMarkdown, setPendingMarkdown] = useState<string | null>(null);
+  const importFile = useCallback(
+    (file: File) => parseImportFile(documentId, file),
+    [documentId, parseImportFile],
+  );
 
   const isDocumentEmpty = useCallback(
     () =>
@@ -127,6 +143,7 @@ export function ImportPlugin({ iconOnly = false }: { iconOnly?: boolean }) {
     <>
       <ImportButton
         onImport={handleImport}
+        importFile={importFile}
         label="Import"
         compact
         iconOnly={iconOnly}

@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   VERIFICATION_TOKEN_REJECTION_MESSAGE,
   VERIFICATION_TOKEN_TTL_MS,
+  buildVerificationTokenPersistenceInput,
   evaluateVerificationToken,
+  generateVerificationTokenMaterial,
   generateVerificationToken,
   hashVerificationToken,
 } from "@/lib/auth/verification-token";
@@ -104,4 +106,26 @@ test("generateVerificationToken returns a high-entropy, URL-safe, unique token",
   assert.notEqual(a, b);
   assert.match(a, /^[A-Za-z0-9_-]+$/);
   assert.ok(a.length >= 32);
+});
+
+test("generateVerificationTokenMaterial returns a raw token and matching hash", () => {
+  const material = generateVerificationTokenMaterial();
+  assert.notEqual(material.rawToken, material.tokenHash);
+  assert.equal(material.tokenHash, hashVerificationToken(material.rawToken));
+});
+
+test("buildVerificationTokenPersistenceInput keeps only durable token state", () => {
+  const material = generateVerificationTokenMaterial();
+  const expiresAt = new Date("2026-06-21T10:00:00.000Z");
+  const persisted = buildVerificationTokenPersistenceInput({
+    userId: "user_1",
+    material,
+    expiresAt,
+  });
+  assert.deepEqual(persisted, {
+    userId: "user_1",
+    tokenHash: material.tokenHash,
+    expiresAt,
+  });
+  assert.equal(Object.values(persisted).includes(material.rawToken), false);
 });

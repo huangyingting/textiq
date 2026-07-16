@@ -30,12 +30,15 @@ import { accessDecisionToPlainTextApiResponse } from "@/lib/access-policy/adapte
 import { notFound, tooManyRequests } from "@/lib/api/errors";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { resolvePublicAssetAccessForDocument } from "@/lib/public-render/resolver-core";
+import {
+  publicAssetShareModeFromParam,
+  PUBLIC_ASSET_ROUTE_DOCUMENT_SELECT,
+  resolvePublicAssetAccessForDocument,
+} from "@/lib/share/public-asset-policy";
 import {
   decideSlideAssetAccess,
   slideAssetAccessDecisionToAccessDecision,
 } from "@/lib/slides/asset-access";
-import { SHARE_ACCESS_SELECT } from "@/lib/share-access";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 import { shareIdFromParam } from "@/lib/slug";
 import { logError } from "@/lib/log";
@@ -68,10 +71,9 @@ export async function GET(
   // Reconstruct the storage key: `${documentId}/${filename}`.
   const storageKey = `${documentId}/${filenamePart}`;
 
-  const requestedShareMode =
-    requestedShareModeParam === "present" || requestedShareModeParam === "embed"
-      ? requestedShareModeParam
-      : null;
+  const requestedShareMode = publicAssetShareModeFromParam(
+    requestedShareModeParam,
+  );
 
   // -------------------------------------------------------------------
   // 1. Look up the asset and its owning document (no access decision yet).
@@ -83,17 +85,7 @@ export async function GET(
       mimeType: true,
       storageKey: true,
       document: {
-        select: {
-          ownerId: true,
-          workspaceId: true,
-          ...SHARE_ACCESS_SELECT,
-          workspace: {
-            select: {
-              ownerId: true,
-              members: { select: { userId: true, role: true } },
-            },
-          },
-        },
+        select: PUBLIC_ASSET_ROUTE_DOCUMENT_SELECT,
       },
     },
   });

@@ -51,6 +51,8 @@ prisma/*.db
 prisma/*.db-journal
 prisma/*.db-wal
 prisma/*.db-shm
+# prisma test databases (generated during test runs)
+prisma/.test-dbs/
 
 # === Ralph working files (generated during runs) ===
 prd.json

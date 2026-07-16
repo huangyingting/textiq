@@ -19,7 +19,6 @@ import {
   createWorkspaceDocumentForUser,
   deleteWorkspaceAndDetachDocuments,
   getWorkspaceMemberRemovalTarget,
-  importWorkspaceDocumentForUser,
   leaveWorkspaceForUser,
   listWorkspaceDocumentsForUser,
   removeWorkspaceMemberAndDetachDocuments,
@@ -27,11 +26,12 @@ import {
   transferWorkspaceOwnership,
 } from "@/lib/workspace/service";
 import type { WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
-import type { WorkspaceRole } from "@/lib/workspace/roles";
+import { isWorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
+import type { InvitableWorkspaceRole } from "@/lib/workspace/roles";
 
 export async function createInviteLink(
   workspaceId: string,
-  role: WorkspaceRole,
+  role: InvitableWorkspaceRole,
   options: CreateInviteLinkOptions = {},
 ): Promise<InviteLink> {
   const user = await requireUser(redirect);
@@ -134,11 +134,10 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 /**
  * Lets the current user leave a workspace by deleting their own membership.
  *
- * Any non-owner member (EDITOR or VIEWER) may leave. The OWNER cannot leave —
- * doing so would orphan the workspace — so they receive a clear error directing
- * them to transfer ownership first. Documents the leaving member authored keep
- * their `ownerId`, so they remain accessible to that member in their personal
- * lists; only the membership row is removed.
+ * Any non-owner membership row may leave. The OWNER cannot leave — doing so
+ * would orphan the workspace — so they receive a clear error directing them to
+ * transfer ownership first. Role values are intentionally ignored so malformed
+ * persisted rows can still be cleaned up by the affected user.
  */
 export async function leaveWorkspace(workspaceId: string): Promise<void> {
   const user = await requireUser(redirect);
@@ -168,7 +167,18 @@ export async function transferOwnership(
   const user = await requireUser(redirect);
   await requireWorkspaceCapability(user.id, workspaceId, "manage");
 
-  await transferWorkspaceOwnership(workspaceId, user.id, newOwnerUserId);
+  try {
+    await transferWorkspaceOwnership({
+      workspaceId,
+      actorUserId: user.id,
+      targetUserId: newOwnerUserId,
+    });
+  } catch (error) {
+    if (isWorkspaceOwnershipTransferConflictError(error)) {
+      throw new Error("Only the workspace owner may perform this action.");
+    }
+    throw error;
+  }
 
   revalidatePath("/app");
   revalidatePath("/app/workspaces");
@@ -200,33 +210,6 @@ export async function createWorkspaceDocument(
     user.id,
     workspaceId,
     templateId,
-  );
-
-  revalidatePath("/app");
-  revalidatePath(`/app/workspaces/${workspaceId}`);
-  redirect(`/app/documents/${document.id}`);
-}
-
-/**
- * Creates a document from pre-extracted import text inside a workspace, then
- * redirects to its editor.
- *
- * The caller's workspace role is checked server-side: only OWNER and EDITOR
- * may proceed; a VIEWER (or non-member) receives an authorization error.
- * `workspaceId` is stored on the document so it appears in both the workspace
- * document list and the dashboard lists.
- */
-export async function importWorkspaceDocument(
-  workspaceId: string,
-  content: string,
-  rawTitle: string,
-): Promise<void> {
-  const user = await requireUser(redirect);
-  const document = await importWorkspaceDocumentForUser(
-    user.id,
-    workspaceId,
-    content,
-    rawTitle,
   );
 
   revalidatePath("/app");

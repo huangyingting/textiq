@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 
 import { requireDocumentCapability } from "@/lib/auth/document-permissions";
 import {
-  createDocumentFromImportForUser,
   createDocumentFromTemplateForUser,
   clampDocumentTitle,
 } from "@/lib/document/create";
@@ -43,32 +42,6 @@ export async function createDocumentFromTemplate(
   const user = await requireUser(redirect);
 
   const document = await createDocumentFromTemplateForUser(user.id, templateId);
-
-  revalidatePath("/app");
-  redirect(`/app/documents/${document.id}`);
-}
-
-/**
- * Creates a document from pre-extracted import text and redirects to its editor.
- *
- * The `content` is the normalized Markdown returned by `POST /api/import`. The
- * caller is responsible for ensuring it has already been validated/normalized.
- * Content is clamped server-side to the central document content limit as a final safety net.
- *
- * `redirect` throws `NEXT_REDIRECT`, so it must stay outside any try/catch and
- * run after the document is created.
- */
-export async function createDocumentFromImport(
-  content: string,
-  rawTitle: string,
-): Promise<void> {
-  const user = await requireUser(redirect);
-
-  const document = await createDocumentFromImportForUser(
-    user.id,
-    content,
-    rawTitle,
-  );
 
   revalidatePath("/app");
   redirect(`/app/documents/${document.id}`);

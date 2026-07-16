@@ -4,8 +4,8 @@ import { dirname, join, normalize } from "node:path";
 import process from "node:process";
 import {
   lineAndColumn,
+  makeShouldScanFile,
   scanRepositoryRoots,
-  shouldScanSourceFile,
   toPosix,
 } from "./source-scan-utils.mjs";
 
@@ -14,9 +14,9 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const IMPORT_RE =
   /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s*)?["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 
-function shouldScanFile(filePath) {
-  return shouldScanSourceFile(filePath, SOURCE_EXTENSIONS);
-}
+const shouldScanFile = makeShouldScanFile({
+  sourceExtensions: SOURCE_EXTENSIONS,
+});
 
 function resolveImport(filePath, specifier) {
   if (specifier.startsWith("@/")) {

@@ -4,8 +4,8 @@
  * Language switcher button rendered in the site header.
  *
  * On selection, it:
- *  1. Calls the `setLocaleCookie` server action to persist the new locale.
- *  2. Calls `setLocaleOptimistic` so the UI updates instantly (no flash).
+ *  1. Calls `setLocaleOptimistic` inside a transition so the UI updates instantly.
+ *  2. Calls the `setLocaleCookie` server action to persist the new locale.
  *  3. Calls `router.refresh()` to re-render the RSC tree with the new locale
  *     (updates `<html lang>` and all server-rendered translated strings).
  */
@@ -14,7 +14,11 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
 import { MENU_CHROME, MENU_ITEM, cx } from "@/components/ui";
-import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
+import {
+  LOCALE_DEFINITIONS,
+  getLocaleDefinition,
+  type Locale,
+} from "@/lib/i18n";
 import { setLocaleCookie } from "@/lib/i18n/actions";
 import {
   useLocale,
@@ -22,29 +26,38 @@ import {
   useTranslation,
 } from "@/lib/i18n/locale-context";
 
-const LOCALE_LABELS: Record<Locale, string> = {
-  en: "English",
-  es: "Español",
-};
-
 export function LanguageSwitcher() {
   const router = useRouter();
   const locale = useLocale();
   const setLocaleOptimistic = useSetLocaleOptimistic();
   const t = useTranslation();
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
   const switchTo = (next: Locale) => {
-    if (next === locale) {
+    if (isPending || next === locale) {
       setOpen(false);
       return;
     }
-    setLocaleOptimistic(next);
+    const confirmedLocale = locale;
     setOpen(false);
+    setError(null);
     startTransition(async () => {
-      await setLocaleCookie(next);
+      setLocaleOptimistic(next);
+      try {
+        const result = await setLocaleCookie(next);
+        if (!result.ok) {
+          setLocaleOptimistic(confirmedLocale);
+          setError(result.error);
+          return;
+        }
+      } catch {
+        setLocaleOptimistic(confirmedLocale);
+        setError(t("languageSwitcher.persistenceError"));
+        return;
+      }
       router.refresh();
     });
   };
@@ -55,8 +68,13 @@ export function LanguageSwitcher() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`${t("languageSwitcher.label")}: ${LOCALE_LABELS[locale]}`}
-        onClick={() => setOpen((v) => !v)}
+        aria-busy={isPending || undefined}
+        aria-label={`${t("languageSwitcher.label")}: ${getLocaleDefinition(locale).displayName}`}
+        disabled={isPending}
+        onClick={() => {
+          if (!open) setError(null);
+          setOpen((value) => !value);
+        }}
         className="flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary"
       >
         <svg
@@ -92,21 +110,22 @@ export function LanguageSwitcher() {
               MENU_CHROME,
             )}
           >
-            {SUPPORTED_LOCALES.map((loc) => (
-              <li key={loc} role="option" aria-selected={loc === locale}>
+            {LOCALE_DEFINITIONS.map(({ locale: option, displayName }) => (
+              <li key={option} role="option" aria-selected={option === locale}>
                 <button
                   type="button"
-                  onClick={() => switchTo(loc)}
+                  disabled={isPending}
+                  onClick={() => switchTo(option)}
                   className={cx(
                     MENU_ITEM,
                     "gap-2 px-4",
-                    loc === locale
+                    option === locale
                       ? "font-medium text-ds-accent hover:text-ds-accent"
                       : undefined,
                   )}
                 >
-                  {LOCALE_LABELS[loc]}
-                  {loc === locale && (
+                  {displayName}
+                  {option === locale && (
                     <svg
                       aria-hidden="true"
                       viewBox="0 0 24 24"
@@ -126,6 +145,15 @@ export function LanguageSwitcher() {
           </ul>
         </>
       )}
+
+      {error ? (
+        <p
+          role="alert"
+          className="absolute right-0 top-full z-dropdown mt-2 w-64 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text shadow-ds-overlay"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

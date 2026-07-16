@@ -31,10 +31,10 @@ import {
   updateDocumentSharePolicyData,
 } from "./persistence-service";
 import { LEGACY_DECK_SCHEMA_VERSION } from "./deck-kernel/deck";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/test/prisma-raw";
 import type { CurrentDeck, CurrentSlideChildNode } from "./deck-schema";
 import * as persistenceService from "./persistence-service";
-import { writeDeckWithCas, type DeckCasDb } from "./deck-cas-writer";
+import { writeDeckWithCas } from "./deck-cas-writer";
 import { snapshotDocumentVersion } from "./persistence/helpers";
 
 // ---------------------------------------------------------------------------
@@ -801,10 +801,14 @@ describe("deck persistence operations", () => {
   });
 
   test("persistDeck writes valid decks and snapshots on success", async (t) => {
+    const events: string[] = [];
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 1,
     }));
-    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => null);
+    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => {
+      events.push("snapshot");
+      return null;
+    });
     stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
       contentJson: EMPTY_LEXICAL_STATE,
       deckJson: VALID_DECK,
@@ -821,6 +825,19 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.comment, "updateMany", async () => ({
       count: 0,
     }));
+    const transaction = stubPrismaMethod(
+      t,
+      prisma,
+      "$transaction",
+      async (fn) => {
+        const result = await runTransactionCallback(
+          fn,
+          prismaTransaction<Prisma.TransactionClient>(prisma),
+        );
+        events.push("commit");
+        return result;
+      },
+    );
 
     const result = await persistDeck("doc-save", VALID_DECK, null, {
       userId: "user-editor",
@@ -828,6 +845,83 @@ describe("deck persistence operations", () => {
 
     assert.equal(result.ok, true);
     assert.equal(createVersion.calls.length, 1);
+    assert.deepEqual(events, ["commit", "snapshot"]);
+    assert.deepEqual(transaction.calls[0]?.[1], {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  });
+
+  test("persistDeck keeps a committed save successful when the later best-effort snapshot fails", async (t) => {
+    let committedDeck: unknown = null;
+    let pendingDeck: unknown = null;
+    let snapshotObservedCommittedSave = false;
+    const tx = prismaTransaction<Prisma.TransactionClient>({
+      document: {
+        updateMany: async (args: Prisma.DocumentUpdateManyArgs) => {
+          pendingDeck = args.data.deckJson;
+          return { count: 1 };
+        },
+      },
+      comment: {
+        findMany: async () => [],
+      },
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) => {
+      const result = await runTransactionCallback(fn, tx);
+      committedDeck = pendingDeck;
+      return result;
+    });
+    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => {
+      snapshotObservedCommittedSave = committedDeck !== null;
+      throw new Error("snapshot unavailable");
+    });
+
+    const result = await persistDeck("doc-snapshot-failure", VALID_DECK, null);
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(committedDeck, VALID_DECK);
+    assert.equal(snapshotObservedCommittedSave, true);
+  });
+
+  test("persistDeck retries PostgreSQL-style serialization conflicts before committing", async (t) => {
+    let writeAttempts = 0;
+    const transactionOptions: unknown[] = [];
+    const tx = prismaTransaction<Prisma.TransactionClient>({
+      document: {
+        updateMany: async () => {
+          writeAttempts += 1;
+          if (writeAttempts === 1) {
+            throw Object.assign(new Error("serialization conflict"), {
+              code: "P2034",
+            });
+          }
+          return { count: 1 };
+        },
+      },
+      comment: {
+        findMany: async () => [],
+      },
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn, options) => {
+      transactionOptions.push(options);
+      return runTransactionCallback(fn, tx);
+    });
+    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => {
+      throw new Error("skip snapshot");
+    });
+
+    const result = await persistDeck(
+      "doc-serialization-retry",
+      VALID_DECK,
+      null,
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(writeAttempts, 2);
+    assert.deepEqual(transactionOptions, [
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ]);
   });
 
   test("persistDeck floats deleted-slide comment anchors after CAS success", async (t) => {
@@ -869,12 +963,24 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.documentVersion, "create", async () => ({}));
     stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
     stubPrismaMethod(t, prisma.documentVersion, "deleteMany", async () => ({}));
-    stubPrismaMethod(t, prisma.comment, "findMany", async () => []);
+    stubPrismaMethod(t, prisma.comment, "findMany", async () => [
+      {
+        id: "comment-on-deleted-slide",
+        slideId: "slide-delete",
+        elementId: null,
+      },
+    ]);
     const commentUpdateMany = stubPrismaMethod(
       t,
       prisma.comment,
       "updateMany",
       async () => ({ count: 1 }),
+    );
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(
+        fn,
+        prismaTransaction<Prisma.TransactionClient>(prisma),
+      ),
     );
 
     const result = await persistDeck("doc-slide-delete", nextDeck, null, {
@@ -886,7 +992,8 @@ describe("deck persistence operations", () => {
     const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
     assert.deepEqual(commentUpdateArgs.where, {
       documentId: "doc-slide-delete",
-      slideId: "slide-delete",
+      parentId: null,
+      id: { in: ["comment-on-deleted-slide"] },
     });
     assert.deepEqual(commentUpdateArgs.data, {
       slideId: null,
@@ -949,12 +1056,24 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.documentVersion, "create", async () => ({}));
     stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
     stubPrismaMethod(t, prisma.documentVersion, "deleteMany", async () => ({}));
-    stubPrismaMethod(t, prisma.comment, "findMany", async () => []);
+    stubPrismaMethod(t, prisma.comment, "findMany", async () => [
+      {
+        id: "comment-on-deleted-node",
+        slideId: "slide-keep",
+        elementId: "node-delete",
+      },
+    ]);
     const commentUpdateMany = stubPrismaMethod(
       t,
       prisma.comment,
       "updateMany",
       async () => ({ count: 1 }),
+    );
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(
+        fn,
+        prismaTransaction<Prisma.TransactionClient>(prisma),
+      ),
     );
 
     const result = await persistDeck("doc-node-delete", nextDeck, null, {
@@ -966,15 +1085,15 @@ describe("deck persistence operations", () => {
     const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
     assert.deepEqual(commentUpdateArgs.where, {
       documentId: "doc-node-delete",
-      slideId: "slide-keep",
-      elementId: { in: ["node-delete"] },
+      parentId: null,
+      id: { in: ["comment-on-deleted-node"] },
     });
     assert.deepEqual(commentUpdateArgs.data, {
       elementId: null,
     });
   });
 
-  test("persistDeck floats orphaned current anchors when previous deck load fails", async (t) => {
+  test("persistDeck repairs current orphaned anchors by their nearest surviving scope", async (t) => {
     const nextDeck = {
       ...VALID_DECK,
       slides: [
@@ -997,13 +1116,10 @@ describe("deck persistence operations", () => {
     stubPrismaMethod(t, prisma.document, "updateMany", async () => ({
       count: 1,
     }));
-    stubPrismaMethod(t, prisma.document, "findUnique", async (args) => {
-      const prismaArgs = args as PrismaStubArgs;
-      if (prismaArgs.select?.deckJson && !prismaArgs.select?.contentJson) {
-        throw new Error("previous deck unavailable");
-      }
-      return { contentJson: EMPTY_LEXICAL_STATE, deckJson: nextDeck };
-    });
+    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
+      contentJson: EMPTY_LEXICAL_STATE,
+      deckJson: nextDeck,
+    }));
     stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => null);
     stubPrismaMethod(t, prisma.documentVersion, "create", async () => ({}));
     stubPrismaMethod(t, prisma.documentVersion, "findMany", async () => []);
@@ -1024,22 +1140,37 @@ describe("deck persistence operations", () => {
       "updateMany",
       async () => ({ count: 2 }),
     );
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(
+        fn,
+        prismaTransaction<Prisma.TransactionClient>(prisma),
+      ),
+    );
 
     const result = await persistDeck("doc-orphaned-current", nextDeck, null, {
       userId: "user-editor",
     });
 
     assert.equal(result.ok, true);
-    assert.equal(commentUpdateMany.calls.length, 1);
-    const commentUpdateArgs = firstCallArg<PrismaStubArgs>(commentUpdateMany);
-    assert.deepEqual(commentUpdateArgs.where, {
-      id: { in: ["missing-slide", "missing-node"] },
+    assert.equal(commentUpdateMany.calls.length, 2);
+    const floatToDeckArgs = commentUpdateMany.calls[0]?.[0] as PrismaStubArgs;
+    assert.deepEqual(floatToDeckArgs.where, {
+      documentId: "doc-orphaned-current",
+      parentId: null,
+      id: { in: ["missing-slide"] },
     });
-    assert.deepEqual(commentUpdateArgs.data, {
+    assert.deepEqual(floatToDeckArgs.data, {
       slideId: null,
       elementId: null,
       anchorGeometry: Prisma.DbNull,
     });
+    const floatToSlideArgs = commentUpdateMany.calls[1]?.[0] as PrismaStubArgs;
+    assert.deepEqual(floatToSlideArgs.where, {
+      documentId: "doc-orphaned-current",
+      parentId: null,
+      id: { in: ["missing-node"] },
+    });
+    assert.deepEqual(floatToSlideArgs.data, { elementId: null });
   });
 
   test("persistDeck does not reconcile comment anchors when CAS conflicts", async (t) => {
@@ -1067,6 +1198,12 @@ describe("deck persistence operations", () => {
       "updateMany",
       async () => ({ count: 0 }),
     );
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
+      runTransactionCallback(
+        fn,
+        prismaTransaction<Prisma.TransactionClient>(prisma),
+      ),
+    );
 
     const result = await persistDeck(
       "doc-conflict",
@@ -1083,6 +1220,48 @@ describe("deck persistence operations", () => {
     });
     assert.equal(commentFindMany.calls.length, 0);
     assert.equal(commentUpdateMany.calls.length, 0);
+  });
+
+  test("persistDeck rolls back the deck write and returns a structured failure when comment reconciliation aborts", async (t) => {
+    const originalDeck = { ...VALID_DECK, slides: [] };
+    let committedDeck: unknown = originalDeck;
+    let snapshotAttempts = 0;
+    const tx = prismaTransaction<Prisma.TransactionClient>({
+      document: {
+        updateMany: async (args: Prisma.DocumentUpdateManyArgs) => {
+          committedDeck = args.data.deckJson;
+          return { count: 1 };
+        },
+      },
+      comment: {
+        findMany: async () => {
+          throw new Error("comment reconciliation failed");
+        },
+      },
+    });
+    stubPrismaMethod(t, prisma.documentVersion, "findFirst", async () => {
+      snapshotAttempts += 1;
+      return null;
+    });
+    stubPrismaMethod(t, prisma, "$transaction", async (fn) => {
+      const beforeTransaction = committedDeck;
+      try {
+        return await runTransactionCallback(fn, tx);
+      } catch (error) {
+        committedDeck = beforeTransaction;
+        throw error;
+      }
+    });
+
+    const result = await persistDeck("doc-reconcile-failure", VALID_DECK, null);
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "Failed to save deck. Please try again.",
+      failure: { code: "storage_unavailable", retryable: true },
+    });
+    assert.deepEqual(committedDeck, originalDeck);
+    assert.equal(snapshotAttempts, 0);
   });
 
   test("persistence-service closes patch and command save exports", () => {
@@ -1456,6 +1635,7 @@ describe("document snapshot and restore operations", () => {
   });
 
   test("restoreVersion writes sanitized state, rebuilds visual rows, and revalidates shares", async (t) => {
+    const documentUpdates: unknown[] = [];
     stubPrismaMethod(
       t,
       prisma.documentVersion,
@@ -1484,7 +1664,10 @@ describe("document snapshot and restore operations", () => {
     const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1498,6 +1681,10 @@ describe("document snapshot and restore operations", () => {
     );
 
     assert.equal(result.documentId, "doc-restore");
+    assert.equal(
+      (documentUpdates[0] as { data: { content: string } }).data.content,
+      "",
+    );
   });
 
   test("restoreVersion rotates deck tokens so pre-restore CAS writes conflict", async (t) => {
@@ -1552,9 +1739,7 @@ describe("document snapshot and restore operations", () => {
 
     const casDb = {
       document: {
-        updateMany: async (
-          args: Parameters<DeckCasDb["document"]["updateMany"]>[0],
-        ) => {
+        updateMany: async (args: Prisma.DocumentUpdateManyArgs) => {
           const where = args.where as Record<string, unknown>;
           const whereToken = where.deckRevisionToken;
           if (whereToken !== currentRevisionToken) {
@@ -1569,7 +1754,7 @@ describe("document snapshot and restore operations", () => {
         },
         findUnique: async () => ({ deckRevisionToken: currentRevisionToken }),
       },
-    } satisfies DeckCasDb;
+    };
 
     const staleWriteResult = await writeDeckWithCas({
       documentId: "doc-restore",
@@ -1593,6 +1778,7 @@ describe("document snapshot and restore operations", () => {
 describe("visual persistence exported flows", () => {
   test("atomicSaveDocumentLexical snapshots, writes content, mirrors visuals, and logs outcome", async (t) => {
     const txBase = makeStubTx();
+    const documentUpdates: unknown[] = [];
     const tx = prismaTransaction<TransactionWithCalls>({
       ...txBase,
       documentVersion: {
@@ -1609,7 +1795,10 @@ describe("visual persistence exported flows", () => {
           contentJson: EMPTY_LEXICAL_STATE,
           deckJson: null,
         }),
-        updateMany: async () => ({ count: 1 }),
+        updateMany: async (args: unknown) => {
+          documentUpdates.push(args);
+          return { count: 1 };
+        },
       },
     });
     stubPrismaMethod(t, prisma, "$transaction", async (fn) =>
@@ -1623,6 +1812,10 @@ describe("visual persistence exported flows", () => {
     );
 
     assert.equal(outcome.created, 0);
+    assert.deepEqual((documentUpdates[0] as { data: unknown }).data, {
+      contentJson: EMPTY_LEXICAL_STATE,
+      content: "",
+    });
     assert.ok(tx._calls.includes("documentVersion.create"));
     assert.ok(tx._calls.includes("visual.findMany"));
   });

@@ -11,8 +11,8 @@ export { E2E_PROFILE_FIXTURE, fixturePngBuffer };
  * Deterministic E2E profile fixture (Epic #517, issue #518).
  *
  * The "E2E profile" is a fully deterministic seed (see `prisma/seed-e2e.ts`,
- * run via `npm run db:seed:e2e`) that creates a fixed owner user, a fixed
- * viewer user, and a single document carrying text, an embedded visual, a
+ * run via `npm run db:seed:e2e`) that creates fixed owner/editor/viewer users,
+ * a workspace, and a single document carrying text, an embedded visual, a
  * persisted `deckJson`, an enabled public share policy, and one slide image
  * `Asset` (with storage bytes written). Every identifier below is a hard-coded
  * constant so the seed and the specs share one source of truth and never drift.
@@ -40,6 +40,14 @@ export function profileViewerCredentials(): Credentials {
   return {
     email: E2E_PROFILE_FIXTURE.viewer.email,
     password: E2E_PROFILE_FIXTURE.viewer.password,
+  };
+}
+
+/** Editor (mutating workspace member) credentials for the deterministic profile. */
+export function profileEditorCredentials(): Credentials {
+  return {
+    email: E2E_PROFILE_FIXTURE.editor.email,
+    password: E2E_PROFILE_FIXTURE.editor.password,
   };
 }
 

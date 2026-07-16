@@ -1,6 +1,11 @@
 import "dotenv/config";
 
 import { Prisma } from "../src/generated/prisma/client";
+import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
+import {
+  createDocumentWithCanonicalContent,
+  updateDocumentWithCanonicalContent,
+} from "../src/lib/document/document-write-port";
 import { buildSeedContentJson } from "../src/lib/lexical/seed-content";
 import { FIXTURES } from "../src/lib/visual/fixtures";
 import {
@@ -12,6 +17,8 @@ import { createScriptPrismaClient } from "./script-prisma-client";
 const prisma = createScriptPrismaClient();
 
 async function main() {
+  const initialDocumentContent =
+    "Paste your text here, then generate a flowchart, mind map, or chart.";
   const demoUser = await prisma.user.upsert({
     where: { email: "demo@textiq.test" },
     update: {},
@@ -27,11 +34,13 @@ async function main() {
 
   const demoDocument =
     existingDocument ??
-    (await prisma.document.create({
+    (await createDocumentWithCanonicalContent<{
+      id: string;
+      title: string;
+    }>(prisma, {
+      contentSnapshot: markdownToLexicalStateObject(initialDocumentContent),
       data: {
         title: "Welcome to TextIQ",
-        content:
-          "Paste your text here, then generate a flowchart, mind map, or chart.",
         ownerId: demoUser.id,
       },
     }));
@@ -86,9 +95,9 @@ async function main() {
     demoVisual.id,
   ) as unknown as Prisma.InputJsonValue;
 
-  await prisma.document.update({
+  await updateDocumentWithCanonicalContent(prisma, {
     where: { id: demoDocument.id },
-    data: { contentJson: contentJsonValue },
+    contentSnapshot: contentJsonValue,
   });
 
   console.log(

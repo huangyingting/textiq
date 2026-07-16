@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { resolveE2EOrigin } from "./scripts/e2e-origin.mjs";
+
 /**
  * Playwright end-to-end configuration for TextIQ (issue #107).
  *
@@ -9,15 +11,14 @@ import { defineConfig, devices } from "@playwright/test";
  * server.
  *
  * The base URL is configurable from the environment (`E2E_BASE_URL`, falling
- * back to `BASE_URL`) and defaults to http://localhost:4000.
+ * back to `BASE_URL`) and defaults to http://127.0.0.1:4000.
  *
  * No mandatory `webServer` is configured: the required unit gate must not spin
  * up a server. To have Playwright start the app for you, set `E2E_WEB_SERVER=1`
  * (see `e2e/README.md`). `E2E_WEB_SERVER_COMMAND` can point at a prebuilt
  * production server for deterministic CI runs.
  */
-const baseURL =
-  process.env.E2E_BASE_URL ?? process.env.BASE_URL ?? "http://localhost:4000";
+const baseURL = resolveE2EOrigin(process.env);
 
 const startWebServer = process.env.E2E_WEB_SERVER === "1";
 const webServerCommand = process.env.E2E_WEB_SERVER_COMMAND ?? "npm run dev";

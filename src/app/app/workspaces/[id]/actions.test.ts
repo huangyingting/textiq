@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, it } from "node:test";
 
+import { WorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
+
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -62,12 +64,6 @@ type TestState = {
   getWorkspaceMemberRemovalTarget: (
     memberId: string,
   ) => Promise<MemberTarget | null>;
-  importWorkspaceDocumentForUser: (
-    userId: string,
-    workspaceId: string,
-    content: string,
-    rawTitle: string,
-  ) => Promise<{ id: string }>;
   leaveWorkspaceForUser: (workspaceId: string, userId: string) => Promise<void>;
   listWorkspaceDocumentsForUser: (
     userId: string,
@@ -81,11 +77,11 @@ type TestState = {
     workspaceId: string,
     rawName: string,
   ) => Promise<void>;
-  transferWorkspaceOwnership: (
-    workspaceId: string,
-    currentOwnerId: string,
-    newOwnerUserId: string,
-  ) => Promise<void>;
+  transferWorkspaceOwnership: (input: {
+    workspaceId: string;
+    actorUserId: string;
+    targetUserId: string;
+  }) => Promise<void>;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -157,21 +153,6 @@ function createDefaultState(): TestState {
       calls.push(["getWorkspaceMemberRemovalTarget", memberId]);
       return { workspaceId: "workspace-1", userId: "user-2" };
     },
-    async importWorkspaceDocumentForUser(
-      userId,
-      workspaceId,
-      content,
-      rawTitle,
-    ) {
-      calls.push([
-        "importWorkspaceDocumentForUser",
-        userId,
-        workspaceId,
-        content,
-        rawTitle,
-      ]);
-      return { id: "doc-2" };
-    },
     async leaveWorkspaceForUser(workspaceId, userId) {
       calls.push(["leaveWorkspaceForUser", workspaceId, userId]);
     },
@@ -190,17 +171,8 @@ function createDefaultState(): TestState {
     async renameWorkspaceRecord(workspaceId, rawName) {
       calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
     },
-    async transferWorkspaceOwnership(
-      workspaceId,
-      currentOwnerId,
-      newOwnerUserId,
-    ) {
-      calls.push([
-        "transferWorkspaceOwnership",
-        workspaceId,
-        currentOwnerId,
-        newOwnerUserId,
-      ]);
+    async transferWorkspaceOwnership(input) {
+      calls.push(["transferWorkspaceOwnership", input]);
     },
   };
 }
@@ -281,11 +253,6 @@ const stubbedModules = new Map<string, string>([
       export async function getWorkspaceMemberRemovalTarget(memberId) {
         return globalThis.__workspaceActionsTestState.getWorkspaceMemberRemovalTarget(memberId);
       }
-      export async function importWorkspaceDocumentForUser(userId, workspaceId, content, rawTitle) {
-        return globalThis.__workspaceActionsTestState.importWorkspaceDocumentForUser(
-          userId, workspaceId, content, rawTitle,
-        );
-      }
       export async function leaveWorkspaceForUser(workspaceId, userId) {
         return globalThis.__workspaceActionsTestState.leaveWorkspaceForUser(workspaceId, userId);
       }
@@ -300,9 +267,9 @@ const stubbedModules = new Map<string, string>([
       export async function renameWorkspaceRecord(workspaceId, rawName) {
         return globalThis.__workspaceActionsTestState.renameWorkspaceRecord(workspaceId, rawName);
       }
-      export async function transferWorkspaceOwnership(workspaceId, currentOwnerId, newOwnerUserId) {
+      export async function transferWorkspaceOwnership(input) {
         return globalThis.__workspaceActionsTestState.transferWorkspaceOwnership(
-          workspaceId, currentOwnerId, newOwnerUserId,
+          input,
         );
       }
     `,
@@ -774,10 +741,45 @@ describe("transferOwnership", () => {
     assert.deepEqual(state().calls, [
       ["requireUser"],
       ["requireWorkspaceCapability", "user-1", "ws-1", "manage"],
-      ["transferWorkspaceOwnership", "ws-1", "user-1", "user-2"],
+      [
+        "transferWorkspaceOwnership",
+        {
+          workspaceId: "ws-1",
+          actorUserId: "user-1",
+          targetUserId: "user-2",
+        },
+      ],
       ["revalidatePath", "/app"],
       ["revalidatePath", "/app/workspaces"],
       ["revalidatePath", "/app/workspaces/ws-1"],
+    ]);
+  });
+
+  it("maps stale-owner CAS conflicts to the owner-only message and skips revalidation", async () => {
+    state().transferWorkspaceOwnership = async (input) => {
+      state().calls.push(["transferWorkspaceOwnership", input]);
+      throw new WorkspaceOwnershipTransferConflictError({
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+      });
+    };
+
+    await assert.rejects(
+      () => actions.transferOwnership("ws-1", "user-2"),
+      /Only the workspace owner may perform this action\./,
+    );
+
+    assert.deepEqual(state().calls, [
+      ["requireUser"],
+      ["requireWorkspaceCapability", "user-1", "ws-1", "manage"],
+      [
+        "transferWorkspaceOwnership",
+        {
+          workspaceId: "ws-1",
+          actorUserId: "user-1",
+          targetUserId: "user-2",
+        },
+      ],
     ]);
   });
 });
@@ -843,47 +845,6 @@ describe("createWorkspaceDocument", () => {
       ["revalidatePath", "/app"],
       ["revalidatePath", "/app/workspaces/ws-1"],
       ["redirect", "/app/documents/doc-1"],
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// importWorkspaceDocument
-// ---------------------------------------------------------------------------
-
-describe("importWorkspaceDocument", () => {
-  it("redirects unauthenticated callers and makes no import calls", async () => {
-    denyAuth();
-    await assert.rejects(
-      () =>
-        actions.importWorkspaceDocument("ws-1", "# Content", "Imported Doc"),
-      /NEXT_REDIRECT:\/login/,
-    );
-    assert.equal(
-      state().calls.filter(
-        (c) => (c as unknown[])[0] === "importWorkspaceDocumentForUser",
-      ).length,
-      0,
-    );
-  });
-
-  it("imports content into workspace, revalidates routes, and redirects to document editor", async () => {
-    await assert.rejects(
-      () => actions.importWorkspaceDocument("ws-1", "# Hello", "  My Import  "),
-      /NEXT_REDIRECT:\/app\/documents\/doc-2$/,
-    );
-    assert.deepEqual(state().calls, [
-      ["requireUser"],
-      [
-        "importWorkspaceDocumentForUser",
-        "user-1",
-        "ws-1",
-        "# Hello",
-        "  My Import  ",
-      ],
-      ["revalidatePath", "/app"],
-      ["revalidatePath", "/app/workspaces/ws-1"],
-      ["redirect", "/app/documents/doc-2"],
     ]);
   });
 });

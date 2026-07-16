@@ -7,19 +7,18 @@
  * `@/lib/public-render/resolver`'s Prisma-backed `resolvePublicRender`, and
  * `@/lib/share-passcode-server`'s cookie-reading passcode check are stubbed
  * (each throws or hits a real database/request outside a live Next.js
- * request). `@/lib/public-render/present-embed-route` (a pure input-builder,
- * covered by its own `present-embed-route.test.ts`),
- * `@/lib/public-render/presentation`'s `publicPresentationRecoveryForViewer`
- * (pure, covered by `presentation.test.ts`), and
+ * request). `@/lib/public-render/presentation`'s
+ * `publicPresentationRecoveryForViewer` (pure, covered by
+ * `presentation.test.ts`), and
  * `@/components/presentation/public-present-viewer` (covered by its own
  * render-state tests) are imported for real so the page's actual composed
  * markup — a real multi-slide deck rendered chrome-free — can be asserted,
  * not just a mocked child element.
  *
  * Coverage here: the embed-specific page title; the abuse-budget short-
- * circuit; `buildPresentEmbedRenderInput`'s embed-mode/presentation-
- * projection wiring into `resolvePublicRender` alongside the passcode
- * callback; the passcode-required gate (embed mode/returnTo, resolved
+ * circuit; embed-mode/presentation-projection wiring into
+ * `resolvePublicRender` alongside the passcode callback; the
+ * passcode-required gate (embed mode/returnTo, resolved
  * shareId, and the invalid/limited query variants); notFound() for any
  * other deny reason and for a defensive ok/projection mismatch; and the
  * successful chrome-free render (no top HUD, real slide content, deck
@@ -222,7 +221,7 @@ describe("PresentEmbedPage", () => {
     assert.equal(state().notFoundCalls.length, 1);
   });
 
-  it("passes buildPresentEmbedRenderInput's embed mode/presentation projection plus the passcode callback through to resolvePublicRender", async () => {
+  it("passes embed mode/presentation projection plus the passcode callback through to resolvePublicRender", async () => {
     state().resolverResult = presentationResult();
 
     await renderPresentEmbedPage({ shareId: "share-xyz" });

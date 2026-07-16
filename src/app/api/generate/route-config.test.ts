@@ -33,6 +33,14 @@ test("#1882: generate route config uses distinct visual rate-limit subjects", ()
   });
 });
 
+test("#1997: generate route config never reuses deck namespaces", () => {
+  const config = buildGenerateRouteConfig();
+  assert.notDeepEqual(config.rateLimitSubjects, {
+    user: "ai.deck.user",
+    anonymousIp: "ai.deck.anonymous-ip",
+  });
+});
+
 test("#1882: generate route config carries the expected anonymous/unexpected messages", () => {
   const config = buildGenerateRouteConfig();
   assert.equal(

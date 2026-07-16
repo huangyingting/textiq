@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FileText, Plus, Upload, X } from "lucide-react";
 
 import {
@@ -13,20 +14,14 @@ import {
   cx,
 } from "@/components/ui";
 import { TEMPLATE_CATALOG } from "@/lib/templates/catalog";
-import {
-  canCreateInWorkspace,
-  canImportInWorkspace,
-} from "@/lib/workspace/capabilities";
+import { capabilitiesForWorkspaceAccessRole } from "@/lib/workspace/capabilities";
+import type { EffectiveWorkspaceRole } from "@/lib/workspace/roles";
 import {
   DOCUMENT_IMPORT_ACCEPT,
-  useDocumentImportWorkflow,
+  useDocumentImportCreationWorkflow,
 } from "@/lib/import/document-import-workflow";
 
-import {
-  createWorkspaceDocument,
-  importWorkspaceDocument,
-  getWorkspaceDocuments,
-} from "./actions";
+import { createWorkspaceDocument, getWorkspaceDocuments } from "./actions";
 import type { WorkspaceDocument } from "@/lib/workspace/document-types";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -133,15 +128,14 @@ function WorkspaceDocumentActions({
   canCreate: boolean;
   canImport: boolean;
 }) {
+  const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
-  const [, startTransition] = useTransition();
   const { inputRef, state, isUploading, processFile, clearError } =
-    useDocumentImportWorkflow({
+    useDocumentImportCreationWorkflow({
       surface: "workspace",
-      onImported: ({ markdown, title }) => {
-        startTransition(async () => {
-          await importWorkspaceDocument(workspaceId, markdown, title);
-        });
+      target: { kind: "workspace", workspaceId },
+      onCreated: ({ documentPath }) => {
+        router.push(documentPath);
       },
     });
 
@@ -220,7 +214,7 @@ export function WorkspaceDocuments({
   userRole,
 }: {
   workspaceId: string;
-  userRole: "OWNER" | "EDITOR" | "VIEWER";
+  userRole: EffectiveWorkspaceRole;
 }) {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -228,8 +222,9 @@ export function WorkspaceDocuments({
   const [error, setError] = useState<string | null>(null);
   const [loadKey, setLoadKey] = useState(0);
 
-  const canCreate = canCreateInWorkspace(userRole);
-  const canImport = canImportInWorkspace(userRole);
+  const roleCapabilities = capabilitiesForWorkspaceAccessRole(userRole);
+  const canCreate = roleCapabilities.canMutate;
+  const canImport = roleCapabilities.canMutate;
 
   const retry = () => {
     setError(null);

@@ -5,17 +5,23 @@
  * client components, as well as in unit tests.
  */
 
+import { catalog, catalogBySurface, type Messages } from "./messages";
 import {
-  catalog,
   DEFAULT_LOCALE,
+  LOCALE_DEFINITIONS,
   SUPPORTED_LOCALES,
-  catalogBySurface,
+  getLocaleDefinition,
   type Locale,
-  type Messages,
-} from "./messages";
+} from "./locales";
 
 export type { Locale, Messages };
-export { catalogBySurface, DEFAULT_LOCALE, SUPPORTED_LOCALES };
+export {
+  catalogBySurface,
+  DEFAULT_LOCALE,
+  getLocaleDefinition,
+  LOCALE_DEFINITIONS,
+  SUPPORTED_LOCALES,
+};
 export {
   getI18nActivationStatus,
   getI18nCoverageBySurface,
@@ -33,14 +39,14 @@ export function isSupportedLocale(value: unknown): value is Locale {
 }
 
 /**
- * Normalises an arbitrary string to a known `Locale`.
+ * Normalises an untrusted value to a known `Locale`.
  *
  * Matching is case-insensitive and tolerates BCP-47 region suffixes
  * (e.g. `"en-US"` → `"en"`, `"es-419"` → `"es"`).
  * Falls back to `DEFAULT_LOCALE` when no match is found.
  */
-export function normaliseLocale(raw: string | null | undefined): Locale {
-  if (!raw) return DEFAULT_LOCALE;
+export function normaliseLocale(raw: unknown): Locale {
+  if (typeof raw !== "string" || !raw) return DEFAULT_LOCALE;
 
   // Exact match first (fast path).
   if (isSupportedLocale(raw)) return raw;
@@ -73,7 +79,12 @@ export function getMessages(locale: Locale): Messages {
  * never produce blank UI.
  */
 /* node:coverage enable */
-export function createTranslator(locale: Locale) {
+export type Translator = <K extends keyof Messages>(
+  key: K,
+  ...args: Messages[K] extends (...a: infer A) => string ? A : []
+) => string;
+
+export function createTranslator(locale: Locale): Translator {
   const primary = getMessages(locale);
   const fallback = getMessages(DEFAULT_LOCALE);
 

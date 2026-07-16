@@ -2,6 +2,10 @@ import { ImageResponse } from "next/og";
 
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
 import { deriveFromContentJson, excerpt } from "@/lib/document-stats";
+import {
+  normalizePublicMetadataMode,
+  type PublicMetadataSource,
+} from "@/lib/public-render/metadata-contract";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
@@ -25,12 +29,6 @@ const FALLBACK_TITLE = "Shared document";
 /** Title text is clamped to this many characters before an ellipsis is appended. */
 const MAX_TITLE_CHARS = 90;
 
-export interface OgSourceDocument {
-  title: string;
-  contentJson: unknown;
-  metadataMode: string;
-}
-
 export interface OgTextContent {
   /** Already truncated/ellipsized for direct rendering. */
   displayTitle: string;
@@ -45,13 +43,9 @@ export interface OgTextContent {
  * `ImageResponse`/satori rendering.
  */
 export function resolveOgTextContent(
-  document: OgSourceDocument | null,
+  document: PublicMetadataSource | null,
 ): OgTextContent {
-  const metadataMode =
-    document?.metadataMode === "title" ||
-    document?.metadataMode === "title-excerpt"
-      ? document.metadataMode
-      : "generic";
+  const metadataMode = normalizePublicMetadataMode(document?.metadataMode);
 
   const title =
     metadataMode === "title" || metadataMode === "title-excerpt"

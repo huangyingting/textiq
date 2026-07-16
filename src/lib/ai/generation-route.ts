@@ -37,14 +37,9 @@ import { ABUSE_CATEGORIES, logRouteDenial } from "@/lib/diagnostics/api-abuse";
 import { auth as authEnv } from "@/lib/env";
 import { logError } from "@/lib/log";
 import { AI_JSON_BODY_MAX_BYTES } from "@/lib/limits";
-import { prismaRateLimitStore, rateLimitSubject } from "@/lib/rate-limit";
 import {
-  checkRateLimitWithStore,
-  type RateLimitStore,
-} from "@/lib/rate-limit/core";
-import {
+  checkAbuseBudget,
   checkIpRateLimit,
-  abuseBudgetOptions,
   type AbuseBudgetCheck,
   type AbuseBudgetNamespaceId,
 } from "@/lib/abuse-budget";
@@ -111,8 +106,8 @@ export interface GenerationRouteConfig<TPayload, TResult> {
   logScope: string;
   operation: string;
   rateLimitSubjects: {
-    user: string;
-    anonymousIp: string;
+    user: AbuseBudgetNamespaceId;
+    anonymousIp: AbuseBudgetNamespaceId;
   };
   anonymousQuotaExceededMessage: string;
   unexpectedErrorMessage: string;
@@ -154,14 +149,15 @@ export interface GenerationRouteDeps {
   ): Promise<T>;
   timeoutMs: number;
   getCurrentUser(): Promise<GenerationRouteUser | null>;
-  rateLimitStore: RateLimitStore;
-  checkRateLimitWithStore: typeof checkRateLimitWithStore;
-  rateLimitSubject(scope: string, identifier: string): string;
-  userRateLimit(): number;
-  userRateWindowMs(): number;
+  checkAbuseBudget(opts: {
+    namespace: AbuseBudgetNamespaceId;
+    subject: string;
+    secret: string;
+    now: number;
+  }): Promise<AbuseBudgetCheck>;
   /** Checks IP-based rate limit; replaces the former getClientIp/hashIdentifier/anonIp* deps. */
   checkIpRateLimit(opts: {
-    namespace: string;
+    namespace: AbuseBudgetNamespaceId;
     headers: Headers;
     secret: string;
     now: number;
@@ -204,16 +200,8 @@ const defaultDeps: GenerationRouteDeps = {
   withAbortDeadline,
   timeoutMs: GENERATE_TIMEOUT_MS,
   getCurrentUser,
-  rateLimitStore: prismaRateLimitStore,
-  checkRateLimitWithStore,
-  rateLimitSubject,
-  userRateLimit: () => abuseBudgetOptions("ai.visual.user").limit,
-  userRateWindowMs: () => abuseBudgetOptions("ai.visual.user").windowMs,
-  checkIpRateLimit: (opts) =>
-    checkIpRateLimit({
-      ...opts,
-      namespace: opts.namespace as AbuseBudgetNamespaceId,
-    }),
+  checkAbuseBudget,
+  checkIpRateLimit,
   anonTrialLimit,
   parseAnonCookie,
   newAnonState,
@@ -311,7 +299,7 @@ export function createGenerationRouteHandler<TPayload, TResult>(
     let meteredUsage: MeteredUsageReservation | null = null;
 
     if (user) {
-      const rateLimit = await checkUserRateLimit(config, deps, user);
+      const rateLimit = await checkUserRateLimit(config, deps, user, secret);
       if (rateLimit) {
         return rateLimit;
       }
@@ -436,33 +424,28 @@ async function checkUserRateLimit<TPayload, TResult>(
   config: GenerationRouteConfig<TPayload, TResult>,
   deps: GenerationRouteDeps,
   user: GenerationRouteUser,
+  secret: string,
 ): Promise<NextResponse | null> {
-  const result = await deps.checkRateLimitWithStore(
-    deps.rateLimitStore,
-    deps.rateLimitSubject(config.rateLimitSubjects.user, user.id),
-    {
-      limit: deps.userRateLimit(),
-      windowMs: deps.userRateWindowMs(),
-      now: deps.now(),
-    },
-  );
-  if (result.allowed) {
+  const now = deps.now();
+  const rateLimit = await deps.checkAbuseBudget({
+    namespace: config.rateLimitSubjects.user,
+    subject: user.id,
+    secret,
+    now,
+  });
+  if (rateLimit.allowed) {
     return null;
   }
 
-  const retryAfter = Math.max(
-    1,
-    Math.ceil((result.resetAt - deps.now()) / 1000),
-  );
   deps.logRouteDenial({
     route: config.logScope,
     reason: ABUSE_CATEGORIES.RATE_LIMIT_HIT,
     status: 429,
     userId: user.id,
-    retryAfterSeconds: retryAfter,
+    retryAfterSeconds: rateLimit.retryAfterSeconds,
   });
   return tooManyRequests(
-    retryAfter,
+    rateLimit.retryAfterSeconds,
     "Rate limit exceeded. Please wait a moment and try again.",
   );
 }

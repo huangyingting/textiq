@@ -31,6 +31,11 @@ export const E2E_PROFILE_FIXTURE = {
     password: process.env.E2E_USER_PASSWORD ?? "e2e-owner-pw-2026",
     name: "E2E Owner",
   },
+  editor: {
+    email: "e2e-editor@textiq.test",
+    password: "e2e-editor-pw-2026",
+    name: "E2E Editor",
+  },
   viewer: {
     email: process.env.E2E_VIEWER_EMAIL ?? "e2e-viewer@textiq.test",
     password: process.env.E2E_VIEWER_PASSWORD ?? "e2e-viewer-pw-2026",
@@ -283,6 +288,7 @@ export function buildE2EProfileFixtureDescriptor(opts: {
 }) {
   return {
     owner: { email: F.owner.email, password: F.owner.password },
+    editor: { email: F.editor.email, password: F.editor.password },
     viewer: { email: F.viewer.email, password: F.viewer.password },
     documentId: F.documentId,
     documentPath: `/app/documents/${F.documentId}`,

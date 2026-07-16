@@ -5,6 +5,7 @@ import { LexicalReadOnly } from "@/components/lexical/lexical-read-only";
 import { MadeWithBadge } from "@/components/made-with-badge";
 import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
+import { adaptPublicRouteOutcome } from "@/lib/public-render/route-outcome";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
@@ -41,27 +42,26 @@ export default async function EmbedPage({
     passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
-  if (!result.ok || result.projection !== "document") {
-    if (
-      !result.decision.allow &&
-      result.decision.reason === "passcode-required"
-    ) {
-      return (
-        <SharePasscodeGate
-          shareId={"shareId" in result ? result.shareId : shareId}
-          mode="embed"
-          returnTo={`/embed/${shareId}`}
-          error={
-            passcodeStatus === "invalid" || passcodeStatus === "limited"
-              ? passcodeStatus
-              : undefined
-          }
-        />
-      );
-    }
+  const outcome = adaptPublicRouteOutcome(
+    result,
+    "document",
+    shareId,
+    passcodeStatus,
+  );
+  if (outcome.kind === "passcode-required") {
+    return (
+      <SharePasscodeGate
+        shareId={outcome.gate.shareId}
+        mode="embed"
+        returnTo={`/embed/${shareId}`}
+        error={outcome.gate.error}
+      />
+    );
+  }
+  if (outcome.kind === "not-found") {
     notFound();
   }
-  const { document } = result;
+  const { document } = outcome.result;
 
   return (
     <main className="min-h-screen w-full bg-ds-surface-base p-4">

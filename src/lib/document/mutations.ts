@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { updateDocumentsMetadata } from "./document-write-port";
 
 type DocumentMutationDb = Pick<typeof prisma, "document">;
 
@@ -7,7 +8,7 @@ export async function renameDocumentTitle(
   title: string,
   db: DocumentMutationDb = prisma,
 ): Promise<void> {
-  await db.document.updateMany({
+  await updateDocumentsMetadata(db, {
     where: { id },
     data: { title },
   });
@@ -28,7 +29,7 @@ export async function toggleDocumentFavorite(
 
   const favorite = !document.favorite;
 
-  await db.document.updateMany({
+  await updateDocumentsMetadata(db, {
     where: { id },
     data: { favorite },
   });

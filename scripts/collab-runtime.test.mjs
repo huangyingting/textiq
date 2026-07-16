@@ -3,6 +3,7 @@ import { afterEach, describe, test } from "node:test";
 
 import {
   buildCollabHealthSummary,
+  COLLAB_INLINE_PATH,
   createCollabHealthHandler,
   createRuntimeAuthorizer,
   createRuntimeEvictionFlusher,
@@ -13,6 +14,25 @@ import {
   roomFromInlineUrl,
   roomFromStandaloneUrl,
 } from "./collab-runtime.mjs";
+import {
+  emitDeploymentDiagnostics as emitDeploymentDiagnosticsImpl,
+  resolveCollabDeployment as resolveCollabDeploymentImpl,
+} from "./collab-runtime-config.mjs";
+import {
+  buildCollabHealthSummary as buildCollabHealthSummaryImpl,
+  createCollabHealthHandler as createCollabHealthHandlerImpl,
+} from "./collab-runtime-health.mjs";
+import {
+  createRuntimeAuthorizer as createRuntimeAuthorizerImpl,
+  createRuntimeEvictionFlusher as createRuntimeEvictionFlusherImpl,
+} from "./collab-runtime-bootstrap.mjs";
+import {
+  COLLAB_INLINE_PATH as COLLAB_INLINE_PATH_IMPL,
+  resolveCollabInternalSecret as resolveCollabInternalSecretImpl,
+  resolveCollabServiceUrls as resolveCollabServiceUrlsImpl,
+  roomFromInlineUrl as roomFromInlineUrlImpl,
+  roomFromStandaloneUrl as roomFromStandaloneUrlImpl,
+} from "./collab-runtime-service.mjs";
 
 const originalConsole = {
   info: console.info,
@@ -63,35 +83,35 @@ describe("collab-runtime health summary", () => {
         },
       ],
     });
+  });
 
-    test("createCollabHealthHandler serializes live stats as JSON", () => {
-      const writes = [];
-      const response = {
-        writeHead: (status, headers) => writes.push({ status, headers }),
-        end: (body) => writes.push({ body }),
-      };
-      const handler = createCollabHealthHandler({
-        deploymentConfig: {
-          mode: "single-instance",
-          warnings: [],
-          healthy: true,
-        },
-        getStats: () => ({
-          rooms: 1,
-          connections: 2,
-          flushFailures: 0,
-          recentFlushFailures: [],
-        }),
-      });
-
-      handler({}, response);
-
-      assert.deepEqual(writes[0], {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-      assert.equal(JSON.parse(writes[1].body).connections, 2);
+  test("createCollabHealthHandler serializes live stats as JSON", () => {
+    const writes = [];
+    const response = {
+      writeHead: (status, headers) => writes.push({ status, headers }),
+      end: (body) => writes.push({ body }),
+    };
+    const handler = createCollabHealthHandler({
+      deploymentConfig: {
+        mode: "single-instance",
+        warnings: [],
+        healthy: true,
+      },
+      getStats: () => ({
+        rooms: 1,
+        connections: 2,
+        flushFailures: 0,
+        recentFlushFailures: [],
+      }),
     });
+
+    handler({}, response);
+
+    assert.deepEqual(writes[0], {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    assert.equal(JSON.parse(writes[1].body).connections, 2);
   });
 
   test("buildCollabHealthSummary reports unhealthy deployment as ok=false", () => {
@@ -354,5 +374,34 @@ describe("collab-runtime room naming rules", () => {
     assert.equal(roomFromStandaloneUrl("/doc-1?token=ignored"), "doc-1");
     assert.equal(roomFromStandaloneUrl("/"), "default");
     assert.equal(roomFromStandaloneUrl(undefined), "default");
+  });
+});
+
+describe("collab-runtime facade parity", () => {
+  test("re-exports config and diagnostics helpers", () => {
+    assert.equal(resolveCollabDeployment, resolveCollabDeploymentImpl);
+    assert.equal(emitDeploymentDiagnostics, emitDeploymentDiagnosticsImpl);
+  });
+
+  test("re-exports health helpers", () => {
+    assert.equal(buildCollabHealthSummary, buildCollabHealthSummaryImpl);
+    assert.equal(createCollabHealthHandler, createCollabHealthHandlerImpl);
+  });
+
+  test("re-exports service URL/room helpers", () => {
+    assert.equal(COLLAB_INLINE_PATH, COLLAB_INLINE_PATH_IMPL);
+    assert.equal(resolveCollabServiceUrls, resolveCollabServiceUrlsImpl);
+    assert.equal(resolveCollabInternalSecret, resolveCollabInternalSecretImpl);
+    assert.equal(roomFromInlineUrl, roomFromInlineUrlImpl);
+    assert.equal(roomFromStandaloneUrl, roomFromStandaloneUrlImpl);
+    assert.equal(COLLAB_INLINE_PATH_IMPL, "/collab");
+  });
+
+  test("re-exports runtime bootstrap helpers", () => {
+    assert.equal(createRuntimeAuthorizer, createRuntimeAuthorizerImpl);
+    assert.equal(
+      createRuntimeEvictionFlusher,
+      createRuntimeEvictionFlusherImpl,
+    );
   });
 });

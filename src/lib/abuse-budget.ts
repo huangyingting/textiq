@@ -271,6 +271,47 @@ export class InMemoryAbuseBudgetStore implements RateLimitStore {
   async set(key: string, window: RateLimitWindow): Promise<void> {
     this.windows.set(key, { ...window });
   }
+
+  /**
+   * Atomic consume: the entire read-modify-write is one synchronous critical
+   * section with no await between read and write. JavaScript's single-threaded
+   * event loop ensures no other code runs between `windows.get` and
+   * `windows.set`, eliminating the concurrent-window race (#1997).
+   */
+  atomicConsume(
+    key: string,
+    options: RateLimitOptions,
+  ): Promise<RateLimitResult> {
+    const { limit, windowMs, now } = options;
+    const existing = this.windows.get(key);
+    if (!existing || now >= existing.resetAt) {
+      const resetAt = now + windowMs;
+      this.windows.set(key, { count: 1, resetAt });
+      return Promise.resolve({
+        allowed: true,
+        remaining: Math.max(0, limit - 1),
+        limit,
+        resetAt,
+      });
+    }
+    if (existing.count >= limit) {
+      return Promise.resolve({
+        allowed: false,
+        remaining: 0,
+        limit,
+        resetAt: existing.resetAt,
+      });
+    }
+    const count = existing.count + 1;
+    this.windows.set(key, { count, resetAt: existing.resetAt });
+    return Promise.resolve({
+      allowed: true,
+      remaining: Math.max(0, limit - count),
+      limit,
+      resetAt: existing.resetAt,
+    });
+  }
+
   /* node:coverage ignore next 10 */
   clear(): void {
     this.windows.clear();

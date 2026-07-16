@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-15"
 description: "This document describes comment threads and their document/slide anchors."
 ---
 
@@ -14,10 +14,14 @@ This document describes comment threads and their document/slide anchors.
 | Area                          | Source                                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Comment actions               | [`src/app/app/documents/[id]/comments-actions.ts`](../../src/app/app/documents/%5Bid%5D/comments-actions.ts)             |
+| Comment action results        | [`src/lib/comments/action-result.ts`](../../src/lib/comments/action-result.ts)                                           |
 | Comment service               | [`src/lib/comments/service.ts`](../../src/lib/comments/service.ts)                                                       |
+| Comment errors                | [`src/lib/comments/errors.ts`](../../src/lib/comments/errors.ts)                                                         |
+| Prisma projection             | [`src/lib/comments/records.ts`](../../src/lib/comments/records.ts)                                                       |
 | Comment permissions           | [`src/lib/comments/policy.ts`](../../src/lib/comments/policy.ts)                                                         |
 | Anchor helpers                | [`src/lib/comments/anchors.ts`](../../src/lib/comments/anchors.ts)                                                       |
 | Lifecycle helpers             | [`src/lib/comments/lifecycle.ts`](../../src/lib/comments/lifecycle.ts)                                                   |
+| Anchor persistence            | [`src/lib/comments/persistence.ts`](../../src/lib/comments/persistence.ts)                                               |
 | Unread helpers                | [`src/lib/comments/read-state.ts`](../../src/lib/comments/read-state.ts)                                                 |
 | Inline comments UI            | [`src/app/app/documents/[id]/inline-comments-layer.tsx`](../../src/app/app/documents/%5Bid%5D/inline-comments-layer.tsx) |
 | Inline comment geometry       | [`src/app/app/documents/[id]/inline-comment-dom.ts`](../../src/app/app/documents/%5Bid%5D/inline-comment-dom.ts)         |
@@ -33,8 +37,25 @@ Comments are one-level threads:
 
 Creating or listing comments requires document `view` capability.
 
-Editing and deleting a comment requires authorship. Resolving threads is handled
-through the comment action layer and returns refreshed server truth.
+Editing and deleting a comment requires authorship. Any viewer may resolve a
+top-level thread, but replies cannot carry lifecycle state. Mutations return
+refreshed server truth. ID-based mutations also take the active document ID,
+authorize that document, and only query comments within it.
+
+Reply validation, root reopening, and insertion share one retryable serializable
+transaction. A new reply always reopens its root thread. Resolving or reopening
+targets only the root; deleting a reply does not change the root's current
+resolved state, while deleting a root cascades to its replies.
+
+Validation and lifecycle failures use `CommentError` codes. Server actions
+return a discriminated `CommentActionResult`: known comment failures preserve
+their safe code/message, while a missing ID, an ID from another document or
+workspace, and a target in an inaccessible document all return the same
+`comment_unavailable` result. Internal structured logs retain only an
+identifier-free availability classification. Read/create document permission
+failures map to `access_denied`, and unknown persistence failures are logged
+before a generic `unexpected` result is returned. Framework redirect control
+flow is re-thrown rather than adapted.
 
 ## Anchor Types
 
@@ -62,15 +83,21 @@ Validation requires both coordinates to be finite and within `0..100`.
 
 ## Slide Lifecycle Behavior
 
-Slide lifecycle helpers keep anchors coherent when slides/elements change:
+Slide lifecycle helpers and persistence keep anchors coherent when
+slides/elements change:
 
-- deleting a slide can orphan anchors that pointed to it;
-- deleting an element can orphan element-level anchors while preserving the
-  slide-level relationship;
+- deleting a slide floats its anchors to deck level;
+- deleting an element floats its anchors to slide level while preserving pin
+  geometry;
 - duplicating a slide does not copy comments to the new slide;
 - restore/version flows can surface orphaned anchors for the UI.
 
-The lifecycle layer is pure and does not write the database directly.
+The lifecycle policy is pure. Deck persistence calls the comments persistence
+adapter inside the same retryable serializable transaction as the successful
+revision-token CAS, so a deck write cannot report success while required anchor
+repairs fail. Slide-comment creation uses the same transaction policy for its
+saved-deck validation and insert, preventing a concurrent deck save from
+committing an orphaned anchor.
 
 ## Filters And UI
 
@@ -79,12 +106,19 @@ The lifecycle layer is pure and does not write the database directly.
 - `slideId` filter;
 - `anchorScope: "all" | "text" | "slide"`.
 
-The document editor uses inline comment surfaces for text/visual anchors.
+The document editor uses inline comment surfaces for text/visual anchors. Each
+root renders its replies directly beneath it. Selecting a root's accessible
+Reply control sends its ID as `parentId`; a successful response keeps the anchor
+card open and renders refreshed server truth, while typed or transport failures
+retain the draft for retry.
 Slide-aware comment behavior is exposed through the comment service filters,
 anchor helpers, lifecycle helpers, and the presentation slide-anchor facade so
 slide-specific callers do not duplicate anchor logic.
 
-Unread helpers compute per-comment/thread read state for slide comment surfaces.
+Unread counts include both roots and replies created after `lastReadAt`, excluding
+the viewer's own comments. Replies inherit their root's text/slide scope, so a
+reply on a slide thread contributes to the slide count even though the reply row
+does not duplicate anchor fields.
 
 ## Invariants
 
@@ -93,7 +127,16 @@ Unread helpers compute per-comment/thread read state for slide comment surfaces.
 3. Replies do not define their own anchors.
 4. Slide anchors use percent geometry.
 5. Slide duplication does not copy comments.
-6. Lifecycle helpers are pure; server actions own persistence.
+6. Only top-level comments carry resolved state.
+7. Lifecycle policy is pure; the comments persistence adapter owns anchor writes.
+8. Deck CAS and required anchor repair commit or roll back together.
+9. Slide-anchor validation and comment insertion share a serializable transaction
+   with bounded retries for PostgreSQL serialization failures and SQLite lock
+   conflicts.
+10. Reply root validation, reopening, and insertion commit or roll back together.
+11. New replies reopen their root and inherit its unread anchor scope.
+12. Comment-ID mutations are document-scoped and conceal missing, cross-document,
+    and inaccessible targets behind one external outcome.
 
 ## Primary Tests
 

@@ -2,8 +2,8 @@
  * Plain-text projection for serialized Lexical editor state.
  *
  * This module deliberately projects through the shared `DocumentBlock` contract
- * so persisted `Document.content` cannot drift from export, AI, or presentation
- * block extraction.
+ * so the persisted `Document.content` search projection cannot drift from
+ * export, AI, or presentation block extraction.
  */
 
 import {
@@ -41,7 +41,8 @@ function blockLine(
 /**
  * Projects already-collected document blocks into a line-oriented plain-text
  * string. Text blocks keep their textual content; horizontal rules become
- * `---`; visual markers are opt-in so `Document.content` remains user text.
+ * `---`; visual markers are opt-in so `Document.content` remains searchable
+ * user text.
  */
 export function documentBlocksToPlainText(
   blocks: ReadonlyArray<DocumentBlock>,

@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import { PublicPresentViewer } from "@/components/presentation/public-present-viewer";
 import { SharePasscodeGate } from "@/components/share/share-passcode-gate";
 import { publicShareBudgetExceeded } from "@/app/public-abuse";
-import { buildPresentEmbedRenderInput } from "@/lib/public-render/present-embed-route";
 import { publicPresentationRecoveryForViewer } from "@/lib/public-render/presentation";
+import { adaptPublicRouteOutcome } from "@/lib/public-render/route-outcome";
 import { resolvePublicRender } from "@/lib/public-render/resolver";
 import { isPublicSharePasscodeUnlocked } from "@/lib/share-passcode-server";
 
@@ -37,31 +37,32 @@ export default async function PresentEmbedPage({
   }
 
   const result = await resolvePublicRender({
-    ...buildPresentEmbedRenderInput(shareId),
+    params: { shareId },
+    mode: "embed",
+    projection: "presentation",
     passcodeUnlocked: isPublicSharePasscodeUnlocked,
   });
 
-  if (!result.ok || result.projection !== "presentation") {
-    if (
-      !result.decision.allow &&
-      result.decision.reason === "passcode-required"
-    ) {
-      return (
-        <SharePasscodeGate
-          shareId={"shareId" in result ? result.shareId : shareId}
-          mode="embed"
-          returnTo={`/present/${shareId}/embed`}
-          error={
-            passcodeStatus === "invalid" || passcodeStatus === "limited"
-              ? passcodeStatus
-              : undefined
-          }
-        />
-      );
-    }
+  const outcome = adaptPublicRouteOutcome(
+    result,
+    "presentation",
+    shareId,
+    passcodeStatus,
+  );
+  if (outcome.kind === "passcode-required") {
+    return (
+      <SharePasscodeGate
+        shareId={outcome.gate.shareId}
+        mode="embed"
+        returnTo={`/present/${shareId}/embed`}
+        error={outcome.gate.error}
+      />
+    );
+  }
+  if (outcome.kind === "not-found") {
     notFound();
   }
-  const { presentation } = result;
+  const { presentation } = outcome.result;
   const recovery = publicPresentationRecoveryForViewer(presentation.recovery);
 
   return (

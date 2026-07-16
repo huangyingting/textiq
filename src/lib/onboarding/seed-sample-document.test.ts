@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { prisma } from "@/lib/prisma";
 import { seedSampleDocument } from "@/lib/onboarding/seed-sample-document";
+import { prisma } from "@/test/prisma-raw";
 
 function stubPrismaMethod<T extends object, K extends keyof T>(
   t: { after: (fn: () => void) => void },

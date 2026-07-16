@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-15"
 description: "TextIQ app chrome uses the --ds-* tokens in src/app/globals.css as the source of truth. Visual-content palettes and themes remain separate in src/lib/visual/themes.ts."
 ---
 
@@ -90,6 +90,12 @@ High-contrast and forced-colors support is part of the chrome token contract:
 critical editor affordances must keep visible outlines, borders, or system-color
 fills when `forced-colors: active` disables shadows and translucent surfaces.
 
+Reduced-motion support is also part of the shared chrome contract. Framer Motion
+surfaces resolve their normal and reduced variants through
+`src/components/motion/presets.ts`; CSS-only movement uses Tailwind
+`motion-reduce:*` utilities. Reduced mode removes spatial movement, pulsing, and
+smooth scrolling while preserving visible state changes and status content.
+
 ## Invariants
 
 1. App chrome uses `--ds-*` tokens; visual content themes stay separate.
@@ -104,6 +110,8 @@ fills when `forced-colors: active` disables shadows and translucent surfaces.
 6. Forced-colors/high-contrast modes use system colors for app/editor chrome
    tokens, with explicit outlines for focus, selection frames, handles, guides,
    filmstrip active states, mobile sheets, diagnostics, and present-mode HUDs.
+7. Shared overlays, loading feedback, and spatial control transitions collapse
+   to instant, static states when the user requests reduced motion.
 
 ## Primary Tests
 

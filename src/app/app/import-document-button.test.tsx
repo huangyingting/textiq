@@ -2,30 +2,17 @@
  * Direct contract coverage for `ImportDocumentButton` (issue #1956) — the
  * dashboard "Import document" action.
  *
- * `createDocumentFromImport` (from `./actions`) is already fully covered by
- * `src/app/app/actions.test.ts`, so this stubs the sibling `./actions`
- * module via `node:module`'s `registerHooks` (same pattern used by
- * `src/app/app/settings/page.test.tsx` and
- * `src/app/app/onboarding-checklist.test.tsx`) rather than re-testing the
- * server action or its `@/lib/prisma`/`@/lib/session` dependencies. The stub
- * is scoped to the `"./actions"` specifier, which only
- * `import-document-button.tsx` resolves within this file's module graph —
- * safe because Node's test runner isolates each test file into its own
- * process.
+ * The button now uses durable `/api/import` create mode and client-side
+ * navigation on success; this suite stubs `next/navigation`'s `useRouter`
+ * via `node:module` `registerHooks` to assert navigation happens only after
+ * the route reports durable success.
  *
- * `useDocumentImportWorkflow` always uses its default `routeDocumentImportPort`
- * (calling the global `fetch`) since `ImportDocumentButton` does not expose
- * an injectable port — matching `src/components/editor/import-button.test.tsx`'s
- * approach of mocking `globalThis.fetch` per scenario instead of duplicating
- * `document-import-workflow.test.ts`'s coverage of the hook/port itself.
+ * `useDocumentImportCreationWorkflow` uses its default route port (global
+ * `fetch`) since `ImportDocumentButton` does not expose an injectable port,
+ * so these tests mock `globalThis.fetch` per scenario.
  *
  * Mounted directly with `react-test-renderer` (no `document`/`window`
  * globals needed — this component renders no Tooltip/portal content).
- * `handleImported`'s `startTransition(async () => { await
- * createDocumentFromImport(...) })` result is fire-and-forget (the
- * component discards `isPending` from `useTransition`), so — unlike
- * `onboarding-checklist.tsx` — no pending UI is gated on it; assertions
- * simply await a drain tick to observe the stubbed action call.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -53,40 +40,44 @@ type ModuleHooks = {
   }): void;
 };
 
-type ImportActionsTestState = {
-  calls: { markdown: string; title: string }[];
+type ImportRouterTestState = {
+  pushes: string[];
 };
 
-const globalForActions = globalThis as typeof globalThis & {
-  __importActionsTestState: ImportActionsTestState;
+const globalForRouter = globalThis as typeof globalThis & {
+  __importRouterTestState: ImportRouterTestState;
 };
 
-function resetActionsState(): void {
-  globalForActions.__importActionsTestState = { calls: [] };
+function resetRouterState(): void {
+  globalForRouter.__importRouterTestState = { pushes: [] };
 }
-resetActionsState();
+resetRouterState();
 
 const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
 ) as ModuleHooks;
-const actionsStubUrl = "import-document-button-actions:test";
+const navigationStubUrl = "import-document-button-navigation:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === "./actions") {
-      return { url: actionsStubUrl, shortCircuit: true };
+    if (specifier === "next/navigation") {
+      return { url: navigationStubUrl, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
-    if (url === actionsStubUrl) {
+    if (url === navigationStubUrl) {
       return {
-        format: "commonjs",
-        source: `module.exports = {
-  createDocumentFromImport: async (markdown, title) => {
-    globalThis.__importActionsTestState.calls.push({ markdown, title });
-  },
-};`,
+        format: "module",
+        source: `
+          export function useRouter() {
+            return {
+              push(url) {
+                globalThis.__importRouterTestState.pushes.push(url);
+              },
+            };
+          }
+        `,
         shortCircuit: true,
       };
     }
@@ -121,7 +112,7 @@ before(async () => {
   ImportDocumentButton = mod.ImportDocumentButton;
 });
 
-beforeEach(resetActionsState);
+beforeEach(resetRouterState);
 
 function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -197,10 +188,14 @@ describe("ImportDocumentButton", () => {
     }
   });
 
-  test("selecting a file uploads it, then calls createDocumentFromImport with the extracted markdown and a title derived from the file name", async () => {
+  test("selecting a file uploads it and navigates only after durable persistence succeeds", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ markdown: "# Hello world" })) as typeof fetch;
+      jsonResponse({
+        ok: true,
+        documentId: "doc-1",
+        documentPath: "/app/documents/doc-1",
+      })) as typeof fetch;
     const renderer = mountButton();
     try {
       const file = new File(["# Hello world"], "my-great_notes.md", {
@@ -208,8 +203,8 @@ describe("ImportDocumentButton", () => {
       });
       await selectFile(renderer, file);
 
-      assert.deepEqual(globalForActions.__importActionsTestState.calls, [
-        { markdown: "# Hello world", title: "my great notes" },
+      assert.deepEqual(globalForRouter.__importRouterTestState.pushes, [
+        "/app/documents/doc-1",
       ]);
       // Back to idle: no error alert, button re-enabled.
       assert.throws(() => findAlert(renderer));
@@ -244,22 +239,63 @@ describe("ImportDocumentButton", () => {
       assert.match(textOf(button), /Importing…/);
 
       await act(async () => {
-        resolveFetch(jsonResponse({ markdown: "done" }));
+        resolveFetch(
+          jsonResponse({
+            ok: true,
+            documentId: "doc-2",
+            documentPath: "/app/documents/doc-2",
+          }),
+        );
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
       assert.equal(findButton(renderer).props.disabled, false);
-      assert.equal(globalForActions.__importActionsTestState.calls.length, 1);
+      assert.deepEqual(globalForRouter.__importRouterTestState.pushes, [
+        "/app/documents/doc-2",
+      ]);
     } finally {
       act(() => renderer.unmount());
       globalThis.fetch = originalFetch;
     }
   });
 
-  test("a server-reported import error renders a dismissible, retryable alert and never calls createDocumentFromImport", async () => {
+  test("a malformed success payload is rejected in create workflow and does not navigate", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ error: "Unsupported file format." }, 400)) as typeof fetch;
+      jsonResponse({
+        ok: true,
+        markdown: "# Missing durable metadata",
+      })) as typeof fetch;
+    const renderer = mountButton();
+    try {
+      const file = new File(["# Hello world"], "my-great_notes.md", {
+        type: "text/markdown",
+      });
+      await selectFile(renderer, file);
+
+      const alert = findAlert(renderer);
+      assert.match(textOf(alert), /invalid import response/i);
+      assert.equal(globalForRouter.__importRouterTestState.pushes.length, 0);
+    } finally {
+      act(() => renderer.unmount());
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("a server-reported import error renders a dismissible, retryable alert and never navigates", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "unsupported",
+            status: 415,
+            message: "Unsupported file format.",
+          },
+        },
+        415,
+      )) as typeof fetch;
     const renderer = mountButton();
     try {
       const file = new File(["bad"], "bad.docx", {
@@ -269,7 +305,7 @@ describe("ImportDocumentButton", () => {
 
       const alert = findAlert(renderer);
       assert.match(textOf(alert), /Unsupported file format\./);
-      assert.equal(globalForActions.__importActionsTestState.calls.length, 0);
+      assert.equal(globalForRouter.__importRouterTestState.pushes.length, 0);
 
       const retry = renderer.root.find(
         (el) => el.type === "button" && el.props.children === "retry",
@@ -303,7 +339,11 @@ describe("ImportDocumentButton", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => {
       fetchCalls += 1;
-      return jsonResponse({ markdown: "unused" });
+      return jsonResponse({
+        ok: true,
+        documentId: "unused",
+        documentPath: "/app/documents/unused",
+      });
     }) as typeof fetch;
     const renderer = mountButton();
     try {
@@ -322,7 +362,17 @@ describe("ImportDocumentButton", () => {
   test("reset: clicking retry clears the error alert and re-enables the import button", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      jsonResponse({ error: "bad file" }, 400)) as typeof fetch;
+      jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "malformed",
+            status: 400,
+            message: "bad file",
+          },
+        },
+        400,
+      )) as typeof fetch;
     const renderer = mountButton();
     try {
       const file = new File(["x"], "notes.md", { type: "text/markdown" });

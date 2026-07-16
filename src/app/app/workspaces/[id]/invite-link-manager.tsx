@@ -5,11 +5,14 @@ import { useState } from "react";
 import { Button, FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui";
 
 import type { InviteLink } from "@/lib/workspace/invite-types";
+import {
+  parsePersistedWorkspaceMemberRole,
+  type InvitableWorkspaceRole,
+} from "@/lib/workspace/roles";
 
 import { createInviteLink, revokeInviteLink } from "./actions";
 
-const roleLabels = {
-  OWNER: "Owner",
+const roleLabels: Record<InvitableWorkspaceRole, string> = {
   EDITOR: "Editor",
   VIEWER: "Viewer",
 };
@@ -29,9 +32,8 @@ export function InviteLinkManager({
   inviteLinks: InviteLink[];
 }) {
   const [links, setLinks] = useState(inviteLinks);
-  const [selectedRole, setSelectedRole] = useState<"EDITOR" | "VIEWER">(
-    "EDITOR",
-  );
+  const [selectedRole, setSelectedRole] =
+    useState<InvitableWorkspaceRole>("EDITOR");
   const [expiryDays, setExpiryDays] = useState<string>("0");
   const [maxUses, setMaxUses] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -82,9 +84,14 @@ export function InviteLinkManager({
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedRole}
-            onChange={(e) =>
-              setSelectedRole(e.target.value as "EDITOR" | "VIEWER")
-            }
+            onChange={(e) => {
+              const parsedRole = parsePersistedWorkspaceMemberRole(
+                e.target.value,
+              );
+              if (parsedRole.success) {
+                setSelectedRole(parsedRole.value);
+              }
+            }}
             className={cx("h-10 flex-1 px-3", FIELD_CONTROL)}
           >
             <option value="EDITOR">Editor</option>

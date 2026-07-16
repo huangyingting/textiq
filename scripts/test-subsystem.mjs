@@ -314,7 +314,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/components\/site-header-view\.test\.tsx$/,
       /^src\/components\/shell-nav-links\.test\.tsx$/,
       /^src\/components\/shell-utility-slots\.test\.tsx$/,
-      /^src\/components\/ui\//,
+      /^src\/components\/(?:motion|ui)\//,
       /^src\/lib\/a11y\//,
       /^src\/lib\/action-result\.test\.ts$/,
       /^src\/lib\/anchor-resolver\.test\.ts$/,
@@ -343,7 +343,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
     description:
       "Reusable UI primitives, app chrome, a11y helpers, and viewport utilities",
     patterns: [
-      /^src\/components\/ui\//,
+      /^src\/components\/(?:motion|ui)\//,
       /^src\/lib\/a11y\//,
       /^src\/lib\/app-shell\//,
       /^src\/components\/theme-provider\.test\.tsx$/,

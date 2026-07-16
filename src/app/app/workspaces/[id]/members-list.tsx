@@ -3,13 +3,25 @@
 import { useState, useTransition } from "react";
 
 import { Button, Dialog, PANEL_CHROME, cx } from "@/components/ui";
+import type {
+  EffectiveWorkspaceRole,
+  PersistedWorkspaceMemberRole,
+} from "@/lib/workspace/roles";
+import { persistedMemberRoleToEffectiveRole } from "@/lib/workspace/roles";
 
 import { removeMember, transferOwnership } from "./actions";
 
 type Member = {
   id: string;
   userId: string;
-  role: "OWNER" | "EDITOR" | "VIEWER";
+  role: PersistedWorkspaceMemberRole;
+  user: { email: string; name: string | null };
+};
+
+type DisplayMember = {
+  id: string;
+  userId: string;
+  role: EffectiveWorkspaceRole;
   user: { email: string; name: string | null };
 };
 
@@ -20,10 +32,10 @@ type Workspace = {
   members: Member[];
 };
 
-const roleLabels = {
-  OWNER: "Owner",
-  EDITOR: "Editor",
-  VIEWER: "Viewer",
+const roleLabels: Record<EffectiveWorkspaceRole, string> = {
+  owner: "Owner",
+  editor: "Editor",
+  viewer: "Viewer",
 };
 
 export function MembersList({
@@ -35,18 +47,23 @@ export function MembersList({
   isOwner: boolean;
   currentUserId: string;
 }) {
-  const [transferTarget, setTransferTarget] = useState<Member | null>(null);
+  const [transferTarget, setTransferTarget] = useState<DisplayMember | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const allMembers = [
+  const allMembers: DisplayMember[] = [
     {
       id: "owner",
       userId: workspace.ownerId,
-      role: "OWNER" as const,
+      role: "owner",
       user: workspace.owner,
     },
-    ...workspace.members,
+    ...workspace.members.map((member) => ({
+      ...member,
+      role: persistedMemberRoleToEffectiveRole(member.role),
+    })),
   ];
 
   const handleRemove = (memberId: string) => {
@@ -99,7 +116,7 @@ export function MembersList({
               {roleLabels[member.role]}
             </span>
             {isOwner &&
-              member.role !== "OWNER" &&
+              member.role !== "owner" &&
               member.userId !== currentUserId && (
                 <>
                   <button
