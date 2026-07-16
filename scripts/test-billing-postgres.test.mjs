@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createScopedDatabaseName,
   createScopedPostgresTarget,
+  dropScopedPostgresDatabase,
   isPostgresBillingHarnessEnabled,
+  main,
   POSTGRES_BILLING_TEST_CLIENT_MODULE,
   POSTGRES_BILLING_TEST_GENERATOR,
   POSTGRES_BILLING_TEST_SCRIPT,
@@ -241,4 +244,276 @@ test("postgres billing harness still cleans up scoped database after command fai
   assert.equal(status, 7);
   assert.equal(commandCalls.length, 2);
   assert.deepEqual(cleanupTargets, ["textiq_test_billing_test_fixed"]);
+});
+
+test("createScopedDatabaseName generates valid scoped names from a base name", () => {
+  const name = createScopedDatabaseName("textiq_test", "abcdef1234567890");
+  assert.equal(name, "billing_test_textiq_test_abcdef1234");
+  assert.ok(name.length <= 63);
+});
+
+test("createScopedDatabaseName normalizes special characters and trims underscores", () => {
+  const name = createScopedDatabaseName("My-DB!!test", "aabbccddee112233");
+  assert.match(name, /^billing_test_my_db_test_/);
+  assert.ok(name.length <= 63);
+});
+
+test("createScopedDatabaseName generates unique names via default token", () => {
+  const a = createScopedDatabaseName("ci_test");
+  const b = createScopedDatabaseName("ci_test");
+  assert.ok(a.startsWith("billing_test_ci_test_"));
+  assert.notEqual(a, b);
+});
+
+test("createScopedPostgresTarget uses default scopedDatabaseNameFactory", () => {
+  const target = createScopedPostgresTarget(
+    "postgresql://localhost:5432/ci_test_db",
+  );
+  assert.match(target.scopedDatabaseName, /^billing_test_ci_test_db_/);
+  assert.match(target.scopedDatabaseUrl, /postgresql:\/\/localhost:5432\//);
+});
+
+test("createScopedPostgresTarget throws for unparseable DATABASE_URL", () => {
+  assert.throws(
+    () => createScopedPostgresTarget("not a url at all"),
+    /must be a valid postgres URL/,
+  );
+});
+
+test("createScopedPostgresTarget throws when database name is absent from URL", () => {
+  assert.throws(
+    () =>
+      createScopedPostgresTarget(
+        "postgresql://localhost:5432/",
+        () => "billing_test_ci_fixed",
+      ),
+    /must include a database name/,
+  );
+});
+
+test("createScopedPostgresTarget throws when scoped name is not a valid identifier", () => {
+  assert.throws(
+    () =>
+      createScopedPostgresTarget(
+        "postgresql://localhost:5432/ci_test",
+        () => "invalid-name-with-hyphens",
+      ),
+    /Invalid Postgres identifier/,
+  );
+});
+
+test("dropScopedPostgresDatabase terminates connections and drops the database", async () => {
+  const calls = [];
+  const mockClient = {
+    connect: async () => {
+      calls.push("connect");
+    },
+    query: async (sql, params) => {
+      calls.push({ sql, params: params ?? null });
+    },
+    end: async () => {
+      calls.push("end");
+    },
+  };
+
+  const target = {
+    scopedDatabaseName: "billing_test_ci_abcdef1234",
+    cleanupDatabaseUrl: "postgresql://localhost:5432/postgres",
+  };
+
+  await dropScopedPostgresDatabase(target, {
+    pgClientFactory: () => mockClient,
+  });
+
+  assert.equal(calls[0], "connect");
+  assert.ok(typeof calls[1].sql === "string");
+  assert.ok(calls[1].sql.includes("pg_terminate_backend"));
+  assert.deepEqual(calls[1].params, [target.scopedDatabaseName]);
+  assert.ok(calls[2].sql.includes("DROP DATABASE IF EXISTS"));
+  assert.ok(calls[2].sql.includes('"billing_test_ci_abcdef1234"'));
+  assert.equal(calls[3], "end");
+  assert.equal(calls.length, 4);
+});
+
+test("dropScopedPostgresDatabase still calls end() when connect throws", async () => {
+  const endCalls = [];
+  const mockClient = {
+    connect: async () => {
+      throw new Error("connection refused");
+    },
+    query: async () => {},
+    end: async () => {
+      endCalls.push("end");
+    },
+  };
+
+  const target = {
+    scopedDatabaseName: "billing_test_ci_abcdef1234",
+    cleanupDatabaseUrl: "postgresql://localhost:5432/postgres",
+  };
+
+  await assert.rejects(
+    () =>
+      dropScopedPostgresDatabase(target, { pgClientFactory: () => mockClient }),
+    /connection refused/,
+  );
+  assert.equal(endCalls.length, 1);
+});
+
+test("dropScopedPostgresDatabase still calls end() when a query throws", async () => {
+  const calls = [];
+  const mockClient = {
+    connect: async () => {
+      calls.push("connect");
+    },
+    query: async () => {
+      calls.push("query-throw");
+      throw new Error("query failed");
+    },
+    end: async () => {
+      calls.push("end");
+    },
+  };
+
+  const target = {
+    scopedDatabaseName: "billing_test_ci_abcdef1234",
+    cleanupDatabaseUrl: "postgresql://localhost:5432/postgres",
+  };
+
+  await assert.rejects(
+    () =>
+      dropScopedPostgresDatabase(target, { pgClientFactory: () => mockClient }),
+    /query failed/,
+  );
+  assert.ok(calls.includes("end"));
+});
+
+test("postgres billing harness propagates spawn error, writes to stderr, and still cleans up", async () => {
+  const cleanupTargets = [];
+  const stderr = captureOutput();
+
+  const status = await runPostgresBillingHarness({
+    env: {
+      ENABLE_POSTGRES_BILLING_TESTS: "1",
+      DATABASE_URL: "postgresql://localhost:5432/textiq_test",
+    },
+    stdout: captureOutput().stream,
+    stderr: stderr.stream,
+    spawn: () => ({ error: new Error("spawn ENOENT"), status: null }),
+    dropDatabase: async (target) => {
+      cleanupTargets.push(target.scopedDatabaseName);
+    },
+    scopedDatabaseNameFactory: () => "textiq_test_billing_test_fixed",
+  });
+
+  assert.equal(status, 1);
+  assert.equal(cleanupTargets.length, 1);
+  assert.match(stderr.lines.join(""), /spawn ENOENT/);
+});
+
+test("postgres billing harness propagates non-Error spawn throws and covers toErrorMessage string path", async () => {
+  const stderr = captureOutput();
+
+  const status = await runPostgresBillingHarness({
+    env: {
+      ENABLE_POSTGRES_BILLING_TESTS: "1",
+      DATABASE_URL: "postgresql://localhost:5432/textiq_test",
+    },
+    stdout: captureOutput().stream,
+    stderr: stderr.stream,
+    spawn: () => ({ error: "raw string error", status: null }),
+    dropDatabase: async () => {},
+    scopedDatabaseNameFactory: () => "textiq_test_billing_test_fixed",
+  });
+
+  assert.equal(status, 1);
+  assert.match(stderr.lines.join(""), /raw string error/);
+});
+
+test("postgres billing harness reports cleanup failure and escalates to exit code 1 on success run", async () => {
+  const stderr = captureOutput();
+  const stdout = captureOutput();
+
+  const status = await runPostgresBillingHarness({
+    env: {
+      ENABLE_POSTGRES_BILLING_TESTS: "1",
+      DATABASE_URL: "postgresql://localhost:5432/textiq_test",
+    },
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+    spawn: () => ({ status: 0 }),
+    dropDatabase: async () => {
+      throw new Error("cleanup ECONNREFUSED");
+    },
+    scopedDatabaseNameFactory: () => "textiq_test_billing_test_fixed",
+  });
+
+  assert.equal(status, 1);
+  assert.match(stderr.lines.join(""), /Failed to clean up database/);
+  assert.match(stderr.lines.join(""), /cleanup ECONNREFUSED/);
+});
+
+test("postgres billing harness cleanup failure does not override a non-zero exit code", async () => {
+  const stderr = captureOutput();
+
+  const status = await runPostgresBillingHarness({
+    env: {
+      ENABLE_POSTGRES_BILLING_TESTS: "1",
+      DATABASE_URL: "postgresql://localhost:5432/textiq_test",
+    },
+    stdout: captureOutput().stream,
+    stderr: stderr.stream,
+    spawn: (command, args) => {
+      const label = `${command} ${args.join(" ")}`;
+      if (label.includes("db push")) return { status: 3 };
+      return { status: 0 };
+    },
+    dropDatabase: async () => {
+      throw new Error("also failed");
+    },
+    scopedDatabaseNameFactory: () => "textiq_test_billing_test_fixed",
+  });
+
+  assert.equal(status, 3);
+});
+
+test("postgres billing harness uses default scopedDatabaseNameFactory when not provided", async () => {
+  const cleanupTargets = [];
+
+  const status = await runPostgresBillingHarness({
+    env: {
+      ENABLE_POSTGRES_BILLING_TESTS: "1",
+      DATABASE_URL: "postgresql://localhost:5432/ci_test_db",
+    },
+    stdout: captureOutput().stream,
+    stderr: captureOutput().stream,
+    spawn: () => ({ status: 0 }),
+    dropDatabase: async (target) => {
+      cleanupTargets.push(target);
+    },
+    // intentionally omitting scopedDatabaseNameFactory to exercise the default
+  });
+
+  assert.equal(status, 0);
+  assert.equal(cleanupTargets.length, 1);
+  assert.match(
+    cleanupTargets[0].scopedDatabaseName,
+    /^billing_test_ci_test_db_/,
+  );
+});
+
+test("main() sets process.exitCode via runPostgresBillingHarness skip path", async () => {
+  const stdout = captureOutput();
+  const prevExitCode = process.exitCode;
+  try {
+    await main({
+      env: {},
+      stdout: stdout.stream,
+      stderr: captureOutput().stream,
+    });
+    assert.equal(process.exitCode, 0);
+    assert.match(stdout.lines.join(""), /Skipping/);
+  } finally {
+    process.exitCode = prevExitCode;
+  }
 });
