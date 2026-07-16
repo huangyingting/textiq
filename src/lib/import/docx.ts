@@ -12,15 +12,42 @@ import "server-only";
 
 import mammoth from "mammoth";
 
-import { loadZipWithinBudget } from "./archive-budget";
+import { disposeZip, loadZipWithinBudget } from "./archive-budget";
 import { htmlToMarkdown } from "./html";
+import { EncryptedImportError } from "./import-errors";
+import { hasOleCompoundFileSignature } from "./office-signature";
+import { throwIfAborted } from "./timeout";
 
 /**
  * Extracts text from a DOCX `Buffer` and returns it as Markdown-compatible text.
  * Throws when `mammoth` cannot parse the buffer (e.g. corrupt file).
  */
-export async function parseDocx(buffer: Buffer): Promise<string> {
-  await loadZipWithinBudget(buffer);
-  const result = await mammoth.convertToHtml({ buffer });
-  return htmlToMarkdown(result.value);
+export type ParseDocxOptions = {
+  signal?: AbortSignal;
+};
+
+export async function parseDocx(
+  buffer: Buffer,
+  options: ParseDocxOptions = {},
+): Promise<string> {
+  const { signal } = options;
+  throwIfAborted(signal);
+  if (hasOleCompoundFileSignature(buffer)) {
+    throw new EncryptedImportError();
+  }
+
+  const zip = await loadZipWithinBudget(buffer, signal);
+  try {
+    if (zip.files["EncryptionInfo"] && zip.files["EncryptedPackage"]) {
+      throw new EncryptedImportError();
+    }
+    throwIfAborted(signal);
+    const result = await mammoth.convertToHtml({ buffer });
+    throwIfAborted(signal);
+    const markdown = htmlToMarkdown(result.value);
+    throwIfAborted(signal);
+    return markdown;
+  } finally {
+    disposeZip(zip);
+  }
 }

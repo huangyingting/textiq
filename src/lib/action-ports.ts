@@ -1,6 +1,7 @@
 import type { ActionResult } from "@/lib/action-result";
 import type { BrandStyle } from "@/lib/brand/schema";
 import type {
+  CommentActionResult,
   CommentThread,
   CreateCommentInput,
   ListCommentsOptions,
@@ -18,6 +19,7 @@ import type {
   BrandKitDraftV1,
 } from "@/lib/presentation/brand-kit/schema";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type { ImportCreationTarget } from "@/lib/import/contract";
 
 export interface DeckFetchPort {
   fetchDeckJson: (documentId: string) => Promise<FetchDeckResult>;
@@ -102,28 +104,49 @@ export interface DocumentListActionPort {
   restoreDocument: (documentId: string) => Promise<void>;
 }
 
-export interface ImportedDocumentPayload {
-  markdown: string;
-  title: string;
+export interface ImportedDocumentCreationPayload {
+  documentId: string;
+  documentPath: string;
 }
 
-export interface DocumentImportActionPort {
-  importFile: (file: File) => Promise<ActionResult<ImportedDocumentPayload>>;
+export interface ImportActionError {
+  code: string;
+  status: number;
+  message: string;
+}
+
+export type ImportActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ImportActionError };
+
+export interface DocumentImportCreateActionPort {
+  importFile: (
+    file: File,
+    target: ImportCreationTarget,
+  ) => Promise<ImportActionResult<ImportedDocumentCreationPayload>>;
 }
 
 export interface CommentsActionPort {
   listComments: (
     documentId: string,
     options?: ListCommentsOptions,
-  ) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
   createComment: (
     documentId: string,
     input: CreateCommentInput,
-  ) => Promise<CommentThread[]>;
-  editComment: (commentId: string, newBody: string) => Promise<CommentThread[]>;
-  deleteComment: (commentId: string) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  editComment: (
+    documentId: string,
+    commentId: string,
+    newBody: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  deleteComment: (
+    documentId: string,
+    commentId: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
   setCommentResolved: (
+    documentId: string,
     commentId: string,
     resolved: boolean,
-  ) => Promise<CommentThread[]>;
+  ) => Promise<CommentActionResult<CommentThread[]>>;
 }

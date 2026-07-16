@@ -3,7 +3,10 @@ import { test } from "node:test";
 
 import JSZip from "jszip";
 
+import { ImportBudgetError, IMPORT_ZIP_MAX_ENTRIES } from "./archive-budget";
+import { EncryptedImportError } from "./import-errors";
 import { parsePptx } from "./pptx-parser";
+import { ParseAbortedError } from "./timeout";
 
 test("parsePptx extracts shape text, native table cells, and linked notes", async () => {
   const zip = new JSZip();
@@ -111,4 +114,72 @@ test("parsePptx retains table-only slide content", async () => {
 
   assert.ok(text.includes("| KPI | Value |"));
   assert.ok(text.includes("| Retention | 96% |"));
+});
+
+test("parsePptx rejects a non-zip payload as malformed", async () => {
+  await assert.rejects(() => parsePptx(Buffer.from("not-a-pptx")));
+});
+
+test("parsePptx rejects encrypted Office payloads with typed error", async () => {
+  const zip = new JSZip();
+  zip.file("EncryptionInfo", "info");
+  zip.file("EncryptedPackage", "payload");
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+
+  await assert.rejects(
+    () => parsePptx(buffer),
+    (error: unknown) => error instanceof EncryptedImportError,
+  );
+});
+
+test("parsePptx rejects OLE compound-file payloads before ZIP parsing", async () => {
+  const oleBuffer = Buffer.from([
+    0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00,
+  ]);
+
+  await assert.rejects(
+    () => parsePptx(oleBuffer),
+    (error: unknown) => error instanceof EncryptedImportError,
+  );
+});
+
+test("parsePptx enforces archive entry budget", async () => {
+  const zip = new JSZip();
+  for (let index = 0; index <= IMPORT_ZIP_MAX_ENTRIES; index += 1) {
+    zip.file(`ppt/slides/slide-${index}.xml`, "<p:sld/>");
+  }
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+
+  await assert.rejects(
+    () => parsePptx(buffer),
+    (error: unknown) => error instanceof ImportBudgetError,
+  );
+});
+
+test("parsePptx observes an already-aborted signal before parsing", async () => {
+  const zip = new JSZip();
+  zip.file("ppt/slides/slide1.xml", "<p:sld/>");
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => parsePptx(buffer, { signal: controller.signal }),
+    (error: unknown) => error instanceof ParseAbortedError,
+  );
+});
+
+test("parsePptx aborts during parsing and drops late slide results", async () => {
+  const zip = new JSZip();
+  zip.file("ppt/slides/slide1.xml", "<p:sld/>");
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+  const controller = new AbortController();
+
+  const parsing = parsePptx(buffer, { signal: controller.signal });
+  controller.abort();
+
+  await assert.rejects(
+    () => parsing,
+    (error: unknown) => error instanceof ParseAbortedError,
+  );
 });

@@ -17,7 +17,7 @@ import {
   PURGE_MIN_INTERVAL_MS,
   resetPurgeLockForTesting,
 } from "@/lib/maintenance";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/test/prisma-raw";
 
 // ---------------------------------------------------------------------------
 // softDeleteDocument

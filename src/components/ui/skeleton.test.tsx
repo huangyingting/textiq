@@ -39,6 +39,7 @@ test("Skeleton merges a caller className onto the default pulse/radius/surface c
   const div = renderer.root.findByType("div");
   const className = div.props.className as string;
   assert.match(className, /animate-pulse/);
+  assert.match(className, /motion-reduce:animate-none/);
   assert.match(className, /rounded-\[var\(--ds-radius-sm,8px\)\]/);
   assert.match(className, /bg-\[var\(--ds-surface-raised,#f3f4f6\)\]/);
   assert.match(className, /h-4 w-24/);
@@ -49,7 +50,7 @@ test("Skeleton renders with only its default classes when no className is passed
   const div = renderer.root.findByType("div");
   assert.equal(
     div.props.className,
-    "animate-pulse rounded-[var(--ds-radius-sm,8px)] bg-[var(--ds-surface-raised,#f3f4f6)]",
+    "animate-pulse rounded-[var(--ds-radius-sm,8px)] bg-[var(--ds-surface-raised,#f3f4f6)] motion-reduce:animate-none",
   );
 });
 

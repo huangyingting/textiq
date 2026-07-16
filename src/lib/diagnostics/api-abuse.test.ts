@@ -69,6 +69,7 @@ test("buildRouteDenialContext: every abuse category is a stable string", () => {
     "ai-timeout",
     "anon-quota-denied",
     "credit-denied",
+    "parser-budget",
     "parser-timeout",
     "rate-limit-hit",
   ]);

@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 
 import { Prisma } from "@/generated/prisma/client";
 import { evaluateInviteAccess, toInviteAccessInput } from "@/lib/invite-access";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import {
   assertPersistedWorkspaceMemberRole,
   type InvitableWorkspaceRole,
@@ -42,7 +42,7 @@ const ACCEPT_INVITE_SELECT = {
 } satisfies Prisma.InviteLinkSelect;
 
 type InviteAcceptanceTxClient = Pick<
-  Prisma.TransactionClient,
+  PrismaTransactionClient,
   "inviteLink" | "workspaceMember" | "inviteLinkUse"
 >;
 

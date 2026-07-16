@@ -224,6 +224,7 @@ describe("RootLayout", () => {
     assert.equal(tree.props.suppressHydrationWarning, true);
     assert.ok(String(tree.props.className).includes(INTER_STUB_VARIABLE));
     assert.match(String(tree.props.className), /antialiased/);
+    assert.match(String(tree.props.className), /motion-reduce:scroll-auto/);
   });
 
   test("calls Inter exactly once at module scope with the expected subset config", () => {

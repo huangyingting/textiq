@@ -1,33 +1,19 @@
 import { formatBytesAsMb, type LimitDefinition } from "@/lib/limits/budgets";
+import {
+  IMPORT_ACCEPTED_MIME_TYPES,
+  IMPORT_MAX_BYTES_BY_MIME,
+  IMPORT_MAX_UPLOAD_BYTES,
+  IMPORT_TEXT_MAX_UPLOAD_BYTES,
+  type ImportAcceptedMimeType,
+} from "@/lib/import/format-registry";
 
-export const IMPORT_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const IMPORT_TEXT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-
-export const IMPORT_ACCEPTED_MIME_TYPES = [
-  "text/markdown",
-  "text/x-markdown",
-  "text/plain",
-  "text/html",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/pdf",
-] as const;
-
-export type ImportAcceptedMimeType =
-  (typeof IMPORT_ACCEPTED_MIME_TYPES)[number];
-
-export const IMPORT_MAX_BYTES_BY_MIME: Record<ImportAcceptedMimeType, number> =
-  {
-    "text/markdown": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/x-markdown": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/plain": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "text/html": IMPORT_TEXT_MAX_UPLOAD_BYTES,
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      IMPORT_MAX_UPLOAD_BYTES,
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-      IMPORT_MAX_UPLOAD_BYTES,
-    "application/pdf": IMPORT_MAX_UPLOAD_BYTES,
-  };
+export {
+  IMPORT_ACCEPTED_MIME_TYPES,
+  IMPORT_MAX_BYTES_BY_MIME,
+  IMPORT_MAX_UPLOAD_BYTES,
+  IMPORT_TEXT_MAX_UPLOAD_BYTES,
+};
+export type { ImportAcceptedMimeType };
 
 export const BRAND_FONT_ACCEPTED_TYPES = [
   "font/ttf",

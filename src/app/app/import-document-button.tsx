@@ -1,35 +1,31 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { useTranslation } from "@/lib/i18n/locale-context";
 import {
   DOCUMENT_IMPORT_ACCEPT,
-  useDocumentImportWorkflow,
+  useDocumentImportCreationWorkflow,
 } from "@/lib/import/document-import-workflow";
-
-import { createDocumentFromImport } from "./actions";
 
 /**
  * Dashboard button that lets users create a new document from an imported
- * file. Uploads the file to `POST /api/import`, then calls the
- * `createDocumentFromImport` server action which creates the document and
- * redirects to the editor.
+ * file. Uploads the file to `POST /api/import` in durable create mode and
+ * only navigates once persistence succeeds.
  *
  * The button is styled to match the existing `primaryButtonClass` from the
  * dashboard header so it sits alongside "New document".
  */
 export function ImportDocumentButton({ className }: { className: string }) {
   const t = useTranslation();
-  const [, startTransition] = useTransition();
+  const router = useRouter();
   const { inputRef, state, isUploading, processFile, clearError } =
-    useDocumentImportWorkflow({
+    useDocumentImportCreationWorkflow({
       surface: "dashboard",
-      onImported: ({ markdown, title }) => {
-        startTransition(async () => {
-          await createDocumentFromImport(markdown, title);
-        });
+      target: { kind: "personal" },
+      onCreated: ({ documentPath }) => {
+        router.push(documentPath);
       },
     });
 

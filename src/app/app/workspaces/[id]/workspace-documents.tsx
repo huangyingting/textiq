@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FileText, Plus, Upload, X } from "lucide-react";
 
 import {
@@ -17,14 +18,10 @@ import { capabilitiesForWorkspaceAccessRole } from "@/lib/workspace/capabilities
 import type { EffectiveWorkspaceRole } from "@/lib/workspace/roles";
 import {
   DOCUMENT_IMPORT_ACCEPT,
-  useDocumentImportWorkflow,
+  useDocumentImportCreationWorkflow,
 } from "@/lib/import/document-import-workflow";
 
-import {
-  createWorkspaceDocument,
-  importWorkspaceDocument,
-  getWorkspaceDocuments,
-} from "./actions";
+import { createWorkspaceDocument, getWorkspaceDocuments } from "./actions";
 import type { WorkspaceDocument } from "@/lib/workspace/document-types";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -131,15 +128,14 @@ function WorkspaceDocumentActions({
   canCreate: boolean;
   canImport: boolean;
 }) {
+  const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
-  const [, startTransition] = useTransition();
   const { inputRef, state, isUploading, processFile, clearError } =
-    useDocumentImportWorkflow({
+    useDocumentImportCreationWorkflow({
       surface: "workspace",
-      onImported: ({ markdown, title }) => {
-        startTransition(async () => {
-          await importWorkspaceDocument(workspaceId, markdown, title);
-        });
+      target: { kind: "workspace", workspaceId },
+      onCreated: ({ documentPath }) => {
+        router.push(documentPath);
       },
     });
 

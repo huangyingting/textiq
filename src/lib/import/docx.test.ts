@@ -16,6 +16,8 @@ import { test } from "node:test";
 import JSZip from "jszip";
 
 import { ImportBudgetError, IMPORT_ZIP_MAX_ENTRIES } from "./archive-budget";
+import { EncryptedImportError } from "./import-errors";
+import { ParseAbortedError } from "./timeout";
 
 // ── server-only shim ─────────────────────────────────────────────────────────
 const serverOnlyPath = require.resolve("server-only");
@@ -97,6 +99,53 @@ test("parseDocx rejects a valid zip that is missing the Word document part", asy
   await assert.rejects(
     () => parseDocx(buffer),
     /main document part|valid \.docx/i,
+  );
+});
+
+test("parseDocx rejects encrypted Office documents with a typed error", async () => {
+  const zip = new JSZip();
+  zip.file("EncryptionInfo", "info");
+  zip.file("EncryptedPackage", "payload");
+  const buffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+
+  await assert.rejects(
+    () => parseDocx(buffer),
+    (error: unknown) => error instanceof EncryptedImportError,
+  );
+});
+
+test("parseDocx rejects OLE compound-file payloads before ZIP parsing", async () => {
+  const oleBuffer = Buffer.from([
+    0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00,
+  ]);
+
+  await assert.rejects(
+    () => parseDocx(oleBuffer),
+    (error: unknown) => error instanceof EncryptedImportError,
+  );
+});
+
+test("parseDocx observes an already-aborted signal before parsing", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const buffer = await minimalDocx(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`);
+
+  await assert.rejects(
+    () => parseDocx(buffer, { signal: controller.signal }),
+    (error: unknown) => error instanceof ParseAbortedError,
+  );
+});
+
+test("parseDocx aborts during parsing and drops the late result", async () => {
+  const controller = new AbortController();
+  const buffer = await minimalDocx(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`);
+
+  const parsing = parseDocx(buffer, { signal: controller.signal });
+  controller.abort();
+
+  await assert.rejects(
+    () => parsing,
+    (error: unknown) => error instanceof ParseAbortedError,
   );
 });
 

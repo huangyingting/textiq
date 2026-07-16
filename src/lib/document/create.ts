@@ -6,6 +6,7 @@ import {
 } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { BLANK_TEMPLATE_ID, getTemplateOrBlank } from "@/lib/templates/catalog";
+import { createDocumentWithCanonicalContent } from "./document-write-port";
 
 type DocumentCreateDb = Pick<typeof prisma, "document">;
 
@@ -42,28 +43,11 @@ export async function createDocumentFromTemplateForUser(
 ): Promise<CreatedDocument> {
   const contentJson = templateContentJsonForId(templateId);
 
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return db.document.create({
-    data: { ownerId: userId, ...(contentJson ? { contentJson } : {}) },
-    select: { id: true },
-  });
-}
-
-export async function createDocumentFromImportForUser(
-  userId: string,
-  content: string,
-  rawTitle: string,
-  db: DocumentCreateDb = prisma,
-): Promise<CreatedDocument> {
-  const title = clampDocumentTitle(rawTitle, "Imported document");
-  const safeContent = clampDocumentContent(content);
-  const contentJson = importedMarkdownToContentJson(safeContent);
-
-  // Document.content (the plaintext mirror) is deprecated — stop writing it.
-  // Physical column drop is a follow-up migration.
-  return db.document.create({
-    data: { ownerId: userId, title, contentJson },
+  return createDocumentWithCanonicalContent<CreatedDocument>(db, {
+    data: {
+      ownerId: userId,
+    },
+    ...(contentJson ? { contentSnapshot: contentJson } : {}),
     select: { id: true },
   });
 }

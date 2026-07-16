@@ -22,7 +22,7 @@ import {
   useSetLocaleOptimistic,
   useTranslation,
 } from "./locale-context";
-import { DEFAULT_LOCALE, type Locale, type Messages } from "./index";
+import { DEFAULT_LOCALE, type Locale, type Translator } from "./index";
 
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
@@ -43,11 +43,6 @@ after(() => {
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
-
-type Translator = <K extends keyof Messages>(
-  key: K,
-  ...args: Messages[K] extends (...a: infer A) => string ? A : []
-) => string;
 
 type ConsumerSnapshot = {
   locale: Locale;
@@ -143,13 +138,11 @@ test("useTranslation binds t() to the locale seeded by LocaleProvider", () => {
 
 // ── Optimistic update wiring ─────────────────────────────────────────────────
 //
-// The language switcher calls `setLocaleOptimistic(next)` directly and then
-// wraps its cookie-write + `router.refresh()` follow-up in `startTransition`
-// (see `src/components/language-switcher.tsx`). The optimistic value takes
-// effect immediately while that transition is pending, and settles back once
-// it resolves unless a real locale update lands in the meantime — that is
-// the "instant UI, then real refresh confirms it" contract this hook exists
-// to provide.
+// The language switcher starts a transition, applies the optimistic locale
+// inside it, then persists the cookie and refreshes the server tree (see
+// `src/components/language-switcher.tsx`). The optimistic value takes effect
+// while that transition is pending, and settles back once it resolves unless
+// a real locale update lands in the meantime.
 
 test("setLocaleOptimistic shows the new locale immediately while the persistence transition is pending", async () => {
   const { ref, unmount } = renderProvided("en");
@@ -161,8 +154,8 @@ test("setLocaleOptimistic shows the new locale immediately while the persistence
   });
 
   act(() => {
-    ref.current?.setLocaleOptimistic("es");
     startTransition(async () => {
+      ref.current?.setLocaleOptimistic("es");
       await persisted;
     });
   });
@@ -186,8 +179,8 @@ test("setLocaleOptimistic settles back once the transition resolves without a co
   });
 
   act(() => {
-    ref.current?.setLocaleOptimistic("es");
     startTransition(async () => {
+      ref.current?.setLocaleOptimistic("es");
       await persisted;
     });
   });

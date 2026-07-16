@@ -1,8 +1,6 @@
 /** Surface-owned message catalogs for the TextIQ UI. */
 
-export const SUPPORTED_LOCALES = ["en", "es"] as const;
-export type Locale = (typeof SUPPORTED_LOCALES)[number];
-export const DEFAULT_LOCALE: Locale = "en";
+import { SUPPORTED_LOCALES, type Locale } from "./locales";
 
 export type AppShellMessages = {
   "header.brand": string;
@@ -32,12 +30,8 @@ export type TemplatePickerMessages = {
 export type LanguageSwitcherMessages = {
   "languageSwitcher.label": string;
   "languageSwitcher.selectLanguage": string;
+  "languageSwitcher.persistenceError": string;
 };
-
-export type Messages = AppShellMessages &
-  DashboardMessages &
-  TemplatePickerMessages &
-  LanguageSwitcherMessages;
 
 const appShellMessages: Record<Locale, AppShellMessages> = {
   en: {
@@ -96,10 +90,14 @@ const languageSwitcherMessages: Record<Locale, LanguageSwitcherMessages> = {
   en: {
     "languageSwitcher.label": "Language",
     "languageSwitcher.selectLanguage": "Select language",
+    "languageSwitcher.persistenceError":
+      "Unable to save your language preference. Please try again.",
   },
   es: {
     "languageSwitcher.label": "Idioma",
     "languageSwitcher.selectLanguage": "Seleccionar idioma",
+    "languageSwitcher.persistenceError":
+      "No se pudo guardar tu preferencia de idioma. Inténtalo de nuevo.",
   },
 };
 
@@ -112,6 +110,15 @@ export const catalogBySurface = {
 
 export type I18nCatalogSurface = keyof typeof catalogBySurface;
 
+type SurfaceMessages = (typeof catalogBySurface)[I18nCatalogSurface][Locale];
+type UnionToIntersection<T> = (
+  T extends unknown ? (value: T) => void : never
+) extends (value: infer Intersection) => void
+  ? Intersection
+  : never;
+
+export type Messages = UnionToIntersection<SurfaceMessages>;
+
 /* node:coverage disable */
 /* Catalog surface keys are asserted by i18n coverage tests; tsx maps Object.keys typing as uncovered. */
 export const I18N_CATALOG_SURFACES = Object.keys(
@@ -120,15 +127,14 @@ export const I18N_CATALOG_SURFACES = Object.keys(
 /* node:coverage enable */
 
 function mergeMessages(locale: Locale): Messages {
-  return {
-    ...catalogBySurface.appShell[locale],
-    ...catalogBySurface.dashboard[locale],
-    ...catalogBySurface.templatePicker[locale],
-    ...catalogBySurface.languageSwitcher[locale],
-  };
+  return Object.assign(
+    {},
+    ...I18N_CATALOG_SURFACES.map(
+      (surface) => catalogBySurface[surface][locale],
+    ),
+  ) as Messages;
 }
 
-export const catalog: Record<Locale, Messages> = {
-  en: mergeMessages("en"),
-  es: mergeMessages("es"),
-};
+export const catalog = Object.fromEntries(
+  SUPPORTED_LOCALES.map((locale) => [locale, mergeMessages(locale)]),
+) as Record<Locale, Messages>;

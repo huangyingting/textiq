@@ -16,7 +16,10 @@
 import { posix as pathPosix } from "node:path";
 import type JSZip from "jszip";
 
-import { loadZipWithinBudget } from "./archive-budget";
+import { disposeZip, loadZipWithinBudget } from "./archive-budget";
+import { EncryptedImportError } from "./import-errors";
+import { hasOleCompoundFileSignature } from "./office-signature";
+import { throwIfAborted } from "./timeout";
 
 /** Regex to match all `<a:t>…</a:t>` text runs. */
 const TEXT_RE = /<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g;
@@ -203,47 +206,72 @@ function slideOrdinal(name: string): number {
  * Extracts slide text from a PPTX `Buffer` and returns a structured plain-text
  * outline (each slide separated by a blank line, titles as `## Heading`).
  */
-export async function parsePptx(buffer: Buffer): Promise<string> {
-  const zip = await loadZipWithinBudget(buffer);
+export type ParsePptxOptions = {
+  signal?: AbortSignal;
+};
 
-  // Collect slide XML files in sorted order so slides appear in sequence.
-  const slideEntries = Object.keys(zip.files)
-    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
-    .sort((a, b) => slideOrdinal(a) - slideOrdinal(b));
+export async function parsePptx(
+  buffer: Buffer,
+  options: ParsePptxOptions = {},
+): Promise<string> {
+  const { signal } = options;
+  throwIfAborted(signal);
+  if (hasOleCompoundFileSignature(buffer)) {
+    throw new EncryptedImportError();
+  }
+  const zip = await loadZipWithinBudget(buffer, signal);
 
-  const slideBlocks: string[] = [];
-
-  for (const slideName of slideEntries) {
-    const slideEntry = zip.files[slideName];
-    if (!slideEntry) continue;
-    const slideXml = await slideEntry.async("string");
-    const sections: string[] = [];
-
-    const shapeLines = extractSlideShapeLines(slideXml);
-    if (shapeLines.length > 0) {
-      sections.push(shapeLines.join("\n"));
+  try {
+    if (zip.files["EncryptionInfo"] && zip.files["EncryptedPackage"]) {
+      throw new EncryptedImportError();
     }
+    // Collect slide XML files in sorted order so slides appear in sequence.
+    const slideEntries = Object.keys(zip.files)
+      .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+      .sort((a, b) => slideOrdinal(a) - slideOrdinal(b));
 
-    const tableBlocks = extractSlideTableBlocks(slideXml);
-    if (tableBlocks.length > 0) {
-      sections.push(tableBlocks.join("\n\n"));
-    }
+    const slideBlocks: string[] = [];
 
-    const notesEntryName = await findSlideNotesEntry(zip, slideName);
-    if (notesEntryName) {
-      const notesEntry = zip.files[notesEntryName];
-      if (notesEntry) {
-        const notesText = extractNotesText(await notesEntry.async("string"));
-        if (notesText) {
-          sections.push(`### Speaker notes\n${notesText}`);
+    for (const slideName of slideEntries) {
+      throwIfAborted(signal);
+      const slideEntry = zip.files[slideName];
+      if (!slideEntry) continue;
+      const slideXml = await slideEntry.async("string");
+      throwIfAborted(signal);
+      const sections: string[] = [];
+
+      const shapeLines = extractSlideShapeLines(slideXml);
+      if (shapeLines.length > 0) {
+        sections.push(shapeLines.join("\n"));
+      }
+
+      const tableBlocks = extractSlideTableBlocks(slideXml);
+      if (tableBlocks.length > 0) {
+        sections.push(tableBlocks.join("\n\n"));
+      }
+
+      const notesEntryName = await findSlideNotesEntry(zip, slideName);
+      throwIfAborted(signal);
+      if (notesEntryName) {
+        const notesEntry = zip.files[notesEntryName];
+        if (notesEntry) {
+          const notesText = extractNotesText(await notesEntry.async("string"));
+          throwIfAborted(signal);
+          if (notesText) {
+            sections.push(`### Speaker notes\n${notesText}`);
+          }
         }
+      }
+
+      if (sections.length > 0) {
+        slideBlocks.push(sections.join("\n\n"));
       }
     }
 
-    if (sections.length > 0) {
-      slideBlocks.push(sections.join("\n\n"));
-    }
+    const markdown = slideBlocks.join("\n\n");
+    throwIfAborted(signal);
+    return markdown;
+  } finally {
+    disposeZip(zip);
   }
-
-  return slideBlocks.join("\n\n");
 }

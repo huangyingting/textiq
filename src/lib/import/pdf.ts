@@ -12,6 +12,7 @@ import "server-only";
 import { PDFParse } from "pdf-parse";
 
 import { ImportBudgetError } from "./archive-budget";
+import { throwIfAborted } from "./timeout";
 
 const PDF_MAX_PAGES = 250;
 const PDF_MAX_TEXT_CHARS = 500_000;
@@ -36,10 +37,17 @@ export interface PdfParserHandle {
  */
 export interface ParsePdfDeps {
   createParser(buffer: Buffer): PdfParserHandle;
+  onCleanupError?(error: unknown): void;
 }
 
 const defaultParsePdfDeps: ParsePdfDeps = {
   createParser: (buffer) => new PDFParse({ data: buffer }),
+};
+
+export type ParsePdfOptions = {
+  deps?: ParsePdfDeps;
+  signal?: AbortSignal;
+  onCleanupError?(error: unknown): void;
 };
 
 /**
@@ -48,11 +56,30 @@ const defaultParsePdfDeps: ParsePdfDeps = {
  */
 export async function parsePdf(
   buffer: Buffer,
-  deps: ParsePdfDeps = defaultParsePdfDeps,
+  options: ParsePdfOptions = {},
 ): Promise<string> {
+  const deps = options.deps ?? defaultParsePdfDeps;
+  const onCleanupError = options.onCleanupError ?? deps.onCleanupError;
+  const signal = options.signal;
   const parser = deps.createParser(buffer);
+  let destroyed = false;
+  const destroyParser = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    try {
+      await parser.destroy();
+    } catch (error) {
+      onCleanupError?.(error);
+    }
+  };
+  const handleAbort = () => {
+    void destroyParser();
+  };
+  signal?.addEventListener("abort", handleAbort, { once: true });
   try {
+    throwIfAborted(signal);
     const result: PdfTextResult = await parser.getText();
+    throwIfAborted(signal);
     const pageCount = Number(result.totalPages ?? result.total);
     if (Number.isFinite(pageCount) && pageCount > PDF_MAX_PAGES) {
       throw new ImportBudgetError("PDF contains too many pages.");
@@ -62,6 +89,7 @@ export async function parsePdf(
     }
     return result.text;
   } finally {
-    await parser.destroy();
+    signal?.removeEventListener("abort", handleAbort);
+    await destroyParser();
   }
 }

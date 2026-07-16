@@ -33,6 +33,8 @@ import {
   type ReactTestRenderer,
 } from "react-test-renderer";
 
+import { textOf, waitForAsyncDrain } from "@/test/render-text";
+
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -49,12 +51,15 @@ type ModuleHooks = {
 };
 
 type Locale = "en" | "es";
+type LocaleActionResult =
+  | { ok: true; data: undefined }
+  | { ok: false; error: string };
 
 type LanguageSwitcherTestState = {
   calls: unknown[][];
   translations: Record<string, string>;
   routerRefreshCount: number;
-  setLocaleCookieImpl: (next: Locale) => Promise<void>;
+  setLocaleCookieImpl: (next: Locale) => Promise<LocaleActionResult>;
 };
 
 const globalForTest = globalThis as typeof globalThis & {
@@ -67,9 +72,11 @@ function resetState(): void {
     translations: {
       "languageSwitcher.label": "Language",
       "languageSwitcher.selectLanguage": "Select language",
+      "languageSwitcher.persistenceError":
+        "Unable to save your language preference. Please try again.",
     },
     routerRefreshCount: 0,
-    setLocaleCookieImpl: async () => {},
+    setLocaleCookieImpl: async () => ({ ok: true, data: undefined }),
   };
 }
 resetState();
@@ -218,8 +225,10 @@ beforeEach(() => {
   setLocale("en");
 });
 
-function waitForAsyncDrain(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
+async function waitForTransitionToSettle(): Promise<void> {
+  await waitForAsyncDrain();
+  await waitForAsyncDrain();
+  await waitForAsyncDrain();
 }
 
 function state(): LanguageSwitcherTestState {
@@ -295,6 +304,10 @@ function optionButton(option: ReactTestInstance): ReactTestInstance {
   return option.findByType("button");
 }
 
+function alerts(renderer: ReactTestRenderer): ReactTestInstance[] {
+  return renderer.root.findAll((node) => node.props.role === "alert");
+}
+
 describe("LanguageSwitcher", () => {
   test("renders current locale and a closed menu by default", () => {
     const renderer = mount();
@@ -341,7 +354,7 @@ describe("LanguageSwitcher", () => {
   });
 
   test("selecting a different locale updates optimistically, closes the menu, then persists and refreshes", async () => {
-    let resolveCookie!: () => void;
+    let resolveCookie!: (result: LocaleActionResult) => void;
     state().setLocaleCookieImpl = () =>
       new Promise((resolve) => {
         resolveCookie = resolve;
@@ -365,25 +378,65 @@ describe("LanguageSwitcher", () => {
       ["setLocaleCookie", "es"],
     ]);
     assert.equal(state().routerRefreshCount, 0);
+    assert.equal(trigger(renderer).props.disabled, true);
+    assert.equal(trigger(renderer).props["aria-busy"], true);
 
-    resolveCookie();
+    resolveCookie({ ok: true, data: undefined });
     await act(async () => {
-      await waitForAsyncDrain();
+      await waitForTransitionToSettle();
     });
 
     assert.equal(state().routerRefreshCount, 1);
     assert.deepEqual(state().calls.at(-1), ["router.refresh"]);
-    act(() => renderer.unmount());
+    assert.equal(trigger(renderer).props.disabled, false);
+    assert.equal(trigger(renderer).props["aria-busy"], undefined);
+    assert.equal(alerts(renderer).length, 0);
+    await act(async () => renderer.unmount());
   });
 
-  test("when setLocaleCookie rejects, router.refresh is never called", async () => {
-    // `switchTo` has no try/catch around `await setLocaleCookie(next)`, so a
-    // rejection here is genuinely unhandled in production too. React 19
-    // routes an async transition's uncaught rejection to the nearest Error
-    // Boundary, so mounting behind `ErrorBoundary` (test-only wrapper)
-    // captures it deterministically via `componentDidCatch`, alongside the
-    // one behavior this component actually guarantees: a failed persist
-    // never reaches `router.refresh()`.
+  test("an explicit persistence failure rolls back to the confirmed locale and displays the action error", async () => {
+    state().setLocaleCookieImpl = async () => ({
+      ok: false,
+      error: "Cookie storage is unavailable. Please try again.",
+    });
+
+    const renderer = mount();
+    act(() => trigger(renderer).props.onClick());
+    const spanish = options(renderer)[1];
+
+    await act(async () => {
+      optionButton(spanish).props.onClick();
+      await waitForTransitionToSettle();
+    });
+
+    assert.equal(
+      trigger(renderer)
+        .findAll((node) => node.type === "span")[0]
+        .children.join(""),
+      "EN",
+    );
+    assert.equal(trigger(renderer).props["aria-label"], "Language: English");
+    assert.equal(state().routerRefreshCount, 0);
+    assert.deepEqual(state().calls, [
+      ["setLocaleOptimistic", "es"],
+      ["setLocaleCookie", "es"],
+      ["setLocaleOptimistic", "en"],
+    ]);
+    assert.equal(alerts(renderer).length, 1);
+    assert.equal(
+      textOf(alerts(renderer)[0]),
+      "Cookie storage is unavailable. Please try again.",
+    );
+
+    await act(async () => trigger(renderer).props.onClick());
+    assert.deepEqual(
+      options(renderer).map((option) => option.props["aria-selected"]),
+      [true, false],
+    );
+    await act(async () => renderer.unmount());
+  });
+
+  test("when setLocaleCookie rejects, the failure is contained, visible, and rolled back without refresh", async () => {
     state().setLocaleCookieImpl = () =>
       Promise.reject(new Error("network down"));
 
@@ -396,21 +449,72 @@ describe("LanguageSwitcher", () => {
 
     await act(async () => {
       optionButton(spanish).props.onClick();
-      await waitForAsyncDrain();
-      await waitForAsyncDrain();
+      await waitForTransitionToSettle();
     });
 
-    assert.ok(capturedError, "expected the failed persist to be reported");
-    assert.match(
-      String((capturedError as Error)?.message ?? capturedError),
-      /network down/,
-    );
+    assert.equal(capturedError, undefined);
     assert.equal(state().routerRefreshCount, 0);
-    assert.ok(
-      state().calls.some((call) => call[0] === "setLocaleCookie"),
-      "expected setLocaleCookie to still have been invoked",
+    assert.deepEqual(state().calls, [
+      ["setLocaleOptimistic", "es"],
+      ["setLocaleCookie", "es"],
+      ["setLocaleOptimistic", "en"],
+    ]);
+    assert.equal(
+      trigger(renderer)
+        .findAll((node) => node.type === "span")[0]
+        .children.join(""),
+      "EN",
     );
-    act(() => renderer.unmount());
+    assert.equal(alerts(renderer).length, 1);
+    assert.equal(
+      textOf(alerts(renderer)[0]),
+      "Unable to save your language preference. Please try again.",
+    );
+    assert.equal(trigger(renderer).props.disabled, false);
+    await act(async () => renderer.unmount());
+  });
+
+  test("a failed switch can be retried and clears the stale error after success", async () => {
+    state().setLocaleCookieImpl = async () => ({
+      ok: false,
+      error: "Temporary cookie failure.",
+    });
+
+    const renderer = mount();
+    act(() => trigger(renderer).props.onClick());
+    await act(async () => {
+      optionButton(options(renderer)[1]).props.onClick();
+      await waitForTransitionToSettle();
+    });
+    assert.equal(alerts(renderer).length, 1);
+
+    state().setLocaleCookieImpl = async () => ({
+      ok: true,
+      data: undefined,
+    });
+    await act(async () => trigger(renderer).props.onClick());
+    assert.equal(alerts(renderer).length, 0);
+    await act(async () => {
+      optionButton(options(renderer)[1]).props.onClick();
+      await waitForTransitionToSettle();
+    });
+
+    assert.equal(
+      trigger(renderer)
+        .findAll((node) => node.type === "span")[0]
+        .children.join(""),
+      "ES",
+    );
+    assert.equal(alerts(renderer).length, 0);
+    assert.equal(state().routerRefreshCount, 1);
+    assert.deepEqual(
+      state().calls.filter(([name]) => name === "setLocaleCookie"),
+      [
+        ["setLocaleCookie", "es"],
+        ["setLocaleCookie", "es"],
+      ],
+    );
+    await act(async () => renderer.unmount());
   });
 
   test("clicking the outside-click backdrop closes the menu", () => {

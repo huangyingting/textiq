@@ -1,10 +1,14 @@
-import type { Prisma } from "@/generated/prisma/client";
 import { acquirePurgeLock, INVITE_LINK_RETENTION_MS } from "@/lib/maintenance";
+import { deleteRetainedInviteLinks } from "@/lib/maintenance/invite-link-retention-write-port";
 import { prisma } from "@/lib/prisma";
 import { getTrashStatus, SOFT_DELETE_RETENTION_MS } from "@/lib/trash";
+import {
+  deleteDocuments,
+  updateDocumentsMetadata,
+} from "./document-write-port";
 
 type TrashDb = Pick<typeof prisma, "document">;
-type MaintenanceDb = Pick<typeof prisma, "document" | "$executeRaw">;
+type MaintenanceDb = Pick<typeof prisma, "document">;
 
 export type TrashDocument = {
   id: string;
@@ -49,7 +53,7 @@ export async function softDeleteDocument(
   id: string,
   db: TrashDb = prisma,
 ): Promise<void> {
-  await db.document.updateMany({
+  await updateDocumentsMetadata(db, {
     where: { id },
     data: { deletedAt: new Date() },
   });
@@ -59,7 +63,7 @@ export async function restoreDocumentFromTrash(
   id: string,
   db: TrashDb = prisma,
 ): Promise<void> {
-  await db.document.updateMany({
+  await updateDocumentsMetadata(db, {
     where: { id, deletedAt: { not: null } },
     data: { deletedAt: null },
   });
@@ -69,7 +73,7 @@ export async function permanentDeleteDocument(
   id: string,
   db: TrashDb = prisma,
 ): Promise<void> {
-  await db.document.deleteMany({
+  await deleteDocuments(db, {
     where: { id, deletedAt: { not: null } },
   });
 }
@@ -94,19 +98,11 @@ export async function runDocumentMaintenance(
   const inviteCutoff = new Date(now.getTime() - INVITE_LINK_RETENTION_MS);
 
   await Promise.all([
-    db.document.deleteMany({
+    deleteDocuments(db, {
       where: { deletedAt: { lt: docCutoff } },
     }),
 
-    db.$executeRaw`
-      DELETE FROM "InviteLink"
-      WHERE "createdAt" < ${inviteCutoff}
-        AND (
-          "isRevoked" = ${true}
-          OR ("expiresAt" IS NOT NULL AND "expiresAt" < ${inviteCutoff})
-          OR ("maxUses" IS NOT NULL AND "useCount" >= "maxUses")
-        )
-    ` as Prisma.PrismaPromise<unknown>,
+    deleteRetainedInviteLinks(db, inviteCutoff),
   ]);
 
   return { policy, skipped: false };
