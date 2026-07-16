@@ -175,13 +175,27 @@ export interface ExportInviteLinkUseInput {
 
 export interface ExportUsageLedgerEntryInput {
   id: string;
+  userId: string;
   operation: string;
   creditCost: number;
   status: string;
+  reservationVersion: number;
   reservedAt: Date;
   capturedAt: Date | null;
   refundedAt: Date | null;
 }
+
+export const ACCOUNT_EXPORT_USAGE_LEDGER_FIELDS = [
+  "id",
+  "userId",
+  "operation",
+  "creditCost",
+  "status",
+  "reservationVersion",
+  "reservedAt",
+  "capturedAt",
+  "refundedAt",
+] as const;
 
 export interface AccountExport {
   exportVersion: number;
@@ -310,9 +324,11 @@ export interface AccountExport {
   }>;
   usageLedger: Array<{
     id: string;
+    userId: string;
     operation: string;
     creditCost: number;
     status: string;
+    reservationVersion: number;
     reservedAt: string;
     capturedAt: string | null;
     refundedAt: string | null;
@@ -526,9 +542,11 @@ export function buildAccountExport(input: {
     })),
     usageLedger: usageLedger.map((entry) => ({
       id: entry.id,
+      userId: entry.userId,
       operation: entry.operation,
       creditCost: entry.creditCost,
       status: entry.status,
+      reservationVersion: entry.reservationVersion,
       reservedAt: entry.reservedAt.toISOString(),
       capturedAt: iso(entry.capturedAt),
       refundedAt: iso(entry.refundedAt),

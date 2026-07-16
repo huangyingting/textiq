@@ -22,17 +22,19 @@ function copyAllowedScalars<T extends object>(
 export type UsageLedgerOperation = "reserve" | "capture" | "refund";
 
 export interface UsageLedgerTelemetryEvent {
-  idempotencyKey: string;
+  keyHash: string;
   operation?: string;
   creditCost?: number;
   status?: string;
+  reservationVersion?: number;
 }
 
 const USAGE_LEDGER_KEYS = [
-  "idempotencyKey",
+  "keyHash",
   "operation",
   "creditCost",
   "status",
+  "reservationVersion",
 ] as const;
 
 export function buildUsageLedgerContext(
@@ -72,10 +74,11 @@ export interface MeteredUsageTelemetryEvent extends UsageLedgerTelemetryEvent {
 }
 
 const METERED_USAGE_KEYS = [
-  "idempotencyKey",
+  "keyHash",
   "operation",
   "creditCost",
   "status",
+  "reservationVersion",
   "userId",
 ] as const;
 

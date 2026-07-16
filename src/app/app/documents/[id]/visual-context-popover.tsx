@@ -677,7 +677,8 @@ export type VisualContextPopoverProps = {
 };
 
 const routeVisualGenerationPort: VisualGenerationActionPort = {
-  requestVisualCandidates,
+  requestVisualCandidates: (text, options, request) =>
+    requestVisualCandidates(text, options, fetch, request),
 };
 
 function PopoverShell({

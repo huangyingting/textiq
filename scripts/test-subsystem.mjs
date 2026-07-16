@@ -79,6 +79,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/app\/settings\/billing\//,
       /^e2e\/product\/billing-brand\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
+      /^scripts\/usage-ledger-postgres-integration\.test\.ts$/,
     ],
   },
   brand: {

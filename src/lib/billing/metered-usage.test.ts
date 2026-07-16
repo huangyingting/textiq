@@ -1,293 +1,318 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { InsufficientCreditsError } from "@/lib/billing/credits";
 import {
   captureMeteredUsage,
   refundMeteredUsage,
   reserveMeteredUsage,
+  type MeteredUsageDeps,
   type MeteredUsageReservation,
 } from "@/lib/billing/metered-usage";
-import { prisma } from "@/lib/prisma";
+import {
+  type LedgerStatus,
+  type UsageLedgerEntry,
+  UsageLedgerConflictError,
+} from "@/lib/billing/usage-ledger";
+import { deriveUsageLedgerKeyHash } from "@/lib/billing/usage-ledger-key";
 
-function stubObjectMethod<T extends object, K extends keyof T>(
-  t: { after: (fn: () => void) => void },
-  object: T,
-  methodName: K,
-  implementation: (...args: unknown[]) => unknown,
-): { calls: unknown[][] } {
-  const original = object[methodName];
-  const calls: unknown[][] = [];
-  Object.defineProperty(object, methodName, {
-    configurable: true,
-    value: (...args: unknown[]) => {
-      calls.push(args);
-      return (implementation as (...args: unknown[]) => unknown)(...args);
+const PERIOD_END = new Date("2026-07-31T00:00:00.000Z");
+
+interface CallState {
+  reserve: Array<{
+    idempotencyKey: string;
+    userId: string;
+    operation: string;
+    creditCost: number;
+  }>;
+  capture: Array<{
+    idempotencyKey: string;
+    userId: string;
+    operation: string;
+    creditCost: number;
+  }>;
+  refund: Array<{
+    idempotencyKey: string;
+    userId: string;
+    operation: string;
+    creditCost: number;
+  }>;
+  loadBillingStateForUsers: string[];
+}
+
+function makeLedgerEntry(
+  input: {
+    idempotencyKey: string;
+    userId: string;
+    operation: string;
+    creditCost: number;
+  },
+  status: LedgerStatus,
+): UsageLedgerEntry {
+  return {
+    id: `ledger-${status}-${input.idempotencyKey}`,
+    keyHash: deriveUsageLedgerKeyHash(input),
+    userId: input.userId,
+    operation: input.operation,
+    creditCost: input.creditCost,
+    status,
+    reservationVersion: 1,
+    reservedAt: new Date("2026-07-01T00:00:00.000Z"),
+    capturedAt:
+      status === "captured" ? new Date("2026-07-01T00:00:10.000Z") : null,
+    refundedAt:
+      status === "refunded" ? new Date("2026-07-01T00:00:20.000Z") : null,
+  };
+}
+
+function createDeps(overrides: Partial<MeteredUsageDeps> = {}): {
+  deps: MeteredUsageDeps;
+  calls: CallState;
+} {
+  const calls: CallState = {
+    reserve: [],
+    capture: [],
+    refund: [],
+    loadBillingStateForUsers: [],
+  };
+
+  const deps: MeteredUsageDeps = {
+    isUnlimitedCreditsEnabled: () => false,
+    computeCreditCost: (creditText) => {
+      const words = creditText.trim().split(/\s+/).filter(Boolean).length;
+      return Math.max(1, words);
     },
-  });
-  t.after(() => {
-    Object.defineProperty(object, methodName, {
-      configurable: true,
-      value: original,
+    loadAndSyncBillingState: async (userId) => {
+      calls.loadBillingStateForUsers.push(userId);
+      return {
+        creditBalance: 10,
+        periodEnd: PERIOD_END,
+      };
+    },
+    reserveUsage: async (opts) => {
+      calls.reserve.push(opts);
+      return makeLedgerEntry(opts, "reserved");
+    },
+    captureUsage: async (opts) => {
+      calls.capture.push(opts);
+      return makeLedgerEntry(opts, "captured");
+    },
+    refundUsage: async (opts) => {
+      calls.refund.push(opts);
+      return makeLedgerEntry(opts, "refunded");
+    },
+    ...overrides,
+  };
+
+  return { deps, calls };
+}
+
+describe("metered usage reserve", () => {
+  it("bypasses billing checks when unlimited credits are enabled", async () => {
+    const { deps, calls } = createDeps({
+      isUnlimitedCreditsEnabled: () => true,
     });
-  });
-  return { calls };
-}
 
-function withLimitedCreditsEnv<T>(fn: () => Promise<T>): Promise<T> {
-  const previous = process.env.BILLING_UNLIMITED_CREDITS;
-  delete process.env.BILLING_UNLIMITED_CREDITS;
-  return fn().finally(() => {
-    if (previous === undefined) {
-      delete process.env.BILLING_UNLIMITED_CREDITS;
-    } else {
-      process.env.BILLING_UNLIMITED_CREDITS = previous;
-    }
-  });
-}
-
-describe("metered usage unlimited-credit shortcuts", () => {
-  it("reserveMeteredUsage bypasses credit checks when unlimited credits are enabled", async () => {
-    const previous = process.env.BILLING_UNLIMITED_CREDITS;
-    process.env.BILLING_UNLIMITED_CREDITS = "true";
-    try {
-      const result = await reserveMeteredUsage({
+    const result = await reserveMeteredUsage(
+      {
         idempotencyKey: "usage-unlimited",
         userId: "user-metered",
         operation: "deck-generation",
         creditText: "A long prompt that would otherwise cost credits.",
-      });
+      },
+      deps,
+    );
 
-      assert.equal(result.ok, true);
-      assert.equal(result.reservation.creditCost, 0);
-      assert.equal(result.reservation.ledgerReserved, false);
-    } finally {
-      if (previous === undefined) {
-        delete process.env.BILLING_UNLIMITED_CREDITS;
-      } else {
-        process.env.BILLING_UNLIMITED_CREDITS = previous;
-      }
-    }
+    assert.equal(result.ok, true);
+    assert.equal(result.reservation.creditCost, 0);
+    assert.equal(result.reservation.ledgerReserved, false);
+    assert.equal(calls.reserve.length, 0);
+    assert.equal(calls.loadBillingStateForUsers.length, 0);
   });
 
-  it("captureMeteredUsage succeeds without writes for zero-cost reservations", async () => {
-    const reservation: MeteredUsageReservation = {
-      idempotencyKey: "usage-zero",
+  it("uses the ledger as the single reservation gate before any balance read", async () => {
+    const { deps, calls } = createDeps();
+    deps.reserveUsage = async (opts) => {
+      calls.reserve.push(opts);
+      return makeLedgerEntry(opts, "captured");
+    };
+    deps.loadAndSyncBillingState = async () => {
+      throw new Error("billing state should not be loaded on idempotent hit");
+    };
+
+    const result = await reserveMeteredUsage(
+      {
+        idempotencyKey: "usage-replay",
+        userId: "user-metered",
+        operation: "deck-generation",
+        creditText: "retry me",
+      },
+      deps,
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.reservation.creditCost, 2);
+    assert.equal(result.reservation.ledgerReserved, true);
+    assert.equal(calls.reserve.length, 1);
+    assert.equal(calls.loadBillingStateForUsers.length, 0);
+  });
+
+  it("maps ledger insufficiency to payment-required details", async () => {
+    const { deps, calls } = createDeps();
+    deps.reserveUsage = async () => {
+      throw new InsufficientCreditsError(1, 2);
+    };
+    deps.loadAndSyncBillingState = async (userId) => {
+      calls.loadBillingStateForUsers.push(userId);
+      return {
+        creditBalance: 1,
+        periodEnd: PERIOD_END,
+      };
+    };
+
+    const result = await reserveMeteredUsage(
+      {
+        idempotencyKey: "usage-insufficient",
+        userId: "user-metered",
+        operation: "deck-generation",
+        creditText: "two words",
+      },
+      deps,
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "insufficient-credits");
+    assert.equal(result.balance, 1);
+    assert.equal(result.creditCost, 2);
+    assert.equal(result.periodEnd.toISOString(), PERIOD_END.toISOString());
+    assert.equal(calls.loadBillingStateForUsers.length, 1);
+  });
+
+  it("maps ledger fingerprint conflicts to idempotency-conflict", async () => {
+    const { deps, calls } = createDeps();
+    deps.reserveUsage = async (opts) => {
+      calls.reserve.push(opts);
+      throw new UsageLedgerConflictError("fingerprint mismatch");
+    };
+
+    const result = await reserveMeteredUsage(
+      {
+        idempotencyKey: "usage-conflict",
+        userId: "user-metered",
+        operation: "deck-generation",
+        creditText: "two words",
+      },
+      deps,
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "idempotency-conflict");
+    assert.equal(calls.reserve.length, 1);
+    assert.equal(calls.loadBillingStateForUsers.length, 0);
+  });
+
+  it("fail-closes on unexpected reservation write failures", async () => {
+    const { deps } = createDeps({
+      reserveUsage: async () => {
+        throw new Error("ledger unavailable");
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        reserveMeteredUsage(
+          {
+            idempotencyKey: "usage-ledger-failed",
+            userId: "user-metered",
+            operation: "deck-generation",
+            creditText: "two words",
+          },
+          deps,
+        ),
+      /ledger unavailable/,
+    );
+  });
+});
+
+describe("metered usage capture/refund", () => {
+  const durableReservation: MeteredUsageReservation = {
+    idempotencyKey: "usage-durable",
+    keyHash: deriveUsageLedgerKeyHash({
+      idempotencyKey: "usage-durable",
       userId: "user-metered",
       operation: "deck-generation",
+    }),
+    userId: "user-metered",
+    operation: "deck-generation",
+    creditCost: 2,
+    ledgerReserved: true,
+  };
+
+  it("capture succeeds without ledger writes for zero-credit reservations", async () => {
+    const { deps, calls } = createDeps();
+    const zeroCostReservation: MeteredUsageReservation = {
+      ...durableReservation,
+      idempotencyKey: "usage-zero",
       creditCost: 0,
       ledgerReserved: false,
     };
 
-    await assert.doesNotReject(() => captureMeteredUsage(reservation));
-  });
-
-  it("refundMeteredUsage skips reservations that were not ledger-reserved", async () => {
-    const reservation: MeteredUsageReservation = {
-      idempotencyKey: "usage-not-reserved",
-      userId: "user-metered",
-      operation: "deck-generation",
-      creditCost: 3,
-      ledgerReserved: false,
-    };
-
-    await assert.doesNotReject(() => refundMeteredUsage(reservation));
-  });
-});
-
-describe("metered usage credit and ledger paths", () => {
-  it("reserveMeteredUsage denies requests above the synced credit balance", async (t) =>
-    withLimitedCreditsEnv(async () => {
-      const periodStart = new Date();
-      stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-        plan: "free",
-        creditBalance: 1,
-        creditPeriodStart: periodStart,
-        subscription: null,
-      }));
-
-      const result = await reserveMeteredUsage({
-        idempotencyKey: "usage-denied",
-        userId: "user-metered",
-        operation: "deck-generation",
-        creditText: "two words",
-      });
-
-      assert.equal(result.ok, false);
-      assert.equal(result.reason, "insufficient-credits");
-      assert.equal(result.creditCost, 2);
-      assert.equal(result.balance, 1);
-    }));
-
-  it("reserveMeteredUsage records a ledger reservation for positive credit cost", async (t) =>
-    withLimitedCreditsEnv(async () => {
-      const periodStart = new Date();
-      stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-        plan: "free",
-        creditBalance: 10,
-        creditPeriodStart: periodStart,
-        subscription: null,
-      }));
-      stubObjectMethod(
-        t,
-        prisma.usageLedgerEntry,
-        "findUnique",
-        async () => null,
-      );
-      const create = stubObjectMethod(
-        t,
-        prisma.usageLedgerEntry,
-        "create",
-        async (args) => {
-          const { data } = args as { data: Record<string, unknown> };
-          return {
-            id: "ledger-reserved",
-            ...data,
-            reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-            capturedAt: null,
-            refundedAt: null,
-          };
-        },
-      );
-
-      const result = await reserveMeteredUsage({
-        idempotencyKey: "usage-reserved",
-        userId: "user-metered",
-        operation: "deck-generation",
-        creditText: "three clear words",
-      });
-
-      assert.equal(result.ok, true);
-      assert.equal(result.reservation.creditCost, 3);
-      assert.equal(result.reservation.ledgerReserved, true);
-      assert.equal(create.calls.length, 1);
-    }));
-
-  it("reserveMeteredUsage still returns a reservation when ledger reserve fails", async (t) =>
-    withLimitedCreditsEnv(async () => {
-      const periodStart = new Date();
-      stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-        plan: "free",
-        creditBalance: 10,
-        creditPeriodStart: periodStart,
-        subscription: null,
-      }));
-      stubObjectMethod(
-        t,
-        prisma.usageLedgerEntry,
-        "findUnique",
-        async () => null,
-      );
-      stubObjectMethod(t, prisma.usageLedgerEntry, "create", async () => {
-        throw new Error("ledger unavailable");
-      });
-
-      const result = await reserveMeteredUsage({
-        idempotencyKey: "usage-ledger-failed",
-        userId: "user-metered",
-        operation: "deck-generation",
-        creditText: "two words",
-      });
-
-      assert.equal(result.ok, true);
-      assert.equal(result.reservation.creditCost, 2);
-      assert.equal(result.reservation.ledgerReserved, false);
-    }));
-
-  it("captureMeteredUsage captures reserved ledger usage", async (t) => {
-    stubObjectMethod(t, prisma.usageLedgerEntry, "findUnique", async () => ({
-      id: "ledger-entry",
-      idempotencyKey: "usage-capture",
-      userId: "user-metered",
-      operation: "deck-generation",
-      creditCost: 2,
-      status: "reserved",
-      reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-      capturedAt: null,
-      refundedAt: null,
-    }));
-    stubObjectMethod(t, prisma.user, "updateMany", async () => ({ count: 1 }));
-    stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-      creditBalance: 8,
-    }));
-    const update = stubObjectMethod(
-      t,
-      prisma.usageLedgerEntry,
-      "update",
-      async (args) => {
-        const { data } = args as { data: Record<string, unknown> };
-        return {
-          id: "ledger-entry",
-          idempotencyKey: "usage-capture",
-          userId: "user-metered",
-          operation: "deck-generation",
-          creditCost: 2,
-          status: data.status,
-          reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-          capturedAt: data.capturedAt,
-          refundedAt: null,
-        };
-      },
-    );
-
-    const result = await captureMeteredUsage({
-      idempotencyKey: "usage-capture",
-      userId: "user-metered",
-      operation: "deck-generation",
-      creditCost: 2,
-      ledgerReserved: true,
-    });
+    const result = await captureMeteredUsage(zeroCostReservation, deps);
 
     assert.deepEqual(result, { ok: true });
-    assert.equal(update.calls.length, 1);
+    assert.equal(calls.capture.length, 0);
   });
 
-  it("captureMeteredUsage falls back to direct deduction and reports insufficient credits", async (t) => {
-    stubObjectMethod(t, prisma.user, "updateMany", async () => ({ count: 0 }));
-    stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
-      creditBalance: 1,
-    }));
+  it("capture fails fast when no durable reservation exists for positive cost", async () => {
+    const { deps, calls } = createDeps();
+    const result = await captureMeteredUsage(
+      {
+        ...durableReservation,
+        ledgerReserved: false,
+      },
+      deps,
+    );
 
-    const result = await captureMeteredUsage({
-      idempotencyKey: "usage-direct-capture",
-      userId: "user-metered",
-      operation: "deck-generation",
-      creditCost: 4,
-      ledgerReserved: false,
-    });
+    assert.equal(result.ok, false);
+    assert.equal(result.insufficientCredits, false);
+    assert.equal(calls.capture.length, 0);
+  });
+
+  it("capture forwards to usage-ledger and reports insufficient-credit failures", async () => {
+    const { deps, calls } = createDeps();
+    deps.captureUsage = async (opts) => {
+      calls.capture.push(opts);
+      throw new InsufficientCreditsError(0, opts.creditCost);
+    };
+
+    const result = await captureMeteredUsage(durableReservation, deps);
 
     assert.equal(result.ok, false);
     assert.equal(result.insufficientCredits, true);
+    assert.equal(calls.capture.length, 1);
   });
 
-  it("refundMeteredUsage marks ledger-reserved usage refunded", async (t) => {
-    const update = stubObjectMethod(
-      t,
-      prisma.usageLedgerEntry,
-      "update",
-      async (args) => {
-        const { data } = args as { data: Record<string, unknown> };
-        return {
-          id: "ledger-entry",
-          idempotencyKey: "usage-refund",
-          userId: "user-metered",
-          operation: "deck-generation",
-          creditCost: 2,
-          status: data.status,
-          reservedAt: new Date("2026-01-01T00:00:00.000Z"),
-          capturedAt: null,
-          refundedAt: data.refundedAt,
-        };
+  it("refund skips non-durable reservations", async () => {
+    const { deps, calls } = createDeps();
+
+    const refunded = await refundMeteredUsage(
+      {
+        ...durableReservation,
+        ledgerReserved: false,
       },
+      deps,
     );
 
-    await refundMeteredUsage({
-      idempotencyKey: "usage-refund",
-      userId: "user-metered",
-      operation: "deck-generation",
-      creditCost: 2,
-      ledgerReserved: true,
-    });
+    assert.equal(refunded, null);
+    assert.equal(calls.refund.length, 0);
+  });
 
-    assert.equal(update.calls.length, 1);
+  it("refund forwards to usage-ledger for durable reservations", async () => {
+    const { deps, calls } = createDeps();
+    const refunded = await refundMeteredUsage(durableReservation, deps);
+
+    assert.ok(refunded);
+    assert.equal(refunded.status, "refunded");
+    assert.equal(calls.refund.length, 1);
   });
 });

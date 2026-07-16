@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai/quota";
 import { InsufficientCreditsError } from "@/lib/billing/credits";
 import type { MeteredUsageReservation } from "@/lib/billing/metered-usage";
+import { deriveUsageLedgerKeyHash } from "@/lib/billing/usage-ledger-key";
 
 interface FakePayload {
   text: string;
@@ -199,8 +200,14 @@ function createDeps(state: FakeState): GenerationRouteDeps {
             "Upgrade your plan or wait for your credits to reset.",
         };
       }
+      const keyHash = deriveUsageLedgerKeyHash({
+        idempotencyKey: opts.idempotencyKey,
+        userId: opts.userId,
+        operation: opts.operation,
+      });
       const reservation: MeteredUsageReservation = {
         idempotencyKey: opts.idempotencyKey,
+        keyHash,
         userId: opts.userId,
         operation: opts.operation,
         creditCost,
@@ -225,6 +232,7 @@ function createDeps(state: FakeState): GenerationRouteDeps {
       if (state.refundError) {
         throw state.refundError;
       }
+      return { status: "refunded" };
     },
     isAzureConfigError: () => false,
     isTimeoutError: (error) => error instanceof GenerateTimeoutError,
@@ -241,9 +249,21 @@ function createDeps(state: FakeState): GenerationRouteDeps {
 
 function createRequest(
   body: unknown,
-  options: { headers?: HeadersInit; cookies?: Record<string, string> } = {},
+  options: {
+    headers?: HeadersInit;
+    cookies?: Record<string, string>;
+    idempotencyKey?: string | null;
+  } = {},
 ): GenerationRouteRequest {
   const cookies = new Map(Object.entries(options.cookies ?? {}));
+  const headers = new Headers(options.headers);
+  if (options.idempotencyKey === null) {
+    headers.delete("Idempotency-Key");
+  } else if (typeof options.idempotencyKey === "string") {
+    headers.set("Idempotency-Key", options.idempotencyKey);
+  } else if (!headers.has("Idempotency-Key")) {
+    headers.set("Idempotency-Key", "request-1");
+  }
   return {
     async json() {
       if (body instanceof Error) {
@@ -257,7 +277,7 @@ function createRequest(
       }
       return JSON.stringify(body) ?? "";
     },
-    headers: new Headers(options.headers),
+    headers,
     cookies: {
       get(name) {
         const value = cookies.get(name);
@@ -318,7 +338,12 @@ test("authenticated success reserves then captures credits without setting anon 
     createDeps(state),
   );
 
-  const response = await handler(createRequest({ text: "hello world" }));
+  const response = await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "auth-op-hello-world-1" },
+    ),
+  );
 
   assert.equal(response.status, 200);
   assert.deepEqual(await responseJson(response), {
@@ -330,6 +355,83 @@ test("authenticated success reserves then captures credits without setting anon 
   assert.equal(state.reserved.length, 1);
   assert.equal(state.captured.length, 1);
   assert.equal(state.refunded.length, 0);
+  assert.equal(
+    (state.reserved[0] as { idempotencyKey: string }).idempotencyKey,
+    "auth-op-hello-world-1",
+  );
+});
+
+test("authenticated requests require Idempotency-Key before reserve/generation", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(
+    createRequest({ text: "hello world" }, { idempotencyKey: null }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "`Idempotency-Key` header is required for authenticated generation requests.",
+    code: "VALIDATION_ERROR",
+  });
+  assert.equal(state.generated, 0);
+  assert.equal(state.reserved.length, 0);
+});
+
+test("authenticated requests reject invalid Idempotency-Key values", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  const response = await handler(
+    createRequest({ text: "hello world" }, { idempotencyKey: "bad key" }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "`Idempotency-Key` must be 8-128 chars and use only letters, numbers, dot (.), underscore (_), colon (:), or hyphen (-).",
+    code: "VALIDATION_ERROR",
+  });
+  assert.equal(state.generated, 0);
+  assert.equal(state.reserved.length, 0);
+});
+
+test("authenticated retries reuse the caller-supplied Idempotency-Key", async () => {
+  const state = createState();
+  const handler = createGenerationRouteHandler(
+    createConfig(state),
+    createDeps(state),
+  );
+
+  await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "retry-op-0000001" },
+    ),
+  );
+  await handler(
+    createRequest(
+      { text: "hello world" },
+      { idempotencyKey: "retry-op-0000001" },
+    ),
+  );
+
+  assert.equal(state.reserved.length, 2);
+  assert.equal(
+    (state.reserved[0] as { idempotencyKey: string }).idempotencyKey,
+    "retry-op-0000001",
+  );
+  assert.equal(
+    (state.reserved[1] as { idempotencyKey: string }).idempotencyKey,
+    "retry-op-0000001",
+  );
 });
 
 test("authenticated checks honor deck user namespace from route config", async () => {
@@ -495,8 +597,14 @@ test("generation errors without a reserved ledger skip refund attempts", async (
   const deps = {
     ...createDeps(state),
     reserveMeteredUsage: async () => {
+      const keyHash = deriveUsageLedgerKeyHash({
+        idempotencyKey: "request-1",
+        userId: "user-1",
+        operation: "fake-generate",
+      });
       const reservation: MeteredUsageReservation = {
         idempotencyKey: "request-1",
+        keyHash,
         userId: "user-1",
         operation: "fake-generate",
         creditCost: 0,
@@ -688,7 +796,7 @@ test("anonymous trial quota returns configured quota message", async () => {
   assert.equal(state.denials.length, 1);
 });
 
-test("capture insufficient credits converts a successful generation to payment required", async () => {
+test("capture insufficient-credit invariants fail closed after terminal settlement", async () => {
   const state = createState({
     captureError: new InsufficientCreditsError(0, 2),
     captureInsufficientCredits: true,
@@ -700,16 +808,16 @@ test("capture insufficient credits converts a successful generation to payment r
 
   const response = await handler(createRequest({ text: "hello world" }));
 
-  assert.equal(response.status, 402);
-  const body = await responseJson(response);
-  assert.equal((body as { code?: string }).code, "PAYMENT_REQUIRED");
-  assert.match(
-    (body as { error?: string }).error ?? "",
-    /Insufficient credits/,
-  );
+  assert.equal(response.status, 500);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "Generation could not be settled due to a billing invariant. Please retry.",
+    code: "SERVER_ERROR",
+  });
   assert.equal(state.generated, 1);
   assert.equal(state.captured.length, 1);
-  assert.equal(state.denials.length, 1);
+  assert.equal(state.refunded.length, 1);
+  assert.equal(state.denials.length, 0);
 });
 
 test("capture insufficient credits refunds the reserved usage exactly once (#1847)", async () => {
@@ -722,8 +830,9 @@ test("capture insufficient credits refunds the reserved usage exactly once (#184
     createDeps(state),
   );
 
-  await handler(createRequest({ text: "hello world" }));
+  const response = await handler(createRequest({ text: "hello world" }));
 
+  assert.equal(response.status, 500);
   assert.equal(
     state.refunded.length,
     1,
@@ -777,6 +886,32 @@ test("generic capture failure refunds the reserved usage exactly once (#1847)", 
   );
 });
 
+test("capture failures never return 200 when settlement is unresolved", async () => {
+  const state = createState({
+    captureError: new Error("ledger capture unavailable"),
+  });
+  const deps = {
+    ...createDeps(state),
+    refundMeteredUsage: async (reservation: MeteredUsageReservation) => {
+      state.refunded.push(reservation);
+      return null;
+    },
+  };
+  const handler = createGenerationRouteHandler(createConfig(state), deps);
+
+  const response = await handler(createRequest({ text: "hello world" }));
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "Generation completed, but billing settlement is still pending. Please retry later.",
+    code: "SERVER_ERROR",
+  });
+  assert.equal(state.generated, 1);
+  assert.equal(state.captured.length, 1);
+  assert.equal(state.refunded.length, 1);
+});
+
 test("successful capture does not call refund (#1847)", async () => {
   const state = createState();
   const handler = createGenerationRouteHandler(
@@ -818,7 +953,7 @@ test("generation exception refunds exactly once and does not double-refund (#184
   );
 });
 
-test("capture-failure refund settlement failure is structured-logged without changing response (#1847)", async () => {
+test("capture-failure refund settlement failure is structured-logged and fails closed", async () => {
   const state = createState({
     captureError: new Error("ledger capture unavailable"),
     refundError: new Error("refund settlement unavailable"),
@@ -830,10 +965,11 @@ test("capture-failure refund settlement failure is structured-logged without cha
 
   const response = await handler(createRequest({ text: "hello world" }));
 
-  // Response policy preserved: generic capture failure still delivers result
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 500);
   assert.deepEqual(await responseJson(response), {
-    result: { value: "HELLO WORLD" },
+    error:
+      "Generation completed, but billing settlement is still pending. Please retry later.",
+    code: "SERVER_ERROR",
   });
 
   assert.equal(state.refunded.length, 1, "refund attempted exactly once");
@@ -847,7 +983,7 @@ test("capture-failure refund settlement failure is structured-logged without cha
   assert.ok(refundLog, "refund settlement failure must be structured-logged");
 });
 
-test("insufficient-credits capture refund settlement failure preserves 402 and is logged (#1847)", async () => {
+test("insufficient-credit capture settlement failure fails closed and is logged", async () => {
   const state = createState({
     captureError: new InsufficientCreditsError(0, 2),
     captureInsufficientCredits: true,
@@ -860,8 +996,12 @@ test("insufficient-credits capture refund settlement failure preserves 402 and i
 
   const response = await handler(createRequest({ text: "hello world" }));
 
-  // Response policy preserved: insufficient credits still returns 402
-  assert.equal(response.status, 402);
+  assert.equal(response.status, 500);
+  assert.deepEqual(await responseJson(response), {
+    error:
+      "Generation completed, but billing settlement is still pending. Please retry later.",
+    code: "SERVER_ERROR",
+  });
 
   assert.equal(state.refunded.length, 1, "refund attempted exactly once");
 

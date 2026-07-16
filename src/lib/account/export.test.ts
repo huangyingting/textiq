@@ -343,9 +343,11 @@ test("maps invite-link uses without tokens and usage ledger entries", () => {
     usageLedger: [
       {
         id: "ledger_1",
+        userId: "user_1",
         operation: "generate",
         creditCost: 3,
         status: "captured",
+        reservationVersion: 1,
         reservedAt: CREATED,
         capturedAt: NOW,
         refundedAt: null,
@@ -354,6 +356,8 @@ test("maps invite-link uses without tokens and usage ledger entries", () => {
   });
 
   assert.equal(result.inviteLinkUses[0].workspaceId, "ws_1");
+  assert.equal(result.usageLedger[0].userId, "user_1");
+  assert.equal(result.usageLedger[0].reservationVersion, 1);
   assert.equal(result.usageLedger[0].capturedAt, NOW.toISOString());
 });
 

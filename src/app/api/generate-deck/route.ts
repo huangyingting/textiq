@@ -5,8 +5,9 @@
  * validate (outline length/shape, before any LLM call) → check Azure config →
  * identify the user → enforce quota (anonymous trial cookie + hashed-IP
  * throttle) or per-user rate limit + credit metering → generate via Azure
- * OpenAI (wrapped in the abort deadline, with an output-token budget) → charge
- * credits on success → return `{ deck, truncated, diagnostics }` (the
+ * OpenAI (wrapped in the abort deadline, with an output-token budget) after a
+ * durable reserve hold → capture/refund to terminal settlement → return
+ * `{ deck, truncated, diagnostics }` (the
  * `truncated` flag tells the UI when the source outline was trimmed to fit the
  * input budget, and `diagnostics` carries AI repair/compile warnings through the
  * preview handoff).
@@ -15,6 +16,12 @@
  * ----------------
  *   { contentJson: <serialised Lexical editor state>, options?: { length?,
  *     tone?, audience? } }
+ *
+ * Authenticated idempotency contract:
+ *   - callers MUST send `Idempotency-Key` (8-128 chars, `[A-Za-z0-9._:-]`),
+ *   - retries for the same logical operation must reuse the same key, and
+ *   - distinct operations must send distinct keys.
+ * Missing/invalid keys are rejected with 400 before metering/generation.
  *
  * The document's VISUALS are derived from `contentJson` itself: every embedded
  * visual node carries its own `visual` payload, so {@link collectDocumentBlocks}

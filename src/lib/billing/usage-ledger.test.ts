@@ -1,362 +1,862 @@
-/**
- * Unit tests for the durable generation usage ledger (Epic #478, issue #481).
- *
- * Uses an in-memory fake Prisma client and a fake deductCredits to test
- * reserve / capture / refund lifecycle and idempotency without a real DB.
- */
-
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
+import { after, before, describe, it } from "node:test";
+import { promisify } from "node:util";
 
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaClient } from "@/generated/prisma/client";
+import { PLAN_ENTITLEMENTS } from "@/lib/billing/catalog";
+import { InsufficientCreditsError } from "@/lib/billing/credits";
+import { reconcileStaleReservedUsage } from "@/lib/billing/stale-reservation-reconciliation";
+import { loadAndSyncBillingState } from "@/lib/billing/service";
 import {
-  reserveUsage,
   captureUsage,
   refundUsage,
+  reserveUsage,
+  USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+  USAGE_LEDGER_STATE_MACHINE,
+  UsageLedgerConflictError,
 } from "@/lib/billing/usage-ledger";
+import { deriveUsageLedgerKeyHash } from "@/lib/billing/usage-ledger-key";
+import { prisma } from "@/lib/prisma";
 
-// ---------------------------------------------------------------------------
-// In-memory fake
-// ---------------------------------------------------------------------------
+type UsageLedgerClient = NonNullable<
+  Parameters<typeof reserveUsage>[0]["client"]
+>;
+type BillingClient = Parameters<typeof loadAndSyncBillingState>[1];
 
-interface LedgerRow {
-  id: string;
-  idempotencyKey: string;
-  userId: string;
-  operation: string;
-  creditCost: number;
-  status: string;
-  reservedAt: Date;
-  capturedAt: Date | null;
-  refundedAt: Date | null;
+interface UsageLedgerIntegrationHarness {
+  databaseFilePath: string;
+  databaseUrl: string;
+  client: PrismaClient;
 }
 
-type PrismaClient = typeof import("@/lib/prisma").prisma;
+const REPO_ROOT = process.cwd();
+const SQLITE_TEST_DB_DIRECTORY = resolvePath(REPO_ROOT, "prisma", ".test-dbs");
+const execFileAsync = promisify(execFile);
 
-function asPrismaClient(client: unknown): PrismaClient {
-  return client as PrismaClient;
+function testRawKey(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${randomUUID().replaceAll("-", "")}`;
 }
 
-function makeFakeClient(initialRows: LedgerRow[] = []) {
-  const store = new Map<string, LedgerRow>(
-    initialRows.map((r) => [r.idempotencyKey, r]),
+function asUsageLedgerClient(client: PrismaClient): UsageLedgerClient {
+  return client as unknown as UsageLedgerClient;
+}
+
+function asBillingClient(client: PrismaClient): BillingClient {
+  return client as unknown as BillingClient;
+}
+
+async function createUsageLedgerIntegrationHarness(): Promise<UsageLedgerIntegrationHarness> {
+  await mkdir(SQLITE_TEST_DB_DIRECTORY, { recursive: true });
+
+  const databaseFilePath = resolvePath(
+    SQLITE_TEST_DB_DIRECTORY,
+    `usage-ledger-${randomUUID()}.db`,
   );
-  let idSeq = 1;
-  const deductCalls: { userId: string; cost: number }[] = [];
+  const databaseUrl = `file:${databaseFilePath}`;
 
-  const client = {
-    usageLedgerEntry: {
-      async findUnique({ where }: { where: { idempotencyKey: string } }) {
-        return store.get(where.idempotencyKey) ?? null;
-      },
-      async create({
-        data,
-      }: {
-        data: {
-          idempotencyKey: string;
-          userId: string;
-          operation: string;
-          creditCost: number;
-          status: string;
-        };
-      }) {
-        const row: LedgerRow = {
-          id: `ledger-${idSeq++}`,
-          idempotencyKey: data.idempotencyKey,
-          userId: data.userId,
-          operation: data.operation,
-          creditCost: data.creditCost,
-          status: data.status,
-          reservedAt: new Date(),
-          capturedAt: null,
-          refundedAt: null,
-        };
-        store.set(row.idempotencyKey, row);
-        return row;
-      },
-      async update({
-        where,
-        data,
-      }: {
-        where: { idempotencyKey: string };
-        data: { status: string; capturedAt?: Date; refundedAt?: Date };
-      }) {
-        const row = store.get(where.idempotencyKey);
-        if (!row) throw new Error("Record not found");
-        const updated = { ...row, ...data };
-        store.set(where.idempotencyKey, updated);
-        return updated;
+  await execFileAsync(
+    "npx",
+    ["prisma", "db", "push", "--schema", "prisma/schema.sqlite.prisma"],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        DB_PROVIDER: "sqlite",
+        DATABASE_URL: databaseUrl,
       },
     },
-    // Fake deductCredits shim (mirrored in the client for captureUsage injection)
-    _deductCalls: deductCalls,
-    _store: store,
-  };
+  );
 
-  return client;
+  const adapter = new PrismaBetterSqlite3({ url: databaseUrl });
+  const client = new PrismaClient({ adapter });
+
+  return { databaseFilePath, databaseUrl, client };
 }
 
-// captureUsage calls deductCredits via the real import, so we need to provide
-// a Prisma client that also handles the user.updateMany call used by deductCredits.
-function makeFakeClientWithUser(initialRows: LedgerRow[], userBalance: number) {
-  const base = makeFakeClient(initialRows);
-  let balance = userBalance;
-  const deductCalls: Array<{ userId: string; cost: number }> = [];
+async function disposeUsageLedgerIntegrationHarness(
+  harness: UsageLedgerIntegrationHarness,
+): Promise<void> {
+  await harness.client.$disconnect();
+  await rm(harness.databaseFilePath, { force: true });
+  await rm(`${harness.databaseFilePath}-journal`, { force: true });
+  await rm(`${harness.databaseFilePath}-wal`, { force: true });
+  await rm(`${harness.databaseFilePath}-shm`, { force: true });
+}
 
-  const client = {
-    ...base,
-    user: {
-      async findUniqueOrThrow(_args: unknown) {
-        return { creditBalance: balance };
-      },
-      async updateMany({
-        where,
-        data,
-      }: {
-        where: { id: string; creditBalance: { gte: number } };
-        data: { creditBalance: { decrement: number } };
-      }) {
-        const cost = data.creditBalance.decrement;
-        if (balance >= where.creditBalance.gte) {
-          balance -= cost;
-          deductCalls.push({ userId: where.id, cost });
-          return { count: 1 };
-        }
-        return { count: 0 };
-      },
+async function createIntegrationUser(
+  harness: UsageLedgerIntegrationHarness,
+  t: { after: (fn: () => Promise<void>) => void },
+  opts: {
+    creditBalance: number;
+    creditPeriodStart?: Date;
+  },
+): Promise<{ userId: string }> {
+  const userId = `usage-ledger-user-${randomUUID()}`;
+  await harness.client.user.create({
+    data: {
+      id: userId,
+      email: `${userId}@example.test`,
+      plan: "free",
+      creditBalance: opts.creditBalance,
+      creditPeriodStart: opts.creditPeriodStart ?? new Date(),
     },
-    _deductCalls: deductCalls,
-    getBalance: () => balance,
-  };
-  return client;
+  });
+
+  t.after(async () => {
+    await harness.client.usageLedgerEntry.deleteMany({ where: { userId } });
+    await harness.client.user.deleteMany({ where: { id: userId } });
+  });
+
+  return { userId };
 }
 
-// ---------------------------------------------------------------------------
-// reserve
-// ---------------------------------------------------------------------------
-
-describe("reserveUsage (#481)", () => {
-  it("creates a new ledger entry with status=reserved", async () => {
-    const client = makeFakeClient();
-    const entry = await reserveUsage({
-      idempotencyKey: "req-001",
-      userId: "user-a",
-      operation: "generate",
-      creditCost: 5,
-      client: asPrismaClient(client),
-    });
-
-    assert.equal(entry.idempotencyKey, "req-001");
-    assert.equal(entry.userId, "user-a");
-    assert.equal(entry.operation, "generate");
-    assert.equal(entry.creditCost, 5);
-    assert.equal(entry.status, "reserved");
-    assert.equal(entry.capturedAt, null);
-    assert.equal(entry.refundedAt, null);
+describe("usage ledger state machine", () => {
+  it("declares reserve/capture/refund transitions explicitly", () => {
+    assert.deepEqual(USAGE_LEDGER_STATE_MACHINE.reserve.idempotentStatuses, [
+      "reserved",
+      "captured",
+      "refunded",
+    ]);
+    assert.deepEqual(USAGE_LEDGER_STATE_MACHINE.capture.allowedFrom, [
+      "reserved",
+    ]);
+    assert.deepEqual(USAGE_LEDGER_STATE_MACHINE.refund.allowedFrom, [
+      "reserved",
+    ]);
+    assert.deepEqual(USAGE_LEDGER_STATE_MACHINE.terminalStatuses, [
+      "captured",
+      "refunded",
+    ]);
   });
 
-  it("is idempotent — returns existing entry without duplicate write", async () => {
-    const client = makeFakeClient();
-    const first = await reserveUsage({
-      idempotencyKey: "req-002",
-      userId: "user-b",
-      operation: "generate",
-      creditCost: 3,
-      client: asPrismaClient(client),
+  it("validates recovered P2002 winners against the reservation fingerprint", async () => {
+    const idempotencyKey = testRawKey("unit-key");
+    const userId = "user-unit";
+    const operation = "generate";
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey,
+      userId,
+      operation,
     });
-    const second = await reserveUsage({
-      idempotencyKey: "req-002",
-      userId: "user-b",
-      operation: "generate",
-      creditCost: 3,
-      client: asPrismaClient(client),
-    });
-
-    assert.equal(first.id, second.id);
-    // Only one row in the store
-    assert.equal(client._store.size, 1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// capture
-// ---------------------------------------------------------------------------
-
-describe("captureUsage (#481)", () => {
-  it("marks the entry captured and deducts credits", async () => {
-    const key = "req-cap-001";
-    const row: LedgerRow = {
-      id: "ledger-1",
-      idempotencyKey: key,
-      userId: "user-c",
-      operation: "generate",
-      creditCost: 4,
+    const winnerRow = {
+      id: "ledger-winner",
+      keyHash,
+      userId,
+      operation,
+      creditCost: 99,
       status: "reserved",
+      reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
       reservedAt: new Date(),
       capturedAt: null,
       refundedAt: null,
     };
-    const client = makeFakeClientWithUser([row], 10);
-    const entry = await captureUsage({
-      idempotencyKey: key,
-      userId: "user-c",
-      creditCost: 4,
-      client: asPrismaClient(client),
-    });
 
-    assert.equal(entry.status, "captured");
-    assert.ok(entry.capturedAt instanceof Date);
-    assert.equal(client.getBalance(), 6); // 10 - 4
-  });
+    let findUniqueCalls = 0;
+    const client = {
+      async $transaction(work: (tx: unknown) => Promise<unknown>) {
+        return work({
+          usageLedgerEntry: {
+            async findUnique() {
+              findUniqueCalls += 1;
+              return null;
+            },
+            async create() {
+              throw Object.assign(new Error("unique"), { code: "P2002" });
+            },
+          },
+          user: {
+            async findUniqueOrThrow() {
+              return {
+                plan: "free",
+                creditBalance: 50,
+                creditPeriodStart: new Date(),
+              };
+            },
+            async updateMany() {
+              return { count: 1 };
+            },
+          },
+        } as never);
+      },
+      usageLedgerEntry: {
+        async findUnique() {
+          findUniqueCalls += 1;
+          return findUniqueCalls > 1 ? winnerRow : null;
+        },
+      },
+      user: {
+        async findUniqueOrThrow() {
+          return {
+            plan: "free",
+            creditBalance: 50,
+            creditPeriodStart: new Date(),
+          };
+        },
+        async updateMany() {
+          return { count: 1 };
+        },
+      },
+    } as unknown as UsageLedgerClient;
 
-  it("is idempotent — does not double-charge when already captured", async () => {
-    const key = "req-cap-002";
-    const row: LedgerRow = {
-      id: "ledger-2",
-      idempotencyKey: key,
-      userId: "user-d",
-      operation: "generate",
-      creditCost: 3,
-      status: "captured",
-      reservedAt: new Date(),
-      capturedAt: new Date(),
-      refundedAt: null,
-    };
-    const client = makeFakeClientWithUser([row], 10);
-    await captureUsage({
-      idempotencyKey: key,
-      userId: "user-d",
-      creditCost: 3,
-      client: asPrismaClient(client),
-    });
-
-    assert.equal(client.getBalance(), 10); // unchanged — no second deduction
-    assert.equal(client._deductCalls.length, 0);
-  });
-
-  it("throws when no entry exists for the key", async () => {
-    const client = makeFakeClient();
     await assert.rejects(
       () =>
-        captureUsage({
-          idempotencyKey: "nonexistent",
-          userId: "user-x",
-          creditCost: 1,
-          client: asPrismaClient(client),
+        reserveUsage({
+          idempotencyKey,
+          userId,
+          operation,
+          creditCost: 2,
+          client,
         }),
-      /no ledger entry found/,
+      (error: unknown) => error instanceof UsageLedgerConflictError,
     );
   });
 
-  it("skips deduction when creditCost is 0", async () => {
-    const key = "req-cap-free";
-    const row: LedgerRow = {
-      id: "ledger-free",
-      idempotencyKey: key,
-      userId: "user-e",
-      operation: "generate",
-      creditCost: 0,
-      status: "reserved",
-      reservedAt: new Date(),
-      capturedAt: null,
-      refundedAt: null,
-    };
-    const client = makeFakeClientWithUser([row], 10);
-    const entry = await captureUsage({
-      idempotencyKey: key,
-      userId: "user-e",
-      creditCost: 0,
-      client: asPrismaClient(client),
-    });
+  it("retries retryable transaction conflicts with serializable isolation on postgres", async () => {
+    const previousProvider = process.env.DB_PROVIDER;
+    process.env.DB_PROVIDER = "postgres";
 
-    assert.equal(entry.status, "captured");
-    assert.equal(client.getBalance(), 10); // no deduction
+    try {
+      const idempotencyKey = testRawKey("postgres-retry");
+      const userId = "user-postgres";
+      const operation = "generate";
+      const keyHash = deriveUsageLedgerKeyHash({
+        idempotencyKey,
+        userId,
+        operation,
+      });
+      const capturedRow = {
+        id: "ledger-captured",
+        keyHash,
+        userId,
+        operation,
+        creditCost: 3,
+        status: "captured",
+        reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+        reservedAt: new Date(),
+        capturedAt: new Date(),
+        refundedAt: null,
+      };
+
+      let attempts = 0;
+      const seenOptions: unknown[] = [];
+      const client = {
+        async $transaction(
+          work: (tx: unknown) => Promise<unknown>,
+          options?: unknown,
+        ) {
+          attempts += 1;
+          seenOptions.push(options);
+          if (attempts === 1) {
+            throw Object.assign(new Error("serialization conflict"), {
+              code: "P2034",
+            });
+          }
+
+          return work({
+            usageLedgerEntry: {
+              async findUnique() {
+                return capturedRow;
+              },
+            },
+          } as never);
+        },
+        usageLedgerEntry: {} as never,
+        user: {} as never,
+      } as unknown as UsageLedgerClient;
+
+      const captured = await captureUsage({
+        idempotencyKey,
+        userId,
+        operation,
+        creditCost: 3,
+        client,
+      });
+
+      assert.equal(captured.status, "captured");
+      assert.equal(attempts, 2);
+      assert.deepEqual(seenOptions, [
+        { isolationLevel: "Serializable" },
+        { isolationLevel: "Serializable" },
+      ]);
+    } finally {
+      if (previousProvider === undefined) {
+        delete process.env.DB_PROVIDER;
+      } else {
+        process.env.DB_PROVIDER = previousProvider;
+      }
+    }
   });
 });
 
-// ---------------------------------------------------------------------------
-// refund
-// ---------------------------------------------------------------------------
+describe("usage-ledger sqlite integration", () => {
+  let harness: UsageLedgerIntegrationHarness;
 
-describe("refundUsage (#481)", () => {
-  it("marks the entry refunded without changing the balance", async () => {
-    const key = "req-ref-001";
-    const row: LedgerRow = {
-      id: "ledger-3",
-      idempotencyKey: key,
-      userId: "user-f",
+  before(async () => {
+    harness = await createUsageLedgerIntegrationHarness();
+  });
+
+  after(async () => {
+    await disposeUsageLedgerIntegrationHarness(harness);
+  });
+
+  it("concurrent same-key reserve creates one row and debits exactly once", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 20,
+    });
+    const idempotencyKey = testRawKey("sqlite-reserve-same");
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey,
+      userId,
       operation: "generate",
-      creditCost: 5,
-      status: "reserved",
-      reservedAt: new Date(),
-      capturedAt: null,
-      refundedAt: null,
-    };
-    const client = makeFakeClient([row]);
-    const result = await refundUsage({
-      idempotencyKey: key,
-      client: asPrismaClient(client),
     });
+    const client = asUsageLedgerClient(harness.client);
 
-    assert.ok(result);
-    assert.equal(result.status, "refunded");
-    assert.ok(result.refundedAt instanceof Date);
+    const [a, b, c] = await Promise.all([
+      reserveUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 3,
+        client,
+      }),
+      reserveUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 3,
+        client,
+      }),
+      reserveUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 3,
+        client,
+      }),
+    ]);
+
+    assert.equal(a.id, b.id);
+    assert.equal(a.id, c.id);
+    assert.equal(a.keyHash, keyHash);
+
+    const rowCount = await harness.client.usageLedgerEntry.count({
+      where: { keyHash },
+    });
+    assert.equal(rowCount, 1);
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 17);
   });
 
-  it("returns null (no throw) when the key does not exist", async () => {
-    const client = makeFakeClient();
-    const result = await refundUsage({
-      idempotencyKey: "ghost-key",
-      client: asPrismaClient(client),
+  it("scopes identical raw keys by operation to avoid cross-mode collisions", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 20,
     });
+    const rawKey = testRawKey("sqlite-operation-scope");
+    const client = asUsageLedgerClient(harness.client);
 
-    assert.equal(result, null);
+    const [visualReserve, deckReserve] = await Promise.all([
+      reserveUsage({
+        idempotencyKey: rawKey,
+        userId,
+        operation: "generate",
+        creditCost: 2,
+        client,
+      }),
+      reserveUsage({
+        idempotencyKey: rawKey,
+        userId,
+        operation: "generate-deck",
+        creditCost: 3,
+        client,
+      }),
+    ]);
+
+    assert.notEqual(visualReserve.keyHash, deckReserve.keyHash);
+
+    const rowCount = await harness.client.usageLedgerEntry.count({
+      where: { userId },
+    });
+    assert.equal(rowCount, 2);
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 15);
   });
-});
 
-// ---------------------------------------------------------------------------
-// Full lifecycle
-// ---------------------------------------------------------------------------
+  it("scopes identical raw keys by user to avoid cross-account collisions", async (t) => {
+    const first = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const second = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const rawKey = testRawKey("sqlite-user-scope");
+    const client = asUsageLedgerClient(harness.client);
 
-describe("Usage ledger full lifecycle reserve→capture (#481)", () => {
-  it("reserve then capture charges exactly once", async () => {
-    const key = "lifecycle-001";
-    const client = makeFakeClientWithUser([], 20);
+    const [firstReserve, secondReserve] = await Promise.all([
+      reserveUsage({
+        idempotencyKey: rawKey,
+        userId: first.userId,
+        operation: "generate",
+        creditCost: 3,
+        client,
+      }),
+      reserveUsage({
+        idempotencyKey: rawKey,
+        userId: second.userId,
+        operation: "generate",
+        creditCost: 3,
+        client,
+      }),
+    ]);
+
+    assert.notEqual(firstReserve.keyHash, secondReserve.keyHash);
+
+    const [firstUser, secondUser] = await Promise.all([
+      harness.client.user.findUniqueOrThrow({
+        where: { id: first.userId },
+        select: { creditBalance: true },
+      }),
+      harness.client.user.findUniqueOrThrow({
+        where: { id: second.userId },
+        select: { creditBalance: true },
+      }),
+    ]);
+    assert.equal(firstUser.creditBalance, 7);
+    assert.equal(secondUser.creditBalance, 7);
+  });
+
+  it("distinct-key reserve races cannot overbook the balance", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 2,
+    });
+    const keyA = testRawKey("sqlite-race-a");
+    const keyB = testRawKey("sqlite-race-b");
+    const client = asUsageLedgerClient(harness.client);
+
+    const settled = await Promise.allSettled([
+      reserveUsage({
+        idempotencyKey: keyA,
+        userId,
+        operation: "generate",
+        creditCost: 2,
+        client,
+      }),
+      reserveUsage({
+        idempotencyKey: keyB,
+        userId,
+        operation: "generate",
+        creditCost: 2,
+        client,
+      }),
+    ]);
+
+    const fulfilled = settled.filter((result) => result.status === "fulfilled");
+    const rejected = settled.filter((result) => result.status === "rejected");
+
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.ok(
+      (rejected[0] as PromiseRejectedResult).reason instanceof
+        InsufficientCreditsError,
+    );
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 0);
+  });
+
+  it("conflicting key reuse fails without a second debit", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const idempotencyKey = testRawKey("sqlite-conflict");
+    const client = asUsageLedgerClient(harness.client);
 
     await reserveUsage({
-      idempotencyKey: key,
-      userId: "user-g",
+      idempotencyKey,
+      userId,
       operation: "generate",
-      creditCost: 7,
-      client: asPrismaClient(client),
+      creditCost: 2,
+      client,
     });
-    assert.equal(client.getBalance(), 20); // not yet deducted
 
-    await captureUsage({
-      idempotencyKey: key,
-      userId: "user-g",
-      creditCost: 7,
-      client: asPrismaClient(client),
+    await assert.rejects(
+      () =>
+        reserveUsage({
+          idempotencyKey,
+          userId,
+          operation: "generate",
+          creditCost: 4,
+          client,
+        }),
+      (error: unknown) => error instanceof UsageLedgerConflictError,
+    );
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
     });
-    assert.equal(client.getBalance(), 13); // deducted on capture
+    assert.equal(user.creditBalance, 8);
   });
 
-  it("reserve then refund leaves balance unchanged", async () => {
-    const key = "lifecycle-002";
-    const client = makeFakeClientWithUser([], 15);
+  it("capture is idempotent and does not mutate balance", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const idempotencyKey = testRawKey("sqlite-capture");
+    const client = asUsageLedgerClient(harness.client);
 
     await reserveUsage({
-      idempotencyKey: key,
-      userId: "user-h",
+      idempotencyKey,
+      userId,
       operation: "generate",
-      creditCost: 6,
-      client: asPrismaClient(client),
+      creditCost: 4,
+      client,
     });
-    assert.equal(client.getBalance(), 15); // not deducted
 
-    await refundUsage({
-      idempotencyKey: key,
-      client: asPrismaClient(client),
+    const captures = await Promise.all([
+      captureUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+      captureUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+      captureUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+    ]);
+
+    assert.ok(captures.every((entry) => entry.status === "captured"));
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
     });
-    assert.equal(client.getBalance(), 15); // still unchanged
+    assert.equal(user.creditBalance, 6);
+  });
+
+  it("refund is idempotent and restores credits once for hold rows", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const idempotencyKey = testRawKey("sqlite-refund");
+    const client = asUsageLedgerClient(harness.client);
+
+    await reserveUsage({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+      creditCost: 4,
+      client,
+    });
+
+    const refunds = await Promise.all([
+      refundUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+      refundUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+      refundUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        client,
+      }),
+    ]);
+
+    assert.ok(refunds.every((entry) => entry?.status === "refunded"));
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 10);
+  });
+
+  it("period reset racing with reserve keeps reserve debit intact", async (t) => {
+    const stalePeriodStart = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 1,
+      creditPeriodStart: stalePeriodStart,
+    });
+    const idempotencyKey = testRawKey("sqlite-reset-reserve");
+    const usageClient = asUsageLedgerClient(harness.client);
+    const billingClient = asBillingClient(harness.client);
+
+    await Promise.all([
+      loadAndSyncBillingState(userId, billingClient),
+      reserveUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 3,
+        client: usageClient,
+      }),
+    ]);
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true, creditPeriodStart: true },
+    });
+    assert.equal(
+      user.creditBalance,
+      PLAN_ENTITLEMENTS.free.creditsPerPeriod - 3,
+    );
+    assert.ok(user.creditPeriodStart instanceof Date);
+  });
+
+  it("period reset racing with refund keeps refund increment intact", async (t) => {
+    const stalePeriodStart = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 0,
+      creditPeriodStart: stalePeriodStart,
+    });
+    const idempotencyKey = testRawKey("sqlite-reset-refund");
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+    });
+
+    await harness.client.usageLedgerEntry.create({
+      data: {
+        keyHash,
+        userId,
+        operation: "generate",
+        creditCost: 2,
+        status: "reserved",
+        reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+      },
+    });
+
+    await Promise.all([
+      loadAndSyncBillingState(userId, asBillingClient(harness.client)),
+      refundUsage({
+        idempotencyKey,
+        userId,
+        operation: "generate",
+        creditCost: 2,
+        client: asUsageLedgerClient(harness.client),
+      }),
+    ]);
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(
+      user.creditBalance,
+      PLAN_ENTITLEMENTS.free.creditsPerPeriod + 2,
+    );
+  });
+
+  it("reconciles stale hold rows by refunding exactly once", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const idempotencyKey = testRawKey("sqlite-reconcile-hold");
+    const usageClient = asUsageLedgerClient(harness.client);
+
+    const reserved = await reserveUsage({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+      creditCost: 3,
+      client: usageClient,
+    });
+    const debited = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(debited.creditBalance, 7);
+
+    await harness.client.usageLedgerEntry.update({
+      where: { keyHash: reserved.keyHash },
+      data: {
+        reservedAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    });
+
+    const first = await reconcileStaleReservedUsage({
+      client: harness.client as unknown as typeof prisma,
+      ttlMs: 60 * 1000,
+      batchSize: 10,
+    });
+    const second = await reconcileStaleReservedUsage({
+      client: harness.client as unknown as typeof prisma,
+      ttlMs: 60 * 1000,
+      batchSize: 10,
+    });
+
+    assert.equal(first.refunded, 1);
+    assert.equal(first.refundedLegacy, 0);
+    assert.equal(second.refunded, 0);
+
+    const row = await harness.client.usageLedgerEntry.findUniqueOrThrow({
+      where: { keyHash: reserved.keyHash },
+      select: { status: true },
+    });
+    assert.equal(row.status, "refunded");
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 10);
+  });
+
+  it("reconciliation respects ttl and bounded batch size", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 5,
+    });
+    const staleA = deriveUsageLedgerKeyHash({
+      idempotencyKey: testRawKey("sqlite-reconcile-batch-a"),
+      userId,
+      operation: "generate",
+    });
+    const staleB = deriveUsageLedgerKeyHash({
+      idempotencyKey: testRawKey("sqlite-reconcile-batch-b"),
+      userId,
+      operation: "generate",
+    });
+    const fresh = deriveUsageLedgerKeyHash({
+      idempotencyKey: testRawKey("sqlite-reconcile-batch-fresh"),
+      userId,
+      operation: "generate",
+    });
+
+    await harness.client.usageLedgerEntry.createMany({
+      data: [
+        {
+          keyHash: staleA,
+          userId,
+          operation: "generate",
+          creditCost: 0,
+          status: "reserved",
+          reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+          reservedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        },
+        {
+          keyHash: staleB,
+          userId,
+          operation: "generate",
+          creditCost: 0,
+          status: "reserved",
+          reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+          reservedAt: new Date(Date.now() - 90 * 60 * 1000),
+        },
+        {
+          keyHash: fresh,
+          userId,
+          operation: "generate",
+          creditCost: 0,
+          status: "reserved",
+          reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+          reservedAt: new Date(),
+        },
+      ],
+    });
+
+    const first = await reconcileStaleReservedUsage({
+      client: harness.client as unknown as typeof prisma,
+      ttlMs: 60 * 1000,
+      batchSize: 1,
+    });
+    const second = await reconcileStaleReservedUsage({
+      client: harness.client as unknown as typeof prisma,
+      ttlMs: 60 * 1000,
+      batchSize: 1,
+    });
+
+    assert.equal(first.scanned, 1);
+    assert.equal(first.refunded, 1);
+    assert.equal(second.scanned, 1);
+    assert.equal(second.refunded, 1);
+
+    const remainingReserved = await harness.client.usageLedgerEntry.count({
+      where: { userId, status: "reserved" },
+    });
+    assert.equal(remainingReserved, 1);
+  });
+
+  it("reconciles stale legacy reserved rows without incrementing balance", async (t) => {
+    const { userId } = await createIntegrationUser(harness, t, {
+      creditBalance: 10,
+    });
+    const idempotencyKey = testRawKey("sqlite-reconcile-legacy");
+    const keyHash = deriveUsageLedgerKeyHash({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+    });
+
+    await harness.client.usageLedgerEntry.create({
+      data: {
+        keyHash,
+        userId,
+        operation: "generate",
+        creditCost: 4,
+        status: "reserved",
+        reservationVersion: 0,
+        reservedAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    });
+
+    const result = await reconcileStaleReservedUsage({
+      client: harness.client as unknown as typeof prisma,
+      ttlMs: 60 * 1000,
+      batchSize: 10,
+    });
+
+    assert.equal(result.refunded, 1);
+    assert.equal(result.refundedLegacy, 1);
+
+    const user = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(user.creditBalance, 10);
+
+    const row = await harness.client.usageLedgerEntry.findUniqueOrThrow({
+      where: { keyHash },
+      select: { status: true },
+    });
+    assert.equal(row.status, "refunded");
   });
 });

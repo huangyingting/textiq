@@ -177,9 +177,11 @@ export async function loadAccountExport(
       orderBy: { reservedAt: "asc" },
       select: {
         id: true,
+        userId: true,
         operation: true,
         creditCost: true,
         status: true,
+        reservationVersion: true,
         reservedAt: true,
         capturedAt: true,
         refundedAt: true,

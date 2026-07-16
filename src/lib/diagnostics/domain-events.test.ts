@@ -11,19 +11,21 @@ import {
 describe("domain telemetry event builders", () => {
   test("usage ledger context is allowlisted and redacts sensitive keys", () => {
     const context = buildUsageLedgerContext({
-      idempotencyKey: "req-1",
+      keyHash: "hash-1",
       operation: "generate",
       creditCost: 3,
       status: "reserved",
+      reservationVersion: 1,
       apiKey: "sk-secret",
       prompt: "draft content",
     } as never);
 
     assert.deepEqual(context, {
-      idempotencyKey: "req-1",
+      keyHash: "hash-1",
       operation: "generate",
       creditCost: 3,
       status: "reserved",
+      reservationVersion: 1,
     });
     assert.ok(!JSON.stringify(context).includes("draft content"));
     assert.ok(!JSON.stringify(context).includes("sk-secret"));
@@ -31,19 +33,21 @@ describe("domain telemetry event builders", () => {
 
   test("metered usage context carries billing operation metadata only", () => {
     const context = buildMeteredUsageContext({
-      idempotencyKey: "req-1",
+      keyHash: "hash-1",
       operation: "generate",
       creditCost: 3,
       status: "captured",
+      reservationVersion: 1,
       userId: "user-1",
       prompt: "draft content",
     } as never);
 
     assert.deepEqual(context, {
-      idempotencyKey: "req-1",
+      keyHash: "hash-1",
       operation: "generate",
       creditCost: 3,
       status: "captured",
+      reservationVersion: 1,
       userId: "user-1",
     });
     assert.ok(!JSON.stringify(context).includes("draft content"));

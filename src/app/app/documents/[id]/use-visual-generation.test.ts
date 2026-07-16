@@ -150,6 +150,65 @@ test("generate() routes a non-'auto' type to its VISUAL_KIND_CATEGORY section", 
   }
 });
 
+test("generate() reuses an idempotency key for the same operation and rotates for distinct operations", async () => {
+  const seenKeys: string[] = [];
+  const actions: VisualGenerationActionPort = {
+    requestVisualCandidates: async (_text, _options, request) => {
+      seenKeys.push(request?.idempotencyKey ?? "");
+      return {
+        ok: true,
+        candidates: [FIXTURES.list],
+      };
+    },
+  };
+  const renderer = createReactRenderHarness();
+  try {
+    const render = () => renderer.run(() => useVisualGeneration(actions));
+
+    await render().generate(target("same input"));
+    await waitForScheduledEffects();
+    await render().generate(target("same input"));
+    await waitForScheduledEffects();
+    await render().generate(target("different input"));
+    await waitForScheduledEffects();
+
+    assert.equal(seenKeys.length, 3);
+    assert.equal(seenKeys[0], seenKeys[1]);
+    assert.notEqual(seenKeys[1], seenKeys[2]);
+    assert.ok(seenKeys.every((key) => key.startsWith("visual-generate-")));
+  } finally {
+    renderer.cleanup();
+  }
+});
+
+test("resetGeneration starts a fresh idempotency lifecycle for subsequent operations", async () => {
+  const seenKeys: string[] = [];
+  const actions: VisualGenerationActionPort = {
+    requestVisualCandidates: async (_text, _options, request) => {
+      seenKeys.push(request?.idempotencyKey ?? "");
+      return {
+        ok: true,
+        candidates: [FIXTURES.list],
+      };
+    },
+  };
+  const renderer = createReactRenderHarness();
+  try {
+    const render = () => renderer.run(() => useVisualGeneration(actions));
+
+    await render().generate(target("same input"));
+    await waitForScheduledEffects();
+    render().resetGeneration();
+    await render().generate(target("same input"));
+    await waitForScheduledEffects();
+
+    assert.equal(seenKeys.length, 2);
+    assert.notEqual(seenKeys[0], seenKeys[1]);
+  } finally {
+    renderer.cleanup();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // generate() — failure paths (credit vs. generic)
 // ---------------------------------------------------------------------------

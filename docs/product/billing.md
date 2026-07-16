@@ -1,8 +1,8 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-10"
-description: "This document describes plan entitlements, AI credit metering, usage-ledger idempotency, billing provider selection, and subscription state. Brand Studio design lives in brand-studio.md."
+last_updated: "2026-07-15"
+description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
 # Billing And Entitlements
@@ -13,17 +13,18 @@ design lives in [brand-studio.md](brand-studio.md).
 
 ## Source Files
 
-| Area                       | Source                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------- |
-| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                       |
-| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts) |
-| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                       |
-| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)             |
-| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                       |
-| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                     |
-| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)       |
-| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)           |
-| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)               |
+| Area                       | Source                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                         |
+| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts)   |
+| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                         |
+| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)               |
+| Legacy key backfill        | [`src/lib/billing/legacy-key-backfill.ts`](../../src/lib/billing/legacy-key-backfill.ts) |
+| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                         |
+| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                       |
+| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)         |
+| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)             |
+| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)                 |
 
 ## Plans And Entitlements
 
@@ -41,20 +42,41 @@ decisions.
 
 ## Credit State And Usage Ledger
 
-`getBillingState` reads the user's plan and resets credit balance when the plan
-period has elapsed. Authenticated AI routes reserve a usage-ledger row before
-the model call, capture it on success, and refund it on failure.
+`loadAndSyncBillingState` and ledger writes share `syncBillingPeriodState` so
+credit-period reset uses a guarded compare-and-swap path. Authenticated AI
+routes reserve a durable hold before the model call, capture it on success, and
+refund it on failure/expiry.
 
 The usage ledger lifecycle is:
 
-1. `reserve` records intent with a stable idempotency key. Credits are not
-   deducted yet.
-2. `capture` atomically deducts credits and marks the ledger entry captured.
-3. `refund` tombstones the reserved entry without changing balance.
+1. `reserve` atomically decrements credits and writes `status="reserved"` once.
+2. `capture` compare-and-swaps `reserved -> captured` with no balance mutation.
+3. `refund` compare-and-swaps `reserved -> refunded`; new-format hold rows
+   increment balance exactly once, legacy pre-hold rows do not.
 
-This prevents double charging on retries. Concurrent captures for different
-requests still rely on `deductCredits`, which performs an atomic conditional
-update guarded by available balance.
+Rows are idempotent by scoped hash (`keyHash`) derived from
+`userId + operation + raw Idempotency-Key`; raw keys are never written by new
+reserve paths. `keyHash` is Prisma-mapped to the historical `idempotencyKey`
+column to keep existing schema/indexes during cutover.
+
+`keyHashVersion` tracks key cutover independently from `reservationVersion`:
+
+- `keyHashVersion=0` legacy/raw key storage
+- `keyHashVersion=1` scoped hash storage
+
+`reservationVersion` remains the hold-accounting marker (`0` pre-hold legacy,
+`1` hold-on-reserve), so key migration never reclassifies legacy rows as hold
+rows.
+
+Stale reserved rows are reconciled via
+`reconcileStaleReservedUsage`/`scripts/reconcile-stale-usage-reservations.ts`,
+which processes bounded TTL batches and distinguishes legacy rows so they never
+receive accidental balance increments.
+
+Legacy key cutover is handled by
+`backfillLegacyUsageLedgerKeys`/`scripts/backfill-usage-ledger-key-hash.ts`:
+dry-run by default, explicit `--apply` to mutate, bounded batches, and
+collision-safe skips that preserve the original row.
 
 `BILLING_UNLIMITED_CREDITS` skips authenticated credit deduction only when
 explicitly enabled. Anonymous users are governed by the AI route quota layer,
@@ -84,16 +106,31 @@ outlive an individual subscription.
 2. Production billing never silently falls back to the mock provider.
 3. Authenticated AI generation is credit-metered unless unlimited credits are
    explicitly enabled.
-4. Ledger reserve/capture/refund is idempotent by request key.
-5. Capturing usage is the only path that deducts credits for successful AI work.
+4. Ledger reserve/capture/refund is idempotent by scoped `keyHash`.
+5. Reserve is the only path that decrements credits for metered AI usage.
+6. Capture/refund settlement failures fail closed (5xx) until terminal state.
+7. Legacy key backfill never changes `reservationVersion`; it updates
+   `keyHashVersion`/`keyHash` only.
 
 ## Primary Tests
 
 - [`src/lib/billing/entitlements.test.ts`](../../src/lib/billing/entitlements.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)
+- [`scripts/usage-ledger-postgres-integration.test.ts`](../../scripts/usage-ledger-postgres-integration.test.ts) (opt-in Postgres harness)
+- [`src/lib/billing/legacy-key-backfill.test.ts`](../../src/lib/billing/legacy-key-backfill.test.ts)
+- [`src/lib/billing/stale-reservation-reconciliation.ts`](../../src/lib/billing/stale-reservation-reconciliation.ts)
 - [`src/lib/billing/provider.test.ts`](../../src/lib/billing/provider.test.ts)
 - [`src/lib/billing/mock-provider.test.ts`](../../src/lib/billing/mock-provider.test.ts)
 - [`src/lib/billing/stripe-provider.test.ts`](../../src/lib/billing/stripe-provider.test.ts)
 - [`src/lib/billing/service.test.ts`](../../src/lib/billing/service.test.ts)
 - [`src/lib/billing/attribution.test.ts`](../../src/lib/billing/attribution.test.ts)
+
+Opt-in Postgres command:
+
+- `ENABLE_POSTGRES_BILLING_TESTS=1 DATABASE_URL=postgres://... npm run test:billing:postgres`
+  - generates only `billingPostgresTestClient` into `.test-generated/prisma-postgres-billing`
+  - provisions a unique test-scoped Postgres database, runs
+    `test:billing:postgres:integration`, then drops the database
+  - refuses non-test targets unless the `DATABASE_URL` database or schema name
+    contains `test`/`ci`

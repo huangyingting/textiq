@@ -45,6 +45,40 @@ function makeFakeClient() {
         if (!user) throw new Error("User not found");
         return { ...user, subscription: subs.get(where.id) ?? null };
       },
+      updateMany({
+        where,
+        data,
+      }: {
+        where: {
+          id: string;
+          plan?: string;
+          creditBalance?: number;
+          creditPeriodStart?: Date | null;
+        };
+        data: Partial<FakeUser>;
+      }) {
+        const user = users.get(where.id);
+        if (!user) return Promise.resolve({ count: 0 });
+        if (where.plan !== undefined && user.plan !== where.plan) {
+          return Promise.resolve({ count: 0 });
+        }
+        if (
+          where.creditBalance !== undefined &&
+          user.creditBalance !== where.creditBalance
+        ) {
+          return Promise.resolve({ count: 0 });
+        }
+        if (where.creditPeriodStart !== undefined) {
+          const current = user.creditPeriodStart?.getTime() ?? null;
+          const expected = where.creditPeriodStart?.getTime() ?? null;
+          if (current !== expected) {
+            return Promise.resolve({ count: 0 });
+          }
+        }
+
+        Object.assign(user, data);
+        return Promise.resolve({ count: 1 });
+      },
       update({
         where,
         data,
