@@ -152,7 +152,7 @@ not the canonical v7 schema. This violates invariant 4.
 
 The following table enumerates **every** non-test import/re-export statement
 reaching into `src/lib/document/deck-kernel/` from outside that directory
-(36 import statements across 17 files). This inventory was generated from the
+(36 import statements across 14 files). This inventory was generated from the
 merged source at `c8514bd` using `rg "from.*deck-kernel" --include="*.ts"` and
 filtering out `*.test.ts`, `__test`, `*.spec.ts`, `/test/`, and kernel-internal
 files. The `src/test/` helper `deck-export-pptx.ts` (2 additional lines) is
@@ -183,7 +183,7 @@ excluded as it is test infrastructure.
 | `visual/image-element.ts`              | `Deck` (type)                                                                                                                                                      | `deck-core`                      | Visual layer           |
 | `visual/presentation-theme.ts`         | `PresentationTheme`, `VisualDefaultsToken` (types)                                                                                                                 | `presentation-theme`             | Visual layer           |
 
-**Families summary (6 families, 17 consumer files, 36 import statements):**
+**Families summary (8 families, 14 consumer files, 36 import statements):**
 
 1. **Model facade** — `document/deck-model.ts` (13 import lines). Re-exports
    the legacy deck type system to `action-ports.ts`, `source-ref-model.ts`,
