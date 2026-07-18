@@ -38,13 +38,13 @@ export async function resolvePublicRender(input: ResolvePublicRenderInput) {
           where: { shareId },
           select: PUBLIC_RENDER_PRESENTATION_SELECT,
         });
-        if (!row) return null;
-
-        const presentation = mapPublicRenderPresentationRow(row);
+        return row ? mapPublicRenderPresentationRow(row) : null;
+      },
+      async loadActiveCustomThemeForAuthorizedPresentation(presentation) {
         const customThemes = await loadCustomThemePackagesForDeckJson(
           presentation.deckJson,
         );
-        return { ...presentation, customThemePackages: customThemes.packages };
+        return customThemes.activePackage;
       },
     },
     input,

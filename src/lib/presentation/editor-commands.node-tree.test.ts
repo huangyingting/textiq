@@ -9,6 +9,7 @@ import {
   pasteNodes,
   cutNodes,
   updateNodeAttributes,
+  updateNodeLayouts,
   deleteNodes,
   duplicateNodes,
   reorderZIndex,
@@ -16,7 +17,10 @@ import {
   ungroupNodes,
 } from "@/lib/presentation/editor-commands";
 import { resetBuilderCounter } from "@/test/builders/presentation-deck";
-import type { SlideChildNode } from "@/lib/presentation/schema";
+import type { LayoutBox, SlideChildNode } from "@/lib/presentation/schema";
+import { hitTestSlideNodes } from "@/lib/presentation/stage-hit-test";
+import { openDeckFromJson } from "@/lib/presentation/open-deck";
+import { buildLayerReorderPatches } from "@/lib/presentation/node-tree-ops";
 import { makeTestDeck, findNode } from "./editor-commands.test-utils";
 
 describe("updateNodeAttributes", () => {
@@ -54,6 +58,54 @@ describe("insertNode and pasteNodes", () => {
 
     assert.equal(result.nodeId, "inserted-text");
     assert.equal(result.deck.slides[0].children.at(-1)?.id, "inserted-text");
+    assert.equal(
+      result.deck.slides[0].children.at(-1)?.layout?.zIndex,
+      Math.max(...slide.children.map((node) => node.layout?.zIndex ?? 0)) + 1,
+    );
+  });
+
+  test("appended insertion is foreground even with a stale lower z-index", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const existing = slide.children[0];
+    assert.ok(existing.layout);
+    const overlappingDeck = {
+      ...deck,
+      slides: [
+        {
+          ...slide,
+          children: [
+            {
+              ...existing,
+              layout: { ...existing.layout, zIndex: 900 },
+            } as SlideChildNode,
+          ],
+        },
+      ],
+    };
+    const result = insertNode(overlappingDeck, slide.id, {
+      id: "inserted-foreground",
+      type: "text",
+      role: "body",
+      layout: { ...existing.layout, zIndex: -900 },
+      style: { ref: "text.body" },
+      content: {
+        paragraphs: [{ id: "inserted-foreground-p", text: "Foreground" }],
+      },
+    });
+    const frame = existing.layout.frame;
+
+    const hits = hitTestSlideNodes(
+      { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 },
+      result.deck.slides[0].children,
+      { includeLocked: true, order: "visual" },
+    );
+
+    assert.equal(hits[0]?.node.id, "inserted-foreground");
+    assert.ok(
+      (findNode(result.deck.slides[0].children, "inserted-foreground")?.layout
+        ?.zIndex ?? 0) > 900,
+    );
   });
 
   test("insertNode re-identifies colliding nodes and ignores missing slides", () => {
@@ -91,6 +143,10 @@ describe("insertNode and pasteNodes", () => {
     assert.ok(pasted);
     assert.notEqual(pasted.id, source.id);
     assert.equal(pasted.layout?.frame.x, source.layout!.frame.x + 2);
+    assert.equal(
+      pasted.layout?.zIndex,
+      Math.max(...slide.children.map((node) => node.layout?.zIndex ?? 0)) + 1,
+    );
   });
 
   test("pasteNodes returns empty no-op result for empty input or missing slides", () => {
@@ -167,7 +223,6 @@ describe("deleteNodes", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "delete-group",
-      { ref: "surface.card" },
     );
     const empty = deleteNodes(deck, slide.id, []);
     const deletedGroup = deleteNodes(group, slide.id, ["delete-group"]);
@@ -297,7 +352,6 @@ describe("duplicateNodes", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 8, y: 8, w: 30, h: 20 }, zIndex: 10 },
-      style: { ref: "surface.card" },
       children: [child],
     };
     const withGroup = {
@@ -318,6 +372,10 @@ describe("duplicateNodes", () => {
       assert.deepEqual(
         updatedGroup.children.map((node) => node.id),
         [child.id, result.duplicatedIds[0]],
+      );
+      assert.ok(
+        (updatedGroup.children[1]?.layout?.zIndex ?? 0) >
+          (updatedGroup.children[0]?.layout?.zIndex ?? 0),
       );
     }
   });
@@ -343,6 +401,96 @@ describe("duplicateNodes", () => {
   });
 });
 
+test("z-index changes survive JSON serialization and deck reload", () => {
+  const deck = makeTestDeck();
+  const slide = deck.slides[0];
+  const first = slide.children[0];
+  const second = slide.children[1];
+  assert.ok(first.layout);
+  assert.ok(second.layout);
+  const reordered = reorderZIndex(
+    reorderZIndex(deck, slide.id, first.id, 50),
+    slide.id,
+    second.id,
+    10,
+  );
+
+  const opened = openDeckFromJson(JSON.parse(JSON.stringify(reordered)));
+  assert.equal(opened.ok, true);
+  if (!opened.ok) return;
+  assert.equal(
+    findNode(opened.deck.slides[0].children, first.id)?.layout?.zIndex,
+    50,
+  );
+  assert.equal(
+    findNode(opened.deck.slides[0].children, second.id)?.layout?.zIndex,
+    10,
+  );
+});
+
+test("layer reorder normalizes missing and non-finite sibling z-index values before serialization", () => {
+  const deck = makeTestDeck();
+  const slide = deck.slides[0];
+  const frame = { x: 10, y: 10, w: 30, h: 12 };
+  const text = (id: string, zIndex: number | undefined): SlideChildNode => ({
+    id,
+    type: "text",
+    role: "body",
+    layout: {
+      frame,
+      ...(zIndex === undefined ? {} : { zIndex }),
+    } as LayoutBox,
+    style: { ref: "text.body" },
+    content: { paragraphs: [{ id: `${id}-p`, text: id }] },
+  });
+  const group: SlideChildNode = {
+    id: "invalid-z-group",
+    type: "group",
+    component: "custom",
+    layout: { frame, zIndex: 5 },
+    children: [
+      text("invalid-z-nan", Number.NaN),
+      text("invalid-z-missing", undefined),
+      text("invalid-z-infinity", Number.POSITIVE_INFINITY),
+    ],
+  };
+  const malformed = {
+    ...deck,
+    slides: [{ ...slide, children: [slide.children[0], group] }],
+  };
+
+  const patches = buildLayerReorderPatches(
+    malformed.slides[0].children,
+    "invalid-z-missing",
+    2,
+  );
+  assert.deepEqual(
+    [...patches.entries()].map(([id, patch]) => [id, patch.zIndex]),
+    [
+      ["invalid-z-nan", 0],
+      ["invalid-z-infinity", 1],
+      ["invalid-z-missing", 2],
+    ],
+  );
+
+  const normalized = updateNodeLayouts(malformed, slide.id, patches);
+  const opened = openDeckFromJson(JSON.parse(JSON.stringify(normalized)));
+  assert.equal(opened.ok, true);
+  if (!opened.ok) return;
+  for (const id of [
+    "invalid-z-nan",
+    "invalid-z-infinity",
+    "invalid-z-missing",
+  ]) {
+    const zIndex: number | undefined = findNode(
+      opened.deck.slides[0].children,
+      id,
+    )?.layout?.zIndex;
+    assert.equal(Number.isFinite(zIndex), true);
+    assert.equal(Number.isInteger(zIndex), true);
+  }
+});
+
 describe("reorderZIndex", () => {
   test("updates zIndex of target node", () => {
     const deck = makeTestDeck();
@@ -360,14 +508,27 @@ describe("groupNodes", () => {
     const deck = makeTestDeck();
     const slide = deck.slides[0];
     const nodeIds = slide.children.map((n) => n.id);
-    const updated = groupNodes(deck, slide.id, nodeIds, "group-001", {
-      ref: "surface.card",
-    });
+    const updated = groupNodes(deck, slide.id, nodeIds, "group-001");
     const grouped = updated.slides[0].children.find(
       (n) => n.id === "group-001",
     );
     assert.ok(grouped, "Expected group node");
     assert.equal(grouped.type, "group");
+    assert.equal(grouped.style, undefined);
+    assert.equal(grouped.localStyle, undefined);
+  });
+
+  test("does not create a group with an existing deck id", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const updated = groupNodes(
+      deck,
+      slide.id,
+      slide.children.map((node) => node.id),
+      slide.children[0]!.id,
+    );
+
+    assert.strictEqual(updated, deck);
   });
 
   test("creates group bounds and z-index from selected children", () => {
@@ -405,7 +566,6 @@ describe("groupNodes", () => {
       slide.id,
       children.map((node) => node.id),
       "group-bounds",
-      { ref: "surface.card" },
     );
     const grouped = findNode(updated.slides[0].children, "group-bounds");
 
@@ -444,7 +604,6 @@ describe("groupNodes", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 8, y: 8, w: 32, h: 16 }, zIndex: 5 },
-      style: { ref: "surface.card" },
       children: [nestedSelected, nestedUnselected],
     };
     const topLevelSelected: SlideChildNode = {
@@ -452,7 +611,6 @@ describe("groupNodes", () => {
       type: "shape",
       role: "background",
       layout: { frame: { x: 60, y: 15, w: 20, h: 10 }, zIndex: 8 },
-      style: { ref: "surface.card" },
       content: { shape: "rect" },
     };
     const withGroup = {
@@ -472,7 +630,6 @@ describe("groupNodes", () => {
       slide.id,
       [nestedSelected.id, topLevelSelected.id],
       "group-mixed-nested",
-      { ref: "surface.card" },
     );
     const grouped = findNode(updated.slides[0].children, "group-mixed-nested");
     const updatedParent = findNode(updated.slides[0].children, parentGroup.id);
@@ -533,7 +690,6 @@ describe("groupNodes", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 5, y: 5, w: 60, h: 40 }, zIndex: 7 },
-      style: { ref: "surface.card" },
       children: [firstSelected, unselectedSibling, secondSelected],
     };
     const withGroup = {
@@ -550,7 +706,6 @@ describe("groupNodes", () => {
       slide.id,
       [firstSelected.id, secondSelected.id],
       "group-nested-siblings",
-      { ref: "surface.card" },
     );
     const updatedParent = findNode(updated.slides[0].children, parentGroup.id);
     const grouped = findNode(
@@ -585,13 +740,7 @@ describe("groupNodes", () => {
   test("returns unchanged deck if no matching nodes", () => {
     const deck = makeTestDeck();
     const slide = deck.slides[0];
-    const updated = groupNodes(
-      deck,
-      slide.id,
-      ["nonexistent-id"],
-      "group-002",
-      { ref: "surface.card" },
-    );
+    const updated = groupNodes(deck, slide.id, ["nonexistent-id"], "group-002");
     // No group should be created since no nodes matched
     assert.ok(!updated.slides[0].children.some((n) => n.id === "group-002"));
   });
@@ -602,9 +751,7 @@ describe("ungroupNodes", () => {
     const deck = makeTestDeck();
     const slide = deck.slides[0];
     const nodeIds = slide.children.map((node) => node.id);
-    const grouped = groupNodes(deck, slide.id, nodeIds, "group-ungroup", {
-      ref: "surface.card",
-    });
+    const grouped = groupNodes(deck, slide.id, nodeIds, "group-ungroup");
     const result = ungroupNodes(grouped, slide.id, "group-ungroup");
 
     assert.deepEqual(new Set(result.nodeIds), new Set(nodeIds));
@@ -614,5 +761,89 @@ describe("ungroupNodes", () => {
       ),
       false,
     );
+  });
+
+  test("ungroups a nested group in its parent sibling position", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const childA = slide.children[0]!;
+    const childB = slide.children[1]!;
+    const nestedGroup: SlideChildNode = {
+      id: "nested-group",
+      type: "group",
+      component: "custom",
+      layout: { frame: { x: 5, y: 5, w: 60, h: 30 }, zIndex: 4 },
+      children: [childA, childB],
+    };
+    const outerGroup: SlideChildNode = {
+      id: "outer-group",
+      type: "group",
+      component: "custom",
+      layout: { frame: { x: 0, y: 0, w: 80, h: 60 }, zIndex: 5 },
+      children: [
+        {
+          ...childA,
+          id: "before-nested",
+        },
+        nestedGroup,
+        {
+          ...childB,
+          id: "after-nested",
+        },
+      ],
+    };
+    const nestedDeck = {
+      ...deck,
+      slides: deck.slides.map((candidate) =>
+        candidate.id === slide.id
+          ? { ...candidate, children: [outerGroup] }
+          : candidate,
+      ),
+    };
+
+    const result = ungroupNodes(nestedDeck, slide.id, nestedGroup.id);
+    const updatedOuter = findNode(
+      result.deck.slides[0].children,
+      outerGroup.id,
+    );
+
+    assert.deepEqual(result.nodeIds, [childA.id, childB.id]);
+    assert.equal(updatedOuter?.type, "group");
+    if (updatedOuter?.type === "group") {
+      assert.deepEqual(
+        updatedOuter.children.map((node) => node.id),
+        ["before-nested", childA.id, childB.id, "after-nested"],
+      );
+      assert.strictEqual(updatedOuter.children[1], childA);
+      assert.strictEqual(updatedOuter.children[2], childB);
+    }
+  });
+
+  test("does not ungroup locked or hidden groups", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    for (const state of [{ locked: true }, { hidden: true }]) {
+      const group: SlideChildNode = {
+        id: state.locked ? "locked-group" : "hidden-group",
+        type: "group",
+        component: "custom",
+        layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
+        ...state,
+        children: slide.children,
+      };
+      const guardedDeck = {
+        ...deck,
+        slides: deck.slides.map((candidate) =>
+          candidate.id === slide.id
+            ? { ...candidate, children: [group] }
+            : candidate,
+        ),
+      };
+
+      assert.deepEqual(ungroupNodes(guardedDeck, slide.id, group.id), {
+        deck: guardedDeck,
+        nodeIds: [],
+      });
+    }
   });
 });

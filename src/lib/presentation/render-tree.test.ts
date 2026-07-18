@@ -70,9 +70,15 @@ describe("render-tree render-list derivation", () => {
       chrome: [
         textNode("chrome-foreground-high", 920, "deckChrome"),
         groupNode(
+          "chrome-background-group",
+          -25,
+          [textNode("chrome-background-child-high", 999, "deckChrome")],
+          "deckChrome",
+        ),
+        groupNode(
           "chrome-group",
           905,
-          [textNode("chrome-group-child", 905, "deckChrome")],
+          [textNode("chrome-group-child", -999, "deckChrome")],
           "deckChrome",
         ),
         textNode("chrome-background", -20, "deckChrome"),
@@ -93,7 +99,11 @@ describe("render-tree render-list derivation", () => {
     );
     assert.deepEqual(
       renderLists.backgroundChrome.map((node) => node.id),
-      ["chrome-background"],
+      [
+        "chrome-background-group",
+        "chrome-background-child-high",
+        "chrome-background",
+      ],
     );
     assert.deepEqual(
       renderLists.foregroundChrome.map((node) => node.id),
@@ -107,6 +117,39 @@ describe("render-tree render-list derivation", () => {
     assert.deepEqual(
       renderLists.userNodes.map((node) => node.id),
       ["user-back", "user-group", "user-child-a", "user-child-b"],
+    );
+    assert.equal(
+      new Set(renderLists.userNodes.map((node) => node.id)).size,
+      renderLists.userNodes.length,
+    );
+  });
+
+  test("uses zero fallback for invalid chrome z-index values with stable source ties", () => {
+    const invalid = textNode("invalid", Number.NaN, "deckChrome");
+    const positiveInfinity = textNode(
+      "positive-infinity",
+      Number.POSITIVE_INFINITY,
+      "deckChrome",
+    );
+    const missing = {
+      ...textNode("missing", 10, "deckChrome"),
+      layout: {
+        frame: { x: 0, y: 0, w: 10, h: 5 },
+      } as ResolvedRenderNode["layout"],
+    };
+    const renderLists = buildSlideRenderLists({
+      decorations: [],
+      nodes: [],
+      chrome: [invalid, missing, positiveInfinity],
+    });
+
+    assert.deepEqual(
+      renderLists.foregroundChrome.map((node) => [node.id, node.layout.zIndex]),
+      [
+        ["invalid", Number.NaN],
+        ["missing", undefined],
+        ["positive-infinity", Number.POSITIVE_INFINITY],
+      ],
     );
   });
 

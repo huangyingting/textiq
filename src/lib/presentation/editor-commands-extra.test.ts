@@ -53,7 +53,6 @@ test("editor commands cover nested id, layout, and no-op branches", () => {
     type: "group",
     component: "custom",
     layout: buildLayoutBox({ frame: { x: 5, y: 5, w: 30, h: 30 }, zIndex: 2 }),
-    style: { ref: "surface.card" },
     children: [child],
   };
   const deck = buildDeck([buildSlide("content", [group])]);
@@ -210,7 +209,6 @@ test("editor commands preserve compatible non-text slot content and duplicate su
       type: "shape",
       slot: "stat",
       layout: buildLayoutBox(),
-      style: { ref: "surface.card" },
       content: { shape: "diamond" },
     },
     {
@@ -238,7 +236,6 @@ test("editor commands preserve compatible non-text slot content and duplicate su
       slot: "cards",
       component: "custom",
       layout: buildLayoutBox(),
-      style: { ref: "surface.card" },
       children: [buildTextNode({ id: "authored-child" })],
     },
     buildTextNode({ id: "group-copy" }),

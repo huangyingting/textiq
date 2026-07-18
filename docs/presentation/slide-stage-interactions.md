@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-17"
 description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit Deck nodes when many nodes overlap. It is the interaction contract for the presentation slide editor stage, not the persisted deck schema."
 ---
 
@@ -27,28 +27,32 @@ insert-then-endpoint-drag rather than a single drag-from-source gesture.
 
 ## Source Files
 
-| Area                  | Source                                                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Stage UI/controller   | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                           |
-| Read-only canvas      | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                           |
-| Node renderer         | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)             |
-| Selection model       | [`src/components/presentation/selection-model.ts`](../../src/components/presentation/selection-model.ts)                       |
-| Selection geometry    | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                               |
-| Stage pointer helpers | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts) |
-| Stage gesture drafts  | [`src/components/presentation/stage-gesture-feedback.tsx`](../../src/components/presentation/stage-gesture-feedback.tsx)       |
-| Multi-select geometry | [`src/components/presentation/multi-selection-transform.ts`](../../src/components/presentation/multi-selection-transform.ts)   |
-| Table editing         | [`src/components/presentation/use-table-cell-editing.ts`](../../src/components/presentation/use-table-cell-editing.ts)         |
-| Stage chrome layering | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                           |
-| Stage fit             | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                 |
-| Stage guides          | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                           |
-| Context toolbar       | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)     |
+| Area                   | Source                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Stage UI/controller    | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                           |
+| Read-only canvas       | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                           |
+| Node renderer          | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)             |
+| Selection model        | [`src/components/presentation/selection-model.ts`](../../src/components/presentation/selection-model.ts)                       |
+| Selection geometry     | [`src/lib/presentation/selection-geometry.ts`](../../src/lib/presentation/selection-geometry.ts)                               |
+| Stage pointer helpers  | [`src/components/presentation/stage-pointer-interactions.ts`](../../src/components/presentation/stage-pointer-interactions.ts) |
+| Stage gesture drafts   | [`src/components/presentation/stage-gesture-feedback.tsx`](../../src/components/presentation/stage-gesture-feedback.tsx)       |
+| Multi-select geometry  | [`src/components/presentation/multi-selection-transform.ts`](../../src/components/presentation/multi-selection-transform.ts)   |
+| Table editing          | [`src/components/presentation/use-table-cell-editing.ts`](../../src/components/presentation/use-table-cell-editing.ts)         |
+| Stage chrome layering  | [`src/lib/presentation/stage-chrome.ts`](../../src/lib/presentation/stage-chrome.ts)                                           |
+| Stage fit              | [`src/lib/presentation/stage-fit.ts`](../../src/lib/presentation/stage-fit.ts)                                                 |
+| Stage guides           | [`src/lib/presentation/stage-guides.ts`](../../src/lib/presentation/stage-guides.ts)                                           |
+| Context toolbar        | [`src/components/presentation/toolbar/context-toolbar.tsx`](../../src/components/presentation/toolbar/context-toolbar.tsx)     |
+| Stage hit testing      | [`src/lib/presentation/stage-hit-test.ts`](../../src/lib/presentation/stage-hit-test.ts)                                       |
+| Render-order traversal | [`src/lib/presentation/render-order.ts`](../../src/lib/presentation/render-order.ts)                                           |
+| Selection traversal    | [`src/components/presentation/selection-traversal.ts`](../../src/components/presentation/selection-traversal.ts)               |
+| Layers panel           | [`src/components/presentation/inspector/layers-panel.tsx`](../../src/components/presentation/inspector/layers-panel.tsx)       |
 
 ## Goals
 
 - Hover feedback should feel Canva-like: moving the pointer over the stage shows
   the element the editor believes the user is most likely targeting.
 - Selection, drag, double-click edit, and context-menu targeting should use the
-  same semantic hit-test result.
+  same shared hit-test and render-order traversal rather than DOM stacking.
 - Large text/list frames and large background-like shapes should not make lower
   content impossible to target.
 - Selected/preselected frames must remain visible even when the target element is
@@ -81,13 +85,13 @@ passes `CLICK_MOVE_THRESHOLD_PX`.
 The interaction model is pointer-first, but it must not assume every input has a
 hover phase.
 
-| Input          | Behavior                                                                                                                   |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Mouse/trackpad | Full hover preselection, click selection, drag threshold, double-click edit, context menu.                                 |
-| Pen/stylus     | Treat like pointer input; hover preselection is available only on devices/browsers that emit hover-style pointer movement. |
-| Touch          | No reliable hover. Tap should select, second tap edits editable text, drag threshold starts movement.                      |
-| Keyboard       | Uses roving tabindex and keyboard canvas helpers; `Enter` enters the current target, arrows nudge, `Alt+]` selects under.  |
-| Screen readers | Use focus, selection announcements, and the layer list. Preselection itself is advisory visual chrome.                     |
+| Input          | Behavior                                                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mouse/trackpad | Full hover preselection, click selection, drag threshold, double-click edit, context menu.                                                                  |
+| Pen/stylus     | Treat like pointer input; hover preselection is available only on devices/browsers that emit hover-style pointer movement.                                  |
+| Touch          | No reliable hover. Tap should select, second tap edits editable text, drag threshold starts movement.                                                       |
+| Keyboard       | Uses roving tabindex and keyboard canvas helpers; `Enter` enters the current target, arrows nudge, and `Shift+F10` or the Menu key opens overlap selection. |
+| Screen readers | Use focus, selection announcements, and the layer list. Preselection itself is advisory visual chrome.                                                      |
 
 Touch and keyboard users must always have deterministic alternatives through
 selection, traversal, and the layer list; they should never depend on hover-only
@@ -95,48 +99,84 @@ feedback.
 
 ## Semantic Hit Testing
 
-The stage should not rely on DOM overlay boxes for target selection. Instead,
-`stage-hit-test.ts` computes ranked candidates from the pointer position and the
-current slide elements.
+The stage does not rely on DOM overlay boxes for target selection. Instead,
+`stage-hit-test.ts` computes geometry-aware candidates from the pointer position
+and current slide nodes. Candidate scoring and candidate ordering are separate:
+the helper can return semantic-score order or topmost visual order, and the
+current stage interaction paths explicitly request visual order.
 
 The hit-test pipeline is:
 
 1. Convert client coordinates to slide percent coordinates.
-2. Collect candidates from elements whose interactive geometry contains or is
-   near the pointer.
-3. Drop hidden elements and, by default, locked elements.
-4. Score candidates by interaction semantics.
-5. Sort by score, then z-index, then DOM/order tie-break.
+2. Canonically sort each sibling list by finite `layout.zIndex`, using stable
+   source order for ties, then flatten in visual preorder: each node, then its
+   descendants, then later siblings. Missing, `NaN`, and infinite z-index values
+   deterministically fall back to zero. A hidden node prunes its entire subtree.
+3. Drop layoutless nodes and, unless `includeLocked` is true, each locked node.
+   Locking is not inherited, so unlocked descendants of a locked group remain
+   candidates.
+4. Apply node-specific geometry and assign a semantic `score` and `reason`.
+5. Order the candidates according to `StageHitTestOptions.order`:
+   - `"semantic"` is the default helper mode. It normally prefers descendants
+     over ancestor groups, then higher scores, then later visual preorder.
+   - `"visual"` ignores scores for ordering and reverses the exact visual
+     preorder, producing foreground-to-background order.
 
-`HitTestCandidate` carries:
+Both modes use the same canonical sibling ordering. The modes differ in candidate
+scoring and whether hidden subtrees are retained, not in visual stacking.
 
-- `element`: the target element;
-- `box`: the box used for manipulation;
+`StageHitCandidate` carries:
+
+- `node`: the target `SlideChildNode`;
+- `frame`: the node's `LayoutBox["frame"]`;
 - `score`: semantic priority;
 - `reason`: why the candidate was included.
 
+### Visual And Management Traversal
+
+`flattenNodesInRenderOrder` has two explicit modes:
+
+- `mode: "visual"` supports hidden-node pruning. When the hidden predicate
+  matches a group, neither the group nor any descendant enters hit testing or
+  selection reading order.
+- `mode: "management"` visits every node and descendant. `LayersPanel` uses this
+  mode, then reverses the preorder so user layers are shown
+  foreground-to-background while hidden groups and descendants remain listed.
+
+Nested groups preserve stacking contexts in both modes: each parent sorts only
+its direct children by canonical z-index, a parent precedes its sorted
+descendants in preorder, and the complete group subtree stays at the parent
+group's position among its own siblings. A child's z-index cannot escape its
+group to cover a later top-level sibling. Reversing that preorder puts
+foreground siblings first and descendants before their parent. The Layers panel
+mirrors this ordering while its management traversal additionally retains hidden
+subtrees. Keyboard reading order also starts from visual traversal, but then
+sorts visible layout nodes by explicit `accessibility.readingOrder` or position.
+
 ### Scoring Intent
 
-Scores are intentionally semantic rather than purely visual z-index based.
+Scores are intentionally semantic and independent of `zIndex`; canonical
+z-index still determines the visual preorder that breaks visual-mode ties.
 Examples:
 
-| Candidate condition                  | Priority intent                                                                                                               |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Text/list actual content hit         | Very high. Text content is often what users intend to edit/select, even if covered by a shape.                                |
-| Text/list near content               | High. A little tolerance around text makes targeting humane.                                                                  |
-| Text/list frame-only hit             | Low. Empty frame area should not block lower visible objects.                                                                 |
-| Connector or line stroke hit         | Very high. Thin objects need a generous distance threshold to be selectable.                                                  |
-| Shape edge hit                       | Very high. Edges/corners usually mean the user is targeting the shape itself.                                                 |
-| Small shape interior                 | High. Small shapes are likely intentional targets.                                                                            |
-| Medium shape interior                | Medium-high.                                                                                                                  |
-| Large/background-like shape interior | Low. Large covering shapes often function as backgrounds/containers and should not trap intent.                               |
-| Selected element                     | Optional strong bonus for selected-object flows such as context menus; not used for hover or ordinary pointer-down targeting. |
-| Z-index                              | Small tie-break bonus, not the whole decision.                                                                                |
+| Candidate condition                  | Priority intent                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Text/list actual content hit         | Very high. Semantic order can prefer text content even when a shape also contains the point.                       |
+| Text/list near content               | High. A little tolerance around text makes targeting humane.                                                       |
+| Text/list frame-only hit             | Low in semantic order.                                                                                             |
+| Connector or line stroke hit         | Very high. Thin objects use a generous distance threshold to become candidates.                                    |
+| Shape edge hit                       | Very high in semantic order.                                                                                       |
+| Small shape interior                 | High in semantic order.                                                                                            |
+| Medium shape interior                | Medium-high in semantic order.                                                                                     |
+| Large/background-like shape interior | Low. Semantic order treats large covering shapes as likely backgrounds or containers.                              |
+| Selected node                        | Optional strong bonus for callers that opt in; current hover, pointer-down, double-click, and menu stacks opt out. |
 
-This is why a text element can be preselected even when a large shape covers it:
-the pointer can be close to the text content, while the large shape's interior is
-penalized as a likely background-like cover. Conversely, if the pointer is near
-the shape edge, the shape edge score wins.
+These scores explain semantic-order results, not topmost visual picking. In
+semantic order, text content can outrank a large covering shape, while a shape
+edge can outrank the text. The current stage hover, pointer-down, double-click,
+context-menu, and overlap paths request `"visual"`, so their first candidate is
+the last eligible node in visual preorder; scores and reasons remain available
+as candidate metadata.
 
 ## Element-Specific Hit Rules
 
@@ -149,22 +189,21 @@ Text elements should not use the entire frame as their primary hit area.
 - Frame-only hit -> `text-frame`, low score.
 - Alignment and vertical alignment affect the estimated visible text box.
 
-The current implementation accepts an optional measured text geometry cache from
-`text-hit-geometry.ts`. The cache is built by `SlideStageEditor` during layout
-from a hidden DOM measurement host, stores line/content boxes in slide-percent
-coordinates, and is passed into the pure `stage-hit-test.ts` pipeline. Cache
-misses fall back to the heuristic geometry derived from line count, character
-count, font size, alignment, and stage aspect ratio.
+The current implementation estimates the visible text frame from non-empty
+paragraph lines, character count, font size, line height, alignment, vertical
+alignment, and stage aspect ratio. It does not consume DOM measurements.
 
 ### List Paragraphs
 
-List paragraphs follow the text model, but include marker/indent slack:
+List paragraphs use the same text-node path:
 
-- `TextElement.paragraphs[]` is authoritative for plain text, bullets, and
-  numbered lists. Paragraphs with `listType` render markers; `indent` carries
-  nesting depth.
-- Visible rows/near rows should outrank large shape interiors.
-- Empty list frame areas should not trap lower objects.
+- `TextNode.content.paragraphs[]` is authoritative. A paragraph's optional
+  `list.kind` is `"bullet"` or `"number"`, and `list.indent` carries nesting
+  depth.
+- Hit estimation currently uses paragraph text only; markers and indentation do
+  not add separate measured hit regions.
+- Semantic order gives visible/near text higher scores than large shape
+  interiors, while current visual stage order remains foreground-to-background.
 
 ### Shapes
 
@@ -173,6 +212,7 @@ Shape rules depend on shape kind:
 - Rectangles: box hit, with edge vs interior scoring.
 - Ellipses: mathematical ellipse hit test.
 - Triangles: triangle area hit test.
+- Diamonds: normalized diamond area hit test.
 - Lines: distance-to-line-segment threshold; line bounding boxes are not enough.
 
 Large interior-only shape hits are downweighted so background-like shapes do not
@@ -183,28 +223,23 @@ high priority so users can still select/manipulate the shape deliberately.
 
 Connectors must be considered in both preselection and direct manipulation.
 
-- Hit testing uses resolved connector endpoint points and a distance-to-segment
-  threshold.
-- Bound endpoints resolve through `resolveConnectorElementPoints` using current
-  fitted boxes.
+- Hit testing resolves point endpoints inside the connector frame and bound
+  endpoints from the target node's current layout frame.
+- Straight paths use one segment, elbow paths use three segments, and curved
+  paths use a sampled cubic path; all use a distance threshold.
 - Connector endpoint handles remain separate editing affordances once the
   connector is selected.
-- While dragging an endpoint, anchor preview dots are shown on candidate target
-  elements; this interaction intentionally suppresses general hover preselection.
-- Candidate target elements are collected by `connectorAnchorCandidates` from
-  elements under the pointer and elements with anchors inside the snap radius;
-  final binding still uses the nearest snapped anchor from `snapLineEndpoint`.
+- While dragging an endpoint, the active endpoint interaction suppresses general
+  hover preselection.
 
 A connector is not selected by its full bounding box. It should be targetable
 near its stroke, with enough tolerance to be practical.
 
 ### Visuals And Images
 
-Visual and image elements can use optional media-aware hit geometry. Visuals get
-node-aware regions from `media-hit-geometry.ts` when positioned node bounds are
-available; otherwise visuals and images fall back to their fitted box. Image
-alpha/pixel-aware geometry is intentionally an extension hook rather than work
-done in pointermove.
+Visual and image nodes currently use their layout frame and the
+`"box-interior"` reason. There is no alpha-aware image or visual-subregion hit
+geometry in `stage-hit-test.ts`.
 
 Large visuals/images are ambiguous: they can be primary content, but they can
 also act as background-like covers. The current box-based rule is intentionally
@@ -256,41 +291,38 @@ strategy as frames.
 Pointer-down, double-click, and context-menu actions should ask the same semantic
 hit-test for the target. This keeps hover feedback and click behavior aligned.
 
-| Gesture                  | Target source                        | Result                                                                                         |
-| ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Pointer move             | top semantic hit candidate           | update preselection while idle/selected-idle                                                   |
-| Pointer down on element  | top semantic hit candidate           | select target immediately, enter `press-pending`                                               |
-| Pointer move threshold   | existing drag ref                    | enter moving/resizing/rotating and suppress hover preselection                                 |
-| Pointer up no movement   | press-pending target                 | select only, or enter inline edit if it was the already selected editable text element         |
-| Double click             | top semantic hit candidate           | collapse to the target, then enter text edit, table edit, or group when allowed                |
-| Context menu             | top semantic hit candidate           | select target and open menu for that target                                                    |
-| Select-under cycle       | current ranked candidate stack       | `Alt`-click or `Alt+]` selects the next candidate in stack order                               |
-| Stage empty click        | no semantic hit, no marquee movement | commit/exit current edit, clear selection, and exit group/table context                        |
-| Stage empty double click | true canvas background               | commit/exit current edit, insert a text node at the point, select it, and enter inline editing |
-| Multi-selection bounds   | stage chrome                         | retain current selection; do not insert text, clear selection, or enter editing                |
+| Gesture                  | Target source                         | Result                                                                                         |
+| ------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Pointer move             | first visual-order hit candidate      | update preselection while idle/selected-idle                                                   |
+| Pointer down on element  | first visual-order hit candidate      | select target immediately, enter `press-pending`                                               |
+| Pointer move threshold   | existing drag ref                     | enter moving/resizing/rotating and suppress hover preselection                                 |
+| Pointer up no movement   | press-pending target                  | select only, or enter inline edit if it was the already selected editable text element         |
+| Double click             | first visual-order hit candidate      | collapse to the target, then enter text or table edit when allowed; groups remain selected     |
+| Context menu             | current node plus visual-order stack  | select target and open menu for that target                                                    |
+| Select-under cycle       | filtered visual-order candidate stack | the context-menu command selects the next candidate and wraps                                  |
+| Stage empty click        | no semantic hit, no marquee movement  | commit/exit current edit, clear selection, and exit group/table context                        |
+| Stage empty double click | true canvas background                | commit/exit current edit, insert a text node at the point, select it, and enter inline editing |
+| Multi-selection bounds   | stage chrome                          | retain current selection; do not insert text, clear selection, or enter editing                |
 
-Pointer-down target resolution and hover preselection use the same ranked
-candidate list without selected-node stickiness, so the object shown as
-preselected is also the object a normal drag starts from. Hover only updates
-`preselectedElementId`; pointer-down stores a press-pending target; movement past
+Pointer-down target resolution and hover preselection use the same reverse
+visual-preorder candidate list without selected-node stickiness, so the object
+shown as preselected is also the object a normal drag starts from. Hover only updates
+`hoveredNodeId`; pointer-down stores a press-pending target; movement past
 the threshold promotes that target into the active manipulation state.
 
 Preselection must be computed from the stage-level semantic pointermove path.
 Node-level DOM `pointerenter`/`pointerleave` handlers must not write preselection
-state directly, because DOM stacking and semantic ranking can disagree for
-overlapping objects.
+state directly, because the event target and shared render-tree traversal can
+disagree for overlapping or grouped objects.
 
-Selected-node stickiness is reserved for flows that explicitly operate on the
-current selection, such as context-menu targeting and select-under anchoring. It
-must not override ordinary pointer-down targeting, because that would make a
-preselected overlapping object appear draggable while actually dragging the
-already selected object underneath.
+Selected-node bonus remains an opt-in semantic-order feature. Current visual
+hover, pointer-down, double-click, context-menu, and overlap stacks disable it so
+the topmost visual result does not change with selection.
 
-The raw semantic hit candidate is resolved through `stage-targeting.ts` before
+The raw `StageHitCandidate` is resolved through `stage-targeting.ts` before
 selection semantics are applied. This keeps group behavior consistent across
-hover, pointer-down, double-click, context-menu selection, and future
-select-under cycling while preserving the raw candidate stack for precision
-fallback menus.
+hover, pointer-down, double-click, context-menu selection, and overlap commands
+while preserving the raw candidate stack for precision menus.
 
 ### Double-Click Finalizer
 
@@ -306,9 +338,12 @@ from those clicks and re-establish the intended editing context:
   empty text node falls back to the start caret;
 - tables enter table-cell edit with the first cell focused as the stable
   fallback;
-- groups enter group-editing mode and select the first child;
+- double-clicking a group collapses selection to and focuses the group without
+  entering a child; keyboard `Enter` on a selected, unlocked group enters and
+  selects its first child;
 - image, visual, shape, and connector nodes only collapse to single selection;
-- locked nodes only collapse selection and never enter text/table/group editing;
+- locked nodes are excluded from default hit targeting; a locked node selected
+  through a management or focus path does not enter text/table/group editing;
 - modifier keys do not add double-click selection semantics and do not trigger
   duplicate behavior.
 
@@ -317,13 +352,35 @@ commits/exits the current editor and then performs the new target action.
 
 ## Groups And Multi-Selection
 
-Groups add another semantic layer over hit testing.
+Groups add another semantic layer over hit testing. They are logical
+selection/stacking containers, not nested visual transform containers. Child
+frames and rotations are stored in slide-absolute coordinates. Moving, resizing,
+or rotating a group updates descendant geometry, so renderers and exporters must
+not apply the group transform again. Group `style` and `localStyle` are rejected
+at the schema boundary rather than stored and ignored; descendant styling remains
+authoritative. Group layout remains meaningful for selection bounds, group
+commands, hit testing, and the subtree's position in its parent stacking context.
 
-- Outside group-editing mode, clicking a grouped member selects the group as a
-  unit.
-- Inside group-editing mode, members are targetable individually.
-- `stage-targeting.ts` is the shared boundary that turns a raw hit element into
-  either an element target or a group target.
+- An initial click on a grouped member selects the group as a unit. Once the
+  group is selected, progressive targeting can select a member without entering
+  a persistent group-editing mode.
+- Group children sort only against their siblings. Editor, present/public
+  rendering, hit testing, Layers, and export use that same nested ordering.
+- A hidden group prunes its full subtree from visual hit testing and keyboard
+  reading order. The Layers panel intentionally uses management traversal so the
+  hidden group and descendants remain available for selection, rename,
+  visibility, lock, and enabled same-parent sibling-reorder controls.
+- A locked group remains in the visual tree, but the group node itself is
+  excluded from default hit candidates. Unlocked descendants remain candidates:
+  lock state is not inherited. Progressive group targeting still applies normal
+  group-entry selection rules, while mutation/edit checks use each resolved
+  node's own lock state.
+- Ungroup locates the selected group recursively, replaces it with its direct
+  children in the same parent list and sibling position, and preserves child
+  identity, geometry, style, source metadata, and nested group structure. Locked
+  and hidden groups are not ungroupable.
+- `stage-targeting.ts` is the shared boundary that turns a raw hit node into
+  either a direct node target or a parent-group target.
 - Group bounding boxes are visual chrome and should not become hit-test
   blockers.
 - Multi-selection transforms use the combined transform box, not the individual
@@ -337,22 +394,21 @@ Groups add another semantic layer over hit testing.
 - Modifier-click selection toggles membership in the selection set and should
   not start drag tracking.
 
-When group behavior and semantic hit-testing disagree, the group-editing mode is
-the authority: unentered groups resolve to group-level selection; entered groups
-resolve to member-level selection.
+When group behavior and semantic hit-testing disagree, progressive selection
+context is the authority: an unselected group resolves to group-level selection;
+an already selected group can resolve to member-level selection.
 
 ## Overlap Cases
 
-| Scenario                                           | Expected result                                                                                                              |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Large text frame over shape, pointer in text blank | Lower visible object can preselect/select.                                                                                   |
-| Large shape over text, pointer near text content   | Text can win by semantic score, even if geometrically covered by the shape.                                                  |
-| Pointer near shape edge                            | Shape wins.                                                                                                                  |
-| Small shape over text                              | Small shape can win.                                                                                                         |
-| Selected large shape over text                     | Hover and normal pointer-down can still target the text; context-menu/select-under flows may bias toward the selected shape. |
-| Multiple arbitrary fully covered objects           | Semantic scoring can improve the common case, but layer list/context menu remains the fallback.                              |
-| Line/connector over any element                    | Stroke-distance hit wins near the line; box interior alone should not.                                                       |
-| Locked object over editable object                 | Locked object is excluded by default, so lower editable objects can be targeted.                                             |
+| Scenario                                          | Current result                                                                                                                          |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Large text frame and shape both contain the point | Visual stage paths choose the later eligible visual-preorder node; semantic order can prefer actual text content over a large interior. |
+| Pointer near shape edge                           | The shape receives a high semantic score; visual order still decides current stage topmost targeting.                                   |
+| Small shape over text                             | The small shape receives a high semantic score; visual order still decides current stage topmost targeting.                             |
+| Selected large shape over text                    | Current visual stage paths disable selected-node bonus; selection does not reorder the visual hit stack.                                |
+| Multiple arbitrary fully covered objects          | Context-menu overlap selection and the Layers panel provide deterministic foreground-to-background access.                              |
+| Line/connector over any element                   | It becomes a candidate only near its stroke; visual order chooses among candidates, while semantic order gives the stroke a high score. |
+| Locked object over editable object                | The locked node itself is excluded by default, so an eligible node underneath can be targeted.                                          |
 
 Locked nodes can still be selected through layer/focus flows for inspection, but
 they are excluded from mutation helpers and do not enter edit modes through
@@ -375,34 +431,53 @@ coordinates:
 | `Ctrl/Cmd+G`          | Group selection; `Ctrl/Cmd+Shift+G` ungroups.                                                                                                        |
 | Delete / Backspace    | Delete selected nodes.                                                                                                                               |
 | `Ctrl/Cmd+D`          | Duplicate selected nodes and select the duplicates.                                                                                                  |
-| `Alt+]`               | Select-under cycle at the focused element center.                                                                                                    |
+| `Shift+F10` / Menu    | Open the focused node menu at its center. When overlap candidates exist, `Select next overlapping element` receives initial focus.                   |
 | `C` / `Shift+C`       | Keyboard connector flow when connector preconditions are met.                                                                                        |
 
 Inline text editing and table-cell editing own their editing keys while active;
 the stage must not intercept arrows, typing, or editing shortcuts from those
-surfaces. `Alt` retains two pointer meanings: `Alt`-click cycles select-under,
-and `Alt`-drag duplicates moved nodes while disabling snap during that drag.
+surfaces. `Alt`-click without movement keeps normal topmost visual selection.
+`Alt`-drag duplicates moved nodes; the duplication path uses its own move preview
+rather than the ordinary select-under command.
 
 ## Precision Fallbacks
 
-Semantic scoring should make common cases feel intelligent, but it is not a
-replacement for precise layer selection.
+Geometry-aware candidate collection and explicit visual ordering do not replace
+precise layer selection. Semantic-score order remains a separate helper mode.
 
-- The layer list remains the deterministic way to select any element regardless
-  of occlusion.
+- The Layers panel remains the deterministic way to select any user node
+  regardless of occlusion. It uses management traversal, includes hidden
+  subtrees, and presents user nodes in reversed canonical preorder. Its move
+  controls reorder only direct siblings within the selected node's parent.
 - The context menu exposes a `Select layer` section when multiple hit-test
-  candidates are under the pointer, sorted by score/z-index.
-- Select-under cycling reuses the same candidate list without changing default
-  hover behavior: `Alt`-click cycles at the pointer, and `Alt+]` cycles at the
-  focused element center.
+  candidates remain under the pointer, ordered foreground-to-background by
+  reverse visual preorder.
+- Select-under cycling uses that visual candidate list without changing hover
+  behavior. Keyboard users press `Shift+F10` or the Menu key, then invoke
+  `Select next overlapping element`; pointer users can open the same context
+  menu. `Alt`-click does not cycle because it shares the `Alt`-drag duplication
+  gesture.
+- Hidden subtrees and locked nodes are filtered before overlap commands are
+  offered. The command is absent unless at least two selectable candidates
+  remain.
+- Cycling advances from the current candidate and wraps to the top. Menu
+  invocation focuses the command; selection then moves focus to the chosen
+  element and announces its label through the stage polite live region.
+- `semanticCandidateStackRef` is populated after hit collection and cleared when
+  slide children, active slide, source document, selection, or context-menu
+  state changes, and when stage interactions become blocked. The open context
+  menu keeps its captured `candidateIds`; reopening it reruns hit testing against
+  current state.
 
 These fallbacks are especially important for fully covered arbitrary objects,
 nearly identical stacked shapes, locked/background layers, and dense groups.
 
 ## Performance And Caching
 
-Pointer movement can fire at high frequency. The stage already batches pointer
-processing with `requestAnimationFrame`; hit testing should preserve that model.
+Pointer movement can fire at high frequency. Current pointer-move hit testing is
+synchronous. The hover path skips hit testing during explicit stage gestures,
+while stage interactions are blocked, and over editable or editing-handle
+targets; hit testing uses the current slide nodes' existing layout frames.
 
 Implementation guidance:
 
@@ -410,28 +485,25 @@ Implementation guidance:
 - Keep grid/ruler/custom guide overlays as editor-only, pointer-transparent
   chrome; only normalized guide positions should enter the pure snapping
   pipeline.
-- Reuse fitted boxes computed for rendering/manipulation.
-- Avoid measuring DOM line boxes on every pointer move; cache measured text
-  geometry if precise text hit testing is added later.
+- Reuse layout frames already used for rendering and manipulation.
+- Keep text hit estimation DOM-free on pointer move. If measured text geometry is
+  added later, compute and cache it outside the pure hit-test path.
 - Consider a spatial index only if slides grow beyond typical element counts.
 - Keep hover preselection advisory so it never writes deck state or schedules
   autosave.
 
 ## Known Limitations And Future Work
 
-- Text hit boxes use DOM-measured line/content boxes when the cache is available
-  and fall back to heuristic boxes on cache miss. The cache is invalidated when
-  slide elements, fitted boxes, or stage dimensions change.
-- Visual and image hit testing is box-based. Alpha-aware image picking and
+- Text hit geometry is heuristic rather than DOM-measured.
+- Visual and image hit testing is frame-based. Alpha-aware image picking and
   visual-node hit testing could make sparse media behave more like Canva.
 - If future group handles diverge from the multi-selection handle strategy, they
   should stay on the named top-layer chrome scale in `stage-chrome.ts`.
-- Fully covered arbitrary objects cannot always be inferred correctly from a
-  single pointer point. If semantic scoring is ambiguous, right-click layer
-  selection or the layer list remains the precise fallback.
-- Select-under cycling uses the ordered candidate list returned by the hit-test;
-  it remains a precision fallback rather than a replacement for semantic
-  scoring.
+- A single pointer point cannot infer intent among fully covered arbitrary
+  objects. Current visual order is deterministic; context-menu layer selection
+  or the Layers panel remains the precise fallback.
+- Select-under cycling uses the visual-order candidate list returned by the
+  hit-test; semantic-order scoring remains a separate helper mode.
 
 ## Invariants
 
@@ -441,19 +513,26 @@ Implementation guidance:
 4. Hit testing is pure and covered by DOM-free tests.
 5. Visual frames render above slide elements but never intercept pointer events.
 6. Connector/line hit testing is distance based, not bounding-box based.
-7. Locked nodes can be selected for inspection but must not be mutated or enter
-   edit modes through pointer, transform, or keyboard shortcuts.
+7. Locked nodes remain available through management/focus flows, but default hit
+   targeting, transforms, and edit entry exclude them; explicit unlock controls
+   remain available.
 8. `SlideCanvas` remains read-only; all interaction logic lives in the stage.
 
 ## Primary Tests
 
 - [`src/components/presentation/selection-model.test.ts`](../../src/components/presentation/selection-model.test.ts)
 - [`src/components/presentation/stage-pointer-interactions.test.ts`](../../src/components/presentation/stage-pointer-interactions.test.ts)
+- [`src/components/presentation/stage-context-menu.test.ts`](../../src/components/presentation/stage-context-menu.test.ts)
+- [`src/components/presentation/use-semantic-candidate-stack-reset.test.ts`](../../src/components/presentation/use-semantic-candidate-stack-reset.test.ts)
+- [`src/components/presentation/selection-traversal.test.ts`](../../src/components/presentation/selection-traversal.test.ts)
+- [`src/components/presentation/inspector/layers-panel.test.ts`](../../src/components/presentation/inspector/layers-panel.test.ts)
 - [`src/components/presentation/slide-editor-node-drag-threshold.test.ts`](../../src/components/presentation/slide-editor-node-drag-threshold.test.ts)
 - [`src/components/presentation/slide-editor-inline-text-editor.failures.test.ts`](../../src/components/presentation/slide-editor-inline-text-editor.failures.test.ts)
 - [`src/components/presentation/slide-editor-stage-selection.failures.test.ts`](../../src/components/presentation/slide-editor-stage-selection.failures.test.ts)
 - [`src/components/presentation/multi-selection-transform.test.ts`](../../src/components/presentation/multi-selection-transform.test.ts)
 - [`src/lib/presentation/selection-geometry.test.ts`](../../src/lib/presentation/selection-geometry.test.ts)
+- [`src/lib/presentation/stage-hit-test.test.ts`](../../src/lib/presentation/stage-hit-test.test.ts)
+- [`src/lib/presentation/render-tree.test.ts`](../../src/lib/presentation/render-tree.test.ts)
 - [`src/lib/presentation/stage-chrome.test.ts`](../../src/lib/presentation/stage-chrome.test.ts)
 - [`src/lib/presentation/stage-fit.test.ts`](../../src/lib/presentation/stage-fit.test.ts)
 - [`src/lib/presentation/stage-guides.test.ts`](../../src/lib/presentation/stage-guides.test.ts)

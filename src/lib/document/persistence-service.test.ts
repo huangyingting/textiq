@@ -25,6 +25,7 @@ import {
   rebuildMirror,
   reconcileDeckAfterMirror,
   revalidateSharePaths,
+  RestoredDeckValidationError,
   restoreVersion,
   setDocumentSharing,
   sanitizeRestoredDeck,
@@ -520,7 +521,6 @@ const VALID_RESTORE_DECK = {
           type: "group",
           component: "custom",
           layout: { frame: { x: 8, y: 40, w: 84, h: 50 }, zIndex: 3 },
-          style: { ref: "surface.card" },
           children: [
             {
               id: "group-visual-drop",
@@ -528,6 +528,29 @@ const VALID_RESTORE_DECK = {
               layout: { frame: { x: 0, y: 0, w: 30, h: 30 }, zIndex: 1 },
               style: { ref: "chart.primary" },
               content: { visualId: "vis-group-drop" },
+            },
+            {
+              id: "nested-group",
+              type: "group",
+              component: "custom",
+              layout: {
+                frame: { x: 68, y: 0, w: 30, h: 30 },
+                zIndex: 3,
+              },
+              children: [
+                {
+                  id: "nested-text",
+                  type: "text",
+                  layout: {
+                    frame: { x: 0, y: 0, w: 30, h: 10 },
+                    zIndex: 1,
+                  },
+                  style: { ref: "text.body" },
+                  content: {
+                    paragraphs: [{ id: "nested-p1", text: "Nested" }],
+                  },
+                },
+              ],
             },
             {
               id: "group-visual-asset",
@@ -703,13 +726,46 @@ describe("sanitizeRestoredDeck", () => {
       undefined,
       "stale visualId should be stripped from asset-backed visual nodes",
     );
+    const nestedGroup = group.children.find(
+      (node) => node.id === "nested-group",
+    );
+    assert.ok(nestedGroup, "nested styleless group should remain");
+    assert.equal(nestedGroup.type, "group");
   });
 
-  test("falls back to raw value when deckJson cannot be parsed", () => {
+  test("rejects malformed unversioned deckJson", () => {
     const malformed = prismaJson({ not: "a valid deck" });
-    const result = sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE);
-    // Falls back to the raw value since safeParseDeck fails.
-    assert.deepEqual(result, malformed);
+    assert.throws(
+      () => sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE),
+      (error: unknown) =>
+        error instanceof RestoredDeckValidationError &&
+        error.diagnosticCode === "invalid_version" &&
+        error.issueCount === 1,
+    );
+  });
+
+  test("rejects a current-version styled group instead of stripping it", () => {
+    const styledGroupDeck = structuredClone(VALID_RESTORE_DECK) as Record<
+      string,
+      unknown
+    >;
+    const slides = styledGroupDeck.slides as Array<{
+      children: Array<Record<string, unknown>>;
+    }>;
+    slides[0].children[2].style = { ref: "surface.card" };
+
+    assert.throws(
+      () =>
+        sanitizeRestoredDeck(
+          prismaJson(styledGroupDeck),
+          lexicalStateWithVisual("vis-keep"),
+        ),
+      (error: unknown) =>
+        error instanceof RestoredDeckValidationError &&
+        error.failure.code === "invalid_deck" &&
+        error.message === "Restored presentation deck validation failed" &&
+        error.issueCount > 0,
+    );
   });
 });
 
@@ -739,20 +795,29 @@ async function captureErrorLines(
 }
 
 describe("schema parse-failure telemetry", () => {
-  test("sanitizeRestoredDeck emits a deck-parse-failed diagnostic and does not throw", async () => {
-    const malformed = prismaJson({ not: "a valid deck" });
-    let result: unknown;
-    const records = await captureErrorLines(() => {
-      result = sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE);
+  test("sanitizeRestoredDeck emits a deck-parse-failed diagnostic before rejecting", async () => {
+    const privateText =
+      "PRIVATE RESTORE PROPERTY https://private.example/customer";
+    const malformed = prismaJson({
+      schemaVersion: 7,
+      [privateText]: privateText,
     });
-    // Returns the raw value (flow not interrupted).
-    assert.deepEqual(result, malformed);
+    const records = await captureErrorLines(() => {
+      assert.throws(
+        () => sanitizeRestoredDeck(malformed, EMPTY_LEXICAL_STATE),
+        RestoredDeckValidationError,
+      );
+    });
     const diag = records.find((r) => r.category === "deck-parse-failed");
     assert.ok(diag, "expected a deck-parse-failed diagnostic");
     assert.equal(diag?.scope, "schema.persisted");
-    // No document content leaked.
+    assert.equal(diag?.message, "Persisted schema validation failed");
+    assert.equal(diag?.area, "DocumentVersion.deckJson");
+    assert.equal(diag?.code, "unsupported_property");
+    assert.equal(diag?.schemaVersion, 7);
     const serialized = JSON.stringify(records);
-    assert.ok(!serialized.includes("a valid deck"));
+    assert.ok(!serialized.includes(privateText));
+    assert.ok(!String(diag?.stack).includes(privateText));
   });
 
   test("mirrorVisualNodesInTx emits content-visual-parse-failed for an invalid visual and keeps going", async () => {
@@ -783,8 +848,11 @@ describe("schema parse-failure telemetry", () => {
       (r) => r.category === "content-visual-parse-failed",
     );
     assert.ok(diag, "expected a content-visual-parse-failed diagnostic");
-    assert.equal(diag?.documentId, "doc-1");
-    assert.equal(diag?.anchorBlockId, "vis-bad");
+    assert.equal(diag?.area, "Document.contentJson:visual");
+    assert.equal(diag?.code, "schema_validation_failed");
+    assert.equal(diag?.issueCount, 1);
+    assert.equal(diag?.documentId, undefined);
+    assert.equal(diag?.anchorBlockId, undefined);
   });
 });
 
@@ -793,11 +861,24 @@ describe("schema parse-failure telemetry", () => {
 // ---------------------------------------------------------------------------
 
 describe("deck persistence operations", () => {
+  test("persistDeck rejects an omitted runtime token before validation or storage", async () => {
+    const result = await Reflect.apply(persistDeck, undefined, [
+      "doc-missing-token",
+      VALID_DECK,
+    ]);
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "A deck revision token is required.",
+      failure: { code: "invalid_revision_token", retryable: false },
+    });
+  });
+
   test("persistDeck validates input before writing", async () => {
     const result = await persistDeck("doc-invalid", { not: "a deck" }, null);
 
     assert.equal(result.ok, false);
-    assert.match(result.error, /^Invalid deck:/);
+    assert.equal(result.error, "Invalid deck.");
   });
 
   test("persistDeck writes valid decks and snapshots on success", async (t) => {
@@ -1224,6 +1305,10 @@ describe("deck persistence operations", () => {
 
   test("persistDeck rolls back the deck write and returns a structured failure when comment reconciliation aborts", async (t) => {
     const originalDeck = { ...VALID_DECK, slides: [] };
+    const privateText =
+      "PRIVATE RECONCILIATION PARAGRAPH token=sk-persist private@example.com https://persist.example unknownPersistKey";
+    const providerError = new Error(privateText);
+    providerError.stack = `Error: ${privateText}\n at privateReconciliationProvider`;
     let committedDeck: unknown = originalDeck;
     let snapshotAttempts = 0;
     const tx = prismaTransaction<Prisma.TransactionClient>({
@@ -1235,7 +1320,7 @@ describe("deck persistence operations", () => {
       },
       comment: {
         findMany: async () => {
-          throw new Error("comment reconciliation failed");
+          throw providerError;
         },
       },
     });
@@ -1253,7 +1338,10 @@ describe("deck persistence operations", () => {
       }
     });
 
-    const result = await persistDeck("doc-reconcile-failure", VALID_DECK, null);
+    let result: Awaited<ReturnType<typeof persistDeck>> | undefined;
+    const records = await captureErrorLines(async () => {
+      result = await persistDeck("doc-reconcile-failure", VALID_DECK, null);
+    });
 
     assert.deepEqual(result, {
       ok: false,
@@ -1262,6 +1350,18 @@ describe("deck persistence operations", () => {
     });
     assert.deepEqual(committedDeck, originalDeck);
     assert.equal(snapshotAttempts, 0);
+    const log = records.find((record) => record.scope === "deck.persist");
+    assert.ok(log);
+    assert.equal(log.message, "Deck persistence transaction failed");
+    assert.equal(log.code, "storage_unavailable");
+    assert.equal(log.operation, "transaction");
+    assert.equal(log.outcome, "failed");
+    const serialized = JSON.stringify({ records, result });
+    assert.ok(!serialized.includes(privateText));
+    assert.ok(!serialized.includes("sk-persist"));
+    assert.ok(!serialized.includes("private@example.com"));
+    assert.ok(!serialized.includes("https://persist.example"));
+    assert.ok(!serialized.includes("unknownPersistKey"));
   });
 
   test("persistence-service closes patch and command save exports", () => {
@@ -1661,6 +1761,49 @@ describe("document snapshot and restore operations", () => {
       }
       return { shareId: null, slug: null, isShared: false };
     });
+
+    test("restoreVersion rejects an invalid current deck before snapshotting or writing", async () => {
+      let snapshotCalls = 0;
+      let transactionCalls = 0;
+      const invalidDeck = structuredClone(VALID_RESTORE_DECK) as Record<
+        string,
+        unknown
+      >;
+      const slides = invalidDeck.slides as Array<{
+        children: Array<Record<string, unknown>>;
+      }>;
+      slides[0].children[2].localStyle = {
+        fill: { type: "solid", color: "#ffffff" },
+      };
+
+      await assert.rejects(
+        () =>
+          restoreVersion("doc-restore", "version-invalid", "user-editor", {
+            db: {
+              documentVersion: {
+                findUniqueOrThrow: async () => ({
+                  documentId: "doc-restore",
+                  contentJson: EMPTY_LEXICAL_STATE,
+                  deckJson: invalidDeck,
+                  createdAt: new Date("2026-01-01T00:00:00Z"),
+                }),
+              },
+              $transaction: async () => {
+                transactionCalls += 1;
+                throw new Error("transaction must not run");
+              },
+            } as never,
+            snapshot: async () => {
+              snapshotCalls += 1;
+            },
+          }),
+        (error: unknown) =>
+          error instanceof RestoredDeckValidationError &&
+          error.failure.code === "invalid_deck",
+      );
+      assert.equal(snapshotCalls, 0);
+      assert.equal(transactionCalls, 0);
+    });
     const tx = prismaTransaction<Prisma.TransactionClient>({
       ...makeStubTx(),
       document: {
@@ -1898,6 +2041,7 @@ describe("visual persistence exported flows", () => {
   test("reconcileDeckAfterMirror strips deck visuals without live rows", async (t) => {
     stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
       deckJson: VALID_LEGACY_DECK,
+      deckRevisionToken: "deck-before-reconcile",
     }));
     stubPrismaMethod(t, prisma.visual, "findMany", async () => [
       { anchorBlockId: "vis-keep" },
@@ -1912,17 +2056,52 @@ describe("visual persistence exported flows", () => {
     await reconcileDeckAfterMirror("doc-reconcile");
 
     assert.equal(updateMany.calls.length, 1);
-    const deckJson = firstCallArg<PrismaStubArgs>(updateMany).data
-      ?.deckJson as typeof VALID_LEGACY_DECK;
+    const updateArgs = firstCallArg<PrismaStubArgs>(updateMany);
+    assert.deepEqual(updateArgs.where, {
+      id: "doc-reconcile",
+      deckRevisionToken: "deck-before-reconcile",
+    });
+    assert.notEqual(
+      updateArgs.data?.deckRevisionToken,
+      "deck-before-reconcile",
+    );
+    assert.equal(typeof updateArgs.data?.deckRevisionToken, "string");
+    const deckJson = updateArgs.data?.deckJson as typeof VALID_LEGACY_DECK;
     const visualIds = deckJson.slides[0].elements
       .filter(isLegacyVisualElement)
       .map((element) => element.content?.visualId);
     assert.deepEqual(visualIds, ["vis-keep"]);
   });
 
-  test("reconcileDeckAfterMirror logs and swallows invalid stored decks", async (t) => {
+  test("reconcileDeckAfterMirror skips a stale reconciliation CAS write", async (t) => {
+    stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
+      deckJson: VALID_LEGACY_DECK,
+      deckRevisionToken: null,
+    }));
+    stubPrismaMethod(t, prisma.visual, "findMany", async () => [
+      { anchorBlockId: "vis-keep" },
+    ]);
+    const updateMany = stubPrismaMethod(
+      t,
+      prisma.document,
+      "updateMany",
+      async () => ({ count: 0 }),
+    );
+
+    await assert.doesNotReject(() =>
+      reconcileDeckAfterMirror("doc-reconcile-conflict"),
+    );
+    assert.equal(updateMany.calls.length, 1);
+    assert.deepEqual(firstCallArg<PrismaStubArgs>(updateMany).where, {
+      id: "doc-reconcile-conflict",
+      deckRevisionToken: null,
+    });
+  });
+
+  test("reconcileDeckAfterMirror reports and skips invalid stored decks", async (t) => {
     stubPrismaMethod(t, prisma.document, "findUnique", async () => ({
       deckJson: { not: "a deck" },
+      deckRevisionToken: "invalid-deck-token",
     }));
     const updateMany = stubPrismaMethod(
       t,
@@ -1935,5 +2114,16 @@ describe("visual persistence exported flows", () => {
       reconcileDeckAfterMirror("doc-invalid-deck"),
     );
     assert.equal(updateMany.calls.length, 0);
+  });
+
+  test("reconcileDeckAfterMirror propagates storage failures", async (t) => {
+    stubPrismaMethod(t, prisma.document, "findUnique", async () => {
+      throw new Error("storage read failed");
+    });
+
+    await assert.rejects(
+      () => reconcileDeckAfterMirror("doc-reconcile-storage-failure"),
+      /storage read failed/,
+    );
   });
 });

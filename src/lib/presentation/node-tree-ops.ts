@@ -1,4 +1,8 @@
 import type { GroupNode, LayoutBox, SlideChildNode } from "./schema";
+import {
+  flattenNodesInRenderOrder,
+  orderSiblingsByVisualOrder,
+} from "./render-order";
 
 export type NodeTreeEntry = {
   node: SlideChildNode;
@@ -99,10 +103,6 @@ function flattenEntries(
 function clampIndex(index: number | undefined, length: number): number {
   if (index === undefined) return length;
   return Math.max(0, Math.min(length, index));
-}
-
-function nodeZIndex(node: SlideChildNode): number {
-  return node.layout?.zIndex ?? 0;
 }
 
 function findEntryInSiblings(
@@ -478,18 +478,21 @@ export function nodesInLayerOrder(
   const order = options.order ?? "back-to-front";
   const includeHidden = options.includeHidden ?? true;
   const requireLayout = options.requireLayout ?? true;
-  return flattenNodeTreeEntries(nodes, {
-    includeGroups: options.includeGroups ?? true,
-  })
-    .filter((entry) => includeHidden || entry.node.hidden !== true)
-    .filter((entry) => !requireLayout || entry.node.layout !== undefined)
-    .map((entry, treeIndex) => ({ entry, treeIndex }))
-    .sort((left, right) => {
-      const zDelta = nodeZIndex(left.entry.node) - nodeZIndex(right.entry.node);
-      const orderedDelta = order === "back-to-front" ? zDelta : -zDelta;
-      return orderedDelta || left.treeIndex - right.treeIndex;
-    })
-    .map(({ entry }) => entry.node);
+  const traversalOptions = includeHidden
+    ? ({ mode: "management" } as const)
+    : ({
+        mode: "visual",
+        isHidden: (node: SlideChildNode) => node.hidden === true,
+      } as const);
+  const ordered = flattenNodesInRenderOrder(
+    nodes,
+    (node) => (node.type === "group" ? node.children : undefined),
+    traversalOptions,
+  ).filter((node) => (options.includeGroups ?? true) || node.type !== "group");
+  const filtered = ordered.filter(
+    (node) => !requireLayout || node.layout !== undefined,
+  );
+  return order === "back-to-front" ? filtered : [...filtered].reverse();
 }
 
 export function buildLayerReorderPatches(
@@ -498,10 +501,14 @@ export function buildLayerReorderPatches(
   targetIndex: number,
   options: NodeTreeFlattenOptions = {},
 ): Map<string, Partial<LayoutBox>> {
-  const layers = nodesInLayerOrder(nodes, {
-    includeGroups: options.includeGroups ?? true,
-    order: "front-to-back",
-  });
+  const entry = findNodeEntryById(nodes, nodeId);
+  if (!entry) return new Map();
+  const siblings = entry.parent?.children ?? nodes;
+  const layers = orderSiblingsByVisualOrder(siblings).filter(
+    (node) =>
+      node.layout !== undefined &&
+      ((options.includeGroups ?? true) || node.type !== "group"),
+  );
   const moving = layers.find((node) => node.id === nodeId);
   if (!moving) return new Map();
 
@@ -510,7 +517,7 @@ export function buildLayerReorderPatches(
 
   const patches = new Map<string, Partial<LayoutBox>>();
   reordered.forEach((node, index) => {
-    patches.set(node.id, { zIndex: reordered.length - index });
+    patches.set(node.id, { zIndex: index });
   });
   return patches;
 }
@@ -677,37 +684,38 @@ export function ungroupNodeById(
   nodes: readonly SlideChildNode[],
   groupId: string,
 ): UngroupNodeResult {
-  let group: GroupNode | null = null;
-  let ungroupedNodes: SlideChildNode[] = [];
-  let changed = false;
-
-  function visit(candidates: readonly SlideChildNode[]): SlideChildNode[] {
-    const nextNodes: SlideChildNode[] = [];
-    for (const node of candidates) {
-      if (node.id === groupId && node.type === "group") {
-        group = node;
-        ungroupedNodes = node.children;
-        changed = true;
-        nextNodes.push(...node.children);
-        continue;
-      }
-      if (node.type === "group") {
-        const children = visit(node.children);
-        nextNodes.push(
-          children === node.children ? node : { ...node, children },
-        );
-        continue;
-      }
-      nextNodes.push(node);
+  function visit(candidates: readonly SlideChildNode[]): {
+    nodes: SlideChildNode[];
+    group: GroupNode | null;
+  } {
+    const groupIndex = candidates.findIndex(
+      (node) => node.id === groupId && node.type === "group",
+    );
+    if (groupIndex !== -1) {
+      const group = candidates[groupIndex] as GroupNode;
+      const nextNodes = [...candidates];
+      nextNodes.splice(groupIndex, 1, ...group.children);
+      return { nodes: nextNodes, group };
     }
-    return changed ? nextNodes : [...candidates];
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const node = candidates[index];
+      if (node?.type !== "group") continue;
+      const nested = visit(node.children);
+      if (!nested.group) continue;
+      const nextNodes = [...candidates];
+      nextNodes[index] = { ...node, children: nested.nodes };
+      return { nodes: nextNodes, group: nested.group };
+    }
+
+    return { nodes: [...candidates], group: null };
   }
 
-  const nextNodes = visit(nodes);
+  const result = visit(nodes);
   return {
-    nodes: nextNodes,
-    changed,
-    group,
-    ungroupedNodes,
+    nodes: result.nodes,
+    changed: result.group !== null,
+    group: result.group,
+    ungroupedNodes: result.group?.children ?? [],
   };
 }

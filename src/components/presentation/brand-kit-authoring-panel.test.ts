@@ -112,6 +112,19 @@ test("BrandKitAuthoringPanel updates editable fields and saves valid drafts", as
       > extends { ok: true; package: infer ThemePackage }
         ? ThemePackage
         : never,
+      catalogEntry: {
+        package: {} as Awaited<
+          ReturnType<
+            NonNullable<
+              Parameters<typeof BrandKitAuthoringPanel>[0]["saveBrandKitDraft"]
+            >
+          >
+        > extends { ok: true; package: infer ThemePackage }
+          ? ThemePackage
+          : never,
+        source: "custom" as const,
+        createdAt: "2026-02-03T04:05:06.000Z",
+      },
       diagnostics: [],
       draft,
     };
@@ -199,7 +212,44 @@ test("BrandKitAuthoringPanel updates editable fields and saves valid drafts", as
   await onClick();
   tree = render();
 
-  assert.match(renderToStaticMarkup(tree), /Saved pkg-executive-kit @ 2.0.0/);
+  const savedHtml = renderToStaticMarkup(tree);
+  assert.match(savedHtml, /Saved pkg-executive-kit @ 2.0.0/);
+  assert.match(savedHtml, /role="status"/);
+  assert.match(savedHtml, /aria-live="polite"/);
   assert.deepEqual(saved, ["Executive Kit", "pkg-executive-kit"]);
   assert.equal(closeCalls, 0);
+});
+
+test("BrandKitAuthoringPanel surfaces immutable version conflicts", async () => {
+  const harness = createHookRenderer();
+  const render = () =>
+    harness.run(() =>
+      BrandKitAuthoringPanel({
+        ownerId: "user-1",
+        saveBrandKitDraft: async () => ({
+          ok: false,
+          diagnostics: [
+            {
+              severity: "error",
+              code: "package-version-exists",
+              message:
+                "This theme package version already exists with different content. Increment Version before saving.",
+              path: "version",
+            },
+          ],
+        }),
+        onClose: () => undefined,
+      }),
+    );
+
+  let tree = render();
+  const onClick = firstElement(
+    tree,
+    (element) => element.props.children === "Save brand kit",
+  ).props.onClick as () => Promise<void>;
+  await onClick();
+  tree = render();
+
+  assert.match(renderToStaticMarkup(tree), /Increment Version before saving/);
+  harness.cleanup();
 });

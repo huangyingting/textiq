@@ -173,9 +173,6 @@ describe("presentation runtime barrel coverage", () => {
       slideId,
       ["node-text", "node-shape"],
       "group-1",
-      {
-        ref: "surface.card",
-      },
     );
     assert.equal(
       findNode(

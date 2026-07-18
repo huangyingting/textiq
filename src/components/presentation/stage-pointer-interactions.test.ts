@@ -28,6 +28,13 @@ describe("stage pointer interactions", () => {
       nextSemanticSelectUnderNodeId(["top"], new Set(["other"])),
       "top",
     );
+    assert.equal(
+      nextSemanticSelectUnderNodeId(
+        ["new-top", "new-bottom"],
+        new Set(["old-selection"]),
+      ),
+      "new-top",
+    );
   });
 
   test("converts client coordinates into clamped canvas percentages", () => {

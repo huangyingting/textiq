@@ -29,7 +29,6 @@ const TEXT_KICKER_STYLE = { ref: "text.kicker" as const };
 const TEXT_QUOTE_STYLE = { ref: "text.quote" as const };
 const TEXT_METRIC_STYLE = { ref: "text.metric" as const };
 const TEXT_CAPTION_STYLE = { ref: "text.caption" as const };
-const SURFACE_CARD_STYLE = { ref: "surface.card" as const };
 const SURFACE_CALLOUT_STYLE = { ref: "surface.callout" as const };
 const SURFACE_TABLE_STYLE = { ref: "surface.table" as const };
 const MEDIA_HERO_STYLE = { ref: "media.hero" as const };
@@ -401,7 +400,6 @@ const METRIC_ROW_TEMPLATE: SemanticTemplateV1 = {
             component: "metricCard",
             role: "card",
             slot: "metrics",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 30, w: 84, h: 52 }, zIndex: 2 },
             children: [
               {
@@ -749,7 +747,6 @@ const AGENDA_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 30, w: 84, h: 60 }, zIndex: 3 },
             children: [
               {
@@ -789,7 +786,6 @@ const AGENDA_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 20, w: 84, h: 72 }, zIndex: 2 },
             children: [
               {
@@ -1353,7 +1349,6 @@ const MATRIX_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "cards",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 20, w: 84, h: 72 }, zIndex: 2 },
             children: [
               {
@@ -1452,7 +1447,6 @@ const FRAMEWORK_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "cards",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 28, w: 84, h: 58 }, zIndex: 3 },
             children: [
               {
@@ -1499,7 +1493,6 @@ const FRAMEWORK_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "cards",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 18, w: 84, h: 74 }, zIndex: 2 },
             children: [
               {
@@ -1573,7 +1566,6 @@ const PROCESS_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 26, w: 84, h: 64 }, zIndex: 2 },
             children: [
               {
@@ -1613,7 +1605,6 @@ const PROCESS_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 18, w: 84, h: 74 }, zIndex: 2 },
             children: [
               {
@@ -1687,7 +1678,6 @@ const TIMELINE_TEMPLATE: SemanticTemplateV1 = {
             component: "timeline",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 26, w: 84, h: 64 }, zIndex: 2 },
             children: [
               {
@@ -1733,7 +1723,6 @@ const TIMELINE_TEMPLATE: SemanticTemplateV1 = {
             component: "timeline",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 18, w: 84, h: 74 }, zIndex: 2 },
             children: [
               {
@@ -1826,7 +1815,6 @@ const ROADMAP_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 28, w: 84, h: 62 }, zIndex: 3 },
             children: [
               {
@@ -1866,7 +1854,6 @@ const ROADMAP_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "steps",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 18, w: 84, h: 74 }, zIndex: 2 },
             children: [
               {
@@ -2247,7 +2234,6 @@ const PRICING_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "cards",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 28, w: 84, h: 62 }, zIndex: 3 },
             children: [
               {
@@ -2346,7 +2332,6 @@ const TEAM_TEMPLATE: SemanticTemplateV1 = {
             component: "cardGrid",
             role: "card",
             slot: "cards",
-            style: SURFACE_CARD_STYLE,
             layout: { frame: { x: 8, y: 26, w: 84, h: 64 }, zIndex: 3 },
             children: [
               {

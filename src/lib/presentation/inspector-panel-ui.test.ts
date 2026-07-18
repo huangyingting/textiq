@@ -208,19 +208,16 @@ describe("availablePanels — table node", () => {
 // ---------------------------------------------------------------------------
 
 describe("availablePanels — group node", () => {
-  test("includes arrange, effects, layers (no node-type-specific panels)", () => {
+  test("includes only arrange and layers because group paint is nonvisual", () => {
     const groupNode: SlideChildNode = {
       id: "grp-001",
       type: "group",
       component: "custom",
       layout: { frame: { x: 5, y: 5, w: 50, h: 50 }, zIndex: 10 },
-      style: { ref: "surface.card" },
       children: [],
     };
     const ids = panelIds(groupNode);
-    assert.ok(ids.includes("arrange"), "should include arrange");
-    assert.ok(ids.includes("effects"), "should include effects");
-    assert.ok(ids.includes("layers"), "should include layers");
+    assert.deepEqual(ids, ["arrange", "layers"]);
     assert.equal(ids.includes("text"), false);
     assert.equal(ids.includes("shape"), false);
   });
@@ -340,7 +337,6 @@ describe("defaultPanelForNode", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 5, y: 5, w: 50, h: 50 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       children: [],
     };
     assert.equal(defaultPanelForNode(groupNode, false), "arrange");

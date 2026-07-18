@@ -89,8 +89,17 @@ test("test subsystem map classifies files by owning subsystem", () => {
       "presentation",
     ),
   );
+  assert.ok(
+    classifyTestFile(
+      "e2e/presentation/overlap-selection-regression.spec.ts",
+    ).includes("presentation"),
+  );
   assert.deepEqual(
     classifyTestFile("e2e/ui-matrix/document-editor-ui.spec.ts"),
+    ["editor"],
+  );
+  assert.deepEqual(
+    classifyTestFile("e2e/editor/document-table-autosave.spec.ts"),
     ["editor"],
   );
   assert.ok(
@@ -193,6 +202,23 @@ test("test subsystem plan keeps e2e specs opt-in", () => {
     command: "npx",
     args: ["playwright", "test", "e2e/presentation/present-export.spec.ts"],
   });
+});
+
+test("test subsystem plan routes the document table autosave regression to editor e2e", () => {
+  const filePath = "e2e/editor/document-table-autosave.spec.ts";
+  const plan = buildTestPlan({
+    subsystems: ["editor"],
+    testFiles: [filePath],
+    includeE2e: true,
+  });
+
+  assert.deepEqual(plan.commands, [
+    {
+      label: "e2e tests",
+      command: "npx",
+      args: ["playwright", "test", filePath],
+    },
+  ]);
 });
 
 test("test subsystem coverage check flags unmapped test files", () => {

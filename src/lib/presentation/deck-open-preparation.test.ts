@@ -86,6 +86,7 @@ describe("prepareDeckForOpen", () => {
           ok: true,
           deckJson: null,
           revisionToken: "server-rev",
+          themeDiagnostics: [],
         }),
       },
       fallbackDeck: () => fallbackDeck,
@@ -108,6 +109,7 @@ describe("prepareDeckForOpen", () => {
           ok: true,
           deckJson: null,
           revisionToken: "server-rev",
+          themeDiagnostics: [],
         }),
       },
       fallbackDeck: () => ({

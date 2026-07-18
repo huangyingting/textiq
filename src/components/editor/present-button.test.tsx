@@ -107,6 +107,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: null,
             revisionToken: null,
+            themeDiagnostics: [],
           })),
         }),
       );
@@ -134,6 +135,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: null,
             revisionToken: null,
+            themeDiagnostics: [],
           })),
         }),
       );
@@ -172,7 +174,12 @@ describe("PresentButton", () => {
       assert.equal(findButton(tree).props.disabled, true);
 
       await act(async () => {
-        deferred.resolve({ ok: true, deckJson: null, revisionToken: null });
+        deferred.resolve({
+          ok: true,
+          deckJson: null,
+          revisionToken: null,
+          themeDiagnostics: [],
+        });
         await clickResult;
         await waitForAsyncDrain();
       });
@@ -200,6 +207,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: null,
             revisionToken: "rev-0",
+            themeDiagnostics: [],
           })),
         }),
       );
@@ -214,6 +222,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: null,
             revisionToken: "rev-0",
+            themeDiagnostics: [],
           })),
         }),
       );
@@ -246,6 +255,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: deck,
             revisionToken: "rev-9",
+            themeDiagnostics: [],
           })),
           getVisuals: () => visuals as never,
         }),
@@ -260,6 +270,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: deck,
             revisionToken: "rev-9",
+            themeDiagnostics: [],
           })),
           getVisuals: () => visuals as never,
         }),
@@ -281,6 +292,7 @@ describe("PresentButton", () => {
             ok: true,
             deckJson: deck,
             revisionToken: "rev-9",
+            themeDiagnostics: [],
           })),
           getVisuals: () => visuals as never,
         }),

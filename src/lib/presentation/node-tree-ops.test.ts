@@ -147,12 +147,16 @@ test("collects node ids, descendants, expanded selections, and top-level selecti
   );
 });
 
-test("orders layer traversal by z-index while preserving tree order ties", () => {
+test("orders layers within stacking contexts and normalizes only same-parent siblings", () => {
   const nodes = [
     textNode("back", 1),
     groupNode(
       "group",
-      [textNode("child-front", 5), textNode("child-mid", 3)],
+      [
+        textNode("child-front", 5),
+        { ...textNode("layoutless-child", 4), layout: undefined },
+        textNode("child-mid", 3),
+      ],
       4,
     ),
     shapeNode("tie", 4),
@@ -160,28 +164,28 @@ test("orders layer traversal by z-index while preserving tree order ties", () =>
 
   assert.deepEqual(
     nodesInLayerOrder(nodes, { order: "back-to-front" }).map((node) => node.id),
-    ["back", "child-mid", "group", "tie", "child-front"],
+    ["back", "group", "child-mid", "child-front", "tie"],
   );
   assert.deepEqual(
     nodesInLayerOrder(nodes, {
       includeGroups: false,
       order: "front-to-back",
     }).map((node) => node.id),
-    ["child-front", "tie", "child-mid", "back"],
+    ["tie", "child-front", "child-mid", "back"],
   );
 
-  const patches = buildLayerReorderPatches(nodes, "back", 0, {
-    includeGroups: false,
-  });
+  const patches = buildLayerReorderPatches(nodes, "child-mid", 1);
   assert.deepEqual(
     [...patches.entries()].map(([id, patch]) => [id, patch.zIndex]),
     [
-      ["back", 4],
-      ["child-front", 3],
-      ["tie", 2],
+      ["child-front", 0],
       ["child-mid", 1],
     ],
   );
+  assert.equal(patches.has("back"), false);
+  assert.equal(patches.has("group"), false);
+  assert.equal(patches.has("tie"), false);
+  assert.equal(patches.has("layoutless-child"), false);
 });
 
 test("inserts nodes by parent path and relative placement", () => {
@@ -330,12 +334,17 @@ test("groups selected nodes at their common ancestor without flat group ids", ()
   ]);
 });
 
-test("ungroups a nested group in place", () => {
+test("ungroups a deeply nested group in its exact sibling position", () => {
   const nodes = [
     textNode("root"),
     groupNode("outer", [
-      groupNode("grouped", [textNode("a"), textNode("b")]),
-      textNode("c"),
+      textNode("before"),
+      groupNode("middle", [
+        textNode("middle-before"),
+        groupNode("grouped", [textNode("a"), textNode("b")]),
+        textNode("middle-after"),
+      ]),
+      textNode("after"),
     ]),
   ];
 
@@ -350,9 +359,13 @@ test("ungroups a nested group in place", () => {
   assert.deepEqual(collectNodeTreeIds(result.nodes), [
     "root",
     "outer",
+    "before",
+    "middle",
+    "middle-before",
     "a",
     "b",
-    "c",
+    "middle-after",
+    "after",
   ]);
 });
 

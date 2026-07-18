@@ -1088,17 +1088,21 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
   dragging = false,
 }: SlideNodeRendererProps): JSX.Element | null {
   const { layout, style, content } = node;
+  const paintsVisualContent = content.type !== "group";
   const shouldIncludeShapePaint =
-    content.type !== "shape" || !shapeUsesSvgGeometry(content.content.shape);
+    paintsVisualContent &&
+    (content.type !== "shape" || !shapeUsesSvgGeometry(content.content.shape));
 
   const isLocked = node.locked === true;
 
   const containerStyle: React.CSSProperties = {
     ...frameToCss(layout.frame),
     ...nodeLayoutTransformToCss(layout),
-    ...styleObjectToContainerCss(style, assetResolver, {
-      includeShapePaint: shouldIncludeShapePaint,
-    }),
+    ...(paintsVisualContent
+      ? styleObjectToContainerCss(style, assetResolver, {
+          includeShapePaint: shouldIncludeShapePaint,
+        })
+      : {}),
     boxSizing: "border-box",
     cursor: interactiveNodeCursor({
       hasPointerHandler: onPointerDown !== undefined,
@@ -1115,7 +1119,7 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
     ? imageFillLayerCss(style.fill, assetResolver)
     : undefined;
 
-  const textCss = textStyleToCss(style.text);
+  const textCss = paintsVisualContent ? textStyleToCss(style.text) : {};
 
   function handleDoubleClick(e: React.MouseEvent) {
     onDoubleClick?.(node.id, e);

@@ -9,6 +9,7 @@ import {
 } from "./slide-comment-anchors";
 import type { Deck } from "@/lib/presentation/schema";
 import { buildSlideCommentAnchor } from "@/test/builders/comments";
+import { safeParseDeck } from "@/lib/presentation/validation";
 
 // ---------------------------------------------------------------------------
 // Minimal deck builder
@@ -39,8 +40,7 @@ function buildNode(el: ElementSpec): never {
     return {
       id: el.id,
       type: "group",
-      component: "generic",
-      style: { ref: "group.generic" },
+      component: "custom",
       children: el.groupChildren.map((child) => buildNode(child)),
     } as never;
   }
@@ -133,6 +133,7 @@ test("resolveAnchorState returns 'attached' when elementId is nested inside a gr
     },
   ]);
   assert.equal(resolveAnchorState(anchor, deck), "attached");
+  assert.equal(safeParseDeck(deck).success, true);
 });
 
 // ---------------------------------------------------------------------------

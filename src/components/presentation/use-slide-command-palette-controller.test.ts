@@ -46,6 +46,7 @@ function controllerArgs(
     handleInsertConnector: () => undefined,
     handleInsertTable: () => undefined,
     handleAlignSelection: () => undefined,
+    handleReorderSelection: () => undefined,
     handleDistributeSelection: () => undefined,
     handleMatchSize: () => undefined,
     handleGroupSelection: () => undefined,
@@ -92,5 +93,22 @@ describe("useSlideCommandPaletteController", () => {
     assert.deepEqual(patches, [{ text: { weight: 700 } }]);
     assert.deepEqual(openedPanels, []);
     assert.deepEqual(announcements, ["Bold text toggled."]);
+  });
+
+  test("routes layer palette commands to the canonical reorder handler", () => {
+    const reorderModes: string[] = [];
+    const controller = useSlideCommandPaletteController(
+      controllerArgs({
+        handleReorderSelection: (mode) => reorderModes.push(mode),
+      }),
+    );
+    const command = controller.commandPaletteCommands.find(
+      (entry) => entry.id === "selection.reorder-back",
+    );
+
+    assert.ok(command, "selection.reorder-back should be discoverable");
+    assert.equal(command.disabledReason, undefined);
+    controller.handleRunCommandPaletteCommand(command);
+    assert.deepEqual(reorderModes, ["back"]);
   });
 });

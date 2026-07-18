@@ -13,6 +13,7 @@ import {
   createDocumentWithCanonicalContent,
   updateDocumentMetadata,
 } from "@/lib/document/document-write-port";
+import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import { mapNodes } from "@/lib/presentation/node-tree-ops";
 import { prisma } from "@/lib/prisma";
 
@@ -224,7 +225,10 @@ export async function duplicateDocumentForUser(
 
       await updateDocumentMetadata(tx, {
         where: { id: document.id },
-        data: { deckJson: cloneJsonForCreate(deckJson) },
+        data: {
+          deckJson: cloneJsonForCreate(deckJson),
+          deckRevisionToken: generateRevisionToken(),
+        },
         select: { id: true },
       });
     }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { EditorState } from "lexical";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { EditorState, LexicalEditor } from "lexical";
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
@@ -13,9 +13,11 @@ export type SaveResult = {
 export type LexicalSaveFn = (json: string) => Promise<SaveResult>;
 
 const DEFAULT_SAVE_DEBOUNCE_MS = 800;
+const DEFAULT_SAVE_MAX_WAIT_MS = 5000;
 
 export type AutosaveController = {
   queue(json: string): void;
+  queueSnapshot(readJson: () => string): void;
   flush(): Promise<void>;
   dispose(): void;
   latestJson(): string | null;
@@ -24,17 +26,23 @@ export type AutosaveController = {
 export function createAutosaveController({
   save,
   debounceMs,
+  maxWaitMs = DEFAULT_SAVE_MAX_WAIT_MS,
   onStatus,
   onError,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
+  scheduleMicrotask = queueMicrotask,
+  now = Date.now,
 }: {
   save: LexicalSaveFn;
   debounceMs: number;
+  maxWaitMs?: number;
   onStatus(status: SaveStatus): void;
   onError(error: unknown): void;
   setTimer?: typeof setTimeout;
   clearTimer?: typeof clearTimeout;
+  scheduleMicrotask?: (callback: () => void) => void;
+  now?: () => number;
 }): AutosaveController {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let latest: string | null = null;
@@ -42,6 +50,9 @@ export function createAutosaveController({
   let disposed = false;
   let inFlight: Promise<void> | null = null;
   let flushAgain = false;
+  let pendingSnapshot: { generation: number; readJson: () => string } | null =
+    null;
+  let burstStartedAt: number | null = null;
 
   const clearPendingTimer = () => {
     if (timer) {
@@ -58,7 +69,43 @@ export function createAutosaveController({
     if (!disposed) onError(error);
   };
 
+  const scheduleFlush = () => {
+    const currentTime = now();
+    burstStartedAt ??= currentTime;
+    const maxWaitRemaining = Math.max(
+      0,
+      maxWaitMs - (currentTime - burstStartedAt),
+    );
+    clearPendingTimer();
+    timer = setTimer(
+      () => {
+        void flush();
+      },
+      Math.min(debounceMs, maxWaitRemaining),
+    );
+  };
+
+  const capturePendingSnapshot = (): boolean => {
+    const pending = pendingSnapshot;
+    if (disposed || pending === null || pending.generation !== generation) {
+      return true;
+    }
+    pendingSnapshot = null;
+    try {
+      latest = pending.readJson();
+      scheduleFlush();
+      return true;
+    } catch (error) {
+      emitError(error);
+      emitStatus("error");
+      return false;
+    }
+  };
+
   const flush = async (): Promise<void> => {
+    if (!capturePendingSnapshot()) {
+      return;
+    }
     const json = latest;
     if (disposed || json === null) {
       return;
@@ -68,6 +115,7 @@ export function createAutosaveController({
       return inFlight;
     }
     clearPendingTimer();
+    burstStartedAt = null;
     const saveGeneration = generation;
     emitStatus("saving");
     inFlight = (async () => {
@@ -90,7 +138,7 @@ export function createAutosaveController({
         emitStatus("error");
       } finally {
         inFlight = null;
-        if (!disposed && flushAgain && latest !== json) {
+        if (!disposed && flushAgain && saveGeneration !== generation) {
           flushAgain = false;
           await flush();
         } else {
@@ -104,16 +152,25 @@ export function createAutosaveController({
   return {
     queue(json) {
       if (disposed) return;
+      pendingSnapshot = null;
       latest = json;
       generation += 1;
       if (inFlight) {
         flushAgain = true;
       }
       emitStatus("pending");
+      scheduleFlush();
+    },
+    queueSnapshot(readJson) {
+      if (disposed) return;
+      generation += 1;
+      pendingSnapshot = { generation, readJson };
+      if (inFlight) {
+        flushAgain = true;
+      }
+      emitStatus("pending");
       clearPendingTimer();
-      timer = setTimer(() => {
-        void flush();
-      }, debounceMs);
+      scheduleMicrotask(capturePendingSnapshot);
     },
     flush,
     dispose() {
@@ -122,6 +179,25 @@ export function createAutosaveController({
     },
     latestJson: () => latest,
   };
+}
+
+export function queueAutosaveForLexicalUpdate({
+  controller,
+  editor,
+  tags,
+  shouldAutosaveUpdate,
+}: {
+  controller: AutosaveController;
+  editor: LexicalEditor;
+  tags: Set<string>;
+  shouldAutosaveUpdate(tags: Set<string>): boolean;
+}): void {
+  if (!shouldAutosaveUpdate(tags)) {
+    return;
+  }
+  controller.queueSnapshot(() =>
+    JSON.stringify(editor.getEditorState().toJSON()),
+  );
 }
 
 /* @preserve node:coverage ignore start -- React hook lifecycle requires a DOM-capable renderer; controller behavior is covered headlessly. */
@@ -135,33 +211,39 @@ export function useLexicalAutosave({
   debounceMs?: number;
 }) {
   const [status, setStatus] = useState<SaveStatus>("saved");
-
-  const controller = useMemo(
-    () =>
-      /* node:coverage ignore next 6 -- Hook wiring is exercised by render test; tsx maps the factory literal as uncovered. */
-      createAutosaveController({
-        save,
-        debounceMs,
-        onStatus: setStatus,
-        /* node:coverage ignore next 2 -- Hook error logging is wiring; controller error delivery is covered headlessly. */
-        onError: (error) => console.error(error),
-      }),
-    [save, debounceMs],
-  );
+  const controllerRef = useRef<AutosaveController | null>(null);
 
   useEffect(() => {
-    /* node:coverage ignore next 2 -- Hook cleanup is lifecycle wiring; controller dispose behavior is covered headlessly. */
-    return () => controller.dispose();
-  }, [controller]);
+    /* node:coverage ignore next 7 -- Hook lifecycle is exercised by mounted editor coverage; controller behavior is covered headlessly. */
+    const controller = createAutosaveController({
+      save,
+      debounceMs,
+      onStatus: setStatus,
+      onError: (error) => console.error(error),
+    });
+    controllerRef.current = controller;
+    return () => {
+      controller.dispose();
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+      }
+    };
+  }, [save, debounceMs]);
 
   const handleChange = useCallback(
-    (editorState: EditorState, _editor: unknown, tags: Set<string>) => {
-      if (!shouldAutosaveUpdate(tags)) {
+    (_editorState: EditorState, editor: LexicalEditor, tags: Set<string>) => {
+      const controller = controllerRef.current;
+      if (!controller) {
         return;
       }
-      controller.queue(JSON.stringify(editorState.toJSON()));
+      queueAutosaveForLexicalUpdate({
+        controller,
+        editor,
+        tags,
+        shouldAutosaveUpdate,
+      });
     },
-    [controller, shouldAutosaveUpdate],
+    [shouldAutosaveUpdate],
   );
 
   return { status, handleChange };

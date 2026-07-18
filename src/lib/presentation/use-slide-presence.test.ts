@@ -89,7 +89,6 @@ function makeDeck(): Deck {
             type: "shape",
             hidden: true,
             layout: { frame: { x: 10, y: 10, w: 20, h: 10 }, zIndex: 2 },
-            style: { ref: "surface.card" },
             content: { shape: "rect" },
           },
           {
@@ -98,7 +97,6 @@ function makeDeck(): Deck {
             component: "custom",
             hidden: true,
             layout: { frame: { x: 20, y: 20, w: 20, h: 10 }, zIndex: 3 },
-            style: { ref: "surface.card" },
             children: [
               {
                 id: "group-child",

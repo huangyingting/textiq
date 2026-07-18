@@ -93,8 +93,15 @@ export function SlideEditorOpenRecovery({
   );
 }
 
-function SlideEditorOverlay({ children }: { children: React.ReactNode }) {
+function SlideEditorOverlay({
+  children,
+  returnFocusRef,
+}: {
+  children: React.ReactNode;
+  returnFocusRef: React.RefObject<HTMLButtonElement | null>;
+}) {
   useEffect(() => {
+    const returnFocusTarget = returnFocusRef.current;
     const root = document.documentElement;
     const previousRootOverflow = root.style.overflow;
     const previousBodyOverflow = document.body.style.overflow;
@@ -103,8 +110,11 @@ function SlideEditorOverlay({ children }: { children: React.ReactNode }) {
     return () => {
       root.style.overflow = previousRootOverflow;
       document.body.style.overflow = previousBodyOverflow;
+      if (returnFocusTarget?.isConnected) {
+        returnFocusTarget.focus();
+      }
     };
-  }, []);
+  }, [returnFocusRef]);
 
   if (typeof document === "undefined") return null;
 
@@ -234,6 +244,7 @@ export function SlideEditorButton({
   onShareRoundtrip,
   iconOnly = false,
 }: SlideEditorButtonProps) {
+  const slideEditorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const {
     open,
     deck,
@@ -448,6 +459,7 @@ export function SlideEditorButton({
   return (
     <>
       <EditorToolbarButton
+        ref={slideEditorTriggerRef}
         label="Slides"
         tooltip="Edit slides"
         icon={<LayoutPanelLeft size={15} aria-hidden="true" />}
@@ -484,7 +496,7 @@ export function SlideEditorButton({
       ) : null}
 
       {buttonView.showEditor && deck ? (
-        <SlideEditorOverlay>
+        <SlideEditorOverlay returnFocusRef={slideEditorTriggerRef}>
           <SlideEditor
             documentId={documentId}
             deck={deck}
@@ -518,7 +530,7 @@ export function SlideEditorButton({
       ) : null}
 
       {buttonView.showRecovery && deckOpenError ? (
-        <SlideEditorOverlay>
+        <SlideEditorOverlay returnFocusRef={slideEditorTriggerRef}>
           <SlideEditorOpenRecovery
             error={deckOpenError.error}
             diagnostics={deckOpenError.diagnostics}

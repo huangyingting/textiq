@@ -9,6 +9,7 @@ import {
   resetLocalStyleOverride,
   groupNodes,
   updateNodeContent,
+  updateNodeStyleBinding,
 } from "@/lib/presentation/editor-commands";
 import type {
   GroupNode,
@@ -53,6 +54,30 @@ describe("updateLocalStyle", () => {
     const node = step2.slides[0].children.find((n) => n.id === nodeId);
     assert.equal(node?.localStyle?.text?.fontSizePt, 44);
     assert.equal(node?.localStyle?.text?.italic, true);
+  });
+
+  test("does not add unsupported group paint or style bindings", () => {
+    const deck = makeTestDeck();
+    const slide = deck.slides[0];
+    const grouped = groupNodes(
+      deck,
+      slide.id,
+      slide.children.map((node) => node.id),
+      "logical-group",
+    );
+    const rebound = updateNodeStyleBinding(grouped, slide.id, "logical-group", {
+      ref: "text.title",
+    });
+    const updated = updateLocalStyle(rebound, slide.id, "logical-group", {
+      fill: { type: "solid", color: "#ff0000" },
+      opacity: 0.2,
+    });
+    const group = expectGroupNode(
+      updated.slides[0].children.find((node) => node.id === "logical-group"),
+    );
+
+    assert.equal(group.style, undefined);
+    assert.equal(group.localStyle, undefined);
   });
 });
 
@@ -122,9 +147,7 @@ describe("updateLocalStyle inside group child", () => {
     const deck = makeTestDeck();
     const slide = deck.slides[0];
     const nodeIds = slide.children.map((n) => n.id);
-    const grouped = groupNodes(deck, slide.id, nodeIds, "grp-001", {
-      ref: "surface.card",
-    });
+    const grouped = groupNodes(deck, slide.id, nodeIds, "grp-001");
     const groupNode = grouped.slides[0].children.find(
       (n) => n.id === "grp-001",
     )!;

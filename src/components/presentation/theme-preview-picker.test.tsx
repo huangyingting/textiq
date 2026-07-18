@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type { ThemePackageCatalogEntry } from "@/lib/presentation/theme-package-registry";
 import { buildMinimalThemePackage } from "@/test/builders/presentation-deck";
 import { createReactRenderHarness } from "@/test/react-render-harness";
 
@@ -79,15 +80,35 @@ const editorialTheme = themePackage(
   "serif magazine theme",
 );
 
+function catalogEntry(
+  themePackage: ThemePackageV1,
+  createdAt: string | null = null,
+): ThemePackageCatalogEntry {
+  return {
+    package: themePackage,
+    source: createdAt ? "custom" : "built-in",
+    createdAt,
+  };
+}
+
 test("ThemePreviewPicker opens, searches previews, and applies a theme", () => {
   const changes: string[] = [];
   const openChanges: boolean[] = [];
   const harness = createReactRenderHarness();
   const render = () =>
     ThemePreviewPicker({
-      value: neutralTheme.id,
-      themes: [neutralTheme, darkTheme, editorialTheme],
-      onChange: (packageId) => changes.push(packageId),
+      value: {
+        packageId: neutralTheme.id,
+        packageVersion: neutralTheme.version,
+      },
+      activeThemePackage: neutralTheme,
+      themes: [
+        catalogEntry(neutralTheme),
+        catalogEntry(darkTheme),
+        catalogEntry(editorialTheme),
+      ],
+      onChange: (selection) =>
+        changes.push(`${selection.packageId}@${selection.packageVersion}`),
       onOpenChange: (open) => openChanges.push(open),
       "aria-label": "Deck theme",
     }) as ElementLike;
@@ -134,8 +155,194 @@ test("ThemePreviewPicker opens, searches previews, and applies a theme", () => {
   (darkOption.props.onClick as () => void)();
   tree = harness.run(render);
   assert.equal(tree.props.open, false);
-  assert.deepEqual(changes, [darkTheme.id]);
+  assert.deepEqual(changes, [`${darkTheme.id}@${darkTheme.version}`]);
   assert.deepEqual(openChanges, [true, false]);
 
+  harness.cleanup();
+});
+
+test("ThemePreviewPicker exposes pressed filters and searches custom metadata", () => {
+  const harness = createReactRenderHarness();
+  const customTheme = {
+    ...themePackage(
+      "brand-kit:user-user-1:executive",
+      "Executive Custom",
+      {
+        canvas: { fill: "#123456", text: "#ffffff", mutedText: "#cbd5e1" },
+        surface: { fill: "#234567", text: "#ffffff", mutedText: "#cbd5e1" },
+        accent: { fill: "#ff8800", text: "#111111" },
+      },
+      "Boardroom identity",
+    ),
+    tokens: {
+      ...neutralTheme.tokens,
+      colors: {
+        canvas: { fill: "#123456", text: "#ffffff", mutedText: "#cbd5e1" },
+        surface: { fill: "#234567", text: "#ffffff", mutedText: "#cbd5e1" },
+        accent: { fill: "#ff8800", text: "#111111" },
+      },
+      fonts: { heading: "Aptos Display", body: "Aptos" },
+    },
+  };
+  const render = () =>
+    ThemePreviewPicker({
+      value: {
+        packageId: neutralTheme.id,
+        packageVersion: neutralTheme.version,
+      },
+      activeThemePackage: neutralTheme,
+      themes: [
+        catalogEntry(neutralTheme),
+        catalogEntry(darkTheme),
+        catalogEntry(editorialTheme),
+        catalogEntry(customTheme, "2026-02-03T04:05:06.000Z"),
+      ],
+      onChange: () => undefined,
+      "aria-label": "Deck theme",
+    }) as ElementLike;
+
+  let tree = harness.run(render);
+  const filterButtons = collectElements(
+    tree.props.children as ReactNode,
+    (element) =>
+      element.type === "button" &&
+      ["All", "Recent", "Editorial", "Dark", "High contrast"].includes(
+        textContent(element),
+      ),
+  );
+  assert.equal(filterButtons[0]?.props["aria-pressed"], true);
+  assert.equal(filterButtons[1]?.props["aria-pressed"], false);
+
+  (filterButtons[1]?.props.onClick as () => void)();
+  tree = harness.run(render);
+  assert.equal(
+    textContent(tree.props.children as ReactNode).includes("Executive Custom"),
+    true,
+  );
+  assert.equal(
+    textContent(tree.props.children as ReactNode).includes(
+      "Dark Aurora Corporate",
+    ),
+    false,
+  );
+
+  const filtersAfterRecent = collectElements(
+    tree.props.children as ReactNode,
+    (element) =>
+      element.type === "button" &&
+      ["All", "Recent", "Editorial", "Dark", "High contrast"].includes(
+        textContent(element),
+      ),
+  );
+  (filtersAfterRecent[3]?.props.onClick as () => void)();
+  tree = harness.run(render);
+  const toggledFilters = collectElements(
+    tree.props.children as ReactNode,
+    (element) =>
+      element.type === "button" &&
+      ["All", "Recent", "Editorial", "Dark", "High contrast"].includes(
+        textContent(element),
+      ),
+  );
+  assert.equal(toggledFilters[0]?.props["aria-pressed"], false);
+  assert.equal(toggledFilters[3]?.props["aria-pressed"], true);
+
+  (toggledFilters[0]?.props.onClick as () => void)();
+  tree = harness.run(render);
+  const search = collectElements(
+    tree.props.children as ReactNode,
+    (element) => element.type === "input",
+  )[0];
+  (search.props.onChange as (event: unknown) => void)({
+    currentTarget: { value: "aptos" },
+  });
+  tree = harness.run(render);
+  assert.equal(
+    textContent(tree.props.children as ReactNode).includes("Executive Custom"),
+    true,
+  );
+  assert.equal(
+    textContent(tree.props.children as ReactNode).includes("custom"),
+    true,
+  );
+  assert.doesNotMatch(String(search.props.placeholder), /owner/i);
+  harness.cleanup();
+});
+
+test("ThemePreviewPicker labels unavailable values and opens customization after closing", () => {
+  const openChanges: boolean[] = [];
+  let customizeCalls = 0;
+  const harness = createReactRenderHarness();
+  const render = () =>
+    ThemePreviewPicker({
+      value: { packageId: "missing-theme", packageVersion: "1.0.0" },
+      activeThemePackage: {
+        ...neutralTheme,
+        id: "missing-theme",
+        name: "Unavailable theme (missing-theme)",
+      },
+      themes: [catalogEntry(neutralTheme), catalogEntry(darkTheme)],
+      onChange: () => undefined,
+      onOpenChange: (open) => openChanges.push(open),
+      onCustomize: () => {
+        customizeCalls += 1;
+      },
+      "aria-label": "Deck theme",
+    }) as ElementLike;
+
+  let tree = harness.run(render);
+  assert.equal(
+    textContent(tree.props.trigger as ReactNode).includes(
+      "Unavailable theme (missing-theme)",
+    ),
+    true,
+  );
+  ((tree.props.trigger as ElementLike).props.onClick as () => void)();
+  tree = harness.run(render);
+  const customize = collectElements(
+    tree.props.children as ReactNode,
+    (element) => element.props.children === "Customize theme",
+  )[0];
+  (customize.props.onClick as () => void)();
+
+  assert.equal(customizeCalls, 1);
+  assert.deepEqual(openChanges, [true, false]);
+  harness.cleanup();
+});
+
+test("ThemePreviewPicker selects a newer catalog version even when its package id matches the active exact version", () => {
+  const active = {
+    ...neutralTheme,
+    id: "brand-kit:user-1:shared",
+    version: "1.0.0",
+  };
+  const latest = {
+    ...active,
+    version: "2.0.0",
+    name: "Shared brand latest",
+  };
+  const changes: unknown[] = [];
+  const harness = createReactRenderHarness();
+  const render = () =>
+    ThemePreviewPicker({
+      value: { packageId: active.id, packageVersion: active.version },
+      activeThemePackage: active,
+      themes: [catalogEntry(latest, "2026-04-01T00:00:00.000Z")],
+      onChange: (selection) => changes.push(selection),
+      "aria-label": "Deck theme",
+    }) as ElementLike;
+
+  let tree = harness.run(render);
+  ((tree.props.trigger as ElementLike).props.onClick as () => void)();
+  tree = harness.run(render);
+  const latestOption = collectElements(
+    tree.props.children as ReactNode,
+    (element) => element.props.role === "option",
+  )[0];
+  assert.equal(latestOption.props["aria-selected"], false);
+  (latestOption.props.onClick as () => void)();
+  assert.deepEqual(changes, [
+    { packageId: latest.id, packageVersion: latest.version },
+  ]);
   harness.cleanup();
 });

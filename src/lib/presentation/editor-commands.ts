@@ -30,6 +30,7 @@ import type { SemanticTemplateV1 } from "./template-registry";
 import { compileSlide } from "./template-compiler";
 import { connectorEndpointToPointFallback } from "./connector-geometry";
 import { mergeStylePatchDeep } from "./style-patch-merge";
+import { ungroupNodeById } from "./node-tree-ops";
 
 export const MIN_DECK_SLIDES_MESSAGE = "A deck must keep at least one slide.";
 
@@ -374,6 +375,24 @@ function duplicateNodeWithIds(
   return { ...node, id, layout } as SlideChildNode;
 }
 
+function nextForegroundZIndex(nodes: readonly SlideChildNode[]): number {
+  const zIndexes = nodes
+    .map((node) => node.layout?.zIndex)
+    .filter(
+      (zIndex): zIndex is number =>
+        typeof zIndex === "number" && Number.isFinite(zIndex),
+    );
+  return zIndexes.length > 0 ? Math.max(...zIndexes) + 1 : 0;
+}
+
+function withZIndex(node: SlideChildNode, zIndex: number): SlideChildNode {
+  if (!node.layout) return node;
+  return {
+    ...node,
+    layout: { ...node.layout, zIndex },
+  } as SlideChildNode;
+}
+
 function uniqueDuplicateId(existingIds: Set<string>, sourceId: string): string {
   const base = `${sourceId}-copy`;
   let candidate = base;
@@ -554,14 +573,19 @@ function duplicateSelectedInChildren(
   duplicatedIds: string[],
 ): SlideChildNode[] {
   const result: SlideChildNode[] = [];
+  let foregroundZIndex = nextForegroundZIndex(nodes);
   for (const node of nodes) {
     if (ids.has(node.id)) {
       result.push(node);
-      const duplicate = duplicateNodeWithIds(node, (sourceId) => {
-        const id = nextId(sourceId);
-        duplicatedIds.push(id);
-        return id;
-      });
+      const duplicate = withZIndex(
+        duplicateNodeWithIds(node, (sourceId) => {
+          const id = nextId(sourceId);
+          duplicatedIds.push(id);
+          return id;
+        }),
+        foregroundZIndex,
+      );
+      foregroundZIndex += 1;
       result.push(duplicate);
       continue;
     }
@@ -1033,7 +1057,13 @@ export function insertNode(
   return {
     deck: mapSlides(deck, (slide) =>
       slide.id === slideId
-        ? { ...slide, children: [...slide.children, inserted] }
+        ? {
+            ...slide,
+            children: [
+              ...slide.children,
+              withZIndex(inserted, nextForegroundZIndex(slide.children)),
+            ],
+          }
         : slide,
     ),
     nodeId: inserted.id,
@@ -1051,11 +1081,17 @@ export function pasteNodes(
     reidentifyNode(node, existingIds, { x: 2, y: 2 }),
   );
   return {
-    deck: mapSlides(deck, (slide) =>
-      slide.id === slideId
-        ? { ...slide, children: [...slide.children, ...pasted] }
-        : slide,
-    ),
+    deck: mapSlides(deck, (slide) => {
+      if (slide.id !== slideId) return slide;
+      const firstZIndex = nextForegroundZIndex(slide.children);
+      const foregroundPasted = pasted.map((node, index) =>
+        withZIndex(node, firstZIndex + index),
+      );
+      return {
+        ...slide,
+        children: [...slide.children, ...foregroundPasted],
+      };
+    }),
     nodeIds: pasted.map((node) => node.id),
   };
 }
@@ -1295,15 +1331,13 @@ export function updateNodeStyleBinding(
 ): Deck {
   return mapSlides(deck, (slide) => {
     if (slide.id !== slideId) return slide;
-    return mapChildren(
-      slide,
-      nodeId,
-      (node) =>
-        ({
-          ...node,
-          style: binding,
-        }) as SlideChildNode,
-    );
+    return mapChildren(slide, nodeId, (node) => {
+      if (node.type === "group") return node;
+      return {
+        ...node,
+        style: binding,
+      } as SlideChildNode;
+    });
   });
 }
 
@@ -1319,15 +1353,13 @@ export function updateLocalStyle(
 ): Deck {
   return mapSlides(deck, (slide) => {
     if (slide.id !== slideId) return slide;
-    return mapChildren(
-      slide,
-      nodeId,
-      (node) =>
-        ({
-          ...node,
-          localStyle: mergeStylePatchDeep(node.localStyle, patch) as StylePatch,
-        }) as SlideChildNode,
-    );
+    return mapChildren(slide, nodeId, (node) => {
+      if (node.type === "group") return node;
+      return {
+        ...node,
+        localStyle: mergeStylePatchDeep(node.localStyle, patch) as StylePatch,
+      } as SlideChildNode;
+    });
   });
 }
 
@@ -1535,8 +1567,8 @@ export function groupNodes(
   slideId: string,
   nodeIds: string[],
   groupId: string,
-  style: StyleBinding,
 ): Deck {
+  if (existingDeckIds(deck).has(groupId)) return deck;
   const selectedIds = new Set(nodeIds);
   return mapSlides(deck, (slide) => {
     if (slide.id !== slideId) return slide;
@@ -1572,7 +1604,6 @@ export function groupNodes(
       id: groupId,
       type: "group",
       component: "custom",
-      style,
       layout: {
         frame: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
         zIndex: maxZIndex,
@@ -1593,23 +1624,28 @@ export function ungroupNodes(
   groupId: string,
 ): { deck: Deck; nodeIds: string[] } {
   const slide = deck.slides.find((candidate) => candidate.id === slideId);
-  const group = slide?.children.find(
-    (node): node is Extract<SlideChildNode, { type: "group" }> =>
-      node.id === groupId && node.type === "group",
-  );
-  if (!group) return { deck, nodeIds: [] };
+  if (!slide) return { deck, nodeIds: [] };
+  const group = findNodeById(slide.children, groupId);
+  if (
+    !group ||
+    group.type !== "group" ||
+    group.locked === true ||
+    group.hidden === true
+  ) {
+    return { deck, nodeIds: [] };
+  }
+  const result = ungroupNodeById(slide.children, groupId);
+  if (!result.changed) return { deck, nodeIds: [] };
   return {
     deck: mapSlides(deck, (candidate) =>
       candidate.id === slideId
         ? {
             ...candidate,
-            children: candidate.children.flatMap((node) =>
-              node.id === groupId ? group.children : [node],
-            ),
+            children: result.nodes,
           }
         : candidate,
     ),
-    nodeIds: group.children.map((node) => node.id),
+    nodeIds: result.ungroupedNodes.map((node) => node.id),
   };
 }
 

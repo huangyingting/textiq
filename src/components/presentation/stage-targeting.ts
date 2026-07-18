@@ -23,6 +23,14 @@ export function stageCandidateNodeIds(
   return ids;
 }
 
+export function unlockedStageCandidateNodeIds(
+  hits: readonly StageHitCandidate[],
+): string[] {
+  return stageCandidateNodeIds(
+    hits.filter((hit) => hit.node.locked !== true && hit.node.hidden !== true),
+  );
+}
+
 export function resolveStageNodeTarget({
   hits,
   nodes,
@@ -32,14 +40,20 @@ export function resolveStageNodeTarget({
   nodes: readonly SlideChildNode[];
   fallbackNodeId?: string;
 }): StageNodeInteractionTarget | null {
+  const fallbackNode = fallbackNodeId
+    ? findNodeById(nodes, fallbackNodeId)
+    : undefined;
   const node =
-    hits[0]?.node ??
-    (fallbackNodeId ? findNodeById(nodes, fallbackNodeId) : undefined);
+    hits.find((hit) => hit.node.locked !== true && hit.node.hidden !== true)
+      ?.node ??
+    (fallbackNode?.locked !== true && fallbackNode?.hidden !== true
+      ? fallbackNode
+      : undefined);
   if (!node) return null;
   return {
     node,
     nodeId: node.id,
-    candidateIds: stageCandidateNodeIds(hits),
+    candidateIds: unlockedStageCandidateNodeIds(hits),
     parentGroupId: parentGroupIdForNode(nodes, node.id),
   };
 }

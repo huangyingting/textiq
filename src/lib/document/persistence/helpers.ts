@@ -14,31 +14,7 @@ import {
   staleVersionIds,
 } from "@/lib/document-versions";
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
-
-// ---------------------------------------------------------------------------
-// Private utilities
-// ---------------------------------------------------------------------------
-
-function stableJsonString(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${(value as unknown[]).map(stableJsonString).join(",")}]`;
-  }
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableJsonString(record[key])}`)
-    .join(",")}}`;
-}
-
-function jsonEqual(a: unknown, b: unknown): boolean {
-  /* node:coverage disable */
-  /* Stable JSON equality is asserted by duplicate-snapshot tests; tsx maps this helper as uncovered. */
-  return stableJsonString(a) === stableJsonString(b);
-  /* node:coverage enable */
-}
+import { structuredJsonEqual } from "@/lib/structured-json";
 
 // ---------------------------------------------------------------------------
 // Shared snapshot helper
@@ -96,8 +72,8 @@ export async function snapshotDocumentVersion(
     if (
       !(options.force ?? false) &&
       last &&
-      jsonEqual(doc.contentJson, last.contentJson) &&
-      jsonEqual(doc.deckJson, last.deckJson)
+      structuredJsonEqual(doc.contentJson, last.contentJson) &&
+      structuredJsonEqual(doc.deckJson, last.deckJson)
     ) {
       /* node:coverage ignore next -- Duplicate snapshot no-op is asserted; tsx maps the guard tail as uncovered. */
       return;

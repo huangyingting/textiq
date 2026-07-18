@@ -1,4 +1,19 @@
-export type UiMatrixRunMode = "advisory-ci" | "opt-in-local";
+export type UiMatrixRunMode = "required-ci" | "advisory-ci" | "opt-in-local";
+
+export type UiMatrixTestInventoryEntry = {
+  test: string;
+  surface: string;
+  viewport: string;
+  auth: string;
+  profile: string;
+  ciTier: "required" | "advisory" | "opt-in";
+  status: "automated";
+};
+
+export type UiMatrixExpectedTestEntry = {
+  test: string;
+  profiles: readonly ("deterministic-profile" | "required-profile")[];
+};
 
 export type UiMatrixSpecInventoryEntry = {
   spec: `e2e/${string}.spec.ts`;
@@ -10,6 +25,9 @@ export type UiMatrixSpecInventoryEntry = {
   devices: string[];
   ciStatus: string;
   sourceRefs: string[];
+  tests?: readonly UiMatrixTestInventoryEntry[];
+  expectedTestCount?: number;
+  expectedTests?: readonly UiMatrixExpectedTestEntry[];
 };
 
 export type UiMatrixManualGap = {
@@ -30,7 +48,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     prerequisites: ["running app"],
     roles: ["anonymous"],
     devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/full Playwright suite",
+    ciStatus: "opt-in local/unrestricted Playwright suite",
     sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
   },
   {
@@ -90,16 +108,71 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
   },
   {
+    spec: "e2e/editor/document-table-autosave.spec.ts",
+    owners: ["editor", "documents", "collaboration"],
+    coverage:
+      "Sustained document and table edits remain durable after the UI reports saved and the document reloads.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
+  },
+  {
     spec: "e2e/import/import-roundtrip.spec.ts",
     owners: ["import", "editor"],
     coverage:
-      "Markdown import creates an editable document and unsupported uploads fail gracefully.",
-    runMode: "advisory-ci",
+      "Markdown and DOCX imports create editable documents that persist across reload; workspace roles are enforced and unsupported uploads fail gracefully.",
+    runMode: "required-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
-    roles: ["seeded owner", "anonymous request API"],
+    roles: ["seeded owner", "seeded editor", "seeded viewer"],
     devices: ["Desktop Chrome"],
-    ciStatus: "advisory deterministic E2E workflow",
-    sourceRefs: ["e2e/README.md", "docs/import/README.md"],
+    ciStatus: "required normal deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/README.md",
+      "docs/import/README.md",
+      "playwright.config.mts",
+      ".github/workflows/e2e-deterministic.yml",
+    ],
+    expectedTestCount: 6,
+    expectedTests: [
+      {
+        test: "imports Markdown, renders blocks, and persists content across reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "imports DOCX, renders blocks, and persists content across reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace import by owner persists across reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace import by editor persists across reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace import by viewer is forbidden and creates zero documents",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "rejects an unsupported file type with a graceful error",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "imports DOCX, renders blocks, and persists content across reload @required-profile",
+        surface: "dashboard import → document editor render/reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/auth/oauth-disabled.spec.ts",
@@ -110,8 +183,20 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     prerequisites: ["running app", "optional GOOGLE_CLIENT_ID/SECRET"],
     roles: ["anonymous"],
     devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/full Playwright suite",
+    ciStatus: "opt-in local/unrestricted Playwright suite",
     sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
+  },
+  {
+    spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+    owners: ["presentation", "accessibility"],
+    coverage:
+      "Shortcut and editor focus restoration plus mobile Edit/Add slide geometry, hit testing, and pointer activation.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome", "390x844 mobile", "412x915 mobile"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
   },
   {
     spec: "e2e/presentation/present-export.spec.ts",
@@ -126,6 +211,42 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/rendering-and-export.md"],
   },
   {
+    spec: "e2e/presentation/overlap-selection-regression.spec.ts",
+    owners: ["presentation", "accessibility"],
+    coverage:
+      "Deterministic browser regression for selecting, editing, deleting, undoing, grouping, locking, reordering, and locating fully covered stage nodes.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+  },
+  {
+    spec: "e2e/presentation/pointer-interactions.spec.ts",
+    owners: ["presentation", "accessibility"],
+    coverage:
+      "Real Chromium pointer drag coverage for filmstrip reorder, node resize/rotation with undo, and connector endpoint snapping with autosave/reload persistence.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+  },
+  {
+    spec: "e2e/presentation/presentation-controls.spec.ts",
+    owners: ["presentation", "accessibility"],
+    coverage:
+      "Real Chromium multi-select Arrange, precision guide preferences/snapping, built-in themes, and custom theme authoring with isolated mutation fixtures.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+  },
+  {
     spec: "e2e/public-render/public-pages.spec.ts",
     owners: ["system", "public-render"],
     coverage:
@@ -134,7 +255,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     prerequisites: ["running app"],
     roles: ["anonymous"],
     devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/full Playwright suite",
+    ciStatus: "opt-in local/unrestricted Playwright suite",
     sourceRefs: ["e2e/README.md"],
   },
   {
@@ -162,7 +283,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     prerequisites: ["running app"],
     roles: ["anonymous"],
     devices: ["Desktop Chrome", "request API"],
-    ciStatus: "opt-in local/full Playwright suite",
+    ciStatus: "opt-in local/unrestricted Playwright suite",
     sourceRefs: ["e2e/README.md", "docs/public-render/README.md"],
   },
   {
@@ -176,6 +297,18 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome", "request API"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/assets.md"],
+  },
+  {
+    spec: "e2e/presentation/slide-delete-persistence.spec.ts",
+    owners: ["presentation", "collaboration"],
+    coverage:
+      "Canonical and generated first-save decks persist slide deletion through autosave, revision-token rotation, and reload.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
   },
   {
     spec: "e2e/presentation/slides-layout-screenshots.spec.ts",
@@ -196,12 +329,39 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/slides-smoke.spec.ts",
     owners: ["presentation"],
     coverage:
-      "Credential-gated slide edit, save, present, and export smoke against a provided document.",
-    runMode: "opt-in-local",
-    prerequisites: ["E2E_USER_EMAIL/PASSWORD", "E2E_SLIDES_DOC_URL"],
-    roles: ["owner", "anonymous fallback routes"],
+      "Slide edit, resize/duplicate, add-slide, and visual-insert mutations use independent deterministic documents and Yjs rooms; optional external fixtures cover non-mutating smoke.",
+    runMode: "advisory-ci",
+    prerequisites: [
+      "E2E_PROFILE=1 for mutating coverage",
+      "optional E2E_USER_EMAIL/PASSWORD and E2E_SLIDES_DOC_URL",
+    ],
+    roles: ["seeded owner", "owner", "anonymous fallback routes"],
     devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/staging only",
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+  },
+  {
+    spec: "e2e/presentation/slides-conflict-recovery.spec.ts",
+    owners: ["presentation", "collaboration"],
+    coverage:
+      "Real two-context Chromium deck conflicts for Keep my version and Use server version, including independent geometry edits, history reset, and reload persistence.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner in two isolated sessions"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+  },
+  {
+    spec: "e2e/presentation/touch-controls.spec.ts",
+    owners: ["presentation", "accessibility"],
+    coverage:
+      "Chromium mobile touch taps select a named text node and navigate, switch, and close the Text inspector without claiming unsupported pinch or drag gestures.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Chromium touch 390x844"],
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
   },
   {
@@ -248,11 +408,11 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     owners: ["presentation", "public-render"],
     coverage:
       "Representative UI matrix checks for slide editor shell, filmstrip, dock, and public present route.",
-    runMode: "opt-in-local",
+    runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "anonymous public"],
     devices: ["Desktop Chrome"],
-    ciStatus: "explicit UI matrix browser run only",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/presentation/slide-editor.md",
@@ -309,13 +469,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
 ] as const satisfies readonly UiMatrixSpecInventoryEntry[];
 
 export const UI_MATRIX_MANUAL_GAPS = [
-  {
-    id: "DOCX-UI-ROUNDTRIP",
-    owner: "import",
-    gap: "DOCX import is parser-tested but remains a manual UI round-trip because binary fixtures are not maintained in-repo.",
-    status: "manual",
-    sourceRefs: ["e2e/README.md", "docs/import/README.md"],
-  },
   {
     id: "BLOCK-ID-DEEP-ASSERTIONS",
     owner: "editor/presentation",

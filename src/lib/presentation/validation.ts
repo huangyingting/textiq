@@ -14,7 +14,6 @@ import { isValidId, isPositiveFinite } from "./ids";
 import { isStyleRef } from "./style-registry";
 import { SEMANTIC_TEMPLATE_KINDS } from "./template-registry";
 import {
-  forEachUnknownKey,
   isLiteralMember,
   isValidationFiniteNumber as isFiniteNumber,
   isValidationNonEmptyString,
@@ -29,6 +28,29 @@ export type DeckParseResult =
   | { success: true; data: Deck }
   | { success: false; errors: string[] };
 
+export const DECK_VALIDATION_CODES = [
+  "duplicate_id",
+  "invalid_limit",
+  "invalid_structure",
+  "invalid_type",
+  "invalid_value",
+  "invalid_version",
+  "unsupported_property",
+  "validation_internal_error",
+] as const;
+
+export type DeckValidationCode = (typeof DECK_VALIDATION_CODES)[number];
+
+const DECK_VALIDATION_CODE_SET: ReadonlySet<string> = new Set(
+  DECK_VALIDATION_CODES,
+);
+
+export function isDeckValidationCode(
+  value: string,
+): value is DeckValidationCode {
+  return DECK_VALIDATION_CODE_SET.has(value);
+}
+
 /** Validates and parses an unknown value as a presentation deck. Does not mutate input. */
 export function safeParseDeck(input: unknown): DeckParseResult {
   const errors: string[] = [];
@@ -38,9 +60,18 @@ export function safeParseDeck(input: unknown): DeckParseResult {
       return { success: false, errors };
     }
     return { success: true, data: deck as Deck };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return { success: false, errors: [...errors, msg] };
+  } catch {
+    return {
+      success: false,
+      errors: [
+        ...errors,
+        formatDiagnostic(
+          "validation_internal_error",
+          "Deck",
+          "validation could not be completed",
+        ),
+      ],
+    };
   }
 }
 
@@ -48,8 +79,38 @@ export function safeParseDeck(input: unknown): DeckParseResult {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function fail(errors: string[], msg: string): void {
-  errors.push(msg);
+function formatDiagnostic(
+  code: DeckValidationCode,
+  path: string,
+  detail: string,
+): string {
+  return `${code}: ${path}: ${detail}`;
+}
+
+function fail(
+  errors: string[],
+  msg: string,
+  code: DeckValidationCode = "invalid_value",
+): void {
+  errors.push(`${code}: ${msg}`);
+}
+
+function rejectUnknownProperties(
+  input: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  ctx: string,
+  errors: string[],
+): void {
+  const count = Object.keys(input).filter((key) => !allowed.has(key)).length;
+  if (count > 0) {
+    errors.push(
+      formatDiagnostic(
+        "unsupported_property",
+        ctx,
+        `unsupported property count=${count}`,
+      ),
+    );
+  }
 }
 
 function validateId(
@@ -147,11 +208,7 @@ function validateCanvas(
     return {};
   }
   const allowed = new Set(["format", "width", "height", "unit", "safeArea"]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known canvas field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   if (
     !CANVAS_FORMATS.includes(input.format as (typeof CANVAS_FORMATS)[number])
   ) {
@@ -220,7 +277,7 @@ function validateAssetIdField(
 ): void {
   const parsedId = validateId(value, `${ctx}.id`, errors);
   if (parsedId !== undefined && parsedId !== assetId) {
-    fail(errors, `${ctx}.id must match asset key "${assetId}"`);
+    fail(errors, `${ctx}.id must match its registry key`);
   }
 }
 
@@ -414,7 +471,7 @@ function validateAssetRegistry(
     fail(errors, `${ctx}.images must be an object`);
   } else {
     for (const [assetId, asset] of Object.entries(input.images)) {
-      const assetCtx = `${ctx}.images.${assetId}`;
+      const assetCtx = `${ctx}.images[entry]`;
       validateImageAssetEntry(asset, assetId, assetCtx, errors);
     }
   }
@@ -423,7 +480,7 @@ function validateAssetRegistry(
       fail(errors, `${ctx}.fonts must be an object`);
     } else {
       for (const [assetId, asset] of Object.entries(input.fonts)) {
-        const assetCtx = `${ctx}.fonts.${assetId}`;
+        const assetCtx = `${ctx}.fonts[entry]`;
         validateFontAssetEntry(asset, assetId, assetCtx, errors);
       }
     }
@@ -433,7 +490,7 @@ function validateAssetRegistry(
       fail(errors, `${ctx}.visuals must be an object`);
     } else {
       for (const [assetId, asset] of Object.entries(input.visuals)) {
-        const assetCtx = `${ctx}.visuals.${assetId}`;
+        const assetCtx = `${ctx}.visuals[entry]`;
         validateVisualAssetEntry(asset, assetId, assetCtx, errors);
       }
     }
@@ -443,7 +500,7 @@ function validateAssetRegistry(
       fail(errors, `${ctx}.files must be an object`);
     } else {
       for (const [assetId, asset] of Object.entries(input.files)) {
-        const assetCtx = `${ctx}.files.${assetId}`;
+        const assetCtx = `${ctx}.files[entry]`;
         validateFileAssetEntry(asset, assetId, assetCtx, errors);
       }
     }
@@ -498,11 +555,7 @@ function validateLayoutBox(
     "anchor",
     "constraints",
   ]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known layout field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   validateFrame(input.frame, `${ctx}.frame`, errors);
   if (!Number.isInteger(input.zIndex) || typeof input.zIndex !== "number") {
     fail(errors, `${ctx}.zIndex must be an integer`);
@@ -548,11 +601,7 @@ function validateLayoutConstraints(
     "maxH",
     "preserveAspectRatio",
   ]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known constraints field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   for (const key of ["minW", "minH", "maxW", "maxH"] as const) {
     if (input[key] !== undefined && !isFiniteNumber(input[key])) {
       fail(errors, `${ctx}.${key} must be a finite number`);
@@ -645,12 +694,10 @@ function validateKnownObjectKeys(
   input: Record<string, unknown>,
   ctx: string,
   allowed: Set<string>,
-  fieldDescription: string,
+  _fieldDescription: string,
   errors: string[],
 ): void {
-  forEachUnknownKey(input, allowed, (key) => {
-    fail(errors, `${ctx}.${key} is not a known ${fieldDescription}`);
-  });
+  rejectUnknownProperties(input, allowed, ctx, errors);
 }
 
 function validateTokenRef(input: unknown, ctx: string, errors: string[]): void {
@@ -1203,8 +1250,8 @@ function validateVisualStylePatch(
     if (!isPlainObject(input.channelColors)) {
       fail(errors, `${ctx}.channelColors must be an object`);
     } else {
-      for (const [channel, value] of Object.entries(input.channelColors)) {
-        validateColorValue(value, `${ctx}.channelColors.${channel}`, errors);
+      for (const value of Object.values(input.channelColors)) {
+        validateColorValue(value, `${ctx}.channelColors[entry]`, errors);
       }
     }
   }
@@ -1298,11 +1345,7 @@ function validateInsetsPct(
     return;
   }
   const allowed = new Set(["top", "right", "bottom", "left"]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known inset field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   for (const key of ["top", "right", "bottom", "left"] as const) {
     if (!isFiniteNumber(input[key])) {
       fail(errors, `${ctx}.${key} must be a finite number`);
@@ -1327,11 +1370,7 @@ function validateChromeItem(
     "layer",
     ...allowedSpecificKeys,
   ]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known chrome field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   if (input.enabled !== undefined && typeof input.enabled !== "boolean") {
     fail(errors, `${ctx}.enabled must be a boolean`);
   }
@@ -1389,13 +1428,7 @@ export function validateDeckChromeConfig(
     fail(errors, `${ctx} must be an object`);
     return;
   }
-  for (const key of Object.keys(input)) {
-    if (
-      !DECK_CHROME_KINDS.includes(key as (typeof DECK_CHROME_KINDS)[number])
-    ) {
-      fail(errors, `${ctx}.${key} is not a known chrome slot`);
-    }
-  }
+  rejectUnknownProperties(input, new Set(DECK_CHROME_KINDS), ctx, errors);
   if (input.logo !== undefined) {
     validateChromeItem(input.logo, `${ctx}.logo`, errors, [
       "assetId",
@@ -1777,10 +1810,10 @@ function validateTableContent(
   }
   const colCount = input.columns.length;
   if (colCount < 1 || colCount > 8) {
-    fail(errors, `${ctx}: columns count must be 1..8`);
+    fail(errors, `${ctx}: columns count must be 1..8`, "invalid_limit");
   }
   if (input.rows.length < 1 || input.rows.length > 20) {
-    fail(errors, `${ctx}: rows count must be 1..20`);
+    fail(errors, `${ctx}: rows count must be 1..20`, "invalid_limit");
   }
   const colIds = new Set<string>();
   for (let ci = 0; ci < input.columns.length; ci++) {
@@ -1994,7 +2027,9 @@ const BASE_CHILD_NODE_KEYS = [
 ] as const;
 const CHILD_NODE_CONTENT_KEYS = new Set([...BASE_CHILD_NODE_KEYS, "content"]);
 const CHILD_NODE_GROUP_KEYS = new Set([
-  ...BASE_CHILD_NODE_KEYS,
+  ...BASE_CHILD_NODE_KEYS.filter(
+    (key) => key !== "style" && key !== "localStyle",
+  ),
   "component",
   "children",
 ]);
@@ -2068,11 +2103,7 @@ function validatePointPct(input: unknown, ctx: string, errors: string[]): void {
     return;
   }
   const allowed = new Set(["x", "y"]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known point field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   if (!isFiniteNumber(input.x)) {
     fail(errors, `${ctx}.x must be a finite number`);
   }
@@ -2091,11 +2122,7 @@ function validateImageCrop(
     return;
   }
   const allowed = new Set(["top", "right", "bottom", "left"]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known crop field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
   for (const key of ["top", "right", "bottom", "left"] as const) {
     if (!isFiniteNumber(input[key])) {
       fail(errors, `${ctx}.${key} must be a finite number`);
@@ -2125,11 +2152,7 @@ function validateAccessibilityMetadata(
   }
 
   const allowed = new Set(["label", "alt", "decorative", "readingOrder"]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known accessibility field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
 
   validateOptionalString(input.label, `${ctx}.label`, errors);
   validateOptionalString(input.alt, `${ctx}.alt`, errors);
@@ -2201,11 +2224,7 @@ function validateSourceMetadata(
     "unlinked",
     "extra",
   ]);
-  for (const key of Object.keys(input)) {
-    if (!allowed.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known source field`);
-    }
-  }
+  rejectUnknownProperties(input, allowed, ctx, errors);
 
   validateStringField(input.documentId, `${ctx}.documentId`, errors);
   validateStringField(input.blockId, `${ctx}.blockId`, errors);
@@ -2236,11 +2255,12 @@ function validateSourceMetadata(
         "blockLabel",
         "blockKindLabel",
       ]);
-      for (const key of Object.keys(input.display)) {
-        if (!displayAllowed.has(key)) {
-          fail(errors, `${ctx}.display.${key} is not a known display field`);
-        }
-      }
+      rejectUnknownProperties(
+        input.display,
+        displayAllowed,
+        `${ctx}.display`,
+        errors,
+      );
       validateStringField(
         input.display.documentTitle,
         `${ctx}.display.documentTitle`,
@@ -2270,11 +2290,12 @@ function validateSourceMetadata(
         "sourceHash",
         "reason",
       ]);
-      for (const key of Object.keys(input.refresh)) {
-        if (!refreshAllowed.has(key)) {
-          fail(errors, `${ctx}.refresh.${key} is not a known refresh field`);
-        }
-      }
+      rejectUnknownProperties(
+        input.refresh,
+        refreshAllowed,
+        `${ctx}.refresh`,
+        errors,
+      );
       if (
         !SOURCE_REFRESH_STATES.includes(
           input.refresh.state as (typeof SOURCE_REFRESH_STATES)[number],
@@ -2328,7 +2349,7 @@ function validateChildNode(
   const id = validateId(input.id, `${ctx}.id`, errors);
   if (id !== undefined) {
     if (nodeIds.has(id)) {
-      fail(errors, `${ctx}.id "${id}" is duplicated`);
+      fail(errors, `${ctx}.id is duplicated`, "duplicate_id");
     } else {
       nodeIds.add(id);
     }
@@ -2507,7 +2528,7 @@ function validateChildNode(
       break;
     }
     default:
-      fail(errors, `${ctx}.type "${type}" is not a known node type`);
+      fail(errors, `${ctx}.type is not a known node type`, "invalid_type");
   }
 }
 
@@ -2573,7 +2594,13 @@ function validateSlideProps(
             kind as (typeof DECK_CHROME_KINDS)[number],
           )
         ) {
-          fail(errors, `${ctx}.deckChrome.${kind} is not a known chrome slot`);
+          errors.push(
+            formatDiagnostic(
+              "unsupported_property",
+              `${ctx}.deckChrome`,
+              "unsupported property count=1",
+            ),
+          );
           continue;
         }
         if (!isPlainObject(override)) {
@@ -2629,14 +2656,7 @@ function validateSlideNode(
     fail(errors, `${ctx} must be an object`);
     return;
   }
-  for (const key of Object.keys(input)) {
-    if (!SLIDE__KEYS.has(key)) {
-      fail(
-        errors,
-        `${ctx}.${key} is not part of the presentation slide schema`,
-      );
-    }
-  }
+  rejectUnknownProperties(input, SLIDE__KEYS, ctx, errors);
   if ("elements" in input) {
     fail(
       errors,
@@ -2649,7 +2669,7 @@ function validateSlideNode(
   const id = validateId(input.id, `${ctx}.id`, errors);
   if (id !== undefined) {
     if (nodeIds.has(id)) {
-      fail(errors, `${ctx}.id "${id}" is duplicated`);
+      fail(errors, `${ctx}.id is duplicated`, "duplicate_id");
     } else {
       nodeIds.add(id);
     }
@@ -2667,7 +2687,8 @@ function validateSlideNode(
     ) {
       fail(
         errors,
-        `${ctx}.template.kind "${input.template.kind}" is not a known template kind`,
+        `${ctx}.template.kind is not a known template kind`,
+        "invalid_type",
       );
     }
   }
@@ -2755,8 +2776,8 @@ function validateJsonValue(
     return;
   }
   if (isPlainObject(input)) {
-    for (const [key, value] of Object.entries(input)) {
-      validateJsonValue(value, `${ctx}.${key}`, errors);
+    for (const value of Object.values(input)) {
+      validateJsonValue(value, `${ctx}[entry]`, errors);
     }
     return;
   }
@@ -2773,11 +2794,7 @@ function validateDeckMetadata(
     fail(errors, `${ctx} must be an object`);
     return;
   }
-  for (const key of Object.keys(input)) {
-    if (!DECK_METADATA_KEYS.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known metadata field`);
-    }
-  }
+  rejectUnknownProperties(input, DECK_METADATA_KEYS, ctx, errors);
   validateStringField(input.createdAt, `${ctx}.createdAt`, errors);
   validateStringField(input.updatedAt, `${ctx}.updatedAt`, errors);
   validateStringField(
@@ -2791,8 +2808,8 @@ function validateDeckMetadata(
     if (!isPlainObject(input.extra)) {
       fail(errors, `${ctx}.extra must be an object`);
     } else {
-      for (const [key, value] of Object.entries(input.extra)) {
-        validateJsonValue(value, `${ctx}.extra.${key}`, errors);
+      for (const value of Object.values(input.extra)) {
+        validateJsonValue(value, `${ctx}.extra[entry]`, errors);
       }
     }
   }
@@ -2822,18 +2839,20 @@ function validateThemeStylesOverrides(
     return;
   }
   for (const [styleRef, variants] of Object.entries(input)) {
+    const styleCtx = `${ctx}[style]`;
     if (!isStyleRef(styleRef)) {
-      fail(errors, `${ctx}.${styleRef} must be a registered StyleRef`);
+      fail(errors, `${styleCtx} must be a registered StyleRef`);
     }
     if (!isPlainObject(variants)) {
-      fail(errors, `${ctx}.${styleRef} must be an object`);
+      fail(errors, `${styleCtx} must be an object`);
       continue;
     }
-    for (const [variant, patch] of Object.entries(variants)) {
+    for (const patch of Object.values(variants)) {
+      const variantCtx = `${styleCtx}[variant]`;
       if (!isPlainObject(patch)) {
-        fail(errors, `${ctx}.${styleRef}.${variant} must be an object`);
+        fail(errors, `${variantCtx} must be an object`);
       } else {
-        validateStylePatch(patch, `${ctx}.${styleRef}.${variant}`, errors);
+        validateStylePatch(patch, variantCtx, errors);
       }
     }
   }
@@ -2848,11 +2867,7 @@ function validateThemeOverridePatch(
     fail(errors, `${ctx} must be an object`);
     return;
   }
-  for (const key of Object.keys(input)) {
-    if (!THEME_OVERRIDE_KEYS.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known theme override field`);
-    }
-  }
+  rejectUnknownProperties(input, THEME_OVERRIDE_KEYS, ctx, errors);
   if (input.tokens !== undefined && !isPlainObject(input.tokens)) {
     fail(errors, `${ctx}.tokens must be an object`);
   }
@@ -2882,11 +2897,7 @@ function validateDeckThemeBinding(
     fail(errors, `${ctx} must be an object`);
     return;
   }
-  for (const key of Object.keys(input)) {
-    if (!DECK_THEME_KEYS.has(key)) {
-      fail(errors, `${ctx}.${key} is not a known theme field`);
-    }
-  }
+  rejectUnknownProperties(input, DECK_THEME_KEYS, ctx, errors);
   if (!isValidationNonEmptyString(input.packageId, "exact")) {
     fail(errors, `${ctx}.packageId must be a non-empty string`);
   }
@@ -2915,16 +2926,11 @@ const DECK__KEYS = new Set([
 
 function validateDeck(input: unknown, errors: string[]): Partial<Deck> {
   if (!isPlainObject(input)) {
-    fail(errors, "Deck must be an object");
+    fail(errors, "Deck must be an object", "invalid_structure");
     return {};
   }
 
-  // Reject unknown top-level keys
-  for (const key of Object.keys(input)) {
-    if (!DECK__KEYS.has(key)) {
-      fail(errors, `Deck.${key} is not part of the presentation schema`);
-    }
-  }
+  rejectUnknownProperties(input, DECK__KEYS, "Deck", errors);
 
   // Check schemaVersion first
   if (input.schemaVersion !== DECK_SCHEMA_VERSION) {
@@ -2934,10 +2940,15 @@ function validateDeck(input: unknown, errors: string[]): Partial<Deck> {
     ) {
       fail(
         errors,
-        `Deck.schemaVersion ${input.schemaVersion} is not presentation (expected ${DECK_SCHEMA_VERSION})`,
+        `Deck.schemaVersion is not presentation (expected ${DECK_SCHEMA_VERSION})`,
+        "invalid_version",
       );
     } else {
-      fail(errors, `Deck.schemaVersion must be ${DECK_SCHEMA_VERSION}`);
+      fail(
+        errors,
+        `Deck.schemaVersion must be ${DECK_SCHEMA_VERSION}`,
+        "invalid_version",
+      );
     }
     // Fatal: stop further validation
     return {};
@@ -2950,9 +2961,13 @@ function validateDeck(input: unknown, errors: string[]): Partial<Deck> {
   validateDeckChromeConfig(input.chrome, "Deck.chrome", errors);
 
   if (!Array.isArray(input.slides)) {
-    fail(errors, "Deck.slides must be an array");
+    fail(errors, "Deck.slides must be an array", "invalid_structure");
   } else if (input.slides.length === 0) {
-    fail(errors, "Deck.slides must contain at least one slide");
+    fail(
+      errors,
+      "Deck.slides must contain at least one slide",
+      "invalid_structure",
+    );
   } else {
     const nodeIds = new Set<string>();
     for (let i = 0; i < input.slides.length; i++) {

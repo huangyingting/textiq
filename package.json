@@ -43,7 +43,7 @@
     "test:visual": "npm run test:subsystem -- visual",
     "test:operations": "npm run test:subsystem -- operations",
     "test:e2e": "playwright test",
-    "test:e2e:profile": "E2E_PROFILE=1 playwright test",
+    "test:e2e:profile": "node scripts/e2e-profile.mjs",
     "test:e2e:profile:self-contained": "node scripts/e2e-profile.mjs",
     "slide-fonts:generate": "node --import tsx scripts/gen-slide-fonts-css.ts",
     "format": "prettier --write .",

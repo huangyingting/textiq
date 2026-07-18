@@ -1,5 +1,6 @@
 import type { Deck } from "@/lib/presentation/schema";
 import type { Visual } from "@/lib/visual/schema";
+import { markdownToLexicalStateObject } from "@/lib/content/from-markdown";
 import { fixtureAssetChecksum, fixturePngBuffer } from "./assets";
 import {
   buildEditorState,
@@ -43,7 +44,9 @@ export const E2E_PROFILE_FIXTURE = {
   },
   workspaceId: "e2efixtureworkspace0000001",
   documentId: "e2efixturedocument0000001",
+  deckRevisionToken: "e2e-deck-revision-canonical",
   layoutDocumentId: "e2efixturelayoutdoc000001",
+  layoutDeckRevisionToken: "e2e-deck-revision-layout",
   privateDocumentId: "e2efixtureprivatedoc00001",
   visualId: "e2efixturevisual000000001",
   shareId: "e2efixtureshare01",
@@ -124,6 +127,26 @@ export function buildE2EProfileContentJson(
     buildParagraphNode(F.documentBodyText),
     buildVisualLexicalNode(F.visualId, visual),
   ]);
+}
+
+export function buildE2EGeneratedPresentationContentJson() {
+  return markdownToLexicalStateObject(`# Generated first-save presentation
+
+Revenue grew 24% year-over-year from real document content.
+
+- Expand the European launch
+- Improve customer retention
+
+## KPI table
+
+| KPI | Result |
+| --- | --- |
+| NPS | 58 |
+| Growth | 24% |
+
+## Next steps
+
+Owners will execute the launch plan and report progress.`);
 }
 
 export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
@@ -234,6 +257,179 @@ export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
       },
     ],
   };
+}
+
+export function buildE2EMultiSelectArrangeDeck(): Deck {
+  return buildDeck(
+    [
+      buildSlide("content", [
+        buildTextNode({
+          id: "arrange-node-a",
+          name: "A",
+          layout: buildLayoutBox({
+            frame: { x: 10, y: 10, w: 10, h: 10 },
+            zIndex: 1,
+          }),
+          content: buildTextContent(["A"]),
+        }),
+        buildTextNode({
+          id: "arrange-node-b",
+          name: "B",
+          layout: buildLayoutBox({
+            frame: { x: 30, y: 25, w: 20, h: 15 },
+            zIndex: 2,
+          }),
+          content: buildTextContent(["B"]),
+        }),
+        buildTextNode({
+          id: "arrange-node-c",
+          name: "C",
+          layout: buildLayoutBox({
+            frame: { x: 80, y: 70, w: 10, h: 20 },
+            zIndex: 3,
+          }),
+          content: buildTextContent(["C"]),
+        }),
+      ]),
+    ],
+    {
+      theme: { packageId: "neutral", packageVersion: "1.0.0" },
+      assets: { images: {} },
+    },
+  );
+}
+
+export function buildE2EPrecisionGuidesDeck(): Deck {
+  return buildDeck(
+    [
+      buildSlide("content", [
+        buildTextNode({
+          id: "guide-target",
+          name: "Guide target",
+          layout: buildLayoutBox({
+            frame: { x: 20, y: 20, w: 10, h: 12 },
+            zIndex: 1,
+          }),
+          content: buildTextContent(["Guide target"]),
+        }),
+        buildTextNode({
+          id: "guide-reference",
+          name: "Guide reference",
+          layout: buildLayoutBox({
+            frame: { x: 70, y: 60, w: 12, h: 10 },
+            zIndex: 2,
+          }),
+          content: buildTextContent(["Guide reference"]),
+        }),
+      ]),
+    ],
+    {
+      theme: { packageId: "neutral", packageVersion: "1.0.0" },
+      assets: { images: {} },
+    },
+  );
+}
+
+export function buildE2ETouchControlsDeck(): Deck {
+  return buildDeck(
+    [
+      buildSlide("content", [
+        buildTextNode({
+          id: "touch-text",
+          name: "Touch text",
+          layout: buildLayoutBox({
+            frame: { x: 20, y: 40, w: 60, h: 12 },
+            zIndex: 1,
+          }),
+          content: buildTextContent(["Touch text"]),
+        }),
+      ]),
+    ],
+    {
+      theme: { packageId: "neutral", packageVersion: "1.0.0" },
+      assets: { images: {} },
+    },
+  );
+}
+
+export function buildE2EOverlapSelectionDeck(): Deck {
+  return buildDeck(
+    [
+      buildSlide("content", [
+        buildTextNode({
+          id: "overlap-earlier-high-z",
+          name: "Earlier high z",
+          layout: buildLayoutBox({
+            frame: { x: 25, y: 30, w: 50, h: 20 },
+            zIndex: 900,
+          }),
+          content: buildTextContent(["Earlier high z"]),
+        }),
+        buildTextNode({
+          id: "overlap-later-low-z",
+          name: "Later low z",
+          layout: buildLayoutBox({
+            frame: { x: 25, y: 30, w: 50, h: 20 },
+            zIndex: -900,
+          }),
+          content: buildTextContent(["Later low z"]),
+        }),
+      ]),
+    ],
+    {
+      theme: { packageId: "neutral", packageVersion: "1.0.0" },
+      assets: { images: {} },
+    },
+  );
+}
+
+export function buildE2EGroupLayerOrderDeck(): Deck {
+  return buildDeck(
+    [
+      buildSlide("content", [
+        buildShapeNode({
+          id: "group-root-back",
+          name: "Root back",
+          layout: buildLayoutBox({
+            frame: { x: 20, y: 20, w: 60, h: 30 },
+            zIndex: 5,
+          }),
+          localStyle: { fill: { type: "solid", color: "#facc15" } },
+        }),
+        buildShapeNode({
+          id: "group-back",
+          name: "Group back",
+          layout: buildLayoutBox({
+            frame: { x: 22, y: 25, w: 24, h: 20 },
+            zIndex: 10,
+          }),
+          localStyle: { fill: { type: "solid", color: "#ef4444" } },
+        }),
+        buildShapeNode({
+          id: "group-front",
+          name: "Group front",
+          layout: buildLayoutBox({
+            frame: { x: 54, y: 25, w: 24, h: 20 },
+            zIndex: 11,
+          }),
+          localStyle: { fill: { type: "solid", color: "#2563eb" } },
+        }),
+        buildShapeNode({
+          id: "group-root-front",
+          name: "Root front",
+          layout: buildLayoutBox({
+            frame: { x: 82, y: 60, w: 10, h: 10 },
+            zIndex: 20,
+          }),
+          localStyle: { fill: { type: "solid", color: "#111827" } },
+        }),
+      ]),
+    ],
+    {
+      theme: { packageId: "neutral", packageVersion: "1.0.0" },
+      assets: { images: {} },
+    },
+  );
 }
 
 export function buildE2EProfileDeckFixture(): Deck {

@@ -46,9 +46,10 @@ test("presenter tools presentation labels fall back through text, group, notes, 
     notes: "",
   });
   const groupNode: Extract<SlideChildNode, { type: "group" }> = {
-    ...buildShapeNode({ id: "group-shell" }),
+    id: "group-shell",
     type: "group",
     component: "metricCard",
+    layout: buildShapeNode({ id: "group-shell-layout" }).layout,
     children: [textNode("Nested group label")],
   };
   const groupSlide = buildSlide("content", [groupNode], {

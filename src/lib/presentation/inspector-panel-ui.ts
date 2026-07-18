@@ -142,7 +142,7 @@ export function availablePanels(
         panels.push("table", "arrange", "style", "effects", "source", "layers");
         break;
       case "group":
-        panels.push("arrange", "effects", "layers");
+        panels.push("arrange", "layers");
         break;
       default:
         panels.push("arrange", "layers");

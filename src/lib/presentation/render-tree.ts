@@ -23,6 +23,10 @@ import type {
 } from "./schema";
 import type { ResolvedTheme } from "./style-resolver";
 import type { PresentationDiagnostic } from "./diagnostics";
+import {
+  effectiveVisualZIndex,
+  flattenNodesInRenderOrder,
+} from "./render-order";
 
 // ---------------------------------------------------------------------------
 // Resolved layout
@@ -108,21 +112,9 @@ export type ResolvedDeckRenderTree = {
 function flattenRenderNodes(
   nodes: readonly ResolvedRenderNode[],
 ): ResolvedRenderNode[] {
-  const result: ResolvedRenderNode[] = [];
-  for (const node of nodes) {
-    result.push(node);
-    if (node.children && node.children.length > 0) {
-      result.push(...flattenRenderNodes(node.children));
-    }
-  }
-  return result;
-}
-
-function compareNodesByZIndex(
-  left: ResolvedRenderNode,
-  right: ResolvedRenderNode,
-): number {
-  return (left.layout.zIndex ?? 0) - (right.layout.zIndex ?? 0);
+  return flattenNodesInRenderOrder(nodes, (node) => node.children, {
+    mode: "visual",
+  });
 }
 
 export function buildSlideRenderLists(slide: {
@@ -131,13 +123,12 @@ export function buildSlideRenderLists(slide: {
   nodes: readonly ResolvedRenderNode[];
 }): ResolvedSlideRenderLists {
   const decorations = flattenRenderNodes(slide.decorations);
-  const flattenedChrome = flattenRenderNodes(slide.chrome);
-  const backgroundChrome = flattenedChrome
-    .filter((node) => (node.layout.zIndex ?? 0) < 0)
-    .sort(compareNodesByZIndex);
-  const foregroundChrome = flattenedChrome
-    .filter((node) => (node.layout.zIndex ?? 0) >= 0)
-    .sort(compareNodesByZIndex);
+  const backgroundChrome = flattenRenderNodes(
+    slide.chrome.filter((node) => effectiveVisualZIndex(node) < 0),
+  );
+  const foregroundChrome = flattenRenderNodes(
+    slide.chrome.filter((node) => effectiveVisualZIndex(node) >= 0),
+  );
   const userNodes = flattenRenderNodes(slide.nodes);
 
   return {

@@ -1,12 +1,24 @@
 import { Prisma } from "@/generated/prisma/client";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
-import type { SaveDeckResult } from "@/lib/document/persistence-types";
+import { classifyValidationDiagnostics } from "@/lib/diagnostics/validation-classification";
+import type {
+  SaveDeckFailureResult,
+  SaveDeckResult,
+} from "@/lib/document/persistence-types";
 import { MAX_DECK_JSON_BYTES, formatDeckTooLargeError } from "@/lib/limits";
 import { logError } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import { updateDocumentsMetadata } from "@/lib/document/document-write-port";
-import { safeParseDeck } from "@/lib/document/persistence/current-deck-schema";
+import {
+  DECK_SCHEMA_VERSION,
+  safeParseDeck,
+} from "@/lib/document/persistence/current-deck-schema";
+
+const DECK_CAS_UPDATE_LOG_ERROR = new Error("Deck CAS update failed");
+const DECK_CAS_VERIFY_LOG_ERROR = new Error(
+  "Deck CAS conflict verification failed",
+);
 
 export type DeckCasDb = {
   document: {
@@ -20,7 +32,7 @@ export type DeckCasDb = {
 export type DeckCasWriteOptions = {
   documentId: string;
   deckJson: unknown;
-  clientToken?: string | null;
+  clientToken: string | null;
   telemetryArea: string;
   db?: DeckCasDb;
   throwOnStorageError?: boolean;
@@ -28,13 +40,9 @@ export type DeckCasWriteOptions = {
 
 function fail(
   error: string,
-  code:
-    | "invalid_deck"
-    | "deck_too_large"
-    | "document_not_found"
-    | "storage_unavailable",
+  code: SaveDeckFailureResult["failure"]["code"],
   retryable: boolean,
-): SaveDeckResult {
+): SaveDeckFailureResult {
   return { ok: false, error, failure: { code, retryable } };
 }
 
@@ -50,15 +58,23 @@ export async function writeDeckWithCas({
   db = prisma,
   throwOnStorageError = false,
 }: DeckCasWriteOptions): Promise<SaveDeckResult> {
+  if (clientToken === undefined) {
+    return fail(
+      "A deck revision token is required.",
+      "invalid_revision_token",
+      false,
+    );
+  }
+
   const presentationResult = safeParseDeck(deckJson);
   if (!presentationResult.success) {
-    const reason = presentationResult.errors.join("; ");
     reportSchemaFailure("deck-parse-failed", {
       area: telemetryArea,
-      documentId,
-      reason,
+      code: classifyValidationDiagnostics(presentationResult.errors),
+      issueCount: presentationResult.errors.length,
+      schemaVersion: DECK_SCHEMA_VERSION,
     });
-    return fail(`Invalid deck: ${reason}`, "invalid_deck", false);
+    return fail("Invalid deck.", "invalid_deck", false);
   }
 
   const parsedData = presentationResult.data;
@@ -72,12 +88,7 @@ export async function writeDeckWithCas({
   let count: number;
   try {
     const update = await updateDocumentsMetadata(db, {
-      where:
-        /* Coverage rationale: CAS/no-CAS update predicates are asserted; tsx maps ternary rows as uncovered. */
-        /* node:coverage ignore next 3 */
-        clientToken != null
-          ? { id: documentId, deckRevisionToken: clientToken }
-          : { id: documentId },
+      where: { id: documentId, deckRevisionToken: clientToken },
       data: {
         deckJson: toPrismaJsonInput(parsedData),
         deckRevisionToken: newToken,
@@ -88,10 +99,11 @@ export async function writeDeckWithCas({
     if (throwOnStorageError) {
       throw error;
     }
-    logError("deck.cas", error, {
+    logError("deck.cas", DECK_CAS_UPDATE_LOG_ERROR, {
+      code: "storage_unavailable",
       documentId,
       operation: "updateMany",
-      telemetryArea,
+      outcome: "failed",
     });
     return fail(
       "Failed to save deck. Please try again.",
@@ -111,10 +123,11 @@ export async function writeDeckWithCas({
       if (throwOnStorageError) {
         throw error;
       }
-      logError("deck.cas", error, {
+      logError("deck.cas", DECK_CAS_VERIFY_LOG_ERROR, {
+        code: "storage_unavailable",
         documentId,
         operation: "findUnique",
-        telemetryArea,
+        outcome: "failed",
       });
       return fail(
         "Failed to verify deck conflict. Please try again.",

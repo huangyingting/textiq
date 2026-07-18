@@ -76,7 +76,7 @@ export function SlideEditorInspectorRegion({
             aria-expanded={inspectorSheetOpen}
             onClick={onOpenMobileInspector}
             className={cx(
-              "tiq-safe-fab fixed z-modal flex min-h-12 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full bg-ds-accent px-3 py-2 text-ds-text-on-accent shadow-ds-overlay transition-colors hover:bg-ds-accent-hover",
+              "tiq-safe-fab absolute z-modal flex min-h-12 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full bg-ds-accent px-3 py-2 text-ds-text-on-accent shadow-ds-overlay transition-colors hover:bg-ds-accent-hover",
               FOCUS_RING,
             )}
           >

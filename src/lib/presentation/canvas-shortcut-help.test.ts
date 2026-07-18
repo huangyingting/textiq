@@ -25,6 +25,10 @@ describe("canvasShortcutHelp (#535)", () => {
     assert.ok(flat.some((e) => e.keys === "Ctrl/⌘ + [ / ]"));
     assert.ok(flat.some((e) => e.keys === "Shift + [ / ]"));
     assert.ok(flat.some((e) => e.keys === "Tab / Shift + Tab"));
+    assert.equal(
+      flat.some((e) => e.description === "Select next overlapping element"),
+      false,
+    );
   });
 
   test("uses ⌘ on mac and Ctrl elsewhere", () => {

@@ -87,7 +87,12 @@ describe("presentation remaining library coverage", () => {
         },
       ),
     );
-    assert.ok(thrown.some((error) => error.includes("schema getter failed")));
+    assert.ok(
+      thrown.includes(
+        "validation_internal_error: Deck: validation could not be completed",
+      ),
+    );
+    assert.ok(!JSON.stringify(thrown).includes("schema getter failed"));
 
     const base = cloneDeck(
       buildDeck([
@@ -229,7 +234,6 @@ describe("presentation remaining library coverage", () => {
       id: "group-1",
       type: "group",
       component: "custom",
-      style: { ref: "surface.card" },
       layout: buildLayoutBox({
         frame: { x: 8, y: 8, w: 35, h: 20 },
         zIndex: 3,
@@ -318,7 +322,6 @@ describe("presentation remaining library coverage", () => {
       id: "parent-group",
       type: "group",
       component: "custom",
-      style: { ref: "surface.card" },
       layout: buildLayoutBox({
         frame: { x: 0, y: 0, w: 70, h: 30 },
         zIndex: 0,
@@ -347,7 +350,6 @@ describe("presentation remaining library coverage", () => {
       deck.slides[0].id,
       ["nested-a", "nested-b"],
       "nested-group",
-      { ref: "surface.card" },
     );
 
     const nested = findNode(grouped.slides[0].children, "nested-group");

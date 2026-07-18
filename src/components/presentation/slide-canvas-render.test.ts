@@ -623,6 +623,9 @@ describe("SlideCanvas stage editing render affordances", () => {
 
     assert.match(html, /data-resize-handle="nw"/);
     assert.match(html, /data-resize-handle="se"/);
+    assert.match(html, /aria-hidden="true" data-node-chrome-overlay="resize"/);
+    assert.doesNotMatch(html, /data-resize-handle="[^"]+"[^>]*role=/);
+    assert.doesNotMatch(html, /data-resize-handle="[^"]+"[^>]*tabindex=/);
     assert.match(
       html,
       /data-resize-handle="se"[^>]*style="[^"]*cursor:nwse-resize/,
@@ -668,9 +671,22 @@ describe("SlideCanvas stage editing render affordances", () => {
     );
 
     assert.match(shapeHtml, /data-rotation-handle="true"/);
+    assert.match(
+      shapeHtml,
+      /aria-hidden="true" data-node-chrome-overlay="rotation"/,
+    );
     assert.match(shapeHtml, /data-node-chrome-frame="activeGroup"/);
     assert.match(connectorHtml, /data-connector-endpoint="from"/);
     assert.match(connectorHtml, /data-connector-endpoint="to"/);
+    assert.match(
+      connectorHtml,
+      /aria-hidden="true" data-node-chrome-overlay="connector-endpoints"/,
+    );
+    assert.doesNotMatch(shapeHtml, /data-rotation-handle="true"[^>]*role=/);
+    assert.doesNotMatch(
+      connectorHtml,
+      /data-connector-endpoint="[^"]+"[^>]*role=/,
+    );
   });
 
   test("applies node transforms to selection and handle overlays", () => {
@@ -1663,7 +1679,7 @@ describe("SlideCanvas stage editing render affordances", () => {
     assert.match(html, /data-slide-index="0"/);
     assert.match(html, /data-slide-index="1"/);
     assert.match(html, /data-slide-index="2"/);
-    assert.match(html, /Go to slide 2/);
+    assert.match(html, /Slide 2/);
     assert.match(html, /deck-chrome-pageNumber/);
     assert.match(html, /data-filmstrip-thumbnail-canvas="true"/);
     assert.match(html, /width:960px/);

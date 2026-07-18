@@ -19,6 +19,7 @@ import type {
   BrandKitDraftV1,
 } from "@/lib/presentation/brand-kit/schema";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type { ThemePackageCatalogEntry } from "@/lib/presentation/theme-package-registry";
 import type { ImportCreationTarget } from "@/lib/import/contract";
 
 export interface DeckFetchPort {
@@ -29,7 +30,7 @@ export interface DeckSavePort {
   saveDeckJson: (
     documentId: string,
     deckJson: unknown,
-    clientToken?: string | null,
+    clientToken: string | null,
   ) => Promise<SaveDeckResult>;
 }
 
@@ -53,6 +54,7 @@ export type SaveBrandKitDraftResult =
       packageId: string;
       packageVersion: string;
       package: ThemePackageV1;
+      catalogEntry: ThemePackageCatalogEntry;
       diagnostics: BrandKitDiagnostic[];
     }
   | { ok: false; diagnostics: BrandKitDiagnostic[] };

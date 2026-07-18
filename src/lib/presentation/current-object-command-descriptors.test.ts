@@ -66,7 +66,6 @@ describe("current-object command descriptor catalog", () => {
     }
 
     for (const family of CURRENT_OBJECT_COMMAND_FAMILIES) {
-      if (family === "reorder-selection") continue;
       assert.ok(
         CURRENT_OBJECT_COMMAND_DESCRIPTORS.some(
           (descriptor) => descriptor.family === family,
@@ -189,12 +188,31 @@ describe("current-object command descriptor bijections", () => {
     }
   });
 
-  test("keeps reorder descriptors out of user-facing command surfaces", () => {
-    assert.deepEqual(CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS, []);
-    assert.throws(
-      () => currentObjectReorderCommandDescriptor("front"),
-      /Unknown current-object reorder command mode: front/,
+  test("keeps reorder descriptors bijective with toolbar and inspector commands", () => {
+    assert.deepEqual(
+      CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS.map(
+        (descriptor) => descriptor.mode,
+      ),
+      ["forward", "backward", "front", "back"],
     );
+    for (const descriptor of CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS) {
+      assert.equal(
+        currentObjectReorderCommandDescriptor(descriptor.mode),
+        descriptor,
+      );
+      assert.ok(
+        descriptor.owners.some(
+          (owner) =>
+            owner.surface === "popover" && owner.ownerId === "context-toolbar",
+        ),
+      );
+      assert.ok(
+        descriptor.owners.some(
+          (owner) =>
+            owner.surface === "inspector" && owner.inspectorPanel === "arrange",
+        ),
+      );
+    }
   });
 
   test("keeps multi-selection arrange descriptors aligned with toolbar verbs", () => {

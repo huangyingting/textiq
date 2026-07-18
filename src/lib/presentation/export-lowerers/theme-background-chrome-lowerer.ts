@@ -7,21 +7,18 @@ import type {
   ResolvedRenderNode,
   ResolvedSlideRenderTree,
 } from "../render-tree";
+import {
+  effectiveVisualZIndex,
+  orderSiblingsByVisualOrder,
+} from "../render-order";
 import { lowerNodeToExportOperations } from "./export-node-lowerer";
-
-function compareByZIndex(
-  left: ResolvedRenderNode,
-  right: ResolvedRenderNode,
-): number {
-  return (left.layout.zIndex ?? 0) - (right.layout.zIndex ?? 0);
-}
 
 function lowerNodes(
   nodes: readonly ResolvedRenderNode[],
   dc: DiagnosticCollector,
 ): ExportOperation[] {
   const operations: ExportOperation[] = [];
-  for (const node of nodes) {
+  for (const node of orderSiblingsByVisualOrder(nodes)) {
     operations.push(...lowerNodeToExportOperations(node, dc));
   }
   return operations;
@@ -48,9 +45,7 @@ export function lowerBackgroundChromeOperations(
   dc: DiagnosticCollector,
 ): ExportOperation[] {
   return lowerNodes(
-    slide.chrome
-      .filter((node) => (node.layout.zIndex ?? 0) < 0)
-      .sort(compareByZIndex),
+    slide.chrome.filter((node) => effectiveVisualZIndex(node) < 0),
     dc,
   );
 }
@@ -60,9 +55,7 @@ export function lowerForegroundChromeOperations(
   dc: DiagnosticCollector,
 ): ExportOperation[] {
   return lowerNodes(
-    slide.chrome
-      .filter((node) => (node.layout.zIndex ?? 0) >= 0)
-      .sort(compareByZIndex),
+    slide.chrome.filter((node) => effectiveVisualZIndex(node) >= 0),
     dc,
   );
 }

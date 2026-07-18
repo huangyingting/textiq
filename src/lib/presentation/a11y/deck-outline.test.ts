@@ -69,7 +69,6 @@ describe("buildDeckOutline", () => {
       component: "metricCard",
       role: "card",
       layout: buildLayoutBox({ zIndex: 7 }),
-      style: { ref: "surface.card" },
       children: [
         buildShapeNode({
           id: "group-shape",
@@ -142,15 +141,15 @@ describe("buildDeckOutline", () => {
     assert.equal(outline.slides[0].title, "A11y Foundation");
     assert.equal(outline.slides[0].position, 1);
     assert.equal(
-      outline.slides[0].nodes[1].label,
+      outline.slides[0].nodes.find((node) => node.id === image.id)?.label,
       "Image: Hero customer photo",
     );
     assert.equal(
-      outline.slides[0].nodes[2].label,
+      outline.slides[0].nodes.find((node) => node.id === table.id)?.label,
       "Table: Quarterly results, 2 columns, 1 rows, headers: Region, Revenue",
     );
     assert.equal(
-      outline.slides[0].nodes[3].label,
+      outline.slides[0].nodes.find((node) => node.id === visual.id)?.label,
       "Visual: Pipeline conversion chart",
     );
     assert.ok(

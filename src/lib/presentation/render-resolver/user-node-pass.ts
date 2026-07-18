@@ -10,6 +10,7 @@ import { resolveNodeStyle } from "../style-resolver";
 import { DiagnosticCollector, retargetDiagnostic } from "../diagnostics";
 import type { StyleObject } from "../style-schema";
 import { normalizeVisualChannelColors } from "../visual-channel-colors";
+import { orderSiblingsByVisualOrder } from "../render-order";
 import { resolveLayoutFramePass } from "./layout-pass";
 
 // Child node resolver
@@ -96,7 +97,9 @@ function resolveChildNode(
 
   // Resolve style
   let resolvedStyle: StyleObject = {};
-  if (node.style) {
+  // Groups are styleless logical stacking/selection containers. Their absolute
+  // child layouts already carry group move/resize/rotation mutations.
+  if (node.type !== "group" && node.style) {
     const { style: s, diagnostics } = resolveNodeStyle(
       node.style,
       deck.theme,
@@ -139,11 +142,7 @@ function resolveChildNode(
   let content: ResolvedNodeContent;
   if (node.type === "group") {
     const children: ResolvedRenderNode[] = [];
-    // Sort by zIndex ascending, stable by tree order
-    const sorted = [...(node.children ?? [])].sort(
-      (a, b) => (a.layout?.zIndex ?? 0) - (b.layout?.zIndex ?? 0),
-    );
-    for (const child of sorted) {
+    for (const child of orderSiblingsByVisualOrder(node.children ?? [])) {
       const resolved = resolveChildNode(
         child,
         slide,
@@ -318,13 +317,8 @@ export function resolveUserNodesPass(
   canvasWidthPx = 960,
   canvasHeightPx = 540,
 ): ResolvedRenderNode[] {
-  const visibleChildren = slide.children.filter((n) => !n.hidden);
-  const sortedChildren = [...visibleChildren].sort(
-    (a, b) => (a.layout?.zIndex ?? 0) - (b.layout?.zIndex ?? 0),
-  );
-
   const nodes: ResolvedRenderNode[] = [];
-  for (const child of sortedChildren) {
+  for (const child of orderSiblingsByVisualOrder(slide.children)) {
     const resolved = resolveChildNode(
       child,
       slide,

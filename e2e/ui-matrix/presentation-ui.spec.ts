@@ -43,7 +43,10 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
   test("command palette filters and runs insert and panel commands", async ({
     page,
   }) => {
-    await loginAsProfileOwner(page, `${profileDocPath()}/slides`);
+    await loginAsProfileOwner(
+      page,
+      `${profileDocPath("uiCommandPalette", test.info())}/slides`,
+    );
 
     const editor = page.locator('[data-slide-editor="true"]').first();
     await expect(editor).toBeVisible({ timeout: 30_000 });
@@ -51,8 +54,15 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
       editor.locator('[data-slide-canvas="true"]').first(),
     );
 
-    const textNodes = editor.locator('[data-node-type="text"]');
+    // Scope text-node counting to the main stage viewport only (excluding
+    // filmstrip thumbnail canvases which also render text nodes).
+    const stageViewport = editor.locator('[data-slide-stage-viewport="true"]');
+    const textNodes = stageViewport.locator('[data-node-type="text"]');
     const textCountBefore = await textNodes.count();
+    // Give the slide editor keyboard focus so the Ctrl/Meta+K shortcut reaches
+    // its keydown handler without selecting a canvas element or triggering a
+    // popover that would interfere with command-palette interaction.
+    await editor.focus();
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+K" : "Control+K",
     );
@@ -61,11 +71,18 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await palette
       .getByRole("combobox", { name: "Search commands" })
       .fill("insert text");
-    await palette
-      .getByRole("combobox", { name: "Search commands" })
-      .press("Enter");
+    const insertText = palette.getByRole("option", {
+      name: /^Insert text\b/,
+    });
+    await expect(insertText).toBeVisible();
+    await insertText.click();
     await expect(textNodes).toHaveCount(textCountBefore + 1);
 
+    // The inserted text node is now selected. Deselect it (slide becomes
+    // current object) before the next palette open: "Open Notes panel" is only
+    // available when no node is selected (notes is a slide-level panel).
+    await editor.focus();
+    await page.keyboard.press("Escape");
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+K" : "Control+K",
     );
@@ -73,12 +90,14 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await palette
       .getByRole("combobox", { name: "Search commands" })
       .fill("open notes");
-    await palette
-      .getByRole("combobox", { name: "Search commands" })
-      .press("Enter");
+    const openNotes = palette.getByRole("option", {
+      name: /^Open Notes panel\b/,
+    });
+    await expect(openNotes).toBeVisible();
+    await openNotes.click();
     await expect(
       editor.getByRole("textbox", { name: "Speaker Notes" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("filmstrip exposes both seeded slides and their controls", async ({
@@ -90,13 +109,21 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
 
     const filmstrip = editor.getByRole("list", { name: "Slides" });
     await expect(
-      filmstrip.getByRole("button", { name: /^Go to slide \d+$/ }),
+      filmstrip.getByRole("button", { name: /^Slide \d+(: |$)/ }),
     ).toHaveCount(2);
     await expect(
-      filmstrip.getByRole("button", { name: "Go to slide 1" }),
+      filmstrip.getByRole("button", {
+        name: new RegExp(
+          `^Slide 1: ${E2E_PROFILE_FIXTURE.slideTitleText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+        ),
+      }),
     ).toBeVisible();
     await expect(
-      filmstrip.getByRole("button", { name: "Go to slide 2" }),
+      filmstrip.getByRole("button", {
+        name: new RegExp(
+          `^Slide 2: ${E2E_PROFILE_FIXTURE.slideTwoTitleText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+        ),
+      }),
     ).toBeVisible();
     await expect(
       filmstrip.getByRole("button", { name: "Add slide" }),

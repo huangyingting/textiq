@@ -111,7 +111,7 @@ declare global {
     saveDeckJson: (
       id: string,
       deckJson: unknown,
-      clientToken?: string | null,
+      clientToken: string | null,
     ) => Promise<unknown>;
     toggleDocumentSharing: (id: string, isShared: boolean) => Promise<unknown>;
     uploadSlideAsset: (
@@ -302,11 +302,14 @@ type SlideEditorRouteClientProps =
     : never;
 let DECK_SCHEMA_VERSION: typeof import("@/lib/presentation/schema").DECK_SCHEMA_VERSION;
 let SAVE_STATUS_LABEL: typeof import("@/lib/presentation/save-status").SAVE_STATUS_LABEL;
+let buildMinimalThemePackage: typeof import("@/test/builders/presentation-deck").buildMinimalThemePackage;
 
 before(async () => {
   ({ SlideEditorRouteClient } = await import("./slide-editor-route-client"));
   ({ DECK_SCHEMA_VERSION } = await import("@/lib/presentation/schema"));
   ({ SAVE_STATUS_LABEL } = await import("@/lib/presentation/save-status"));
+  ({ buildMinimalThemePackage } =
+    await import("@/test/builders/presentation-deck"));
 
   // Side effect only: flips on `IS_REACT_ACT_ENVIRONMENT` and installs the
   // baseline `document`/`window` stubs, persistently for this file's
@@ -506,6 +509,63 @@ function mount(props: SlideEditorRouteClientProps): {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
+async function withManualTimeouts<T>(
+  body: (timers: {
+    fireNext: () => void;
+    fireAll: () => void;
+    pendingCount: () => number;
+  }) => Promise<T> | T,
+): Promise<T> {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let nextHandle = 1;
+  const callbacks = new Map<number, () => void>();
+
+  globalThis.setTimeout = ((
+    callback: (...args: unknown[]) => void,
+    _delay?: number,
+    ...args: unknown[]
+  ) => {
+    const handle = nextHandle++;
+    callbacks.set(handle, () => callback(...args));
+    return handle;
+  }) as typeof globalThis.setTimeout;
+  globalThis.clearTimeout = ((handle: ReturnType<typeof setTimeout>) => {
+    callbacks.delete(handle as unknown as number);
+  }) as typeof globalThis.clearTimeout;
+
+  const fireNext = () => {
+    const entry = callbacks.entries().next().value as
+      | [number, () => void]
+      | undefined;
+    assert.ok(entry, "expected a pending timeout");
+    callbacks.delete(entry[0]);
+    entry[1]();
+  };
+
+  try {
+    return await body({
+      fireNext,
+      fireAll: () => {
+        while (callbacks.size > 0) fireNext();
+      },
+      pendingCount: () => callbacks.size,
+    });
+  } finally {
+    callbacks.clear();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+}
+
 function latestSlideEditorProps(): Record<string, unknown> {
   const calls = globalThis.__slideEditorCalls;
   const last = calls[calls.length - 1];
@@ -656,7 +716,7 @@ test("onDeckChange marks the deck dirty; onSave persists via the stubbed action 
   globalThis.__slideRouteActionImpls.saveDeckJson = async (
     _id: string,
     _deckJson: unknown,
-    clientToken?: string | null,
+    clientToken: string | null,
   ) => ({ ok: true, revisionToken: `${clientToken ?? "none"}-next` });
 
   const { unmount } = mount(
@@ -752,30 +812,76 @@ test("cleanup: unmounting before the autosave debounce fires cancels the pending
     return { ok: true, revisionToken: "rev-cleanup" };
   };
 
-  const { unmount } = mount(
-    baseProps({
-      documentId: "doc-cleanup",
-      initialDeckJson: validDeckJson(),
-    }),
-  );
-
-  const changedDeck = {
-    ...(latestSlideEditorProps().deck as object),
-    title: "Will not persist",
-  };
-  act(() => {
-    (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
-      changedDeck,
+  await withManualTimeouts(async (timers) => {
+    const { unmount } = mount(
+      baseProps({
+        documentId: "doc-cleanup",
+        initialDeckJson: validDeckJson(),
+      }),
     );
+
+    const changedDeck = {
+      ...(latestSlideEditorProps().deck as object),
+      title: "Will not persist",
+    };
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        changedDeck,
+      );
+    });
+    assert.equal(timers.pendingCount(), 1);
+
+    unmount();
+    assert.equal(timers.pendingCount(), 0);
+    timers.fireAll();
+    assert.equal(saveCalls, 0);
+    assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 0);
   });
+});
 
-  // Unmount tears down the autosave-scheduler effect (`scheduler.cancel()`)
-  // strictly before the real 1500ms debounce could fire.
-  unmount();
+test("cleanup: switching documents remounts the controller and cancels the old document debounce", async () => {
+  await withManualTimeouts(async (timers) => {
+    const { renderer, unmount } = mount(
+      baseProps({
+        documentId: "doc-before-switch",
+        initialDeckJson: validDeckJson(),
+      }),
+    );
+    const oldDeck = {
+      ...(latestSlideEditorProps().deck as object),
+      title: "Old document pending edit",
+    };
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        oldDeck,
+      );
+    });
+    assert.equal(timers.pendingCount(), 1);
 
-  await new Promise((resolve) => setTimeout(resolve, 1700));
-  assert.equal(saveCalls, 0);
-  assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 0);
+    const nextDeck = {
+      ...validDeckJson(),
+      title: "New document deck",
+    };
+    act(() => {
+      renderer.update(
+        createElement(
+          SlideEditorRouteClient,
+          baseProps({
+            documentId: "doc-after-switch",
+            initialDeckJson: nextDeck,
+            initialDeckRevisionToken: "rev-after-switch",
+          }),
+        ),
+      );
+    });
+
+    assert.equal(timers.pendingCount(), 0);
+    timers.fireAll();
+    assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 0);
+    assert.equal(latestSlideEditorProps().documentId, "doc-after-switch");
+    assert.deepEqual(latestSlideEditorProps().deck, nextDeck);
+    unmount();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -898,6 +1004,7 @@ test("save conflict → use theirs: reloads the server deck, replaces local stat
     ok: true,
     deckJson: serverDeck,
     revisionToken: "server-rev-2",
+    themeDiagnostics: [],
   });
 
   const { unmount } = mount(
@@ -939,6 +1046,163 @@ test("save conflict → use theirs: reloads the server deck, replaces local stat
   assert.equal(props.hasUnsavedWork, false);
 
   unmount();
+});
+
+test("save conflict → use theirs: collaborator immediately renders the exact owner theme while retaining only the collaborator catalog", async () => {
+  const exactOwnerPackage = buildMinimalThemePackage(
+    "brand-kit:user-owner:private",
+    { version: "1.0.0", name: "Owner exact v1" },
+  );
+  const sameIdNewerCatalogPackage = {
+    ...exactOwnerPackage,
+    version: "2.0.0",
+    name: "Selectable newer v2",
+  };
+  const catalogEntry = {
+    package: sameIdNewerCatalogPackage,
+    source: "custom" as const,
+    createdAt: "2026-07-01T00:00:00.000Z",
+  };
+  const serverDeck = validDeckJson({
+    id: "deck-owner-theme",
+    theme: {
+      packageId: exactOwnerPackage.id,
+      packageVersion: exactOwnerPackage.version,
+    },
+  });
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () => ({
+    ok: "conflict",
+    serverRevisionToken: "server-owner-theme-rev",
+  });
+  globalThis.__slideRouteActionImpls.fetchDeckJson = async () => ({
+    ok: true,
+    deckJson: serverDeck,
+    revisionToken: "server-owner-theme-rev",
+    activeCustomThemePackage: exactOwnerPackage,
+    themeDiagnostics: [],
+  });
+
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-collaborator-owner-theme",
+      initialDeckJson: validDeckJson(),
+      customThemeCatalogEntries: [catalogEntry],
+    }),
+  );
+  const localDeck = {
+    ...(latestSlideEditorProps().deck as object),
+    title: "Collaborator stale edit",
+  };
+  act(() => {
+    (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+      localDeck,
+    );
+  });
+  await act(async () => {
+    await (
+      latestSlideEditorProps().onSave as (deck: unknown) => Promise<unknown>
+    )(localDeck);
+  });
+
+  await act(async () => {
+    await (latestConflictDialogProps()?.onUseTheirs as () => Promise<void>)();
+  });
+
+  const props = latestSlideEditorProps();
+  assert.equal((props.deck as { id: string }).id, "deck-owner-theme");
+  assert.equal(
+    (props.themePackage as { id: string; version: string }).id,
+    exactOwnerPackage.id,
+  );
+  assert.equal(
+    (props.themePackage as { id: string; version: string }).version,
+    exactOwnerPackage.version,
+    "a same-id newer catalog package must not replace the exact server version",
+  );
+  assert.deepEqual(props.customThemeCatalogEntries, [catalogEntry]);
+  assert.deepEqual(
+    (
+      props.customThemeCatalogEntries as {
+        package: { version: string };
+      }[]
+    ).map((entry) => entry.package.version),
+    [sameIdNewerCatalogPackage.version],
+    "the owner's trusted render snapshot must not be added to Recent/catalog",
+  );
+  assert.equal(props.canUndo, false);
+  assert.equal(props.canRedo, false);
+  assert.equal(props.hasUnsavedWork, false);
+
+  unmount();
+});
+
+test("save conflict → use theirs: fetch or exact-theme hydration failure keeps the conflict and local history intact", async () => {
+  for (const fetchDeckJson of [
+    async () => {
+      throw new Error("network unavailable");
+    },
+    async () => ({
+      ok: true,
+      deckJson: validDeckJson({
+        theme: {
+          packageId: "brand-kit:user-owner:missing",
+          packageVersion: "1.0.0",
+        },
+      }),
+      revisionToken: "missing-theme-rev",
+      themeDiagnostics: [
+        {
+          code: "unknown-theme-package" as const,
+          severity: "warning" as const,
+          message: "Exact custom theme snapshot is unavailable.",
+        },
+      ],
+    }),
+  ]) {
+    globalThis.__slideEditorCalls = [];
+    globalThis.__conflictDialogCalls = [];
+    globalThis.__conflictDialogMounted = false;
+    globalThis.__slideRouteActionImpls.saveDeckJson = async () => ({
+      ok: "conflict",
+      serverRevisionToken: "server-rev-failure",
+    });
+    globalThis.__slideRouteActionImpls.fetchDeckJson = fetchDeckJson;
+    const { unmount } = mount(
+      baseProps({
+        documentId: "doc-use-theirs-failure",
+        initialDeckJson: validDeckJson(),
+      }),
+    );
+    const localDeck = {
+      ...(latestSlideEditorProps().deck as object),
+      title: "Keep this local state",
+    };
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        localDeck,
+      );
+    });
+    assert.equal(latestSlideEditorProps().canUndo, true);
+    await act(async () => {
+      await (
+        latestSlideEditorProps().onSave as (deck: unknown) => Promise<unknown>
+      )(localDeck);
+    });
+
+    await assert.rejects(async () => {
+      await act(async () => {
+        await (
+          latestConflictDialogProps()?.onUseTheirs as () => Promise<void>
+        )();
+      });
+    }, /couldn't load the server version/i);
+
+    const props = latestSlideEditorProps();
+    assert.equal((props.deck as { title: string }).title, localDeck.title);
+    assert.equal(props.hasUnsavedWork, true);
+    assert.equal(globalThis.__conflictDialogMounted, true);
+    unmount();
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1122,6 +1386,68 @@ test("composition: export/undo/redo callbacks are wired as functions and presenc
   unmount();
 });
 
+test("composition: brand authoring save action adds the returned package to route catalog state", () => {
+  const activePackage = buildMinimalThemePackage(
+    "brand-kit:user-user-42:shared",
+    {
+      version: "1.0.0+r1",
+    },
+  );
+  const savedPackage = buildMinimalThemePackage(activePackage.id, {
+    version: "2.0.0+r1",
+  });
+  const initialEntry = {
+    package: activePackage,
+    source: "custom",
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+  const savedEntry = {
+    package: savedPackage,
+    source: "custom",
+    createdAt: "2026-02-01T00:00:00.000Z",
+  };
+  const saveBrandKitDraftAction = async () =>
+    ({ ok: false, diagnostics: [] }) as never;
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-brand-kit",
+      initialDeckJson: validDeckJson({
+        theme: {
+          packageId: activePackage.id,
+          packageVersion: activePackage.version,
+        },
+      }),
+      userId: "user-42",
+      activeCustomThemePackage: activePackage as never,
+      customThemeCatalogEntries: [initialEntry as never],
+      saveBrandKitDraftAction,
+    }),
+  );
+
+  let props = latestSlideEditorProps();
+  assert.equal(props.brandKitOwnerId, "user-42");
+  assert.equal(props.saveBrandKitDraft, saveBrandKitDraftAction);
+  assert.deepEqual(props.themePackage, activePackage);
+  assert.deepEqual(props.customThemeCatalogEntries, [initialEntry]);
+
+  act(() => {
+    (props.onBrandKitSaved as (result: Record<string, unknown>) => void)({
+      ok: true,
+      draftId: "draft-1",
+      packageId: savedPackage.id,
+      packageVersion: savedPackage.version,
+      package: savedPackage,
+      catalogEntry: savedEntry,
+      diagnostics: [],
+    });
+  });
+
+  props = latestSlideEditorProps();
+  assert.deepEqual(props.themePackage, activePackage);
+  assert.deepEqual(props.customThemeCatalogEntries, [savedEntry]);
+  unmount();
+});
+
 // ---------------------------------------------------------------------------
 // Regenerate: blank/derived/derivation-failure/conflict-blocked
 // ---------------------------------------------------------------------------
@@ -1140,11 +1466,15 @@ test("regenerate: blocked while a save conflict is unresolved", async () => {
   );
 
   await act(async () => {
+    const conflictingDeck = {
+      ...(latestSlideEditorProps().deck as object),
+      title: "Conflict before regeneration",
+    };
     await (
       latestSlideEditorProps().onSave as (
         deck: unknown,
       ) => Promise<{ ok: boolean }>
-    )(latestSlideEditorProps().deck);
+    )(conflictingDeck);
   });
   assert.ok(latestConflictDialogProps()?.open, "expected a conflict to exist");
 
@@ -1577,37 +1907,342 @@ test("autosave: the scheduled debounce persists the deck via saveDeckJson withou
     return { ok: true, revisionToken: "rev-autosave" };
   };
 
+  await withManualTimeouts(async (timers) => {
+    const { unmount } = mount(
+      baseProps({
+        documentId: "doc-autosave",
+        initialDeckJson: validDeckJson(),
+      }),
+    );
+
+    const changedDeck = {
+      ...(latestSlideEditorProps().deck as object),
+      title: "Autosaved edit",
+    };
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        changedDeck,
+      );
+    });
+    assert.equal(latestSlideEditorProps().hasUnsavedWork, true);
+    assert.equal(timers.pendingCount(), 1);
+
+    await act(async () => {
+      timers.fireNext();
+      await Promise.resolve();
+    });
+
+    assert.equal(saveCalls, 1);
+    assert.deepEqual(globalThis.__slideRouteActionCalls.saveDeckJson.at(-1), [
+      "doc-autosave",
+      changedDeck,
+      null,
+    ]);
+    assert.equal(latestSlideEditorProps().hasUnsavedWork, false);
+
+    unmount();
+  });
+});
+
+test("save serialization: identical in-flight and already-persisted deck generations write once", async () => {
+  let resolveSave: ((result: unknown) => void) | undefined;
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () =>
+    await new Promise((resolve) => {
+      resolveSave = resolve;
+    });
+
   const { unmount } = mount(
     baseProps({
-      documentId: "doc-autosave",
+      documentId: "doc-save-dedup",
       initialDeckJson: validDeckJson(),
+      initialDeckRevisionToken: "rev-before-dedup",
     }),
   );
-
   const changedDeck = {
     ...(latestSlideEditorProps().deck as object),
-    title: "Autosaved edit",
+    title: "One canonical generation",
   };
+  const onSave = latestSlideEditorProps().onSave as (
+    deck: unknown,
+  ) => Promise<unknown>;
+  let firstSave!: Promise<unknown>;
+  let duplicateSave!: Promise<unknown>;
   act(() => {
-    (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
-      changedDeck,
-    );
+    firstSave = onSave(changedDeck);
+    duplicateSave = onSave({
+      title: "One canonical generation",
+      ...(changedDeck as object),
+    });
   });
-  assert.equal(latestSlideEditorProps().hasUnsavedWork, true);
+
+  assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 1);
+  await act(async () => {
+    resolveSave?.({ ok: true, revisionToken: "rev-after-dedup" });
+    await Promise.all([firstSave, duplicateSave]);
+  });
+  await act(async () => {
+    await onSave({ ...(changedDeck as object) });
+  });
+
+  assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 1);
+  assert.equal(latestSlideEditorProps().saveStatus, "saved");
+  unmount();
+});
+
+test("save serialization: A then B then duplicate B writes each distinct generation once and keeps B failure authoritative", async () => {
+  let resolveA: ((result: unknown) => void) | undefined;
+  let resolveB: ((result: unknown) => void) | undefined;
+  const saveBStarted = createDeferred<void>();
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () => {
+    const callNumber = globalThis.__slideRouteActionCalls.saveDeckJson.length;
+    return await new Promise((resolve) => {
+      if (callNumber === 1) resolveA = resolve;
+      else {
+        resolveB = resolve;
+        saveBStarted.resolve(undefined);
+      }
+    });
+  };
+
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-save-order",
+      initialDeckJson: validDeckJson(),
+      initialDeckRevisionToken: "rev-before-a",
+    }),
+  );
+  const deckA = {
+    ...(latestSlideEditorProps().deck as object),
+    title: "Generation A",
+  };
+  const deckB = { ...deckA, title: "Generation B" };
+  const onSave = latestSlideEditorProps().onSave as (
+    deck: unknown,
+  ) => Promise<unknown>;
+  let drain!: Promise<unknown>;
+  act(() => {
+    drain = onSave(deckA);
+    void onSave(deckB);
+    void onSave({ ...deckB });
+  });
+  assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 1);
 
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    resolveA?.({ ok: true, revisionToken: "rev-after-a" });
+    await saveBStarted.promise;
+  });
+  assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 2);
+  assert.equal(
+    latestSlideEditorProps().saveStatus,
+    "saving",
+    "A completion must not mark the newer B generation clean",
+  );
+
+  await act(async () => {
+    resolveB?.({ ok: false, error: "B write failed" });
+    await drain;
+  });
+  assert.deepEqual(globalThis.__slideRouteActionCalls.saveDeckJson, [
+    ["doc-save-order", deckA, "rev-before-a"],
+    ["doc-save-order", deckB, "rev-after-a"],
+  ]);
+  assert.equal(latestSlideEditorProps().saveStatus, "error");
+  assert.equal(latestSlideEditorProps().hasUnsavedWork, true);
+  unmount();
+});
+
+test("save serialization: an older failure cannot mark a newer successful generation failed", async () => {
+  let resolveA: ((result: unknown) => void) | undefined;
+  let resolveB: ((result: unknown) => void) | undefined;
+  const saveBStarted = createDeferred<void>();
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () => {
+    const callNumber = globalThis.__slideRouteActionCalls.saveDeckJson.length;
+    return await new Promise((resolve) => {
+      if (callNumber === 1) resolveA = resolve;
+      else {
+        resolveB = resolve;
+        saveBStarted.resolve(undefined);
+      }
+    });
+  };
+
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-stale-failure",
+      initialDeckJson: validDeckJson(),
+      initialDeckRevisionToken: "rev-before-stale",
+    }),
+  );
+  const deckA = {
+    ...(latestSlideEditorProps().deck as object),
+    title: "Stale failure",
+  };
+  const deckB = { ...deckA, title: "Latest success" };
+  const onSave = latestSlideEditorProps().onSave as (
+    deck: unknown,
+  ) => Promise<unknown>;
+  let drain!: Promise<unknown>;
+  act(() => {
+    drain = onSave(deckA);
+    void onSave(deckB);
   });
 
-  assert.equal(saveCalls, 1);
-  assert.deepEqual(globalThis.__slideRouteActionCalls.saveDeckJson.at(-1), [
-    "doc-autosave",
-    changedDeck,
-    null,
-  ]);
-  assert.equal(latestSlideEditorProps().hasUnsavedWork, false);
+  await act(async () => {
+    resolveA?.({ ok: false, error: "stale failure" });
+    await saveBStarted.promise;
+  });
+  assert.equal(latestSlideEditorProps().saveStatus, "saving");
 
+  await act(async () => {
+    resolveB?.({ ok: true, revisionToken: "rev-after-latest" });
+    await drain;
+  });
+  assert.equal(latestSlideEditorProps().saveStatus, "saved");
+  assert.equal(latestSlideEditorProps().hasUnsavedWork, false);
   unmount();
+});
+
+test("autosave: a delete queued behind an in-flight duplicate save rotates the token and persists the latest deck exactly once", async () => {
+  let resolveFirstSave: ((result: unknown) => void) | undefined;
+  const secondSaveStarted = createDeferred<void>();
+  globalThis.__slideRouteActionImpls.saveDeckJson = async (
+    _documentId,
+    _deckJson,
+    revisionToken,
+  ) => {
+    if (globalThis.__slideRouteActionCalls.saveDeckJson.length === 1) {
+      return await new Promise((resolve) => {
+        resolveFirstSave = resolve;
+      });
+    }
+    assert.equal(revisionToken, "rev-after-duplicate");
+    secondSaveStarted.resolve(undefined);
+    return { ok: true, revisionToken: "rev-after-delete" };
+  };
+
+  const initialDeck = validDeckJson();
+  const initialSlides = (initialDeck as { slides: unknown[] }).slides;
+  const duplicatedDeck = {
+    ...initialDeck,
+    slides: [...initialSlides, initialSlides[0]],
+  };
+  const deletedDeck = {
+    ...initialDeck,
+    slides: [...initialSlides],
+  };
+  await withManualTimeouts(async (timers) => {
+    const { unmount } = mount(
+      baseProps({
+        documentId: "doc-autosave-delete",
+        initialDeckJson: initialDeck,
+        initialDeckRevisionToken: "rev-before-duplicate",
+      }),
+    );
+
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        duplicatedDeck,
+      );
+    });
+    act(() => timers.fireNext());
+    assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 1);
+
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+        deletedDeck,
+      );
+    });
+    act(() => timers.fireNext());
+    assert.equal(
+      latestSlideEditorProps().saveStatus,
+      "saving",
+      "the first save must not report the later delete as saved",
+    );
+
+    await act(async () => {
+      resolveFirstSave?.({
+        ok: true,
+        revisionToken: "rev-after-duplicate",
+      });
+      await secondSaveStarted.promise;
+    });
+
+    assert.deepEqual(globalThis.__slideRouteActionCalls.saveDeckJson, [
+      ["doc-autosave-delete", duplicatedDeck, "rev-before-duplicate"],
+      ["doc-autosave-delete", deletedDeck, "rev-after-duplicate"],
+    ]);
+    assert.equal(latestSlideEditorProps().saveStatus, "saved");
+    assert.equal(latestSlideEditorProps().hasUnsavedWork, false);
+
+    unmount();
+  });
+});
+
+test("autosave: an older write cannot report saved while a newer deck is still inside the debounce window", async () => {
+  let resolveFirstSave: ((result: unknown) => void) | undefined;
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () => {
+    if (globalThis.__slideRouteActionCalls.saveDeckJson.length === 1) {
+      return await new Promise((resolve) => {
+        resolveFirstSave = resolve;
+      });
+    }
+    return { ok: true, revisionToken: "rev-after-latest-debounce" };
+  };
+
+  const initialDeck = validDeckJson();
+  const deckA = { ...initialDeck, title: "Persisting generation" };
+  const deckB = { ...initialDeck, title: "Still debouncing generation" };
+  await withManualTimeouts(async (timers) => {
+    const { unmount } = mount(
+      baseProps({
+        documentId: "doc-autosave-pending-generation",
+        initialDeckJson: initialDeck,
+        initialDeckRevisionToken: "rev-before-pending-generation",
+      }),
+    );
+
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(deckA);
+      timers.fireNext();
+    });
+    assert.equal(globalThis.__slideRouteActionCalls.saveDeckJson.length, 1);
+
+    act(() => {
+      (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(deckB);
+    });
+    assert.equal(timers.pendingCount(), 1);
+
+    await act(async () => {
+      resolveFirstSave?.({
+        ok: true,
+        revisionToken: "rev-after-persisting-generation",
+      });
+      await Promise.resolve();
+    });
+    assert.equal(latestSlideEditorProps().saveStatus, "pending");
+    assert.equal(latestSlideEditorProps().hasUnsavedWork, true);
+
+    await act(async () => {
+      timers.fireNext();
+      await Promise.resolve();
+    });
+    assert.deepEqual(globalThis.__slideRouteActionCalls.saveDeckJson, [
+      [
+        "doc-autosave-pending-generation",
+        deckA,
+        "rev-before-pending-generation",
+      ],
+      [
+        "doc-autosave-pending-generation",
+        deckB,
+        "rev-after-persisting-generation",
+      ],
+    ]);
+    assert.equal(latestSlideEditorProps().saveStatus, "saved");
+    assert.equal(latestSlideEditorProps().hasUnsavedWork, false);
+
+    unmount();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1632,6 +2267,70 @@ test("theme fallback: an unknown theme packageId surfaces a fallback diagnostic 
       (diagnostic) => diagnostic.code === "unknown-theme-package",
     ),
   );
+
+  unmount();
+});
+
+test("theme hydration: a missing-version custom reference falls back until an exact catalog option is explicitly selected", () => {
+  const latestPackage = buildMinimalThemePackage(
+    "brand-kit:user-user-1:custom",
+    {
+      version: "2.0.0+r1",
+      name: "Latest selectable theme",
+    },
+  );
+  const latestEntry = {
+    package: latestPackage,
+    source: "custom" as const,
+    createdAt: "2026-04-01T00:00:00.000Z",
+  };
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-theme-missing-version",
+      initialDeckJson: validDeckJson({
+        theme: { packageId: latestPackage.id },
+      }),
+      customThemeCatalogEntries: [latestEntry],
+    }),
+  );
+
+  let props = latestSlideEditorProps();
+  assert.equal(
+    (props.themePackage as { id: string }).id,
+    "neutral",
+    "hydration must not render a same-id latest catalog package",
+  );
+  assert.deepEqual(props.customThemeCatalogEntries, [latestEntry]);
+  assert.ok(
+    (props.diagnostics as { code: string }[]).some(
+      (diagnostic) => diagnostic.code === "unknown-theme-package",
+    ),
+  );
+
+  const hydratedDeck = props.deck as Record<string, unknown>;
+  act(() => {
+    (props.onDeckChange as (deck: unknown) => void)({
+      ...hydratedDeck,
+      theme: {
+        packageId: latestPackage.id,
+        packageVersion: latestPackage.version,
+      },
+    });
+  });
+
+  props = latestSlideEditorProps();
+  assert.equal(
+    (props.themePackage as { id: string; version: string }).id,
+    latestPackage.id,
+  );
+  assert.equal(
+    (props.themePackage as { id: string; version: string }).version,
+    latestPackage.version,
+  );
+  assert.deepEqual((props.deck as { theme: unknown }).theme, {
+    packageId: latestPackage.id,
+    packageVersion: latestPackage.version,
+  });
 
   unmount();
 });

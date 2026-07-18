@@ -1,9 +1,16 @@
+import { test } from "@playwright/test";
+
 import type { Credentials } from "./auth";
 import {
   E2E_PROFILE_FIXTURE,
   fixtureAssetChecksum,
   fixturePngBuffer,
 } from "@/test/builders/e2e-profile";
+import {
+  presentationTestFixture,
+  type PresentationFixtureSlotInput,
+  type PresentationTestFixtureName,
+} from "./presentation-fixtures";
 
 export { E2E_PROFILE_FIXTURE, fixturePngBuffer };
 
@@ -12,10 +19,9 @@ export { E2E_PROFILE_FIXTURE, fixturePngBuffer };
  *
  * The "E2E profile" is a fully deterministic seed (see `prisma/seed-e2e.ts`,
  * run via `npm run db:seed:e2e`) that creates fixed owner/editor/viewer users,
- * a workspace, and a single document carrying text, an embedded visual, a
- * persisted `deckJson`, an enabled public share policy, and one slide image
- * `Asset` (with storage bytes written). Every identifier below is a hard-coded
- * constant so the seed and the specs share one source of truth and never drift.
+ * a workspace, a canonical read fixture, and dedicated presentation documents
+ * for mutating tests. Each document carries deterministic content and deck
+ * state so one Yjs room can never contaminate another spec's fixture.
  *
  * Specs that exercise authenticated/seeded flows gate on {@link
  * e2eProfileEnabled}: when the profile is NOT enabled they skip cleanly, so the
@@ -52,8 +58,15 @@ export function profileEditorCredentials(): Credentials {
 }
 
 /** App editor URL for the seeded document. */
-export function profileDocPath(): string {
-  return `/app/documents/${E2E_PROFILE_FIXTURE.documentId}`;
+export function profileDocPath(
+  fixtureName?: PresentationTestFixtureName,
+  slotOrTestInfo?: PresentationFixtureSlotInput,
+): string {
+  const documentId = fixtureName
+    ? presentationTestFixture(fixtureName, slotOrTestInfo ?? test.info())
+        .documentId
+    : E2E_PROFILE_FIXTURE.documentId;
+  return `/app/documents/${documentId}`;
 }
 
 /** App editor URL for the seeded presentation layout screenshot document. */
@@ -67,7 +80,17 @@ export function profileShareSegment(): string {
 }
 
 /** Public present-mode path for the seeded deck. */
-export function profilePresentPath(): string {
+export function profilePresentPath(
+  fixtureName?: PresentationTestFixtureName,
+  slotOrTestInfo?: PresentationFixtureSlotInput,
+): string {
+  if (fixtureName) {
+    const fixture = presentationTestFixture(
+      fixtureName,
+      slotOrTestInfo ?? test.info(),
+    );
+    return `/present/${fixture.slug}-${fixture.shareId}`;
+  }
   return `/present/${profileShareSegment()}`;
 }
 

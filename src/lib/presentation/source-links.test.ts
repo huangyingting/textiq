@@ -23,6 +23,7 @@ import {
   sourceReviewItems,
   unlinkNodeSource,
 } from "./source-links";
+import { safeParseDeck } from "./validation";
 
 const NOW = "2026-06-30T10:00:00.000Z";
 
@@ -163,12 +164,12 @@ describe("presentation source link classification", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       children: [nested, incomplete],
     });
     const deck = buildDeck([
       buildSlide("content", [group], { id: "slide-group" }),
     ]);
+    assert.equal(safeParseDeck(deck).success, true);
 
     const classifications = classifyDeckSourceLinks(deck, index());
 
@@ -487,7 +488,6 @@ describe("presentation source link commands", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       children: [nested],
     });
     const deck = buildDeck([

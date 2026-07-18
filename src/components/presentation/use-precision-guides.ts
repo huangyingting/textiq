@@ -86,9 +86,12 @@ export function usePrecisionGuides(
   }
 
   function addCustomGuide(axis: StageGuideInput["axis"], value: string) {
-    const [guide] = normalizeStageGuideInputs([
-      { axis, positionPct: Number(value) },
-    ]);
+    const positionPct = value.trim() === "" ? Number.NaN : Number(value);
+    if (!Number.isFinite(positionPct) || positionPct < 0 || positionPct > 100) {
+      setStageAnnouncement("Enter a guide position between 0 and 100 percent");
+      return;
+    }
+    const [guide] = normalizeStageGuideInputs([{ axis, positionPct }]);
     if (!guide) {
       setStageAnnouncement("Enter a guide position between 0 and 100 percent");
       return;

@@ -56,6 +56,10 @@ import { MobileEditingSheetHost } from "./mobile-editing-sheet";
 import { Presence } from "./presence";
 import { OverallAdjustmentsPanel } from "./overall-adjustments-panel";
 import { ShareButton } from "./share-button";
+import {
+  consumeSlideEditorReturnFocus,
+  hasSlideEditorReturnFocus,
+} from "./slide-editor-return-focus";
 import { SourceBlockJumpPlugin } from "./source-block-jump";
 import { TagControl } from "./tag-control";
 import { FloatingTableToolbar } from "./table-controls";
@@ -332,6 +336,7 @@ export function LexicalEditor({
 
   // Ref for the editor content area — used by PageBreakIndicator.
   const contentAreaRef = useRef<HTMLDivElement | null>(null);
+  const slideEditorLinkRef = useRef<HTMLAnchorElement | null>(null);
   // Page break indicators are shown by default at A4 size and can be toggled off.
   const [showPageBreaks, setShowPageBreaks] = useState(false);
 
@@ -442,6 +447,16 @@ export function LexicalEditor({
     [],
   );
 
+  useEffect(() => {
+    if (!hasSlideEditorReturnFocus(documentId)) return;
+    const timeout = window.setTimeout(() => {
+      if (consumeSlideEditorReturnFocus(documentId)) {
+        slideEditorLinkRef.current?.focus();
+      }
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [documentId]);
+
   return (
     <main className="flex flex-1 flex-col bg-ds-surface-sunken">
       <LexicalCollaboration>
@@ -546,6 +561,7 @@ export function LexicalEditor({
                     <EditorToolbarGroup label="Create and present">
                       {canEdit && (
                         <Link
+                          ref={slideEditorLinkRef}
                           href={`/app/documents/${documentId}/slides`}
                           aria-label="Open slide editor"
                           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-raised px-3 text-sm font-medium text-ds-text-primary shadow-ds-raised transition-colors hover:bg-ds-state-hover active:bg-ds-state-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-focus-ring focus-visible:ring-offset-1 focus-visible:ring-offset-ds-focus-offset"

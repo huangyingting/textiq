@@ -296,7 +296,7 @@ export function createCoreEditorPlugins({
       <OnChangePlugin
         onChange={onChange}
         ignoreSelectionChange
-        ignoreHistoryMergeTagChange
+        ignoreHistoryMergeTagChange={false}
       />
     )),
   ];

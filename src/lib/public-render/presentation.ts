@@ -23,7 +23,7 @@ export interface PublicPresentationDocument {
     name: string | null;
     plan: string;
   };
-  customThemePackages?: ThemePackageV1[];
+  activeCustomThemePackage?: ThemePackageV1;
 }
 
 export interface PublicPresentationAssetBinding {
@@ -203,7 +203,9 @@ export function buildPublicPresentationModel(
 
   const deck = bindDeckAssetUrlsToShare(rawDeck, assetBinding);
   const themeResolution = resolveThemePackageForDeck(deck, {
-    customPackages: document.customThemePackages ?? [],
+    activePackages: document.activeCustomThemePackage
+      ? [document.activeCustomThemePackage]
+      : [],
   });
 
   return {

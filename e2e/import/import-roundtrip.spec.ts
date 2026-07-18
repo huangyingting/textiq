@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { credentialGatedRequest } from "../helpers/credential-gate";
 import {
   createDocxRoundtripFixture,
   DOCX_ROUNDTRIP_FIXTURE,
@@ -177,7 +178,7 @@ async function importWorkspaceMarkdown({
   fileName: string;
   markdown: string;
 }): Promise<{ documentId: string; documentPath: string }> {
-  const response = await page.request.post("/api/import", {
+  const response = await credentialGatedRequest(page).post("/api/import", {
     multipart: {
       target: "workspace",
       workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
@@ -191,6 +192,21 @@ async function importWorkspaceMarkdown({
   expect(response.status(), "workspace import should succeed").toBe(200);
   const payload = await response.json();
   return parseImportSuccessPayload(payload);
+}
+
+async function chooseDashboardImportFile(
+  page: Page,
+  file: { name: string; mimeType: string; buffer: Buffer },
+): Promise<void> {
+  const importButton = page.getByRole("button", { name: "Import document" });
+  await expect(
+    importButton,
+    "parse: import button not ready on dashboard",
+  ).toBeEnabled();
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await importButton.click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(file);
 }
 
 test.describe("document import round-trip", () => {
@@ -212,16 +228,7 @@ test.describe("document import round-trip", () => {
     await expect(page, "navigate: workspace did not load").toHaveURL(/\/app/);
 
     // --- Import (parse + create) ------------------------------------------
-    // The hidden file input drives `ImportDocumentButton`; setting files on it
-    // triggers the same POST /api/import → createDocumentFromImport flow a user
-    // gets by clicking "Import document" and choosing a file.
-    const fileInput = page.getByLabel("Import a document file");
-    await expect(
-      fileInput,
-      "parse: import file input not found on dashboard",
-    ).toHaveCount(1);
-
-    await fileInput.setInputFiles({
+    await chooseDashboardImportFile(page, {
       name: "import-roundtrip.md",
       mimeType: "text/markdown",
       buffer: Buffer.from(SAMPLE_MARKDOWN, "utf8"),
@@ -269,19 +276,24 @@ test.describe("document import round-trip", () => {
     await page.goto("/app");
     await expect(page, "navigate: workspace did not load").toHaveURL(/\/app/);
 
-    const fileInput = page.getByLabel("Import a document file");
-    await expect(
-      fileInput,
-      "parse: import file input not found on dashboard",
-    ).toHaveCount(1);
-
-    await fileInput.setInputFiles({
+    const apiStartedAt = performance.now();
+    const importResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/import",
+    );
+    await chooseDashboardImportFile(page, {
       name: DOCX_ROUNDTRIP_FIXTURE.fileName,
       mimeType: DOCX_ROUNDTRIP_FIXTURE.mimeType,
       buffer: await createDocxRoundtripFixture(),
     });
+    const importResponse = await importResponsePromise;
+    expect(importResponse.status(), "DOCX import API should succeed").toBe(200);
+    const importResult = parseImportSuccessPayload(await importResponse.json());
+    const apiDurationMs = Math.round(performance.now() - apiStartedAt);
 
-    await page.waitForURL(/\/app\/documents\/[^/]+/, {
+    const documentStartedAt = performance.now();
+    await page.waitForURL(importResult.documentPath, {
       timeout: IMPORT_NAVIGATION_TIMEOUT_MS,
     });
 
@@ -311,6 +323,12 @@ test.describe("document import round-trip", () => {
       paragraph: DOCX_ROUNDTRIP_FIXTURE.paragraph,
       firstBullet: DOCX_ROUNDTRIP_FIXTURE.bullets[0],
     });
+    const documentDurationMs = Math.round(
+      performance.now() - documentStartedAt,
+    );
+    console.log(
+      `[e2e-evidence] DOCX API ${apiDurationMs}ms; document navigation/render/reload ${documentDurationMs}ms`,
+    );
   });
 
   test("workspace import by owner persists across reload @required-profile", async ({
@@ -395,7 +413,7 @@ test.describe("document import round-trip", () => {
       .getByText(persistedTitle, { exact: true })
       .count();
 
-    const response = await page.request.post("/api/import", {
+    const response = await credentialGatedRequest(page).post("/api/import", {
       multipart: {
         target: "workspace",
         workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
@@ -430,7 +448,7 @@ test.describe("document import round-trip", () => {
 
     // The create-only import route validates unsupported payloads for signed-in
     // users before persistence.
-    const response = await page.request.post("/api/import", {
+    const response = await credentialGatedRequest(page).post("/api/import", {
       multipart: {
         target: "personal",
         file: {

@@ -344,7 +344,7 @@ function keyEvent(key: string, target: unknown = {}) {
   };
 }
 
-function connectorNode(): SlideChildNode {
+function connectorNode(): Extract<SlideChildNode, { type: "connector" }> {
   return {
     id: "node-a",
     type: "connector",

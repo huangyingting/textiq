@@ -99,6 +99,37 @@ describe("buildExportSpec", () => {
     assert.deepEqual(exportIds, resolvedIds);
   });
 
+  test("operation order honors high z-index before stable equal-z source ties", () => {
+    resetBuilderCounter();
+    const deck = buildDeck([
+      {
+        ...buildContentSlide(),
+        children: [
+          buildTextNode({
+            id: "export-high",
+            layout: { frame: { x: 0, y: 0, w: 20, h: 10 }, zIndex: 50 },
+          }),
+          buildTextNode({
+            id: "export-low",
+            layout: { frame: { x: 0, y: 0, w: 20, h: 10 }, zIndex: -10 },
+          }),
+          buildTextNode({
+            id: "export-low-later",
+            layout: { frame: { x: 0, y: 0, w: 20, h: 10 }, zIndex: -10 },
+          }),
+        ],
+      },
+    ]);
+    const exportSpec = buildExportSpec(
+      resolveDeckRenderTree(deck, buildMinimalThemePackage()),
+    );
+
+    assert.deepEqual(
+      exportSpec.slides[0].operations.map((operation) => operation.id),
+      ["export-low", "export-low-later", "export-high"],
+    );
+  });
+
   test("operations include deck chrome in deterministic render order", () => {
     resetBuilderCounter();
     const deck = buildDeck([buildContentSlide()], {

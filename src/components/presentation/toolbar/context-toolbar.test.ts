@@ -130,6 +130,8 @@ function renderToolbar(
         onUngroup: () => undefined,
         onBringForward: () => undefined,
         onSendBackward: () => undefined,
+        onBringToFront: () => undefined,
+        onSendToBack: () => undefined,
         onUpdateSelectedContent: () => undefined,
         onUpdateSelectedLayout: () => undefined,
         onUpdateSelectedLocalStyle: () => undefined,
@@ -945,6 +947,10 @@ describe("ContextToolbar render branches", () => {
     assert.ok(renderedLabels.includes("Border width"));
     assert.ok(renderedLabels.includes("Opacity"));
     assert.ok(renderedLabels.includes("Rotate left 15°"));
+    assert.ok(renderedLabels.includes("Bring forward"));
+    assert.ok(renderedLabels.includes("Send backward"));
+    assert.ok(renderedLabels.includes("Bring to front"));
+    assert.ok(renderedLabels.includes("Send to back"));
     assert.ok(renderedLabels.includes("Open Shape inspector"));
   });
 

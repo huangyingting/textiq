@@ -182,24 +182,10 @@ function mountFloatingToolbar(
   );
 }
 
-/**
- * `TableEditingControls`'s own `<div role="toolbar">` is the thing under
- * test. `FloatingTableToolbar` wraps it in `FloatingSurface`, which forwards
- * the *same* `role="toolbar"` straight through to its own (separate) host
- * `<div>` — so matching on `role` alone double-counts when this toolbar is
- * rendered inside `FloatingTableToolbar`. Restricting to elements that also
- * carry the roving-focus `onKeyDown`/`onFocus` handlers (only ever set on
- * `TableEditingControls`'s own div, never `FloatingSurface`'s) finds exactly
- * the one real toolbar, in both `TableEditingSection` and
- * `FloatingTableToolbar`.
- */
 function findToolbars(renderer: ReactTestRenderer): ReactTestInstance[] {
   return renderer.root.findAll(
     (instance) =>
-      typeof instance.type === "string" &&
-      instance.props.role === "toolbar" &&
-      typeof instance.props.onKeyDown === "function" &&
-      typeof instance.props.onFocus === "function",
+      typeof instance.type === "string" && instance.props.role === "toolbar",
   );
 }
 
@@ -673,7 +659,7 @@ describe("FloatingTableToolbar", () => {
     assert.equal(findToolbars(renderer as ReactTestRenderer).length, 0);
   });
 
-  test("becomes visible when editable, a fine pointer, and a real table selection all hold", () => {
+  test("mounts exactly one named toolbar when table controls become visible", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     seedTable(editor, [
@@ -685,6 +671,7 @@ describe("FloatingTableToolbar", () => {
     });
     const toolbars = findToolbars(renderer as ReactTestRenderer);
     assert.equal(toolbars.length, 1);
+    assert.equal(toolbars[0]?.props["aria-label"], "Table editing");
     const label = (renderer as ReactTestRenderer).root.find(
       (instance) =>
         instance.type === "span" &&

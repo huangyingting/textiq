@@ -1,13 +1,19 @@
 "use client";
 
 import { Check, ChevronDown, Search } from "lucide-react";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type Ref } from "react";
 
 import { Popover } from "@/components/ui/popover";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import {
+  getThemePackage,
+  type ThemePackageCatalogEntry,
+  type ThemePackageSelection,
+} from "@/lib/presentation/theme-package-registry";
 
 const VISIBLE_THEME_LIMIT = 24;
+const RECENT_THEME_LIMIT = 8;
 
 type ThemeFilter = "all" | "recent" | "editorial" | "dark" | "contrast";
 
@@ -28,10 +34,16 @@ type ThemePreviewStyle = CSSProperties & {
 };
 
 export interface ThemePreviewPickerProps {
-  value: string;
-  themes: readonly ThemePackageV1[];
-  onChange: (packageId: string) => void;
+  value: {
+    packageId: string;
+    packageVersion?: string;
+  };
+  activeThemePackage: ThemePackageV1;
+  themes: readonly ThemePackageCatalogEntry[];
+  onChange: (selection: ThemePackageSelection) => void;
   onOpenChange?: (open: boolean) => void;
+  onCustomize?: () => void;
+  triggerRef?: Ref<HTMLButtonElement>;
   "aria-label": string;
 }
 
@@ -92,14 +104,17 @@ function isHighContrastTheme(themePackage: ThemePackageV1): boolean {
 }
 
 function searchableThemeText(themePackage: ThemePackageV1): string {
+  const tokenValues = (value: unknown): string[] => {
+    if (typeof value === "string") return [value];
+    if (!value || typeof value !== "object") return [];
+    return Object.values(value).flatMap(tokenValues);
+  };
   return [
     themePackage.id,
     themePackage.name,
     themePackage.tagline,
-    themePackage.tokens.fonts.heading,
-    themePackage.tokens.fonts.body,
-    themePackage.tokens.colors.canvas.fill,
-    themePackage.tokens.colors.accent.fill,
+    ...tokenValues(themePackage.tokens.fonts),
+    ...tokenValues(themePackage.tokens.colors),
   ]
     .filter(Boolean)
     .join(" ")
@@ -107,12 +122,13 @@ function searchableThemeText(themePackage: ThemePackageV1): string {
 }
 
 function themeMatchesFilter(
-  themePackage: ThemePackageV1,
+  entry: ThemePackageCatalogEntry,
   filter: ThemeFilter,
-  recentIds: ReadonlySet<string>,
+  recentKeys: ReadonlySet<string>,
 ): boolean {
+  const themePackage = entry.package;
   if (filter === "all") return true;
-  if (filter === "recent") return recentIds.has(themePackage.id);
+  if (filter === "recent") return recentKeys.has(themeCatalogKey(entry));
   if (filter === "dark") return isDarkTheme(themePackage);
   if (filter === "contrast") return isHighContrastTheme(themePackage);
   const haystack = searchableThemeText(themePackage);
@@ -124,10 +140,15 @@ function themeMatchesFilter(
   );
 }
 
+function themeCatalogKey(entry: ThemePackageCatalogEntry): string {
+  return `${entry.package.id}@${entry.package.version}`;
+}
+
 function themeKindLabel(
   themePackage: ThemePackageV1,
   selected: boolean,
 ): string {
+  if (!getThemePackage(themePackage.id)) return "custom";
   if (selected) return "current";
   if (isDarkTheme(themePackage)) return "dark";
   if (isHighContrastTheme(themePackage)) return "AA+";
@@ -136,30 +157,37 @@ function themeKindLabel(
 
 export function ThemePreviewPicker({
   value,
+  activeThemePackage,
   themes,
   onChange,
   onOpenChange,
+  onCustomize,
+  triggerRef,
   "aria-label": ariaLabel,
 }: ThemePreviewPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ThemeFilter>("all");
-  const selectedTheme =
-    themes.find((themePackage) => themePackage.id === value) ?? themes[0];
-  const recentIds = useMemo(
-    () => new Set([value, ...themes.slice(0, 5).map((theme) => theme.id)]),
-    [themes, value],
+  const recentKeys = useMemo(
+    () =>
+      new Set(
+        themes
+          .filter((entry) => entry.createdAt !== null)
+          .slice(0, RECENT_THEME_LIMIT)
+          .map(themeCatalogKey),
+      ),
+    [themes],
   );
   const normalizedQuery = query.trim().toLowerCase();
   const matchingThemes = useMemo(
     () =>
       themes.filter(
-        (themePackage) =>
-          themeMatchesFilter(themePackage, filter, recentIds) &&
+        (entry) =>
+          themeMatchesFilter(entry, filter, recentKeys) &&
           (normalizedQuery.length === 0 ||
-            searchableThemeText(themePackage).includes(normalizedQuery)),
+            searchableThemeText(entry.package).includes(normalizedQuery)),
       ),
-    [filter, normalizedQuery, recentIds, themes],
+    [filter, normalizedQuery, recentKeys, themes],
   );
   const visibleThemes = matchingThemes.slice(0, VISIBLE_THEME_LIMIT);
 
@@ -170,8 +198,11 @@ export function ThemePreviewPicker({
 
   const closePicker = () => setPickerOpen(false);
 
-  const selectTheme = (packageId: string) => {
-    onChange(packageId);
+  const selectTheme = (entry: ThemePackageCatalogEntry) => {
+    onChange({
+      packageId: entry.package.id,
+      packageVersion: entry.package.version,
+    });
     closePicker();
   };
 
@@ -185,6 +216,7 @@ export function ThemePreviewPicker({
       className="w-[min(460px,calc(100vw-1rem))] overflow-hidden p-0"
       trigger={
         <button
+          ref={triggerRef}
           type="button"
           aria-label={ariaLabel}
           aria-haspopup="dialog"
@@ -195,9 +227,7 @@ export function ThemePreviewPicker({
             open ? "bg-ds-state-active" : undefined,
           )}
         >
-          <span className="min-w-0 truncate">
-            {selectedTheme?.name ?? "Theme"}
-          </span>
+          <span className="min-w-0 truncate">{activeThemePackage.name}</span>
           <ChevronDown
             size={13}
             aria-hidden="true"
@@ -218,7 +248,7 @@ export function ThemePreviewPicker({
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder={`Search ${themes.length} themes by name, style, color, or owner`}
+              placeholder={`Search ${themes.length} themes by name, style, color, or font`}
               className={cx(
                 "h-8 w-full rounded-ds-md border border-ds-border-subtle bg-ds-surface pl-8 pr-2 text-xs text-ds-text-primary placeholder:text-ds-text-muted outline-none",
                 FOCUS_RING,
@@ -235,6 +265,7 @@ export function ThemePreviewPicker({
             <button
               key={themeFilter.id}
               type="button"
+              aria-pressed={filter === themeFilter.id}
               onClick={() => setFilter(themeFilter.id)}
               className={cx(
                 "rounded-ds-pill border px-2.5 py-1 text-[11px] font-semibold transition-colors",
@@ -260,16 +291,20 @@ export function ThemePreviewPicker({
             No themes match your search.
           </p>
         ) : (
-          visibleThemes.map((themePackage) => {
-            const selected = themePackage.id === value;
+          visibleThemes.map((entry) => {
+            const themePackage = entry.package;
+            const selected =
+              themePackage.id === value.packageId &&
+              (!value.packageVersion ||
+                themePackage.version === value.packageVersion);
             const colors = themePackage.tokens.colors;
             return (
               <button
-                key={themePackage.id}
+                key={themeCatalogKey(entry)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => selectTheme(themePackage.id)}
+                onClick={() => selectTheme(entry)}
                 className={cx(
                   "min-w-0 rounded-ds-lg border bg-ds-surface p-2 text-left transition-colors hover:bg-ds-state-hover",
                   selected
@@ -329,6 +364,23 @@ export function ThemePreviewPicker({
           })
         )}
       </div>
+      {onCustomize ? (
+        <div className="border-t border-ds-border-subtle p-3">
+          <button
+            type="button"
+            onClick={() => {
+              closePicker();
+              onCustomize();
+            }}
+            className={cx(
+              "w-full rounded-ds-md border border-ds-border-subtle px-3 py-2 text-xs font-semibold text-ds-text-primary hover:bg-ds-state-hover",
+              FOCUS_RING,
+            )}
+          >
+            Customize theme
+          </button>
+        </div>
+      ) : null}
     </Popover>
   );
 }

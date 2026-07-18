@@ -83,7 +83,6 @@ import {
   isEditableTarget,
   isStageEditingHandleTarget,
   isStageHandleTarget,
-  nextSemanticSelectUnderNodeId,
   pointPctFromEvent,
   pointerMovedBeyondThreshold,
   shouldEnterInlineNodeEditOnClick,
@@ -92,7 +91,6 @@ import {
   nextActiveGroupIdForStageTarget,
   resolveProgressiveGroupTarget,
   resolveStageNodeTarget,
-  stageCandidateNodeIds,
   type StageNodeInteractionTarget,
 } from "./stage-targeting";
 import { stageNodeMenuLabel } from "./stage-context-menu";
@@ -251,7 +249,6 @@ export interface StageGestureControllerArgs {
   activeCropHandle: unknown | null;
   activeRotationNodeId: string | null;
   activeConnectorEndpoint: unknown | null;
-  semanticCandidateStackRef: { current: readonly string[] };
   enterInlineEdit: (
     nodeId: string,
     initialCaret?: InlineTextInitialCaret,
@@ -304,18 +301,18 @@ export interface StageGestureControllerArgs {
     SetStateAction<RotationGestureDraft | null>
   >;
   setSelection: SetSelection;
-  setShortcutHelpOpen: Dispatch<SetStateAction<boolean>>;
+  onToggleShortcutHelp: () => void;
   setSlideHovered: Dispatch<SetStateAction<boolean>>;
   setStageAnnouncement: Dispatch<SetStateAction<string>>;
   setStageGuides: Dispatch<SetStateAction<StageGuide[]>>;
   suppressNextStageClick: () => void;
-  semanticHitsAtPoint: (
-    point: { x: number; y: number },
-    options?: { selectedNodeBonus?: boolean },
-  ) => StageHitCandidate[];
   semanticHitsFromEvent: (
     event: PointerLikeEvent,
-    options?: { selectedNodeBonus?: boolean },
+    options?: {
+      includeLocked?: boolean;
+      order?: "semantic" | "visual";
+      selectedNodeBonus?: boolean;
+    },
   ) => StageHitCandidate[];
   semanticTargetFromHits: (
     hits: readonly StageHitCandidate[],
@@ -389,7 +386,6 @@ export function useStageGestureController(
     activeCropHandle,
     activeRotationNodeId,
     activeConnectorEndpoint,
-    semanticCandidateStackRef,
     enterInlineEdit,
     requestInlineEditCommit,
     clearTableEditing,
@@ -424,12 +420,11 @@ export function useStageGestureController(
     setResizeGestureDraft,
     setRotationGestureDraft,
     setSelection,
-    setShortcutHelpOpen,
+    onToggleShortcutHelp,
     setSlideHovered,
     setStageAnnouncement,
     setStageGuides,
     suppressNextStageClick,
-    semanticHitsAtPoint,
     semanticHitsFromEvent,
     semanticTargetFromHits,
   } = args;
@@ -444,25 +439,19 @@ export function useStageGestureController(
     }
   }
 
-  function applyActiveGroupContext(nodeId: string) {
-    if (!activeSlide) return;
-    const target = resolveStageNodeTarget({
-      hits: [],
-      nodes: activeSlide.children,
-      fallbackNodeId: nodeId,
-    });
-    if (target) applyStageTargetContext(target);
-  }
-
-  function selectUnderFromHits(hits: readonly StageHitCandidate[]) {
-    const nextId = nextSemanticSelectUnderNodeId(
-      stageCandidateNodeIds(hits),
-      new Set(selectedIds),
-    );
-    if (nextId) {
-      setSelection((s) => setSelectedNodeIds(s, [nextId]));
-      setFocusedNodeId(nextId);
-      applyActiveGroupContext(nextId);
+  function selectTopFromHits(hits: readonly StageHitCandidate[]) {
+    const target = semanticTargetFromHits(hits);
+    if (target) {
+      setSelection((s) => setSelectedNodeIds(s, [target.nodeId]));
+      setFocusedNodeId(target.nodeId);
+      focusSelectedNodeSoon(target.nodeId);
+      applyStageTargetContext(target);
+      const node = activeSlide
+        ? findNodeById(activeSlide.children, target.nodeId)
+        : undefined;
+      if (node) {
+        setStageAnnouncement(`${stageNodeMenuLabel(node)} selected`);
+      }
     }
   }
 
@@ -710,7 +699,10 @@ export function useStageGestureController(
       setSlideHovered((current) => (current === false ? current : false));
       return;
     }
-    const hits = semanticHitsFromEvent(event, { selectedNodeBonus: false });
+    const hits = semanticHitsFromEvent(event, {
+      order: "visual",
+      selectedNodeBonus: false,
+    });
     const hoverTarget = semanticTargetFromHits(hits);
     const hoveredId = hoverTarget?.nodeId;
     setHoveredNodeId((current) =>
@@ -723,7 +715,6 @@ export function useStageGestureController(
   }
 
   function handleStagePointerLeave() {
-    semanticCandidateStackRef.current = [];
     setHoveredNodeId((current) => (current === null ? current : null));
     setSlideHovered((current) => (current === false ? current : false));
   }
@@ -794,7 +785,7 @@ export function useStageGestureController(
     });
     const rect = canvasRectFromEvent(event);
     if (!target || !hasUsableCanvasArea(rect)) {
-      selectUnderFromHits(hits);
+      selectTopFromHits(hits);
       return;
     }
 
@@ -809,7 +800,7 @@ export function useStageGestureController(
       originalFrames.set(id, node.layout.frame);
     }
     if (originalFrames.size === 0) {
-      selectUnderFromHits(hits);
+      selectTopFromHits(hits);
       return;
     }
     const alignmentGuides = [
@@ -907,7 +898,7 @@ export function useStageGestureController(
             }`,
           );
         } else {
-          selectUnderFromHits(hits);
+          selectTopFromHits(hits);
         }
       },
     });
@@ -917,7 +908,10 @@ export function useStageGestureController(
     if (!activeSlide || event.button !== 0 || isEditableTarget(event.target)) {
       return;
     }
-    const hits = semanticHitsFromEvent(event, { selectedNodeBonus: false });
+    const hits = semanticHitsFromEvent(event, {
+      order: "visual",
+      selectedNodeBonus: false,
+    });
     if (event.altKey) {
       handleAltNodePointerDown(nodeId, event, hits);
       return;
@@ -1699,37 +1693,7 @@ export function useStageGestureController(
     }
 
     if (event.key === "?") {
-      setShortcutHelpOpen((open) => !open);
-      event.preventDefault();
-      return;
-    }
-
-    if (event.altKey && event.key === "]") {
-      const anchorId = focusedNodeId ?? firstSelectedId;
-      let candidateIds = semanticCandidateStackRef.current;
-      if (anchorId) {
-        const anchorNode = findNodeById(activeSlide.children, anchorId);
-        if (anchorNode?.layout) {
-          candidateIds = stageCandidateNodeIds(
-            semanticHitsAtPoint(
-              {
-                x: anchorNode.layout.frame.x + anchorNode.layout.frame.w / 2,
-                y: anchorNode.layout.frame.y + anchorNode.layout.frame.h / 2,
-              },
-              { selectedNodeBonus: true },
-            ),
-          );
-        }
-      }
-      const nextId = nextSemanticSelectUnderNodeId(
-        candidateIds,
-        new Set(selectedIds),
-      );
-      if (nextId) {
-        setSelection((s) => setSelectedNodeIds(s, [nextId]));
-        focusSelectedNodeSoon(nextId);
-        applyActiveGroupContext(nextId);
-      }
+      onToggleShortcutHelp();
       event.preventDefault();
       return;
     }

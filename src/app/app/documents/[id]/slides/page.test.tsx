@@ -60,7 +60,8 @@ type StubViewModel = {
   canManage: boolean;
   userId: string;
   userName: string;
-  customThemePackages: unknown[];
+  activeCustomThemePackage?: unknown;
+  customThemeCatalogEntries: unknown[];
 };
 
 declare global {
@@ -138,6 +139,14 @@ const stubbedModules = new Map<string, string>([
     `,
   ],
   [
+    "../brand-kit-actions",
+    `
+      export async function saveBrandKitDraft() {
+        throw new Error("not used by page.test.tsx");
+      }
+    `,
+  ],
+  [
     "../slide-asset-actions",
     `
       export async function uploadSlideAsset() {
@@ -209,7 +218,7 @@ function baseViewModel(overrides: Partial<StubViewModel> = {}): StubViewModel {
     canManage: false,
     userId: "user-1",
     userName: "Ada Lovelace",
-    customThemePackages: [],
+    customThemeCatalogEntries: [],
     ...overrides,
   };
 }
@@ -339,7 +348,14 @@ describe("DocumentSlidesPage", () => {
       canManage: true,
       userId: "user-1",
       userName: "Ada Lovelace",
-      customThemePackages: [{ id: "custom-1" }],
+      activeCustomThemePackage: { id: "custom-1", version: "1.0.0" },
+      customThemeCatalogEntries: [
+        {
+          package: { id: "custom-1", version: "2.0.0" },
+          source: "custom",
+          createdAt: "2026-02-03T04:05:06.000Z",
+        },
+      ],
     });
 
     const tree = await DocumentSlidesPage({
@@ -371,6 +387,17 @@ describe("DocumentSlidesPage", () => {
     assert.equal(props.canManage, true);
     assert.equal(props.userId, "user-1");
     assert.equal(props.userName, "Ada Lovelace");
-    assert.deepEqual(props.customThemePackages, [{ id: "custom-1" }]);
+    assert.deepEqual(props.activeCustomThemePackage, {
+      id: "custom-1",
+      version: "1.0.0",
+    });
+    assert.deepEqual(props.customThemeCatalogEntries, [
+      {
+        package: { id: "custom-1", version: "2.0.0" },
+        source: "custom",
+        createdAt: "2026-02-03T04:05:06.000Z",
+      },
+    ]);
+    assert.equal(typeof props.saveBrandKitDraftAction, "function");
   });
 });

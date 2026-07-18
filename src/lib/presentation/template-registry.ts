@@ -90,17 +90,26 @@ export type TemplateGroup =
 // Layout variants
 // ---------------------------------------------------------------------------
 
-export type TemplateNodeBlueprint = {
-  type: SlideChildNode["type"] | "slide";
+type TemplateNodeBlueprintBase = {
   component?: GroupComponentKind;
   role?: SemanticRole;
   slot?: SlotKey;
   layout?: LayoutBox;
-  style: StyleBinding;
   content?: TemplateStaticContent;
   props?: Record<string, JsonValue>;
-  children?: TemplateNodeBlueprint[];
 };
+
+export type TemplateNodeBlueprint =
+  | (TemplateNodeBlueprintBase & {
+      type: "group";
+      style?: never;
+      children?: TemplateNodeBlueprint[];
+    })
+  | (TemplateNodeBlueprintBase & {
+      type: Exclude<SlideChildNode["type"], "group"> | "slide";
+      style: StyleBinding;
+      children?: TemplateNodeBlueprint[];
+    });
 
 export type TemplateLayoutVariant = {
   id: string;

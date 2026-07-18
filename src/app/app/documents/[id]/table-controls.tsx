@@ -467,8 +467,7 @@ export function FloatingTableToolbar({ editable }: { editable: boolean }) {
     <FloatingSurface
       open={visible}
       position={coords}
-      role="toolbar"
-      aria-label="Table editing"
+      role="presentation"
       elevation="overlay"
       radius="lg"
       closeOnEscape={false}

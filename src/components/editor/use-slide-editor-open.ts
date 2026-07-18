@@ -200,7 +200,9 @@ export async function persistDeckWithRecovery({
     }
     return { ok: false, error: rejectionError };
   } finally {
-    setSaving(false);
+    if (shouldApplyCompletionState()) {
+      setSaving(false);
+    }
   }
 }
 
