@@ -270,7 +270,7 @@ test("text, shape, visual, connector, and accessibility variants render meaningf
   assert.match(decorativeHtml, /aria-label="Decorative image"/);
 });
 
-test("table editing and canvas chrome invoke remaining safe handlers", () => {
+test("table editing and pointer-only canvas chrome preserve their contracts", () => {
   const calls: string[] = [];
   const tableTree = invokeMemoComponent(SlideNodeRenderer, {
     node: tableNode(),
@@ -380,13 +380,16 @@ test("table editing and canvas chrome invoke remaining safe handlers", () => {
     activeConnectorEndpoint: { nodeId: "connector-a", endpoint: "to" },
   });
   const html = renderToStaticMarkup(canvas);
-  const canvasElements = [canvas, imageCanvas, connectorCanvas]
-    .flatMap((node) => collectElements(node))
-    .map(propsOf);
+  const renderedCanvasElements = [canvas, imageCanvas, connectorCanvas].flatMap(
+    (node) => collectElements(node),
+  );
+  const canvasElements = renderedCanvasElements.map(propsOf);
   const nodeProps = canvasElements.find(
     (props) => props["data-node-id"] === "image-a",
   );
   assert.ok(nodeProps);
+  assert.equal(nodeProps.role, "button");
+  assert.equal(nodeProps["aria-hidden"], undefined);
   (nodeProps.onPointerDown as (event: unknown) => void)({});
   (nodeProps.onDoubleClick as (event: unknown) => void)({});
   (nodeProps.onFocus as (event: unknown) => void)({});
@@ -424,6 +427,37 @@ test("table editing and canvas chrome invoke remaining safe handlers", () => {
   );
   assert.ok(connectorHandle);
   (connectorHandle.onPointerDown as (event: unknown) => void)(pointerEvent);
+  const pointerOnlyHandles = renderedCanvasElements.filter((element) => {
+    const props = propsOf(element);
+    return (
+      props["data-multi-resize-handle"] !== undefined ||
+      props["data-multi-rotation-handle"] !== undefined ||
+      props["data-resize-handle"] !== undefined ||
+      props["data-rotation-handle"] !== undefined ||
+      props["data-crop-handle"] !== undefined ||
+      props["data-connector-endpoint"] !== undefined
+    );
+  });
+  assert.ok(pointerOnlyHandles.length > 0);
+  for (const handle of pointerOnlyHandles) {
+    const props = propsOf(handle);
+    assert.equal(handle.type, "span");
+    assert.equal(props.role, undefined);
+    assert.equal(props.tabIndex, undefined);
+    assert.equal(props["aria-label"], undefined);
+    assert.equal(typeof props.onPointerDown, "function");
+  }
+  const pointerOnlyOverlays = canvasElements.filter(
+    (props) => props["data-node-chrome-overlay"] !== undefined,
+  );
+  assert.ok(pointerOnlyOverlays.length > 0);
+  assert.ok(
+    pointerOnlyOverlays.every((props) => props["aria-hidden"] === "true"),
+  );
+  const multiSelectionOverlay = canvasElements.find(
+    (props) => props["data-multi-selection-bounds"] === "true",
+  );
+  assert.equal(multiSelectionOverlay?.["aria-hidden"], "true");
 
   assert.match(html, /data-slide-hovered="true"/);
   assert.match(html, /data-slide-selected="true"/);

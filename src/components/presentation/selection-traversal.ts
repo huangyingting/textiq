@@ -1,4 +1,5 @@
 import type { LayoutBox, SlideChildNode } from "@/lib/presentation/schema";
+import { flattenNodesInRenderOrder } from "@/lib/presentation/render-order";
 import {
   findNodeById,
   flattenNodeTree,
@@ -16,8 +17,15 @@ export function flattenEditorNodes(
 export function nodesInReadingOrder(
   nodes: readonly SlideChildNode[],
 ): SlideChildNode[] {
-  return flattenEditorNodes(nodes)
-    .filter((node) => node.layout !== undefined && node.hidden !== true)
+  return flattenNodesInRenderOrder(
+    nodes,
+    (node) => (node.type === "group" ? node.children : undefined),
+    {
+      mode: "visual",
+      isHidden: (node) => node.hidden === true,
+    },
+  )
+    .filter((node) => node.layout !== undefined)
     .sort((a, b) => {
       const readingA = a.accessibility?.readingOrder;
       const readingB = b.accessibility?.readingOrder;

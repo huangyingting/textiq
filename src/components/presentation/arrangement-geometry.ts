@@ -1,5 +1,5 @@
 import type { LayoutBox, SlideChildNode } from "@/lib/presentation/schema";
-import { layerBandForNodeType } from "@/lib/presentation/layer-bands";
+import { orderSiblingsByVisualOrder } from "@/lib/presentation/render-order";
 
 export type ArrangementAlignMode =
   | "left"
@@ -23,14 +23,6 @@ export type ZOrderSelectionOperation = {
   zIndex: number;
 };
 
-function flattenLayerNodes(nodes: readonly SlideChildNode[]): SlideChildNode[] {
-  return nodes.flatMap((node) =>
-    node.type === "group"
-      ? [node, ...flattenLayerNodes(node.children)]
-      : [node],
-  );
-}
-
 function findNodeById(
   nodes: readonly SlideChildNode[],
   id: string,
@@ -43,6 +35,39 @@ function findNodeById(
     }
   }
   return undefined;
+}
+
+function siblingListForNode(
+  nodes: readonly SlideChildNode[],
+  nodeId: string,
+): readonly SlideChildNode[] | null {
+  if (nodes.some((node) => node.id === nodeId)) return nodes;
+  for (const node of nodes) {
+    if (node.type !== "group") continue;
+    const siblings = siblingListForNode(node.children, nodeId);
+    if (siblings) return siblings;
+  }
+  return null;
+}
+
+function sameNodeOrder(
+  left: readonly SlideChildNode[],
+  right: readonly SlideChildNode[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((node, index) => node.id === right[index]?.id)
+  );
+}
+
+function normalizedSiblingPatches(
+  siblings: readonly SlideChildNode[],
+): Map<string, Partial<LayoutBox>> {
+  const patches = new Map<string, Partial<LayoutBox>>();
+  siblings.forEach((node, zIndex) => {
+    if (node.layout) patches.set(node.id, { zIndex });
+  });
+  return patches;
 }
 
 export function collectSelectedLayoutEntries(
@@ -64,23 +89,17 @@ export function buildLayerReorderPatches(
   nodeId: string,
   targetIndex: number,
 ): Map<string, Partial<LayoutBox>> {
-  const allLayers = flattenLayerNodes(nodes).filter(
-    (node) => node.layout !== undefined,
-  );
-  const moving = allLayers.find((node) => node.id === nodeId);
-  if (!moving) return new Map();
-  const bandStart = layerBandForNodeType(moving.type);
-  const layers = allLayers
-    .filter((node) => layerBandForNodeType(node.type) === bandStart)
-    .sort((a, b) => (b.layout?.zIndex ?? 0) - (a.layout?.zIndex ?? 0));
-  const reordered = layers.filter((node) => node.id !== nodeId);
+  const siblings = siblingListForNode(nodes, nodeId);
+  if (!siblings) return new Map();
+  const ordered = orderSiblingsByVisualOrder(siblings);
+  const moving = ordered.find((node) => node.id === nodeId);
+  if (!moving?.layout) return new Map();
+  const reordered = ordered.filter((node) => node.id !== nodeId);
   const insertIndex = Math.max(0, Math.min(targetIndex, reordered.length));
   reordered.splice(insertIndex, 0, moving);
-  const patches = new Map<string, Partial<LayoutBox>>();
-  reordered.forEach((node, index) => {
-    patches.set(node.id, { zIndex: bandStart + reordered.length - index });
-  });
-  return patches;
+  return sameNodeOrder(ordered, reordered)
+    ? new Map()
+    : normalizedSiblingPatches(reordered);
 }
 
 export function buildAlignSelectionPatches(
@@ -171,22 +190,67 @@ export function buildZOrderSelectionOperations(
   kind: ArrangementZOrderKind,
 ): ZOrderSelectionOperation[] {
   if (selectedIds.length === 0) return [];
-  const zIndexes = nodes
-    .map((node) => node.layout?.zIndex)
-    .filter((zIndex): zIndex is number => typeof zIndex === "number");
-  const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
-  const minZ = zIndexes.length > 0 ? Math.min(...zIndexes) : 0;
-  return selectedIds.map((id, index) => {
-    const node = findNodeById(nodes, id);
-    const currentZ = node?.layout?.zIndex ?? 0;
-    const zIndex =
-      kind === "front"
-        ? maxZ + index + 1
-        : kind === "back"
-          ? minZ - index - 1
-          : kind === "forward"
-            ? currentZ + 1
-            : currentZ - 1;
-    return { id, zIndex };
-  });
+  const selected = new Set(selectedIds);
+  const operations = new Map<string, number>();
+
+  function collect(siblings: readonly SlideChildNode[]) {
+    const ordered = orderSiblingsByVisualOrder(siblings);
+    const selectedHere = ordered.filter(
+      (node) =>
+        selected.has(node.id) && node.layout !== undefined && !node.locked,
+    );
+    if (selectedHere.length > 0) {
+      let reordered = [...ordered];
+      if (kind === "front") {
+        reordered = [
+          ...ordered.filter((node) => !selectedHere.includes(node)),
+          ...selectedHere,
+        ];
+      } else if (kind === "back") {
+        reordered = [
+          ...selectedHere,
+          ...ordered.filter((node) => !selectedHere.includes(node)),
+        ];
+      } else if (kind === "forward") {
+        for (let index = reordered.length - 2; index >= 0; index -= 1) {
+          const current = reordered[index];
+          const next = reordered[index + 1];
+          if (
+            current &&
+            next &&
+            selected.has(current.id) &&
+            !selected.has(next.id)
+          ) {
+            reordered[index] = next;
+            reordered[index + 1] = current;
+          }
+        }
+      } else {
+        for (let index = 1; index < reordered.length; index += 1) {
+          const previous = reordered[index - 1];
+          const current = reordered[index];
+          if (
+            previous &&
+            current &&
+            !selected.has(previous.id) &&
+            selected.has(current.id)
+          ) {
+            reordered[index - 1] = current;
+            reordered[index] = previous;
+          }
+        }
+      }
+      if (!sameNodeOrder(ordered, reordered)) {
+        reordered.forEach((node, zIndex) => {
+          if (node.layout) operations.set(node.id, zIndex);
+        });
+      }
+    }
+    for (const node of siblings) {
+      if (node.type === "group") collect(node.children);
+    }
+  }
+
+  collect(nodes);
+  return [...operations].map(([id, zIndex]) => ({ id, zIndex }));
 }

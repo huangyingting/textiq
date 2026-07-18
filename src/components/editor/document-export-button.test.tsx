@@ -322,6 +322,7 @@ describe("DocumentExportButton", () => {
             ok: true,
             deckJson: { schemaVersion: 1 },
             revisionToken: "rev-1",
+            themeDiagnostics: [],
           };
         }),
       }),
@@ -416,6 +417,7 @@ describe("DocumentExportButton", () => {
       ok: true;
       deckJson: unknown;
       revisionToken: string | null;
+      themeDiagnostics: [];
     }>();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -459,6 +461,7 @@ describe("DocumentExportButton", () => {
         ok: true,
         deckJson: { schemaVersion: 1 },
         revisionToken: "rev-1",
+        themeDiagnostics: [],
       });
       await act(async () => {
         await settled;

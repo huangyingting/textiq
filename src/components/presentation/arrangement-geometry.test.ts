@@ -160,7 +160,7 @@ test("buildMatchSizeSelectionPatches supports width, height, and both modes", ()
   assert.equal(patchFrame(both, "c").h, 20);
 });
 
-test("buildLayerReorderPatches flattens groups and reassigns z-indexes within the node type band", () => {
+test("buildLayerReorderPatches reindexes only the moved node's siblings", () => {
   const nodes: SlideChildNode[] = [
     textNode("a", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 1 }),
     textNode("b", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 2 }),
@@ -170,73 +170,73 @@ test("buildLayerReorderPatches flattens groups and reassigns z-indexes within th
   ];
 
   const patches = buildLayerReorderPatches(nodes, "b", 0);
-  assert.equal(patches.get("b")?.zIndex, 4003);
-  assert.equal(patches.get("group-child")?.zIndex, 4002);
-  assert.equal(patches.get("a")?.zIndex, 4001);
-  assert.equal(patches.has("group"), false);
+  assert.equal(patches.get("b")?.zIndex, 0);
+  assert.equal(patches.get("a")?.zIndex, 1);
+  assert.equal(patches.get("group")?.zIndex, 2);
+  assert.equal(patches.has("group-child"), false);
 });
 
-test("buildZOrderSelectionOperations computes forward/backward/front/back moves", () => {
+test("buildZOrderSelectionOperations computes every layer command direction", () => {
   const nodes: SlideChildNode[] = [
-    textNode("a", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 4 }),
+    textNode("a", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 0 }),
     textNode("b", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 10 }),
+    textNode("c", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 20 }),
+  ];
+
+  assert.deepEqual(buildZOrderSelectionOperations(nodes, ["b"], "forward"), [
+    { id: "a", zIndex: 0 },
+    { id: "c", zIndex: 1 },
+    { id: "b", zIndex: 2 },
+  ]);
+
+  assert.deepEqual(buildZOrderSelectionOperations(nodes, ["b"], "backward"), [
+    { id: "b", zIndex: 0 },
+    { id: "a", zIndex: 1 },
+    { id: "c", zIndex: 2 },
+  ]);
+
+  assert.deepEqual(buildZOrderSelectionOperations(nodes, ["b"], "front"), [
+    { id: "a", zIndex: 0 },
+    { id: "c", zIndex: 1 },
+    { id: "b", zIndex: 2 },
+  ]);
+
+  assert.deepEqual(buildZOrderSelectionOperations(nodes, ["b"], "back"), [
+    { id: "b", zIndex: 0 },
+    { id: "a", zIndex: 1 },
+    { id: "c", zIndex: 2 },
+  ]);
+});
+
+test("buildZOrderSelectionOperations normalizes only the selected nested sibling context", () => {
+  const nodes: SlideChildNode[] = [
+    textNode("outside", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 500 }),
     groupNode("group", 7, [
-      textNode("group-child", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 2 }),
+      textNode("group-a", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: 100 }),
+      textNode("group-b", { x: 0, y: 0, w: 10, h: 10 }, { zIndex: -100 }),
     ]),
   ];
 
   assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["a", "group-child"], "forward"),
+    buildZOrderSelectionOperations(nodes, ["group-b"], "front"),
     [
-      { id: "a", zIndex: 5 },
-      { id: "group-child", zIndex: 3 },
-    ],
-  );
-
-  assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["a", "group-child"], "backward"),
-    [
-      { id: "a", zIndex: 3 },
-      { id: "group-child", zIndex: 1 },
-    ],
-  );
-
-  assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["a", "group-child"], "front"),
-    [
-      { id: "a", zIndex: 11 },
-      { id: "group-child", zIndex: 12 },
-    ],
-  );
-
-  assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["a", "group-child"], "back"),
-    [
-      { id: "a", zIndex: 3 },
-      { id: "group-child", zIndex: 2 },
+      { id: "group-a", zIndex: 0 },
+      { id: "group-b", zIndex: 1 },
     ],
   );
 });
 
-test("buildZOrderSelectionOperations ignores missing z-index values when computing front/back bounds", () => {
+test("buildZOrderSelectionOperations ignores missing, locked, and layoutless selections", () => {
   const nodes: SlideChildNode[] = [
     textNode("layoutless"),
-    textNode("also-layoutless"),
+    textNode("locked", { x: 0, y: 0, w: 10, h: 10 }, { locked: true }),
   ];
-
   assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["layoutless", "missing"], "front"),
-    [
-      { id: "layoutless", zIndex: 1 },
-      { id: "missing", zIndex: 2 },
-    ],
-  );
-
-  assert.deepEqual(
-    buildZOrderSelectionOperations(nodes, ["layoutless", "missing"], "back"),
-    [
-      { id: "layoutless", zIndex: -1 },
-      { id: "missing", zIndex: -2 },
-    ],
+    buildZOrderSelectionOperations(
+      nodes,
+      ["layoutless", "locked", "missing"],
+      "front",
+    ),
+    [],
   );
 });

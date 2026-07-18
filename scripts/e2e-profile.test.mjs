@@ -1,462 +1,568 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import {
+  closeSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
-import { resolveE2EOrigin, resolveE2EOriginConfig } from "./e2e-origin.mjs";
+import {
+  parseAuthenticatedE2EAppUrl,
+  parseAuthenticatedE2EProfileOrigin,
+  parseAuthenticatedE2EReadinessUrl,
+  deriveAuthenticatedE2EHostname,
+  resolveE2EOriginConfig,
+} from "./e2e-origin.mjs";
 import {
   buildE2EProfileEnv,
   buildE2EProfileSteps,
-  captureE2EProfileConfigFiles,
+  e2EPlaywrightProcessEnv,
+  provisionE2ETlsIdentity,
   removeGeneratedTypeIncludes,
-  restoreE2EProfileConfigFiles,
+  resolveE2EProfileDatabaseUrl,
+  resolveE2EProfileFixturePlan,
+  resolveE2EProfileWorkers,
   runE2EProfile,
+  stopE2EProfileServer,
 } from "./e2e-profile.mjs";
+import { runE2EGlobalSetup } from "./e2e-global-setup.mjs";
+import {
+  authenticateE2EProfile,
+  linuxProcessTreePids,
+  precompileE2EProfileRoutes,
+} from "./e2e-web-server.mjs";
+import { resolveE2EWebServerRuntime } from "./e2e-profile-runtime.mjs";
 import { createTestFixtureRoot } from "./test-fixtures.mjs";
 
-test("E2E origin defaults to one loopback origin and honors host/port overrides", () => {
-  assert.deepEqual(resolveE2EOriginConfig({}), {
-    origin: "http://127.0.0.1:4000",
-    port: "4000",
-    serverHost: "127.0.0.1",
-  });
-  assert.deepEqual(
-    resolveE2EOriginConfig({ HOST: "localhost", PORT: "4555" }),
-    {
-      origin: "http://localhost:4555",
-      port: "4555",
-      serverHost: "localhost",
-    },
-  );
-  assert.equal(
-    resolveE2EOrigin({ HOST: "0.0.0.0", PORT: "4666" }),
-    "http://127.0.0.1:4666",
-  );
-  assert.equal(
-    resolveE2EOrigin({ HOST: "[::]", PORT: "4667" }),
-    "http://127.0.0.1:4667",
-  );
-  assert.equal(
-    resolveE2EOrigin({ HOST: "::1", PORT: "4668" }),
-    "http://[::1]:4668",
-  );
-  assert.equal(
-    resolveE2EOrigin({ HOST: "[::1]", PORT: "4669" }),
-    "http://[::1]:4669",
-  );
-  assert.equal(
-    resolveE2EOrigin({ BASE_URL: "http://localhost:4670" }),
-    "http://localhost:4670",
-  );
-  assert.deepEqual(
-    resolveE2EOriginConfig({ E2E_BASE_URL: "http://localhost" }),
-    {
-      origin: "http://localhost",
-      port: "80",
-      serverHost: "localhost",
-    },
-  );
-});
-
-test("E2E origin safely normalizes explicit base URL overrides", () => {
-  assert.deepEqual(
-    resolveE2EOriginConfig({
-      E2E_BASE_URL: "http://LOCALHOST:4777/",
-    }),
-    {
-      origin: "http://localhost:4777",
-      port: "4777",
-      serverHost: "localhost",
-    },
-  );
-  assert.equal(
-    resolveE2EOrigin({
-      E2E_BASE_URL: "http://localhost/",
-      PORT: "4888",
-    }),
-    "http://localhost:4888",
-  );
-  assert.throws(
-    () =>
-      resolveE2EOrigin({
-        E2E_BASE_URL: "http://localhost:4777",
-        PORT: "4888",
-      }),
-    /does not match PORT/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "http://localhost:4777/app" }),
-    /must be an origin/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "file:///workspace" }),
-    /must use http: or https:/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "not a URL" }),
-    /must be an absolute HTTP\(S\) URL/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "http://user:pass@localhost" }),
-    /must not contain credentials/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "http://:pass@localhost" }),
-    /must not contain credentials/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "http://localhost/?query=1" }),
-    /must be an origin/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ E2E_BASE_URL: "http://localhost/#fragment" }),
-    /must be an origin/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ PORT: "0" }),
-    /PORT must be an integer/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ PORT: "12.5" }),
-    /PORT must be an integer/,
-  );
-  assert.throws(
-    () => resolveE2EOrigin({ PORT: "65536" }),
-    /PORT must be an integer/,
-  );
-  assert.deepEqual(
-    resolveE2EOriginConfig({
-      E2E_BASE_URL: "http://localhost:4777",
-      PORT: "4777",
-      HOST: "0.0.0.0",
-    }),
-    {
-      origin: "http://localhost:4777",
-      port: "4777",
-      serverHost: "0.0.0.0",
-    },
-  );
-  assert.deepEqual(
-    resolveE2EOriginConfig({
-      E2E_BASE_URL: "https://[::1]/",
-      HOST: "::",
-    }),
-    {
-      origin: "https://[::1]",
-      port: "443",
-      serverHost: "::",
-    },
-  );
-  assert.deepEqual(
-    resolveE2EOriginConfig({
-      E2E_BASE_URL: "https://[::1]/",
-    }),
-    {
-      origin: "https://[::1]",
-      port: "443",
-      serverHost: "::1",
-    },
-  );
-  assert.equal(
-    resolveE2EOrigin({ HOST: "::", PORT: "4998" }),
-    "http://127.0.0.1:4998",
-  );
-});
-
-test("self-contained runner propagates one canonical origin to every boundary", () => {
+test("self-contained profile separates HTTPS origin, app listener, and readiness", () => {
   const env = buildE2EProfileEnv(
+    { E2E_PROFILE_WORKERS: "2" },
     {
-      E2E_BASE_URL: "http://localhost:4999/",
-      AUTH_URL: "http://127.0.0.1:1",
-      NEXT_PUBLIC_APP_URL: "http://127.0.0.1:2",
-      E2E_REUSE_EXISTING_SERVER: "1",
+      repoRoot: process.cwd(),
+      runId: "origin-contract",
+      runNonce: "a".repeat(64),
+      playwrightArgs: ["--repeat-each=2"],
     },
-    { runId: "runner-test" },
   );
-
-  assert.equal(env.E2E_BASE_URL, "http://localhost:4999");
+  const hostname = deriveAuthenticatedE2EHostname(
+    "origin-contract",
+    "a".repeat(64),
+  );
+  assert.equal(env.E2E_BASE_URL, `https://${hostname}:4000`);
+  assert.equal(env.BASE_URL, env.E2E_BASE_URL);
   assert.equal(env.AUTH_URL, env.E2E_BASE_URL);
   assert.equal(env.NEXT_PUBLIC_APP_URL, env.E2E_BASE_URL);
-  assert.equal(env.HOST, "localhost");
-  assert.equal(env.PORT, "4999");
-  assert.equal(env.E2E_REUSE_EXISTING_SERVER, "0");
+  assert.equal(env.E2E_PROFILE_HOSTNAME, hostname);
+  assert.equal(env.E2E_PROFILE_APP_URL, "http://127.0.0.1:4002");
+  assert.equal(env.PLAYWRIGHT_BROWSERS_PATH, "0");
+  assert.equal(env.PORT, "4002");
+  assert.equal(env.E2E_PROFILE_READINESS_URL, "http://127.0.0.1:4001/ready");
+  assert.equal(env.HOST, "127.0.0.1");
   assert.equal(
-    env.E2E_PROFILE_DIST_DIR,
-    join(".next", "e2e-profile", "runner-test"),
+    env.E2E_WEB_SERVER_COMMAND,
+    "node scripts/e2e-app-server-cli.mjs",
   );
-  assert.throws(
-    () => buildE2EProfileEnv({ E2E_BASE_URL: "https://localhost" }),
-    /requires an http:\/\//,
-  );
-  assert.deepEqual(buildE2EProfileSteps({})[3], [
-    "Install Chromium",
-    "npx",
-    ["playwright", "install", "chromium"],
-  ]);
-  assert.deepEqual(buildE2EProfileSteps({ E2E_INSTALL_BROWSER_DEPS: "1" })[3], [
-    "Install Chromium",
-    "npx",
-    ["playwright", "install", "--with-deps", "chromium"],
-  ]);
-  const explicit = buildE2EProfileEnv(
-    {
-      DB_PROVIDER: "postgres",
-      DATABASE_URL: "postgresql://example.test/db",
-      AUTH_SECRET: "test-secret",
-      AUTH_LOGIN_RATE_LIMIT: "42",
-      E2E_PROFILE_SERVER: "custom",
-      E2E_WEB_SERVER_COMMAND: "node custom-server.mjs",
-      E2E_WEB_SERVER_TIMEOUT_MS: "12345",
-      PORT: "4997",
-    },
-    { runId: "explicit-env" },
-  );
-  assert.equal(explicit.DB_PROVIDER, "postgres");
-  assert.equal(explicit.DATABASE_URL, "postgresql://example.test/db");
-  assert.equal(explicit.AUTH_SECRET, "test-secret");
-  assert.equal(explicit.AUTH_LOGIN_RATE_LIMIT, "42");
-  assert.equal(explicit.E2E_PROFILE_SERVER, "custom");
-  assert.equal(explicit.E2E_WEB_SERVER_COMMAND, "node custom-server.mjs");
-  assert.equal(explicit.E2E_WEB_SERVER_TIMEOUT_MS, "12345");
-  assert.equal(buildE2EProfileSteps()[3][2].at(-1), "chromium");
+  assert.equal(env.E2E_WEB_SERVER, "0");
+  assert.equal(env.E2E_REUSE_EXISTING_SERVER, "1");
+  assert.equal(env.E2E_PROFILE_EXTERNAL_SERVER, "1");
+  assert.equal(env.NODE_EXTRA_CA_CERTS, env.E2E_PROFILE_TLS_CA_CERT_FILE);
+  assert.equal(JSON.parse(env.E2E_PROFILE_FIXTURE_SLOTS).length, 4);
 });
 
-test("self-contained runner passes the canonical env to every command and cleans its dist dir", () => {
-  const commands = [];
-  const cleanupEvents = [];
+test("authenticated profile URL parsers reject normalization and wrong schemes", () => {
+  const parserEnv = {
+    E2E_PROFILE_RUN_ID: "origin-parser",
+    E2E_PROFILE_RUN_NONCE: "1".repeat(64),
+  };
+  parserEnv.E2E_PROFILE_HOSTNAME = deriveAuthenticatedE2EHostname(
+    parserEnv.E2E_PROFILE_RUN_ID,
+    parserEnv.E2E_PROFILE_RUN_NONCE,
+  );
+  assert.equal(
+    parseAuthenticatedE2EProfileOrigin(
+      `https://${parserEnv.E2E_PROFILE_HOSTNAME}:443`,
+      "E2E_BASE_URL",
+      parserEnv,
+    ).toString(),
+    `https://${parserEnv.E2E_PROFILE_HOSTNAME}:443/`,
+  );
+  assert.equal(
+    parseAuthenticatedE2EReadinessUrl("http://127.0.0.1:4001/ready").toString(),
+    "http://127.0.0.1:4001/ready",
+  );
+  assert.equal(
+    parseAuthenticatedE2EAppUrl("http://127.0.0.1:4002").toString(),
+    "http://127.0.0.1:4002/",
+  );
+  for (const invalid of [
+    `http://${parserEnv.E2E_PROFILE_HOSTNAME}:4000`,
+    `HTTPS://${parserEnv.E2E_PROFILE_HOSTNAME}:4000`,
+    "https://127.0.0.1:4000",
+    "https://localhost:04000",
+    `https://${parserEnv.E2E_PROFILE_HOSTNAME}:4000/path`,
+  ]) {
+    assert.throws(() =>
+      parseAuthenticatedE2EProfileOrigin(invalid, "E2E_BASE_URL", parserEnv),
+    );
+  }
+});
 
-  runE2EProfile({
-    argv: ["node", "scripts/e2e-profile.mjs"],
-    processEnv: { PORT: "5111" },
+test("profile origin resolution ignores the internal PORT only in profile mode", () => {
+  const env = buildE2EProfileEnv(
+    {},
+    {
+      repoRoot: process.cwd(),
+      runId: "origin-resolution",
+      runNonce: "2".repeat(64),
+    },
+  );
+  assert.equal(
+    resolveE2EOriginConfig({
+      E2E_PROFILE: "1",
+      E2E_BASE_URL: env.E2E_BASE_URL.replace(":4000", ":4400"),
+      PORT: "4402",
+    }).origin,
+    env.E2E_BASE_URL.replace(":4000", ":4400"),
+  );
+  assert.throws(() =>
+    resolveE2EOriginConfig({
+      E2E_BASE_URL: env.E2E_BASE_URL.replace(":4000", ":4400"),
+      PORT: "4402",
+    }),
+  );
+});
+
+test("TLS provisioning persists only the public certificate and inherits an anonymous key FD", (t) => {
+  const root = createTestFixtureRoot("e2e-tls-provision");
+  t.after(() => rmSync(root, { force: true, recursive: true }));
+  const env = buildE2EProfileEnv(
+    {},
+    {
+      repoRoot: root,
+      runId: "tls-provision",
+      runNonce: "b".repeat(64),
+    },
+  );
+  const identity = provisionE2ETlsIdentity(env, { repoRoot: root });
+  t.after(() => closeSync(identity.keyDescriptor));
+  assert.match(readFileSync(identity.keyDescriptor, "utf8"), /PRIVATE KEY/);
+  assert.match(
+    readFileSync(env.E2E_PROFILE_TLS_CERT_FILE, "utf8"),
+    /BEGIN CERTIFICATE/,
+  );
+  assert.match(
+    readFileSync(env.E2E_PROFILE_TLS_CA_CERT_FILE, "utf8"),
+    /BEGIN CERTIFICATE/,
+  );
+  assert.equal(
+    existsSync(join(env.E2E_PROFILE_BROWSER_HOME, ".pki", "nssdb", "cert9.db")),
+    true,
+  );
+  assert.match(env.E2E_PROFILE_TLS_SPKI_PIN, /^[A-Za-z0-9+/]{43}=$/);
+  assert.equal(env.E2E_PROFILE_TLS_KEY_FD, "3");
+  assert.deepEqual(
+    Object.keys(process.env).filter((name) => /TLS.*KEY.*PEM/i.test(name)),
+    [],
+  );
+});
+
+test("runtime paths are absolute, same-directory, and nonce is public correlation only", () => {
+  const env = buildE2EProfileEnv(
+    {},
+    {
+      repoRoot: process.cwd(),
+      runId: "runtime-contract",
+      runNonce: "c".repeat(64),
+    },
+  );
+  const runtime = resolveE2EWebServerRuntime(env);
+  assert.equal(runtime.runId, "runtime-contract");
+  assert.equal(runtime.nonce, "c".repeat(64));
+  assert.equal(runtime.tlsCertFile, env.E2E_PROFILE_TLS_CERT_FILE);
+  assert.equal(runtime.tlsCaCertFile, env.E2E_PROFILE_TLS_CA_CERT_FILE);
+  assert.throws(() =>
+    resolveE2EWebServerRuntime({
+      ...env,
+      E2E_PROFILE_TLS_CERT_FILE: "relative.pem",
+    }),
+  );
+});
+
+test("runner isolates the key FD to its managed secure server before Playwright", async (t) => {
+  const root = createTestFixtureRoot("e2e-runner");
+  t.after(() => rmSync(root, { force: true, recursive: true }));
+  writeFileSync(join(root, "tsconfig.json"), "{}\n");
+  const calls = [];
+  const reservations = [{}, {}, {}];
+  let closedReservations = 0;
+  let closedKey = false;
+  let stoppedServer = false;
+  const serverProcess = { exitCode: null, pid: 4321, signalCode: null };
+  await runE2EProfile({
+    argv: ["node", "scripts/e2e-profile.mjs", "--workers=2"],
+    processEnv: {},
+    repoRoot: root,
+    detectLiveServer: async () => false,
+    reservePorts: async (ports) => {
+      assert.deepEqual(ports, ["4000", "4001", "4002"]);
+      return reservations;
+    },
+    closeReservations: async (value) => {
+      closedReservations += value.length;
+    },
+    provisionTls: (env) => {
+      env.E2E_PROFILE_TLS_SPKI_PIN = "A".repeat(43) + "=";
+      env.E2E_PROFILE_TLS_KEY_FD = "3";
+      return { keyDescriptor: 99 };
+    },
+    closeDescriptor: (descriptor) => {
+      assert.equal(descriptor, 99);
+      closedKey = true;
+    },
     runCommand: (command, args, options) => {
-      commands.push({ command, args, env: options.env });
+      calls.push({ command, args, options });
       return { status: 0 };
     },
-    stdout: () => {},
-    cleanup: (path) => cleanupEvents.push(["dist", path]),
-    captureConfig: () => ({ snapshot: "config" }),
-    restoreConfig: (snapshot, path) =>
-      cleanupEvents.push(["config", snapshot, path]),
-  });
-
-  assert.equal(commands.length, buildE2EProfileSteps({}).length);
-  for (const command of commands) {
-    assert.equal(command.env.E2E_BASE_URL, "http://127.0.0.1:5111");
-    assert.equal(command.env.AUTH_URL, command.env.E2E_BASE_URL);
-    assert.equal(command.env.NEXT_PUBLIC_APP_URL, command.env.E2E_BASE_URL);
-  }
-  assert.deepEqual(cleanupEvents, [
-    ["dist", commands[0].env.E2E_PROFILE_DIST_DIR],
-    ["config", { snapshot: "config" }, commands[0].env.E2E_PROFILE_DIST_DIR],
-  ]);
-});
-
-test("self-contained runner lists its command plan without running commands", () => {
-  const output = [];
-  const commands = [];
-
-  runE2EProfile({
-    argv: ["node", "scripts/e2e-profile.mjs", "--list"],
-    processEnv: {},
-    runCommand: (...args) => commands.push(args),
-    stdout: (line) => output.push(line),
-    captureConfig: () => ({}),
-  });
-
-  assert.deepEqual(commands, []);
-  assert.equal(output.length, 5);
-  assert.match(output[3], /playwright install chromium/);
-});
-
-test("self-contained runner cleans its dist dir before reporting a command failure", () => {
-  const cleaned = [];
-  let exitCode;
-
-  runE2EProfile({
-    argv: ["node", "scripts/e2e-profile.mjs"],
-    processEnv: { PORT: "5112" },
-    runCommand: () => ({ status: 7 }),
-    stdout: () => {},
-    cleanup: (path) => cleaned.push(path),
-    captureConfig: () => ({}),
-    restoreConfig: () => {},
-    exit: (code) => {
-      exitCode = code;
+    spawnServer: ({ env, keyDescriptor }) => {
+      assert.equal(env.E2E_PROFILE_TLS_KEY_FD, "3");
+      assert.equal(keyDescriptor, 99);
+      return serverProcess;
     },
-  });
-
-  assert.equal(exitCode, 7);
-  assert.equal(cleaned.length, 1);
-});
-
-test("self-contained runner maps a signaled command failure to exit code one", () => {
-  let exitCode;
-
-  runE2EProfile({
-    argv: ["node", "scripts/e2e-profile.mjs"],
-    processEnv: { PORT: "5113" },
-    runCommand: () => ({ status: null }),
-    stdout: () => {},
+    waitForServer: ({ serverProcess: actual }) => {
+      assert.equal(actual, serverProcess);
+      assert.equal(closedKey, true);
+    },
+    stopServer: (actual) => {
+      assert.equal(actual, serverProcess);
+      stoppedServer = true;
+    },
     cleanup: () => {},
     captureConfig: () => ({}),
     restoreConfig: () => {},
-    exit: (code) => {
-      exitCode = code;
-    },
+    exit: () => assert.fail("successful runner must not exit"),
   });
-
-  assert.equal(exitCode, 1);
+  assert.equal(closedReservations, 3);
+  assert.deepEqual(
+    calls.map((call) => call.args.join(" ")),
+    [
+      "run db:generate",
+      "run db:push",
+      "run db:seed:e2e",
+      "playwright install chromium",
+      "node_modules/@playwright/test/cli.js test --workers=2",
+    ],
+  );
+  assert.equal(calls.at(-1).options.stdio, "inherit");
+  assert.equal("E2E_PROFILE_TLS_KEY_FD" in calls.at(-1).options.env, false);
+  assert.equal(calls.at(-1).options.env.E2E_WEB_SERVER, "0");
+  assert.equal(calls.at(-1).options.env.E2E_REUSE_EXISTING_SERVER, "1");
+  assert.equal(calls[2].options.env.E2E_PROFILE_TLS_KEY_FD, "3");
+  assert.equal(closedKey, true);
+  assert.equal(stoppedServer, true);
 });
 
-test("profile cleanup removes only the generated Next type includes", () => {
-  const config = {
-    compilerOptions: { strict: true },
-    include: [
-      "**/*.ts",
-      ".next/e2e-profile/run-1/types/**/*.ts",
-      ".next/e2e-profile/run-1/dev/types/**/*.ts",
-      ".next/e2e-profile/other/types/**/*.ts",
-    ],
-  };
-
-  assert.deepEqual(
-    removeGeneratedTypeIncludes(config, ".next/e2e-profile/run-1"),
+test("Playwright and its descendants cannot inherit the proxy key descriptor", async (t) => {
+  if (process.platform !== "linux") return;
+  const root = createTestFixtureRoot("e2e-key-isolation");
+  t.after(() => rmSync(root, { force: true, recursive: true }));
+  const env = buildE2EProfileEnv(
+    {},
     {
-      compilerOptions: { strict: true },
-      include: ["**/*.ts", ".next/e2e-profile/other/types/**/*.ts"],
+      repoRoot: root,
+      runId: "key-isolation",
+      runNonce: "d".repeat(64),
+    },
+  );
+  const identity = provisionE2ETlsIdentity(env, { repoRoot: root });
+  const proxy = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+    env,
+    stdio: ["ignore", "ignore", "ignore", identity.keyDescriptor],
+  });
+  closeSync(identity.keyDescriptor);
+  const playwrightProgram = [
+    'const {spawn}=require("node:child_process")',
+    'const child=spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"})',
+    'process.on("SIGTERM",()=>{child.kill("SIGTERM");process.exit(0)})',
+    "setInterval(()=>{},1000)",
+  ].join(";");
+  const playwright = spawn(process.execPath, ["-e", playwrightProgram], {
+    env: e2EPlaywrightProcessEnv(env),
+    stdio: "ignore",
+  });
+  t.after(() => {
+    if (proxy.exitCode === null) proxy.kill("SIGTERM");
+    if (playwright.exitCode === null) playwright.kill("SIGTERM");
+  });
+  const playwrightTree = await waitForProcessTree(playwright.pid, 2);
+
+  const keyTarget = readlinkSync(`/proc/${proxy.pid}/fd/3`);
+  const proxyMatches = descriptorTargets(proxy.pid).filter(
+    (target) => target === keyTarget,
+  );
+  assert.equal(proxyMatches.length, 1);
+  assert.equal(playwrightTree.length, 2);
+  const inheritedMatches = playwrightTree.flatMap((pid) =>
+    descriptorTargets(pid).filter((target) => target === keyTarget),
+  );
+  assert.equal(inheritedMatches.length, 0);
+  assert.equal("E2E_PROFILE_TLS_KEY_FD" in e2EPlaywrightProcessEnv(env), false);
+});
+
+test("direct deterministic Playwright setup fails without the managed secure server", async () => {
+  await assert.rejects(
+    runE2EGlobalSetup({ env: { E2E_PROFILE: "1" } }),
+    /must be started through/,
+  );
+});
+
+test("fixture planning preserves workers, projects, and repeat slots", () => {
+  assert.equal(
+    resolveE2EProfileWorkers(["--workers=50%"], {}, { cpuCount: 8 }),
+    4,
+  );
+  assert.deepEqual(
+    resolveE2EProfileFixturePlan(
+      ["--workers=2", "--repeat-each=3", "--project=chromium"],
+      {},
+    ),
+    {
+      projects: ["chromium"],
+      repeatEach: 3,
+      workers: 2,
+      slots: Array.from({ length: 3 }, (_, repeatEachIndex) =>
+        Array.from({ length: 2 }, (_unused, parallelIndex) => ({
+          projectName: "chromium",
+          repeatEachIndex,
+          parallelIndex,
+        })),
+      ).flat(),
     },
   );
 });
 
-test("profile cleanup restores Next-generated config drift", (t) => {
-  const root = createTestFixtureRoot("e2e-profile-config-cleanup", t);
-  const tsconfigPath = join(root, "tsconfig.json");
-  const nextEnvPath = join(root, "next-env.d.ts");
-  const distDir = ".next/e2e-profile/run-1";
-  const originalTsconfig = `${JSON.stringify(
-    {
-      compilerOptions: { strict: true },
-      include: ["**/*.ts"],
-    },
-    null,
-    2,
-  )}\n`;
-  const originalNextEnv = 'import "./.next/dev/types/routes.d.ts";\n';
-  const snapshot = {
-    [tsconfigPath]: originalTsconfig,
-    [nextEnvPath]: originalNextEnv,
-  };
-
-  writeFileSync(
-    tsconfigPath,
-    JSON.stringify(
+test("database normalization and generated type cleanup remain deterministic", () => {
+  assert.equal(
+    resolveE2EProfileDatabaseUrl(
+      { DB_PROVIDER: "sqlite", DATABASE_URL: "file:./prisma/dev.db" },
+      "/repo",
+    ),
+    "file:/repo/prisma/dev.db",
+  );
+  assert.deepEqual(
+    removeGeneratedTypeIncludes(
       {
-        compilerOptions: { strict: true },
         include: [
-          "**/*.ts",
-          `${distDir}/types/**/*.ts`,
-          `${distDir}/dev/types/**/*.ts`,
+          "src/**/*.ts",
+          ".next/e2e-profile/run/types/**/*.ts",
+          ".next/e2e-profile/run/dev/types/**/*.ts",
         ],
       },
-      null,
-      2,
+      ".next/e2e-profile/run",
     ),
+    { include: ["src/**/*.ts"] },
   );
-  writeFileSync(nextEnvPath, `import "./${distDir}/dev/types/routes.d.ts";\n`);
-
-  restoreE2EProfileConfigFiles(snapshot, distDir);
-
-  assert.equal(readFileSync(tsconfigPath, "utf8"), originalTsconfig);
-  assert.equal(readFileSync(nextEnvPath, "utf8"), originalNextEnv);
 });
 
-test("profile config capture and cleanup handle missing and concurrent files", (t) => {
-  const root = createTestFixtureRoot("e2e-profile-config-edges", t);
-  const tsconfigPath = join(root, "tsconfig.json");
-  const nextEnvPath = join(root, "next-env.d.ts");
-  const originalTsconfig = '{"include":["**/*.ts"]}\n';
-  writeFileSync(tsconfigPath, originalTsconfig);
-
-  const snapshot = captureE2EProfileConfigFiles(root);
-  assert.equal(snapshot[tsconfigPath], originalTsconfig);
-  assert.equal(snapshot[nextEnvPath], undefined);
-
-  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
-  assert.equal(readFileSync(tsconfigPath, "utf8"), originalTsconfig);
-
-  writeFileSync(tsconfigPath, "{invalid");
-  writeFileSync(
-    nextEnvPath,
-    'import "./.next/e2e-profile/run/dev/types/routes.d.ts";\n',
+test("command plan keeps database generation, push, seed, browser install, then Playwright", () => {
+  const steps = buildE2EProfileSteps({}, [
+    "e2e/auth/authenticated-nested-routes.spec.ts",
+  ]);
+  assert.deepEqual(
+    steps.map(([label]) => label),
+    [
+      "Generate Prisma client",
+      "Push SQLite schema",
+      "Seed deterministic profile",
+      "Install Chromium",
+      "Run deterministic E2E profile",
+    ],
   );
-  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
-  assert.equal(readFileSync(tsconfigPath, "utf8"), "{invalid");
-  assert.equal(existsSync(nextEnvPath), false);
-
-  rmSync(tsconfigPath);
-  restoreE2EProfileConfigFiles(snapshot, ".next/e2e-profile/run");
 });
 
-test("profile CLI entry point supports list mode", () => {
-  const result = spawnSync(
-    process.execPath,
+test("unrestricted, deterministic, and required lists preserve command provenance", () => {
+  const unrestrictedEnv = {
+    ...process.env,
+    E2E_PROFILE: "0",
+    E2E_PROFILE_GREP: "",
+  };
+  delete unrestrictedEnv.E2E_PROFILE_EXTERNAL_SERVER;
+  delete unrestrictedEnv.E2E_PROFILE_HOSTNAME;
+  delete unrestrictedEnv.NODE_EXTRA_CA_CERTS;
+
+  const unrestricted = listPlaywrightTests(
+    [join("node_modules", "@playwright", "test", "cli.js"), "test", "--list"],
+    unrestrictedEnv,
+  );
+  const deterministic = listPlaywrightTests(
     ["scripts/e2e-profile.mjs", "--list"],
     {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: { ...process.env, PORT: "5333" },
+      ...process.env,
+      E2E_PROFILE_GREP: "",
     },
   );
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Run deterministic E2E profile/);
-});
-
-test("Playwright baseURL and webServer use the same normalized origin", () => {
-  const config = loadPlaywrightConfig({
-    E2E_BASE_URL: "http://LOCALHOST:5222/",
-    E2E_WEB_SERVER: "1",
-    E2E_REUSE_EXISTING_SERVER: "0",
+  const required = listPlaywrightTests(["scripts/e2e-profile.mjs", "--list"], {
+    ...process.env,
+    E2E_PROFILE_GREP: "@required-profile",
   });
 
-  assert.equal(config.baseURL, "http://localhost:5222");
-  assert.equal(config.webServerUrl, config.baseURL);
-  assert.equal(config.reuseExistingServer, false);
+  assert.match(deterministic.output, /List deterministic E2E profile/);
+  assert.match(required.output, /List required E2E profile/);
+  assert.ok(
+    unrestricted.tests.some(
+      ({ spec }) => spec === "auth/auth-redirect.spec.ts",
+    ),
+    "unrestricted list must contain an intentionally out-of-profile spec",
+  );
+  assert.equal(
+    deterministic.tests.some(
+      ({ spec }) => spec === "auth/auth-redirect.spec.ts",
+    ),
+    false,
+    "deterministic list must use the configured profile spec set",
+  );
+
+  const unrestrictedIdentities = new Set(unrestricted.tests.map(testIdentity));
+  const deterministicIdentities = new Set(
+    deterministic.tests.map(testIdentity),
+  );
+  const requiredIdentities = new Set(required.tests.map(testIdentity));
+  for (const identity of deterministicIdentities) {
+    assert.ok(
+      unrestrictedIdentities.has(identity),
+      `deterministic test is absent from unrestricted list: ${identity}`,
+    );
+  }
+
+  const annotatedUnrestricted = new Set(
+    unrestricted.tests
+      .filter(({ title }) => title.includes("@required-profile"))
+      .map(testIdentity),
+  );
+  assert.deepEqual(requiredIdentities, annotatedUnrestricted);
+  for (const identity of requiredIdentities) {
+    assert.ok(
+      deterministicIdentities.has(identity),
+      `required test is outside the deterministic profile: ${identity}`,
+    );
+  }
+  assert.ok(
+    deterministic.tests.some(
+      ({ spec, title }) =>
+        spec === "import/import-roundtrip.spec.ts" &&
+        title.includes("rejects an unsupported file type"),
+    ),
+    "deterministic list must include the import-only non-required case",
+  );
+  assert.equal(
+    required.tests.some(({ title }) =>
+      title.includes("rejects an unsupported file type"),
+    ),
+    false,
+  );
 });
 
-function loadPlaywrightConfig(overrides) {
-  const configUrl = pathToFileURL(
-    join(process.cwd(), "playwright.config.ts"),
-  ).href;
-  const source = `
-    import config from ${JSON.stringify(configUrl)};
-    const resolved = config.default ?? config;
-    process.stdout.write(JSON.stringify({
-      baseURL: resolved.use?.baseURL,
-      webServerUrl: resolved.webServer?.url,
-      reuseExistingServer: resolved.webServer?.reuseExistingServer,
-    }));
-  `;
-  const env = { ...process.env };
-  for (const name of [
-    "BASE_URL",
-    "E2E_BASE_URL",
-    "E2E_WEB_SERVER",
-    "E2E_REUSE_EXISTING_SERVER",
-    "HOST",
-    "PORT",
-  ]) {
-    delete env[name];
-  }
-  Object.assign(env, overrides);
-
-  const result = spawnSync(
-    process.execPath,
-    ["--import", "tsx", "--input-type=module", "--eval", source],
-    { encoding: "utf8", env },
+test("profile authentication and precompile keep credentials on injected secure fetch", async () => {
+  const calls = [];
+  const responses = [
+    new Response(JSON.stringify({ csrfToken: "csrf" }), {
+      status: 200,
+      headers: { "set-cookie": "authjs.csrf-token=csrf; Secure; Path=/" },
+    }),
+    new Response(null, {
+      status: 302,
+      headers: {
+        location: "https://localhost:4000/app",
+        "set-cookie":
+          "__Secure-authjs.session-token=session; Secure; HttpOnly; Path=/",
+      },
+    }),
+    new Response("<html>ok</html>", { status: 200 }),
+  ];
+  const fetchImpl = async (target, init) => {
+    calls.push({ target: target.toString(), init });
+    return responses.shift();
+  };
+  const cookie = await authenticateE2EProfile({
+    email: "owner@example.test",
+    fetchImpl,
+    origin: "https://localhost:4000",
+    password: "password",
+  });
+  assert.match(cookie, /__Secure-authjs\.session-token=session/);
+  await precompileE2EProfileRoutes({
+    cookie,
+    fetchImpl,
+    origin: "https://localhost:4000",
+    routes: [{ kind: "dashboard", method: "GET", path: "/app", status: 200 }],
+    stdout: () => {},
+  });
+  assert.equal(calls.length, 3);
+  assert.equal(
+    calls[1].target,
+    "https://localhost:4000/api/auth/callback/credentials",
   );
-  assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout);
+  assert.match(String(calls[1].init.body), /password=password/);
+  assert.equal(calls[2].init.headers.cookie.includes("session"), true);
+});
+
+test("PID cleanup terminates only the exact recorded process", () => {
+  const root = createTestFixtureRoot("e2e-pid-cleanup");
+  const pidFile = join(root, "server.pid");
+  writeFileSync(pidFile, "1234\n", { mode: 0o600 });
+  const signals = [];
+  stopE2EProfileServer(pidFile, {
+    kill: (pid, signal) => signals.push([pid, signal]),
+  });
+  assert.deepEqual(signals, [[1234, "SIGTERM"]]);
+  assert.equal(existsSync(pidFile), false);
+  rmSync(root, { force: true, recursive: true });
+});
+
+function descriptorTargets(pid) {
+  return readdirSync(`/proc/${pid}/fd`).flatMap((descriptor) => {
+    try {
+      return [readlinkSync(`/proc/${pid}/fd/${descriptor}`)];
+    } catch (error) {
+      if (error && typeof error === "object" && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+  });
+}
+
+async function waitForProcessTree(rootPid, expectedCount, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pids = linuxProcessTreePids(rootPid);
+    if (pids.length === expectedCount) return pids;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+  throw new Error("Timed out waiting for the Playwright fixture process tree.");
+}
+
+function listPlaywrightTests(args, env) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const output = `${result.stdout}${result.stderr}`;
+  const tests = output.split("\n").flatMap((line) => {
+    const match = line.match(/› ([^:]+\.spec\.ts):\d+:\d+ › (.+)$/);
+    return match ? [{ spec: match[1], title: match[2] }] : [];
+  });
+  assert.ok(tests.length > 0, output);
+  return { output, tests };
+}
+
+function testIdentity({ spec, title }) {
+  return `${spec} › ${title}`;
 }

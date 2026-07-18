@@ -21,7 +21,7 @@ import type { InspectorPanelId } from "@/lib/presentation/inspector-panel-ui";
 import {
   detachDeckChrome,
   detachDecoration,
-  reorderZIndex,
+  currentObjectReorderCommandDescriptor,
   resetLocalStyleOverride,
   resetSlideLocalStyle,
   updateDeckChrome,
@@ -437,16 +437,16 @@ export function useInspectorCommands(args: CreateInspectorCommandsArgs) {
       kind,
     );
     if (operations.length === 0) return;
-    let updated = deck;
-    operations.forEach((operation) => {
-      updated = reorderZIndex(
-        updated,
+    onDeckChange(
+      updateNodeLayouts(
+        deck,
         activeSlide.id,
-        operation.id,
-        operation.zIndex,
-      );
-    });
-    onDeckChange(updated);
+        new Map(operations.map(({ id, zIndex }) => [id, { zIndex }] as const)),
+      ),
+    );
+    setStageAnnouncement(
+      currentObjectReorderCommandDescriptor(kind).liveMessage,
+    );
   }
 
   function handleDiagnosticNavigate(diagnostic: PresentationDiagnostic) {

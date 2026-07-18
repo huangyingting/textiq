@@ -4,6 +4,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { act } from "react-test-renderer";
 
 import type { PresentationExportPreflightResult } from "@/lib/presentation/export-preflight";
+import { Popover } from "@/components/ui/popover";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
 import { SlideEditor } from "./slide-editor";
 import { SlideEditorTopToolbar } from "./slide-editor-top-toolbar";
@@ -100,6 +101,45 @@ async function runWithSettledDom(body: () => Promise<void> | void) {
 }
 
 describe("SlideEditor export preflight", () => {
+  test("portals the export menu so real pointer activation escapes toolbar clipping", () => {
+    const renderer = createHookRenderer();
+    try {
+      const tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-export-menu-pointer",
+          deck: buildDeck([
+            buildSlide("content", [], {
+              id: "slide-1",
+            }),
+          ]),
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPptx: async () => undefined,
+        }),
+      );
+      const toolbar = renderTopToolbar(tree);
+      const exportPopover = findRequiredElement(
+        toolbar,
+        (element) =>
+          element.type === Popover &&
+          element.props["aria-label"] === "Export slides",
+        "expected export popover",
+      );
+      const exportPptx = findRequiredElement(
+        toolbar,
+        (element) =>
+          element.type === "button" &&
+          element.props["aria-label"] === "Export PPTX",
+        "expected PPTX export menu item",
+      );
+
+      assert.equal(exportPopover.props.portal, true);
+      assert.equal(typeof exportPptx.props.onClick, "function");
+    } finally {
+      renderer.cleanup();
+    }
+  });
+
   // Clicking the export menu item below calls its `onClick` directly
   // (bypassing React's synthetic event system), which makes the resulting
   // `setExportPreflight` update settle via React's real scheduler rather

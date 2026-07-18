@@ -8,6 +8,7 @@ import { lowerTableNode } from "./table-lowerer";
 import { lowerTextNode } from "./text-rich-text-lowerer";
 import { warnUnsupportedExportEffect } from "./shared";
 import { lowerVisualNode } from "./visual-block-lowerer";
+import { orderSiblingsByVisualOrder } from "../render-order";
 
 export function lowerNodeToExportOperations(
   node: ResolvedRenderNode,
@@ -17,7 +18,7 @@ export function lowerNodeToExportOperations(
 
   if (node.type === "group") {
     const ops: ExportOperation[] = [];
-    for (const child of node.children ?? []) {
+    for (const child of orderSiblingsByVisualOrder(node.children ?? [])) {
       ops.push(...lowerNodeToExportOperations(child, dc));
     }
     return ops;

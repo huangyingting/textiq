@@ -654,8 +654,7 @@ describe("inspector panels render and wire controls", () => {
     );
 
     assert.match(html, /Group/);
-    assert.match(html, /Text/);
-    assert.match(html, /Media/);
+    assert.match(html, /User layers/);
     assert.match(html, /Nested text/);
     assert.match(html, /Second text/);
     assert.match(html, /Nested image/);

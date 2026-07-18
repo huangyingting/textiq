@@ -5,6 +5,7 @@ import { loadDocumentEditorViewModel } from "@/lib/document-editor/loader";
 import { requireUser } from "@/lib/session";
 
 import { requireDocumentActionContext } from "../document-context";
+import { saveBrandKitDraft } from "../brand-kit-actions";
 import { SlideEditorRouteClient } from "./slide-editor-route-client";
 
 export const metadata: Metadata = {
@@ -43,7 +44,9 @@ export default async function DocumentSlidesPage({
       canManage={viewModel.canManage}
       userId={viewModel.userId}
       userName={viewModel.userName}
-      customThemePackages={viewModel.customThemePackages}
+      activeCustomThemePackage={viewModel.activeCustomThemePackage}
+      customThemeCatalogEntries={viewModel.customThemeCatalogEntries}
+      saveBrandKitDraftAction={saveBrandKitDraft}
     />
   );
 }

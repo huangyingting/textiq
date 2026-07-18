@@ -422,7 +422,7 @@ describe("template structure: layouts and slots", () => {
       }
     });
 
-    test(`"${kind}" all layout non-slide blueprints have layout and style`, () => {
+    test(`"${kind}" blueprints have layout and only visual nodes have style`, () => {
       const template = registry.get(kind)!;
       function checkBlueprints(
         blueprints: (typeof template.layouts)[0]["root"]["children"],
@@ -434,10 +434,18 @@ describe("template structure: layouts and slots", () => {
             bp.layout,
             `"${kind}" blueprint type="${bp.type}" slot="${bp.slot ?? "none"}" must have layout`,
           );
-          assert.ok(
-            bp.style,
-            `"${kind}" blueprint type="${bp.type}" slot="${bp.slot ?? "none"}" must have style`,
-          );
+          if (bp.type === "group") {
+            assert.equal(
+              bp.style,
+              undefined,
+              `"${kind}" group blueprint slot="${bp.slot ?? "none"}" must be styleless`,
+            );
+          } else {
+            assert.ok(
+              bp.style,
+              `"${kind}" blueprint type="${bp.type}" slot="${bp.slot ?? "none"}" must have style`,
+            );
+          }
           if (bp.children) checkBlueprints(bp.children);
         }
       }

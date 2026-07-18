@@ -116,6 +116,17 @@ export function FilmstripSlide({
 }: FilmstripSlideProps): JSX.Element {
   const metrics = thumbnailMetrics(canvas);
 
+  // Extract the first title-role text node's content to form an accessible
+  // slide label that includes the title when one is present.
+  const titleNode = slideTree.nodes.find((node) => node.role === "title");
+  const slideTitle =
+    titleNode?.content.type === "text"
+      ? (titleNode.content.content.paragraphs[0]?.text ?? "").trim() || null
+      : null;
+  const slideAriaLabel = slideTitle
+    ? `Slide ${index + 1}: ${slideTitle}`
+    : `Slide ${index + 1}`;
+
   return (
     <li
       data-slide-index={index}
@@ -137,12 +148,18 @@ export function FilmstripSlide({
         <button
           ref={slideButtonRef}
           type="button"
-          aria-label={`Go to slide ${index + 1}`}
+          aria-label={slideAriaLabel}
           aria-current={isActive ? "true" : undefined}
           aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Delete Backspace"
           disabled={!isInteractive}
           tabIndex={isInteractive ? 0 : -1}
-          onClick={() => onSelect(index)}
+          onClick={(event) => {
+            // Pointer selection is committed by the drag controller on
+            // pointerup. Only keyboard/assistive activation should use click,
+            // otherwise the synthetic click after a drag re-selects the old
+            // index after the slide has moved.
+            if (event.detail === 0) onSelect(index);
+          }}
           className={cx(
             "block h-full w-full rounded-ds-sm text-left transition-transform duration-150 ease-out motion-reduce:transition-none",
             isDragging ? "cursor-grabbing" : "cursor-grab",

@@ -3,6 +3,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 
 import { Prisma } from "@/generated/prisma/client";
+import { isPrismaUniqueConstraintConflict } from "@/lib/db/prisma-unique-constraint";
 import { evaluateInviteAccess, toInviteAccessInput } from "@/lib/invite-access";
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import {
@@ -50,107 +51,11 @@ type InviteForAcceptance = Prisma.InviteLinkGetPayload<{
   select: typeof ACCEPT_INVITE_SELECT;
 }>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((entry) => typeof entry === "string")
-  );
-}
-
-function matchesWorkspaceMemberUniqueFields(
-  fields: readonly string[],
-): boolean {
-  if (fields.length !== WORKSPACE_MEMBER_UNIQUE_FIELDS.length) {
-    return false;
-  }
-
-  const normalized = fields.map((field) => field.trim());
-  return WORKSPACE_MEMBER_UNIQUE_FIELDS.every((field) =>
-    normalized.includes(field),
-  );
-}
-
-function matchesWorkspaceMemberUniqueStringTarget(target: string): boolean {
-  const normalizedTarget = target.replace(/["'`()[\]]/g, "").trim();
-
-  if (
-    normalizedTarget === WORKSPACE_MEMBER_UNIQUE_CONSTRAINT ||
-    normalizedTarget.endsWith(`.${WORKSPACE_MEMBER_UNIQUE_CONSTRAINT}`)
-  ) {
-    return true;
-  }
-
-  const asFields = normalizedTarget
-    .split(/[,\s]+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-
-  return matchesWorkspaceMemberUniqueFields(asFields);
-}
-
-function extractWorkspaceMemberConstraintTarget(
-  error: Prisma.PrismaClientKnownRequestError,
-): string | string[] | null {
-  const meta = error.meta;
-  if (!isRecord(meta)) {
-    return null;
-  }
-
-  if (typeof meta.target === "string" || isStringArray(meta.target)) {
-    return meta.target;
-  }
-
-  const driverAdapterError = meta.driverAdapterError;
-  if (!isRecord(driverAdapterError)) {
-    return null;
-  }
-
-  const cause = driverAdapterError.cause;
-  if (!isRecord(cause)) {
-    return null;
-  }
-
-  const constraint = cause.constraint;
-  if (!isRecord(constraint)) {
-    return null;
-  }
-
-  if (isStringArray(constraint.fields)) {
-    return constraint.fields;
-  }
-
-  if (typeof constraint.name === "string") {
-    return constraint.name;
-  }
-
-  if (typeof constraint.index === "string") {
-    return constraint.index;
-  }
-
-  return null;
-}
-
 export function isWorkspaceMembershipUniqueConflict(error: unknown): boolean {
-  if (
-    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-    error.code !== "P2002"
-  ) {
-    return false;
-  }
-
-  const target = extractWorkspaceMemberConstraintTarget(error);
-  if (!target) {
-    return false;
-  }
-
-  if (typeof target === "string") {
-    return matchesWorkspaceMemberUniqueStringTarget(target);
-  }
-
-  return matchesWorkspaceMemberUniqueFields(target);
+  return isPrismaUniqueConstraintConflict(error, {
+    fields: WORKSPACE_MEMBER_UNIQUE_FIELDS,
+    constraintName: WORKSPACE_MEMBER_UNIQUE_CONSTRAINT,
+  });
 }
 
 /** Converts an optional expiry window in days to an absolute timestamp. */

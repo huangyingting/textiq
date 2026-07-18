@@ -335,8 +335,60 @@ export const CURRENT_OBJECT_ALIGN_COMMAND_DESCRIPTORS = [
 export type CurrentObjectAlignCommandId =
   (typeof CURRENT_OBJECT_ALIGN_COMMAND_DESCRIPTORS)[number]["id"];
 
-export const CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS =
-  [] as const satisfies readonly CurrentObjectReorderCommandDescriptor[];
+export const CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS = [
+  {
+    id: "selection.reorder-forward",
+    family: "reorder-selection",
+    mode: "forward",
+    label: "Bring forward",
+    shortLabel: "Forward",
+    inspectorSingleLabel: "Bring forward",
+    accessibilityLabel: "Bring selection forward",
+    liveMessage: "Selection brought forward.",
+    currentObjects: NODE_AND_MULTI_OBJECTS,
+    owners: ARRANGE_OWNERS,
+    disabledReasons: ["missing-selection", "missing-handler"],
+  },
+  {
+    id: "selection.reorder-backward",
+    family: "reorder-selection",
+    mode: "backward",
+    label: "Send backward",
+    shortLabel: "Backward",
+    inspectorSingleLabel: "Send backward",
+    accessibilityLabel: "Send selection backward",
+    liveMessage: "Selection sent backward.",
+    currentObjects: NODE_AND_MULTI_OBJECTS,
+    owners: ARRANGE_OWNERS,
+    disabledReasons: ["missing-selection", "missing-handler"],
+  },
+  {
+    id: "selection.reorder-front",
+    family: "reorder-selection",
+    mode: "front",
+    label: "Bring to front",
+    shortLabel: "To front",
+    inspectorSingleLabel: "Bring to front",
+    accessibilityLabel: "Bring selection to front",
+    liveMessage: "Selection brought to front.",
+    currentObjects: NODE_AND_MULTI_OBJECTS,
+    owners: ARRANGE_OWNERS,
+    disabledReasons: ["missing-selection", "missing-handler"],
+  },
+  {
+    id: "selection.reorder-back",
+    family: "reorder-selection",
+    mode: "back",
+    label: "Send to back",
+    shortLabel: "To back",
+    inspectorSingleLabel: "Send to back",
+    accessibilityLabel: "Send selection to back",
+    liveMessage: "Selection sent to back.",
+    currentObjects: NODE_AND_MULTI_OBJECTS,
+    owners: ARRANGE_OWNERS,
+    disabledReasons: ["missing-selection", "missing-handler"],
+  },
+] as const satisfies readonly CurrentObjectReorderCommandDescriptor[];
 
 const CURRENT_OBJECT_BASE_COMMAND_DESCRIPTORS = [
   {
@@ -717,7 +769,11 @@ const CURRENT_OBJECT_ALIGN_DESCRIPTOR_BY_MODE = new Map<
 const CURRENT_OBJECT_REORDER_DESCRIPTOR_BY_MODE = new Map<
   CurrentObjectReorderMode,
   CurrentObjectReorderCommandDescriptor
->();
+>(
+  CURRENT_OBJECT_REORDER_COMMAND_DESCRIPTORS.map(
+    (descriptor) => [descriptor.mode, descriptor] as const,
+  ),
+);
 
 const CURRENT_OBJECT_INSERT_NODE_DESCRIPTOR_BY_KIND = new Map<
   CurrentObjectInsertNodeKind,

@@ -150,6 +150,10 @@ export function BrandKitAuthoringPanel({
   const compiledPackage = state.compileResult.ok
     ? state.compileResult.package
     : undefined;
+  const saveError =
+    state.saveResult && !state.saveResult.ok
+      ? state.saveResult.diagnostics[0]?.message
+      : undefined;
 
   async function handleSave() {
     if (!saveBrandKitDraft || !state.compileResult.ok) return;
@@ -424,6 +428,15 @@ export function BrandKitAuthoringPanel({
               Compiler accepted this draft.
             </p>
           )}
+          {state.saveResult && !state.saveResult.ok ? (
+            <ul className="mt-3 space-y-1 text-xs text-ds-danger">
+              {state.saveResult.diagnostics.map((diagnostic) => (
+                <li key={`${diagnostic.path}:${diagnostic.code}`}>
+                  {diagnostic.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {compiledPackage ? (
             <div className="mt-3 rounded-ds-sm bg-ds-surface-muted p-2 text-xs text-ds-text-secondary">
               Preview package:{" "}
@@ -437,14 +450,20 @@ export function BrandKitAuthoringPanel({
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-ds-border-subtle px-4 py-3">
-        <p className="text-xs text-ds-text-muted">
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-xs text-ds-text-muted"
+        >
           {state.saveResult?.ok
             ? `Saved ${state.saveResult.packageId} @ ${state.saveResult.packageVersion}`
-            : blockingErrors.length
-              ? `${blockingErrors.length} compiler error${blockingErrors.length === 1 ? "" : "s"} must be fixed before save.`
-              : saveBrandKitDraft
-                ? "Ready to save compiled snapshot."
-                : "Save action unavailable in this surface."}
+            : saveError
+              ? saveError
+              : blockingErrors.length
+                ? `${blockingErrors.length} compiler error${blockingErrors.length === 1 ? "" : "s"} must be fixed before save.`
+                : saveBrandKitDraft
+                  ? "Ready to save compiled snapshot."
+                  : "Save action unavailable in this surface."}
         </p>
         <Button
           variant="solid"

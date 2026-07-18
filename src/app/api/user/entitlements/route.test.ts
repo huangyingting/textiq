@@ -156,13 +156,13 @@ before(async () => {
 // Fixed billing state fixtures
 // ---------------------------------------------------------------------------
 
-const NOW = new Date("2026-07-11T00:00:00Z");
+const FRESH_PERIOD_START = new Date("2099-01-01T00:00:00Z");
 
 function makePrismaUserRow(plan: string, balance: number) {
   return {
     plan,
     creditBalance: balance,
-    creditPeriodStart: NOW, // recent — no period-rollover update triggered
+    creditPeriodStart: FRESH_PERIOD_START,
     subscription: null,
   };
 }

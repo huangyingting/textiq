@@ -10,6 +10,7 @@ import {
   resolveProgressiveGroupTarget,
   resolveStageNodeTarget,
   stageCandidateNodeIds,
+  unlockedStageCandidateNodeIds,
 } from "./stage-targeting";
 
 function textNode(id: string): SlideChildNode {
@@ -42,6 +43,17 @@ describe("stageCandidateNodeIds", () => {
       ["first", "second"],
     );
   });
+
+  test("filters locked candidates from explicit select-behind cycling", () => {
+    const top = textNode("top");
+    const locked = { ...textNode("locked"), locked: true };
+    const bottom = textNode("bottom");
+
+    assert.deepEqual(
+      unlockedStageCandidateNodeIds([hit(top), hit(locked), hit(bottom)]),
+      ["top", "bottom"],
+    );
+  });
 });
 
 describe("resolveStageNodeTarget", () => {
@@ -70,6 +82,29 @@ describe("resolveStageNodeTarget", () => {
     assert.deepEqual(target?.candidateIds, []);
   });
 
+  test("excludes locked and hidden hits and fallbacks", () => {
+    const locked = { ...textNode("locked"), locked: true };
+    const hidden = { ...textNode("hidden"), hidden: true };
+    const selectable = textNode("selectable");
+
+    assert.equal(
+      resolveStageNodeTarget({
+        hits: [hit(locked), hit(hidden), hit(selectable)],
+        nodes: [locked, hidden, selectable],
+        fallbackNodeId: "locked",
+      })?.nodeId,
+      "selectable",
+    );
+    assert.equal(
+      resolveStageNodeTarget({
+        hits: [],
+        nodes: [locked],
+        fallbackNodeId: "locked",
+      }),
+      null,
+    );
+  });
+
   test("reports parent group context for child targets", () => {
     const child = textNode("child");
     const group: SlideChildNode = {
@@ -78,7 +113,6 @@ describe("resolveStageNodeTarget", () => {
       role: "card",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 20, h: 20 }, zIndex: 2 },
-      style: { ref: "surface.card" },
       children: [child],
     };
     const target = resolveStageNodeTarget({
@@ -127,7 +161,6 @@ describe("resolveStageNodeTarget", () => {
       role: "card",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 20, h: 20 }, zIndex: 2 },
-      style: { ref: "surface.card" },
       children: [child],
     };
     const childTarget = resolveStageNodeTarget({

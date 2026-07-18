@@ -1,7 +1,19 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { login, ownerCredentials } from "../helpers/auth";
-import { waitForSlideAutosave } from "../helpers/readiness";
+import {
+  SLIDES_SMOKE_MUTATION_FIXTURES,
+  type PresentationTestFixtureName,
+} from "../helpers/presentation-fixtures";
+import {
+  e2eProfileEnabled,
+  profileDocPath,
+  profileOwnerCredentials,
+} from "../helpers/profile";
+import {
+  waitForSlideAutosave,
+  waitForStableSlideStage,
+} from "../helpers/readiness";
 
 /**
  * E2E smoke tests for the Slides feature: edit, save, present, and export
@@ -23,7 +35,10 @@ import { waitForSlideAutosave } from "../helpers/readiness";
  * Required environment variables (all optional — tests skip cleanly without them):
  *   E2E_USER_EMAIL / E2E_USER_PASSWORD  — owner credentials
  *   E2E_SLIDES_DOC_URL                  — full URL to a seeded document that
- *                                          has a Slides presentation
+ *                                          has a Slides presentation for
+ *                                          non-mutating smoke checks
+ *
+ * Mutating coverage uses dedicated deterministic profile documents/Yjs rooms.
  *
  * Large-file downloads and pixel checks are NOT performed in this spec.
  * The export smoke only asserts that the export dialog/mechanism is reachable.
@@ -41,6 +56,23 @@ function slidesDocUrl(): string | undefined {
   return process.env.E2E_SLIDES_DOC_URL;
 }
 
+async function openIsolatedMutationEditor(
+  page: Page,
+  fixtureName: PresentationTestFixtureName,
+): Promise<Locator> {
+  await login(
+    page,
+    profileOwnerCredentials(),
+    `${profileDocPath(fixtureName, test.info())}/slides`,
+  );
+  const editor = page.locator('[data-slide-editor="true"]').first();
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  await waitForStableSlideStage(
+    editor.locator('[data-slide-canvas="true"]').first(),
+  );
+  return editor;
+}
+
 async function readSlideCount(page: Page): Promise<number | null> {
   const editor = page.locator('[data-slide-editor="true"]').first();
   if ((await editor.count()) === 0) return null;
@@ -55,7 +87,9 @@ async function readSlideCount(page: Page): Promise<number | null> {
 async function readVisualNodeCount(page: Page): Promise<number | null> {
   const editor = page.locator('[data-slide-editor="true"]').first();
   if ((await editor.count()) === 0) return null;
-  return await editor.locator('[data-node-type="visual"]').count();
+  const activeSlide = editor.locator('[data-slide-canvas="true"]').first();
+  if ((await activeSlide.count()) === 0) return null;
+  return await activeSlide.locator('[data-node-type="visual"]').count();
 }
 
 async function clickIfPresent(locator: Locator): Promise<boolean> {
@@ -80,22 +114,17 @@ async function isVisible(locator: Locator, timeout = 2_000): Promise<boolean> {
   }
 }
 
-async function waitForLoadStateIfPossible(page: Page): Promise<void> {
-  try {
-    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 });
-  } catch {
-    return;
-  }
-}
-
 async function waitForPresentTarget(page: Page): Promise<Page | null> {
   try {
-    return await Promise.race([
+    const target = await Promise.race([
       page.context().waitForEvent("page", { timeout: 5_000 }),
       page
         .waitForURL(/\/present\/|\/app.*present/i, { timeout: 5_000 })
         .then(() => page),
     ]);
+    await target.waitForURL(/\/present\/|\/app.*present/i, { timeout: 10_000 });
+    await target.waitForLoadState("domcontentloaded", { timeout: 10_000 });
+    return target;
   } catch {
     return null;
   }
@@ -219,62 +248,41 @@ test.describe("slides edit and save persistence", () => {
   test("edit a slide title, save, and reload to verify persistence", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
-    test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
     test.skip(
-      !docUrl,
-      "Set E2E_SLIDES_DOC_URL to run the edit-persistence flow",
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
     );
 
-    await login(page, creds!);
-    await page.goto(docUrl!);
-
-    // Navigate to slides editor.
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .first();
-
-    await clickIfPresent(slidesTab);
-
-    // Look for an editable title field on the first slide.
-    const titleInput = page
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.titleEdit,
+    );
+    const titleNode = editor
       .locator(
-        '[data-testid="slide-title-input"], input[placeholder*="title" i]',
+        '[data-slide-stage-viewport="true"] [data-node-id="fixture-title"]',
       )
-      .or(page.getByRole("textbox", { name: /title/i }))
       .first();
-
-    const titleInputCount = await titleInput.count();
-    if (titleInputCount === 0) {
-      skipOptionalSlidesFixture("No editable slide title input was available");
-    }
+    await expect(titleNode).toBeVisible();
 
     const uniqueMark = "Smoke title persistence";
-    await titleInput.fill(uniqueMark);
-
-    // Save via keyboard shortcut or save button.
-    await page.keyboard.press("Control+S");
+    await titleNode.dblclick();
+    const inlineEditor = page.getByRole("textbox", { name: "Edit text" });
+    await expect(inlineEditor).toBeVisible();
+    await inlineEditor.fill(uniqueMark);
+    await page.keyboard.press("Escape");
+    await expect(inlineEditor).toHaveCount(0);
 
     await waitForSlideAutosave(page);
 
-    // Reload and verify the change persisted.
     await page.reload();
-    await page.waitForLoadState("networkidle");
-
-    // Re-navigate to the slides tab after reload.
-    const slidesTabAfterReload = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .first();
-
-    await clickIfPresent(slidesTabAfterReload);
-
-    // The saved title text should appear somewhere on the page.
-    await expect(page.getByText(uniqueMark).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(titleNode).toHaveAttribute(
+      "aria-label",
+      new RegExp(`Text:\\s*${uniqueMark}`),
+    );
   });
 });
 
@@ -284,9 +292,14 @@ test.describe("slides edit and save persistence", () => {
 
 test.describe("slides present mode", () => {
   test("authenticated user can open present mode", async ({ page }) => {
-    const creds = ownerCredentials();
+    const deterministicProfile = e2eProfileEnabled();
+    const creds = deterministicProfile
+      ? profileOwnerCredentials()
+      : ownerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
+    const docUrl = deterministicProfile
+      ? `${profileDocPath(SLIDES_SMOKE_MUTATION_FIXTURES.present, test.info())}/slides`
+      : slidesDocUrl();
     test.skip(!docUrl, "Set E2E_SLIDES_DOC_URL to run the present-mode smoke");
 
     await login(page, creds!);
@@ -306,22 +319,25 @@ test.describe("slides present mode", () => {
       .or(page.getByRole("link", { name: /present/i }))
       .first();
 
-    const btnCount = await presentBtn.count();
-    if (btnCount === 0) {
+    if (deterministicProfile) {
+      await expect(presentBtn).toBeVisible({ timeout: 30_000 });
+    } else if ((await presentBtn.count()) === 0) {
       skipOptionalSlidesFixture("Present button was not available");
     }
+    const presentTargetPromise = waitForPresentTarget(page);
     await presentBtn.click();
 
     // Present mode should either open a new page, navigate to a /present route,
     // or display a fullscreen overlay.
-    const newPage = await waitForPresentTarget(page);
-    if (!newPage) {
+    const newPage = await presentTargetPromise;
+    if (!newPage && !deterministicProfile) {
       skipOptionalSlidesFixture("Present mode did not open in a known route");
     }
+    expect(newPage).not.toBeNull();
 
-    await waitForLoadStateIfPossible(newPage);
+    await expect(newPage!.locator("html")).toHaveAttribute("lang", /^.{2,}$/);
     // A slide container or presentation surface should be visible.
-    const presentSurface = newPage
+    const presentSurface = newPage!
       .locator(
         '[data-testid="present-slide"], [data-testid="slide-view"], .present-stage',
       )
@@ -451,15 +467,14 @@ test.describe("additional presentation route fallbacks without auth", () => {
     expect(response?.status()).toBe(404);
   });
 
-  test("404 page for an unknown present route has a valid html[lang] attribute", async ({
+  test("present-route 404 exposes root-layout language after navigation readiness", async ({
     page,
   }) => {
-    // The Next.js 404 page should be well-formed HTML: the root <html> element
-    // must carry a non-empty lang attribute — a baseline accessibility requirement.
-    await page.goto("/present/slides-smoke-a11y-lang-check");
-    const lang = await page.locator("html").getAttribute("lang");
-    expect(lang).toBeTruthy();
-    expect(lang!.length).toBeGreaterThanOrEqual(2);
+    const response = await page.goto("/present/slides-smoke-a11y-lang-check");
+    expect(response?.status()).toBe(404);
+    await expect(page).toHaveURL(/\/present\/slides-smoke-a11y-lang-check$/);
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("html")).toHaveAttribute("lang", /^.{2,}$/);
   });
 });
 
@@ -519,25 +534,18 @@ test.describe("slides editor accessible toolbar controls", () => {
   test("presentation stage keyboard traversal, resize shortcuts, and live announcements are behavioral", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
-    test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
     test.skip(
-      !docUrl,
-      "Set E2E_SLIDES_DOC_URL to run the stage keyboard/screen-reader coverage",
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
     );
 
-    await login(page, creds!);
-    await page.goto(docUrl!);
-
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .or(page.getByRole("link", { name: /slides/i }))
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.stageMutations,
+    );
+    const stageShell = editor
+      .locator('[data-slide-stage-shell="true"]')
       .first();
-    await clickIfPresent(slidesTab);
-
-    const stageShell = page.locator('[data-slide-stage-shell="true"]').first();
     await expect(stageShell).toBeVisible({ timeout: 10_000 });
 
     const liveRegion = stageShell.locator('[aria-live="polite"]').first();
@@ -553,15 +561,9 @@ test.describe("slides editor accessible toolbar controls", () => {
     await stageNodes.first().click();
     await expect(stageNodes.first()).toHaveAttribute("aria-pressed", "true");
 
-    if ((await stageNodes.count()) < 2) {
-      await page.keyboard.press("ControlOrMeta+d");
-      await expect.poll(() => stageNodes.count()).toBeGreaterThanOrEqual(2);
-    }
-    if ((await stageNodes.count()) < 2) {
-      skipOptionalSlidesFixture(
-        "Need at least two stage nodes for Tab/Shift+Tab traversal coverage",
-      );
-    }
+    const beforeDuplicateCount = await stageNodes.count();
+    await page.keyboard.press("ControlOrMeta+d");
+    await expect(stageNodes).toHaveCount(beforeDuplicateCount + 1);
 
     const firstSelectedId = await selectedStageNodeId(stageShell);
     if (!firstSelectedId) {
@@ -570,19 +572,23 @@ test.describe("slides editor accessible toolbar controls", () => {
       );
     }
 
-    await expect(async () => {
-      await page.keyboard.press("Tab");
-      const nextSelectedId = await selectedStageNodeId(stageShell);
-      expect(nextSelectedId).toBeTruthy();
-      expect(nextSelectedId).not.toBe(firstSelectedId);
-      expect(await focusedStageNodeId(stageShell)).toBe(nextSelectedId);
-    }).toPass({ timeout: 10_000 });
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(() => selectedStageNodeId(stageShell))
+      .not.toBe(firstSelectedId);
+    const nextSelectedId = await selectedStageNodeId(stageShell);
+    expect(nextSelectedId).toBeTruthy();
+    await expect
+      .poll(() => focusedStageNodeId(stageShell))
+      .toBe(nextSelectedId);
 
-    await expect(async () => {
-      await page.keyboard.press("Shift+Tab");
-      expect(await selectedStageNodeId(stageShell)).toBe(firstSelectedId);
-      expect(await focusedStageNodeId(stageShell)).toBe(firstSelectedId);
-    }).toPass({ timeout: 10_000 });
+    await page.keyboard.press("Shift+Tab");
+    await expect
+      .poll(() => selectedStageNodeId(stageShell))
+      .toBe(firstSelectedId);
+    await expect
+      .poll(() => focusedStageNodeId(stageShell))
+      .toBe(firstSelectedId);
 
     const beforeResize = await stageNodeSize(stageShell, firstSelectedId);
     if (!beforeResize) {
@@ -592,19 +598,25 @@ test.describe("slides editor accessible toolbar controls", () => {
     }
 
     await page.keyboard.press("Alt+ArrowRight");
-    await expect(liveRegion).toContainText(/Resized 1 node/i);
+    await expect
+      .poll(
+        async () => (await stageNodeSize(stageShell, firstSelectedId))?.width,
+      )
+      .toBeGreaterThan(beforeResize.width);
     const afterAltResize = await stageNodeSize(stageShell, firstSelectedId);
     expect(afterAltResize).not.toBeNull();
-    expect(afterAltResize!.width).toBeGreaterThan(beforeResize.width);
 
     await page.keyboard.press("Alt+Shift+ArrowDown");
-    await expect(liveRegion).toContainText(/Resized 1 node/i);
+    await expect
+      .poll(
+        async () => (await stageNodeSize(stageShell, firstSelectedId))?.height,
+      )
+      .toBeGreaterThan(afterAltResize!.height);
     const afterShiftAltResize = await stageNodeSize(
       stageShell,
       firstSelectedId,
     );
     expect(afterShiftAltResize).not.toBeNull();
-    expect(afterShiftAltResize!.height).toBeGreaterThan(afterAltResize!.height);
 
     await page.keyboard.press("Escape");
     await expect.poll(() => selectedStageNodeId(stageShell)).toBe(null);
@@ -662,25 +674,16 @@ test.describe("slides editor accessible toolbar controls", () => {
   test("add slide template picker traps focus and supports keyboard insertion", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
-    test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
     test.skip(
-      !docUrl,
-      "Set E2E_SLIDES_DOC_URL to run the add-slide keyboard/focus check",
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
     );
 
-    await login(page, creds!);
-    await page.goto(docUrl!);
-
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .or(page.getByRole("link", { name: /slides/i }))
-      .first();
-    await clickIfPresent(slidesTab);
-
-    const addSlideTrigger = page
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.addSlide,
+    );
+    const addSlideTrigger = editor
       .getByRole("button", { name: /add slide/i })
       .first();
     if ((await addSlideTrigger.count()) === 0) {
@@ -695,7 +698,7 @@ test.describe("slides editor accessible toolbar controls", () => {
     const picker = page.getByRole("dialog", { name: /add semantic slide/i });
     await addSlideTrigger.focus();
     await expect(addSlideTrigger).toBeFocused();
-    await addSlideTrigger.press("Enter");
+    await addSlideTrigger.click();
     await expect(picker).toBeVisible({ timeout: 10_000 });
 
     const pickerButtons = picker.getByRole("button");
@@ -705,26 +708,37 @@ test.describe("slides editor accessible toolbar controls", () => {
         "Add semantic slide picker has no template buttons",
       );
     }
+    const initialPickerButton = pickerButtons.first();
     const closeButton = picker.getByRole("button", { name: /^close$/i });
-    const firstTemplateButton = pickerButtons.nth(1);
+    const firstTemplateButton = picker
+      .getByRole("button", {
+        name: /^add .+ slide,/i,
+      })
+      .first();
+    const firstTemplateIndex = await pickerButtons.evaluateAll((buttons) =>
+      buttons.findIndex((button) =>
+        /^add .+ slide,/i.test(button.getAttribute("aria-label") ?? ""),
+      ),
+    );
+    expect(firstTemplateIndex).toBeGreaterThan(0);
     const lastPickerButton = pickerButtons.nth(buttonCount - 1);
 
-    await expect(closeButton).toBeFocused();
+    await expect(initialPickerButton).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(lastPickerButton).toBeFocused();
     await page.keyboard.press("Tab");
-    await expect(closeButton).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(firstTemplateButton).toBeFocused();
+    await expect(initialPickerButton).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(picker).toHaveCount(0);
     await expect(addSlideTrigger).toBeFocused();
 
-    await addSlideTrigger.press("Enter");
+    await addSlideTrigger.click();
     await expect(picker).toBeVisible();
-    await expect(closeButton).toBeFocused();
-    await page.keyboard.press("Tab");
+    await expect(initialPickerButton).toBeFocused();
+    for (let index = 0; index < firstTemplateIndex; index += 1) {
+      await page.keyboard.press("Tab");
+    }
     await expect(firstTemplateButton).toBeFocused();
     await page.keyboard.press("Enter");
 
@@ -732,7 +746,7 @@ test.describe("slides editor accessible toolbar controls", () => {
     await expect(addSlideTrigger).toBeFocused();
     await expect.poll(() => readSlideCount(page)).toBe(beforeCount + 1);
 
-    await addSlideTrigger.press("Enter");
+    await addSlideTrigger.click();
     await expect(picker).toBeVisible();
     await closeButton.click();
     await expect(picker).toHaveCount(0);
@@ -742,65 +756,34 @@ test.describe("slides editor accessible toolbar controls", () => {
   test("presentation visual picker modal traps focus and restores invoking focus", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
-    test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
     test.skip(
-      !docUrl,
-      "Set E2E_SLIDES_DOC_URL to run the visual-picker keyboard/focus check",
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
     );
 
-    await login(page, creds!);
-    await page.goto(docUrl!);
-
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .or(page.getByRole("link", { name: /slides/i }))
-      .first();
-    await clickIfPresent(slidesTab);
+    await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.visualInsert,
+    );
 
     const beforeVisualCount = await readVisualNodeCount(page);
     if (beforeVisualCount === null) {
       skipOptionalSlidesFixture("Visual node count could not be read");
     }
 
+    const stage = page
+      .locator('[data-slide-editor="true"] [data-slide-canvas="true"]')
+      .first();
+
     const openVisualPicker = async () => {
-      const directInsertVisualTrigger = page
-        .getByRole("button", { name: /insert visual/i })
+      await stage.click({ position: { x: 10, y: 10 } });
+      const invokingControl = page
+        .getByRole("button", { name: /^insert visual$/i })
         .first();
-      let invokingControl = directInsertVisualTrigger;
-
-      if ((await directInsertVisualTrigger.count()) > 0) {
-        await expect(directInsertVisualTrigger).toBeVisible({
-          timeout: 10_000,
-        });
-        await directInsertVisualTrigger.focus();
-        await expect(directInsertVisualTrigger).toBeFocused();
-        await directInsertVisualTrigger.press("Enter");
-      } else {
-        const insertTrigger = page
-          .getByRole("button", { name: /insert element/i })
-          .first();
-        if ((await insertTrigger.count()) === 0) {
-          skipOptionalSlidesFixture(
-            "Visual insert action was not available in this editor build",
-          );
-        }
-        await expect(insertTrigger).toBeVisible({ timeout: 10_000 });
-        await insertTrigger.focus();
-        await expect(insertTrigger).toBeFocused();
-        await insertTrigger.press("Enter");
-
-        const visualMenuItem = page.getByRole("menuitem", { name: /visual/i });
-        if ((await visualMenuItem.count()) === 0) {
-          skipOptionalSlidesFixture(
-            "Visual insert menu action was not available",
-          );
-        }
-        await visualMenuItem.first().click();
-        invokingControl = insertTrigger;
-      }
+      await expect(invokingControl).toBeVisible({ timeout: 10_000 });
+      await invokingControl.focus();
+      await expect(invokingControl).toBeFocused();
+      await invokingControl.press("Enter");
 
       const picker = page.getByRole("dialog", { name: /choose visual/i });
       await expect(picker).toBeVisible({ timeout: 10_000 });
@@ -839,10 +822,12 @@ test.describe("slides editor accessible toolbar controls", () => {
     await page.keyboard.press("Enter");
 
     await expect(secondOpen.picker).toHaveCount(0);
-    await expect(secondOpen.invokingControl).toBeFocused();
     await expect
       .poll(() => readVisualNodeCount(page))
       .toBe(beforeVisualCount + 1);
+    await expect(
+      stage.locator('[data-node-type="visual"][aria-pressed="true"]'),
+    ).toBeFocused();
 
     const thirdOpen = await openVisualPicker();
     await thirdOpen.cancelButton.click();

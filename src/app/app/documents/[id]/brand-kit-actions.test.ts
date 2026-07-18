@@ -88,6 +88,11 @@ function createState(): BrandKitTestState {
         packageId: "pkg-1",
         packageVersion: "1.0.0",
         package: { id: "pkg-1", version: "1.0.0" },
+        catalogEntry: {
+          package: { id: "pkg-1", version: "1.0.0" },
+          source: "custom",
+          createdAt: "2026-02-03T04:05:06.000Z",
+        },
         diagnostics: [],
       };
     },
@@ -263,6 +268,11 @@ describe("saveBrandKitDraft server action", () => {
       packageId: "pkg-1",
       packageVersion: "1.0.0",
       package: { id: "pkg-1", version: "1.0.0" },
+      catalogEntry: {
+        package: { id: "pkg-1", version: "1.0.0" },
+        source: "custom",
+        createdAt: "2026-02-03T04:05:06.000Z",
+      },
       diagnostics: [],
     });
     assert.deepEqual(state().calls, [

@@ -345,7 +345,10 @@ function materialiseBlueprintNode(
       } as ShapeNode);
     }
     return {
-      ...baseNode,
+      id: baseNode.id,
+      ...(baseNode.role !== undefined ? { role: baseNode.role } : {}),
+      ...(baseNode.slot !== undefined ? { slot: baseNode.slot } : {}),
+      ...(baseNode.layout !== undefined ? { layout: baseNode.layout } : {}),
       type: "group",
       component: blueprint.component ?? "custom",
       children,

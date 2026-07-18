@@ -8,7 +8,7 @@
  *   1. Slide background fill.
  *   2. Theme decoration nodes (behind user nodes) — not selectable in normal mode.
  *   3. Background deck chrome such as watermarks.
- *   4. User nodes ordered by ascending zIndex with stable tree-order ties.
+ *   4. User nodes in deck traversal order, with later nodes in the foreground.
  *   5. Foreground deck chrome such as logo/footer/page number/border.
  *
  * The canvas is `position: relative` with an aspect ratio driven by the

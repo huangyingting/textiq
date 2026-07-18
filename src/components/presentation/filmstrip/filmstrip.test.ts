@@ -56,6 +56,25 @@ function textNode(
   };
 }
 
+function titleNode(
+  id: string,
+  title: string,
+  frame: { x: number; y: number; w: number; h: number },
+): ResolvedRenderNode {
+  return {
+    id,
+    type: "text",
+    role: "title",
+    layout: { frame, zIndex: 0 },
+    style: {},
+    content: {
+      type: "text",
+      content: { paragraphs: [{ id: `${id}-p1`, text: title }] },
+    },
+    source: "user",
+  };
+}
+
 function slide(id: string): ResolvedSlideRenderTree {
   return {
     id,
@@ -66,6 +85,22 @@ function slide(id: string): ResolvedSlideRenderTree {
     decorations: [],
     chrome: [],
     nodes: [textNode(`${id}-title`, { x: 10, y: 10, w: 80, h: 12 })],
+  };
+}
+
+function slideWithTitle(id: string, title: string): ResolvedSlideRenderTree {
+  return {
+    id,
+    background: {
+      fill: { type: "solid", color: "#ffffff" },
+      decorationLevel: "none",
+    },
+    decorations: [],
+    chrome: [],
+    nodes: [
+      titleNode(`${id}-title`, title, { x: 6, y: 6, w: 88, h: 14 }),
+      textNode(`${id}-body`, { x: 8, y: 26, w: 56, h: 50 }),
+    ],
   };
 }
 
@@ -86,6 +121,27 @@ function renderTree(slideCount = 3): ResolvedDeckRenderTree {
     diagnostics: [],
     slides: Array.from({ length: slideCount }, (_, index) =>
       slide(`slide-${index + 1}`),
+    ),
+  };
+}
+
+function renderTreeWithTitles(titles: string[]): ResolvedDeckRenderTree {
+  return {
+    canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
+    theme: {
+      packageId: "test-package",
+      tokens: {
+        colors: {
+          canvas: { fill: "#ffffff", text: "#111111", mutedText: "#64748b" },
+          surface: { fill: "#ffffff", text: "#111111", mutedText: "#64748b" },
+          accent: { fill: "#2563eb", text: "#ffffff" },
+        },
+        fonts: { heading: "Inter", body: "Inter" },
+      },
+    },
+    diagnostics: [],
+    slides: titles.map((title, index) =>
+      slideWithTitle(`slide-${index + 1}`, title),
     ),
   };
 }
@@ -208,10 +264,66 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     assert.match(html, /aria-label="Slides"/);
     assert.doesNotMatch(html, /role="listbox"/);
     assert.doesNotMatch(html, /role="option"/);
-    assert.match(html, /Go to slide 2/);
+    assert.match(html, /Slide 2/);
     assert.match(html, /Duplicate slide 2/);
     assert.match(html, /Delete slide 2/);
     assert.match(html, /aria-current="true"/);
+  });
+
+  test("slide button accessible name includes title when present and falls back to index only for untitled slides", () => {
+    // With title nodes: each button gets "Slide N: <title>"
+    const htmlWithTitles = renderToStaticMarkup(
+      createElement(
+        Filmstrip,
+        filmstripProps({
+          renderTree: renderTreeWithTitles(["Intro", "Details"]),
+        }),
+      ),
+    );
+    assert.match(htmlWithTitles, /aria-label="Slide 1: Intro"/);
+    assert.match(htmlWithTitles, /aria-label="Slide 2: Details"/);
+    assert.doesNotMatch(htmlWithTitles, /aria-label="Go to slide/);
+
+    // Without title nodes (body-only slides): fallback is "Slide N"
+    const htmlNoTitles = renderToStaticMarkup(
+      createElement(Filmstrip, filmstripProps({ renderTree: renderTree(2) })),
+    );
+    assert.match(htmlNoTitles, /aria-label="Slide 1"/);
+    assert.match(htmlNoTitles, /aria-label="Slide 2"/);
+    assert.doesNotMatch(htmlNoTitles, /aria-label="Go to slide/);
+    assert.doesNotMatch(htmlNoTitles, /aria-label="Slide 1: /);
+  });
+
+  test("slide buttons reserve click selection for keyboard activation", () => {
+    const selected: number[] = [];
+    const deck = renderTree();
+    const tree = FilmstripSlide({
+      slideTree: deck.slides[0]!,
+      canvas: deck.canvas,
+      index: 0,
+      isActive: true,
+      slideId: "slide-1",
+      totalSlides: 2,
+      onSelect: (index) => selected.push(index),
+      onDuplicate: () => undefined,
+      onDelete: () => undefined,
+      onPointerDown: () => undefined,
+    });
+    const slideButton = findElement(
+      tree,
+      (candidate) =>
+        candidate.type === "button" &&
+        candidate.props["aria-label"] === "Slide 1",
+    );
+    assert.ok(slideButton);
+    const onClick = slideButton.props.onClick as (event: {
+      detail: number;
+    }) => void;
+
+    onClick({ detail: 1 });
+    assert.deepEqual(selected, []);
+    onClick({ detail: 0 });
+    assert.deepEqual(selected, [0]);
   });
 
   test("handles keyboard slide selection/reorder/delete flows with focus restore and announcements", () => {
@@ -371,7 +483,7 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     assert.match(html, /aria-label="Slides"[^>]*tabindex="-1"/);
     assert.match(
       html,
-      /aria-label="Go to slide 1"[^>]*disabled=""[^>]*tabindex="-1"/,
+      /aria-label="Slide 1"[^>]*disabled=""[^>]*tabindex="-1"/,
     );
     assert.match(
       html,

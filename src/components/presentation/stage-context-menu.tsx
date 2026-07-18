@@ -25,6 +25,7 @@ import {
   moveMenuCommandFocus,
 } from "@/lib/a11y/menu-command-semantics";
 import { cx, MENU_CHROME } from "@/components/ui/tokens";
+import { nextSemanticSelectUnderNodeId } from "./stage-pointer-interactions";
 
 export function stageNodeMenuLabel(node: SlideChildNode): string {
   if (node.name) return node.name;
@@ -36,6 +37,35 @@ export function stageNodeMenuLabel(node: SlideChildNode): string {
     return text ? `Text: ${text}` : "Text";
   }
   return node.type.charAt(0).toUpperCase() + node.type.slice(1);
+}
+
+export function nextUnlockedContextLayerId(
+  candidates: readonly SlideChildNode[],
+  currentNodeId: string,
+): string | null {
+  return nextSemanticSelectUnderNodeId(
+    candidates
+      .filter(
+        (candidate) => candidate.locked !== true && candidate.hidden !== true,
+      )
+      .map((candidate) => candidate.id),
+    new Set([currentNodeId]),
+  );
+}
+
+export function selectableContextLayers(
+  candidates: readonly SlideChildNode[],
+): SlideChildNode[] {
+  return candidates.filter(
+    (candidate) => candidate.locked !== true && candidate.hidden !== true,
+  );
+}
+
+export function overlapContextLayers(
+  candidates: readonly SlideChildNode[],
+): SlideChildNode[] {
+  const selectableCandidates = selectableContextLayers(candidates);
+  return selectableCandidates.length > 1 ? selectableCandidates : [];
 }
 
 export function StageNodeContextMenu({
@@ -104,7 +134,11 @@ export function StageNodeContextMenu({
   const menuWidth = 320;
   const left = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - 560));
-  const layerCandidates = candidates.length > 1 ? candidates : [];
+  const layerCandidates = overlapContextLayers(candidates);
+  const nextUnlockedLayerId = nextUnlockedContextLayerId(
+    layerCandidates,
+    node.id,
+  );
   const run = (action: () => void) => () => {
     action();
     onClose();
@@ -174,6 +208,16 @@ export function StageNodeContextMenu({
           <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-ds-text-muted">
             Select layer
           </div>
+          {item(
+            "Select next overlapping element",
+            Layers,
+            () => {
+              if (nextUnlockedLayerId) onSelectCandidate(nextUnlockedLayerId);
+            },
+            {
+              disabled: nextUnlockedLayerId === null,
+            },
+          )}
           {layerCandidates.map((candidate) => (
             <button
               key={candidate.id}

@@ -9,11 +9,17 @@ import { requireDocumentCapability } from "@/lib/auth/document-permissions";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { logError } from "@/lib/log";
-import { restoreVersion } from "@/lib/document/persistence-service";
+import {
+  isRestoredDeckValidationError,
+  restoreVersion,
+} from "@/lib/document/persistence-service";
 import type {
   DocumentVersionSummary,
   RestoredDocumentVersion,
 } from "@/lib/document/persistence-types";
+import { DECK_SCHEMA_VERSION } from "@/lib/document/persistence/current-deck-schema";
+
+const DOCUMENT_RESTORE_LOG_ERROR = new Error("Document version restore failed");
 
 type VersionAuthor = { name: string | null; email: string | null } | null;
 
@@ -83,11 +89,22 @@ export async function restoreDocumentVersion(
     revalidatePath("/app");
     return actionOk(restored);
   } catch (err) {
-    logError(
-      "document.restore",
-      err instanceof Error ? err : new Error(String(err)),
-      { documentId, versionId },
-    );
+    const invalidDeck = isRestoredDeckValidationError(err);
+    logError("document.restore", DOCUMENT_RESTORE_LOG_ERROR, {
+      code: invalidDeck ? "invalid_deck" : "restore_failed",
+      issueCount: invalidDeck ? err.issueCount : 0,
+      operation: "restore",
+      outcome: "failed",
+      schemaVersion: DECK_SCHEMA_VERSION,
+      validationCode: invalidDeck
+        ? err.diagnosticCode
+        : "schema_validation_failed",
+    });
+    if (invalidDeck) {
+      return actionError(
+        "This version contains an invalid presentation deck and was not restored.",
+      );
+    }
     return actionError("Failed to restore document version.");
   }
 }

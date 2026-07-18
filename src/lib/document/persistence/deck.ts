@@ -13,6 +13,8 @@ import type { SaveDeckResult } from "@/lib/document/persistence-types";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import { snapshotDocumentVersion } from "./helpers";
 
+const DECK_PERSIST_LOG_ERROR = new Error("Deck persistence transaction failed");
+
 // Re-export so the barrel can surface it via `export *`
 export type { SaveDeckResult };
 
@@ -30,9 +32,17 @@ export type { SaveDeckResult };
 export async function persistDeck(
   documentId: string,
   deckJson: unknown,
-  clientToken?: string | null,
+  clientToken: string | null,
   options: { userId?: string | null } = {},
 ): Promise<SaveDeckResult> {
+  if (clientToken === undefined) {
+    return {
+      ok: false,
+      error: "A deck revision token is required.",
+      failure: { code: "invalid_revision_token", retryable: false },
+    };
+  }
+
   const parsedNextDeck = safeParseDeck(deckJson);
   if (!parsedNextDeck.success) {
     return writeDeckWithCas({
@@ -61,10 +71,12 @@ export async function persistDeck(
       await reconcileSlideCommentAnchors(tx, documentId, parsedNextDeck.data);
       return result;
     });
-  } catch (error) {
-    logError("deck.persist", error, {
+  } catch {
+    logError("deck.persist", DECK_PERSIST_LOG_ERROR, {
+      code: "storage_unavailable",
       documentId,
       operation: "transaction",
+      outcome: "failed",
     });
     return {
       ok: false,

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-17"
 description: "This document describes how authored decks render in the editor, present mode, public viewers, and export pipeline. For the deck JSON shape, see ../data-model/deck.md. For theme/layout resolution, see theme-packages.md."
 ---
 
@@ -54,18 +54,22 @@ command detaches them.
 
 Supported element rendering:
 
-| Node        | Runtime behavior                                                                                                              |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `text`      | Paragraph content, rich text runs, fit mode, role/style binding, local style, and rotation.                                   |
-| `visual`    | Renders visual placeholders or resolved visual image assets with channel-color defaults.                                      |
-| `image`     | Renders deck image assets with fit/crop/alt metadata and missing-asset diagnostics.                                           |
-| `shape`     | Renders shape geometry, fill/stroke/effect style, opacity, and rotation; labels are separate `text` nodes.                    |
-| `connector` | Resolves point/node endpoints and renders straight/elbow/curved connector intent with per-node SVG marker ids for arrowheads. |
-| `table`     | Renders a clipped grid with optional header, caption, alternating rows, borders, and cell runs.                               |
-| `group`     | Renders nested child nodes in group-local order while preserving group lock/selection metadata.                               |
+| Node        | Runtime behavior                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `text`      | Paragraph content, rich text runs, fit mode, role/style binding, local style, and rotation.                                    |
+| `visual`    | Renders visual placeholders or resolved visual image assets with channel-color defaults.                                       |
+| `image`     | Renders deck image assets with fit/crop/alt metadata and missing-asset diagnostics.                                            |
+| `shape`     | Renders shape geometry, fill/stroke/effect style, opacity, and rotation; labels are separate `text` nodes.                     |
+| `connector` | Resolves point/node endpoints and renders straight/elbow/curved connector intent with per-node SVG marker ids for arrowheads.  |
+| `table`     | Renders a clipped grid with optional header, caption, alternating rows, borders, and cell runs.                                |
+| `group`     | Traverses nested child nodes in group-local order while preserving group lock/selection metadata; groups have no visual style. |
 
 Renderers do not synthesize nodes from flat slide fields. A stored deck must
 already be valid Deck with slide content under `SlideNode.children`.
+Logical groups are structural only: schema validation rejects group `style` and
+`localStyle`, while descendant styles resolve once through the standard theme,
+deck override, and node-local cascade before editor/present/public/export/PPTX
+consumption.
 When a container-rendered node uses `fill.type: "image"`, the renderer draws the
 fill as a separate overlay layer and applies `fill.opacity` there so node
 content does not fade with the background image.

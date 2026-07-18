@@ -689,6 +689,11 @@ describe("source review and context menu render surfaces", () => {
         name: "",
         content: buildTextContent(["Menu label"]),
       });
+      const selectableLayer: SlideChildNode = buildTextNode({
+        id: "text-layer",
+        name: "Selectable layer",
+        content: buildTextContent(["Selectable layer"]),
+      });
       const connectorNode: SlideChildNode = {
         id: "connector-menu",
         type: "connector",
@@ -705,7 +710,7 @@ describe("source review and context menu render surfaces", () => {
       const common = {
         x: 999,
         y: -20,
-        candidates: [textNode, connectorNode],
+        candidates: [textNode, selectableLayer, connectorNode],
         selectedCount: 2,
         canPaste: true,
         canGroup: true,

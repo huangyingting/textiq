@@ -44,7 +44,11 @@ import {
   resolveInspectorPanelContinuity,
   type InspectorPanelId,
 } from "@/lib/presentation/inspector-panel-ui";
-import { currentObjectAlignCommandDescriptor } from "@/lib/presentation/current-object-command-descriptors";
+import {
+  currentObjectAlignCommandDescriptor,
+  currentObjectReorderCommandDescriptor,
+  type CurrentObjectReorderMode,
+} from "@/lib/presentation/current-object-command-descriptors";
 
 import { cx } from "@/components/ui/tokens";
 import type {
@@ -189,6 +193,7 @@ function MultiArrangePanel({
   onAlignSelection,
   onDistributeSelection,
   onMatchSize,
+  onReorderSelection,
   onGroupSelection,
   onUngroupSelection,
 }: {
@@ -196,6 +201,7 @@ function MultiArrangePanel({
   onAlignSelection: (mode: SelectionAlignMode) => void;
   onDistributeSelection: (mode: SelectionDistributeMode) => void;
   onMatchSize: (mode: SelectionMatchSizeMode) => void;
+  onReorderSelection: (mode: CurrentObjectReorderMode) => void;
   onGroupSelection: () => void;
   onUngroupSelection: () => void;
 }) {
@@ -224,6 +230,13 @@ function MultiArrangePanel({
           <ActionButton onClick={() => onAlignSelection("bottom")}>
             {currentObjectAlignCommandDescriptor("bottom").shortLabel}
           </ActionButton>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(["forward", "backward", "front", "back"] as const).map((mode) => (
+            <ActionButton key={mode} onClick={() => onReorderSelection(mode)}>
+              {currentObjectReorderCommandDescriptor(mode).shortLabel}
+            </ActionButton>
+          ))}
         </div>
         <div className="grid grid-cols-2 gap-1.5">
           <ActionButton
@@ -259,8 +272,10 @@ function MultiArrangePanel({
 
 function SingleArrangePanel({
   onAlignSelection,
+  onReorderSelection,
 }: {
   onAlignSelection: (mode: SelectionAlignMode) => void;
+  onReorderSelection: (mode: CurrentObjectReorderMode) => void;
 }) {
   return (
     <section className="flex flex-col gap-3 px-3 py-2.5">
@@ -286,6 +301,13 @@ function SingleArrangePanel({
         <ActionButton onClick={() => onAlignSelection("bottom")}>
           {currentObjectAlignCommandDescriptor("bottom").shortLabel}
         </ActionButton>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {(["forward", "backward", "front", "back"] as const).map((mode) => (
+          <ActionButton key={mode} onClick={() => onReorderSelection(mode)}>
+            {currentObjectReorderCommandDescriptor(mode).inspectorSingleLabel}
+          </ActionButton>
+        ))}
       </div>
     </section>
   );
@@ -847,6 +869,7 @@ export interface InspectorShellProps {
   onAlignSelection: (mode: SelectionAlignMode) => void;
   onDistributeSelection: (mode: SelectionDistributeMode) => void;
   onMatchSize: (mode: SelectionMatchSizeMode) => void;
+  onReorderSelection?: (mode: CurrentObjectReorderMode) => void;
   onGroupSelection: () => void;
   onUngroupSelection: () => void;
 
@@ -917,6 +940,7 @@ export function InspectorShell({
   onAlignSelection,
   onDistributeSelection,
   onMatchSize,
+  onReorderSelection = () => undefined,
   onGroupSelection,
   onUngroupSelection,
   onSelectLayer,
@@ -1174,6 +1198,7 @@ export function InspectorShell({
             onAlignSelection={onAlignSelection}
             onDistributeSelection={onDistributeSelection}
             onMatchSize={onMatchSize}
+            onReorderSelection={onReorderSelection}
             onGroupSelection={onGroupSelection}
             onUngroupSelection={onUngroupSelection}
           />
@@ -1190,7 +1215,10 @@ export function InspectorShell({
                   onResetToTheme={onResetToTheme}
                 />
               </div>
-              <SingleArrangePanel onAlignSelection={onAlignSelection} />
+              <SingleArrangePanel
+                onAlignSelection={onAlignSelection}
+                onReorderSelection={onReorderSelection}
+              />
               <NodeGeometryPanel
                 node={selectedNode}
                 onUpdateLayout={

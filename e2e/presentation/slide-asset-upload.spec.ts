@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import {
+  credentialGatedRequest,
+  unauthenticatedRequest,
+} from "../helpers/credential-gate";
+import {
   e2eProfileEnabled,
   profileAssetSharePath,
   fixturePngBuffer,
@@ -12,7 +16,10 @@ import {
   profilePrivateAssetPath,
   profileViewerCredentials,
 } from "../helpers/profile";
-import { waitForSlideAutosave } from "../helpers/readiness";
+import {
+  waitForSlideAutosave,
+  waitForStableSlideStage,
+} from "../helpers/readiness";
 
 /**
  * Slide image upload + protected asset access-control E2E (Epic #517, #521).
@@ -40,12 +47,12 @@ test.describe("slide asset access control", () => {
 
   test("owner fetches protected bytes; anonymous denied for private, allowed for shared @required-profile", async ({
     page,
-    browser,
   }) => {
     // Owner session — fetches go out with the owner's auth cookie.
     await login(page, profileOwnerCredentials());
 
-    const ownerShared = await page.request.get(profileAssetPath());
+    const ownerShared =
+      await credentialGatedRequest(page).get(profileAssetPath());
     expect(
       ownerShared.status(),
       "access: owner should fetch its shared-document asset (200)",
@@ -59,40 +66,37 @@ test.describe("slide asset access control", () => {
       "missing-file: owner asset bytes should be nonzero",
     ).toBeGreaterThan(0);
 
-    const ownerPrivate = await page.request.get(profilePrivateAssetPath());
+    const ownerPrivate = await credentialGatedRequest(page).get(
+      profilePrivateAssetPath(),
+    );
     expect(
       ownerPrivate.status(),
       "access: owner should fetch its private-document asset (200)",
     ).toBe(200);
 
-    // Fresh anonymous context — no auth cookie at all.
-    const anon = await browser.newContext();
-    try {
-      const anonPrivate = await anon.request.get(profilePrivateAssetPath());
-      expect(
-        anonPrivate.status(),
-        "access: anonymous request to a PRIVATE asset must be denied (403/404)",
-      ).toBeGreaterThanOrEqual(403);
-      expect(anonPrivate.status()).toBeLessThan(405);
+    const publicRequest = unauthenticatedRequest();
+    const anonPrivate = await publicRequest.get(profilePrivateAssetPath());
+    expect(
+      anonPrivate.status(),
+      "access: anonymous request to a PRIVATE asset must be denied (403/404)",
+    ).toBeGreaterThanOrEqual(403);
+    expect(anonPrivate.status()).toBeLessThan(405);
 
-      const anonSharedUnbound = await anon.request.get(profileAssetPath());
-      expect(
-        anonSharedUnbound.status(),
-        "access: anonymous shared asset without share binding must be denied",
-      ).toBe(403);
+    const anonSharedUnbound = await publicRequest.get(profileAssetPath());
+    expect(
+      anonSharedUnbound.status(),
+      "access: anonymous shared asset without share binding must be denied",
+    ).toBe(403);
 
-      const anonShared = await anon.request.get(profileAssetSharePath());
-      expect(
-        anonShared.status(),
-        "access: share-bound public present asset must serve anonymously (200)",
-      ).toBe(200);
-      expect(
-        (await anonShared.body()).byteLength,
-        "missing-file: shared asset bytes should be nonzero for anonymous",
-      ).toBeGreaterThan(0);
-    } finally {
-      await anon.close();
-    }
+    const anonShared = await publicRequest.get(profileAssetSharePath());
+    expect(
+      anonShared.status(),
+      "access: share-bound public present asset must serve anonymously (200)",
+    ).toBe(200);
+    expect(
+      (await anonShared.body()).byteLength,
+      "missing-file: shared asset bytes should be nonzero for anonymous",
+    ).toBeGreaterThan(0);
   });
 
   test("an unrelated authenticated user is denied the private asset", async ({
@@ -104,7 +108,9 @@ test.describe("slide asset access control", () => {
       // The viewer has no relationship to the private (workspace-less) document.
       await login(viewerPage, profileViewerCredentials());
 
-      const res = await viewerPage.request.get(profilePrivateAssetPath());
+      const res = await credentialGatedRequest(viewerPage).get(
+        profilePrivateAssetPath(),
+      );
       expect(
         res.status(),
         "access: unrelated user must be denied the private asset (403/404)",
@@ -126,7 +132,7 @@ test.describe("slide image upload round-trip", () => {
     page,
   }) => {
     await login(page, profileOwnerCredentials());
-    await page.goto(profileDocPath());
+    await page.goto(profileDocPath("slideAssetUpload", test.info()));
 
     // Open the slide editor.
     const openEditor = page.getByRole("link", { name: "Open slide editor" });
@@ -134,10 +140,20 @@ test.describe("slide image upload round-trip", () => {
       openEditor,
       "upload: 'Open slide editor' link not found",
     ).toBeVisible({ timeout: 20_000 });
-    await openEditor.click();
+    await expect(
+      page.getByRole("status").filter({ hasText: /^Live$/ }),
+    ).toBeVisible({ timeout: 30_000 });
+    const slidesPath = `${profileDocPath("slideAssetUpload", test.info())}/slides`;
+    await expect(openEditor).toHaveAttribute("href", slidesPath);
+    await page.goto(slidesPath);
+    const editor = page.locator('[data-slide-editor="true"]').first();
+    await expect(editor).toBeVisible({ timeout: 20_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
 
     // Select the seeded image element (its accessible name is its alt text).
-    const seededImage = page.getByRole("button", {
+    const seededImage = editor.getByRole("button", {
       name: "Seeded fixture image",
     });
     await expect(
@@ -159,9 +175,11 @@ test.describe("slide image upload round-trip", () => {
       buffer: fixturePngBuffer(),
     });
 
-    // No upload error should be surfaced by the inspector.
+    // No product upload error should be surfaced by the inspector.
+    // Exclude Next.js's #__next-route-announcer__ live region, which always
+    // renders with role="alert" but is a framework artefact, not a product error.
     await expect(
-      page.getByRole("alert"),
+      page.locator('[role="alert"]:not(#__next-route-announcer__)'),
       "upload: inspector reported an upload error",
     ).toHaveCount(0, { timeout: 15_000 });
 
@@ -171,7 +189,9 @@ test.describe("slide image upload round-trip", () => {
     // Verify the rendered slide still resolves a protected asset URL by loading
     // the public present page (which renders the persisted deck's image) and
     // confirming the asset request returns real bytes.
-    const present = await page.goto(profilePresentPath());
+    const present = await page.goto(
+      profilePresentPath("slideAssetUpload", test.info()),
+    );
     expect(
       present?.status(),
       "upload: public present page should load after upload",
@@ -185,7 +205,7 @@ test.describe("slide image upload round-trip", () => {
 
     const src = await slideImg.getAttribute("src");
     expect(src, "upload: protected image has no src").toBeTruthy();
-    const assetResponse = await page.request.get(src!);
+    const assetResponse = await credentialGatedRequest(page).get(src!);
     expect(
       assetResponse.status(),
       "upload: protected asset URL did not resolve to servable bytes",

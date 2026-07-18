@@ -48,7 +48,7 @@ test("node tree ops no-op and option branches", () => {
       includeHidden: false,
       requireLayout: false,
     }).map((node) => node.id),
-    ["group", "no-layout", "root", "child"],
+    ["group", "child", "no-layout", "root"],
   );
   assert.equal(buildLayerReorderPatches(nodes, "missing", 0).size, 0);
 

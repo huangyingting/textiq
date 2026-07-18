@@ -21,6 +21,12 @@ export const DEFAULT_PRECISION_GUIDE_PREFERENCES: PrecisionGuidePreferences = {
   customGuides: [],
 };
 
+export function customGuidesForSnapping(
+  preferences: PrecisionGuidePreferences,
+): readonly StageGuideInput[] {
+  return preferences.guidesVisible ? preferences.customGuides : [];
+}
+
 function getBrowserStorage(): PrecisionGuidesStorage | undefined {
   if (typeof window === "undefined") return undefined;
   try {

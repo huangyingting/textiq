@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-02"
+last_updated: "2026-07-17"
 description: "This document defines the current Document.deckJson contract. Persisted decks must be Deck JSON. Runtime open, save, render, and export paths reject superseded payload shapes instead of repairing or upgrading them."
 ---
 
@@ -52,6 +52,18 @@ not valid Deck fields.
 
 `safeParseDeck` validates unknown input without mutating it. It returns typed
 data only when the full structure is valid.
+
+`safeParseDeck` currently emits diagnostics beginning with exactly one of these
+validator codes: `duplicate_id`, `invalid_limit`, `invalid_structure`,
+`invalid_type`, `invalid_value`, `invalid_version`, `unsupported_property`, or
+`validation_internal_error`. `unsupported_type` is an import-file validation
+code, not a deck-schema validator code.
+
+Higher layers accept a validator code only after checking it with
+`isDeckValidationCode`. Unknown or malformed codes map to the generic
+`schema_validation_failed` telemetry classification. Persisted-schema telemetry
+records that classification without forwarding the diagnostic text or other
+caller-provided content.
 
 The gate enforces these deck-level rules:
 
@@ -193,10 +205,11 @@ Supported child node types are:
 - `visual`
 - `group`
 
-All child nodes may carry stable identity, semantic role, layout, style binding,
-local style, hidden/locked state, accessibility metadata, and source metadata.
-Renderable nodes require a valid `layout` before they can resolve into the
-render tree.
+All child nodes may carry stable identity, semantic role, layout, hidden/locked
+state, accessibility metadata, and source metadata. Renderable non-group nodes
+may also carry a style binding and local style. Logical groups reject `style` and
+`localStyle`; descendant nodes own all visual styling. Renderable nodes require a
+valid `layout` before they can resolve into the render tree.
 
 Key content rules:
 
@@ -217,7 +230,8 @@ Key content rules:
   cell per column.
 - Visual nodes must provide `assetId` or `visualId`.
 - Group nodes require a supported `component`, a non-empty `children` array, and
-  nesting depth no greater than 4.
+  nesting depth no greater than 4. They reject `style` and `localStyle` rather
+  than persisting visual fields that render/export would ignore.
 - `localStyle`, slide style, chrome style, and theme override style patches only
   accept known style fields; unknown keys are rejected at validation time.
 
@@ -280,9 +294,12 @@ The CAS writer:
    supplied;
 5. mints a fresh revision token on success.
 
-Validation failures return `ok: false` and report schema telemetry. CAS misses
-return `ok: "conflict"` with the server revision token. No save path accepts an
-older deck shape as a compatibility fallback.
+Validation failures return `ok: false` and report canonical schema telemetry
+containing only a category, stable code, known schema area, issue count, and
+schema version. Validator reasons, paths, row/document ids, caught errors, and
+payload content are not logged. CAS misses return `ok: "conflict"` with the
+server revision token. No save path accepts an older deck shape as a
+compatibility fallback.
 
 ## Render And Export
 

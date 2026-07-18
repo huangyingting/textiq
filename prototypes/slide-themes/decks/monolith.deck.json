@@ -198,9 +198,6 @@
             },
             "zIndex": 2503
           },
-          "style": {
-            "ref": "surface.card"
-          },
           "type": "group",
           "component": "cardGrid",
           "children": [
@@ -938,9 +935,6 @@
             },
             "zIndex": 2502
           },
-          "style": {
-            "ref": "surface.card"
-          },
           "type": "group",
           "component": "metricCard",
           "children": [
@@ -1623,9 +1617,6 @@
             },
             "zIndex": 2502
           },
-          "style": {
-            "ref": "surface.card"
-          },
           "type": "group",
           "component": "cardGrid",
           "children": [
@@ -1768,9 +1759,6 @@
               "h": 58
             },
             "zIndex": 2503
-          },
-          "style": {
-            "ref": "surface.card"
           },
           "type": "group",
           "component": "cardGrid",
@@ -1915,9 +1903,6 @@
             },
             "zIndex": 2502
           },
-          "style": {
-            "ref": "surface.card"
-          },
           "type": "group",
           "component": "cardGrid",
           "children": [
@@ -2034,9 +2019,6 @@
               "h": 64
             },
             "zIndex": 2502
-          },
-          "style": {
-            "ref": "surface.card"
           },
           "type": "group",
           "component": "timeline",
@@ -2205,9 +2187,6 @@
               "h": 62
             },
             "zIndex": 2503
-          },
-          "style": {
-            "ref": "surface.card"
           },
           "type": "group",
           "component": "cardGrid",
@@ -2898,9 +2877,6 @@
             },
             "zIndex": 2503
           },
-          "style": {
-            "ref": "surface.card"
-          },
           "type": "group",
           "component": "cardGrid",
           "children": [
@@ -3068,9 +3044,6 @@
               "h": 64
             },
             "zIndex": 2503
-          },
-          "style": {
-            "ref": "surface.card"
           },
           "type": "group",
           "component": "cardGrid",

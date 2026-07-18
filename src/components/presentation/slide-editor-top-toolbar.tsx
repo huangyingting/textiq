@@ -29,6 +29,10 @@ import type { SaveStatus } from "@/lib/presentation/save-status";
 import type { Deck, SlideNode } from "@/lib/presentation/schema";
 import type { SourceReviewItem } from "@/lib/presentation/source-links";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type {
+  ThemePackageCatalogEntry,
+  ThemePackageSelection,
+} from "@/lib/presentation/theme-package-registry";
 import { Popover } from "@/components/ui/popover";
 import { SelectMenu } from "@/components/ui/select-menu";
 import type { SelectMenuOption } from "@/components/ui/select-menu";
@@ -44,6 +48,7 @@ const CANVAS_RATIO_OPTIONS: readonly SelectMenuOption[] = [
 import { DeckChromePanel } from "./inspector";
 import type { PrecisionGuidePreferences } from "./precision-guides-storage";
 import { PrecisionGuideToolbarControls } from "./precision-guides-controls";
+import type { StageGuideInput } from "@/lib/presentation/stage-guides";
 import {
   DeckToolbar,
   DeckToolbarButton,
@@ -56,7 +61,9 @@ import {
 export interface SlideEditorTopToolbarProps {
   deck: Deck;
   activeSlide: SlideNode | undefined;
-  themePackages: readonly ThemePackageV1[];
+  themeCatalogEntries: readonly ThemePackageCatalogEntry[];
+  activeThemePackage: ThemePackageV1;
+  themePickerTriggerRef: RefObject<HTMLButtonElement | null>;
   currentCanvasFormat: "16:9" | "4:3" | "square";
   deckChromeToolbarOpen: boolean;
   deckChromeToolbarPanelRef: RefObject<HTMLDivElement | null>;
@@ -85,7 +92,8 @@ export interface SlideEditorTopToolbarProps {
   exportMenuOpen: boolean;
   exportMenuId: string;
   onClose: (() => void) | undefined;
-  handleThemePackageChange: (packageId: string) => void;
+  handleThemePackageChange: (selection: ThemePackageSelection) => void;
+  onCustomizeTheme?: () => void;
   handleCanvasRatioChange: (format: "16:9" | "4:3" | "square") => void;
   onSelectMenuOpenChange: (open: boolean) => void;
   setDeckChromeToolbarOpen: Dispatch<SetStateAction<boolean>>;
@@ -98,6 +106,9 @@ export interface SlideEditorTopToolbarProps {
   toggleSnapToGuides: () => void;
   togglePrecisionGrid: () => void;
   togglePrecisionRulers: () => void;
+  toggleCustomGuidesVisible: () => void;
+  addCustomGuide: (axis: StageGuideInput["axis"], position: string) => void;
+  removeCustomGuide: (index: number) => void;
   handleSyncFromDocument: () => void;
   handleReviewSourceLinks: () => void;
   handleRegenerate: () => Promise<void>;
@@ -107,7 +118,7 @@ export interface SlideEditorTopToolbarProps {
   ) => void;
   setCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   closeCompactToolbarMenuAndRestoreFocus: () => void;
-  setShortcutHelpOpen: Dispatch<SetStateAction<boolean>>;
+  onOpenShortcutHelp: () => void;
   setDeckDiagnosticsReviewOpen: Dispatch<SetStateAction<boolean>>;
   handleRoundtripAction: (
     action: () => Promise<ActionResult>,
@@ -121,7 +132,9 @@ export interface SlideEditorTopToolbarProps {
 export function SlideEditorTopToolbar({
   deck,
   activeSlide,
-  themePackages,
+  themeCatalogEntries,
+  activeThemePackage,
+  themePickerTriggerRef,
   currentCanvasFormat,
   deckChromeToolbarOpen,
   deckChromeToolbarPanelRef,
@@ -151,6 +164,7 @@ export function SlideEditorTopToolbar({
   exportMenuId,
   onClose,
   handleThemePackageChange,
+  onCustomizeTheme,
   handleCanvasRatioChange,
   onSelectMenuOpenChange,
   setDeckChromeToolbarOpen,
@@ -159,6 +173,9 @@ export function SlideEditorTopToolbar({
   toggleSnapToGuides,
   togglePrecisionGrid,
   togglePrecisionRulers,
+  toggleCustomGuidesVisible,
+  addCustomGuide,
+  removeCustomGuide,
   handleSyncFromDocument,
   handleReviewSourceLinks,
   handleRegenerate,
@@ -166,7 +183,7 @@ export function SlideEditorTopToolbar({
   handleCompactToolbarMenuKeyDown,
   setCommandPaletteOpen,
   closeCompactToolbarMenuAndRestoreFocus,
-  setShortcutHelpOpen,
+  onOpenShortcutHelp,
   setDeckDiagnosticsReviewOpen,
   handleRoundtripAction,
   setExportMenuOpen,
@@ -199,10 +216,13 @@ export function SlideEditorTopToolbar({
         <DeckToolbarGroup label="Deck setup">
           <ThemePreviewPicker
             aria-label="Deck theme"
-            value={deck.theme.packageId}
-            themes={themePackages}
+            value={deck.theme}
+            activeThemePackage={activeThemePackage}
+            themes={themeCatalogEntries}
             onChange={handleThemePackageChange}
             onOpenChange={onSelectMenuOpenChange}
+            onCustomize={onCustomizeTheme}
+            triggerRef={themePickerTriggerRef}
           />
           <SelectMenu
             aria-label="Slide ratio"
@@ -258,6 +278,9 @@ export function SlideEditorTopToolbar({
             preferences={precisionGuides}
             onToggleGrid={togglePrecisionGrid}
             onToggleRulers={togglePrecisionRulers}
+            onToggleCustomGuides={toggleCustomGuidesVisible}
+            onAddCustomGuide={addCustomGuide}
+            onRemoveCustomGuide={removeCustomGuide}
           />
         </DeckToolbarGroup>
 
@@ -347,8 +370,8 @@ export function SlideEditorTopToolbar({
                 role="menuitem"
                 aria-label="Keyboard shortcuts"
                 onClick={() => {
-                  setShortcutHelpOpen(true);
-                  closeCompactToolbarMenuAndRestoreFocus();
+                  onOpenShortcutHelp();
+                  setCompactToolbarMenuOpen(false);
                 }}
                 className={cx(
                   "flex w-full items-center gap-2 rounded-ds-sm px-2 py-1.5 text-left text-xs text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
@@ -454,6 +477,7 @@ export function SlideEditorTopToolbar({
               aria-label="Export slides"
               placement="bottom"
               align="end"
+              portal
               className="w-44 p-1"
               trigger={
                 <DeckToolbarButton

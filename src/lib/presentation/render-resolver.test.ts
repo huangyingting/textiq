@@ -77,6 +77,42 @@ describe("resolveDeckRenderTree", () => {
     );
   });
 
+  test("prunes hidden group subtrees and restores their render order when unhidden", () => {
+    resetBuilderCounter();
+    const child = buildTextNode({ id: "visible-child" });
+    const group: SlideChildNode = {
+      id: "hidden-group",
+      type: "group",
+      component: "custom",
+      hidden: true,
+      layout: { frame: { x: 0, y: 0, w: 20, h: 20 }, zIndex: 1 },
+      children: [child],
+    };
+    const pkg = buildMinimalThemePackage();
+
+    const hiddenResult = resolveDeckRenderTree(
+      buildDeck([buildSlide("content", [group])]),
+      pkg,
+    );
+    assert.deepEqual(
+      getSlideRenderLists(hiddenResult.slides[0]).userNodes.map(
+        (node) => node.id,
+      ),
+      [],
+    );
+
+    const visibleResult = resolveDeckRenderTree(
+      buildDeck([buildSlide("content", [{ ...group, hidden: false }])]),
+      pkg,
+    );
+    assert.deepEqual(
+      getSlideRenderLists(visibleResult.slides[0]).userNodes.map(
+        (node) => node.id,
+      ),
+      ["hidden-group", "visible-child"],
+    );
+  });
+
   test("preserves locked node state in resolved render nodes", () => {
     resetBuilderCounter();
     const slide = buildCoverSlide();
@@ -95,6 +131,42 @@ describe("resolveDeckRenderTree", () => {
       (node) => node.id === "locked-text",
     );
     assert.equal(resolved?.locked, true);
+  });
+
+  test("orders siblings by z-index and keeps nested groups as stacking contexts", () => {
+    resetBuilderCounter();
+    const nestedChildHigh = buildTextNode({
+      id: "nested-high-z-first",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: 900 },
+    });
+    const nestedChildLow = buildTextNode({
+      id: "nested-low-z-later",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: -900 },
+    });
+    const group: SlideChildNode = {
+      id: "traversal-group",
+      type: "group",
+      component: "custom",
+      layout: { frame: { x: 0, y: 0, w: 20, h: 20 }, zIndex: 500 },
+      children: [nestedChildHigh, nestedChildLow],
+    };
+    const laterLow = buildTextNode({
+      id: "later-low-z",
+      layout: { frame: { x: 0, y: 0, w: 10, h: 10 }, zIndex: -500 },
+    });
+    const deck = buildDeck([buildSlide("content", [group, laterLow])]);
+
+    const result = resolveDeckRenderTree(deck, buildMinimalThemePackage());
+
+    assert.deepEqual(
+      getSlideRenderLists(result.slides[0]).userNodes.map((node) => node.id),
+      [
+        "later-low-z",
+        "traversal-group",
+        "nested-low-z-later",
+        "nested-high-z-first",
+      ],
+    );
   });
 
   test("preserves authored node name and accessibility metadata", () => {
@@ -139,17 +211,19 @@ describe("resolveDeckRenderTree", () => {
       type: "group" as const,
       component: "custom" as const,
       layout: { frame: { x: 18, y: 20, w: 36, h: 14 }, zIndex: 3 },
-      style: { ref: "surface.card" as const },
       children: [groupedText],
     };
     const slide = buildSlide("content", [group]);
     const deck = buildDeck([slide]);
 
     const result = resolveDeckRenderTree(deck, buildMinimalThemePackage());
-    const resolvedGroupedText = getSlideRenderLists(
-      result.slides[0],
-    ).userNodes.find((node) => node.id === groupedText.id);
+    const userNodes = getSlideRenderLists(result.slides[0]).userNodes;
+    const resolvedGroup = userNodes.find((node) => node.id === group.id);
+    const resolvedGroupedText = userNodes.find(
+      (node) => node.id === groupedText.id,
+    );
 
+    assert.deepEqual(resolvedGroup?.style, {});
     assert.equal(resolvedGroupedText?.style.text?.fontSizePt, 22);
     assert.equal(resolvedGroupedText?.style.text?.fontFamily, "Georgia");
   });
@@ -258,20 +332,56 @@ describe("resolveDeckRenderTree", () => {
     );
   });
 
-  test("orders user nodes by ascending zIndex", () => {
+  test("sorts user siblings by zIndex", () => {
     resetBuilderCounter();
     const slide = makeSlideWithZIndices([3, 1, 2]);
     const deck = buildDeck([slide]);
     const pkg = buildMinimalThemePackage();
     const result = resolveDeckRenderTree(deck, pkg);
-    const nodes = result.slides[0].nodes;
-    const zOrders = nodes.map((n) => n.layout.zIndex);
-    for (let i = 1; i < zOrders.length; i++) {
-      assert.ok(
-        zOrders[i] >= zOrders[i - 1],
-        `Expected ascending zIndex order, got ${zOrders}`,
-      );
-    }
+    assert.deepEqual(
+      result.slides[0].nodes.map((node) => node.layout.zIndex),
+      [1, 2, 3],
+    );
+  });
+
+  test("canonicalizes missing and non-finite resolved z-index values to stable zero", () => {
+    resetBuilderCounter();
+    const frame = { x: 8, y: 8, w: 30, h: 5 };
+    const children = [
+      buildTextNode({
+        id: "valid-positive-z",
+        layout: { frame, zIndex: 10 },
+      }),
+      buildTextNode({
+        id: "missing-z",
+        layout: invalidLayoutBox({ frame }),
+      }),
+      buildTextNode({
+        id: "nan-z",
+        layout: invalidLayoutBox({ frame, zIndex: Number.NaN }),
+      }),
+      buildTextNode({
+        id: "infinite-z",
+        layout: invalidLayoutBox({
+          frame,
+          zIndex: Number.POSITIVE_INFINITY,
+        }),
+      }),
+    ];
+    const result = resolveDeckRenderTree(
+      buildDeck([buildSlide("content", children)]),
+      buildMinimalThemePackage(),
+    );
+
+    assert.deepEqual(
+      result.slides[0].nodes.map((node) => [node.id, node.layout.zIndex]),
+      [
+        ["missing-z", 0],
+        ["nan-z", 0],
+        ["infinite-z", 0],
+        ["valid-positive-z", 10],
+      ],
+    );
   });
 
   test("resolves theme decorations into decorations array", () => {
@@ -786,7 +896,6 @@ describe("resolveDeckRenderTree", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "moved-group",
-      { ref: "surface.card" },
     );
     const moved = moveNodesBy(grouped, slide.id, ["moved-group"], {
       x: 6,
@@ -823,7 +932,6 @@ describe("resolveDeckRenderTree", () => {
       component: "custom",
       role: "body",
       layout: { frame: { x: 10, y: 10, w: 40, h: 40 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       locked: true,
       children: [
         buildTextNode({

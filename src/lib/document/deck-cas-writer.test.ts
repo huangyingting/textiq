@@ -70,6 +70,22 @@ function makeDb({
 }
 
 describe("writeDeckWithCas", () => {
+  async function captureErrorRecords(
+    fn: () => Promise<void>,
+  ): Promise<Record<string, unknown>[]> {
+    const original = console.error;
+    const records: Record<string, unknown>[] = [];
+    console.error = (line?: unknown) => {
+      records.push(JSON.parse(String(line)));
+    };
+    try {
+      await fn();
+    } finally {
+      console.error = original;
+    }
+    return records;
+  }
+
   test("guards writes with the supplied revision token", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
@@ -84,6 +100,86 @@ describe("writeDeckWithCas", () => {
     assert.deepEqual((calls[0] as { where: unknown }).where, {
       id: "doc-1",
       deckRevisionToken: "client-token",
+    });
+  });
+
+  test("treats an explicit null token as a loaded CAS predicate", async () => {
+    const { db, calls } = makeDb({ updateCount: 1, serverToken: null });
+    const result = await writeDeckWithCas({
+      documentId: "doc-null-token",
+      deckJson: VALID_DECK,
+      clientToken: null,
+      telemetryArea: "test",
+      db,
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual((calls[0] as { where: unknown }).where, {
+      id: "doc-null-token",
+      deckRevisionToken: null,
+    });
+  });
+
+  test("rejects an omitted runtime token without reaching storage", async () => {
+    const { db, calls } = makeDb({ updateCount: 1 });
+    const result = await writeDeckWithCas({
+      documentId: "doc-missing-token",
+      deckJson: VALID_DECK,
+      clientToken: undefined as never,
+      telemetryArea: "test",
+      db,
+    });
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "A deck revision token is required.",
+      failure: { code: "invalid_revision_token", retryable: false },
+    });
+    assert.equal(calls.length, 0);
+  });
+
+  test("rotates the first null token and conflicts a second stale null writer", async () => {
+    let currentToken: string | null = null;
+    const db = {
+      document: {
+        async updateMany(args: {
+          where: { id: string; deckRevisionToken?: string | null };
+          data: { deckRevisionToken?: string | null };
+        }) {
+          const guarded = "deckRevisionToken" in args.where;
+          if (guarded && args.where.deckRevisionToken !== currentToken) {
+            return { count: 0 };
+          }
+          currentToken = args.data.deckRevisionToken ?? null;
+          return { count: 1 };
+        },
+        async findUnique() {
+          return { deckRevisionToken: currentToken };
+        },
+      },
+    } as DeckCasDb;
+
+    const first = await writeDeckWithCas({
+      documentId: "doc-stale-null",
+      deckJson: VALID_DECK,
+      clientToken: null,
+      telemetryArea: "test",
+      db,
+    });
+    assert.equal(first.ok, true);
+    assert.notEqual(currentToken, null);
+    const rotatedToken = currentToken;
+
+    const second = await writeDeckWithCas({
+      documentId: "doc-stale-null",
+      deckJson: VALID_DECK,
+      clientToken: null,
+      telemetryArea: "test",
+      db,
+    });
+    assert.deepEqual(second, {
+      ok: "conflict",
+      serverRevisionToken: rotatedToken,
     });
   });
 
@@ -160,6 +256,45 @@ describe("writeDeckWithCas", () => {
     });
   });
 
+  test("never logs caught CAS provider messages, stacks, or private deck data", async () => {
+    const privateText =
+      "PRIVATE DECK PARAGRAPH token=sk-cas private@example.com https://cas.example unknownCasKey";
+    const providerError = new Error(privateText);
+    providerError.stack = `Error: ${privateText}\n at privateCasProvider`;
+
+    for (const failure of [
+      { updateCount: 1, updateError: providerError },
+      { updateCount: 0, findError: providerError },
+    ]) {
+      const { db } = makeDb(failure);
+      let result: Awaited<ReturnType<typeof writeDeckWithCas>> | undefined;
+      const records = await captureErrorRecords(async () => {
+        result = await writeDeckWithCas({
+          documentId: "doc-safe-log",
+          deckJson: VALID_DECK,
+          clientToken: "client-token",
+          telemetryArea: privateText,
+          db,
+        });
+      });
+
+      assert.equal(result?.ok, false);
+      assert.equal(records.length, 1);
+      assert.equal(records[0].scope, "deck.cas");
+      assert.equal(records[0].code, "storage_unavailable");
+      assert.equal(records[0].outcome, "failed");
+      assert.ok(
+        ["updateMany", "findUnique"].includes(String(records[0].operation)),
+      );
+      const serialized = JSON.stringify({ records, result });
+      assert.ok(!serialized.includes(privateText));
+      assert.ok(!serialized.includes("sk-cas"));
+      assert.ok(!serialized.includes("private@example.com"));
+      assert.ok(!serialized.includes("https://cas.example"));
+      assert.ok(!serialized.includes("unknownCasKey"));
+    }
+  });
+
   test("rejects invalid decks before writing", async () => {
     const { db, calls } = makeDb({ updateCount: 1 });
     const result = await writeDeckWithCas({
@@ -171,8 +306,57 @@ describe("writeDeckWithCas", () => {
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.ok === false ? result.error : "", /Invalid deck:/);
+    assert.equal(result.ok === false ? result.error : "", "Invalid deck.");
     assert.equal(calls.length, 0);
+  });
+
+  test("reports stable safe validation classifications for CAS input", async () => {
+    const cases = [
+      {
+        expectedCode: "invalid_version",
+        deckJson: { ...VALID_DECK, schemaVersion: 6 },
+      },
+      {
+        expectedCode: "invalid_structure",
+        deckJson: { ...VALID_DECK, slides: "not-an-array" },
+      },
+      {
+        expectedCode: "invalid_type",
+        deckJson: {
+          ...VALID_DECK,
+          slides: [
+            {
+              ...VALID_DECK.slides[0],
+              children: [{ id: "unknown-node", type: "private-widget" }],
+            },
+          ],
+        },
+      },
+      {
+        expectedCode: "unsupported_property",
+        deckJson: { ...VALID_DECK, unknownPrivateKey: "PRIVATE VALUE" },
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const { db } = makeDb({ updateCount: 1 });
+      const records = await captureErrorRecords(async () => {
+        await writeDeckWithCas({
+          documentId: "doc-classification",
+          deckJson: testCase.deckJson,
+          clientToken: "client-token",
+          telemetryArea: "persistDeck.input",
+          db,
+        });
+      });
+      const diagnostic = records.find(
+        (record) => record.category === "deck-parse-failed",
+      );
+      assert.equal(diagnostic?.code, testCase.expectedCode);
+      assert.equal(diagnostic?.schemaVersion, DECK_SCHEMA_VERSION);
+      assert.ok(!JSON.stringify(records).includes("unknownPrivateKey"));
+      assert.ok(!JSON.stringify(records).includes("PRIVATE VALUE"));
+    }
   });
 
   test("rejects nested unknown child-node/content fields before writing", async () => {
@@ -206,10 +390,9 @@ describe("writeDeckWithCas", () => {
     });
 
     assert.equal(result.ok, false);
-    assert.match(
-      result.ok === false ? result.error : "",
-      /rogueNodeField|rogueContentField|rogueParagraph/,
-    );
+    const error = result.ok === false ? result.error : "";
+    assert.equal(error, "Invalid deck.");
+    assert.ok(!/rogueNodeField|rogueContentField|rogueParagraph/.test(error));
     assert.equal(calls.length, 0);
   });
 
@@ -289,7 +472,7 @@ describe("writeDeckWithCas", () => {
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.ok === false ? result.error : "", /Invalid deck:/);
+    assert.equal(result.ok === false ? result.error : "", "Invalid deck.");
     assert.equal(calls.length, 0);
   });
 
@@ -312,7 +495,7 @@ describe("writeDeckWithCas", () => {
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.ok === false ? result.error : "", /v6 field/);
+    assert.equal(result.ok === false ? result.error : "", "Invalid deck.");
     assert.equal(calls.length, 0);
   });
 
@@ -331,7 +514,7 @@ describe("writeDeckWithCas", () => {
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.ok === false ? result.error : "", /Invalid deck:/);
+    assert.equal(result.ok === false ? result.error : "", "Invalid deck.");
     assert.equal(
       calls.length,
       0,

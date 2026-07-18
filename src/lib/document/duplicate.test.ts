@@ -35,6 +35,7 @@ type DuplicateCreateData = {
 };
 type DuplicateDeckUpdate = {
   deckJson: DeckWithSourceRefs;
+  deckRevisionToken: string;
 };
 
 function elementSource(
@@ -287,6 +288,7 @@ test("duplicateDocumentForUser regenerates content block ids and remaps deck sou
   assert.equal(createData.content, "Copied body");
   assert.equal(createData.visuals.create[0].anchorBlockId, newBid);
   const deckUpdate = updatedData[0]!;
+  assert.equal(deckUpdate.deckRevisionToken.length, 24);
   assert.equal(
     deckUpdate.deckJson.slides[0].elements[0].source.documentId,
     "copy-doc",

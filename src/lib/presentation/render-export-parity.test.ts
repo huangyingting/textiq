@@ -10,6 +10,12 @@ import {
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation/neutral-theme-package";
 import { resolveDeckRenderTree } from "@/lib/presentation/render-resolver";
 import { buildExportSpec } from "@/lib/presentation/export-spec";
+import { getSlideRenderLists } from "@/lib/presentation/render-tree";
+import { hitTestSlideNodes } from "@/lib/presentation/stage-hit-test";
+import {
+  moveNodesBy,
+  updateNodeRotation,
+} from "@/lib/presentation/editor-commands";
 import { buildPptxSpec } from "@/lib/presentation/pptx-export-adapter";
 import { resolveExportSpecAssetSources } from "@/lib/presentation/pptx-apply";
 import { makeDiagnostic } from "@/lib/presentation/diagnostics";
@@ -364,6 +370,258 @@ test("representative deck keeps editor, present, and public presentation render 
     ),
     false,
   );
+});
+
+test("editor, present, public, and export share canonical z-order", () => {
+  const deck = buildDeck([
+    buildSlide("content", [
+      buildTextNode({
+        id: "surface-high",
+        layout: { frame: { x: 10, y: 10, w: 30, h: 10 }, zIndex: 100 },
+      }),
+      buildTextNode({
+        id: "surface-low",
+        layout: { frame: { x: 10, y: 10, w: 30, h: 10 }, zIndex: -100 },
+      }),
+    ]),
+  ]);
+  const editorTree = resolveDeckRenderTree(deck, NEUTRAL_THEME_PACKAGE);
+  const presentTree = resolveDeckRenderTree(deck, NEUTRAL_THEME_PACKAGE);
+  const publicModel = buildPublicPresentationModel({
+    title: "Z-order parity",
+    contentJson: { root: { children: [] } },
+    deckJson: deck,
+    owner: { name: "TextIQ", plan: "pro" },
+  });
+  const publicTree = resolveDeckRenderTree(
+    publicModel.deck,
+    publicModel.themePackage,
+  );
+  const exportSpec = buildExportSpec(editorTree);
+  const expected = ["surface-low", "surface-high"];
+
+  assert.deepEqual(
+    editorTree.slides[0].nodes.map((node) => node.id),
+    expected,
+  );
+  assert.deepEqual(
+    presentTree.slides[0].nodes.map((node) => node.id),
+    expected,
+  );
+  assert.deepEqual(
+    publicTree.slides[0].nodes.map((node) => node.id),
+    expected,
+  );
+  assert.deepEqual(
+    exportSpec.slides[0].operations.map((operation) => operation.id),
+    expected,
+  );
+});
+
+test("logical nested groups bake transforms into absolute children across render, public, export, and connectors", () => {
+  const target = buildTextNode({
+    id: "group-target",
+    layout: { frame: { x: 34, y: 30, w: 12, h: 10 }, zIndex: 1 },
+    localStyle: {
+      text: { color: "#123456", fontSizePt: 19 },
+      effect: { kind: "glow", color: "#abcdef", blurPt: 4, opacity: 0.6 },
+    },
+  });
+  const connector: SlideChildNode = {
+    id: "group-connector",
+    type: "connector",
+    role: "connector",
+    layout: { frame: { x: 20, y: 20, w: 50, h: 40 }, zIndex: 2 },
+    style: { ref: "connector.primary" },
+    content: {
+      from: { kind: "point", point: { x: 0, y: 50 } },
+      to: { kind: "node", nodeId: target.id, anchor: "right" },
+    },
+  };
+  const nestedGroup: SlideChildNode = {
+    id: "nested-logical-group",
+    type: "group",
+    component: "custom",
+    layout: { frame: { x: 20, y: 20, w: 50, h: 40 }, zIndex: 0 },
+    children: [connector, target],
+  };
+  const outerGroup: SlideChildNode = {
+    id: "outer-logical-group",
+    type: "group",
+    component: "custom",
+    layout: { frame: { x: 15, y: 15, w: 60, h: 50 }, zIndex: 10 },
+    children: [
+      buildTextNode({
+        id: "outer-back",
+        layout: { frame: { x: 18, y: 18, w: 14, h: 10 }, zIndex: -10 },
+      }),
+      nestedGroup,
+      buildTextNode({
+        id: "outer-front",
+        layout: { frame: { x: 52, y: 48, w: 14, h: 10 }, zIndex: 10 },
+      }),
+    ],
+  };
+  const baseDeck = buildDeck([
+    buildSlide("content", [
+      buildTextNode({
+        id: "top-back",
+        layout: { frame: { x: 5, y: 5, w: 12, h: 8 }, zIndex: 5 },
+      }),
+      outerGroup,
+      buildTextNode({
+        id: "top-front",
+        layout: { frame: { x: 80, y: 80, w: 12, h: 8 }, zIndex: 20 },
+      }),
+    ]),
+  ]);
+  const moved = moveNodesBy(baseDeck, baseDeck.slides[0].id, [outerGroup.id], {
+    x: 5,
+    y: 4,
+  });
+  const deck = updateNodeRotation(moved, moved.slides[0].id, outerGroup.id, 90);
+  const editorTree = resolveDeckRenderTree(deck, NEUTRAL_THEME_PACKAGE);
+  const presentTree = resolveDeckRenderTree(deck, NEUTRAL_THEME_PACKAGE);
+  const publicModel = buildPublicPresentationModel({
+    title: "Logical group parity",
+    contentJson: { root: { children: [] } },
+    deckJson: deck,
+    owner: { name: "TextIQ", plan: "pro" },
+  });
+  const publicTree = resolveDeckRenderTree(
+    publicModel.deck,
+    publicModel.themePackage,
+  );
+  const editorNodes = getSlideRenderLists(editorTree.slides[0]).userNodes;
+  const publicNodes = getSlideRenderLists(publicTree.slides[0]).userNodes;
+  const expectedRenderOrder = [
+    "top-back",
+    "outer-logical-group",
+    "outer-back",
+    "nested-logical-group",
+    "group-target",
+    "group-connector",
+    "outer-front",
+    "top-front",
+  ];
+
+  assert.deepEqual(
+    editorNodes.map((node) => node.id),
+    expectedRenderOrder,
+  );
+  assert.deepEqual(
+    getSlideRenderLists(presentTree.slides[0]).userNodes.map((node) => node.id),
+    expectedRenderOrder,
+  );
+  assert.deepEqual(
+    publicNodes.map((node) => node.id),
+    expectedRenderOrder,
+  );
+  assert.deepEqual(
+    editorNodes
+      .filter((node) => node.type === "group")
+      .map((node) => node.style),
+    [{}, {}],
+  );
+
+  const exportSpec = buildExportSpec(editorTree);
+  const expectedExportOrder = [
+    "top-back",
+    "outer-back",
+    "group-target",
+    "group-connector",
+    "outer-front",
+    "top-front",
+  ];
+  assert.deepEqual(
+    exportSpec.slides[0].operations.map((operation) => operation.id),
+    expectedExportOrder,
+  );
+  const pptx = buildPptxSpec(exportSpec);
+  assert.deepEqual(
+    pptx.slides[0].ops.map((operation) => operation.id),
+    expectedExportOrder,
+  );
+  const resolvedTarget = editorNodes.find((node) => node.id === target.id);
+  const resolvedConnector = editorNodes.find(
+    (node) => node.id === connector.id,
+  );
+  const connectorOperation = exportSpec.slides[0].operations.find(
+    (operation) => operation.id === connector.id,
+  );
+  const targetOperation = exportSpec.slides[0].operations.find(
+    (operation) => operation.id === target.id,
+  );
+  const pptxTarget = pptx.slides[0].ops.find(
+    (operation) => operation.id === target.id,
+  );
+  const pptxConnector = pptx.slides[0].ops.find(
+    (operation) => operation.id === connector.id,
+  );
+  assert.equal(connectorOperation?.type, "connector");
+  assert.equal(resolvedConnector?.content.type, "connector");
+  assert.ok(resolvedTarget);
+  assert.ok(resolvedConnector);
+  assert.equal(targetOperation?.type, "text");
+  assert.equal(pptxTarget?.type, "text");
+  assert.equal(resolvedTarget?.style.text?.color, "#123456");
+  assert.equal(resolvedTarget?.style.text?.fontSizePt, 19);
+  assert.equal(
+    publicNodes.find((node) => node.id === target.id)?.style.text?.color,
+    "#123456",
+  );
+  assert.equal(targetOperation?.style.text?.color, "#123456");
+  assert.equal(targetOperation?.style.text?.fontSizePt, 19);
+  assert.equal(pptxTarget?.textStyle.color, "123456");
+  assert.equal(pptxTarget?.textStyle.fontSize, 19);
+  assert.deepEqual(pptxTarget?.effect, {
+    kind: "glow",
+    color: "ABCDEF",
+    blurPt: 4,
+    opacity: 0.6,
+  });
+  if (targetOperation?.type === "text" && pptxTarget?.type === "text") {
+    assert.notEqual(pptxTarget.x, (target.layout!.frame.x / 100) * pptx.slideW);
+    assert.notEqual(pptxTarget.y, (target.layout!.frame.y / 100) * pptx.slideH);
+    assert.equal(pptxTarget.rotation, targetOperation.rotation);
+  }
+  if (resolvedTarget) {
+    const targetFrame = resolvedTarget.layout.frame;
+    assert.equal(
+      hitTestSlideNodes(
+        {
+          x: targetFrame.x + targetFrame.w / 2,
+          y: targetFrame.y + targetFrame.h / 2,
+        },
+        deck.slides[0].children,
+        { includeLocked: true, order: "visual" },
+      )[0]?.node.id,
+      target.id,
+    );
+  }
+  if (
+    connectorOperation?.type === "connector" &&
+    resolvedConnector?.content.type === "connector" &&
+    resolvedTarget
+  ) {
+    assert.deepEqual(
+      connectorOperation.to,
+      resolvedConnector.content.content.to,
+    );
+    assert.deepEqual(
+      connectorOperation.frame,
+      resolvedConnector.layout.framePx,
+    );
+    assert.equal(targetOperation?.type, "text");
+    if (targetOperation?.type === "text") {
+      assert.deepEqual(targetOperation.frame, resolvedTarget.layout.framePx);
+    }
+    assert.notDeepEqual(resolvedTarget.layout.frame, target.layout?.frame);
+    assert.equal(pptxConnector?.type, "connector");
+    if (pptxConnector?.type === "connector") {
+      assert.deepEqual(pptxConnector.to, connectorOperation.to);
+    }
+  }
 });
 
 test("public present and embeddable projections resolve equivalent presentation render trees", async () => {

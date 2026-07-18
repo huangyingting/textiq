@@ -190,7 +190,7 @@ test("list/link/horizontal-rule plugins render the expected library components w
   );
 });
 
-test("autosave plugin wires onChange with selection-change/history-merge ignored", () => {
+test("autosave plugin ignores selection-only updates but observes history-merged typing", () => {
   const config = baseConfig();
   const plugins = pluginMap(createCoreEditorPlugins(config));
   const element = elementOf(plugins.get("autosave")?.render());
@@ -198,7 +198,7 @@ test("autosave plugin wires onChange with selection-change/history-merge ignored
   assert.equal(element.type, OnChangePlugin);
   assert.equal(element.props.onChange, config.onChange);
   assert.equal(element.props.ignoreSelectionChange, true);
-  assert.equal(element.props.ignoreHistoryMergeTagChange, true);
+  assert.equal(element.props.ignoreHistoryMergeTagChange, false);
 });
 
 // ---------------------------------------------------------------------------

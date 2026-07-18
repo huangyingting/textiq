@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { COLLABORATION_TAG, HISTORIC_TAG } from "lexical";
+import { COLLABORATION_TAG, HISTORIC_TAG, HISTORY_MERGE_TAG } from "lexical";
 
 import {
   IMPORT_TAG,
@@ -14,6 +14,7 @@ import {
 test("autosave persists ordinary local edits (no special tags)", () => {
   assert.equal(shouldAutosaveUpdate(new Set()), true);
   assert.equal(shouldAutosaveUpdate(new Set(["history-push"])), true);
+  assert.equal(shouldAutosaveUpdate(new Set([HISTORY_MERGE_TAG])), true);
 });
 
 test("autosave ignores remote CRDT merges and history replays", () => {

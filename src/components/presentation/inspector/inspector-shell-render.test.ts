@@ -377,7 +377,7 @@ describe("InspectorShell render affordances", () => {
     assert.equal(emptyHtml, "");
   });
 
-  test("single selection arrange panel exposes align controls without z-order controls", () => {
+  test("single selection arrange panel exposes align and z-order controls", () => {
     const html = renderInspector({
       initialPanel: "arrange",
       selectedNode: textNode,
@@ -385,7 +385,10 @@ describe("InspectorShell render affordances", () => {
 
     assert.match(html, />Arrange</);
     assert.match(html, />Center</);
-    assert.doesNotMatch(html, />Bring front</);
+    assert.match(html, />Bring forward</);
+    assert.match(html, />Send backward</);
+    assert.match(html, />Bring to front</);
+    assert.match(html, />Send to back</);
     assert.doesNotMatch(html, />Backward</);
   });
 

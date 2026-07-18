@@ -91,6 +91,7 @@ export async function loadDocumentEditorViewModel({
     userName,
     initialComments,
     allTags,
-    customThemePackages: customThemes.packages,
+    activeCustomThemePackage: customThemes.activePackage,
+    customThemeCatalogEntries: customThemes.catalogEntries,
   });
 }

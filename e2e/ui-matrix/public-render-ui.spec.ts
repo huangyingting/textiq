@@ -8,6 +8,7 @@ import {
   profilePresentPath,
   profileShareSegment,
 } from "../helpers/profile";
+import { unauthenticatedRequest } from "../helpers/credential-gate";
 
 const UNKNOWN_SHARE_ID = "ui-matrix-missing-share-id";
 
@@ -54,14 +55,13 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     ).toBeVisible();
   });
 
-  test("unknown share and present routes return safe 404s without fixture leaks", async ({
-    request,
-  }) => {
+  test("unknown share and present routes return safe 404s without fixture leaks", async () => {
+    const publicRequest = unauthenticatedRequest();
     for (const route of [
       `/share/${UNKNOWN_SHARE_ID}`,
       `/present/${UNKNOWN_SHARE_ID}`,
     ]) {
-      const response = await request.get(route);
+      const response = await publicRequest.get(route);
       const body = await response.text();
       expect(response.status(), route).toBe(404);
       expect(body, route).toMatch(/not found|404/i);
@@ -70,14 +70,15 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     }
   });
 
-  test("share-bound slide assets serve only with present or embed binding", async ({
-    request,
-  }) => {
-    const presentAsset = await request.get(profileAssetSharePath("present"));
+  test("share-bound slide assets serve only with present or embed binding", async () => {
+    const publicRequest = unauthenticatedRequest();
+    const presentAsset = await publicRequest.get(
+      profileAssetSharePath("present"),
+    );
     expect(presentAsset.status()).toBe(200);
     expect((await presentAsset.body()).byteLength).toBeGreaterThan(0);
 
-    const embedAsset = await request.get(profileAssetSharePath("embed"));
+    const embedAsset = await publicRequest.get(profileAssetSharePath("embed"));
     expect(embedAsset.status()).toBe(200);
     expect((await embedAsset.body()).byteLength).toBeGreaterThan(0);
   });

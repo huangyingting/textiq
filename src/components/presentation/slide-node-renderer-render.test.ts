@@ -650,6 +650,7 @@ describe("SlideNodeRenderer content variants", () => {
 
     assert.match(html, /role="button"/);
     assert.match(html, /aria-label="Connector node"/);
+    assert.doesNotMatch(html, /aria-keyshortcuts/);
     assert.match(html, /stroke="#ef4444"/);
     assert.match(html, /stroke-dasharray="6 4"/);
     assert.match(html, /L 50 10 L 50 90 L 100 90/);
@@ -710,7 +711,7 @@ describe("SlideNodeRenderer content variants", () => {
     assert.match(straight, /M 0 50 L 50 50/);
   });
 
-  test("renders group nodes as positioned empty containers", () => {
+  test("renders groups as nonvisual positioned selection containers", () => {
     const html = renderNode(
       node(
         { type: "group" },

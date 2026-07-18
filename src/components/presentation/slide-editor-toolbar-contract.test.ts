@@ -175,6 +175,14 @@ describe("SlideEditor toolbar command ownership", () => {
       true,
     );
     assert.equal(
+      precisionGuidesControlsSource.includes('label="Manage custom guides"'),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes('aria-label="Custom guides"'),
+      true,
+    );
+    assert.equal(
       precisionGuidesControlsSource.includes("data-precision-grid-overlay"),
       true,
     );
@@ -185,6 +193,31 @@ describe("SlideEditor toolbar command ownership", () => {
     assert.equal(
       precisionGuidesControlsSource.includes("data-precision-guides-overlay"),
       true,
+    );
+  });
+
+  test("offers brand authoring from the theme picker rather than slide master", () => {
+    assert.equal(
+      topToolbarSource.includes("onCustomize={onCustomizeTheme}"),
+      true,
+    );
+    assert.equal(
+      precisionGuidesControlsSource.includes("BrandKitAuthoringPanel"),
+      false,
+    );
+    const authoringDialogWiring = source.match(
+      /<BrandKitAuthoringDialog[\s\S]*?onClose=\{closeBrandKitAuthoring\}/,
+    )?.[0];
+    assert.ok(authoringDialogWiring);
+    assert.equal(
+      authoringDialogWiring.includes("onBrandKitSaved?.(result)"),
+      true,
+    );
+    assert.equal(
+      authoringDialogWiring.includes(
+        "onBrandKitSaved?.(result);\n            setBrandKitAuthoringOpen(false)",
+      ),
+      false,
     );
   });
 
@@ -232,7 +265,7 @@ describe("SlideEditor toolbar command ownership", () => {
   });
 
   test("wires keyboard shortcut help button to the shared dialog surface", () => {
-    assert.equal(topToolbarSource.includes("setShortcutHelpOpen(true)"), true);
+    assert.equal(topToolbarSource.includes("onOpenShortcutHelp()"), true);
     assert.equal(
       topToolbarSource.includes('aria-label="Keyboard shortcuts"'),
       true,

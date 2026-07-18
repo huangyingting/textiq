@@ -42,6 +42,10 @@ import {
 } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
+import type {
+  BrandKitSavePort,
+  SaveBrandKitDraftResult,
+} from "@/lib/action-ports";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import type { SaveStatus } from "@/lib/presentation/save-status";
 import type {
@@ -91,7 +95,12 @@ import {
 
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation/neutral-theme-package";
 import { createDefaultTemplateRegistry } from "@/lib/presentation/theme-packages";
-import { listThemePackages } from "@/lib/presentation/theme-package-registry";
+import {
+  listThemePackageCatalog,
+  mergeThemePackageCatalogEntries,
+  type ThemePackageCatalogEntry,
+  type ThemePackageSelection,
+} from "@/lib/presentation/theme-package-registry";
 import { resolveNodeFontCss } from "@/lib/presentation/node-font-css";
 import { injectThemePackageFontFaces } from "@/lib/presentation/theme-package-fonts";
 import { resolveDeckAssetSource } from "@/lib/presentation/deck-asset-source";
@@ -141,20 +150,23 @@ import {
 import { InspectorShell } from "./inspector";
 import { ContextToolbar } from "./toolbar/context-toolbar";
 import { SlideEditorTopToolbar } from "./slide-editor-top-toolbar";
+import { BrandKitAuthoringDialog } from "./brand-kit-authoring-dialog";
 import { Filmstrip } from "./filmstrip/filmstrip";
 import {
   readFilmstripCollapsed,
   writeFilmstripCollapsed,
 } from "./filmstrip/filmstrip-collapse-storage";
 import { PrecisionGuideOverlays } from "./precision-guides-controls";
+import { customGuidesForSnapping } from "./precision-guides-storage";
 import { usePrecisionGuides } from "./use-precision-guides";
 import {
   nextActiveGroupIdForStageTarget,
   resolveStageNodeTarget,
-  stageCandidateNodeIds,
+  unlockedStageCandidateNodeIds,
   type StageNodeInteractionTarget,
 } from "./stage-targeting";
-import { StageNodeContextMenu } from "./stage-context-menu";
+import { StageNodeContextMenu, stageNodeMenuLabel } from "./stage-context-menu";
+import { focusGeometryTargets } from "./focus-geometry-registry";
 import { detachConnectorEndpointPresentation } from "./stage-keyboard-interactions";
 import {
   buildStageGestureBadge,
@@ -170,6 +182,7 @@ import {
 } from "./stage-pointer-interactions";
 import { useStageInteractionController } from "./use-stage-interaction-controller";
 import { useStageGestureController } from "./use-stage-gesture-controller";
+import { useSemanticCandidateStackReset } from "./use-semantic-candidate-stack-reset";
 import {
   useFocusFirstDescendantWhenOpen,
   useStageFocusController,
@@ -280,6 +293,12 @@ export interface SlideEditorProps {
   deck: Deck;
   /** Theme package to use for rendering. Falls back to the neutral package. */
   themePackage?: ThemePackageV1 | null;
+  customThemeCatalogEntries?: readonly ThemePackageCatalogEntry[];
+  brandKitOwnerId?: string;
+  saveBrandKitDraft?: BrandKitSavePort["saveBrandKitDraft"];
+  onBrandKitSaved?: (
+    result: Extract<SaveBrandKitDraftResult, { ok: true }>,
+  ) => void;
   /** Boundary diagnostics, e.g. validation or theme fallback notices. */
   diagnostics?: readonly PresentationDiagnostic[];
   saveStatus?: SaveStatus;
@@ -383,6 +402,10 @@ export function SlideEditor({
   documentId,
   deck,
   themePackage,
+  customThemeCatalogEntries = [],
+  brandKitOwnerId,
+  saveBrandKitDraft,
+  onBrandKitSaved,
   diagnostics: boundaryDiagnostics = [],
   saveStatus = "saved",
   saveStatusLabel = "All changes saved",
@@ -413,7 +436,14 @@ export function SlideEditor({
 }: SlideEditorProps): JSX.Element {
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const editorRootRef = useRef<HTMLDivElement | null>(null);
-  const themePackages = useMemo(() => listThemePackages(), []);
+  const themeCatalogEntries = useMemo(
+    () =>
+      mergeThemePackageCatalogEntries([
+        ...listThemePackageCatalog(),
+        ...customThemeCatalogEntries,
+      ]),
+    [customThemeCatalogEntries],
+  );
   const isMac = useIsMac();
   const documentVisualsById = useMemo(() => {
     const visuals = new Map<
@@ -448,11 +478,10 @@ export function SlideEditor({
     requestInlineEditCommit,
   } = useInlineTextEditingController();
 
-  function handleThemePackageChange(packageId: string) {
-    const nextPackage = themePackages.find(
-      (candidate) => candidate.id === packageId,
+  function handleThemePackageChange(selection: ThemePackageSelection) {
+    onDeckChange(
+      setThemePackage(deck, selection.packageId, selection.packageVersion),
     );
-    onDeckChange(setThemePackage(deck, packageId, nextPackage?.version));
   }
 
   function handleCanvasRatioChange(format: "16:9" | "4:3" | "square") {
@@ -510,11 +539,19 @@ export function SlideEditor({
   const [snapToGuides, setSnapToGuides] = useState(true);
   const [clipboardNodes, setClipboardNodes] = useState<SlideChildNode[]>([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [brandKitAuthoringOpen, setBrandKitAuthoringOpen] = useState(false);
+  const themePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const shortcutHelpReturnFocusRef = useRef<HTMLElement | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [stageZoomPercent, setStageZoomPercent] = useState(100);
   const [filmstripCollapsed, setFilmstripCollapsed] = useState(() =>
     readFilmstripCollapsed(documentId),
   );
+
+  function closeBrandKitAuthoring() {
+    setBrandKitAuthoringOpen(false);
+    queueMicrotask(() => themePickerTriggerRef.current?.focus());
+  }
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [footerStatusMenuOpen, setFooterStatusMenuOpen] = useState(false);
@@ -587,8 +624,14 @@ export function SlideEditor({
     suppressNextStageClick,
     shouldSuppressStageClick,
   } = useStageInteractionController();
-  const { precisionGuides, togglePrecisionGrid, togglePrecisionRulers } =
-    usePrecisionGuides(documentId, setStageAnnouncement);
+  const {
+    precisionGuides,
+    togglePrecisionGrid,
+    togglePrecisionRulers,
+    toggleCustomGuidesVisible,
+    addCustomGuide,
+    removeCustomGuide,
+  } = usePrecisionGuides(documentId, setStageAnnouncement);
   const {
     focusGeometryRegistry,
     canvasElement,
@@ -682,6 +725,15 @@ export function SlideEditor({
     setSlideHovered((current) => (current === false ? current : false));
   }, [stageInteractionsBlocked, setHoveredNodeId, setSlideHovered]);
 
+  useSemanticCandidateStackReset({
+    candidateStackRef: semanticCandidateStackRef,
+    activeSlideChildren: activeSlide?.children,
+    activeSlideId: activeSlide?.id,
+    contextMenu,
+    sourceDocumentId: deck.metadata?.sourceDocumentId,
+    selection,
+  });
+
   useEffect(() => {
     return scheduleEffectStateUpdate(() => {
       clearGestureDrafts();
@@ -755,6 +807,26 @@ export function SlideEditor({
   function closeCompactToolbarMenuAndRestoreFocus() {
     setCompactToolbarMenuOpen(false);
     compactToolbarMenuTriggerRef.current?.focus();
+  }
+
+  function openShortcutHelp(returnFocusTarget?: HTMLElement | null) {
+    const activeElement =
+      typeof HTMLElement !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+        ? document.activeElement
+        : null;
+    shortcutHelpReturnFocusRef.current =
+      returnFocusTarget ?? activeElement ?? editorRootRef.current;
+    setShortcutHelpOpen(true);
+  }
+
+  function toggleShortcutHelp() {
+    if (shortcutHelpOpen) {
+      setShortcutHelpOpen(false);
+      return;
+    }
+    openShortcutHelp();
   }
 
   function handleZoomMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -1275,13 +1347,9 @@ export function SlideEditor({
   }
 
   function handleGroupSelection() {
-    if (!activeSlide || selectedIds.length < 2) return;
+    if (!canGroupSelection || !activeSlide) return;
     const groupId = nodeFactoryId("group");
-    onDeckChange(
-      groupNodes(deck, activeSlide.id, selectedIds, groupId, {
-        ref: "surface.card",
-      }),
-    );
+    onDeckChange(groupNodes(deck, activeSlide.id, selectedIds, groupId));
     setSelection((s) => setSelectedNodeIds(s, [groupId]));
     setActiveGroupId(null);
     setStageAnnouncement("Grouped nodes");
@@ -1289,7 +1357,7 @@ export function SlideEditor({
   }
 
   function handleUngroupSelection() {
-    if (!activeSlide || !selectedNode || selectedNode.type !== "group") return;
+    if (!activeSlide || !canUngroupSelection || !selectedNode) return;
     const result = ungroupNodes(deck, activeSlide.id, selectedNode.id);
     onDeckChange(result.deck);
     setActiveGroupId(null);
@@ -1302,16 +1370,21 @@ export function SlideEditor({
 
   function semanticHitsAtPoint(
     point: { x: number; y: number },
-    options: { selectedNodeBonus?: boolean } = {},
+    options: {
+      includeLocked?: boolean;
+      order?: "semantic" | "visual";
+      selectedNodeBonus?: boolean;
+    } = {},
   ): StageHitCandidate[] {
     if (!activeSlide) return [];
     const hits = hitTestSlideNodes(point, activeSlide.children, {
-      includeLocked: true,
+      includeLocked: options.includeLocked ?? false,
+      order: options.order,
       stageAspect: canvasAspectRatio(deck),
       selectedNodeBonus: options.selectedNodeBonus,
       selectedNodeIds: new Set(selectedIds),
     });
-    semanticCandidateStackRef.current = stageCandidateNodeIds(hits);
+    semanticCandidateStackRef.current = unlockedStageCandidateNodeIds(hits);
     return hits;
   }
 
@@ -1320,7 +1393,11 @@ export function SlideEditor({
       MouseEvent<HTMLElement> | ReactPointerEvent<HTMLElement>,
       "clientX" | "clientY" | "target"
     >,
-    options: { selectedNodeBonus?: boolean } = {},
+    options: {
+      includeLocked?: boolean;
+      order?: "semantic" | "visual";
+      selectedNodeBonus?: boolean;
+    } = {},
   ): StageHitCandidate[] {
     const canvasElement = canvasElementFromTarget(event.target);
     if (
@@ -1341,7 +1418,11 @@ export function SlideEditor({
       MouseEvent<HTMLElement> | ReactPointerEvent<HTMLElement>,
       "clientX" | "clientY" | "target"
     >,
-    options: { selectedNodeBonus?: boolean } = {},
+    options: {
+      includeLocked?: boolean;
+      order?: "semantic" | "visual";
+      selectedNodeBonus?: boolean;
+    } = {},
   ): StageNodeInteractionTarget | null {
     if (!activeSlide) return null;
     return resolveStageNodeTarget({
@@ -1415,8 +1496,46 @@ export function SlideEditor({
     )
       return;
     if (isStageEditingHandleTarget(event.target)) return;
-    const hits = semanticHitsFromEvent(event, { selectedNodeBonus: true });
-    const target = semanticTargetFromHits(hits);
+    const eventNodeElement =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-node-id]")
+        : null;
+    const eventNodeId = eventNodeElement?.dataset.nodeId;
+    const eventNode = eventNodeId
+      ? findNodeById(activeSlide.children, eventNodeId)
+      : undefined;
+    const keyboardNode =
+      eventNodeElement === document.activeElement ? eventNode : undefined;
+    const hits =
+      keyboardNode?.layout !== undefined
+        ? semanticHitsAtPoint(
+            {
+              x: keyboardNode.layout.frame.x + keyboardNode.layout.frame.w / 2,
+              y: keyboardNode.layout.frame.y + keyboardNode.layout.frame.h / 2,
+            },
+            {
+              includeLocked: false,
+              order: "visual",
+              selectedNodeBonus: false,
+            },
+          )
+        : semanticHitsFromEvent(event, {
+            includeLocked: false,
+            order: "visual",
+            selectedNodeBonus: false,
+          });
+    const target =
+      eventNodeId && eventNode
+        ? {
+            node: eventNode,
+            nodeId: eventNodeId,
+            candidateIds: unlockedStageCandidateNodeIds(hits),
+            parentGroupId: parentGroupIdForNode(
+              activeSlide.children,
+              eventNodeId,
+            ),
+          }
+        : semanticTargetFromHits(hits);
     if (!target) return;
 
     event.preventDefault();
@@ -1430,9 +1549,18 @@ export function SlideEditor({
     if (!selectedIds.includes(targetNodeId)) {
       setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
     }
+    const keyboardRect = keyboardNode
+      ? focusGeometryRegistry.measure(
+          focusGeometryTargets.stageNode(keyboardNode.id),
+        )
+      : null;
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x: keyboardRect
+        ? keyboardRect.left + keyboardRect.width / 2
+        : event.clientX,
+      y: keyboardRect
+        ? keyboardRect.top + keyboardRect.height / 2
+        : event.clientY,
       nodeId: targetNodeId,
       candidateIds: target.candidateIds,
     });
@@ -1489,6 +1617,7 @@ export function SlideEditor({
   function handleNodeDoubleClick(nodeId: string, event: MouseEvent) {
     if (!activeSlide) return;
     const target = semanticTargetFromEvent(nodeId, event, {
+      order: "visual",
       selectedNodeBonus: false,
     });
     if (!target) return;
@@ -1708,6 +1837,17 @@ export function SlideEditor({
     activeSlide && firstSelectedId
       ? findNodeById(activeSlide.children, firstSelectedId)
       : undefined;
+  const canGroupSelection =
+    activeSlide !== undefined &&
+    selectedIds.length >= 2 &&
+    selectedIds.every((nodeId) => {
+      const node = findNodeById(activeSlide.children, nodeId);
+      return node !== undefined && node.locked !== true && node.hidden !== true;
+    });
+  const canUngroupSelection =
+    selectedNode?.type === "group" &&
+    selectedNode.locked !== true &&
+    selectedNode.hidden !== true;
   const selectedSource = selectedNode?.source;
   const {
     documentSourceIndex,
@@ -1821,27 +1961,23 @@ export function SlideEditor({
       if (selectedIds.length === 0) {
         setStageAnnouncement("Slide selected");
       } else if (selectedIds.length === 1) {
-        const type = selectedNode?.type ?? "node";
         setStageAnnouncement(
-          `${type.charAt(0).toUpperCase()}${type.slice(1)} selected`,
+          `${selectedNode ? stageNodeMenuLabel(selectedNode) : "Node"} selected`,
         );
       } else {
         setStageAnnouncement(`${selectedIds.length} nodes selected`);
       }
     });
-  }, [selectedIds, selectedNode?.type, setStageAnnouncement]);
+  }, [selectedIds, selectedNode, setStageAnnouncement]);
 
   function resolveDeckAsset(assetId: string): string | undefined {
     return resolveDeckAssetSource(deck, assetId);
   }
 
-  // Alt-click cycles the selection to the node beneath the current one
-  // (select-under). Kept as a helper so both the click fallback and the
-  // Alt-drag gesture can reuse the exact legacy behavior.
-
   // Alt-drag duplicates the dragged node(s) and drops the copies at the moved
-  // position, leaving the originals in place (Canva parity). Alt without any
-  // movement falls back to select-under so the legacy click behavior is intact.
+  // position, leaving the originals in place. A click without movement keeps
+  // normal topmost selection; overlap cycling remains keyboard/context-menu
+  // driven so it does not conflict with the duplication gesture.
 
   function requestImageRepair(nodeId: string) {
     replaceImageTargetIdRef.current = nodeId;
@@ -1891,6 +2027,7 @@ export function SlideEditor({
     handleAlignSelection,
     handleDistributeSelection,
     handleMatchSize,
+    handleReorderSelection,
     handleDiagnosticNavigate,
     handleDiagnosticAction,
     handleDetachDecoration,
@@ -1947,7 +2084,7 @@ export function SlideEditor({
     selectedNode,
     selection,
     snapToGuides,
-    customGuides: precisionGuides.customGuides,
+    customGuides: customGuidesForSnapping(precisionGuides),
     stageInteractionsBlocked,
     tableEditingNodeId,
     draggingStage,
@@ -1955,7 +2092,6 @@ export function SlideEditor({
     activeCropHandle,
     activeRotationNodeId,
     activeConnectorEndpoint,
-    semanticCandidateStackRef,
     enterInlineEdit,
     requestInlineEditCommit,
     clearTableEditing,
@@ -1990,12 +2126,11 @@ export function SlideEditor({
     setResizeGestureDraft,
     setRotationGestureDraft,
     setSelection,
-    setShortcutHelpOpen,
+    onToggleShortcutHelp: toggleShortcutHelp,
     setSlideHovered,
     setStageAnnouncement,
     setStageGuides,
     suppressNextStageClick,
-    semanticHitsAtPoint,
     semanticHitsFromEvent,
     semanticTargetFromHits,
   });
@@ -2084,6 +2219,7 @@ export function SlideEditor({
     handleInsertConnector,
     handleInsertTable,
     handleAlignSelection,
+    handleReorderSelection,
     handleDistributeSelection,
     handleMatchSize,
     handleGroupSelection,
@@ -2099,7 +2235,13 @@ export function SlideEditor({
     focusStageViewportSoon,
     focusEditorRootSoon,
     setCommandPaletteOpen,
-    setShortcutHelpOpen,
+    setShortcutHelpOpen: (open) => {
+      if (open) {
+        openShortcutHelp(editorRootRef.current);
+      } else {
+        setShortcutHelpOpen(false);
+      }
+    },
     setDeckDiagnosticsReviewOpen,
     setDeckChromeToolbarOpen,
     setStageAnnouncement,
@@ -2163,6 +2305,7 @@ export function SlideEditor({
       onAlignSelection={handleAlignSelection}
       onDistributeSelection={handleDistributeSelection}
       onMatchSize={handleMatchSize}
+      onReorderSelection={handleReorderSelection}
       onGroupSelection={handleGroupSelection}
       onUngroupSelection={handleUngroupSelection}
       onSelectLayer={handleSelectLayer}
@@ -2254,10 +2397,23 @@ export function SlideEditor({
         </>
       ) : null}
 
+      {brandKitAuthoringOpen && brandKitOwnerId && saveBrandKitDraft ? (
+        <BrandKitAuthoringDialog
+          ownerId={brandKitOwnerId}
+          saveBrandKitDraft={saveBrandKitDraft}
+          onSaved={(result) => {
+            onBrandKitSaved?.(result);
+          }}
+          onClose={closeBrandKitAuthoring}
+        />
+      ) : null}
+
       <SlideEditorTopToolbar
         deck={deck}
         activeSlide={activeSlide}
-        themePackages={themePackages}
+        themeCatalogEntries={themeCatalogEntries}
+        activeThemePackage={pkg}
+        themePickerTriggerRef={themePickerTriggerRef}
         currentCanvasFormat={currentCanvasFormat}
         deckChromeToolbarOpen={deckChromeToolbarOpen}
         deckChromeToolbarPanelRef={deckChromeToolbarPanelRef}
@@ -2287,6 +2443,11 @@ export function SlideEditor({
         exportMenuId={exportMenuId}
         onClose={onClose}
         handleThemePackageChange={handleThemePackageChange}
+        onCustomizeTheme={
+          brandKitOwnerId && saveBrandKitDraft
+            ? () => setBrandKitAuthoringOpen(true)
+            : undefined
+        }
         handleCanvasRatioChange={handleCanvasRatioChange}
         onSelectMenuOpenChange={setTopToolbarSelectMenuOpen}
         setDeckChromeToolbarOpen={setDeckChromeToolbarOpen}
@@ -2295,6 +2456,9 @@ export function SlideEditor({
         toggleSnapToGuides={toggleSnapToGuides}
         togglePrecisionGrid={togglePrecisionGrid}
         togglePrecisionRulers={togglePrecisionRulers}
+        toggleCustomGuidesVisible={toggleCustomGuidesVisible}
+        addCustomGuide={addCustomGuide}
+        removeCustomGuide={removeCustomGuide}
         handleSyncFromDocument={handleSyncFromDocument}
         handleReviewSourceLinks={handleReviewSourceLinks}
         handleRegenerate={handleRegenerate}
@@ -2304,7 +2468,11 @@ export function SlideEditor({
         closeCompactToolbarMenuAndRestoreFocus={
           closeCompactToolbarMenuAndRestoreFocus
         }
-        setShortcutHelpOpen={setShortcutHelpOpen}
+        onOpenShortcutHelp={() =>
+          openShortcutHelp(
+            compactToolbarMenuTriggerRef.current ?? editorRootRef.current,
+          )
+        }
         setDeckDiagnosticsReviewOpen={setDeckDiagnosticsReviewOpen}
         handleRoundtripAction={handleRoundtripAction}
         setExportMenuOpen={setExportMenuOpen}
@@ -2348,6 +2516,8 @@ export function SlideEditor({
         open={shortcutHelpOpen}
         isMac={isMac}
         onClose={() => setShortcutHelpOpen(false)}
+        returnFocusRef={shortcutHelpReturnFocusRef}
+        fallbackFocusRef={editorRootRef}
       />
 
       {deckDiagnosticsReviewOpen ? (
@@ -2419,14 +2589,20 @@ export function SlideEditor({
                     canPaste={
                       clipboardNodes.length > 0 || canReadTextIqNodeClipboard()
                     }
-                    canGroup={selectedIds.length >= 2}
-                    canUngroup={selectedNode?.type === "group"}
+                    canGroup={canGroupSelection}
+                    canUngroup={canUngroupSelection}
                     onClose={() => setContextMenu(null)}
                     onSelectCandidate={(nodeId) => {
                       setSelection((s) => setSelectedNodeIds(s, [nodeId]));
                       setFocusedNodeId(nodeId);
                       applyActiveGroupContext(nodeId);
                       focusSelectedNodeSoon(nodeId);
+                      const node = findNodeById(activeSlide.children, nodeId);
+                      if (node) {
+                        setStageAnnouncement(
+                          `${stageNodeMenuLabel(node)} selected`,
+                        );
+                      }
                     }}
                     onDuplicate={handleDuplicateSelection}
                     onCopy={handleCopyNodes}
@@ -2507,45 +2683,51 @@ export function SlideEditor({
                 );
               })()
             : null}
-          <ContextToolbar
-            selectedIds={selectedIds}
-            selectedNode={selectedNode}
-            selectedResolvedStyle={selectedResolvedNode?.style}
-            isInlineEditing={inlineEditNodeId !== null}
-            isDragging={
-              draggingStage ||
-              activeResizeHandle !== null ||
-              activeCropHandle !== null ||
-              activeRotationNodeId !== null ||
-              activeConnectorEndpoint !== null
-            }
-            isDecorationSelected={isDecorationSelected}
-            onAlignSelection={handleAlignSelection}
-            onDistributeSelection={handleDistributeSelection}
-            onMatchSize={handleMatchSize}
-            onUpdateSelectedContent={handleUpdateSelectedContent}
-            onUpdateSelectedLayout={handleUpdateSelectedLayout}
-            onUpdateSelectedLocalStyle={handleUpdateSelectedLocalStyle}
-            onUpdateSelectedAttributes={handleUpdateSelectedAttributes}
-            onReplaceImage={handleReplaceSelectedImageRequest}
-            onReplaceVisual={handleReplaceSelectedVisual}
-            onResetImageCrop={handleResetSelectedImageCrop}
-            onEnterTableEdit={() => handleEnterTableEdit()}
-            slideBackgroundColor={activeSlideBackgroundColor}
-            onUpdateSlideLocalStyle={handleUpdateSlideLocalStyle}
-            onInsertText={handleInsertText}
-            onInsertShape={handleInsertShape}
-            onInsertImage={handleInsertImage}
-            onInsertVisual={() => void handleInsertVisual()}
-            onInsertConnector={handleInsertConnector}
-            onInsertTable={handleInsertTable}
-            documentInsertBlocks={documentInsertBlocks}
-            onInsertDocumentSourceBlock={handleInsertDocumentSourceBlock}
-            onDetachDecoration={handleDetachDecoration}
-            onRequestStageFocus={handleContextToolbarEscape}
-            onOpenInspectorPanel={openInspectorPanel}
-            hasDiagnostics={diagnostics.length > 0}
-          />
+          {!effectiveInspectorSheetOpen ? (
+            <ContextToolbar
+              selectedIds={selectedIds}
+              selectedNode={selectedNode}
+              selectedResolvedStyle={selectedResolvedNode?.style}
+              isInlineEditing={inlineEditNodeId !== null}
+              isDragging={
+                draggingStage ||
+                activeResizeHandle !== null ||
+                activeCropHandle !== null ||
+                activeRotationNodeId !== null ||
+                activeConnectorEndpoint !== null
+              }
+              isDecorationSelected={isDecorationSelected}
+              onBringForward={() => handleReorderSelection("forward")}
+              onSendBackward={() => handleReorderSelection("backward")}
+              onBringToFront={() => handleReorderSelection("front")}
+              onSendToBack={() => handleReorderSelection("back")}
+              onAlignSelection={handleAlignSelection}
+              onDistributeSelection={handleDistributeSelection}
+              onMatchSize={handleMatchSize}
+              onUpdateSelectedContent={handleUpdateSelectedContent}
+              onUpdateSelectedLayout={handleUpdateSelectedLayout}
+              onUpdateSelectedLocalStyle={handleUpdateSelectedLocalStyle}
+              onUpdateSelectedAttributes={handleUpdateSelectedAttributes}
+              onReplaceImage={handleReplaceSelectedImageRequest}
+              onReplaceVisual={handleReplaceSelectedVisual}
+              onResetImageCrop={handleResetSelectedImageCrop}
+              onEnterTableEdit={() => handleEnterTableEdit()}
+              slideBackgroundColor={activeSlideBackgroundColor}
+              onUpdateSlideLocalStyle={handleUpdateSlideLocalStyle}
+              onInsertText={handleInsertText}
+              onInsertShape={handleInsertShape}
+              onInsertImage={handleInsertImage}
+              onInsertVisual={() => void handleInsertVisual()}
+              onInsertConnector={handleInsertConnector}
+              onInsertTable={handleInsertTable}
+              documentInsertBlocks={documentInsertBlocks}
+              onInsertDocumentSourceBlock={handleInsertDocumentSourceBlock}
+              onDetachDecoration={handleDetachDecoration}
+              onRequestStageFocus={handleContextToolbarEscape}
+              onOpenInspectorPanel={openInspectorPanel}
+              hasDiagnostics={diagnostics.length > 0}
+            />
+          ) : null}
 
           {activeSlideTree ? (
             <div

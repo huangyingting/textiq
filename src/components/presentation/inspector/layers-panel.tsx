@@ -14,7 +14,10 @@ import { useState, type DragEvent, type JSX, type KeyboardEvent } from "react";
 
 import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
 import type { SlideChildNode } from "@/lib/presentation/schema";
-import { layerBandForNodeType } from "@/lib/presentation/layer-bands";
+import {
+  flattenNodesInRenderOrder,
+  orderSiblingsByVisualOrder,
+} from "@/lib/presentation/render-order";
 
 export interface LayersPanelProps {
   nodes: readonly SlideChildNode[];
@@ -34,7 +37,9 @@ type LayerItem = {
   label: string;
   depth: number;
   zIndex: number;
-  band?: number;
+  parentId?: string | null;
+  siblingIndex?: number;
+  siblingCount?: number;
   source: "user" | "themeDecoration" | "deckChrome";
   editable: boolean;
   node?: SlideChildNode;
@@ -69,11 +74,47 @@ function generatedLayerLabel(node: ResolvedRenderNode): string {
 export function flattenLayers(
   nodes: readonly SlideChildNode[],
   depth = 0,
-): { node: SlideChildNode; depth: number }[] {
-  return nodes.flatMap((node) => [
-    { node, depth },
-    ...(node.type === "group" ? flattenLayers(node.children, depth + 1) : []),
-  ]);
+  parentId: string | null = null,
+): {
+  node: SlideChildNode;
+  depth: number;
+  parentId: string | null;
+  siblingIndex: number;
+  siblingCount: number;
+}[] {
+  const metadata = new Map<
+    string,
+    {
+      depth: number;
+      parentId: string | null;
+      siblingIndex: number;
+      siblingCount: number;
+    }
+  >();
+  function collect(
+    siblings: readonly SlideChildNode[],
+    currentDepth: number,
+    currentParentId: string | null,
+  ) {
+    const orderedSiblings = orderSiblingsByVisualOrder(siblings);
+    orderedSiblings.forEach((node, siblingIndex) => {
+      metadata.set(node.id, {
+        depth: currentDepth,
+        parentId: currentParentId,
+        siblingIndex,
+        siblingCount: orderedSiblings.length,
+      });
+      if (node.type === "group") {
+        collect(node.children, currentDepth + 1, node.id);
+      }
+    });
+  }
+  collect(nodes, depth, parentId);
+  return flattenNodesInRenderOrder(
+    nodes,
+    (node) => (node.type === "group" ? node.children : undefined),
+    { mode: "visual" },
+  ).map((node) => ({ node, ...metadata.get(node.id)! }));
 }
 
 function flattenGeneratedLayers(
@@ -102,15 +143,6 @@ function sourceBadge(source: LayerItem["source"]): string {
   return "User";
 }
 
-function userLayerGroupLabel(node: SlideChildNode): string {
-  if (node.type === "text") return "Text";
-  if (node.type === "connector") return "Connectors";
-  if (node.type === "group") return "Groups";
-  if (node.type === "table") return "Tables";
-  if (node.type === "image" || node.type === "visual") return "Media";
-  return "Shapes";
-}
-
 export function LayersPanel({
   nodes,
   decorations = [],
@@ -125,49 +157,37 @@ export function LayersPanel({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const userLayers: LayerItem[] = flattenLayers(nodes).map(
-    ({ node, depth }) => {
-      const band = layerBandForNodeType(node.type);
+  const flattenedUserLayers = flattenLayers(nodes);
+  const userLayers: LayerItem[] = [...flattenedUserLayers]
+    .reverse()
+    .map((entry) => {
+      const { node, depth } = entry;
       return {
         id: node.id,
         label: layerLabel(node),
         depth,
         zIndex: node.layout?.zIndex ?? 0,
-        band,
+        parentId: entry.parentId,
+        siblingIndex: entry.siblingIndex,
+        siblingCount: entry.siblingCount,
         source: "user",
         editable: true,
         node,
       };
-    },
-  );
-  const userLayerGroupsByBand = new Map<
-    number,
-    { band: number; label: string; items: LayerItem[] }
-  >();
-  for (const layer of userLayers) {
-    if (layer.band === undefined || !layer.node) continue;
-    const group = userLayerGroupsByBand.get(layer.band) ?? {
-      band: layer.band,
-      label: userLayerGroupLabel(layer.node),
-      items: [],
-    };
-    group.items.push(layer);
-    userLayerGroupsByBand.set(layer.band, group);
-  }
-  const userLayerGroups = [...userLayerGroupsByBand.values()]
-    .sort((a, b) => b.band - a.band)
-    .map((group) => ({
-      ...group,
-      items: [...group.items].sort((a, b) => b.zIndex - a.zIndex),
-    }));
+    });
+  const userLayerGroups =
+    userLayers.length > 0
+      ? [{ band: 0, label: "User layers", items: userLayers }]
+      : [];
   const userLayerIndexById = new Map<string, number>();
   const userLayerGroupSizeById = new Map<string, number>();
-  const userLayerBandById = new Map<string, number>();
   for (const group of userLayerGroups) {
-    group.items.forEach((item, index) => {
-      userLayerIndexById.set(item.id, index);
-      userLayerGroupSizeById.set(item.id, group.items.length);
-      userLayerBandById.set(item.id, group.band);
+    group.items.forEach((item) => {
+      if (item.siblingIndex === undefined || item.siblingCount === undefined) {
+        return;
+      }
+      userLayerIndexById.set(item.id, item.siblingIndex);
+      userLayerGroupSizeById.set(item.id, item.siblingCount);
     });
   }
   const userLayersById = new Map(userLayers.map((item) => [item.id, item]));
@@ -188,7 +208,7 @@ export function LayersPanel({
     const movedLayer = userLayersById.get(nodeId);
     const label = movedLayer?.label ?? "Layer";
     setStatusMessage(
-      `Moved ${label} to position ${nextIndex + 1} of ${groupSize}.`,
+      `Moved ${label} to position ${groupSize - nextIndex} of ${groupSize}.`,
     );
   }
 
@@ -202,12 +222,14 @@ export function LayersPanel({
 
   function handleDrop(item: LayerItem) {
     const targetIndex = userLayerIndexById.get(item.id);
-    const draggingBand = draggingId ? userLayerBandById.get(draggingId) : null;
+    const draggingParentId = draggingId
+      ? userLayersById.get(draggingId)?.parentId
+      : undefined;
     if (
       draggingId &&
       draggingId !== item.id &&
       item.editable &&
-      draggingBand === item.band &&
+      draggingParentId === item.parentId &&
       targetIndex !== undefined &&
       onReorderNode
     ) {
@@ -260,7 +282,7 @@ export function LayersPanel({
     const groupSize = userLayerGroupSizeById.get(item.id);
     if (currentIndex === undefined || groupSize === undefined) return;
     const targetIndex =
-      direction === "forward" ? currentIndex - 1 : currentIndex + 1;
+      direction === "forward" ? currentIndex + 1 : currentIndex - 1;
     if (targetIndex < 0 || targetIndex >= groupSize) return;
     handleReorder(item.id, targetIndex);
   }
@@ -277,11 +299,11 @@ export function LayersPanel({
     const groupSize =
       editable && reorderable ? userLayerGroupSizeById.get(item.id) : undefined;
     const canMoveForward =
-      currentUserIndex !== undefined && currentUserIndex > 0;
-    const canMoveBackward =
       currentUserIndex !== undefined &&
       groupSize !== undefined &&
       currentUserIndex < groupSize - 1;
+    const canMoveBackward =
+      currentUserIndex !== undefined && currentUserIndex > 0;
     const hidden = node?.hidden === true;
     const locked = node?.locked === true;
 
@@ -289,6 +311,7 @@ export function LayersPanel({
       <li key={`${item.source}-${item.id}`}>
         <div
           data-layer-source={item.source}
+          data-layer-id={item.id}
           draggable={reorderable && renamingId !== item.id}
           onDragStart={(event) => handleDragStart(event, item)}
           onDragEnd={() => {
@@ -296,14 +319,14 @@ export function LayersPanel({
             setDropTargetId(null);
           }}
           onDragOver={(event) => {
-            const draggingBand = draggingId
-              ? userLayerBandById.get(draggingId)
-              : null;
+            const draggingParentId = draggingId
+              ? userLayersById.get(draggingId)?.parentId
+              : undefined;
             if (
               !draggingId ||
               draggingId === item.id ||
               !editable ||
-              draggingBand !== item.band
+              draggingParentId !== item.parentId
             ) {
               return;
             }

@@ -12,6 +12,7 @@ import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import { safeParseDeck } from "@/lib/document/deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
+import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import { VISUAL_KIND_TO_PRISMA, safeParseVisual } from "@/lib/visual/schema";
 import {
   diffVisualMirror,
@@ -19,10 +20,10 @@ import {
   type LiveVisualNode,
   type VisualMirrorOutcome,
 } from "@/lib/visual/mirror-diff";
-import { logInfo, logError } from "@/lib/log";
+import { logInfo } from "@/lib/log";
 import {
-  updateDocumentsMetadata,
   updateDocumentsWithCanonicalContent,
+  updateDocumentsMetadata,
 } from "@/lib/document/document-write-port";
 import { snapshotDocumentVersion } from "./helpers";
 
@@ -138,9 +139,8 @@ export async function mirrorVisualNodesInTx(
       skippedCount += 1;
       reportSchemaFailure("content-visual-parse-failed", {
         area: "Document.contentJson:visual",
-        documentId,
-        anchorBlockId: anchor,
-        reason: result.error,
+        code: "schema_validation_failed",
+        issueCount: 1,
       });
       continue;
     }
@@ -176,10 +176,8 @@ export async function mirrorVisualNodesInTx(
       if (!parsed.success) {
         reportSchemaFailure("visual-parse-failed", {
           area: "Visual.data",
-          documentId,
-          rowId: row.id,
-          ...(row.anchorBlockId ? { anchorBlockId: row.anchorBlockId } : {}),
-          reason: parsed.error,
+          code: "schema_validation_failed",
+          issueCount: 1,
         });
       }
       return {
@@ -327,54 +325,58 @@ export async function rebuildMirror(
 export async function reconcileDeckAfterMirror(
   documentId: string,
 ): Promise<void> {
-  try {
-    const doc = await prisma.document.findUnique({
-      where: { id: documentId },
-      select: { deckJson: true },
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: { deckJson: true, deckRevisionToken: true },
+  });
+  if (!doc?.deckJson) return;
+
+  const parsed = safeParseDeck(doc.deckJson);
+  if (!parsed.success) {
+    reportSchemaFailure("deck-parse-failed", {
+      area: "Document.deckJson",
+      code: "schema_validation_failed",
+      issueCount: 1,
     });
-    if (!doc?.deckJson) return;
-
-    const parsed = safeParseDeck(doc.deckJson);
-    if (!parsed.success) {
-      reportSchemaFailure("deck-parse-failed", {
-        area: "Document.deckJson",
-        documentId,
-        reason: parsed.error,
-      });
-      return;
-    }
-
-    const visualRows = await prisma.visual.findMany({
-      where: { documentId, anchorBlockId: { not: null } },
-      select: { anchorBlockId: true },
-    });
-    const knownVisualIds = new Set(
-      visualRows
-        .map((r) => r.anchorBlockId)
-        .filter((id): id is string => id !== null),
-    );
-
-    const { deck: reconciled, changed } = reconcileDocumentDeckDependencies({
-      deck: parsed.data,
-      visualsById: knownVisualIds,
-    });
-
-    if (!changed) return;
-
-    await updateDocumentsMetadata(prisma, {
-      where: { id: documentId },
-      data: { deckJson: toPrismaJsonInput(reconciled) },
-    });
-
-    logInfo("visual.reconcile", "deck reconciled after mirror", {
-      documentId,
-      knownVisualCount: knownVisualIds.size,
-    });
-  } catch (err) {
-    logError(
-      "visual.reconcile",
-      err instanceof Error ? err : new Error(String(err)),
-      { documentId },
-    );
+    return;
   }
+
+  const visualRows = await prisma.visual.findMany({
+    where: { documentId, anchorBlockId: { not: null } },
+    select: { anchorBlockId: true },
+  });
+  const knownVisualIds = new Set(
+    visualRows
+      .map((r) => r.anchorBlockId)
+      .filter((id): id is string => id !== null),
+  );
+
+  const { deck: reconciled, changed } = reconcileDocumentDeckDependencies({
+    deck: parsed.data,
+    visualsById: knownVisualIds,
+  });
+
+  if (!changed) return;
+
+  const update = await updateDocumentsMetadata(prisma, {
+    where: {
+      id: documentId,
+      deckRevisionToken: doc.deckRevisionToken,
+    },
+    data: {
+      deckJson: toPrismaJsonInput(reconciled),
+      deckRevisionToken: generateRevisionToken(),
+    },
+  });
+  if (update.count === 0) {
+    logInfo("visual.reconcile", "deck reconciliation skipped after conflict", {
+      documentId,
+    });
+    return;
+  }
+
+  logInfo("visual.reconcile", "deck reconciled after mirror", {
+    documentId,
+    knownVisualCount: knownVisualIds.size,
+  });
 }

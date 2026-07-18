@@ -27,7 +27,12 @@ export {
 } from "./persistence/visual";
 
 export type { RestoredDocumentVersion } from "./persistence/versioning";
-export { sanitizeRestoredDeck, restoreVersion } from "./persistence/versioning";
+export {
+  RestoredDeckValidationError,
+  isRestoredDeckValidationError,
+  sanitizeRestoredDeck,
+  restoreVersion,
+} from "./persistence/versioning";
 
 export type { SaveDeckResult } from "./persistence/deck";
 export { persistDeck } from "./persistence/deck";

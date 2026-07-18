@@ -57,6 +57,7 @@ import {
 import {
   CURRENT_OBJECT_INSERT_NODE_COMMAND_DESCRIPTORS,
   currentObjectAlignCommandDescriptor,
+  currentObjectReorderCommandDescriptor,
   type CurrentObjectInsertNodeCommandId,
   type CurrentObjectInsertNodeKind,
 } from "@/lib/presentation/current-object-command-descriptors";
@@ -76,6 +77,7 @@ import {
   ContextToolbarNumberInput,
   ContextToolbarSelect,
   renderContextToolbarInsertIcon,
+  renderContextToolbarLayerIcon,
 } from "./context-toolbar-primitives";
 
 const TOOLBAR_GAP = 12;
@@ -818,6 +820,10 @@ export function ContextToolbar({
   isInlineEditing,
   isDragging,
   isDecorationSelected,
+  onBringForward,
+  onSendBackward,
+  onBringToFront,
+  onSendToBack,
   onAlignSelection,
   onDistributeSelection,
   onMatchSize,
@@ -1605,6 +1611,26 @@ export function ContextToolbar({
         {showArrangeGroup && selectedIds.length > 0 ? (
           <>
             <ContextToolbarDivider />
+            {(
+              [
+                ["forward", onBringForward],
+                ["backward", onSendBackward],
+                ["front", onBringToFront],
+                ["back", onSendToBack],
+              ] as const
+            ).map(([mode, onClick]) => {
+              const descriptor = currentObjectReorderCommandDescriptor(mode);
+              return (
+                <ContextToolbarButton
+                  key={descriptor.id}
+                  label={descriptor.label}
+                  disabled={!onClick}
+                  onClick={() => onClick?.()}
+                >
+                  {renderContextToolbarLayerIcon(mode)}
+                </ContextToolbarButton>
+              );
+            })}
             {!isMultiSelect && selectedNode?.type !== "connector" ? (
               <>
                 <ContextToolbarButton

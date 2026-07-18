@@ -22,6 +22,11 @@ import { before, describe, it, type TestContext } from "node:test";
 
 import { accessibleDocumentWhere } from "@/lib/access-query";
 import { prisma } from "@/lib/prisma";
+import {
+  buildDeck,
+  buildMinimalThemePackage,
+  buildThemeBinding,
+} from "@/test/builders/presentation-deck";
 
 type ModuleHooks = {
   registerHooks(hooks: {
@@ -140,7 +145,20 @@ describe("loadDocumentEditorViewModel", () => {
       );
     });
     replacePrismaProperty(t, "comment", { findMany: commentFindMany.fn });
-
+    const themeFindUnique = trackedCalls(async () => {
+      throw new Error(
+        "themePackageSnapshot.findUnique should not run when the document lookup misses",
+      );
+    });
+    const themeFindMany = trackedCalls(async () => {
+      throw new Error(
+        "themePackageSnapshot.findMany should not run when the document lookup misses",
+      );
+    });
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findUnique: themeFindUnique.fn,
+      findMany: themeFindMany.fn,
+    });
     const result = await loadDocumentEditorViewModel({
       documentId: "doc-missing",
       userId: "user-1",
@@ -152,6 +170,8 @@ describe("loadDocumentEditorViewModel", () => {
     assert.equal(findFirst.calls.length, 1);
     assert.equal(tagFindMany.calls.length, 0);
     assert.equal(commentFindMany.calls.length, 0);
+    assert.equal(themeFindUnique.calls.length, 0);
+    assert.equal(themeFindMany.calls.length, 0);
   });
 
   it("scopes the document lookup through accessibleDocumentWhere for the acting user", async (t) => {
@@ -224,6 +244,10 @@ describe("loadDocumentEditorViewModel", () => {
       },
     ]);
     replacePrismaProperty(t, "comment", { findMany: commentFindMany.fn });
+    const themeFindMany = trackedCalls(async () => []);
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: themeFindMany.fn,
+    });
 
     const viewModel = await loadDocumentEditorViewModel({
       documentId: "doc-1",
@@ -243,11 +267,20 @@ describe("loadDocumentEditorViewModel", () => {
     assert.deepEqual(viewModel?.initialTags, documentRow.tags as unknown[]);
     assert.equal(viewModel?.initialComments.length, 1);
     assert.equal(viewModel?.initialComments[0]?.body, "Looks good");
-    // No custom theme packages: deckJson is null, so the brand-kit lookup short-circuits.
-    assert.deepEqual(viewModel?.customThemePackages, []);
+    assert.equal(viewModel?.activeCustomThemePackage, undefined);
+    assert.deepEqual(viewModel?.customThemeCatalogEntries, []);
     assert.equal(findFirst.calls.length, 1);
     assert.equal(tagFindMany.calls.length, 1);
     assert.equal(commentFindMany.calls.length, 1);
+    assert.equal(themeFindMany.calls.length, 1);
+    assert.deepEqual(
+      (
+        themeFindMany.calls[0]?.[0] as {
+          where: { OR: unknown[] };
+        }
+      ).where.OR,
+      [{ ownerId: "user-1" }],
+    );
   });
 
   it("derives non-owner capabilities from the workspace membership role", async (t) => {
@@ -265,6 +298,10 @@ describe("loadDocumentEditorViewModel", () => {
     });
     replacePrismaProperty(t, "tag", { findMany: async () => [] });
     replacePrismaProperty(t, "comment", { findMany: async () => [] });
+    const themeFindMany = trackedCalls(async () => []);
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: themeFindMany.fn,
+    });
 
     const viewModel = await loadDocumentEditorViewModel({
       documentId: "doc-1",
@@ -277,6 +314,151 @@ describe("loadDocumentEditorViewModel", () => {
     assert.equal(viewModel?.canEdit, false);
     assert.equal(viewModel?.canManage, false);
     assert.equal(viewModel?.workspaceName, "Acme");
+    assert.deepEqual(
+      (
+        themeFindMany.calls[0]?.[0] as {
+          where: { OR: unknown[] };
+        }
+      ).where.OR,
+      [{ ownerId: "user-2" }, { workspaceId: "ws-1" }],
+    );
+  });
+
+  it("loads an authorized collaborator's exact owner theme while keeping the catalog collaborator/workspace-scoped", async (t) => {
+    const ownerPackage = buildMinimalThemePackage("brand-kit:user-owner:acme", {
+      version: "1.0.0+r1",
+      name: "Owner theme",
+    });
+    const collaboratorPackage = buildMinimalThemePackage(
+      "brand-kit:user-collaborator:mine",
+      {
+        version: "2.0.0+r1",
+        name: "Collaborator theme",
+      },
+    );
+    const documentRow = baseDocumentRow({
+      ownerId: "user-owner",
+      workspaceId: "ws-1",
+      deckJson: buildDeck(undefined, {
+        theme: buildThemeBinding({
+          packageId: ownerPackage.id,
+          packageVersion: ownerPackage.version,
+        }),
+      }),
+      workspace: {
+        name: "Acme",
+        ownerId: "user-owner",
+        members: [{ userId: "user-collaborator", role: "EDITOR" }],
+      },
+    });
+    replacePrismaProperty(t, "document", {
+      findFirst: async () => documentRow,
+    });
+    replacePrismaProperty(t, "tag", { findMany: async () => [] });
+    replacePrismaProperty(t, "comment", { findMany: async () => [] });
+    const themeFindUnique = trackedCalls(async () => ({
+      packageJson: ownerPackage,
+    }));
+    const themeFindMany = trackedCalls(async () => [
+      {
+        packageId: collaboratorPackage.id,
+        packageVersion: collaboratorPackage.version,
+        packageJson: collaboratorPackage,
+        createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      },
+    ]);
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findUnique: themeFindUnique.fn,
+      findMany: themeFindMany.fn,
+    });
+
+    const viewModel = await loadDocumentEditorViewModel({
+      documentId: "doc-1",
+      userId: "user-collaborator",
+      userName: "Collaborator",
+      requireDocumentContext: allowDocumentContext(),
+    });
+
+    assert.equal(viewModel?.activeCustomThemePackage?.name, "Owner theme");
+    assert.deepEqual(
+      viewModel?.customThemeCatalogEntries.map((entry) => entry.package.name),
+      ["Collaborator theme"],
+    );
+    assert.deepEqual(
+      (
+        themeFindUnique.calls[0]?.[0] as {
+          where: { packageId_packageVersion: unknown };
+        }
+      ).where.packageId_packageVersion,
+      {
+        packageId: ownerPackage.id,
+        packageVersion: ownerPackage.version,
+      },
+    );
+    assert.deepEqual(
+      (
+        themeFindMany.calls[0]?.[0] as {
+          where: { OR: unknown[] };
+        }
+      ).where.OR,
+      [{ ownerId: "user-collaborator" }, { workspaceId: "ws-1" }],
+    );
+  });
+
+  it("does not promote a same-id catalog snapshot for a missing-version active custom reference", async (t) => {
+    const latestPackage = buildMinimalThemePackage(
+      "brand-kit:user-user-1:custom",
+      {
+        version: "2.0.0+r1",
+        name: "Latest selectable theme",
+      },
+    );
+    const documentRow = baseDocumentRow({
+      deckJson: buildDeck(undefined, {
+        theme: buildThemeBinding({
+          packageId: latestPackage.id,
+        }),
+      }),
+    });
+    replacePrismaProperty(t, "document", {
+      findFirst: async () => documentRow,
+    });
+    replacePrismaProperty(t, "tag", { findMany: async () => [] });
+    replacePrismaProperty(t, "comment", { findMany: async () => [] });
+    const themeFindUnique = trackedCalls(async () => {
+      throw new Error(
+        "themePackageSnapshot.findUnique must not run without packageVersion",
+      );
+    });
+    const themeFindMany = trackedCalls(async () => [
+      {
+        packageId: latestPackage.id,
+        packageVersion: latestPackage.version,
+        packageJson: latestPackage,
+        createdAt: new Date("2026-04-01T00:00:00.000Z"),
+      },
+    ]);
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findUnique: themeFindUnique.fn,
+      findMany: themeFindMany.fn,
+    });
+
+    const viewModel = await loadDocumentEditorViewModel({
+      documentId: "doc-1",
+      userId: "user-1",
+      userName: "Ada",
+      requireDocumentContext: allowDocumentContext(),
+    });
+
+    assert.equal(themeFindUnique.calls.length, 0);
+    assert.equal(viewModel?.activeCustomThemePackage, undefined);
+    assert.deepEqual(
+      viewModel?.customThemeCatalogEntries.map((entry) => [
+        entry.package.id,
+        entry.package.version,
+      ]),
+      [[latestPackage.id, latestPackage.version]],
+    );
   });
 
   it("propagates a denial thrown by requireDocumentContext instead of swallowing it", async (t) => {
@@ -290,6 +472,9 @@ describe("loadDocumentEditorViewModel", () => {
           "comment.findMany should not run when requireDocumentContext denies access",
         );
       },
+    });
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: async () => [],
     });
 
     await assert.rejects(

@@ -84,13 +84,14 @@ async function detectPresentationState(
   const recoveryHeading = page.getByRole("heading", {
     name: "Presentation deck could not be opened",
   });
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (await recoveryHeading.isVisible()) return "recovery";
-    if (await region.isVisible()) return "region";
-    // e2e-governance-allow wait-for-timeout: polling waits for either present mode or recovery UI without app-side readiness events.
-    await page.waitForTimeout(250);
-  }
-  return "timeout";
+  return await Promise.any([
+    recoveryHeading
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => "recovery" as const),
+    region
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => "region" as const),
+  ]).catch(() => "timeout" as const);
 }
 
 async function openPresentationOverlay(
@@ -119,11 +120,8 @@ test.describe("present + export", () => {
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run present/export",
   );
   // Authenticated tests need login + navigation which can exceed the default
-  // 30 s under dev-server load (2-worker parallel run).
+  // 30 s under dev-server load.
   test.setTimeout(90_000);
-  // One retry absorbs the occasional login timeout caused by the concurrent
-  // slide-editor serial test saturating the dev server briefly.
-  test.describe.configure({ retries: 1 });
 
   test("authenticated present mode renders the seeded slide text @required-profile", async ({
     page,

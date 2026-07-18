@@ -1,4 +1,5 @@
 import type { LayoutBox, SlideChildNode, ConnectorEndpoint } from "./schema";
+import { flattenNodesInRenderOrder } from "./render-order";
 
 export type StageHitReason =
   | "text-content"
@@ -21,6 +22,7 @@ export interface StageHitTestOptions {
   stageAspect?: number;
   includeLocked?: boolean;
   lineThresholdPct?: number;
+  order?: "semantic" | "visual";
   selectedNodeIds?: ReadonlySet<string>;
   selectedNodeBonus?: boolean;
 }
@@ -50,18 +52,19 @@ const SCORE = {
   coveringShapeInterior: 24,
   boxInterior: 68,
   selectedBonus: 88,
-  maxZIndexBonus: 8,
 } as const;
 
-function flattenHitNodes(nodes: readonly SlideChildNode[]): SlideChildNode[] {
-  const result: SlideChildNode[] = [];
-  for (const node of nodes) {
-    if (node.type === "group") {
-      result.push(...flattenHitNodes(node.children));
-    }
-    result.push(node);
-  }
-  return result;
+function flattenRenderOrder(
+  nodes: readonly SlideChildNode[],
+): SlideChildNode[] {
+  return flattenNodesInRenderOrder(
+    nodes,
+    (node) => (node.type === "group" ? node.children : undefined),
+    {
+      mode: "visual",
+      isHidden: (node) => node.hidden === true,
+    },
+  );
 }
 
 function flattenAllNodes(nodes: readonly SlideChildNode[]): SlideChildNode[] {
@@ -255,14 +258,6 @@ function shapeInteriorScore(frame: LayoutBox["frame"]): number {
   return SCORE.coveringShapeInterior;
 }
 
-function zIndex(node: SlideChildNode): number {
-  return node.layout?.zIndex ?? 0;
-}
-
-function zIndexBonus(node: SlideChildNode): number {
-  return Math.max(0, Math.min(SCORE.maxZIndexBonus, zIndex(node) * 0.1));
-}
-
 function collectParentIds(
   nodes: readonly SlideChildNode[],
   parentId: string | null = null,
@@ -316,11 +311,7 @@ function withBonuses(
   node: SlideChildNode,
   selectedNodeIds: ReadonlySet<string> | undefined,
 ): number {
-  return (
-    baseScore +
-    zIndexBonus(node) +
-    (selectedNodeIds?.has(node.id) ? SCORE.selectedBonus : 0)
-  );
+  return baseScore + (selectedNodeIds?.has(node.id) ? SCORE.selectedBonus : 0);
 }
 
 function lineEndpoints(
@@ -605,11 +596,12 @@ export function hitTestSlideNodes(
     options.lineThresholdPct ?? DEFAULT_LINE_THRESHOLD_PCT;
   const selectedNodeIds =
     options.selectedNodeBonus === false ? undefined : options.selectedNodeIds;
+  const order = options.order ?? "semantic";
   const allNodes = flattenAllNodes(nodes);
   const nodesById = new Map(allNodes.map((node) => [node.id, node]));
   const parentIds = collectParentIds(nodes);
 
-  return flattenHitNodes(nodes)
+  return flattenRenderOrder(nodes)
     .map((node, index) => ({ node, index, frame: node.layout?.frame }))
     .filter(
       (
@@ -620,7 +612,6 @@ export function hitTestSlideNodes(
         frame: LayoutBox["frame"];
       } => candidate.frame !== undefined,
     )
-    .filter(({ node }) => node.hidden !== true)
     .filter(({ node }) => options.includeLocked || node.locked !== true)
     .map((candidate) => {
       const hit = hitTestNode(
@@ -642,6 +633,9 @@ export function hitTestSlideNodes(
       } => candidate !== null,
     )
     .sort((left, right) => {
+      if (order === "visual") {
+        return right.index - left.index;
+      }
       const descendantOrder = descendantTieBreak(
         left.node,
         right.node,
@@ -653,11 +647,7 @@ export function hitTestSlideNodes(
           descendantOrder
         );
       }
-      return (
-        right.score - left.score ||
-        zIndex(right.node) - zIndex(left.node) ||
-        right.index - left.index
-      );
+      return right.score - left.score || right.index - left.index;
     })
     .map(({ index: _index, ...candidate }) => candidate);
 }

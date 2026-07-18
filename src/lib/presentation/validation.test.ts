@@ -177,7 +177,7 @@ describe("safeParseDeck", () => {
       );
       assert.ok(
         result.errors.some((error) =>
-          /Deck\.metadata\.unknownField/.test(error),
+          /unsupported_property: Deck\.metadata:/.test(error),
         ),
       );
       assert.ok(
@@ -201,11 +201,13 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(
-        result.errors.some((error) => /Deck\.theme\.unexpected/.test(error)),
+        result.errors.some((error) =>
+          /unsupported_property: Deck\.theme:/.test(error),
+        ),
       );
       assert.ok(
         result.errors.some((error) =>
-          /Deck\.theme\.overrides\.extraUnknown/.test(error),
+          /unsupported_property: Deck\.theme\.overrides:/.test(error),
         ),
       );
     }
@@ -297,10 +299,10 @@ describe("safeParseDeck", () => {
     if (!result.success) {
       for (const pattern of [
         /slides\[0\]\.localStyle\.slide\.chrome/,
-        /slides\[0\]\.children\[0\]\.localStyle\.unknownField/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.localStyle:/,
         /slides\[0\]\.children\[0\]\.localStyle\.text\.align/,
         /slides\[0\]\.children\[0\]\.localStyle\.fill\.color\.token/,
-        /Deck\.chrome\.footer\.style\.sparkle/,
+        /unsupported_property: Deck\.chrome\.footer\.style:/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -340,10 +342,10 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       for (const pattern of [
-        /Deck\.theme\.overrides\.styles\.text\.body\.default\.fill\.type/,
-        /Deck\.theme\.overrides\.styles\.text\.body\.default\.fill\.stops\[0\]\.offsetPct/,
-        /Deck\.theme\.overrides\.styles\.text\.body\.default\.table\.cellPaddingPt\.top/,
-        /Deck\.theme\.overrides\.styles\.text\.body\.default\.blendMode/,
+        /Deck\.theme\.overrides\.styles\[style\]\[variant\]\.fill\.type/,
+        /Deck\.theme\.overrides\.styles\[style\]\[variant\]\.fill\.stops\[0\]\.offsetPct/,
+        /Deck\.theme\.overrides\.styles\[style\]\[variant\]\.table\.cellPaddingPt\.top/,
+        /Deck\.theme\.overrides\.styles\[style\]\[variant\]\.blendMode/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -680,22 +682,22 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       for (const pattern of [
-        /slides\[0\]\.children\[0\]\.unexpectedNodeKey/,
-        /slides\[0\]\.children\[0\]\.content\.unexpectedTextContentKey/,
-        /slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.unexpectedParagraphKey/,
-        /slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.runs\[0\]\.unexpectedRunKey/,
-        /slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.runs\[0\]\.localStyle\.unknownLocalStyleKey/,
-        /slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.list\.unexpectedListKey/,
-        /slides\[0\]\.children\[1\]\.content\.unexpectedImageContentKey/,
-        /slides\[0\]\.children\[2\]\.content\.unexpectedShapeContentKey/,
-        /slides\[0\]\.children\[3\]\.content\.unexpectedConnectorContentKey/,
-        /slides\[0\]\.children\[4\]\.content\.unexpectedTableContentKey/,
-        /slides\[0\]\.children\[4\]\.content\.columns\[0\]\.unexpectedColumnKey/,
-        /slides\[0\]\.children\[4\]\.content\.rows\[0\]\.unexpectedRowKey/,
-        /slides\[0\]\.children\[4\]\.content\.rows\[0\]\.cells\[0\]\.unexpectedCellKey/,
-        /slides\[0\]\.children\[5\]\.content\.unexpectedVisualContentKey/,
-        /slides\[0\]\.children\[6\]\.unexpectedGroupKey/,
-        /slides\[0\]\.children\[6\]\.children\[0\]\.content\.unexpectedNestedTextContentKey/,
+        /unsupported_property: slides\[0\]\.children\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.runs\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.runs\[0\]\.localStyle:/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.content\.paragraphs\[0\]\.list:/,
+        /unsupported_property: slides\[0\]\.children\[1\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[2\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[3\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[4\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[4\]\.content\.columns\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[4\]\.content\.rows\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[4\]\.content\.rows\[0\]\.cells\[0\]:/,
+        /unsupported_property: slides\[0\]\.children\[5\]\.content:/,
+        /unsupported_property: slides\[0\]\.children\[6\]:/,
+        /unsupported_property: slides\[0\]\.children\[6\]\.children\[0\]\.content:/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -1238,7 +1240,11 @@ describe("safeParseDeck", () => {
     const result = safeParseDeck(deck);
     assert.ok(!result.success);
     if (!result.success) {
-      assert.ok(result.errors.some((e) => /unknownField/.test(e)));
+      assert.ok(
+        result.errors.some((e) =>
+          /unsupported_property: Deck: unsupported property count=1/.test(e),
+        ),
+      );
     }
   });
 
@@ -1559,7 +1565,6 @@ describe("safeParseDeck", () => {
       type: "group",
       component: "unknownWidget", // invalid component
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       children: [innerNode],
     };
     const badSlide = { ...slide, children: [badGroup] };
@@ -1571,6 +1576,46 @@ describe("safeParseDeck", () => {
     }
   });
 
+  test("rejects style bindings and local style patches on logical groups", () => {
+    const slide = buildCoverSlide();
+    const child = { ...slide.children[0], id: "group-style-child" };
+    for (const unsupported of [
+      { style: { ref: "surface.card" } },
+      {
+        localStyle: {
+          fill: { type: "solid", color: "#22c55e" },
+          opacity: 0.4,
+        },
+      },
+    ]) {
+      const group = {
+        id: "group-style-invalid",
+        type: "group",
+        component: "custom",
+        layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
+        children: [child],
+        ...unsupported,
+      };
+      const result = safeParseDeck(
+        buildDeck([
+          invalidSlide({
+            ...slide,
+            children: [group],
+          }),
+        ]),
+      );
+
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.ok(
+          result.errors.some((error) =>
+            /unsupported_property: slides\[0\]\.children\[0\]:/.test(error),
+          ),
+        );
+      }
+    }
+  });
+
   test("rejects group node with empty children array", () => {
     resetBuilderCounter();
     const slide = buildCoverSlide();
@@ -1579,7 +1624,6 @@ describe("safeParseDeck", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 0, y: 0, w: 50, h: 50 }, zIndex: 1 },
-      style: { ref: "surface.card" },
       children: [], // empty is invalid
     };
     const badSlide = { ...slide, children: [badGroup] };
@@ -1678,9 +1722,7 @@ describe("safeParseDeck", () => {
     if (!result.success) {
       assert.ok(
         result.errors.some((e) =>
-          /Deck\.canvas\.safeArea\.horizontal is not a known inset field/.test(
-            e,
-          ),
+          /unsupported_property: Deck\.canvas\.safeArea:/.test(e),
         ),
       );
     }
@@ -1778,10 +1820,10 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(
-        result.errors.some((e) => /Deck\.assets\.images\.img-001\.src/.test(e)),
+        result.errors.some((e) => /Deck\.assets\.images\[entry\]\.src/.test(e)),
       );
       assert.ok(
-        result.errors.some((e) => /Deck\.assets\.files\.file-001\.src/.test(e)),
+        result.errors.some((e) => /Deck\.assets\.files\[entry\]\.src/.test(e)),
       );
     }
   });
@@ -1831,17 +1873,17 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       for (const pattern of [
-        /Deck\.assets\.images\.img-001\.id must match asset key/,
-        /Deck\.assets\.images\.img-001\.widthPx/,
-        /Deck\.assets\.images\.img-001\.origin\.kind/,
-        /Deck\.assets\.fonts\.font-001\.family/,
-        /Deck\.assets\.fonts\.font-001\.weight\[0\]/,
-        /Deck\.assets\.fonts\.font-001\.style/,
-        /Deck\.assets\.visuals\.visual-001\.visualId/,
-        /Deck\.assets\.visuals\.visual-001\.documentId/,
-        /Deck\.assets\.visuals\.visual-001\.alt/,
-        /Deck\.assets\.files\.file-001\.filename/,
-        /Deck\.assets\.files\.file-001\.mimeType/,
+        /Deck\.assets\.images\[entry\]\.id must match its registry key/,
+        /Deck\.assets\.images\[entry\]\.widthPx/,
+        /Deck\.assets\.images\[entry\]\.origin\.kind/,
+        /Deck\.assets\.fonts\[entry\]\.family/,
+        /Deck\.assets\.fonts\[entry\]\.weight\[0\]/,
+        /Deck\.assets\.fonts\[entry\]\.style/,
+        /Deck\.assets\.visuals\[entry\]\.visualId/,
+        /Deck\.assets\.visuals\[entry\]\.documentId/,
+        /Deck\.assets\.visuals\[entry\]\.alt/,
+        /Deck\.assets\.files\[entry\]\.filename/,
+        /Deck\.assets\.files\[entry\]\.mimeType/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -2050,7 +2092,13 @@ describe("safeParseDeck", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.ok(result.errors.some((error) => error.includes("refresh.state")));
-      assert.ok(result.errors.some((error) => /mystery/.test(error)));
+      assert.ok(
+        result.errors.some((error) =>
+          /unsupported_property: slides\[0\]\.children\[0\]\.source:/.test(
+            error,
+          ),
+        ),
+      );
     }
   });
 
@@ -2119,7 +2167,7 @@ describe("safeParseDeck", () => {
         /slides\[0\]\.children\[0\]\.accessibility\.alt must be a string/,
         /slides\[0\]\.children\[0\]\.accessibility\.decorative must be a boolean/,
         /slides\[0\]\.children\[0\]\.accessibility\.readingOrder must be a finite number/,
-        /slides\[0\]\.children\[0\]\.accessibility\.mystery is not a known accessibility field/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.accessibility:/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -2160,7 +2208,7 @@ describe("safeParseDeck", () => {
         /slides\[0\]\.accessibility\.alt must be a string/,
         /slides\[0\]\.accessibility\.decorative must be a boolean/,
         /slides\[0\]\.accessibility\.readingOrder must be a finite number/,
-        /slides\[0\]\.accessibility\.mystery is not a known accessibility field/,
+        /unsupported_property: slides\[0\]\.accessibility:/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),
@@ -2276,27 +2324,27 @@ describe("safeParseDeck", () => {
       for (const pattern of [
         /Deck\.canvas must be an object/,
         /Deck\.assets\.images/,
-        /Deck\.chrome\.unexpected/,
+        /unsupported_property: Deck\.chrome:/,
         /Deck\.chrome\.logo must be an object/,
         /Deck\.chrome\.safeArea\.insets must be an object/,
         /props\.decoration/,
         /props\.chrome/,
-        /deckChrome\.sidebar/,
+        /unsupported_property: slides\[0\]\.props\.deckChrome:/,
         /deckChrome\.footer\.value\.footer\.text/,
         /role is not a known semantic role/,
         /layout\.frame must be an object/,
         /layout\.zIndex/,
         /layout\.rotation/,
         /layout\.anchor/,
-        /constraints\.extra/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.layout\.constraints:/,
         /constraints\.minW/,
         /constraints\.preserveAspectRatio/,
         /source\.documentId/,
         /source\.blockKind/,
         /source\.unlinked/,
-        /source\.display\.unknown/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.source\.display:/,
         /source\.display\.documentTitle/,
-        /source\.refresh\.mystery/,
+        /unsupported_property: slides\[0\]\.children\[0\]\.source\.refresh:/,
         /source\.refresh\.state/,
         /source\.refresh\.checkedAt/,
         /source\.extra/,
@@ -2307,7 +2355,7 @@ describe("safeParseDeck", () => {
         /must have exactly 2 cells/,
         /content\.from must be an object/,
         /content\.to must be an object/,
-        /content\.text is not a known shape content field/,
+        /unsupported_property: slides\[0\]\.children\[3\]\.content:/,
       ]) {
         assert.ok(
           result.errors.some((error) => pattern.test(error)),

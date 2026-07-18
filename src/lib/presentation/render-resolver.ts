@@ -6,7 +6,8 @@
  *
  * Rules:
  * - Hidden nodes are excluded.
- * - User nodes are ordered by ascending zIndex with stable tree-order ties.
+ * - User siblings render by ascending `layout.zIndex`, with source order as the
+ *   stable tie-breaker. Groups keep their descendants in the parent context.
  * - Theme decorations are injected into `ResolvedSlideRenderTree.decorations`.
  * - Decorations disabled in `DeckThemeBinding.overrides.disabledDecorations`
  *   are omitted.

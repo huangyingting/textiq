@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-07-10"
+last_updated: "2026-07-18"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -192,15 +192,14 @@ export DB_PROVIDER=sqlite DATABASE_URL="file:./prisma/dev.db" AUTH_SECRET=ci-pla
 npm run db:reset        # or db:push
 npm run db:seed:e2e     # writes e2e/.e2e-fixture.json + storage/slide-assets/…
 
-# 2. Start the app, then run the profile suite (sets E2E_PROFILE=1).
-npm run dev &
-npm run test:e2e:profile
+# 2. Run the profile suite; the runner starts the app on the canonical origin.
+E2E_PROFILE=1 E2E_BASE_URL=https://localhost:4000 npm run test:e2e:profile
 ```
 
 For fresh checkouts or CI parity, prefer the self-contained profile runner:
 
 ```bash
-npm run test:e2e:profile:self-contained
+E2E_PROFILE=1 E2E_BASE_URL=https://localhost:4000 npm run test:e2e:profile:self-contained
 ```
 
 Key properties:
@@ -216,10 +215,21 @@ Key properties:
   fails the workflow on any required-profile failure.
 - Seeded owner/viewer emails and passwords are fixed test credentials (see
   `e2e/helpers/profile.ts` / the emitted `e2e/.e2e-fixture.json`).
+- The profile credential harness is fail-stop. Chromium pins the per-run HTTPS/
+  WSS proxy SPKI, Node helpers trust the same certificate, and the anonymous
+  private-key descriptor is inherited only by the dedicated proxy process, not
+  Playwright or its descendants, and never enters files, env values, argv, or
+  logs. Request
+  capabilities bind method/origin/Host/path/query/body hash/TLS channel/time/
+  nonce and are atomically one-use. The proxy proves the accepted app socket's
+  endpoint and process ownership before writing upstream; hostile takeover tests
+  require zero credential bytes. Upstream redirects are returned only after
+  singular internal-app `Location` values are rewritten to the pinned public
+  HTTPS origin.
 
 | Spec (Epic #517)                                     | Covers                                                                                                                                        |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/import/import-roundtrip.spec.ts`                | #519 Markdown import → editor render → edit/save → reload persistence; unsupported-type error                                                 |
+| `e2e/import/import-roundtrip.spec.ts`                | #519 Markdown + deterministic DOCX import → editor render → reload persistence; workspace-role enforcement; unsupported-type error            |
 | `e2e/presentation/present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                                                     |
 | `e2e/presentation/slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                                                |
 | `e2e/presentation/slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout rendering (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open); pixel snapshots opt-in |
@@ -236,15 +246,15 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Document flows
 
-| #   | Flow                              | Owner           | Notes                                                                                                                            |
-| --- | --------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                             |
-| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                |
-| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                        |
-| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                |
-| D-5 | Document import (markdown, .docx) | **M** + **E2E** | Pure import helpers tested; Markdown round-trip in `e2e/import/import-roundtrip.spec.ts` (#519); DOCX UI round-trip still manual |
-| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                 |
-| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                  |
+| #   | Flow                              | Owner           | Notes                                                                                                                                |
+| --- | --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                                 |
+| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                    |
+| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                            |
+| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                    |
+| D-5 | Document import (markdown, .docx) | **A** + **E2E** | Markdown and generated-fixture DOCX round-trips gate required deterministic CI in `e2e/import/import-roundtrip.spec.ts` (#519/#1734) |
+| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                     |
+| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                      |
 
 ### Slide / deck flows
 
@@ -363,6 +373,6 @@ Before each foundation release wave:
 | #495          | API surface governance — `docs/security/api-route-security-matrix.md`, `src/lib/api/errors.ts`, `src/lib/diagnostics/api-abuse.ts`                                                                                                                                        |
 | #493          | Persisted-schema gates — `src/lib/schema-audit/audit.ts`, `docs/operations/schema-repair-runbook.md`                                                                                                                                                                      |
 | #517          | Release-gate E2E profile — `prisma/seed-e2e.ts`, `e2e/helpers/profile.ts`, `e2e/{import-roundtrip,present-export,slide-asset-upload,slides-layout-screenshots}.spec.ts`, [slide canvas keyboard accessibility decision](../system/slide-canvas-keyboard-accessibility.md) |
-| #1449         | Deterministic presentation layout screenshot gate — `e2e/presentation/slides-layout-screenshots.spec.ts`, `playwright.config.ts`, [E2E README](../../e2e/README.md)                                                                                                       |
+| #1449         | Deterministic presentation layout screenshot gate — `e2e/presentation/slides-layout-screenshots.spec.ts`, `playwright.config.mts`, [E2E README](../../e2e/README.md)                                                                                                      |
 | #1390         | Deck release-gate slide blocker ownership reconciliation — this runbook's S-1/S-2/S-3 rows                                                                                                                                                                                |
 | #1004         | Documentation, ADR, and source-driven verification — [runtime config](runtime-config.md), [API route matrix](../security/api-route-security-matrix.md), [ADR index](../system/architecture-decisions.md), `npm run docs:check`                                            |

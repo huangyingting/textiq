@@ -1,11 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { X } from "lucide-react";
 
 import { IconButton } from "@/components/ui";
 import { Dialog } from "@/components/ui/dialog";
 import { canvasShortcutHelp } from "@/lib/presentation/canvas-shortcut-help";
+
+export function restoreKeyboardShortcutHelpFocus(
+  returnFocusTarget: HTMLElement | null,
+  fallbackFocusTarget: HTMLElement | null,
+): void {
+  const target = returnFocusTarget?.isConnected
+    ? returnFocusTarget
+    : fallbackFocusTarget?.isConnected
+      ? fallbackFocusTarget
+      : null;
+  target?.focus();
+}
 
 /**
  * In-product keyboard shortcut help overlay for the slide editor canvas (#535).
@@ -18,12 +30,30 @@ export function KeyboardShortcutHelpDialog({
   open,
   isMac,
   onClose,
+  returnFocusRef,
+  fallbackFocusRef,
 }: {
   open: boolean;
   isMac: boolean;
   onClose: () => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  fallbackFocusRef: RefObject<HTMLElement | null>;
 }) {
   const groups = useMemo(() => canvasShortcutHelp({ isMac }), [isMac]);
+  const wasOpenRef = useRef(open);
+
+  useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!wasOpen || open) return;
+
+    restoreKeyboardShortcutHelpFocus(
+      returnFocusRef.current,
+      fallbackFocusRef.current,
+    );
+    returnFocusRef.current = null;
+  }, [fallbackFocusRef, open, returnFocusRef]);
+
   return (
     <Dialog
       open={open}

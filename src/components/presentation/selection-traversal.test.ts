@@ -114,6 +114,23 @@ test("nodesInReadingOrder keeps layouted visible nodes and sorts by reading orde
   );
 });
 
+test("nodesInReadingOrder prunes hidden group subtrees and restores them when unhidden", () => {
+  const group = groupNode(
+    "group",
+    [textNode("child", { x: 10, y: 10, w: 10, h: 10 })],
+    { x: 0, y: 0, w: 30, h: 30 },
+  );
+
+  assert.deepEqual(
+    nodesInReadingOrder([{ ...group, hidden: true }]).map((node) => node.id),
+    [],
+  );
+  assert.deepEqual(
+    nodesInReadingOrder([{ ...group, hidden: false }]).map((node) => node.id),
+    ["group", "child"],
+  );
+});
+
 test("adjacentNodeId wraps based on reading-order traversal", () => {
   const nodes: SlideChildNode[] = [
     textNode("n1", { x: 0, y: 0, w: 10, h: 10 }),

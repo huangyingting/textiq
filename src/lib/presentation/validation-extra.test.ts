@@ -6,6 +6,7 @@ import {
   buildDeck,
   buildLayoutBox,
   buildSlide,
+  buildTextNode,
 } from "@/test/builders/presentation-deck";
 import type { SlideChildNode } from "./schema";
 
@@ -137,7 +138,6 @@ test("safeParseDeck reports deeply malformed current presentation authoring cont
       id: "bad-shape",
       type: "shape",
       layout: buildLayoutBox(),
-      style: { ref: "surface.card" },
       content: { shape: "path", path: "", extra: true } as never,
     },
     {
@@ -180,7 +180,7 @@ test("safeParseDeck reports deeply malformed current presentation authoring cont
       type: "group",
       component: "bad" as never,
       layout: buildLayoutBox(),
-      style: { ref: "surface.card" },
+      style: { ref: "surface.card" } as never,
       children: [],
     },
     {
@@ -254,8 +254,8 @@ test("safeParseDeck reports deeply malformed current presentation authoring cont
       /children\[4\].*rows\[1\]/,
       /children\[5\].*assetId or visualId/,
       /children\[6\].*children/,
-      /unknown.*not a known node type/,
-      /Deck\.assets\.images\.img\.id/,
+      /children\[7\]\.type is not a known node type/,
+      /Deck\.assets\.images\[entry\]\.id/,
     ]) {
       assert.ok(
         result.errors.some((error) => pattern.test(error)),
@@ -301,7 +301,9 @@ test("validateDeckChromeConfig reports malformed chrome slot options", () => {
   );
 
   assert.ok(errors.length > 20);
-  assert.ok(errors.some((error) => /Deck\.chrome\.unknown/.test(error)));
+  assert.ok(
+    errors.some((error) => /unsupported_property: Deck\.chrome:/.test(error)),
+  );
   assert.ok(
     errors.some((error) => /Deck\.chrome\.logo\.placement/.test(error)),
   );
@@ -311,15 +313,77 @@ test("validateDeckChromeConfig reports malformed chrome slot options", () => {
 });
 
 test("safeParseDeck catches unexpected validator exceptions", () => {
+  const privateText = "PRIVATE VALIDATOR EXCEPTION";
   const throwing = new Proxy(
     {},
     {
       get() {
-        throw new Error("boom");
+        throw new Error(privateText);
       },
     },
   );
   const result = safeParseDeck(throwing);
   assert.equal(result.success, false);
-  assert.ok(!result.success && result.errors.includes("boom"));
+  assert.ok(
+    !result.success &&
+      result.errors.includes(
+        "validation_internal_error: Deck: validation could not be completed",
+      ),
+  );
+  assert.ok(!JSON.stringify(result).includes(privateText));
+});
+
+test("safeParseDeck diagnostics never serialize private keys, values, ids, urls, or nested paths", () => {
+  const privateText =
+    "PRIVATE PARAGRAPH https://private.example/customer/account-label";
+  const privateId = "private-id-never-log";
+  const deck = buildDeck([
+    buildSlide("content", [
+      {
+        ...buildTextNode({ id: privateId }),
+        type: privateText as never,
+        [privateText]: privateText,
+      } as never,
+      buildTextNode({ id: privateId }),
+    ]),
+  ]) as unknown as Record<string, unknown>;
+  deck[privateText] = privateText;
+  deck.metadata = {
+    [privateText]: privateText,
+    extra: {
+      [privateText]: {
+        nested: Number.NaN,
+      },
+    },
+  };
+  deck.assets = {
+    images: {
+      [privateText]: {
+        id: "different",
+        src: `javascript:${privateText}`,
+        [privateText]: privateText,
+      },
+    },
+  };
+
+  const result = safeParseDeck(deck);
+  assert.equal(result.success, false);
+  assert.ok(!result.success);
+  if (result.success) return;
+
+  const serialized = JSON.stringify(result);
+  assert.ok(!serialized.includes(privateText));
+  assert.ok(!serialized.includes(privateId));
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("unsupported_property: Deck: unsupported property count="),
+    ),
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("Deck.assets.images[entry].src"),
+    ),
+  );
+  assert.ok(result.errors.some((error) => error.startsWith("duplicate_id:")));
+  assert.ok(result.errors.some((error) => error.startsWith("invalid_type:")));
 });

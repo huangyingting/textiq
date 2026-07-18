@@ -10,7 +10,6 @@ import { createDefaultTemplateRegistry } from "@/lib/presentation/theme-packages
 import {
   buildLayoutBox,
   buildSlide,
-  buildStyleBinding,
   buildTableNode,
   buildTextNode,
   buildVisualNode,
@@ -25,7 +24,6 @@ function buildGroupNode(
     type: "group",
     component: "custom",
     layout: buildLayoutBox(),
-    style: buildStyleBinding("surface.callout"),
     children,
   };
 }

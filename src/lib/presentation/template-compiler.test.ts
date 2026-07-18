@@ -441,7 +441,6 @@ describe("compileSlide", () => {
                 component: "custom",
                 role: "card",
                 layout,
-                style: { ref: "surface.card" },
               },
               {
                 type: "video" as never,
@@ -523,6 +522,7 @@ describe("compileSlide", () => {
     }
     assert.equal(group?.type, "group");
     if (group?.type === "group") {
+      assert.equal("style" in group, false);
       assert.equal(group.children[0]?.type, "shape");
     }
     assert.ok(

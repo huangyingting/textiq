@@ -26,6 +26,7 @@ import {
   lowerSlideBackground,
   lowerThemeDecorationOperations,
 } from "./export-lowerers/theme-background-chrome-lowerer";
+import { orderSiblingsByVisualOrder } from "./render-order";
 export type {
   ExportBackgroundOperation,
   ExportConnectorOperation,
@@ -55,8 +56,9 @@ function buildSlideExportSpec(
   // Background chrome (e.g. watermark) sits above decorations and below user nodes.
   operations.push(...lowerBackgroundChromeOperations(slide, dc));
 
-  // User nodes in resolved order (already sorted by zIndex in render resolver)
-  for (const node of slide.nodes) {
+  // User roots form slide-level stacking contexts; group descendants are
+  // lowered recursively in their own sibling order.
+  for (const node of orderSiblingsByVisualOrder(slide.nodes)) {
     operations.push(...lowerNodeToExportOperations(node, dc));
   }
 

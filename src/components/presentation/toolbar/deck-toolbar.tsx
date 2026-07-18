@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, type Ref } from "react";
 
 import { Tooltip } from "@/components/ui/tooltip";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
@@ -66,6 +66,7 @@ export function DeckToolbarButton({
   hasPopup,
   expanded,
   controls,
+  buttonRef,
 }: {
   label: string;
   tooltip?: ReactNode;
@@ -77,10 +78,12 @@ export function DeckToolbarButton({
   hasPopup?: "menu" | "dialog";
   expanded?: boolean;
   controls?: string;
+  buttonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <Tooltip label={tooltip} side="bottom">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={label}
         aria-pressed={active === undefined ? undefined : active}
@@ -115,6 +118,7 @@ export function DeckToolbarIconButton({
   hasPopup,
   expanded,
   controls,
+  buttonRef,
 }: {
   label: string;
   tooltip?: ReactNode;
@@ -126,10 +130,12 @@ export function DeckToolbarIconButton({
   hasPopup?: "menu" | "dialog";
   expanded?: boolean;
   controls?: string;
+  buttonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <Tooltip label={tooltip} side="bottom">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={label}
         aria-pressed={active === undefined ? undefined : active}

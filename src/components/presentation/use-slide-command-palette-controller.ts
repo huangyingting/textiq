@@ -4,6 +4,7 @@ import type { ActionResult } from "@/lib/action-result";
 import {
   findCurrentObjectCommandDescriptor,
   resolveSlideCommandPaletteCommands,
+  type CurrentObjectReorderMode,
   type Deck,
   type SlideChildNode,
   type SlideCommandPaletteCommand,
@@ -71,6 +72,7 @@ export interface SlideCommandPaletteControllerArgs {
   handleInsertConnector: () => void;
   handleInsertTable: () => void;
   handleAlignSelection: (mode: SelectionAlignMode) => void;
+  handleReorderSelection: (mode: CurrentObjectReorderMode) => void;
   handleDistributeSelection: (mode: SelectionDistributeMode) => void;
   handleMatchSize: (mode: SelectionMatchSizeMode) => void;
   handleGroupSelection: () => void;
@@ -162,6 +164,12 @@ export function useSlideCommandPaletteController(
     if (commandId.startsWith("selection.align-")) {
       args.handleAlignSelection(
         commandId.replace("selection.align-", "") as SelectionAlignMode,
+      );
+      return;
+    }
+    if (commandId.startsWith("selection.reorder-")) {
+      args.handleReorderSelection(
+        commandId.replace("selection.reorder-", "") as CurrentObjectReorderMode,
       );
       return;
     }

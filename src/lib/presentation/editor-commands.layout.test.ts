@@ -63,7 +63,6 @@ describe("moveNodesBy", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "move-group",
-      { ref: "surface.card" },
     );
     const groupBeforeMove = findNode(grouped.slides[0].children, "move-group");
     assert.equal(groupBeforeMove?.type, "group");
@@ -107,7 +106,6 @@ describe("moveNodesBy", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "edit-group",
-      { ref: "surface.card" },
     );
     const moved = moveNodesBy(grouped, slide.id, ["edit-group"], {
       x: 2,
@@ -139,7 +137,6 @@ describe("moveNodesBy", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "resize-group",
-      { ref: "surface.card" },
     );
     const groupBeforeResize = findNode(
       grouped.slides[0].children,
@@ -178,7 +175,6 @@ describe("moveNodesBy", () => {
       slide.id,
       slide.children.map((node) => node.id),
       "rotate-group",
-      { ref: "surface.card" },
     );
     const groupBeforeRotate = findNode(
       grouped.slides[0].children,
@@ -219,7 +215,6 @@ describe("moveNodesBy", () => {
       type: "group",
       component: "custom",
       layout: { frame: { x: 20, y: 20, w: 40, h: 40 }, zIndex: 2 },
-      style: { ref: "surface.card" },
       children: [child],
     };
     const withGroup = {

@@ -2,6 +2,7 @@ import { documentCapabilities } from "@/lib/auth/document-permissions";
 import type { CommentThread } from "@/lib/comments";
 import type { DocumentTag } from "@/lib/document/tags";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
+import type { ThemePackageCatalogEntry } from "@/lib/presentation/theme-package-registry";
 
 export interface DocumentEditorViewModel {
   documentId: string;
@@ -26,7 +27,8 @@ export interface DocumentEditorViewModel {
   initialComments: CommentThread[];
   initialTags: DocumentTag[];
   allTags: DocumentTag[];
-  customThemePackages: ThemePackageV1[];
+  activeCustomThemePackage?: ThemePackageV1;
+  customThemeCatalogEntries: ThemePackageCatalogEntry[];
 }
 
 export interface DocumentEditorRow {
@@ -60,14 +62,16 @@ export function buildDocumentEditorViewModel({
   userName,
   initialComments,
   allTags,
-  customThemePackages = [],
+  activeCustomThemePackage,
+  customThemeCatalogEntries = [],
 }: {
   document: DocumentEditorRow;
   userId: string;
   userName: string;
   initialComments: CommentThread[];
   allTags: DocumentTag[];
-  customThemePackages?: ThemePackageV1[];
+  activeCustomThemePackage?: ThemePackageV1;
+  customThemeCatalogEntries?: ThemePackageCatalogEntry[];
 }): DocumentEditorViewModel {
   const { canEdit, canManage } = documentCapabilities(document, userId);
 
@@ -104,6 +108,7 @@ export function buildDocumentEditorViewModel({
     initialComments,
     initialTags: document.tags,
     allTags,
-    customThemePackages,
+    ...(activeCustomThemePackage ? { activeCustomThemePackage } : {}),
+    customThemeCatalogEntries,
   };
 }

@@ -96,7 +96,7 @@ export type PublicRenderPresentationRow = ShareAccessFields & {
   contentJson: unknown;
   deckJson: unknown;
   owner: PublicRenderOwner;
-  customThemePackages?: ThemePackageV1[];
+  activeCustomThemePackage?: ThemePackageV1;
 };
 
 export interface PublicDocumentModel {
@@ -119,6 +119,9 @@ export interface PublicRenderSource {
   findPresentationByShareId(
     shareId: string,
   ): Promise<PublicRenderPresentationRow | null>;
+  loadActiveCustomThemeForAuthorizedPresentation?(
+    document: PublicRenderPresentationRow,
+  ): Promise<ThemePackageV1 | undefined>;
 }
 
 /* node:coverage disable */
@@ -366,12 +369,18 @@ export async function resolvePublicRenderWithSource(
     };
   }
 
+  const activeCustomThemePackage =
+    await source.loadActiveCustomThemeForAuthorizedPresentation?.(document);
+  const authorizedDocument = activeCustomThemePackage
+    ? { ...document, activeCustomThemePackage }
+    : document;
+
   return {
     ok: true,
     mode: input.mode,
     projection: "presentation",
     shareId,
-    presentation: buildPublicPresentationModel(document, {
+    presentation: buildPublicPresentationModel(authorizedDocument, {
       shareId,
       mode: input.mode === "embed" ? "embed" : "present",
     }),

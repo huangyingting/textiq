@@ -53,7 +53,6 @@ function groupNode(
     id,
     type: "group",
     component: "custom",
-    style: { ref: "surface.card" },
     layout: buildLayoutBox({ frame: { x, y: x, w: 10, h: 10 }, zIndex: x }),
     children,
   };
@@ -319,9 +318,6 @@ describe("presentation final library coverage", () => {
       slideId,
       ["parent", "child"],
       "wrapper",
-      {
-        ref: "surface.card",
-      },
     );
     const wrapper = findNode(grouped.slides[0].children, "wrapper");
     assert.equal(wrapper?.type, "group");

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import bcrypt from "bcryptjs";
+import clarityPackageJson from "../prototypes/slide-themes/packages/clarity.package.json";
 
 import { Prisma } from "../src/generated/prisma/client";
 import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
@@ -13,6 +14,7 @@ import {
 } from "../src/lib/document/document-write-port";
 import { openDeckFromJson } from "../src/lib/presentation/open-deck";
 import { safeParseDeck } from "../src/lib/presentation/validation";
+import { validateThemePackage } from "../src/lib/presentation/theme-package-schema";
 import { deriveStorageKey } from "../src/lib/slides/asset-storage";
 import {
   VISUAL_KIND_TO_PRISMA,
@@ -24,18 +26,39 @@ import {
   buildE2EProfileDeck,
   buildE2EProfileDeckFixture,
   buildE2EProfileFixtureDescriptor,
+  buildE2EMultiSelectArrangeDeck,
+  buildE2EGroupLayerOrderDeck,
+  buildE2EOverlapSelectionDeck,
+  buildE2EGeneratedPresentationContentJson,
+  buildE2EPrecisionGuidesDeck,
+  buildE2ETouchControlsDeck,
   buildE2EProfileVisual,
   fixtureAssetChecksum,
   fixturePngBuffer,
 } from "../src/test/builders/e2e-profile";
+import {
+  configuredPresentationFixtureSlots,
+  E2E_CONFLICT_OWNER_THEME_FIXTURE,
+  E2E_CUSTOM_THEME_FIXTURE,
+  E2E_VERSIONED_THEME_FIXTURE,
+  PRESENTATION_TEST_FIXTURES,
+  presentationTestFixture,
+  type PresentationTestFixtureName,
+} from "../e2e/helpers/presentation-fixtures";
 import { createScriptPrismaClient } from "./script-prisma-client";
+import {
+  cleanupStaleE2EPresentationFixtures,
+  documentIdFromE2EPresentationAssetStorageKey,
+  E2E_PRESENTATION_ASSET_ORIGINAL_NAME,
+  removeE2EPresentationAssetDirectory,
+} from "./seed-e2e-cleanup";
 
 /**
  * Deterministic E2E seed (Epic #517, issue #518).
  *
  * Creates fixed owner/editor/viewer users (passwords hashed via the same bcrypt
  * path the app uses), a workspace granting editor mutating access and viewer
- * read-only access, and a single document with:
+ * read-only access, and a canonical document with:
  *   - an intro paragraph + embedded VisualNode in `contentJson`,
  *   - a persisted `deckJson` (current schema version) whose first slide carries
  *     known title/body text and an ImageElement backed by a slide Asset,
@@ -43,9 +66,9 @@ import { createScriptPrismaClient } from "./script-prisma-client";
  *   - one slide image `Asset` whose bytes are written to local storage so the
  *     protected `/api/slide-assets/…` route resolves real bytes.
  *
- * Every identifier is the constant from `e2e/helpers/profile.ts`, so the seed
- * and the Playwright specs share one source of truth. After a successful run it
- * emits `e2e/.e2e-fixture.json` describing the produced fixture.
+ * Mutating presentation checks receive dedicated document/room fixtures from
+ * `e2e/helpers/presentation-fixtures.ts`. After a successful run it emits
+ * `e2e/.e2e-fixture.json` describing the canonical fixture.
  *
  * Idempotent: safe to re-run (and after `prisma db push --force-reset`).
  */
@@ -112,6 +135,16 @@ async function main() {
       passwordHash: editorHash,
       emailVerified: now,
     },
+  });
+
+  await prisma.themePackageSnapshot.deleteMany({
+    where: {
+      ownerId: owner.id,
+      packageId: { contains: E2E_CUSTOM_THEME_FIXTURE.slug },
+    },
+  });
+  await prisma.brandKitDraft.deleteMany({
+    where: { ownerId: owner.id, slug: E2E_CUSTOM_THEME_FIXTURE.slug },
   });
 
   // -------------------------------------------------------------------------
@@ -320,8 +353,256 @@ async function main() {
   const deck = openedDeck.deck;
   await updateDocumentMetadata(prisma, {
     where: { id: F.documentId },
-    data: { deckJson: deck as unknown as Prisma.InputJsonValue },
+    data: {
+      deckJson: deck as unknown as Prisma.InputJsonValue,
+      deckRevisionToken: F.deckRevisionToken,
+    },
   });
+
+  const versionedThemePackages = [
+    {
+      ...clarityPackageJson,
+      id: E2E_VERSIONED_THEME_FIXTURE.packageId,
+      version: E2E_VERSIONED_THEME_FIXTURE.activeVersion,
+      name: E2E_VERSIONED_THEME_FIXTURE.activeName,
+    },
+    {
+      ...clarityPackageJson,
+      id: E2E_VERSIONED_THEME_FIXTURE.packageId,
+      version: E2E_VERSIONED_THEME_FIXTURE.latestVersion,
+      name: E2E_VERSIONED_THEME_FIXTURE.latestName,
+    },
+  ].map((candidate) => {
+    const validated = validateThemePackage(candidate);
+    if (!validated.valid) {
+      throw new Error(
+        `Versioned theme fixture failed validation: ${validated.diagnostics
+          .map((diagnostic) => diagnostic.message)
+          .join("; ")}`,
+      );
+    }
+    return validated.package;
+  });
+  for (const [index, themePackage] of versionedThemePackages.entries()) {
+    await prisma.themePackageSnapshot.upsert({
+      where: {
+        packageId_packageVersion: {
+          packageId: themePackage.id,
+          packageVersion: themePackage.version,
+        },
+      },
+      update: {
+        ownerId: owner.id,
+        workspaceId: F.workspaceId,
+        publishedById: owner.id,
+        packageJson: themePackage as unknown as Prisma.InputJsonValue,
+        createdAt: new Date(
+          index === 0 ? "2026-01-01T00:00:00.000Z" : "2026-02-01T00:00:00.000Z",
+        ),
+      },
+      create: {
+        packageId: themePackage.id,
+        packageVersion: themePackage.version,
+        ownerId: owner.id,
+        workspaceId: F.workspaceId,
+        publishedById: owner.id,
+        packageJson: themePackage as unknown as Prisma.InputJsonValue,
+        createdAt: new Date(
+          index === 0 ? "2026-01-01T00:00:00.000Z" : "2026-02-01T00:00:00.000Z",
+        ),
+      },
+    });
+  }
+
+  const conflictThemeValidation = validateThemePackage({
+    ...clarityPackageJson,
+    id: E2E_CONFLICT_OWNER_THEME_FIXTURE.packageId,
+    version: E2E_CONFLICT_OWNER_THEME_FIXTURE.version,
+    name: E2E_CONFLICT_OWNER_THEME_FIXTURE.name,
+    tokens: {
+      ...clarityPackageJson.tokens,
+      colors: {
+        ...clarityPackageJson.tokens.colors,
+        canvas: {
+          ...clarityPackageJson.tokens.colors.canvas,
+          fill: E2E_CONFLICT_OWNER_THEME_FIXTURE.canvasFill,
+        },
+      },
+    },
+  });
+  if (!conflictThemeValidation.valid) {
+    throw new Error(
+      `Conflict theme fixture failed validation: ${conflictThemeValidation.diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join("; ")}`,
+    );
+  }
+  await prisma.themePackageSnapshot.upsert({
+    where: {
+      packageId_packageVersion: {
+        packageId: conflictThemeValidation.package.id,
+        packageVersion: conflictThemeValidation.package.version,
+      },
+    },
+    update: {
+      ownerId: owner.id,
+      workspaceId: null,
+      publishedById: owner.id,
+      packageJson:
+        conflictThemeValidation.package as unknown as Prisma.InputJsonValue,
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    create: {
+      packageId: conflictThemeValidation.package.id,
+      packageVersion: conflictThemeValidation.package.version,
+      ownerId: owner.id,
+      workspaceId: null,
+      publishedById: owner.id,
+      packageJson:
+        conflictThemeValidation.package as unknown as Prisma.InputJsonValue,
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  });
+
+  const presentationFixtureSlots = configuredPresentationFixtureSlots();
+  const presentationFixtureNames = Object.keys(
+    PRESENTATION_TEST_FIXTURES,
+  ) as PresentationTestFixtureName[];
+  const presentationFixtures = presentationFixtureNames.flatMap((fixtureName) =>
+    presentationFixtureSlots.map((slot) =>
+      presentationTestFixture(fixtureName, slot),
+    ),
+  );
+  const activePresentationDocumentIds = presentationFixtures.map(
+    (fixture) => fixture.documentId,
+  );
+  const staleFixtureCleanup = await cleanupStaleE2EPresentationFixtures(
+    prisma,
+    {
+      workspaceId: F.workspaceId,
+      ownerId: owner.id,
+      activeDocumentIds: activePresentationDocumentIds,
+    },
+  );
+  const assetRoot = path.resolve(process.cwd(), "storage", "slide-assets");
+  const staleAssetDirectoryIds = new Set(staleFixtureCleanup.staleDocumentIds);
+  for (const storageKey of staleFixtureCleanup.deletedAssetStorageKeys) {
+    const documentId = documentIdFromE2EPresentationAssetStorageKey(storageKey);
+    if (!documentId) {
+      console.warn(
+        `Skipped unsafe E2E asset storage key cleanup: ${storageKey}`,
+      );
+      continue;
+    }
+    staleAssetDirectoryIds.add(documentId);
+  }
+  await Promise.all(
+    [...staleAssetDirectoryIds].map((documentId) =>
+      removeE2EPresentationAssetDirectory(assetRoot, documentId),
+    ),
+  );
+
+  for (const fixture of presentationFixtures) {
+    const isolatedStorageKey = deriveStorageKey(
+      fixture.documentId,
+      checksum,
+      "image/png",
+    );
+    await writeAssetBytes(isolatedStorageKey, pngBytes);
+
+    await upsertDocumentWithCanonicalContent(prisma, {
+      where: { id: fixture.documentId },
+      contentSnapshot:
+        fixture.deckKind === "generated"
+          ? buildE2EGeneratedPresentationContentJson()
+          : contentJson,
+      update: {
+        title: `Isolated presentation fixture: ${fixture.slug}`,
+        ownerId: owner.id,
+        workspaceId: F.workspaceId,
+        shareId: fixture.shareId,
+        slug: fixture.slug,
+        isShared: true,
+        shareEmbedEnabled: true,
+        sharePresentEnabled: true,
+        shareExpiresAt: null,
+        deletedAt: null,
+        tags: { set: [{ id: dashboardTag.id }] },
+      },
+      create: {
+        id: fixture.documentId,
+        title: `Isolated presentation fixture: ${fixture.slug}`,
+        ownerId: owner.id,
+        workspaceId: F.workspaceId,
+        shareId: fixture.shareId,
+        slug: fixture.slug,
+        isShared: true,
+        shareEmbedEnabled: true,
+        sharePresentEnabled: true,
+        tags: { connect: { id: dashboardTag.id } },
+      },
+    });
+
+    const isolatedAsset = await prisma.asset.upsert({
+      where: { storageKey: isolatedStorageKey },
+      update: {
+        documentId: fixture.documentId,
+        workspaceId: F.workspaceId,
+        mimeType: "image/png",
+        byteSize: pngBytes.byteLength,
+        checksum,
+        originalName: E2E_PRESENTATION_ASSET_ORIGINAL_NAME,
+        deletedAt: null,
+      },
+      create: {
+        documentId: fixture.documentId,
+        workspaceId: F.workspaceId,
+        mimeType: "image/png",
+        byteSize: pngBytes.byteLength,
+        checksum,
+        storageKey: isolatedStorageKey,
+        originalName: E2E_PRESENTATION_ASSET_ORIGINAL_NAME,
+      },
+      select: { id: true },
+    });
+    const isolatedAssetUrl = `/api/slide-assets/${isolatedStorageKey}`;
+    const isolatedDeck =
+      fixture.deckKind === "arrange"
+        ? buildE2EMultiSelectArrangeDeck()
+        : fixture.deckKind === "guides"
+          ? buildE2EPrecisionGuidesDeck()
+          : fixture.deckKind === "touch"
+            ? buildE2ETouchControlsDeck()
+            : fixture.deckKind === "overlap"
+              ? buildE2EOverlapSelectionDeck()
+              : fixture.deckKind === "group"
+                ? buildE2EGroupLayerOrderDeck()
+                : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
+    if (fixture.deckKind === "themeVersions") {
+      isolatedDeck.theme = {
+        ...isolatedDeck.theme,
+        packageId: E2E_VERSIONED_THEME_FIXTURE.packageId,
+        packageVersion: E2E_VERSIONED_THEME_FIXTURE.activeVersion,
+      };
+    }
+    const parsedIsolatedDeck = safeParseDeck(isolatedDeck);
+    if (!parsedIsolatedDeck.success) {
+      throw new Error(
+        `Isolated fixture deck failed validation: ${parsedIsolatedDeck.errors.join("; ")}`,
+      );
+    }
+    await updateDocumentMetadata(prisma, {
+      where: { id: fixture.documentId },
+      data: {
+        deckJson:
+          fixture.deckKind === "generated"
+            ? Prisma.DbNull
+            : (parsedIsolatedDeck.data as unknown as Prisma.InputJsonValue),
+        deckRevisionToken:
+          fixture.deckKind === "generated" ? null : fixture.deckRevisionToken,
+      },
+    });
+  }
 
   // -------------------------------------------------------------------------
   // 5b. Dedicated presentation layout screenshot document.
@@ -343,6 +624,7 @@ async function main() {
     update: {
       title: F.layoutDocumentTitle,
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
+      deckRevisionToken: F.layoutDeckRevisionToken,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: null,
@@ -358,6 +640,7 @@ async function main() {
       id: F.layoutDocumentId,
       title: F.layoutDocumentTitle,
       deckJson: parsedLayoutDeck.data as unknown as Prisma.InputJsonValue,
+      deckRevisionToken: F.layoutDeckRevisionToken,
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       shareId: null,

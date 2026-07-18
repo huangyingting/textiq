@@ -231,7 +231,6 @@ describe("safeParseDeck coverage branches", () => {
       type: "group",
       component: "cardGrid",
       layout: buildLayoutBox({ frame: { x: 3, y: 3, w: 90, h: 50 } }),
-      style: { ref: "surface.card" },
       children: [textNode, imageNode],
     };
     const slide = buildSlide(
@@ -629,20 +628,17 @@ describe("safeParseDeck coverage branches", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       assertHasError(result.errors, /Deck\.canvas\.format/);
-      assertHasError(result.errors, /Deck\.assets\.images\.img-bad\.src/);
+      assertHasError(result.errors, /Deck\.assets\.images\[entry\]\.src/);
       assertHasError(result.errors, /protocol-relative URL/);
       assertHasError(result.errors, /must not contain control characters/);
-      assertHasError(
-        result.errors,
-        /Deck\.theme\.overrides\.styles\.not\.registered/,
-      );
-      assertHasError(result.errors, /Deck\.metadata\.extra\.badNumber/);
+      assertHasError(result.errors, /Deck\.theme\.overrides\.styles\[style\]/);
+      assertHasError(result.errors, /Deck\.metadata\.extra\[entry\]/);
       assertHasError(result.errors, /runs text must concatenate/);
       assertHasError(result.errors, /content\.shape must be one of/);
       assertHasError(result.errors, /content\.path is required/);
       assertHasError(result.errors, /content must provide assetId or visualId/);
       assertHasError(result.errors, /children must be a non-empty array/);
-      assertHasError(result.errors, /type "video" is not a known node type/);
+      assertHasError(result.errors, /type is not a known node type/);
       assertHasError(result.errors, /props\.deckChrome\.footer\.value/);
     }
   });
@@ -657,7 +653,7 @@ describe("safeParseDeck coverage branches", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       assert.deepEqual(result.errors, [
-        "Deck.schemaVersion 6 is not presentation (expected 7)",
+        "invalid_version: Deck.schemaVersion is not presentation (expected 7)",
       ]);
     }
   });
@@ -667,7 +663,9 @@ describe("safeParseDeck coverage branches", () => {
 
     assert.equal(result.success, false);
     if (!result.success) {
-      assert.deepEqual(result.errors, ["Deck must be an object"]);
+      assert.deepEqual(result.errors, [
+        "invalid_structure: Deck must be an object",
+      ]);
     }
   });
 });

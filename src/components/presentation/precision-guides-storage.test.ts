@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  customGuidesForSnapping,
   normalizePrecisionGuidePreferences,
   precisionGuidesStorageKey,
   readPrecisionGuidePreferences,
@@ -71,6 +72,29 @@ describe("precision guide preferences storage", () => {
       rulersVisible: false,
       guidesVisible: false,
       customGuides: [],
+    });
+
+    test("only exposes visible custom guides to snapping controllers", () => {
+      const customGuides = [{ axis: "x" as const, positionPct: 37 }];
+
+      assert.deepEqual(
+        customGuidesForSnapping({
+          gridVisible: false,
+          rulersVisible: false,
+          guidesVisible: false,
+          customGuides,
+        }),
+        [],
+      );
+      assert.equal(
+        customGuidesForSnapping({
+          gridVisible: false,
+          rulersVisible: false,
+          guidesVisible: true,
+          customGuides,
+        }),
+        customGuides,
+      );
     });
   });
 });

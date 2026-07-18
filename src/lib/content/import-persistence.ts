@@ -49,11 +49,13 @@ export const BLOCK_ID_REPAIR_TAG = "block-id-repair";
  *
  * Remote CRDT merges (`COLLABORATION_TAG`) and history replays / programmatic
  * historic replacements (`HISTORIC_TAG`) are skipped: only the client that made
- * a local edit persists it, and undo/redo/remote merges must not write. An
- * explicit import (`IMPORT_TAG`) is a user-initiated replacement that must
- * persist, so it overrides the skip. Version restores (`RESTORE_TAG`) are
- * skipped because the restore server action has already persisted the restored
- * state; the local editor update exists to refresh/sync the live room.
+ * a local edit persists it, and undo/redo/remote merges must not write. Lexical's
+ * `history-merge` tag is intentionally not skipped: it marks ordinary coalesced
+ * typing, not an undo/redo replay. An explicit import (`IMPORT_TAG`) is a
+ * user-initiated replacement that must persist, so it overrides the skip.
+ * Version restores (`RESTORE_TAG`) are skipped because the restore server action
+ * has already persisted the restored state; the local editor update exists to
+ * refresh/sync the live room.
  */
 export function shouldAutosaveUpdate(tags: ReadonlySet<string>): boolean {
   if (tags.has(IMPORT_TAG)) {

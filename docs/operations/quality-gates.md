@@ -158,7 +158,7 @@ Every `ref=` value goes through `validateBreadthMarkerRef`, which rejects
   resolve under `e2e/` if collapsed first,
 - a normalized path that does not fall under the repository's `e2e/` root,
 - an unsupported spec extension (only `.spec.ts` matches the real Playwright
-  convention enforced by `playwright.config.ts`'s `testMatch` and
+  convention enforced by `playwright.config.mts`'s `testMatch` and
   `scripts/test-subsystem.mjs`'s spec pattern), and finally
 - a dangling ref: `listExistingE2eSpecFiles` walks the real `e2e/` directory
   on disk (skipping `node_modules`, `test-results`, and other build

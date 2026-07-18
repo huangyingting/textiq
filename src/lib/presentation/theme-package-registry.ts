@@ -67,8 +67,19 @@ export type ThemePackageResolution = {
   diagnostics: PresentationDiagnostic[];
 };
 
+export type ThemePackageCatalogEntry = {
+  package: ThemePackageV1;
+  source: "built-in" | "custom";
+  createdAt: string | null;
+};
+
+export type ThemePackageSelection = {
+  packageId: string;
+  packageVersion: string;
+};
+
 export type ThemePackageResolverOptions = {
-  customPackages?: readonly ThemePackageV1[];
+  activePackages?: readonly ThemePackageV1[];
 };
 
 export function resolveThemePackageId(
@@ -88,6 +99,40 @@ export function listThemePackages(): readonly ThemePackageV1[] {
   return THEME_PACKAGE_LIST;
 }
 
+function compareCatalogEntries(
+  first: ThemePackageCatalogEntry,
+  second: ThemePackageCatalogEntry,
+): number {
+  if (first.createdAt !== second.createdAt) {
+    if (first.createdAt === null) return 1;
+    if (second.createdAt === null) return -1;
+    return second.createdAt.localeCompare(first.createdAt);
+  }
+  const idOrder = first.package.id.localeCompare(second.package.id);
+  if (idOrder !== 0) return idOrder;
+  return second.package.version.localeCompare(first.package.version);
+}
+
+export function listThemePackageCatalog(): readonly ThemePackageCatalogEntry[] {
+  return THEME_PACKAGE_LIST.map((themePackage) => ({
+    package: themePackage,
+    source: "built-in" as const,
+    createdAt: null,
+  })).sort(compareCatalogEntries);
+}
+
+export function mergeThemePackageCatalogEntries(
+  entries: readonly ThemePackageCatalogEntry[],
+): ThemePackageCatalogEntry[] {
+  const latestById = new Map<string, ThemePackageCatalogEntry>();
+  for (const entry of [...entries].sort(compareCatalogEntries)) {
+    if (!latestById.has(entry.package.id)) {
+      latestById.set(entry.package.id, entry);
+    }
+  }
+  return [...latestById.values()].sort(compareCatalogEntries);
+}
+
 export function resolveThemePackageForDeck(
   deck: Pick<Deck, "theme">,
   options: ThemePackageResolverOptions = {},
@@ -103,19 +148,25 @@ export function resolveThemePackageForDeck(
     };
   }
 
-  const customPackage = options.customPackages?.find(
-    (candidate) =>
-      candidate.id === requestedPackageId &&
-      (!deck.theme.packageVersion ||
-        candidate.version === deck.theme.packageVersion),
-  );
-  if (customPackage) {
-    return {
-      package: customPackage,
-      requestedPackageId,
-      fallback: false,
-      diagnostics: [],
-    };
+  const requestedPackageVersion = deck.theme.packageVersion;
+  if (typeof requestedPackageVersion === "string") {
+    for (const candidate of options.activePackages ?? []) {
+      if (
+        candidate.id !== requestedPackageId ||
+        candidate.version !== requestedPackageVersion
+      ) {
+        continue;
+      }
+      const validation = validateThemePackage(candidate);
+      if (validation.valid) {
+        return {
+          package: validation.package,
+          requestedPackageId,
+          fallback: false,
+          diagnostics: [],
+        };
+      }
+    }
   }
 
   return {

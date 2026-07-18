@@ -10,15 +10,10 @@
  * content.
  *
  * The contract is deliberately narrow:
- *  - Callers pass a {@link SchemaFailureCategory} and a small bag of SAFE
- *    identifiers (ids, counts, an opaque validator `reason` string).
- *  - The validator `reason` strings produced by `safeParseDeck` /
- *    `safeParseVisual` / `validateSourceRef` describe the schema violation
- *    (e.g. "Deck.slides[0].id must be a non-empty string"), and this module
- *    still sanitizes `reason` defensively in case a future validator regresses.
- *  - Anything that looks like raw content (keys such as `text`, `input`,
- *    `deckJson`, `contentJson`, `data`) is stripped before logging as a
- *    belt-and-suspenders guard on top of {@link logError}'s own redaction.
+ *  - Callers pass a {@link SchemaFailureCategory} and canonical non-sensitive
+ *    codes/counts only.
+ *  - Validator messages, paths, row ids, document ids, property keys, and
+ *    caught errors are never accepted into the emitted record.
  *
  * The pure {@link buildSchemaDiagnostic} builder is exported for unit testing
  * the no-content-leak guarantee; production code calls
@@ -31,14 +26,17 @@
 
 import { logError } from "@/lib/log";
 import redaction from "@/lib/log-redaction-core.cjs";
+import {
+  DECK_VALIDATION_CODES,
+  isDeckValidationCode,
+} from "@/lib/presentation/validation";
 
 /** Fixed scope used for every persisted-schema diagnostic. */
 export const SCHEMA_TELEMETRY_SCOPE = "schema.persisted";
 
 /**
  * The set of persisted-schema parse-failure categories. Each maps to a stable,
- * greppable string used as the diagnostic `category` field and as the synthetic
- * error name, so log pipelines can alert per-category.
+ * greppable string used as the diagnostic `category` field.
  */
 export const SCHEMA_FAILURE_CATEGORIES = [
   "deck-parse-failed",
@@ -48,6 +46,22 @@ export const SCHEMA_FAILURE_CATEGORIES = [
 ] as const;
 
 export type SchemaFailureCategory = (typeof SCHEMA_FAILURE_CATEGORIES)[number];
+
+export const SCHEMA_TELEMETRY_CODES = [
+  "schema_validation_failed",
+  ...DECK_VALIDATION_CODES,
+] as const;
+
+export type SchemaTelemetryCode = (typeof SCHEMA_TELEMETRY_CODES)[number];
+
+const SCHEMA_FAILURE_AREAS = new Set([
+  "Document.deckJson",
+  "Document.contentJson:visual",
+  "DocumentVersion.deckJson",
+  "DocumentVersion.contentJson:visual",
+  "Visual.data",
+  "persistDeck.input",
+]);
 
 /* node:coverage disable */
 /* Redaction policy prose is documentation-only. */
@@ -62,65 +76,31 @@ export type SchemaFailureCategory = (typeof SCHEMA_FAILURE_CATEGORIES)[number];
 /* node:coverage enable */
 export const isContentKey = redaction.isContentKey;
 
-/** Safe identifiers a caller may attach to a schema diagnostic. */
 export interface SchemaFailureContext {
-  /** Opaque validator failure reason — safe (describes schema, not content). */
-  reason?: string;
-  /** Document id the row belongs to (safe identifier). */
-  documentId?: string;
-  /** Primary key of the offending row (safe identifier). */
-  rowId?: string;
-  /** Schema area / table the failure came from (e.g. "Document.deckJson"). */
+  code?: unknown;
   area?: string;
-  /** Anchor / block id (safe identifier). */
-  anchorBlockId?: string;
-  /** Numeric counters only (never content). */
-  [key: string]: string | number | boolean | undefined;
+  issueCount?: number;
+  schemaVersion?: number;
+  [key: string]: unknown;
 }
 
 export interface SchemaDiagnosticRecord {
   category: SchemaFailureCategory;
-  [key: string]: string | number | boolean | undefined;
+  code: SchemaTelemetryCode;
+  area?: string;
+  issueCount?: number;
+  schemaVersion?: number;
+  [key: string]: unknown;
 }
 
-const MAX_REASON_LENGTH = 240;
-const REASON_SEGMENT_PATTERN = /(["'`])((?:\\.|(?!\1).)*)\1/g;
-const REASON_TOKEN_PATTERN = /^[a-z0-9._-]{1,32}$/i;
-const FALLBACK_REASON = "schema validation failed";
-
-/**
- * Keep validator reasons useful for debugging while stripping likely
- * content-bearing quoted segments and overlong payloads.
- */
-export function sanitizeSchemaReason(reason: string): string {
-  const compact = reason.replace(/\s+/g, " ").trim();
-  if (compact.length === 0) return FALLBACK_REASON;
-
-  const redacted = String(redaction.REDACTED ?? "[redacted]");
-  let sanitized = compact.replace(
-    REASON_SEGMENT_PATTERN,
-    (match: string, quote: string, segment: string) => {
-      const token = segment.trim();
-      if (token.length === 0 || REASON_TOKEN_PATTERN.test(token)) {
-        return match;
-      }
-      return `${quote}${redacted}${quote}`;
-    },
-  );
-
-  if (redaction.isUnsafeLogString(sanitized)) {
-    return FALLBACK_REASON;
-  }
-  if (sanitized.length > MAX_REASON_LENGTH) {
-    sanitized = `${sanitized.slice(0, MAX_REASON_LENGTH)}…`;
-  }
-  return sanitized;
+function normalizeSchemaTelemetryCode(code: unknown): SchemaTelemetryCode {
+  return typeof code === "string" && isDeckValidationCode(code)
+    ? code
+    : "schema_validation_failed";
 }
 
 /**
- * Builds the safe diagnostic context for a persisted-schema parse failure
- * WITHOUT writing anything. Drops any content-bearing keys and any non-scalar
- * values, so only ids/counts/booleans and the validator `reason` survive.
+ * Builds a canonical log-safe diagnostic without forwarding caller strings.
  *
  * Exposed for unit tests asserting the no-content-leak guarantee.
  */
@@ -128,14 +108,29 @@ export function buildSchemaDiagnostic(
   category: SchemaFailureCategory,
   context: SchemaFailureContext = {},
 ): SchemaDiagnosticRecord {
-  const safeContext: SchemaFailureContext = { ...context };
-  if (typeof safeContext.reason === "string") {
-    safeContext.reason = sanitizeSchemaReason(safeContext.reason);
-  }
-  return {
+  const diagnostic: SchemaDiagnosticRecord = {
     category,
-    ...redaction.buildSafeTelemetryContext(safeContext),
+    code: normalizeSchemaTelemetryCode(context.code),
   };
+  if (
+    typeof context.area === "string" &&
+    SCHEMA_FAILURE_AREAS.has(context.area)
+  ) {
+    diagnostic.area = context.area;
+  }
+  if (
+    Number.isSafeInteger(context.issueCount) &&
+    Number(context.issueCount) >= 0
+  ) {
+    diagnostic.issueCount = Number(context.issueCount);
+  }
+  if (
+    Number.isSafeInteger(context.schemaVersion) &&
+    Number(context.schemaVersion) >= 0
+  ) {
+    diagnostic.schemaVersion = Number(context.schemaVersion);
+  }
+  return diagnostic;
 }
 
 /**
@@ -149,7 +144,7 @@ export function reportSchemaFailure(
   context: SchemaFailureContext = {},
 ): void {
   const diagnostic = buildSchemaDiagnostic(category, context);
-  const error = new Error(category);
-  error.name = category;
+  const error = new Error("Persisted schema validation failed");
+  error.name = "SchemaValidationError";
   logError(SCHEMA_TELEMETRY_SCOPE, error, diagnostic);
 }

@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ConflictRecoveryDialog } from "@/components/presentation/conflict-recovery-dialog";
 import { SlideEditor } from "@/components/presentation/slide-editor";
 import { Button } from "@/components/ui";
+import type {
+  BrandKitSavePort,
+  SaveBrandKitDraftResult,
+} from "@/lib/action-ports";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { isEffectivelyEmptyEditorState } from "@/lib/ai/empty-content";
 import { collectDocumentBlocks } from "@/lib/content/document-blocks";
@@ -24,9 +28,9 @@ import {
   type SaveStatus,
 } from "@/lib/presentation/save-status";
 import {
-  createSlideAutosaveScheduler,
-  type SlideAutosaveScheduler,
-} from "@/lib/presentation/slide-autosave-scheduler";
+  createSlideSaveController,
+  type SlideSaveController,
+} from "@/lib/presentation/slide-save-controller";
 import { DEFAULT_THEME_PACKAGE_ID } from "@/lib/presentation/theme-package-ids";
 import { buildSourceBlockIndex } from "@/lib/presentation/block-index";
 import {
@@ -43,15 +47,22 @@ import { exportDeckRasterBrowser } from "@/lib/presentation/raster-browser-expor
 import type { Deck } from "@/lib/presentation/schema";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import {
+  mergeThemePackageCatalogEntries,
+  resolveThemePackageForDeck,
+  type ThemePackageCatalogEntry,
+} from "@/lib/presentation/theme-package-registry";
+import { useFocusTrap } from "@/lib/a11y/use-focus-trap";
+import {
   SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE,
   hasUnresolvedDeckSaveConflict,
   updateConflictLocalDeck,
   type SlideEditorConflictState,
 } from "@/lib/presentation/slide-editor-collaboration-state";
-import { resolveThemePackageForDeck } from "@/lib/presentation/theme-package-registry";
 import { downloadBlob } from "@/lib/visual/export";
+import { structuredJsonEqual } from "@/lib/structured-json";
 
 import { fetchDeckJson, saveDeckJson, toggleDocumentSharing } from "../actions";
+import { requestSlideEditorReturnFocus } from "../slide-editor-return-focus";
 import { uploadSlideAsset } from "../slide-asset-actions";
 import { persistDeckWithRecovery } from "@/components/editor/use-slide-editor-open";
 
@@ -86,7 +97,79 @@ export interface SlideEditorRouteClientProps {
   canManage: boolean;
   userId: string;
   userName: string;
-  customThemePackages?: ThemePackageV1[];
+  activeCustomThemePackage?: ThemePackageV1;
+  customThemeCatalogEntries?: ThemePackageCatalogEntry[];
+  saveBrandKitDraftAction?: BrandKitSavePort["saveBrandKitDraft"];
+}
+
+const EMPTY_THEME_CATALOG: ThemePackageCatalogEntry[] = [];
+
+type RoutePersistenceContext = {
+  active: boolean;
+  revisionTokenRef: { current: string | null };
+  lastSavedRef: { current: unknown };
+  aiAppliedDeckRef: { current: Deck | null };
+};
+
+function VisualPickerDialog({
+  visualBlocks,
+  onResolve,
+}: {
+  visualBlocks: Extract<DocumentBlock, { kind: "visual" }>[];
+  onResolve: (value: { visualId?: string; alt?: string } | undefined) => void;
+}) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useFocusTrap(dialogRef);
+
+  return (
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/35"
+        onClick={() => onResolve(undefined)}
+      />
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose visual"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onResolve(undefined);
+        }}
+        className="relative w-full max-w-md rounded-ds-md border border-ds-border-subtle bg-ds-surface p-4 shadow-ds-overlay"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-ds-text-primary">
+            Replace visual
+          </h2>
+          <button
+            type="button"
+            onClick={() => onResolve(undefined)}
+            className="rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs text-ds-text-secondary hover:bg-ds-state-hover"
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto">
+          {visualBlocks.map((block) => (
+            <button
+              key={block.visualId}
+              type="button"
+              onClick={() =>
+                onResolve({
+                  visualId: block.visualId,
+                  ...(block.visual.title ? { alt: block.visual.title } : {}),
+                })
+              }
+              className="rounded-ds-sm border border-ds-border-subtle px-3 py-2 text-left text-xs text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+            >
+              <span className="font-mono">{block.visualId}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function openInitialDeck({
@@ -188,7 +271,7 @@ function SlideRouteRecovery({
   );
 }
 
-export function SlideEditorRouteClient({
+function SlideEditorRouteClientDocument({
   documentId,
   documentTitle,
   initialDeckJson,
@@ -201,7 +284,9 @@ export function SlideEditorRouteClient({
   canManage,
   userId,
   userName,
-  customThemePackages = [],
+  activeCustomThemePackage,
+  customThemeCatalogEntries = EMPTY_THEME_CATALOG,
+  saveBrandKitDraftAction,
 }: SlideEditorRouteClientProps) {
   const router = useRouter();
   const initialOpenState = useMemo(
@@ -233,6 +318,12 @@ export function SlideEditorRouteClient({
   } | null>(null);
   const [conflictState, setConflictState] =
     useState<SlideEditorConflictState | null>(null);
+  const [customThemeCatalog, setCustomThemeCatalog] = useState<
+    ThemePackageCatalogEntry[]
+  >(() => customThemeCatalogEntries);
+  const [activeRenderThemePackages, setActiveRenderThemePackages] = useState<
+    ThemePackageV1[]
+  >(() => (activeCustomThemePackage ? [activeCustomThemePackage] : []));
   const [shareState, setShareState] = useState<SlideEditorShareState>({
     isShared: initialIsShared,
     shareId: initialShareId,
@@ -243,13 +334,12 @@ export function SlideEditorRouteClient({
   const visualPickerResolverRef = useRef<
     ((value: { visualId?: string; alt?: string } | undefined) => void) | null
   >(null);
-  const revisionTokenRef = useRef<string | null>(initialDeckRevisionToken);
-  const lastSavedRef = useRef<unknown>(initialDeckJson);
-  const noopAiAppliedDeckRef = useRef<Deck | null>(null);
   const focusTokenRef = useRef(0);
-  const autosaveSchedulerRef = useRef<SlideAutosaveScheduler<Deck> | null>(
-    null,
+  const latestDeckRef = useRef<Deck | null>(
+    initialOpenState.ok ? initialOpenState.deck : null,
   );
+  const saveControllerRef = useRef<SlideSaveController<Deck> | null>(null);
+  const persistenceContextRef = useRef<RoutePersistenceContext | null>(null);
   const deckPort = useMemo(() => ({ fetchDeckJson, saveDeckJson }), []);
   const documentBlocks = useMemo(
     () => collectDocumentBlocks(initialContentJson),
@@ -268,41 +358,73 @@ export function SlideEditorRouteClient({
     [documentBlocks],
   );
 
-  const persistDeck = useCallback(
-    (updatedDeck: Deck) =>
-      persistDeckWithRecovery({
-        updatedDeck,
-        documentId,
-        deckPort,
-        revisionTokenRef,
-        lastSavedRef,
-        aiAppliedDeckRef: noopAiAppliedDeckRef,
-        setDirty: setDirty,
-        setSaving: setSaving,
-        setSaveError: setSaveError,
-        setConflictState: setConflictState,
-        onAiDeckSaved: () => undefined,
-      }),
-    [deckPort, documentId],
-  );
-
   useEffect(() => {
-    const scheduler = createSlideAutosaveScheduler<Deck>({
-      onDue: (updatedDeck) => {
-        void persistDeck(updatedDeck);
-      },
-    });
-    autosaveSchedulerRef.current = scheduler;
+    const context: RoutePersistenceContext = {
+      active: true,
+      revisionTokenRef: { current: initialDeckRevisionToken },
+      lastSavedRef: { current: initialDeckJson },
+      aiAppliedDeckRef: { current: null },
+    };
+    const controller: SlideSaveController<Deck> =
+      createSlideSaveController<Deck>({
+        initialPersisted:
+          initialDeckJson !== null && initialOpenState.ok
+            ? initialOpenState.deck
+            : null,
+        equals: structuredJsonEqual,
+        persist: (updatedDeck, isAuthoritative): Promise<ActionResult> =>
+          persistDeckWithRecovery({
+            updatedDeck,
+            documentId,
+            deckPort,
+            revisionTokenRef: context.revisionTokenRef,
+            lastSavedRef: context.lastSavedRef,
+            aiAppliedDeckRef: context.aiAppliedDeckRef,
+            setDirty: () => undefined,
+            setSaving: () => undefined,
+            setSaveError: () => undefined,
+            setConflictState: (state) => {
+              if (context.active && saveControllerRef.current === controller) {
+                setConflictState(state);
+              }
+            },
+            onAiDeckSaved: () => undefined,
+            shouldApplyCompletionState: (): boolean =>
+              context.active &&
+              saveControllerRef.current === controller &&
+              isAuthoritative(),
+          }),
+        onStateChange: (state) => {
+          if (saveControllerRef.current !== controller) return;
+          setDirty(state.dirty);
+          setSaving(state.saving);
+          setSaveError(state.error);
+        },
+      });
+    saveControllerRef.current = controller;
+    persistenceContextRef.current = context;
     return () => {
-      scheduler.cancel();
-      if (autosaveSchedulerRef.current === scheduler) {
-        autosaveSchedulerRef.current = null;
+      context.active = false;
+      controller.dispose();
+      if (saveControllerRef.current === controller) {
+        saveControllerRef.current = null;
+      }
+      if (persistenceContextRef.current === context) {
+        persistenceContextRef.current = null;
       }
     };
-  }, [persistDeck]);
+  }, [
+    deckPort,
+    documentId,
+    initialDeckJson,
+    initialDeckRevisionToken,
+    initialOpenState,
+  ]);
 
   const themeResolution = deck
-    ? resolveThemePackageForDeck(deck, { customPackages: customThemePackages })
+    ? resolveThemePackageForDeck(deck, {
+        activePackages: activeRenderThemePackages,
+      })
     : null;
   const editorDiagnostics = [
     ...deckDiagnostics,
@@ -316,11 +438,12 @@ export function SlideEditorRouteClient({
   const documentHref = `/app/documents/${documentId}`;
 
   function goBackToDocument() {
+    requestSlideEditorReturnFocus(documentId);
     router.push(documentHref);
   }
 
   function scheduleAutosave(updatedDeck: Deck) {
-    autosaveSchedulerRef.current?.schedule(updatedDeck);
+    saveControllerRef.current?.schedule(updatedDeck);
   }
 
   function setNextDeck(
@@ -334,19 +457,44 @@ export function SlideEditorRouteClient({
       return updatedDeck;
     });
     setRedoStack([]);
-    setDirty(true);
-    setSaveError(null);
+    latestDeckRef.current = updatedDeck;
     if (options.persistNow) {
-      void persistDeck(updatedDeck);
+      void saveControllerRef.current?.replaceAndPersist(updatedDeck);
     } else {
       scheduleAutosave(updatedDeck);
     }
   }
 
+  function activateCatalogThemePackage(updatedDeck: Deck) {
+    const selectedCustomPackage = customThemeCatalog.find(
+      (entry) =>
+        entry.package.id === updatedDeck.theme.packageId &&
+        entry.package.version === updatedDeck.theme.packageVersion,
+    )?.package;
+    if (!selectedCustomPackage) return;
+
+    setActiveRenderThemePackages((current) =>
+      current.some(
+        (themePackage) =>
+          themePackage.id === selectedCustomPackage.id &&
+          themePackage.version === selectedCustomPackage.version,
+      )
+        ? current
+        : [...current, selectedCustomPackage],
+    );
+  }
+
   function handleDeckChange(updatedDeck: Deck) {
+    if (
+      deck?.theme.packageId !== updatedDeck.theme.packageId ||
+      deck.theme.packageVersion !== updatedDeck.theme.packageVersion
+    ) {
+      activateCatalogThemePackage(updatedDeck);
+    }
     if (hasUnresolvedDeckSaveConflict(conflictState)) {
       setConflictState(updateConflictLocalDeck(conflictState, updatedDeck));
       setDeck(updatedDeck);
+      latestDeckRef.current = updatedDeck;
       setDirty(true);
       setSaveError(SAVE_CONFLICT_AUTOSAVE_BLOCKED_MESSAGE);
       return;
@@ -354,9 +502,16 @@ export function SlideEditorRouteClient({
     setNextDeck(updatedDeck);
   }
 
+  function handleBrandKitSaved(
+    result: Extract<SaveBrandKitDraftResult, { ok: true }>,
+  ) {
+    setCustomThemeCatalog((current) =>
+      mergeThemePackageCatalogEntries([...current, result.catalogEntry]),
+    );
+  }
+
   async function handleSave(updatedDeck: Deck): Promise<ActionResult> {
-    autosaveSchedulerRef.current?.cancel();
-    return await persistDeck(updatedDeck);
+    return (await saveControllerRef.current?.flush(updatedDeck)) ?? actionOk();
   }
 
   async function handleRegenerate(): Promise<ActionResult> {
@@ -365,6 +520,7 @@ export function SlideEditorRouteClient({
         "Resolve the save conflict before regenerating slides.",
       );
     }
+
     if (
       !initialContentJson ||
       isEffectivelyEmptyEditorState(initialContentJson)
@@ -399,8 +555,7 @@ export function SlideEditorRouteClient({
         setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
       }
       setDeck(previous);
-      setDirty(true);
-      setSaveError(null);
+      latestDeckRef.current = previous;
       scheduleAutosave(previous);
       return stack.slice(0, -1);
     });
@@ -418,8 +573,7 @@ export function SlideEditorRouteClient({
         setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
       }
       setDeck(next);
-      setDirty(true);
-      setSaveError(null);
+      latestDeckRef.current = next;
       scheduleAutosave(next);
       return stack.slice(0, -1);
     });
@@ -435,12 +589,14 @@ export function SlideEditorRouteClient({
       serverToken,
     );
     if (result.ok === true) {
-      lastSavedRef.current = localDeck;
-      revisionTokenRef.current = result.revisionToken;
+      const context = persistenceContextRef.current;
+      if (context) {
+        context.lastSavedRef.current = localDeck;
+        context.revisionTokenRef.current = result.revisionToken;
+      }
+      latestDeckRef.current = localDeck;
+      saveControllerRef.current?.adoptPersisted(localDeck);
       setConflictState(null);
-      setDirty(false);
-      setSaving(false);
-      setSaveError(null);
       return;
     }
     if (result.ok === "conflict") {
@@ -454,19 +610,25 @@ export function SlideEditorRouteClient({
   }
 
   async function handleConflictUseTheirs() {
+    saveControllerRef.current?.cancelScheduled();
     const reload = await reloadConflictServerDeck({ deckPort, documentId });
     if (!reload.ok) {
       setSaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
       throw new Error(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
     }
-    revisionTokenRef.current = reload.revisionToken;
-    lastSavedRef.current = reload.deckJson;
+    const context = persistenceContextRef.current;
+    if (context) {
+      context.revisionTokenRef.current = reload.revisionToken;
+      context.lastSavedRef.current = reload.deckJson;
+    }
+    latestDeckRef.current = reload.deck;
+    saveControllerRef.current?.adoptPersisted(reload.deck);
+    setActiveRenderThemePackages(
+      reload.activeCustomThemePackage ? [reload.activeCustomThemePackage] : [],
+    );
     setDeck(reload.deck);
     setDeckDiagnostics(reload.diagnostics);
     setOpenError(null);
-    setDirty(false);
-    setSaving(false);
-    setSaveError(null);
     setUndoStack([]);
     setRedoStack([]);
     setUndoRedoFocus(null);
@@ -697,6 +859,10 @@ export function SlideEditorRouteClient({
         documentId={documentId}
         deck={deck}
         themePackage={themeResolution?.package}
+        customThemeCatalogEntries={customThemeCatalog}
+        brandKitOwnerId={userId}
+        saveBrandKitDraft={saveBrandKitDraftAction}
+        onBrandKitSaved={handleBrandKitSaved}
         diagnostics={editorDiagnostics}
         saveStatus={saveStatus}
         saveStatusLabel={SAVE_STATUS_LABEL[saveStatus]}
@@ -731,51 +897,10 @@ export function SlideEditorRouteClient({
       />
 
       {visualPickerOpen ? (
-        <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-black/35"
-            onClick={() => resolveVisualPicker(undefined)}
-          />
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose visual"
-            className="relative w-full max-w-md rounded-ds-md border border-ds-border-subtle bg-ds-surface p-4 shadow-ds-overlay"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ds-text-primary">
-                Replace visual
-              </h2>
-              <button
-                type="button"
-                onClick={() => resolveVisualPicker(undefined)}
-                className="rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs text-ds-text-secondary hover:bg-ds-state-hover"
-              >
-                Cancel
-              </button>
-            </div>
-            <div className="mt-3 flex max-h-80 flex-col gap-1 overflow-auto">
-              {visualBlocks.map((block) => (
-                <button
-                  key={block.visualId}
-                  type="button"
-                  onClick={() =>
-                    resolveVisualPicker({
-                      visualId: block.visualId,
-                      ...(block.visual.title
-                        ? { alt: block.visual.title }
-                        : {}),
-                    })
-                  }
-                  className="rounded-ds-sm border border-ds-border-subtle px-3 py-2 text-left text-xs text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
-                >
-                  <span className="font-mono">{block.visualId}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
+        <VisualPickerDialog
+          visualBlocks={visualBlocks}
+          onResolve={resolveVisualPicker}
+        />
       ) : null}
 
       {conflictState ? (
@@ -790,4 +915,8 @@ export function SlideEditorRouteClient({
       ) : null}
     </main>
   );
+}
+
+export function SlideEditorRouteClient(props: SlideEditorRouteClientProps) {
+  return <SlideEditorRouteClientDocument key={props.documentId} {...props} />;
 }

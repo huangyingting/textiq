@@ -1,4 +1,5 @@
 import type { LayoutBox } from "../schema";
+import { effectiveVisualZIndex } from "../render-order";
 
 /** Converts a slide-percent frame to pixel frame given canvas dimensions. */
 export function frameToPx(
@@ -21,6 +22,7 @@ export function resolveLayoutFramePass(
 ): LayoutBox & { framePx: { x: number; y: number; w: number; h: number } } {
   return {
     ...layout,
+    zIndex: effectiveVisualZIndex({ layout }),
     framePx: frameToPx(layout.frame, canvasWidthPx, canvasHeightPx),
   };
 }

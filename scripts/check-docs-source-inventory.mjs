@@ -6,8 +6,8 @@ import process from "node:process";
 import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_ROOTS = ["src", "scripts", "prisma", "e2e"];
-const SOURCE_FILES = ["server.mjs", "playwright.config.ts"];
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mjs", ".js"]);
+const SOURCE_FILES = ["server.mjs", "playwright.config.mts"];
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".mjs", ".js"]);
 const IGNORED_DIRS = new Set([
   ".git",
   ".next",
@@ -44,7 +44,7 @@ function shouldScanSourceFile(filePath) {
   if (!SOURCE_EXTENSIONS.has(extname(normalized))) {
     return false;
   }
-  if (/\.(test)\.(?:ts|tsx|mjs|js)$/.test(normalized)) {
+  if (/\.(test)\.(?:ts|tsx|mts|mjs|js)$/.test(normalized)) {
     return false;
   }
   return ![...IGNORED_DIRS].some(

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { E2E_PROFILE_FIXTURE } from "../helpers/profile";
+import { unauthenticatedRequest } from "../helpers/credential-gate";
 
 /**
  * Share / presentation fallback coverage (issue #107, building on #98).
@@ -51,13 +52,12 @@ async function expectVisibleNotFoundWithoutFixtureContent(page: Page) {
 }
 
 test.describe("share/present fallback", () => {
-  test("unknown and malformed public routes return 404 without leaking fixture content", async ({
-    request,
-  }) => {
+  test("unknown and malformed public routes return 404 without leaking fixture content", async () => {
     test.setTimeout(90_000);
+    const publicRequest = unauthenticatedRequest();
 
     for (const route of DENIED_PUBLIC_ROUTES) {
-      const response = await request.get(route);
+      const response = await publicRequest.get(route);
       const body = await response.text();
 
       expect(response.status(), route).toBe(404);

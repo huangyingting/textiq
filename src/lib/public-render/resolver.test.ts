@@ -63,13 +63,17 @@ type ModuleHooks = {
 
 declare global {
   var __publicRenderTestThemeResult: {
-    packages: { id: string }[];
+    activePackage?: { id: string };
+    catalogEntries: unknown[];
     diagnostics: unknown[];
   };
   var __publicRenderTestThemeCalls: unknown[][];
 }
 
-globalThis.__publicRenderTestThemeResult = { packages: [], diagnostics: [] };
+globalThis.__publicRenderTestThemeResult = {
+  catalogEntries: [],
+  diagnostics: [],
+};
 globalThis.__publicRenderTestThemeCalls = [];
 
 const { registerHooks } = createRequire(import.meta.url)(
@@ -194,7 +198,10 @@ function presentationRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  globalThis.__publicRenderTestThemeResult = { packages: [], diagnostics: [] };
+  globalThis.__publicRenderTestThemeResult = {
+    catalogEntries: [],
+    diagnostics: [],
+  };
   globalThis.__publicRenderTestThemeCalls = [];
 });
 
@@ -267,6 +274,30 @@ describe("resolvePublicRender", () => {
     assert.equal(globalThis.__publicRenderTestThemeCalls.length, 0);
   });
 
+  it("does not resolve an active custom theme until public presentation access is authorized", async (t) => {
+    replacePrismaProperty(t, "document", {
+      findFirst: async () =>
+        presentationRow({
+          deckJson: buildDeck(undefined, {
+            theme: buildThemeBinding({
+              packageId: "brand-kit:user-owner:private",
+              packageVersion: "1.0.0+r1",
+            }),
+          }),
+          sharePresentEnabled: false,
+        }),
+    });
+
+    const result = await resolvePublicRender({
+      params: { shareId: "shared-doc-share123" },
+      mode: "present",
+      projection: "presentation",
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(globalThis.__publicRenderTestThemeCalls.length, 0);
+  });
+
   it("skips the theme-package loader entirely for non-presentation projections", async (t) => {
     replacePrismaProperty(t, "document", {
       findFirst: async () => metadataRow(),
@@ -285,7 +316,10 @@ describe("resolvePublicRender", () => {
   it("loads and merges custom theme packages onto the presentation row", async (t) => {
     const customPackage = buildMinimalThemePackage("custom-theme-xyz");
     const deck = buildDeck(undefined, {
-      theme: buildThemeBinding({ packageId: "custom-theme-xyz" }),
+      theme: buildThemeBinding({
+        packageId: customPackage.id,
+        packageVersion: customPackage.version,
+      }),
     });
     const deckJson = JSON.parse(JSON.stringify(deck));
     replacePrismaProperty(t, "document", {
@@ -296,7 +330,8 @@ describe("resolvePublicRender", () => {
         }),
     });
     globalThis.__publicRenderTestThemeResult = {
-      packages: [customPackage],
+      activePackage: customPackage,
+      catalogEntries: [],
       diagnostics: [],
     };
 
@@ -311,6 +346,46 @@ describe("resolvePublicRender", () => {
     assert.equal(result.ok, true);
     if (result.ok && result.projection === "presentation") {
       assert.equal(result.presentation.themePackage.id, "custom-theme-xyz");
+    } else {
+      assert.fail("expected a successful presentation projection result");
+    }
+  });
+
+  it("falls back with a diagnostic when a public custom theme reference omits its version", async (t) => {
+    const latestPackage = buildMinimalThemePackage("custom-theme-xyz", {
+      version: "2.0.0+r1",
+    });
+    const deck = buildDeck(undefined, {
+      theme: buildThemeBinding({ packageId: latestPackage.id }),
+    });
+    const deckJson = JSON.parse(JSON.stringify(deck));
+    replacePrismaProperty(t, "document", {
+      findFirst: async () =>
+        presentationRow({
+          deckJson,
+          sharePresentEnabled: true,
+        }),
+    });
+    globalThis.__publicRenderTestThemeResult = {
+      activePackage: latestPackage,
+      catalogEntries: [],
+      diagnostics: [],
+    };
+
+    const result = await resolvePublicRender({
+      params: { shareId: "shared-doc-share123" },
+      mode: "present",
+      projection: "presentation",
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok && result.projection === "presentation") {
+      assert.equal(result.presentation.themePackage.id, "neutral");
+      assert.ok(
+        result.presentation.diagnostics.some(
+          (diagnostic) => diagnostic.code === "unknown-theme-package",
+        ),
+      );
     } else {
       assert.fail("expected a successful presentation projection result");
     }

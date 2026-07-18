@@ -203,7 +203,6 @@ function groupNode(children: SlideChildNode[]): SlideChildNode {
     name: "Grouped callout",
     component: "custom",
     layout: { frame: { x: 5, y: 5, w: 90, h: 80 }, zIndex: 10 },
-    style: { ref: "surface.card" },
     children,
   };
 }

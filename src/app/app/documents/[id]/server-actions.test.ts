@@ -52,9 +52,10 @@ type ActionTestState = {
   persistDeck: (
     documentId: string,
     deckJson: unknown,
-    clientToken: string | null | undefined,
+    clientToken: string | null,
     options: unknown,
   ) => Promise<unknown>;
+  loadCustomThemePackagesForDeckJson: (deckJson: unknown) => Promise<unknown>;
   setDocumentSharing: (
     documentId: string,
     isShared: boolean,
@@ -190,6 +191,20 @@ const stubbedModules = new Map<string, string>([
       export async function restoreVersion(...args) {
         return globalThis.__documentActionsTestState.restoreVersion(...args);
       }
+      export function isRestoredDeckValidationError(error) {
+        return error instanceof Error &&
+          error.failure?.code === "invalid_deck" &&
+          typeof error.diagnosticCode === "string" &&
+          Number.isSafeInteger(error.issueCount);
+      }
+    `,
+  ],
+  [
+    "@/lib/presentation/brand-kit/persistence",
+    `
+      export async function loadCustomThemePackagesForDeckJson(...args) {
+        return globalThis.__documentActionsTestState.loadCustomThemePackagesForDeckJson(...args);
+      }
     `,
   ],
 ]);
@@ -280,6 +295,10 @@ function createDefaultState(): ActionTestState {
       calls.push(["persistDeck", documentId, deckJson, clientToken, options]);
       return { ok: true, revisionToken: "rev-2" };
     },
+    async loadCustomThemePackagesForDeckJson(deckJson) {
+      calls.push(["loadCustomThemePackagesForDeckJson", deckJson]);
+      return { catalogEntries: [], diagnostics: [] };
+    },
     async setDocumentSharing(documentId, isShared) {
       calls.push(["setDocumentSharing", documentId, isShared]);
       return { isShared, shareId: isShared ? "share-1" : null };
@@ -319,6 +338,7 @@ describe("deck server actions", () => {
       ok: true,
       deckJson: { slides: [] },
       revisionToken: "rev-1",
+      themeDiagnostics: [],
     });
     // Exact document-id scoping: view access is checked for the requested
     // document id, not a hardcoded or unrelated one (issue #1904).
@@ -326,6 +346,10 @@ describe("deck server actions", () => {
       "requireDocumentActionContext",
       "doc-1",
       "view",
+    ]);
+    assert.deepEqual(state().calls[1], [
+      "loadCustomThemePackagesForDeckJson",
+      { slides: [] },
     ]);
 
     prisma.document.findUnique = async () => null;
@@ -336,6 +360,7 @@ describe("deck server actions", () => {
       error: "Document not found.",
       failure: { code: "document_not_found", retryable: false },
     });
+
     assert.deepEqual(state().calls.at(-1), [
       "requireDocumentActionContext",
       "missing",
@@ -343,12 +368,73 @@ describe("deck server actions", () => {
     ]);
 
     prisma.document.findUnique = async () => {
-      throw new Error("database down");
+      const error = new Error(
+        "PRIVATE DECK PARAGRAPH token=sk-private user@example.com https://private.example unknownDeckKey",
+      );
+      error.stack = `Error: ${error.message}\n at privateDeckProvider`;
+      throw error;
     };
     const failure = await deckActions.fetchDeckJson("doc-1");
     assert.equal(failure.ok, false);
     assert.equal(failure.failure.code, "storage_unavailable");
     assert.equal(failure.failure.retryable, true);
+    const fetchLogCall = state().calls.at(-1) as unknown[];
+    assert.equal(fetchLogCall[0], "logError");
+    assert.equal(fetchLogCall[1], "deck.fetch");
+    assert.equal((fetchLogCall[2] as Error).message, "Deck fetch failed");
+    assert.deepEqual(fetchLogCall[3], {
+      code: "storage_unavailable",
+      documentId: "doc-1",
+      operation: "fetch",
+      outcome: "failed",
+    });
+    assert.ok(!JSON.stringify(fetchLogCall).includes("PRIVATE DECK PARAGRAPH"));
+    assert.ok(!JSON.stringify(failure).includes("sk-private"));
+  });
+
+  it("returns only the exact trusted active theme snapshot from the authorized deck", async () => {
+    const activePackage = {
+      id: "brand-kit:user-owner:exact",
+      version: "1.0.0",
+    };
+    const deckJson = {
+      theme: {
+        packageId: activePackage.id,
+        packageVersion: activePackage.version,
+      },
+      slides: [],
+    };
+    prisma.document.findUnique = async () => ({
+      deckJson,
+      deckRevisionToken: "rev-theme",
+    });
+    state().loadCustomThemePackagesForDeckJson = async (authorizedDeckJson) => {
+      assert.equal(authorizedDeckJson, deckJson);
+      return {
+        activePackage,
+        catalogEntries: [
+          {
+            package: { id: "brand-kit:user-owner:other" },
+            source: "custom",
+            createdAt: null,
+          },
+        ],
+        diagnostics: [],
+      };
+    };
+
+    assert.deepEqual(await deckActions.fetchDeckJson("doc-theme"), {
+      ok: true,
+      deckJson,
+      revisionToken: "rev-theme",
+      activeCustomThemePackage: activePackage,
+      themeDiagnostics: [],
+    });
+    assert.deepEqual(state().calls[0], [
+      "requireDocumentActionContext",
+      "doc-theme",
+      "view",
+    ]);
   });
 
   it("denies fetch access without querying storage when authorization is rejected", async () => {
@@ -383,13 +469,46 @@ describe("deck server actions", () => {
     ]);
 
     state().persistDeck = async () => {
-      throw new Error("database down");
+      const error = new Error(
+        "PRIVATE SAVE PARAGRAPH token=sk-save private@example.com https://save.example unknownSaveKey",
+      );
+      error.stack = `Error: ${error.message}\n at privateDeckParser`;
+      throw error;
     };
-    assert.deepEqual(await deckActions.saveDeckJson("doc-1", {}, null), {
+    const failure = await deckActions.saveDeckJson("doc-1", {}, null);
+    assert.deepEqual(failure, {
       ok: false,
       error: "Failed to save deck. Please try again.",
       failure: { code: "storage_unavailable", retryable: true },
     });
+    const saveLogCall = state().calls.at(-1) as unknown[];
+    assert.equal(saveLogCall[0], "logError");
+    assert.equal(saveLogCall[1], "deck.save");
+    assert.equal((saveLogCall[2] as Error).message, "Deck save failed");
+    assert.deepEqual(saveLogCall[3], {
+      code: "storage_unavailable",
+      documentId: "doc-1",
+      operation: "persist",
+      outcome: "failed",
+    });
+    assert.ok(!JSON.stringify(saveLogCall).includes("PRIVATE SAVE PARAGRAPH"));
+    assert.ok(!JSON.stringify(failure).includes("sk-save"));
+  });
+
+  it("rejects an omitted runtime revision token before persistence", async () => {
+    const result = await Reflect.apply(deckActions.saveDeckJson, undefined, [
+      "doc-1",
+      { slides: [] },
+    ]);
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "A deck revision token is required.",
+      failure: { code: "invalid_revision_token", retryable: false },
+    });
+    assert.deepEqual(state().calls, [
+      ["requireDocumentActionContext", "doc-1", "edit"],
+    ]);
   });
 
   it("denies save access without persisting or revalidating when authorization is rejected", async () => {
@@ -836,8 +955,12 @@ describe("versioning server actions", () => {
       ["revalidatePath", "/app"],
     ]);
 
+    const privateText =
+      "PRIVATE RESTORE PARAGRAPH token=sk-restore private@example.com https://private.example/version-id unknownRestoreKey";
     state().restoreVersion = async () => {
-      throw new Error("restore failed");
+      const error = new Error(privateText);
+      error.stack = `Error: ${privateText}\n at privateRestoreProvider`;
+      throw error;
     };
     assert.deepEqual(
       await versioningActions.restoreDocumentVersion("version-1"),
@@ -846,6 +969,46 @@ describe("versioning server actions", () => {
         error: "Failed to restore document version.",
       },
     );
+    const genericLogCall = state().calls.at(-1) as unknown[] | undefined;
+    assert.equal(genericLogCall?.[0], "logError");
+    assert.equal(genericLogCall?.[1], "document.restore");
+    assert.equal(
+      (genericLogCall?.[2] as Error).message,
+      "Document version restore failed",
+    );
+    assert.ok(!(genericLogCall?.[2] as Error).stack?.includes(privateText));
+    assert.ok(!JSON.stringify(genericLogCall?.[3]).includes(privateText));
+    assert.ok(!JSON.stringify(genericLogCall).includes("sk-restore"));
+
+    state().restoreVersion = async () => {
+      const error = new Error(privateText) as Error & {
+        failure: { code: "invalid_deck"; retryable: false };
+        diagnosticCode: string;
+        issueCount: number;
+      };
+      error.failure = { code: "invalid_deck", retryable: false };
+      error.diagnosticCode = "unsupported_property";
+      error.issueCount = 4;
+      throw error;
+    };
+    assert.deepEqual(
+      await versioningActions.restoreDocumentVersion("version-1"),
+      {
+        ok: false,
+        error:
+          "This version contains an invalid presentation deck and was not restored.",
+      },
+    );
+    const invalidDeckLogCall = state().calls.at(-1) as unknown[] | undefined;
+    assert.deepEqual(invalidDeckLogCall?.[3], {
+      code: "invalid_deck",
+      issueCount: 4,
+      operation: "restore",
+      outcome: "failed",
+      schemaVersion: 7,
+      validationCode: "unsupported_property",
+    });
+    assert.ok(!(invalidDeckLogCall?.[2] as Error).stack?.includes(privateText));
   });
 
   it("scopes restore to the document owning the version record, not the versionId text", async () => {

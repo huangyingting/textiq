@@ -9,6 +9,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
+import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/document/deck-kernel/deck";
 import {
   DECK_SCHEMA_VERSION,
   safeParseDeck,
@@ -17,9 +18,16 @@ import {
 } from "@/lib/document/persistence/current-deck-schema";
 import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
+import {
+  classifyValidationDiagnostics,
+  type SafeValidationClassification,
+} from "@/lib/diagnostics/validation-classification";
 import { generateRevisionToken } from "@/lib/document/deck-revision-token";
 import { updateDocumentsWithCanonicalContent } from "@/lib/document/document-write-port";
-import type { RestoredDocumentVersion } from "@/lib/document/persistence-types";
+import type {
+  DeckActionFailure,
+  RestoredDocumentVersion,
+} from "@/lib/document/persistence-types";
 import { snapshotDocumentVersion } from "./helpers";
 import { mirrorVisualNodesInTx, reconcileDeckAfterMirror } from "./visual";
 import { revalidateSharePaths } from "./sharing";
@@ -33,6 +41,34 @@ type RestoreVersionDeps = {
   reconcile?: typeof reconcileDeckAfterMirror;
   revalidate?: typeof revalidateSharePaths;
 };
+
+export class RestoredDeckValidationError extends Error {
+  readonly failure: DeckActionFailure = {
+    code: "invalid_deck",
+    retryable: false,
+  };
+  readonly diagnosticCode: SafeValidationClassification;
+  readonly issueCount: number;
+
+  constructor({
+    code,
+    issueCount,
+  }: {
+    code: SafeValidationClassification;
+    issueCount: number;
+  }) {
+    super("Restored presentation deck validation failed");
+    this.name = "RestoredDeckValidationError";
+    this.diagnosticCode = code;
+    this.issueCount = issueCount;
+  }
+}
+
+export function isRestoredDeckValidationError(
+  error: unknown,
+): error is RestoredDeckValidationError {
+  return error instanceof RestoredDeckValidationError;
+}
 
 // ---------------------------------------------------------------------------
 // Exported service operations
@@ -60,11 +96,10 @@ export function sanitizeRestoredDeck(
   if (looksLikeDeck(rawDeckJson)) {
     const parsed = safeParseDeck(rawDeckJson);
     if (!parsed.success) {
-      reportSchemaFailure("deck-parse-failed", {
-        area: "DocumentVersion.deckJson",
-        reason: parsed.errors.join("; "),
+      throw invalidRestoredDeck({
+        code: classifyValidationDiagnostics(parsed.errors),
+        issueCount: parsed.errors.length,
       });
-      return rawDeckJson as Prisma.InputJsonValue;
     }
 
     const sanitized = reconcileDeckVisualReferences(
@@ -74,13 +109,16 @@ export function sanitizeRestoredDeck(
     return toPrismaJsonInput(sanitized);
   }
 
+  if (!looksLikeLegacyDeck(rawDeckJson)) {
+    throw invalidRestoredDeck({ code: "invalid_version", issueCount: 1 });
+  }
+
   const parsedLegacy = safeParseLegacyDeck(rawDeckJson);
   if (!parsedLegacy.success) {
-    reportSchemaFailure("deck-parse-failed", {
-      area: "DocumentVersion.deckJson",
-      reason: parsedLegacy.error,
+    throw invalidRestoredDeck({
+      code: "invalid_structure",
+      issueCount: 1,
     });
-    return rawDeckJson as Prisma.InputJsonValue;
   }
 
   const { deck: sanitizedLegacy } = reconcileDocumentDeckDependencies({
@@ -90,12 +128,37 @@ export function sanitizeRestoredDeck(
   return toPrismaJsonInput(sanitizedLegacy);
 }
 
+function invalidRestoredDeck({
+  code,
+  issueCount,
+}: {
+  code: SafeValidationClassification;
+  issueCount: number;
+}): RestoredDeckValidationError {
+  reportSchemaFailure("deck-parse-failed", {
+    area: "DocumentVersion.deckJson",
+    code,
+    issueCount,
+    schemaVersion: DECK_SCHEMA_VERSION,
+  });
+  return new RestoredDeckValidationError({ code, issueCount });
+}
+
 function looksLikeDeck(rawDeckJson: Prisma.JsonValue): boolean {
   return (
     typeof rawDeckJson === "object" &&
     rawDeckJson !== null &&
     !Array.isArray(rawDeckJson) &&
     rawDeckJson.schemaVersion === DECK_SCHEMA_VERSION
+  );
+}
+
+function looksLikeLegacyDeck(rawDeckJson: Prisma.JsonValue): boolean {
+  return (
+    typeof rawDeckJson === "object" &&
+    rawDeckJson !== null &&
+    !Array.isArray(rawDeckJson) &&
+    rawDeckJson.schemaVersion === LEGACY_DECK_SCHEMA_VERSION
   );
 }
 
@@ -195,16 +258,16 @@ export async function restoreVersion(
     );
   }
 
+  const restoredContent = version.contentJson;
+  const restoredDeck = sanitizeRestoredDeck(version.deckJson, restoredContent);
+  const restoredDeckRevisionToken = generateRevisionToken();
+
   /* node:coverage ignore next 5 */
   await snapshot(documentId, {
     userId,
     force: true,
     label: "Before restore",
   });
-
-  const restoredContent = version.contentJson;
-  const restoredDeck = sanitizeRestoredDeck(version.deckJson, restoredContent);
-  const restoredDeckRevisionToken = generateRevisionToken();
 
   // Write the restored document state and its search projection, then atomically
   // rebuild the Visual mirror.

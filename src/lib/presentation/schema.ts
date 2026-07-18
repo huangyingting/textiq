@@ -435,10 +435,12 @@ export type VisualNode = BaseNode & {
   content: VisualContent;
 };
 
-export type GroupNode = BaseNode & {
+export type GroupNode = Omit<BaseNode, "style" | "localStyle"> & {
   type: "group";
   component: GroupComponentKind;
   children: SlideChildNode[];
+  style?: never;
+  localStyle?: never;
 };
 
 export type SlideChildNode =

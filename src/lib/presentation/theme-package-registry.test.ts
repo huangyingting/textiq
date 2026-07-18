@@ -4,7 +4,9 @@ import clarityPackageJson from "../../../prototypes/slide-themes/packages/clarit
 
 import {
   getThemePackage,
+  listThemePackageCatalog,
   listThemePackages,
+  mergeThemePackageCatalogEntries,
   resolveThemePackageId,
   resolveThemePackageForDeck,
 } from "./theme-package-registry";
@@ -19,9 +21,9 @@ test("getThemePackage resolves generated presentation theme packages by id", () 
   assert.equal(getThemePackage("clarity")?.id, "clarity");
 });
 
-test("resolveThemePackageForDeck returns the requested presentation package", () => {
+test("resolveThemePackageForDeck preserves built-in package resolution", () => {
   const result = resolveThemePackageForDeck({
-    theme: { packageId: "ocean" },
+    theme: { packageId: "ocean", packageVersion: "ignored-for-built-ins" },
   });
 
   assert.equal(result.package.id, "ocean");
@@ -47,7 +49,9 @@ test("resolveThemePackageForDeck accepts validated custom packages at load bound
         packageVersion: validation.package.version,
       },
     },
-    { customPackages: [validation.package] },
+    {
+      activePackages: [validation.package],
+    },
   );
 
   assert.equal(result.package.id, validation.package.id);
@@ -86,6 +90,194 @@ test("listThemePackages returns a stable memoized list", () => {
   const second = listThemePackages();
 
   assert.equal(first, second);
+});
+
+test("catalog dedup keeps the newest persisted same-id snapshot independent of the active render package", () => {
+  const active = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:custom",
+    version: "1.0.0+r1",
+  };
+  const latest = { ...active, version: "2.0.0+r1" };
+  const other = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:other",
+    version: "3.0.0+r1",
+  };
+  const packages = mergeThemePackageCatalogEntries([
+    {
+      package: active as never,
+      source: "custom",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      package: latest as never,
+      source: "custom",
+      createdAt: "2026-02-01T00:00:00.000Z",
+    },
+    {
+      package: other as never,
+      source: "custom",
+      createdAt: "2026-01-15T00:00:00.000Z",
+    },
+  ]);
+
+  assert.deepEqual(
+    packages.map((entry) => [
+      entry.package.id,
+      entry.package.version,
+      entry.createdAt,
+    ]),
+    [
+      [latest.id, latest.version, "2026-02-01T00:00:00.000Z"],
+      [other.id, other.version, "2026-01-15T00:00:00.000Z"],
+    ],
+  );
+});
+
+test("catalog ordering uses persisted recency with deterministic id and version ties", () => {
+  const first = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:a",
+    version: "1.0.0+r1",
+  };
+  const second = { ...first, id: "brand-kit:user-user-1:b" };
+  const entries = mergeThemePackageCatalogEntries([
+    {
+      package: second as never,
+      source: "custom",
+      createdAt: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      package: first as never,
+      source: "custom",
+      createdAt: "2026-03-01T00:00:00.000Z",
+    },
+    ...listThemePackageCatalog(),
+  ]);
+
+  assert.deepEqual(
+    entries.slice(0, 2).map((entry) => entry.package.id),
+    [first.id, second.id],
+  );
+  assert.equal(entries.at(-1)?.source, "built-in");
+});
+
+test("missing-version custom references never resolve from a same-id latest catalog entry", () => {
+  const latest = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:custom",
+    version: "2.0.0+r1",
+  };
+  const catalogEntries = mergeThemePackageCatalogEntries([
+    {
+      package: latest as never,
+      source: "custom",
+      createdAt: "2026-04-01T00:00:00.000Z",
+    },
+  ]);
+  const result = resolveThemePackageForDeck({
+    theme: { packageId: latest.id },
+  });
+
+  assert.equal(catalogEntries[0]?.package.version, latest.version);
+  assert.equal(result.package.id, "neutral");
+  assert.equal(result.fallback, true);
+  assert.equal(result.diagnostics[0]?.code, "unknown-theme-package");
+});
+
+test("mismatched custom package IDs or versions use the safe fallback path", () => {
+  const active = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:custom",
+    version: "1.0.0+r1",
+  };
+  const latest = { ...active, version: "2.0.0+r1" };
+  const catalogEntries = mergeThemePackageCatalogEntries([
+    {
+      package: latest as never,
+      source: "custom",
+      createdAt: "2026-04-01T00:00:00.000Z",
+    },
+  ]);
+  const versionMismatch = resolveThemePackageForDeck(
+    {
+      theme: {
+        packageId: latest.id,
+        packageVersion: latest.version,
+      },
+    },
+    {
+      activePackages: [active as never],
+    },
+  );
+  const idMismatch = resolveThemePackageForDeck(
+    {
+      theme: {
+        packageId: "brand-kit:user-user-1:other",
+        packageVersion: active.version,
+      },
+    },
+    {
+      activePackages: [active as never],
+    },
+  );
+
+  assert.equal(catalogEntries[0]?.package.version, latest.version);
+  for (const result of [versionMismatch, idMismatch]) {
+    assert.equal(result.package.id, "neutral");
+    assert.equal(result.fallback, true);
+    assert.equal(result.diagnostics[0]?.code, "unknown-theme-package");
+  }
+});
+
+test("an exact active custom package resolves independently of newer catalog state", () => {
+  const active = {
+    ...cloneFixture(clarityPackageJson),
+    id: "brand-kit:user-user-1:custom",
+    version: "1.0.0+r1",
+  };
+  const latest = { ...active, version: "2.0.0+r1" };
+  const catalogEntries = mergeThemePackageCatalogEntries([
+    {
+      package: latest as never,
+      source: "custom",
+      createdAt: "2026-04-01T00:00:00.000Z",
+    },
+  ]);
+  const result = resolveThemePackageForDeck(
+    {
+      theme: {
+        packageId: active.id,
+        packageVersion: active.version,
+      },
+    },
+    { activePackages: [active as never] },
+  );
+
+  assert.equal(catalogEntries[0]?.package.version, latest.version);
+  assert.equal(result.package.version, active.version);
+  assert.equal(result.fallback, false);
+});
+
+test("invalid exact active custom snapshots use the safe fallback path", () => {
+  const invalid = {
+    id: "brand-kit:user-user-1:custom",
+    version: "1.0.0+r1",
+  };
+  const result = resolveThemePackageForDeck(
+    {
+      theme: {
+        packageId: invalid.id,
+        packageVersion: invalid.version,
+      },
+    },
+    { activePackages: [invalid as never] },
+  );
+
+  assert.equal(result.package.id, "neutral");
+  assert.equal(result.fallback, true);
+  assert.equal(result.diagnostics[0]?.code, "unknown-theme-package");
 });
 
 test("listThemePackages keeps all generated packages after validation", () => {

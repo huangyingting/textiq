@@ -87,6 +87,11 @@ describe("brand kit authoring controller", () => {
           packageId: compiledPackage.id,
           packageVersion: compiledPackage.version,
           package: compiledPackage,
+          catalogEntry: {
+            package: compiledPackage,
+            source: "custom",
+            createdAt: "2026-02-03T04:05:06.000Z",
+          },
           diagnostics: [],
         };
       },

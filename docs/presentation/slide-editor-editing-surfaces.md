@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-07"
+last_updated: "2026-07-17"
 description: "Interaction ownership rules for the slide editor canvas popover, element popover toolbar, right inspector panel, right-click menu, and layer management."
 ---
 
@@ -141,8 +141,25 @@ Group behavior:
 - Grouping selected elements creates a group and selects the new group.
 - Grouping does not enter a persistent group editing mode.
 - The editor does not show an `Editing group` badge or an `Exit` button.
-- Ungrouping removes only the selected group layer and selects the former children.
-- Ungrouping does not recursively ungroup nested groups.
+- Ungrouping finds the selected group at any supported nesting depth, replaces it
+  with its direct children at the same parent/sibling position, and selects those
+  former children. Nested group children remain grouped until explicitly
+  ungrouped.
+- Locked or hidden groups cannot be grouped or ungrouped. This prevents a
+  structural command from bypassing lock state or making a hidden subtree
+  visible.
+- Groups are logical selection and stacking containers. Their children retain
+  slide-absolute frames and rotations; group move, resize, and rotation commands
+  bake geometry changes into descendants.
+- Renderers and exporters therefore do not paint group fill/effects or apply a
+  nested group transform. Group layout remains authoritative for selection
+  bounds, manipulation, hit testing, and placement of the whole subtree among
+  the group's siblings.
+- Logical groups do not support `style` or `localStyle`. The schema rejects both
+  fields, group creation does not write them, and style-binding/local-style
+  commands ignore group targets. Visual styling belongs to descendants and keeps
+  the normal theme binding, deck override, and node `localStyle` precedence,
+  including for source-linked descendants.
 
 Group child selection uses progressive clicks:
 
@@ -160,16 +177,25 @@ Group context is visual only:
 
 ## Layer Management
 
-Layering is type-banded rather than globally freeform. The system keeps stable type bands for slide objects, and users manage order only within compatible layer groups.
+Each parent node is an independent stacking context. Direct siblings are sorted
+back-to-front by finite `layout.zIndex`; missing, `NaN`, and infinite values
+deterministically fall back to zero, and source order is the stable tie-break.
+A grouped child's z-index competes only with children of the same group, never
+with the group's top-level siblings.
 
 Layer management lives in the right inspector panel's Layers panel.
 
 The Layers panel:
 
-- Groups user layers by element type band.
+- Shows nested user layers in the same canonical foreground-to-background order
+  used by editor, present/public rendering, hit testing, and export.
 - Shows generated theme decoration and deck chrome layers as read-only generated groups.
 - Supports rename, hide/show, and lock/unlock for user layers.
-- Supports drag or move controls only within the same type group.
-- Does not allow user-facing cross-type bring/send commands.
+- Supports move controls only between direct siblings in the same parent.
+- Does not move a node across a group boundary or into a different parent.
 
-User-facing bring/send commands are removed from popover toolbars, the right-click menu, and ordinary arrange panels. Internal zIndex remains part of the data model and render order but is not an ordinary user-editable field.
+User-facing bring/send commands are removed from popover toolbars and the
+right-click menu. Layers move controls update and normalize the selected sibling
+set only; unrelated parent contexts retain their z-index values. Internal
+`zIndex` remains part of the data model and render order but is not an ordinary
+user-editable field.
