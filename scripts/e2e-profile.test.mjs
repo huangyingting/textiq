@@ -22,14 +22,23 @@ import {
 import {
   buildE2EProfileEnv,
   buildE2EProfileSteps,
+  closeE2EProfilePortReservations,
+  detectLiveE2EServer,
   e2EPlaywrightProcessEnv,
   provisionE2ETlsIdentity,
+  provisionChromiumTrust,
   removeGeneratedTypeIncludes,
+  reserveE2EProfilePorts,
   resolveE2EProfileDatabaseUrl,
   resolveE2EProfileFixturePlan,
+  resolveE2EProfileProjects,
+  resolveE2EProfileRepeatEach,
   resolveE2EProfileWorkers,
   runE2EProfile,
+  spawnE2EProfileServer,
   stopE2EProfileServer,
+  stopE2EProfileServerProcess,
+  waitForE2EProfileServer,
 } from "./e2e-profile.mjs";
 import { runE2EGlobalSetup } from "./e2e-global-setup.mjs";
 import {
@@ -366,6 +375,256 @@ test("database normalization and generated type cleanup remain deterministic", (
       ".next/e2e-profile/run",
     ),
     { include: ["src/**/*.ts"] },
+  );
+});
+
+test("origin and profile config reject unsafe edge cases", () => {
+  assert.deepEqual(resolveE2EOriginConfig({ HOST: "0.0.0.0" }), {
+    origin: "http://127.0.0.1:4000",
+    port: "4000",
+    serverHost: "0.0.0.0",
+  });
+  assert.deepEqual(resolveE2EOriginConfig({ HOST: "::", PORT: "4010" }), {
+    origin: "http://127.0.0.1:4010",
+    port: "4010",
+    serverHost: "::",
+  });
+  assert.equal(
+    resolveE2EOriginConfig({ E2E_BASE_URL: "https://localhost:443" }).port,
+    "443",
+  );
+
+  for (const env of [
+    { DB_PROVIDER: "postgres" },
+    { DB_PROVIDER: " " },
+    { DATABASE_URL: "postgres://example" },
+    { DATABASE_URL: "file:" },
+    { DATABASE_URL: "file:./db.sqlite?mode=ro" },
+  ]) {
+    assert.throws(() => resolveE2EProfileDatabaseUrl(env, "/repo"));
+  }
+
+  assert.throws(() => buildE2EProfileEnv({}, { runId: "-bad" }));
+  assert.throws(() => buildE2EProfileEnv({}, { runId: "ok", runNonce: "ABC" }));
+  assert.throws(() =>
+    buildE2EProfileEnv(
+      { E2E_PROFILE_PORT: "65534" },
+      { runId: "ok", runNonce: "1".repeat(64) },
+    ),
+  );
+  assert.throws(() =>
+    buildE2EProfileEnv(
+      { E2E_PROFILE_PORT: "65535" },
+      { runId: "ok", runNonce: "1".repeat(64) },
+    ),
+  );
+  assert.throws(() =>
+    buildE2EProfileEnv(
+      {
+        BASE_URL: "https://localhost:4001",
+        E2E_BASE_URL: "https://localhost:4000",
+      },
+      { runId: "ok", runNonce: "1".repeat(64) },
+    ),
+  );
+});
+
+test("profile argument parsing rejects unsupported worker and project shapes", () => {
+  assert.equal(resolveE2EProfileRepeatEach(["--repeat-each", "3"]), 3);
+  assert.equal(resolveE2EProfileRepeatEach(["--repeat-each=2"]), 2);
+  for (const args of [
+    ["--repeat-each"],
+    ["--repeat-each=0"],
+    ["--repeat-each=x"],
+  ]) {
+    assert.throws(() => resolveE2EProfileRepeatEach(args));
+  }
+  assert.equal(resolveE2EProfileWorkers(["--workers", "2"]), 2);
+  assert.equal(
+    resolveE2EProfileWorkers(
+      [],
+      { E2E_PROFILE_WORKERS: "50%" },
+      { cpuCount: 3 },
+    ),
+    1,
+  );
+  for (const [args, env, options] of [
+    [["--workers"], {}, {}],
+    [["--workers=0"], {}, {}],
+    [["--workers=abc"], {}, {}],
+    [["--workers=101%"], {}, {}],
+    [["--workers=50%"], {}, { cpuCount: 0 }],
+  ]) {
+    assert.throws(() => resolveE2EProfileWorkers(args, env, options));
+  }
+  assert.deepEqual(resolveE2EProfileProjects(["--project", "chromium"]), [
+    "chromium",
+  ]);
+  assert.deepEqual(resolveE2EProfileProjects(["--project=chromium"]), [
+    "chromium",
+  ]);
+  assert.throws(() =>
+    resolveE2EProfileProjects([], { E2E_PROFILE_PROJECTS: "," }),
+  );
+  assert.throws(() =>
+    resolveE2EProfileProjects([], { E2E_PROFILE_PROJECTS: "firefox" }),
+  );
+});
+
+test("profile server readiness and cleanup handle failure paths", async () => {
+  await assert.equal(
+    await detectLiveE2EServer("https://localhost:4000", {
+      fetchImpl: async () => {},
+    }),
+    true,
+  );
+  await assert.equal(
+    await detectLiveE2EServer("https://localhost:4000", {
+      fetchImpl: async () => {
+        const error = new Error("aggregate");
+        error.errors = [{ code: "ECONNREFUSED" }];
+        throw error;
+      },
+    }),
+    false,
+  );
+  await assert.rejects(
+    detectLiveE2EServer("https://localhost:4000", {
+      fetchImpl: async () => {
+        const error = new Error("boom");
+        error.cause = { code: "ECONNRESET" };
+        throw error;
+      },
+    }),
+    /Unable to verify/,
+  );
+
+  await assert.rejects(
+    waitForE2EProfileServer({
+      env: {
+        E2E_PROFILE_IDENTITY_FILE: "identity",
+        E2E_PROFILE_CREDENTIAL_GATE_FILE: "gate",
+        E2E_PROFILE_COMPROMISE_FILE: "compromise",
+        E2E_WEB_SERVER_TIMEOUT_MS: "1",
+      },
+      serverProcess: { e2eSpawnError: new Error("spawn") },
+      delay: async () => {},
+    }),
+    /Unable to launch/,
+  );
+  await assert.rejects(
+    waitForE2EProfileServer({
+      env: {
+        E2E_PROFILE_IDENTITY_FILE: "identity",
+        E2E_PROFILE_CREDENTIAL_GATE_FILE: "gate",
+        E2E_PROFILE_COMPROMISE_FILE: "compromise",
+        E2E_WEB_SERVER_TIMEOUT_MS: "1",
+      },
+      serverProcess: { exitCode: 1, signalCode: null },
+      delay: async () => {},
+    }),
+    /exited before readiness/,
+  );
+  await assert.rejects(
+    waitForE2EProfileServer({
+      env: {
+        E2E_PROFILE_IDENTITY_FILE: "identity",
+        E2E_PROFILE_CREDENTIAL_GATE_FILE: "gate",
+        E2E_PROFILE_COMPROMISE_FILE: "compromise",
+        E2E_WEB_SERVER_TIMEOUT_MS: "1",
+      },
+      serverProcess: { exitCode: null, signalCode: null },
+      existsFile: () => true,
+      assertGate: async () => {
+        throw new Error("not ready");
+      },
+      delay: async () => {},
+    }),
+    /did not establish/,
+  );
+
+  const signals = [];
+  await stopE2EProfileServerProcess(
+    { pid: 123, exitCode: 0, signalCode: null },
+    { kill: () => assert.fail("already exited"), delay: async () => {} },
+  );
+  await stopE2EProfileServerProcess(
+    { pid: 123, exitCode: null, signalCode: null },
+    {
+      timeoutMs: 0,
+      kill: (pid, signal) => signals.push([pid, signal]),
+      delay: async () => {},
+    },
+  );
+  assert.deepEqual(signals, [
+    [123, "SIGTERM"],
+    [123, "SIGKILL"],
+  ]);
+  await assert.rejects(
+    stopE2EProfileServerProcess(
+      { pid: 0, exitCode: null, signalCode: null },
+      { delay: async () => {} },
+    ),
+    /PID is invalid/,
+  );
+});
+
+test("profile process helpers cover reservation and command error paths", async () => {
+  const closed = [];
+  const servers = [
+    {
+      once: (_event, _handler) => {},
+      listen: (_options, callback) => callback(),
+      removeListener: () => {},
+      close: (callback) => {
+        closed.push("first");
+        callback();
+      },
+    },
+    {
+      once: (_event, handler) => {
+        handler(new Error("busy"));
+      },
+      listen: () => {},
+      close: (callback) => {
+        closed.push("second");
+        callback();
+      },
+    },
+  ];
+  await assert.rejects(
+    reserveE2EProfilePorts(["4000", "4001"], {
+      createServerImpl: () => servers.shift(),
+    }),
+    /Unable to reserve/,
+  );
+  assert.deepEqual(closed, ["first"]);
+  await assert.rejects(
+    closeE2EProfilePortReservations([
+      { close: (callback) => callback(new Error("close")) },
+    ]),
+    /close/,
+  );
+  assert.throws(() =>
+    spawnE2EProfileServer({ env: {}, keyDescriptor: 2, spawnImpl: () => ({}) }),
+  );
+  const child = {
+    once(event, handler) {
+      assert.equal(event, "error");
+      handler(new Error("spawn"));
+    },
+  };
+  assert.equal(
+    spawnE2EProfileServer({
+      env: {},
+      keyDescriptor: 3,
+      spawnImpl: () => child,
+    }).e2eSpawnError.message,
+    "spawn",
+  );
+
+  assert.throws(() =>
+    provisionChromiumTrust({ E2E_PROFILE_BROWSER_HOME: "relative" }),
   );
 });
 
