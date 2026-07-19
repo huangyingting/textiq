@@ -220,6 +220,15 @@ test("redirect and response header proxying reject ambiguous upstream locations"
     ),
     "https://localhost:4400/app",
   );
+  assert.throws(
+    () =>
+      rewriteE2ERedirectLocation(
+        "/profile",
+        new URL("http://user:pass@localhost:4402"),
+        externalOrigin,
+      ),
+    /external upstream Location/,
+  );
   for (const location of [
     "http://evil.example/app",
     "//evil.example/app",
@@ -373,6 +382,19 @@ test("secure web proxy rejects invalid capabilities and request targets", async 
       })
     ).status,
     503,
+  );
+
+  const oversizedCommitment = await fixture("oversized-commitment");
+  await assert.rejects(
+    () =>
+      proxyRequest(oversizedCommitment.env, {
+        body: Buffer.alloc(17 * 1024, "x"),
+        headers: { host: new URL(oversizedCommitment.env.E2E_BASE_URL).host },
+        method: "POST",
+        path: E2E_CAPABILITY_ENDPOINT,
+        timeoutMs: 1_000,
+      }),
+    /socket hang up|closed before completion/,
   );
 
   const forged = await fixture("forged-capability");

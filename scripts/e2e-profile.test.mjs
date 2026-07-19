@@ -147,6 +147,52 @@ test("profile origin resolution ignores the internal PORT only in profile mode",
   );
 });
 
+test("profile origin resolution validates ports and preserves IPv6 host intent", () => {
+  assert.deepEqual(
+    resolveE2EOriginConfig({ E2E_BASE_URL: "http://host.test" }),
+    {
+      origin: "http://host.test",
+      port: "80",
+      serverHost: "host.test",
+    },
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({ E2E_BASE_URL: "https://host.test" }),
+    {
+      origin: "https://host.test",
+      port: "443",
+      serverHost: "host.test",
+    },
+  );
+  assert.deepEqual(
+    resolveE2EOriginConfig({ E2E_BASE_URL: "http://[::1]:4100" }),
+    {
+      origin: "http://[::1]:4100",
+      port: "4100",
+      serverHost: "::1",
+    },
+  );
+  assert.deepEqual(resolveE2EOriginConfig({ HOST: "::1", PORT: "4101" }), {
+    origin: "http://[::1]:4101",
+    port: "4101",
+    serverHost: "::1",
+  });
+  assert.deepEqual(resolveE2EOriginConfig({ HOST: "[::]", PORT: "4102" }), {
+    origin: "http://127.0.0.1:4102",
+    port: "4102",
+    serverHost: "[::]",
+  });
+
+  assert.throws(
+    () => resolveE2EOriginConfig({ E2E_BASE_URL: "http://[" }),
+    /absolute HTTP\(S\) URL/,
+  );
+  assert.throws(
+    () => resolveE2EOriginConfig({ PORT: "not-a-port" }),
+    /PORT must be an integer/,
+  );
+});
+
 test("TLS provisioning persists only the public certificate and inherits an anonymous key FD", (t) => {
   const root = createTestFixtureRoot("e2e-tls-provision");
   t.after(() => rmSync(root, { force: true, recursive: true }));

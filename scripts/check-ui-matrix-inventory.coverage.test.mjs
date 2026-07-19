@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
 
 import { createTestFixtureRoot } from "./test-fixtures.mjs";
 
 let inventoryModule;
+const require = createRequire(import.meta.url);
 
 async function inventory() {
   inventoryModule ??= await import("./check-ui-matrix-inventory.mjs");
@@ -116,6 +119,90 @@ test("ui matrix scanner covers conditional aliases, invalidations, and exports",
 
   const scan = playwrightTestRegistrations(source, "e2e/nested/spec.spec.ts", {
     repoRoot: root,
+  });
+
+  test("ui matrix CLI reports README drift and top-level load failures", async (t) => {
+    const script = join(
+      process.cwd(),
+      "scripts",
+      "check-ui-matrix-inventory.mjs",
+    );
+    const tsxLoader = require.resolve("tsx");
+    const root = createTestFixtureRoot("ui-matrix-cli-coverage", t);
+    mkdirSync(join(root, "e2e", "ui-matrix"), { recursive: true });
+    writeFileSync(
+      join(root, "e2e", "demo.spec.ts"),
+      [
+        'import { test } from "@playwright/test";',
+        'test("demo", async () => {});',
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(root, "e2e", "ui-matrix", "inventory.ts"),
+      [
+        "export const UI_MATRIX_SPEC_INVENTORY = [{",
+        '  spec: "e2e/demo.spec.ts",',
+        '  owners: ["presentation"],',
+        '  coverage: "demo",',
+        '  runMode: "required-ci",',
+        "  prerequisites: [],",
+        '  roles: ["anonymous"],',
+        '  devices: ["Desktop Chrome"],',
+        '  ciStatus: "required",',
+        '  sourceRefs: ["e2e/demo.spec.ts#L1"],',
+        "}];",
+        "export const UI_MATRIX_MANUAL_GAPS = [];",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(root, "e2e", "ui-matrix", "cases.ts"),
+      [
+        "export const UI_TEST_CASES = [{",
+        '  status: "automated",',
+        '  subsystem: "presentation",',
+        '  automation: { spec: "e2e/demo.spec.ts" },',
+        "}];",
+        "export function summarizeUiCases() {",
+        "  return {",
+        "    total: 1,",
+        "    byStatus: { automated: 1, manual: 0, blocked: 0, catalog: 0 },",
+        "    bySubsystem: {",
+        "      presentation: { total: 1, automated: 1, manual: 0, blocked: 0, catalog: 0 },",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(root, "e2e", "ui-matrix", "README.md"),
+      [
+        "# Fixture",
+        "",
+        "<!-- ui-matrix-inventory:start -->",
+        "stale",
+        "<!-- ui-matrix-inventory:end -->",
+        "",
+      ].join("\n"),
+    );
+
+    const drift = spawnSync(process.execPath, ["--import", tsxLoader, script], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(drift.status, 1);
+    assert.match(drift.stderr, /readme-inventory-drift/);
+
+    const missingRoot = createTestFixtureRoot("ui-matrix-cli-missing", t);
+    const missing = spawnSync(
+      process.execPath,
+      ["--import", tsxLoader, script],
+      {
+        cwd: missingRoot,
+        encoding: "utf8",
+      },
+    );
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /ENOENT/);
   });
 
   assert.deepEqual(
