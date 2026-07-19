@@ -13,7 +13,6 @@ import type { TextRun } from "../deck-elements";
 import type { SlideFormat } from "@/lib/document/deck-kernel/slide-format";
 import { logError } from "@/lib/log";
 import type { Visual } from "@/lib/visual/schema";
-import { toHex } from "@/lib/visual/pptx-shapes";
 import type { PptxSpec } from "@/lib/visual/pptx-shapes";
 import {
   buildDeckSpecs,
@@ -160,14 +159,6 @@ function xmlEscape(value: string): string {
   return escaped;
 }
 
-function cssText(value: string | undefined): string {
-  return value ? xmlEscape(value) : "";
-}
-
-function cssFontFace(fontFace: string | undefined): string {
-  return fontFace ? `font-family:${cssText(fontFace)};` : "";
-}
-
 function shadowCss(enabled: boolean | undefined): string {
   return enabled ? "filter:drop-shadow(0px 4px 8px rgba(0,0,0,0.28));" : "";
 }
@@ -184,62 +175,11 @@ function hashColor(value: string): string {
   return value.startsWith("#") ? value : `#${value}`;
 }
 
-function rgbaColor(value: string, alpha: number): string {
-  const raw = value.replace("#", "");
-  const expanded =
-    raw.length === 3
-      ? raw
-          .split("")
-          .map((part) => `${part}${part}`)
-          .join("")
-      : raw;
-  if (expanded.length < 6) return `rgba(113,113,122,${alpha})`;
-  const r = Number.parseInt(expanded.slice(0, 2), 16);
-  const g = Number.parseInt(expanded.slice(2, 4), 16);
-  const b = Number.parseInt(expanded.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 const GLASS_PRESETS = {
   light: { alpha: 0.05, blur: 6, saturate: 1.16, borderAlpha: 0.12 },
   medium: { alpha: 0.3, blur: 14, saturate: 1.3, borderAlpha: 0.5 },
   strong: { alpha: 0.4, blur: 22, saturate: 1.42, borderAlpha: 0.6 },
 } as const;
-
-function glassFillCss(
-  fill: NonNullable<DeckShapeOp["fill"]>,
-  alpha: number,
-): string {
-  if (typeof fill === "string") return rgbaColor(fill, alpha);
-  if (fill.type === "linearGradient") {
-    if (fill.stops) {
-      return `linear-gradient(${fill.angle ?? 90}deg, ${fill.stops
-        .map(
-          (stop) =>
-            `${rgbaColor(stop.color, alpha + 0.08)}${stop.offset !== undefined ? ` ${stop.offset}%` : ""}`,
-        )
-        .join(", ")})`;
-    }
-    return `linear-gradient(${fill.angle ?? 90}deg, ${rgbaColor(
-      fill.from,
-      alpha + 0.08,
-    )}, ${rgbaColor(fill.to, alpha)})`;
-  }
-  const rx = fill.rx ?? fill.r ?? 70;
-  const ry = fill.ry ?? fill.r ?? 70;
-  if (fill.stops) {
-    return `radial-gradient(${rx}% ${ry}% at ${fill.cx ?? 50}% ${fill.cy ?? 50}%, ${fill.stops
-      .map(
-        (stop) =>
-          `${rgbaColor(stop.color, alpha + 0.08)}${stop.offset !== undefined ? ` ${stop.offset}%` : ""}`,
-      )
-      .join(", ")})`;
-  }
-  return `radial-gradient(${rx}% ${ry}% at ${fill.cx ?? 50}% ${fill.cy ?? 50}%, ${rgbaColor(
-    fill.inner,
-    alpha + 0.08,
-  )}, ${rgbaColor(fill.outer, alpha)})`;
-}
 
 function gradientStopsSvg(
   fill: Exclude<NonNullable<DeckShapeOp["fill"]>, string>,
@@ -279,37 +219,60 @@ function rotationTransform(
 /** Monospace font face used to render inline-code runs in SVG slides. */
 const CODE_FONT_FACE = "Courier New";
 
-function textHtml(
-  text: string,
-  runs: TextRun[] | undefined,
-  pxPerIn: number,
-): string {
-  if (runs && runs.length > 0) {
-    return runs
-      .map((run) => {
-        if (run.text === "\n") return "<br/>";
-        const styles = [
-          run.bold ? "font-weight:700;" : "",
-          run.italic ? "font-style:italic;" : "",
-          run.underline ? "text-decoration:underline;" : "",
-          run.fontSize !== undefined
-            ? `font-size:${pxFromPt(run.fontSize, pxPerIn)}px;`
-            : "",
-          run.code ? `font-family:${CODE_FONT_FACE};` : "",
-          run.color ? `color:#${toHex(run.color)};` : "",
-        ].join("");
-        const content = xmlEscape(run.text).replaceAll("\n", "<br/>");
-        const span = `<span style="${styles}">${content}</span>`;
-        return run.link
-          ? `<a href="${xmlEscape(run.link)}" style="color:inherit;text-decoration:inherit;">${span}</a>`
-          : span;
-      })
-      .join("");
+/** Average character width as a fraction of font-size pixels, for line-wrap estimation. */
+const CHAR_WIDTH_RATIO = 0.54;
+
+/** Word-wrap a single line of text to at most `charsPerLine` characters. */
+function wrapTextLine(text: string, charsPerLine: number): string[] {
+  if (!text) return [""];
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else {
+      const candidate = `${current} ${word}`;
+      if (candidate.length <= charsPerLine) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = word;
+      }
+    }
   }
-  return xmlEscape(text).replaceAll("\n", "<br/>");
+  if (current) lines.push(current);
+  return lines.length === 0 ? [""] : lines;
 }
 
-function renderTextForeignObject(
+/** Render a single TextRun as an SVG `<tspan>` with per-run styling. */
+function renderRunTspan(run: TextRun, pxPerIn: number): string {
+  const attrs: string[] = [];
+  if (run.bold) attrs.push('font-weight="bold"');
+  if (run.italic) attrs.push('font-style="italic"');
+  if (run.underline) attrs.push('text-decoration="underline"');
+  if (run.color) {
+    attrs.push(
+      `fill="${run.color.startsWith("#") ? run.color : `#${run.color}`}"`,
+    );
+  }
+  if (run.fontSize !== undefined) {
+    attrs.push(`font-size="${pxFromPt(run.fontSize, pxPerIn)}"`);
+  }
+  if (run.code) attrs.push(`font-family="${CODE_FONT_FACE}"`);
+  const attrsStr = attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
+  return `<tspan${attrsStr}>${xmlEscape(run.text)}</tspan>`;
+}
+
+/**
+ * Render a text op as native SVG `<text>` / `<tspan>` — no `<foreignObject>`.
+ *
+ * Plain-text content (no runs) is word-wrapped to the box width using an
+ * estimated average character width. Rich runs are split only on explicit
+ * `\n` and rendered with per-run `<tspan>` styling (bold, italic, color,
+ * font-size) without additional word-wrapping — the SVG box clips overflow.
+ */
+function renderTextSvg(
   op: Pick<
     DeckTextOp,
     | "x"
@@ -333,92 +296,199 @@ function renderTextForeignObject(
   >,
   pxPerIn: number,
 ): string {
-  const x = px(op.x, pxPerIn);
-  const y = px(op.y, pxPerIn);
-  const w = px(op.w, pxPerIn);
-  const h = px(op.h, pxPerIn);
+  const bx = op.x * pxPerIn;
+  const by = op.y * pxPerIn;
+  const bw = op.w * pxPerIn;
+  const bh = op.h * pxPerIn;
   const style = toExportTextStyle(op);
-  const valign =
-    style.verticalAlign === "top"
-      ? "flex-start"
-      : style.verticalAlign === "bottom"
-        ? "flex-end"
-        : "center";
-  /* node:coverage disable */
-  /* Text foreignObject style rows are asserted via slide-image export tests; tsx maps array entries as residual. */
-  const outerStyle = [
-    "width:100%;height:100%;display:flex;",
-    `align-items:${valign};`,
-    "justify-content:stretch;",
-    `color:#${style.color};`,
-    `font-size:${pxFromPt(style.fontSize, pxPerIn)}px;`,
-    style.bold ? "font-weight:700;" : "font-weight:400;",
-    style.italic ? "font-style:italic;" : "font-style:normal;",
-    style.underline ? "text-decoration:underline;" : "",
-    `text-align:${style.align};`,
-    `line-height:${style.lineHeight ?? 1.15};`,
-    "white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;",
-    "overflow:hidden;",
-    cssFontFace(style.fontFace),
-    op.opacity !== undefined ? `opacity:${op.opacity};` : "",
-    shadowCss(op.shadow),
-  ].join("");
-  /* node:coverage enable */
-  const innerStyle = "width:100%;";
-  /* node:coverage disable */
-  /* ForeignObject template rows are asserted via slide-image export tests; tsx maps wrapped template rows as residual. */
-  return `<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"${rotationTransform(
-    op.x * pxPerIn,
-    op.y * pxPerIn,
-    op.w * pxPerIn,
-    op.h * pxPerIn,
-    op.rotation,
-  )}><div xmlns="http://www.w3.org/1999/xhtml" style="${outerStyle}"><div style="${innerStyle}">${textHtml(
-    op.text,
-    op.runs,
-    pxPerIn,
-  )}</div></div></foreignObject>`;
-  /* node:coverage enable */
-}
+  const fontSizePx = (style.fontSize * pxPerIn) / 72;
+  const lineHeightPx = fontSizePx * (style.lineHeight ?? 1.25);
 
-function renderBulletsForeignObject(
-  op: DeckBulletsOp,
-  pxPerIn: number,
-): string {
-  const bulletCounters = new Map<number, number>();
-  /* node:coverage disable */
-  /* Bullet row HTML is asserted by SVG export tests; tsx maps wrapped map rows as residual. */
-  const rows = op.items
-    .map((item, index) => {
-      const detail = op.itemDetails?.[index];
-      const indent = detail?.indent ?? 0;
-      const numbered = detail?.listType === "number";
-      const current = (bulletCounters.get(indent) ?? 0) + 1;
-      bulletCounters.set(indent, current);
-      if (!numbered) bulletCounters.delete(indent + 1);
-      const marker = numbered ? `${current}.` : "•";
-      const html = textHtml(item, op.itemRuns?.[index], pxPerIn);
-      return `<div style="display:flex;gap:0.5em;padding-left:${indent * 1.5}em;"><span style="width:1.2em;flex:0 0 1.2em;">${marker}</span><span style="flex:1 1 auto;">${html}</span></div>`;
+  // Build logical lines: each element is either a plain string (wrap-eligible)
+  // or an array of TextRun (rich, no additional wrapping).
+  type LogicalLine = { text: string; richRuns: TextRun[] | null };
+  const logicalLines: LogicalLine[] = [];
+
+  if (op.runs && op.runs.length > 0) {
+    let currentRuns: TextRun[] = [];
+    for (const run of op.runs) {
+      if (run.text === "\n") {
+        logicalLines.push({
+          text: currentRuns.map((r) => r.text).join(""),
+          richRuns: currentRuns,
+        });
+        currentRuns = [];
+      } else {
+        currentRuns.push(run);
+      }
+    }
+    logicalLines.push({
+      text: currentRuns.map((r) => r.text).join(""),
+      richRuns: currentRuns,
+    });
+  } else {
+    for (const segment of (op.text ?? "").split("\n")) {
+      logicalLines.push({ text: segment, richRuns: null });
+    }
+  }
+
+  // Word-wrap plain-text lines; leave run-based lines as a single render line.
+  const charsPerLine = Math.max(
+    1,
+    Math.floor(bw / (fontSizePx * CHAR_WIDTH_RATIO)),
+  );
+  type RenderLine = { text: string; richRuns: TextRun[] | null };
+  const renderLines: RenderLine[] = [];
+  for (const ll of logicalLines) {
+    if (ll.richRuns !== null) {
+      renderLines.push(ll);
+    } else {
+      for (const wrapped of wrapTextLine(ll.text, charsPerLine)) {
+        renderLines.push({ text: wrapped, richRuns: null });
+      }
+    }
+  }
+  if (renderLines.length === 0) return "";
+
+  const totalTextH = renderLines.length * lineHeightPx;
+
+  // Starting Y based on vertical alignment
+  let firstLineY: number;
+  switch (style.verticalAlign) {
+    case "top":
+      firstLineY = by + fontSizePx;
+      break;
+    case "bottom":
+      firstLineY = Math.max(by + fontSizePx, by + bh - totalTextH + fontSizePx);
+      break;
+    default:
+      firstLineY = Math.max(
+        by + fontSizePx,
+        by + (bh - totalTextH) / 2 + fontSizePx,
+      );
+  }
+
+  // Horizontal anchor
+  const anchor =
+    style.align === "right"
+      ? "end"
+      : style.align === "center"
+        ? "middle"
+        : "start";
+  const anchorX =
+    style.align === "right"
+      ? bx + bw
+      : style.align === "center"
+        ? bx + bw / 2
+        : bx;
+
+  const transform = rotationTransform(bx, by, bw, bh, op.rotation);
+  const groupStyle = shadowCss(op.shadow);
+  const groupAttr = groupStyle ? ` style="${groupStyle}"` : "";
+
+  const baseAttrs = [
+    `x="${anchorX.toFixed(2)}"`,
+    `y="${firstLineY.toFixed(2)}"`,
+    `fill="#${style.color}"`,
+    `font-size="${fontSizePx.toFixed(2)}"`,
+    style.bold ? `font-weight="bold"` : "",
+    style.italic ? `font-style="italic"` : "",
+    style.underline ? `text-decoration="underline"` : "",
+    style.fontFace ? `font-family="${xmlEscape(style.fontFace)}"` : "",
+    `text-anchor="${anchor}"`,
+    op.opacity !== undefined ? `opacity="${op.opacity}"` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const tspans = renderLines
+    .map((line, i) => {
+      const dy = i === 0 ? "0" : lineHeightPx.toFixed(2);
+      const content =
+        line.richRuns !== null
+          ? line.richRuns.map((r) => renderRunTspan(r, pxPerIn)).join("")
+          : xmlEscape(line.text);
+      return `<tspan x="${anchorX.toFixed(2)}" dy="${dy}">${content}</tspan>`;
     })
     .join("");
-  /* node:coverage enable */
-  return renderTextForeignObject(
-    {
-      ...op,
-      text: "",
-      runs: undefined,
-      shadow: op.shadow,
-    },
-    pxPerIn,
-  ).replace(
-    "</div></div></foreignObject>",
-    `${rows}</div></div></foreignObject>`,
-  );
+
+  return `<g${transform}${groupAttr}><text ${baseAttrs}>${tspans}</text></g>`;
+}
+
+/**
+ * Render a bullets op as native SVG `<text>` elements — no `<foreignObject>`.
+ * Each item is laid out as a marker glyph + item text at incremented Y positions.
+ */
+function renderBulletsSvg(op: DeckBulletsOp, pxPerIn: number): string {
+  const bx = op.x * pxPerIn;
+  const by = op.y * pxPerIn;
+  const bw = op.w * pxPerIn;
+  const bh = op.h * pxPerIn;
+  const style = toExportTextStyle(op);
+  const fontSizePx = (style.fontSize * pxPerIn) / 72;
+  const lineHeightPx = fontSizePx * (style.lineHeight ?? 1.4);
+  const transform = rotationTransform(bx, by, bw, bh, op.rotation);
+  const groupStyleParts = [
+    shadowCss(op.shadow),
+    op.opacity !== undefined ? `opacity:${op.opacity};` : "",
+  ].filter(Boolean);
+  const groupAttr =
+    groupStyleParts.length > 0 ? ` style="${groupStyleParts.join("")}"` : "";
+
+  const commonAttrs = [
+    `fill="#${style.color}"`,
+    `font-size="${fontSizePx.toFixed(2)}"`,
+    style.bold ? `font-weight="bold"` : "",
+    style.italic ? `font-style="italic"` : "",
+    style.fontFace ? `font-family="${xmlEscape(style.fontFace)}"` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const bulletCounters = new Map<number, number>();
+  const elements: string[] = [];
+  let currentY = by + fontSizePx;
+
+  for (let index = 0; index < op.items.length; index++) {
+    const itemText = op.items[index] ?? "";
+    const detail = op.itemDetails?.[index];
+    const indent = detail?.indent ?? 0;
+    const numbered = detail?.listType === "number";
+    const current = (bulletCounters.get(indent) ?? 0) + 1;
+    bulletCounters.set(indent, current);
+    if (!numbered) bulletCounters.delete(indent + 1);
+    const marker = numbered ? `${current}.` : "•";
+
+    const indentPx = indent * fontSizePx * 1.5;
+    const markerX = bx + indentPx;
+    const textX = markerX + fontSizePx * 1.5;
+    const textW = bw - indentPx - fontSizePx * 1.5;
+    const charsPerLine = Math.max(
+      1,
+      Math.floor(textW / (fontSizePx * CHAR_WIDTH_RATIO)),
+    );
+    const itemLines = wrapTextLine(itemText, charsPerLine);
+
+    elements.push(
+      `<text ${commonAttrs} x="${markerX.toFixed(2)}" y="${currentY.toFixed(2)}">${xmlEscape(marker)}</text>`,
+    );
+
+    for (const [li, line] of itemLines.entries()) {
+      const lineY = currentY + li * lineHeightPx;
+      if (lineY > by + bh) break;
+      elements.push(
+        `<text ${commonAttrs} x="${textX.toFixed(2)}" y="${lineY.toFixed(2)}">${xmlEscape(line)}</text>`,
+      );
+    }
+    currentY += itemLines.length * lineHeightPx;
+  }
+
+  return `<g${transform}${groupAttr}>${elements.join("")}</g>`;
 }
 
 function renderShapeLabel(op: DeckShapeOp, pxPerIn: number): string {
   if (!op.text || op.shape === "line") return "";
-  return renderTextForeignObject(
+  return renderTextSvg(
     {
       x: op.x + op.w * 0.08,
       y: op.y + op.h * 0.08,
@@ -470,67 +540,65 @@ function shapeFillAttr(
   };
 }
 
-function glassClipCss(op: DeckShapeOp, pxPerIn: number): string {
-  switch (op.shape) {
-    case "circle":
-      return "border-radius:9999px;";
-    case "square":
-      return op.radius ? `border-radius:${op.radius * pxPerIn}px;` : "";
-    case "ellipse":
-      return "clip-path:ellipse(50% 50% at 50% 50%);";
-    case "triangle":
-      return "clip-path:polygon(50% 0%, 0% 100%, 100% 100%);";
-    case "diamond":
-      return "clip-path:polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);";
-    case "rect":
-      return op.radius ? `border-radius:${op.radius * pxPerIn}px;` : "";
-    case "line":
-      return "";
-  }
-}
-
 function renderEffectShapeSvg(
   op: DeckShapeOp,
   fill: NonNullable<DeckShapeOp["fill"]>,
   pxPerIn: number,
 ): string {
   const drawOp = { ...op, ...shapeRenderBox(op.shape, op) };
-  const x = px(drawOp.x, pxPerIn);
-  const y = px(drawOp.y, pxPerIn);
-  const w = px(drawOp.w, pxPerIn);
-  const h = px(drawOp.h, pxPerIn);
-  const transform = rotationTransform(
-    drawOp.x * pxPerIn,
-    drawOp.y * pxPerIn,
-    drawOp.w * pxPerIn,
-    drawOp.h * pxPerIn,
-    drawOp.rotation,
-  );
+  const x = drawOp.x * pxPerIn;
+  const y = drawOp.y * pxPerIn;
+  const w = drawOp.w * pxPerIn;
+  const h = drawOp.h * pxPerIn;
+  const transform = rotationTransform(x, y, w, h, drawOp.rotation);
   const effect = drawOp.effect;
+  const opacity = drawOp.opacity ?? 1;
   const preset =
     effect?.kind === "glass" ? GLASS_PRESETS[effect.intensity] : undefined;
-  const style = [
-    "width:100%;height:100%;box-sizing:border-box;",
-    `background:${preset ? glassFillCss(fill, preset.alpha) : typeof fill === "string" ? hashColor(fill) : shapeFillAttr(fill, "effect-fill").attr};`,
-    preset
-      ? `backdrop-filter:blur(${preset.blur}px) saturate(${preset.saturate});`
-      : effect?.kind === "blur"
-        ? `filter:blur(${effect.radius * pxPerIn * 0.08}px);`
-        : "",
-    preset
-      ? `-webkit-backdrop-filter:blur(${preset.blur}px) saturate(${preset.saturate});`
-      : "",
-    preset
-      ? `border:1px solid ${rgbaColor("ffffff", preset.borderAlpha)};`
-      : "",
-    preset ? "box-shadow:0 8px 24px rgba(15,23,42,0.18);" : "",
-    drawOp.opacity !== undefined ? `opacity:${drawOp.opacity};` : "",
-    glassClipCss(drawOp, pxPerIn),
-  ].join("");
-  return `<g${transform}><foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${style}"></div></foreignObject>${renderShapeLabel(
-    drawOp,
-    pxPerIn,
-  )}</g>`;
+  const uid = `eff-${drawOp.x.toFixed(0)}-${drawOp.y.toFixed(0)}-${drawOp.w.toFixed(0)}`;
+  const localDefs: string[] = [];
+  let common: string;
+
+  if (preset) {
+    // Glass: approximate as semi-transparent fill (SVG has no backdrop-filter)
+    const baseColor = typeof fill === "string" ? hashColor(fill) : "#6b7280";
+    common = `fill="${baseColor}" fill-opacity="${preset.alpha}" stroke="rgba(255,255,255,${preset.borderAlpha})" stroke-width="1"`;
+  } else if (effect?.kind === "blur") {
+    // Blur: use SVG feGaussianBlur filter
+    const stdDev = Math.max(0.1, effect.radius * pxPerIn * 0.04);
+    const filterId = `${uid}-blur`;
+    localDefs.push(
+      `<filter id="${filterId}"><feGaussianBlur stdDeviation="${stdDev.toFixed(2)}" /></filter>`,
+    );
+    const fv = shapeFillAttr(fill, uid);
+    localDefs.push(...fv.defs);
+    common = `fill="${fv.attr}" fill-opacity="${opacity}" filter="url(#${filterId})"`;
+  } else {
+    const fv = shapeFillAttr(fill, uid);
+    localDefs.push(...fv.defs);
+    common = `fill="${fv.attr}" fill-opacity="${opacity}"`;
+  }
+
+  let shapeSvg: string;
+  switch (drawOp.shape) {
+    case "circle":
+    case "ellipse":
+      shapeSvg = `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" ${common} />`;
+      break;
+    case "triangle":
+      shapeSvg = `<polygon points="${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}" ${common} />`;
+      break;
+    case "diamond":
+      shapeSvg = `<polygon points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}" ${common} />`;
+      break;
+    default:
+      shapeSvg = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${drawOp.radius ? drawOp.radius * pxPerIn : 0}" ry="${drawOp.radius ? drawOp.radius * pxPerIn : 0}" ${common} />`;
+  }
+
+  const defsStr =
+    localDefs.length > 0 ? `<defs>${localDefs.join("")}</defs>` : "";
+  const label = renderShapeLabel(drawOp, pxPerIn);
+  return `${defsStr}<g${transform}>${shapeSvg}${label}</g>`;
 }
 
 function renderShapeSvg(
@@ -769,7 +837,7 @@ function renderPptxSpecSvg(
     case "text":
       return {
         defs: [],
-        body: renderTextForeignObject(
+        body: renderTextSvg(
           {
             x: spec.x,
             y: spec.y,
@@ -785,6 +853,12 @@ function renderPptxSpecSvg(
             italic: false,
             align: spec.align ?? "center",
             verticalAlign: "middle",
+            runs: undefined,
+            underline: undefined,
+            opacity: undefined,
+            shadow: undefined,
+            rotation: undefined,
+            lineHeight: undefined,
           },
           pxPerIn,
         ),
@@ -845,10 +919,10 @@ function slideSpecToSvgString(
     try {
       switch (op.kind) {
         case "text":
-          opBody.push(renderTextForeignObject(op, geometry.pxPerIn));
+          opBody.push(renderTextSvg(op, geometry.pxPerIn));
           break;
         case "bullets":
-          opBody.push(renderBulletsForeignObject(op, geometry.pxPerIn));
+          opBody.push(renderBulletsSvg(op, geometry.pxPerIn));
           break;
         case "shape":
           {
@@ -1052,4 +1126,42 @@ export async function exportDeckAsSlideImages(
   } catch {
     return null;
   }
+}
+
+/**
+ * Build per-slide SVG strings for all slides in a deck using native SVG
+ * geometry — no `<foreignObject>` — so each string is safe to rasterize via
+ * `canvas.toDataURL()` without triggering a canvas taint error.
+ *
+ * Image ops are rendered with their original `src` URLs.  Call the browser-
+ * side `inlineSvgImageSources` helper (in `raster-browser-export.tsx`) to
+ * replace those URLs with data URIs before drawing to a canvas.
+ *
+ * @param deck    The deck to render.
+ * @param widthPx Desired output width in pixels. Height is derived from the
+ *                slide aspect ratio. Defaults to 1600 px (matching the
+ *                existing `SLIDE_IMAGE_PX_PER_IN × 13.33 in` geometry).
+ */
+export function buildDeckSlideSvgStrings(
+  deck: Deck,
+  { widthPx = 1600 }: { widthPx?: number } = {},
+): string[] {
+  const specs = buildDeckSpecs(deck, new Map());
+  const deckGeom = deckGeometry(deck.canvas?.format);
+  const pxPerIn = widthPx / deckGeom.slideW;
+  const geometry: SlideImageGeometry = {
+    width: widthPx,
+    height: Math.round(deckGeom.slideH * pxPerIn),
+    pxPerIn,
+  };
+  return specs.map((spec) =>
+    slideSpecToSvgString(
+      spec,
+      geometry,
+      () => null,
+      () => {
+        /* diagnostics suppressed — caller sees the finished SVG string */
+      },
+    ),
+  );
 }

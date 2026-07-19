@@ -4,7 +4,10 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { buildExportSpec } from "@/lib/presentation/export-spec";
+import {
+  buildExportSpec,
+  buildSingleSlideExportSpec,
+} from "@/lib/presentation/export-spec";
 import { resolveDeckRenderTree } from "@/lib/presentation/render-resolver";
 import {
   buildDeck,
@@ -431,5 +434,55 @@ describe("buildExportSpec — additional operation types", () => {
       assert.ok(typeof op.frame.x === "number");
       assert.ok(typeof op.frame.y === "number");
     }
+  });
+});
+
+describe("buildSingleSlideExportSpec", () => {
+  test("returns a single-slide ExportDeckSpec with the given canvas", () => {
+    resetBuilderCounter();
+    const deck = buildDeck([buildContentSlide()]);
+    const pkg = buildMinimalThemePackage();
+    const renderTree = resolveDeckRenderTree(deck, pkg);
+    const slide = renderTree.slides[0]!;
+
+    const result = buildSingleSlideExportSpec(slide, deck.canvas);
+
+    assert.equal(result.slides.length, 1, "should have exactly one slide spec");
+    assert.equal(
+      result.canvas,
+      deck.canvas,
+      "canvas should be the passed canvas",
+    );
+    assert.ok(
+      Array.isArray(result.diagnostics),
+      "diagnostics should be an array",
+    );
+    assert.ok(
+      result.slides[0]!.operations.length > 0,
+      "slide should have at least one operation",
+    );
+  });
+
+  test("produces identical result for the same slide as buildExportSpec", () => {
+    resetBuilderCounter();
+    const deck = buildDeck([buildCoverSlide()]);
+    const pkg = buildMinimalThemePackage();
+    const renderTree = resolveDeckRenderTree(deck, pkg);
+    const fullSpec = buildExportSpec(renderTree);
+    const singleSpec = buildSingleSlideExportSpec(
+      renderTree.slides[0]!,
+      deck.canvas,
+    );
+
+    assert.deepEqual(
+      singleSpec.slides[0]!.id,
+      fullSpec.slides[0]!.id,
+      "slide id should match",
+    );
+    assert.equal(
+      singleSpec.slides[0]!.operations.length,
+      fullSpec.slides[0]!.operations.length,
+      "operation count should match",
+    );
   });
 });

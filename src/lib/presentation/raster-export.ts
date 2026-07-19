@@ -111,6 +111,13 @@ export async function buildRasterPdfFromPngs(
   };
 }
 
+/**
+ * @deprecated Use `exportDeckRasterBrowser` (raster-browser-export.tsx) which
+ * builds foreignObject-free native SVGs from the ExportDeckSpec pipeline.
+ * This function accepts an arbitrary `renderSlideToPng` callback and is kept
+ * for testing the PDF-assembly pipeline (buildRasterPdfFromPngs) without a
+ * browser. Do not wire new UI export flows through this function.
+ */
 export async function exportDeckRaster(
   deck: Deck,
   renderSlideToPng: RenderSlideToPng,

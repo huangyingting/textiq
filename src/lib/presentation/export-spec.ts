@@ -13,6 +13,7 @@ import type {
   ResolvedDeckRenderTree,
   ResolvedSlideRenderTree,
 } from "./render-tree";
+import type { CanvasSpec } from "./types";
 import { DiagnosticCollector } from "./diagnostics";
 import type {
   ExportDeckSpec,
@@ -97,6 +98,23 @@ export function buildExportSpec(
   return {
     canvas: renderTree.canvas,
     slides,
+    diagnostics: dc.diagnostics,
+  };
+}
+
+/**
+ * Builds an `ExportDeckSpec` for a single slide without requiring a full
+ * `ResolvedDeckRenderTree`. Used by per-slide rasterization paths such as
+ * copy-as-image where only one slide's render tree is available.
+ */
+export function buildSingleSlideExportSpec(
+  slide: ResolvedSlideRenderTree,
+  canvas: CanvasSpec,
+): ExportDeckSpec {
+  const dc = new DiagnosticCollector();
+  return {
+    canvas,
+    slides: [buildSlideExportSpec(slide, dc)],
     diagnostics: dc.diagnostics,
   };
 }
