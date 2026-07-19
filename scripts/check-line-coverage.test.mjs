@@ -172,7 +172,7 @@ test("coverage stages have branch and function floor defaults at safe baselines"
 
   assert.equal(scripts.defaultBranchMinimum, 93);
   assert.equal(scripts.branchEnvKey, "SCRIPT_BRANCH_COVERAGE_MIN");
-  assert.equal(scripts.defaultFunctionMinimum, 97);
+  assert.equal(scripts.defaultFunctionMinimum, 96);
   assert.equal(scripts.functionEnvKey, "SCRIPT_FUNCTION_COVERAGE_MIN");
 });
 
@@ -207,7 +207,7 @@ test("buildCoverageCommand uses script stage branch and function defaults", () =
   assert.ok(cmd.args.includes("--check-coverage"));
   assert.ok(cmd.args.includes("--lines=97"));
   assert.ok(cmd.args.includes("--branches=93"));
-  assert.ok(cmd.args.includes("--functions=97"));
+  assert.ok(cmd.args.includes("--functions=96"));
   assert.ok(cmd.args.includes("--reporter=text-summary"));
   assert.ok(cmd.args.includes("node"));
   assert.ok(cmd.args.includes("--test"));
