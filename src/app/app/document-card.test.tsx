@@ -338,6 +338,111 @@ describe("DocumentCard", () => {
     });
   });
 
+  test("the Rename submit button is disabled for an empty or whitespace-only title and enabled once the value is non-blank", () => {
+    withPortalDom(() => {
+      const renderer = mount();
+      try {
+        openMenu(renderer);
+        const renameItem = renderer.root.find(
+          (el) => el.props.role === "menuitem" && textOf(el) === "Rename",
+        );
+        act(() => {
+          (renameItem.props.onClick as () => void)();
+        });
+
+        const input = renderer.root.findByProps({
+          "aria-label": "Document title",
+        });
+        const submitButton = () =>
+          renderer.root.find(
+            (el) => el.type === "button" && el.props.type === "submit",
+          );
+
+        // Pre-filled with the current (non-empty) title → enabled.
+        assert.equal(submitButton().props.disabled, false);
+
+        // Cleared → disabled.
+        act(() => {
+          (input.props.onChange as (e: unknown) => void)({
+            target: { value: "" },
+          });
+        });
+        assert.equal(submitButton().props.disabled, true);
+
+        // Whitespace-only → still disabled.
+        act(() => {
+          (
+            renderer.root.findByProps({ "aria-label": "Document title" }).props
+              .onChange as (e: unknown) => void
+          )({
+            target: { value: "   " },
+          });
+        });
+        assert.equal(submitButton().props.disabled, true);
+
+        // Non-blank again → re-enabled.
+        act(() => {
+          (
+            renderer.root.findByProps({ "aria-label": "Document title" }).props
+              .onChange as (e: unknown) => void
+          )({
+            target: { value: "Renamed" },
+          });
+        });
+        assert.equal(submitButton().props.disabled, false);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("submitting a whitespace-only title is a no-op: renameDocument is never called and the dialog stays open", async () => {
+    await withPortalDom(async () => {
+      const renderer = mount({ title: "Quarterly Plan" });
+      try {
+        openMenu(renderer);
+        const renameItem = renderer.root.find(
+          (el) => el.props.role === "menuitem" && textOf(el) === "Rename",
+        );
+        act(() => {
+          (renameItem.props.onClick as () => void)();
+        });
+
+        const input = renderer.root.findByProps({
+          "aria-label": "Document title",
+        });
+        act(() => {
+          (input.props.onChange as (e: unknown) => void)({
+            target: { value: "   " },
+          });
+        });
+        const form = renderer.root.findByType("form");
+        act(() => {
+          (form.props.onSubmit as (e: unknown) => void)({
+            preventDefault: () => {},
+          });
+        });
+
+        await act(async () => {
+          await waitForAsyncDrain();
+        });
+
+        // The empty submit is guarded: no rename fired, and the dialog is
+        // still mounted (its title input remains findable) rather than
+        // silently coercing the title to "Untitled".
+        assert.deepEqual(
+          globalForActions.__documentCardActionsTestState.renameCalls,
+          [],
+        );
+        assert.ok(
+          renderer.root.findByProps({ "aria-label": "Document title" }),
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("cancelling the rename dialog leaves the title untouched and calls no action", () => {
     withPortalDom(() => {
       const renderer = mount();

@@ -187,6 +187,7 @@ function RenameDialog({
   onSubmit: (title: string) => void;
 }) {
   const [value, setValue] = useState(initialTitle);
+  const isEmpty = value.trim().length === 0;
 
   return (
     <Dialog
@@ -204,6 +205,9 @@ function RenameDialog({
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (isEmpty) {
+            return;
+          }
           onSubmit(value);
         }}
       >
@@ -232,6 +236,7 @@ function RenameDialog({
           </button>
           <button
             type="submit"
+            disabled={isEmpty}
             className="flex h-9 items-center justify-center rounded-full bg-ds-accent px-4 text-sm font-medium text-ds-text-on-accent transition hover:opacity-90 disabled:opacity-60"
           >
             Rename
