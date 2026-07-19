@@ -98,14 +98,23 @@ test("e2e governance: deterministic workflows use the canonical localhost origin
           ...(job.env ?? {}),
           ...(step.env ?? {}),
         };
-        const expectedOrigin = `https://localhost:${env.PORT}`;
 
         assert.match(String(env.PORT ?? ""), /^[1-9]\d*$/);
-        assert.equal(env.E2E_BASE_URL, expectedOrigin);
+        // The runtime derives a per-run r-<hash>.localhost hostname from
+        // E2E_PROFILE_RUN_ID + E2E_PROFILE_RUN_NONCE. Static URL env vars
+        // must NOT be set — if present they suppress derivation and are then
+        // rejected by validateProfileHostname as "not per-run".
+        assert.equal(
+          env.E2E_BASE_URL,
+          undefined,
+          `${fileName}:${jobName} must not set a static E2E_BASE_URL`,
+        );
         for (const name of ["BASE_URL", "AUTH_URL"]) {
-          if (env[name] !== undefined) {
-            assert.equal(env[name], expectedOrigin);
-          }
+          assert.equal(
+            env[name],
+            undefined,
+            `${fileName}:${jobName} must not set a static ${name}`,
+          );
         }
       }
     }
