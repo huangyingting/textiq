@@ -55,3 +55,11 @@ Mouse reviewed testing and QA improvement opportunities and opened GitHub issues
 - 2026-07-04T23:59:30Z — Resolved PR #1753 merge conflict against origin/main in worktree `/home/azadmin/TextIQ-worktrees/issue-1739`, preserved SECURITY.md/Dependabot/dependency policy, ran docs/config checks, and pushed `squad/1739-security-policy-dependabot` at `50725e1604d23614bad5253124befab7a83561bb` without merging.
 
 - 2026-07-05: Implemented #1732/#1735 on branch `squad/1732-1735-e2e-required-gate`; promoted deterministic E2E to a hard required workflow, added self-contained prebuilt-server profile support and `@required-profile` grep slice, updated docs/spec readiness, opened PR https://github.com/huangyingting/textiq/pull/1767. CI green: Quality gate, deterministic E2E, production install smoke.
+
+## 2026-07-19T00:24:30+0000 — Presentation hardening verification and coverage
+
+Mouse verified PR #2016's merged presentation/document-to-deck hardening with focused unit specs passing, identified global gate failures, and a second Mouse pass added check-ui-matrix-inventory, e2e-origin, and function-floor coverage tests for PR #2018. Residual scripts/** coverage debt was classified as coverage-strategy work and tracked in #2019, not as a blocker for #2008–#2015 closure.
+
+## 2026-07-19T02:15:00+00:00 — SCRIPT c8 gate QA coverage
+
+Issue #2019 added real SCRIPT-stage behavioral gap tests alongside the c8 union coverage migration: e2e-profile IPv6/port validation, e2e-web-server redirect ambiguity, e2e-credential-gate listener mismatch/socket hangup, and check-ui-matrix-inventory README drift/ENOENT. Mouse should treat future SCRIPT coverage measurements as c8-based union results, not Node subprocess coverage views.
