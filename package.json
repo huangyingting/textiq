@@ -116,7 +116,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@lexical/headless": "^0.46.0",
+    "@lexical/headless": "^0.48.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26",
@@ -125,13 +125,13 @@
     "@types/react-test-renderer": "^19.1.0",
     "@types/ws": "^8.18.1",
     "c8": "^12.0.0",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "16.2.10",
     "eslint-config-prettier": "^10",
     "prettier": "^3",
     "react-test-renderer": "19.2.7",
     "tailwindcss": "^4",
-    "tsx": "^4.23.0",
-    "typescript": "^6"
+    "tsx": "^4.23.1",
+    "typescript": "^7"
   }
 }
