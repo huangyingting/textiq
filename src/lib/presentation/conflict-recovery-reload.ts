@@ -9,9 +9,7 @@ export const CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE =
   "Couldn't load the server version. Check your connection and retry.";
 
 export type ConflictReloadFailureReason =
-  | "fetch_failed"
-  | "invalid_server_deck"
-  | "theme_hydration_failed";
+  "fetch_failed" | "invalid_server_deck" | "theme_hydration_failed";
 
 export type ConflictReloadServerResult =
   | {

@@ -10,10 +10,7 @@ export type ShortcutSurface =
   | "present-mode";
 
 export type ShortcutHandlerKind =
-  | "global"
-  | "local"
-  | "browser-editor"
-  | "canvas";
+  "global" | "local" | "browser-editor" | "canvas";
 
 export type ModifierRule = "required" | "forbidden" | "optional";
 

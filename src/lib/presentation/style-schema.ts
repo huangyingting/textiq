@@ -137,13 +137,7 @@ export type ImageStyle = {
   contrast?: number;
   saturation?: number;
   maskShape?:
-    | "none"
-    | "rect"
-    | "circle"
-    | "ellipse"
-    | "rounded"
-    | "diamond"
-    | "triangle";
+    "none" | "rect" | "circle" | "ellipse" | "rounded" | "diamond" | "triangle";
   radiusPct?: number;
   shadow?: boolean;
 };
@@ -184,12 +178,7 @@ export type ClipStyle = {
 };
 
 export type BlendMode =
-  | "normal"
-  | "multiply"
-  | "screen"
-  | "overlay"
-  | "darken"
-  | "lighten";
+  "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
 
 // ---------------------------------------------------------------------------
 // Top-level style object

@@ -88,11 +88,7 @@ afterEach(() => {
 
 function restoreGlobal(
   name:
-    | "document"
-    | "window"
-    | "DOMRect"
-    | "ResizeObserver"
-    | "MutationObserver",
+    "document" | "window" | "DOMRect" | "ResizeObserver" | "MutationObserver",
   descriptor: PropertyDescriptor | undefined,
 ) {
   if (descriptor) {
@@ -103,20 +99,44 @@ function restoreGlobal(
 }
 
 function compiledUtilityBlock(css: string, candidate: string) {
-  const selector = `.${candidate.replaceAll(":", "\\:")} {`;
-  const start = css.indexOf(selector);
-  assert.notEqual(start, -1, `expected Tailwind to compile ${candidate}`);
+  // Tailwind escapes ":" in class names as "\:" and may append real pseudo-classes
+  // (e.g. ":hover") to the compiled selector, so match the escaped class name and
+  // tolerate any trailing pseudo-class segments before the opening brace.
+  const escapedClass = candidate
+    .split(":")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\\\:");
+  const selectorPattern = new RegExp(
+    `\\.${escapedClass}(?::[a-zA-Z-]+)*\\s*\\{`,
+  );
+  const match = selectorPattern.exec(css);
+  assert.notEqual(match, null, `expected Tailwind to compile ${candidate}`);
+  const openBrace = match!.index + match![0].length - 1;
+
+  // Collect the enclosing at-rule guards (e.g. media queries) that wrap this rule.
+  // Tailwind may either nest guards inside the rule (older builds) or hoist them
+  // above the selector (newer builds); capturing both keeps the assertions stable.
+  const guards: string[] = [];
+  let segmentStart = 0;
+  for (let index = 0; index < openBrace; index += 1) {
+    const char = css[index];
+    if (char === "{") {
+      guards.push(css.slice(segmentStart, index).trim());
+      segmentStart = index + 1;
+    } else if (char === "}") {
+      guards.pop();
+      segmentStart = index + 1;
+    }
+  }
 
   let depth = 0;
-  for (
-    let index = start + selector.length - 1;
-    index < css.length;
-    index += 1
-  ) {
+  for (let index = openBrace; index < css.length; index += 1) {
     if (css[index] === "{") depth += 1;
     if (css[index] === "}") {
       depth -= 1;
-      if (depth === 0) return css.slice(start, index + 1);
+      if (depth === 0) {
+        return `${guards.join("\n")}\n${css.slice(match!.index, index + 1)}`;
+      }
     }
   }
 
@@ -811,7 +831,7 @@ test("ColorPicker swatches keep normal hover feedback but never scale with reduc
   assert.match(reducedBase, /--tw-scale-x: 100%/);
   assert.match(reducedBase, /\bscale:/);
   assert.match(reducedHover, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(reducedHover, /&:hover/);
+  assert.match(reducedHover, /:hover\b/);
   assert.match(reducedHover, /--tw-scale-x: 100%/);
   assert.match(reducedTransition, /transition-property: none/);
 });

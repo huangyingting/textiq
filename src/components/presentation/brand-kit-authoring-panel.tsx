@@ -357,9 +357,7 @@ export function BrandKitAuthoringPanel({
                       current,
                       "background",
                       event.currentTarget.value as
-                        | "none"
-                        | "subtle"
-                        | "expressive",
+                        "none" | "subtle" | "expressive",
                     ),
                   )
                 }

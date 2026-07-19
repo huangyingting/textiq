@@ -112,9 +112,7 @@ registerHooks({
 
 declare global {
   var __testBrandFontUser:
-    | { id: string; sessionInvalidatedAt: Date | null }
-    | null
-    | undefined;
+    { id: string; sessionInvalidatedAt: Date | null } | null | undefined;
 }
 
 type PrismaDelegate = { [key: string]: (...args: unknown[]) => unknown };

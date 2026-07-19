@@ -64,9 +64,7 @@ export type RuntimeRendererFamily =
   | "orgchart";
 
 export type RuntimeTransformLayout =
-  | "stack-vertical"
-  | "radial"
-  | "strip-position";
+  "stack-vertical" | "radial" | "strip-position";
 
 /** Descriptor-owned runtime contract for one visual kind. */
 export interface VisualRuntimeDescriptor {
@@ -87,12 +85,7 @@ export interface VisualRuntimeDescriptor {
     readonly family: RuntimeRendererFamily;
     readonly component: string;
     readonly primitives: readonly (
-      | "canvas"
-      | "effects"
-      | "nodes"
-      | "edges"
-      | "labels"
-      | "icons"
+      "canvas" | "effects" | "nodes" | "edges" | "labels" | "icons"
     )[];
   };
   readonly transform: {

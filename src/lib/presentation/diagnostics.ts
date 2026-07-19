@@ -47,23 +47,11 @@ export type DiagnosticSeverity = "info" | "warning" | "error" | "fatal";
 
 /** Stable subsystem vocabulary used for filtering and summary counts. */
 export type DiagnosticCategory =
-  | "validation"
-  | "source"
-  | "asset"
-  | "theme"
-  | "render"
-  | "export";
+  "validation" | "source" | "asset" | "theme" | "render" | "export";
 
 /** Stable target scopes used by inspector and deck-level review grouping. */
 export type DiagnosticTargetScope =
-  | "deck"
-  | "slide"
-  | "node"
-  | "asset"
-  | "source"
-  | "style"
-  | "theme"
-  | "export";
+  "deck" | "slide" | "node" | "asset" | "source" | "style" | "theme" | "export";
 
 export const DIAGNOSTIC_CATEGORIES: readonly DiagnosticCategory[] = [
   "validation",

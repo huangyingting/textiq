@@ -28,8 +28,7 @@ import {
 } from "./toolbar/context-toolbar";
 
 type SlideCommandPaletteKeyboardEvent =
-  | KeyboardEvent<HTMLDivElement>
-  | globalThis.KeyboardEvent;
+  KeyboardEvent<HTMLDivElement> | globalThis.KeyboardEvent;
 
 export interface SlideCommandPaletteControllerArgs {
   deck: Deck;

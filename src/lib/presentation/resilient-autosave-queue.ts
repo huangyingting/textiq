@@ -7,10 +7,7 @@ import type {
 } from "./slide-autosave-scheduler";
 
 export type SaveQueueErrorClass =
-  | "offline"
-  | "transient"
-  | "fatal"
-  | "conflict";
+  "offline" | "transient" | "fatal" | "conflict";
 
 export type { SaveQueueStatus } from "./save-status";
 

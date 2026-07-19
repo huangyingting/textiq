@@ -5,11 +5,7 @@ type StringMessageKey = {
 }[keyof Messages];
 
 export type ShellNavItemId =
-  | "documents"
-  | "workspaces"
-  | "brands"
-  | "login"
-  | "signup";
+  "documents" | "workspaces" | "brands" | "login" | "signup";
 
 export type ShellNavItemEmphasis = "default" | "primary";
 

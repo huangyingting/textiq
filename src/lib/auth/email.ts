@@ -26,8 +26,7 @@ export type VerificationEmailMessage = VerificationEmail & {
 };
 
 export type AuthEmailMessage =
-  | PasswordResetEmailMessage
-  | VerificationEmailMessage;
+  PasswordResetEmailMessage | VerificationEmailMessage;
 
 export interface AuthEmailDeliveryPort {
   /** Delivers a concrete auth/account email message. */

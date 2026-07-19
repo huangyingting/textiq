@@ -31,8 +31,7 @@ type EmailVerificationWriteClient = Pick<
 >;
 
 export type VerifyOutcome =
-  | { status: "verified" }
-  | { status: "error"; message: string };
+  { status: "verified" } | { status: "error"; message: string };
 
 const GENERIC_VERIFICATION_ERROR =
   "Could not send a verification email. Please try again.";

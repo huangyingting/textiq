@@ -31,12 +31,7 @@ export const MAX_BULLETS = 5;
 
 type PresentationRole = "title" | "sectionTitle" | "bullet" | "visual";
 type DerivationTemplateId =
-  | "title"
-  | "section"
-  | "content"
-  | "media"
-  | "two-column"
-  | "blank";
+  "title" | "section" | "content" | "media" | "two-column" | "blank";
 
 type DerivedSlideContent = {
   id?: string;

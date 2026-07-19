@@ -10,11 +10,7 @@ import type { Deck } from "./schema";
 export type PresentationExportFormat = "pptx" | "pdf" | "png";
 
 export type PresentationExportFallbackTier =
-  | "native"
-  | "image-retry"
-  | "placeholder"
-  | "raster"
-  | "diagnostic";
+  "native" | "image-retry" | "placeholder" | "raster" | "diagnostic";
 
 export interface PresentationExportPreflightResult {
   format: PresentationExportFormat;

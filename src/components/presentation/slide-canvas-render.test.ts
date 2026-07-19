@@ -344,8 +344,7 @@ describe("SlideCanvas stage editing render affordances", () => {
     );
     assert.ok(renderer, "expected stage node renderer");
     const nodeRef = renderer.props.nodeRef as
-      | ((element: HTMLDivElement | null) => void)
-      | undefined;
+      ((element: HTMLDivElement | null) => void) | undefined;
     assert.ok(nodeRef, "expected stage node registry ref");
 
     const element = fakeStageElement((options) => focusCalls.push(options));

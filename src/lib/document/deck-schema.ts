@@ -30,8 +30,7 @@ export {
 export { validateSourceRef } from "./deck-kernel/deck-validation/source-refs";
 
 export type DeckParseResult =
-  | { success: true; data: Deck }
-  | { success: false; error: string };
+  { success: true; data: Deck } | { success: false; error: string };
 
 /**
  * Non-throwing wrapper around the current deck schema validator.

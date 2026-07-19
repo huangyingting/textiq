@@ -55,11 +55,7 @@ export type ImageAsset = {
   widthPx?: number;
   heightPx?: number;
   mimeType?:
-    | "image/png"
-    | "image/jpeg"
-    | "image/gif"
-    | "image/webp"
-    | "image/svg+xml";
+    "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/svg+xml";
   contentHash?: string;
   origin?: AssetOrigin;
 };
@@ -152,11 +148,7 @@ export type AccessibilityMetadata = {
 };
 
 export type SourceRefreshState =
-  | "fresh"
-  | "stale"
-  | "orphan"
-  | "unlinked"
-  | "unknown";
+  "fresh" | "stale" | "orphan" | "unlinked" | "unknown";
 
 export type SourceRefreshMetadata = {
   state: SourceRefreshState;
@@ -492,22 +484,12 @@ export type SlideTemplateBinding = {
 };
 
 export type SlideTone =
-  | "neutral"
-  | "confident"
-  | "warm"
-  | "urgent"
-  | "premium"
-  | "technical";
+  "neutral" | "confident" | "warm" | "urgent" | "premium" | "technical";
 
 export type SlideDensity = "airy" | "normal" | "dense";
 
 export type SlideEmphasis =
-  | "balanced"
-  | "title"
-  | "data"
-  | "visual"
-  | "quote"
-  | "action";
+  "balanced" | "title" | "data" | "visual" | "quote" | "action";
 
 export type SlideControls = {
   tone?: SlideTone;
@@ -535,12 +517,7 @@ export type SlideNode = BaseNode & {
 // ---------------------------------------------------------------------------
 
 export type DeckChromeKind =
-  | "logo"
-  | "footer"
-  | "pageNumber"
-  | "watermark"
-  | "border"
-  | "safeArea";
+  "logo" | "footer" | "pageNumber" | "watermark" | "border" | "safeArea";
 
 export type DeckChromeLayer = "background" | "foreground";
 
@@ -552,10 +529,7 @@ export type DeckChromeBase = {
 };
 
 export type DeckChromeLogoPlacement =
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
+  "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type DeckChromeLogoSize = "small" | "medium" | "large";
 
 export type DeckChromeLogo = DeckChromeBase & {
@@ -574,9 +548,7 @@ export type DeckChromeFooter = DeckChromeBase & {
 
 export type DeckChromePageNumberFormat = "number" | "number-total";
 export type DeckChromePageNumberPlacement =
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
+  "bottom-left" | "bottom-center" | "bottom-right";
 
 export type DeckChromePageNumber = DeckChromeBase & {
   format?: DeckChromePageNumberFormat;
@@ -614,10 +586,7 @@ export type DeckChromeConfig = {
 };
 
 export type SlideDeckChromeOverrideMode =
-  | "inherit"
-  | "disabled"
-  | "detached"
-  | "override";
+  "inherit" | "disabled" | "detached" | "override";
 
 export type SlideDeckChromeOverride<TChrome> =
   | { mode: "inherit" }

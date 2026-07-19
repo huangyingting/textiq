@@ -45,8 +45,7 @@ export type ShareDenyReason =
 
 /** Result of a share-access evaluation. */
 export type ShareAccessDecision =
-  | { allow: true }
-  | { allow: false; reason: ShareDenyReason };
+  { allow: true } | { allow: false; reason: ShareDenyReason };
 
 /**
  * The document's current share state plus the request context. All fields are

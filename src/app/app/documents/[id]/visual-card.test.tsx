@@ -821,8 +821,7 @@ describe("VisualCard", () => {
           write: async (items: unknown[]) => {
             (globalThis as Record<string, unknown>).__clipboardWrites =
               ((globalThis as Record<string, unknown>).__clipboardWrites as
-                | unknown[]
-                | undefined) ?? [];
+                unknown[] | undefined) ?? [];
             (
               (globalThis as Record<string, unknown>)
                 .__clipboardWrites as unknown[]

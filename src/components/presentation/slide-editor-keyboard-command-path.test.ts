@@ -45,8 +45,7 @@ after(() => {
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 let SlideEditorComponent:
-  | (typeof import("./slide-editor"))["SlideEditor"]
-  | undefined;
+  (typeof import("./slide-editor"))["SlideEditor"] | undefined;
 
 async function getSlideEditor() {
   SlideEditorComponent ??= (await import("./slide-editor")).SlideEditor;

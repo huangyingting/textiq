@@ -197,10 +197,7 @@ export function reconcileDeckVisuals(
 
 /** Reconciliation status of a single deck→document dependency. */
 export type ReconciledDependencyStatus =
-  | "found"
-  | "stale"
-  | "missing"
-  | "invalid";
+  "found" | "stale" | "missing" | "invalid";
 
 /** A single dependency together with its reconciliation outcome. */
 export interface ReconciledDependency {

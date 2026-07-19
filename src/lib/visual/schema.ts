@@ -44,8 +44,7 @@ import { VisualValidationError } from "./schema-validation/utils";
 import type { Visual } from "./schema-types";
 
 export type VisualParseResult =
-  | { success: true; data: Visual }
-  | { success: false; error: string };
+  { success: true; data: Visual } | { success: false; error: string };
 
 /** Non-throwing wrapper around {@link validateVisual}. */
 export function safeParseVisual(input: unknown): VisualParseResult {

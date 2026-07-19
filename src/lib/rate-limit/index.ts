@@ -47,10 +47,7 @@ function isRetryableAtomicConsumeError(error: unknown): boolean {
 type IpFamily = "ipv4" | "ipv6";
 
 export type ClientIpSource =
-  | "forwarded-for"
-  | "real-ip"
-  | "remote-address"
-  | "missing";
+  "forwarded-for" | "real-ip" | "remote-address" | "missing";
 
 export type ClientIpDiagnosticReason =
   | "forwarded-header-ignored"

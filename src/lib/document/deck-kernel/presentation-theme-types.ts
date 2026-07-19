@@ -176,10 +176,7 @@ export type ShapeToken = {
 
 /** Numbered-list rendering style for bullet defaults. */
 export type BulletNumberStyle =
-  | "decimal"
-  | "lower-alpha"
-  | "upper-alpha"
-  | "lower-roman";
+  "decimal" | "lower-alpha" | "upper-alpha" | "lower-roman";
 
 /** Deck-template bullet defaults inherited by bullet elements. */
 export type BulletDefaultsToken = {

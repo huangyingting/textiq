@@ -39,12 +39,7 @@ interface CommandEnvelope<P = unknown> {
   actor: { id: string; sessionId?: string };
   target: {
     surface:
-      | "document"
-      | "visual"
-      | "deck"
-      | "asset"
-      | "comment"
-      | "source-ref";
+      "document" | "visual" | "deck" | "asset" | "comment" | "source-ref";
     documentId?: string;
     visualId?: string;
     slideId?: string;

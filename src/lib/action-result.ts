@@ -17,8 +17,7 @@
  * `T` defaults to `void` for actions that succeed without returning a payload.
  */
 export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+  { ok: true; data: T } | { ok: false; error: string };
 
 /** Builds a successful {@link ActionResult}, optionally carrying a payload. */
 export function actionOk(): ActionResult<void>;

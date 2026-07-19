@@ -25,8 +25,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export type DeckParseResult =
-  | { success: true; data: Deck }
-  | { success: false; errors: string[] };
+  { success: true; data: Deck } | { success: false; errors: string[] };
 
 export const DECK_VALIDATION_CODES = [
   "duplicate_id",

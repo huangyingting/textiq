@@ -40,8 +40,7 @@ export { inlineTextAlignForCommand } from "./inline-text-dom-adapter";
 export type { InlineTextAlign } from "./inline-text-dom-adapter";
 
 export type InlineTextInitialCaret =
-  | { kind: "client"; x: number; y: number }
-  | { kind: "start" };
+  { kind: "client"; x: number; y: number } | { kind: "start" };
 
 export interface InlineTextEditorPresentationProps {
   /** Stable id of the node being edited. */
@@ -178,8 +177,7 @@ export function InlineTextEditorPresentation({
   };
 
   function autoHeightFrame():
-    | { x: number; y: number; w: number; h: number }
-    | undefined {
+    { x: number; y: number; w: number; h: number } | undefined {
     const el = editableRef.current;
     if (!autoHeight || !el || !canvasRect || canvasRect.height <= 0) {
       return undefined;

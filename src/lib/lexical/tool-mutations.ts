@@ -33,14 +33,7 @@ import type { EditorContextSnapshot } from "./selection-snapshot";
 import type { VisualKind } from "@/lib/visual/schema";
 
 type BlockInsertKind =
-  | "h1"
-  | "h2"
-  | "h3"
-  | "bullet"
-  | "number"
-  | "quote"
-  | "divider"
-  | "table";
+  "h1" | "h2" | "h3" | "bullet" | "number" | "quote" | "divider" | "table";
 
 function toggleFormat(editor: LexicalEditor, format: TextFormatType): void {
   editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);

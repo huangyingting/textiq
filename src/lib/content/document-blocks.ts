@@ -65,11 +65,7 @@ export function computePageBreaks(
 // ---------------------------------------------------------------------------
 
 export type TextBlockKind =
-  | "paragraph"
-  | "heading"
-  | "quote"
-  | "listitem"
-  | "hr";
+  "paragraph" | "heading" | "quote" | "listitem" | "hr";
 
 export type DocumentTextBlock = {
   kind: "text";
@@ -124,9 +120,7 @@ export type DocumentVisualBlock = {
 };
 
 export type DocumentBlock =
-  | DocumentTextBlock
-  | DocumentVisualBlock
-  | DocumentTableBlock;
+  DocumentTextBlock | DocumentVisualBlock | DocumentTableBlock;
 
 function escapeMarkdownTableCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();

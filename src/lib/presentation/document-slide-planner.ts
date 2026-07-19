@@ -289,18 +289,16 @@ export function documentSlidePlanToSemanticDeckPlan(
     planVersion: 1,
     ...(plan.title ? { title: plan.title } : {}),
     ...(plan.locale ? { locale: plan.locale } : {}),
-    slides: plan.slides.map(
-      (slide): SemanticSlideSpecV1 => ({
-        kind: slide.kind,
-        ...(slide.controls?.tone ? { tone: slide.controls.tone } : {}),
-        ...(slide.controls?.density ? { density: slide.controls.density } : {}),
-        ...(slide.controls?.emphasis
-          ? { emphasis: slide.controls.emphasis }
-          : {}),
-        slots: slide.slots,
-        ...(slide.speakerNotes ? { speakerNotes: slide.speakerNotes } : {}),
-      }),
-    ),
+    slides: plan.slides.map((slide): SemanticSlideSpecV1 => ({
+      kind: slide.kind,
+      ...(slide.controls?.tone ? { tone: slide.controls.tone } : {}),
+      ...(slide.controls?.density ? { density: slide.controls.density } : {}),
+      ...(slide.controls?.emphasis
+        ? { emphasis: slide.controls.emphasis }
+        : {}),
+      slots: slide.slots,
+      ...(slide.speakerNotes ? { speakerNotes: slide.speakerNotes } : {}),
+    })),
   };
 }
 
@@ -326,22 +324,20 @@ export function semanticDeckPlanToDocumentSlidePlan({
       contentHash: sourcePlan.contentHash,
       truncated: sourcePlan.truncated,
     },
-    slides: semanticPlan.slides.map(
-      (slide, index): DocumentPlannedSlideV1 => ({
-        id: `plan-slide-${index + 1}`,
-        kind: slide.kind,
-        sourceBlockIds: [],
-        slotSources: {},
-        slots: slide.slots,
-        ...((slide.tone || slide.density || slide.emphasis) && {
-          controls: {
-            ...(slide.tone ? { tone: slide.tone } : {}),
-            ...(slide.density ? { density: slide.density } : {}),
-            ...(slide.emphasis ? { emphasis: slide.emphasis } : {}),
-          },
-        }),
-        ...(slide.speakerNotes ? { speakerNotes: slide.speakerNotes } : {}),
+    slides: semanticPlan.slides.map((slide, index): DocumentPlannedSlideV1 => ({
+      id: `plan-slide-${index + 1}`,
+      kind: slide.kind,
+      sourceBlockIds: [],
+      slotSources: {},
+      slots: slide.slots,
+      ...((slide.tone || slide.density || slide.emphasis) && {
+        controls: {
+          ...(slide.tone ? { tone: slide.tone } : {}),
+          ...(slide.density ? { density: slide.density } : {}),
+          ...(slide.emphasis ? { emphasis: slide.emphasis } : {}),
+        },
       }),
-    ),
+      ...(slide.speakerNotes ? { speakerNotes: slide.speakerNotes } : {}),
+    })),
   };
 }

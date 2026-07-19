@@ -27,8 +27,7 @@ export type TextIqNodeCopyOutPayload = {
 };
 
 export type TextIqNodePayloadParseResult =
-  | { ok: true; nodes: SlideChildNode[] }
-  | { ok: false; error: string };
+  { ok: true; nodes: SlideChildNode[] } | { ok: false; error: string };
 
 export type TextIqNodePasteResolution =
   | { source: "os"; nodes: SlideChildNode[] }

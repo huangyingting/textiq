@@ -22,8 +22,7 @@ interface BodySizeOptions {
 }
 
 type BodyReadResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; response: NextResponse };
+  { ok: true; value: T } | { ok: false; response: NextResponse };
 
 const utf8Encoder = new TextEncoder();
 

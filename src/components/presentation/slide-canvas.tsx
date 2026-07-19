@@ -443,8 +443,7 @@ export const SlideCanvas = memo(function SlideCanvas({
 function applyNodeGestureDraft(
   node: ResolvedRenderNode,
   nodeGestureDrafts:
-    | ReadonlyMap<string, SlideCanvasNodeGestureDraft>
-    | undefined,
+    ReadonlyMap<string, SlideCanvasNodeGestureDraft> | undefined,
 ): ResolvedRenderNode {
   const draft = nodeGestureDrafts?.get(node.id);
   if (!draft) return node;

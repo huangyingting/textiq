@@ -23,8 +23,7 @@ export const INITIAL_RIGHT_SURFACE_STATE: RightSurfaceState = {
 };
 
 export type RightSurfaceAction =
-  | { type: "OPEN_SLIDE_EDITOR" }
-  | { type: "CLOSE_SLIDE_EDITOR" };
+  { type: "OPEN_SLIDE_EDITOR" } | { type: "CLOSE_SLIDE_EDITOR" };
 
 /**
  * Pure reducer for right-surface coordinator state.

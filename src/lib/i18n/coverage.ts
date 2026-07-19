@@ -18,8 +18,7 @@ export type I18nRequiredUncataloguedSurface =
   (typeof I18N_REQUIRED_UNCATALOGUED_SURFACES)[number];
 
 export type I18nActivationSurface =
-  | I18nCatalogSurface
-  | I18nRequiredUncataloguedSurface;
+  I18nCatalogSurface | I18nRequiredUncataloguedSurface;
 
 export const I18N_ACTIVATION_REQUIRED_SURFACES = [
   "appShell",

@@ -17,10 +17,7 @@ export interface LegacyKeyBackfillOptions {
 }
 
 export type LegacyKeyBackfillRowOutcome =
-  | "would-update"
-  | "updated"
-  | "skipped-collision"
-  | "skipped-race";
+  "would-update" | "updated" | "skipped-collision" | "skipped-race";
 
 export interface LegacyKeyBackfillRow {
   keyHash: string;

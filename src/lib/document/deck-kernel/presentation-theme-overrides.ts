@@ -65,8 +65,7 @@ export function updatePresentationThemeOverrides(
 ): Deck {
   const themeId = resolvePresentationThemeId(deck);
   const existingTokenSet = deck.design?.themeOverrides?.tokenSet as
-    | PresentationTheme
-    | undefined;
+    PresentationTheme | undefined;
   const base: PresentationTheme = existingTokenSet ?? {
     ...resolvePresentationThemeTokens(deck),
     id: `custom:${themeId}`,

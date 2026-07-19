@@ -28,8 +28,7 @@ export type PreparedDeckForOpen =
     };
 
 export type DeckOpenFallback =
-  | Deck
-  | { deck: Deck; diagnostics?: PresentationDiagnostic[] };
+  Deck | { deck: Deck; diagnostics?: PresentationDiagnostic[] };
 
 function stringifyError(error: unknown): string {
   if (error instanceof Error) {

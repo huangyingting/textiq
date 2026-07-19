@@ -114,13 +114,7 @@ export interface TextElementStyle {
 }
 
 export type ShapeKind =
-  | "rect"
-  | "ellipse"
-  | "line"
-  | "triangle"
-  | "diamond"
-  | "circle"
-  | "square";
+  "rect" | "ellipse" | "line" | "triangle" | "diamond" | "circle" | "square";
 
 export type ColorRef = { token: string } | { value: string };
 

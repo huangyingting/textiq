@@ -93,9 +93,7 @@ registerHooks({
 
 declare global {
   var __testBrandListUser:
-    | { id: string; sessionInvalidatedAt: Date | null }
-    | null
-    | undefined;
+    { id: string; sessionInvalidatedAt: Date | null } | null | undefined;
 }
 
 type PrismaDelegate = { [key: string]: (...args: unknown[]) => unknown };

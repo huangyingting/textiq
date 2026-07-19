@@ -91,9 +91,7 @@ registerHooks({
 
 declare global {
   var __testEntitlementUser:
-    | { id: string; sessionInvalidatedAt: Date | null }
-    | null
-    | undefined;
+    { id: string; sessionInvalidatedAt: Date | null } | null | undefined;
 }
 
 type PrismaUserDelegate = {

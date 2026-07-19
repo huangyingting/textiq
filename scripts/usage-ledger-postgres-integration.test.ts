@@ -34,8 +34,7 @@ const DATABASE_URL_ENV = "DATABASE_URL";
 const POSTGRES_TEST_CLIENT_MODULE_ENV = "POSTGRES_TEST_PRISMA_CLIENT_MODULE";
 const originalProvider = process.env.DB_PROVIDER;
 let postgresPrismaClientConstructorPromise:
-  | Promise<PostgresPrismaClientConstructor>
-  | undefined;
+  Promise<PostgresPrismaClientConstructor> | undefined;
 
 function requireEnv(name: string): string {
   const value = process.env[name];

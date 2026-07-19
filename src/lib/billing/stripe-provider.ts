@@ -394,11 +394,7 @@ export type StripeWebhookEventLike = {
 };
 
 export type StripeWebhookProcessingOutcome =
-  | "success"
-  | "duplicate"
-  | "stale"
-  | "missing"
-  | "ignored";
+  "success" | "duplicate" | "stale" | "missing" | "ignored";
 
 export async function applyStripeWebhookEvent(
   client: StripeWebhookWriteClient,

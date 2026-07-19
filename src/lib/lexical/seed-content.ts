@@ -26,8 +26,7 @@ interface SerializedVisualNodeJSON {
 }
 
 type RootChild =
-  | SerializedLexicalState["root"]["children"][number]
-  | SerializedVisualNodeJSON;
+  SerializedLexicalState["root"]["children"][number] | SerializedVisualNodeJSON;
 
 export interface SeedLexicalState {
   root: {

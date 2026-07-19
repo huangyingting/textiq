@@ -35,8 +35,7 @@ type ModuleHooks = {
 };
 
 type VerifyOutcome =
-  | { status: "verified" }
-  | { status: "error"; message: string };
+  { status: "verified" } | { status: "error"; message: string };
 
 type VerifyEmailPageTestState = {
   calls: unknown[][];

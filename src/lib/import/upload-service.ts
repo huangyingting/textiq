@@ -28,8 +28,7 @@ import type { ParseImportedFileOptions } from "./index";
 const LOG_SCOPE = "api.import";
 
 export type ImportUploadResult =
-  | { ok: true; markdown: string }
-  | ImportRouteFailure;
+  { ok: true; markdown: string } | ImportRouteFailure;
 
 type ParseImportedFile = (
   mime: AcceptedMimeType,

@@ -101,11 +101,7 @@ export type BrandKitImageAsset = {
   widthPx?: number;
   heightPx?: number;
   mimeType?:
-    | "image/png"
-    | "image/jpeg"
-    | "image/gif"
-    | "image/webp"
-    | "image/svg+xml";
+    "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/svg+xml";
   contentHash?: string;
 };
 

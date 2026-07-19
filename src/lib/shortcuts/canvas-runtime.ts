@@ -22,10 +22,7 @@ export const _CANVAS_RUNTIME_SHORTCUT_IDS = [
 ] as const satisfies readonly ShortcutId[];
 
 export type CanvasArrangeShortcutKind =
-  | "forward"
-  | "backward"
-  | "front"
-  | "back";
+  "forward" | "backward" | "front" | "back";
 
 export interface CanvasArrangeShortcutEvent {
   key: string;

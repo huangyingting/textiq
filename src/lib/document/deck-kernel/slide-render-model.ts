@@ -65,9 +65,7 @@ export interface ResolvedGradientStop {
 }
 
 export type ResolvedElementFill =
-  | string
-  | ResolvedRadialGradientFill
-  | ResolvedLinearGradientFill;
+  string | ResolvedRadialGradientFill | ResolvedLinearGradientFill;
 
 export function resolvedFillToCss(fill: ResolvedElementFill): string {
   if (typeof fill === "string") return fill;
@@ -244,8 +242,7 @@ function resolveElementEffect(input: unknown): ElementEffect | undefined {
   if (!input || typeof input !== "object") return undefined;
   const effect = input as Record<string, unknown>;
   const glassIntensity = effect.intensity as
-    | (typeof GLASS_EFFECT_INTENSITIES)[number]
-    | undefined;
+    (typeof GLASS_EFFECT_INTENSITIES)[number] | undefined;
   if (
     effect.kind === "glass" &&
     glassIntensity !== undefined &&

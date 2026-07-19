@@ -62,8 +62,7 @@ export type ImportRouteSuccess = {
 export type ImportRouteResult = ImportRouteSuccess | ImportRouteFailure;
 
 export type ImportCreationTarget =
-  | { kind: "personal" }
-  | { kind: "workspace"; workspaceId: string };
+  { kind: "personal" } | { kind: "workspace"; workspaceId: string };
 
 export type ParsedImportUpload = {
   file: File;

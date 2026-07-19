@@ -163,13 +163,7 @@ export interface TemplateCapacity {
 export interface TemplateSlotBinding {
   slot: TemplateSlotKey;
   target:
-    | "title"
-    | "subtitle"
-    | "body"
-    | "bullets"
-    | "table"
-    | "visual"
-    | "caption";
+    "title" | "subtitle" | "body" | "bullets" | "table" | "visual" | "caption";
   elementRole?: string;
   elementIndex?: number;
 }

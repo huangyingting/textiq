@@ -475,8 +475,7 @@ test("useLexicalAutosave remains active after StrictMode effect replay", async (
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   let handleChange:
-    | ReturnType<typeof useLexicalAutosave>["handleChange"]
-    | null = null;
+    ReturnType<typeof useLexicalAutosave>["handleChange"] | null = null;
   const saved: string[] = [];
   let renderer: ReactTestRenderer | null = null;
 

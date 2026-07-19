@@ -131,27 +131,26 @@ function materializeTemplate(
       : {}),
     elements: template.elements
       .filter((element) => !isMasterChromeTemplateElement(element))
-      .map(
-        (element, index): SlideElement =>
-          materializedTemplateElement({
-            id: makeElementId(),
-            kind: element.kind,
-            role: element.role,
-            box: templateElementBox(element.box),
-            zIndex: index,
-            content: element.contentDefaults ?? { kind: element.kind },
-            designOverrides: element.designOverrides ?? {},
-            ...(typeof element.opacity === "number"
-              ? { opacity: element.opacity }
-              : {}),
-            ...(typeof element.rotation === "number"
-              ? { rotation: element.rotation }
-              : {}),
-            ...(typeof element.locked === "boolean"
-              ? { locked: element.locked }
-              : {}),
-            ...(typeof element.name === "string" ? { name: element.name } : {}),
-          }),
+      .map((element, index): SlideElement =>
+        materializedTemplateElement({
+          id: makeElementId(),
+          kind: element.kind,
+          role: element.role,
+          box: templateElementBox(element.box),
+          zIndex: index,
+          content: element.contentDefaults ?? { kind: element.kind },
+          designOverrides: element.designOverrides ?? {},
+          ...(typeof element.opacity === "number"
+            ? { opacity: element.opacity }
+            : {}),
+          ...(typeof element.rotation === "number"
+            ? { rotation: element.rotation }
+            : {}),
+          ...(typeof element.locked === "boolean"
+            ? { locked: element.locked }
+            : {}),
+          ...(typeof element.name === "string" ? { name: element.name } : {}),
+        }),
       ),
   } as Deck["slides"][number];
 }

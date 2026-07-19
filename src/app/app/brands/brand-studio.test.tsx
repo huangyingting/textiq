@@ -92,8 +92,7 @@ type ModuleHooks = {
 };
 
 type ActionResultLike =
-  | { ok: true; data: unknown }
-  | { ok: false; error: string };
+  { ok: true; data: unknown } | { ok: false; error: string };
 
 type BrandActionsTestState = {
   createCalls: unknown[];

@@ -3,9 +3,7 @@ import type { CSSProperties } from "react";
 import type { StyleObject, StylePatch } from "./style-schema";
 
 type NodeTextStyle =
-  | Pick<StyleObject, "text">
-  | Pick<StylePatch, "text">
-  | undefined;
+  Pick<StyleObject, "text"> | Pick<StylePatch, "text"> | undefined;
 
 function getTextDecoration(
   text: StyleObject["text"] | StylePatch["text"],
