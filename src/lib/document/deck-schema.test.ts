@@ -355,8 +355,7 @@ test("safeParseDeck accepts a valid logo master element", () => {
   assert.equal(result.success, true);
   if (result.success) {
     const masterEl = result.data.masters?.[0]?.elements?.[0] as
-      | { masterChromeKind: string; layer: string }
-      | undefined;
+      { masterChromeKind: string; layer: string } | undefined;
     assert.equal(masterEl?.masterChromeKind, "logo");
     assert.equal(masterEl?.layer, "foreground");
   }

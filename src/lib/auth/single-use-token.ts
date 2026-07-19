@@ -7,8 +7,7 @@ const TOKEN_BYTES = 32;
 export type SingleUseTokenRejection = "not_found" | "used" | "expired";
 
 export type SingleUseTokenEvaluation =
-  | { valid: true }
-  | { valid: false; reason: SingleUseTokenRejection };
+  { valid: true } | { valid: false; reason: SingleUseTokenRejection };
 
 export type SingleUseTokenRejectionMessages = Record<
   SingleUseTokenRejection,

@@ -122,9 +122,7 @@ registerHooks({
 
 declare global {
   var __testBrandAssetUser:
-    | { id: string; sessionInvalidatedAt: Date | null }
-    | null
-    | undefined;
+    { id: string; sessionInvalidatedAt: Date | null } | null | undefined;
 }
 
 type AssetDelegate = {

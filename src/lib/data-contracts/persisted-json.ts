@@ -13,8 +13,7 @@ import {
 } from "./literals";
 
 export type ContractValidationResult =
-  | { success: true }
-  | { success: false; error: string };
+  { success: true } | { success: false; error: string };
 
 export interface PersistedJsonContract {
   name: string;

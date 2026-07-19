@@ -17,12 +17,7 @@ import {
 } from "@/lib/rate-limit";
 
 export type AbuseBudgetOwner =
-  | "auth"
-  | "account"
-  | "public"
-  | "collab"
-  | "import"
-  | "ai";
+  "auth" | "account" | "public" | "collab" | "import" | "ai";
 
 export interface AbuseBudgetNamespace {
   readonly namespace: string;

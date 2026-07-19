@@ -229,8 +229,7 @@ function registerSlideButtonRefs(
     );
     assert.ok(slideElement, `expected filmstrip slide ${index + 1}`);
     const slideButtonRef = slideElement.props.slideButtonRef as
-      | ((element: HTMLButtonElement | null) => void)
-      | undefined;
+      ((element: HTMLButtonElement | null) => void) | undefined;
     if (typeof slideButtonRef !== "function") {
       assert.fail("expected slide button registry ref");
     }

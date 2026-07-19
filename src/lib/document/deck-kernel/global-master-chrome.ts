@@ -5,16 +5,11 @@ import { makeElementId } from "./deck-ids";
 export type GlobalMasterChromeKind = MasterChromeKind;
 
 export type LogoPlacement =
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
+  "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type LogoSize = "small" | "medium" | "large";
 export type PageNumberFormat = "number" | "number-total";
 export type PageNumberPlacement =
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
+  "bottom-left" | "bottom-center" | "bottom-right";
 export type WatermarkLayout = "center" | "diagonal";
 export type WatermarkSize = "small" | "medium" | "large";
 
@@ -453,8 +448,7 @@ function textElementAlign(
 ): ElementAlign | undefined {
   const align = (
     element as
-      | { designOverrides?: { textStyle?: { align?: ElementAlign } } }
-      | undefined
+      { designOverrides?: { textStyle?: { align?: ElementAlign } } } | undefined
   )?.designOverrides?.textStyle?.align;
   return align;
 }
@@ -530,8 +524,7 @@ function inferPageNumberPlacement(
 function inferWatermarkSize(element: MasterElement | undefined): WatermarkSize {
   const fontSize = (
     element as
-      | { designOverrides?: { textStyle?: { fontSize?: number } } }
-      | undefined
+      { designOverrides?: { textStyle?: { fontSize?: number } } } | undefined
   )?.designOverrides?.textStyle?.fontSize;
   if (fontSize === undefined) return "medium";
   if (fontSize <= 8) return "small";

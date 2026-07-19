@@ -46,12 +46,7 @@ export type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
  * - `other`    — any other non-OK status or an unparseable response.
  */
 export type DeckGenerateErrorKind =
-  | "network"
-  | "timeout"
-  | "credit"
-  | "unavailable"
-  | "empty"
-  | "other";
+  "network" | "timeout" | "credit" | "unavailable" | "empty" | "other";
 
 /** A user-facing error plus its classification. */
 export interface DeckGenerateError {

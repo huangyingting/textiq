@@ -39,10 +39,7 @@ import {
 /* Coverage rationale: invite-access DTO contracts are TypeScript-only. */
 /** Structured reason an invite acceptance was denied (for logging/UX copy). */
 export type InviteDenyReason =
-  | "revoked"
-  | "expired"
-  | "exhausted"
-  | "invalid-role";
+  "revoked" | "expired" | "exhausted" | "invalid-role";
 
 /**
  * Result of an invite-access evaluation. On `allow`, the validated role is

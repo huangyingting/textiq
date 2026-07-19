@@ -23,9 +23,7 @@ export class CommentError extends Error {
 }
 
 export type CommentUnavailableClassification =
-  | "document_not_visible"
-  | "target_missing_in_document"
-  | "target_changed";
+  "document_not_visible" | "target_missing_in_document" | "target_changed";
 
 export class CommentUnavailableError extends CommentError {
   readonly classification: CommentUnavailableClassification;

@@ -4,10 +4,7 @@ import type { SourceReviewItem } from "./source-links";
 export type ReviewActionSeverity = "neutral" | "accent" | "warning" | "danger";
 
 export type ReviewActionRepairEligibility =
-  | "navigation-only"
-  | "direct-repair"
-  | "host-action"
-  | "source-review";
+  "navigation-only" | "direct-repair" | "host-action" | "source-review";
 
 export type ReviewActionSafety = "safe" | "safe-destructive";
 

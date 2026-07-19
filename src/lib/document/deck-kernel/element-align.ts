@@ -19,12 +19,7 @@ import type { ElementBox } from "./deck-elements";
 
 /** The six alignment modes: three on the x-axis, three on the y-axis. */
 export type AlignMode =
-  | "left"
-  | "hcenter"
-  | "right"
-  | "top"
-  | "vmiddle"
-  | "bottom";
+  "left" | "hcenter" | "right" | "top" | "vmiddle" | "bottom";
 
 interface Bounds {
   minX: number;

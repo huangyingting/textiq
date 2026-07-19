@@ -44,8 +44,7 @@ export interface AdapterValidationError {
 
 /** Result of {@link VisualKindAdapter.validate}. */
 export type AdapterValidationResult =
-  | { ok: true }
-  | { ok: false; errors: AdapterValidationError[] };
+  { ok: true } | { ok: false; errors: AdapterValidationError[] };
 
 /**
  * Per-kind adapter that provides semantic validation on top of the generic

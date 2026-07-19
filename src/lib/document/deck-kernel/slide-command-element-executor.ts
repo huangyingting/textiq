@@ -66,8 +66,7 @@ const MIN_GROUPABLE_ELEMENT_COUNT = 2;
 const MIN_DISTRIBUTABLE_ELEMENT_COUNT = 3;
 
 type SlideLookup =
-  | { ok: true; index: number }
-  | { ok: false; result: CommandResult };
+  { ok: true; index: number } | { ok: false; result: CommandResult };
 
 function requireSlide(deck: Deck, slideId: string): SlideLookup {
   const index = findSlideIndex(deck, slideId);

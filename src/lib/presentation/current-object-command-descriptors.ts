@@ -117,12 +117,7 @@ export type CurrentObjectCommandDescriptor = {
 };
 
 export type CurrentObjectInsertNodeKind =
-  | "text"
-  | "shape"
-  | "image"
-  | "visual"
-  | "connector"
-  | "table";
+  "text" | "shape" | "image" | "visual" | "connector" | "table";
 
 export type CurrentObjectInsertNodeCommandDescriptor =
   CurrentObjectCommandDescriptor & {
@@ -131,12 +126,7 @@ export type CurrentObjectInsertNodeCommandDescriptor =
   };
 
 export type CurrentObjectAlignMode =
-  | "left"
-  | "center"
-  | "right"
-  | "top"
-  | "middle"
-  | "bottom";
+  "left" | "center" | "right" | "top" | "middle" | "bottom";
 
 export type CurrentObjectAlignCommandDescriptor =
   CurrentObjectCommandDescriptor & {
@@ -145,10 +135,7 @@ export type CurrentObjectAlignCommandDescriptor =
   };
 
 export type CurrentObjectReorderMode =
-  | "front"
-  | "back"
-  | "forward"
-  | "backward";
+  "front" | "back" | "forward" | "backward";
 
 export type CurrentObjectReorderCommandId =
   `selection.reorder-${CurrentObjectReorderMode}`;

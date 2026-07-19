@@ -8,9 +8,7 @@ import {
 } from "./errors";
 
 export type CommentActionErrorCode =
-  | CommentErrorCode
-  | "access_denied"
-  | "unexpected";
+  CommentErrorCode | "access_denied" | "unexpected";
 
 export type CommentActionError = {
   code: CommentActionErrorCode;
@@ -18,8 +16,7 @@ export type CommentActionError = {
 };
 
 export type CommentActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: CommentActionError };
+  { ok: true; data: T } | { ok: false; error: CommentActionError };
 
 export type CommentActionObservation = {
   message: string;

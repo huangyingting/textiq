@@ -54,8 +54,7 @@ export type ValidationError =
   | { code: "file_too_large"; maxBytes: number; actualBytes: number };
 
 export type ValidationResult =
-  | { ok: true; mime: AcceptedMimeType }
-  | { ok: false; error: ValidationError };
+  { ok: true; mime: AcceptedMimeType } | { ok: false; error: ValidationError };
 
 /**
  * Validates that a file's MIME type is supported and its byte size is within

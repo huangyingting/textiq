@@ -21,8 +21,7 @@ export type MemberEffectiveWorkspaceRole = Exclude<
 /* node:coverage ignore stop */
 
 export type WorkspaceMemberRoleParseErrorCode =
-  | "owner-membership-row"
-  | "invalid-workspace-member-role";
+  "owner-membership-row" | "invalid-workspace-member-role";
 
 export type WorkspaceMemberRoleParseError = {
   code: WorkspaceMemberRoleParseErrorCode;

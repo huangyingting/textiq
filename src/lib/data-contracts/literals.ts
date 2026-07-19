@@ -8,8 +8,7 @@ import {
 } from "@/lib/workspace/roles";
 
 export type LiteralValidationResult<T extends string> =
-  | { success: true; value: T }
-  | { success: false; error: string };
+  { success: true; value: T } | { success: false; error: string };
 
 function parseLiteral<T extends string>(
   value: unknown,

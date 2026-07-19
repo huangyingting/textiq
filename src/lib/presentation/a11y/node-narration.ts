@@ -2,13 +2,7 @@ import type { DeckAssetRegistry } from "@/lib/presentation/schema";
 import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
 
 export type DeckOutlineNodeRole =
-  | "text"
-  | "image"
-  | "shape"
-  | "table"
-  | "visual"
-  | "connector"
-  | "group";
+  "text" | "image" | "shape" | "table" | "visual" | "connector" | "group";
 
 export type NodeNarrationWarning =
   | "decorative"

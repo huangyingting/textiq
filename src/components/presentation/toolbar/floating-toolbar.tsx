@@ -147,12 +147,7 @@ const CONTEXT_TOOLBAR_TEXT_ROLE_FONT_SIZE_PT: Record<
 };
 
 export type SelectionAlignMode =
-  | "left"
-  | "center"
-  | "right"
-  | "top"
-  | "middle"
-  | "bottom";
+  "left" | "center" | "right" | "top" | "middle" | "bottom";
 export type SelectionDistributeMode = "horizontal" | "vertical";
 export type SelectionMatchSizeMode = "width" | "height" | "both";
 
@@ -359,10 +354,7 @@ function getSelectionElements(selectedIds: string[]): HTMLElement[] {
 }
 
 export type ContextToolbarTextCommand =
-  | "bold"
-  | "italic"
-  | "underline"
-  | "strikethrough";
+  "bold" | "italic" | "underline" | "strikethrough";
 
 export function routeContextToolbarTextCommand({
   command,

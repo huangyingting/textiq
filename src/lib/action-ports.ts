@@ -118,8 +118,7 @@ export interface ImportActionError {
 }
 
 export type ImportActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: ImportActionError };
+  { ok: true; data: T } | { ok: false; error: ImportActionError };
 
 export interface DocumentImportCreateActionPort {
   importFile: (

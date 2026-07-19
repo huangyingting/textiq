@@ -109,8 +109,7 @@ describe("ConflictRecoveryDialog", () => {
     });
     const keepMineButton = findButtonByLabel(tree, "Keep my version");
     const clickKeepMine = keepMineButton?.props.onClick as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     assert.equal(typeof clickKeepMine, "function");
     clickKeepMine?.();
     await waitForAsyncDrain();
@@ -135,8 +134,7 @@ describe("ConflictRecoveryDialog", () => {
     });
     const useTheirsButton = findButtonByLabel(tree, "Use server version");
     const clickUseTheirs = useTheirsButton?.props.onClick as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     assert.equal(typeof clickUseTheirs, "function");
     clickUseTheirs?.();
     await waitForAsyncDrain();

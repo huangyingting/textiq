@@ -544,8 +544,7 @@ async function withManualTimeouts<T>(
 
   const fireNext = () => {
     const entry = callbacks.entries().next().value as
-      | [number, () => void]
-      | undefined;
+      [number, () => void] | undefined;
     assert.ok(entry, "expected a pending timeout");
     callbacks.delete(entry[0]);
     entry[1]();

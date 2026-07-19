@@ -66,11 +66,7 @@ const functionComponentsToResolve = new Set([
 
 function restoreGlobal(
   name:
-    | "document"
-    | "window"
-    | "DOMRect"
-    | "ResizeObserver"
-    | "MutationObserver",
+    "document" | "window" | "DOMRect" | "ResizeObserver" | "MutationObserver",
   descriptor: PropertyDescriptor | undefined,
 ) {
   if (descriptor) {

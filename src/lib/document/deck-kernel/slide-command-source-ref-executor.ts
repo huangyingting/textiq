@@ -18,8 +18,7 @@ import {
 } from "./slide-command-executor-helpers";
 
 export type SourceRefFamilyCommand =
-  | UpdateElementSourceCommand
-  | RemoveSourceElementCommand;
+  UpdateElementSourceCommand | RemoveSourceElementCommand;
 
 function elementSource(element: unknown): SourceRef | undefined {
   return (element as { source?: SourceRef }).source;

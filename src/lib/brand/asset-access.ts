@@ -19,9 +19,7 @@
 
 /** Why a brand-asset request was denied. */
 export type BrandAssetDenyReason =
-  | "asset-not-found"
-  | "unauthenticated"
-  | "forbidden";
+  "asset-not-found" | "unauthenticated" | "forbidden";
 
 /** Outcome of a brand-asset access check. */
 export type BrandAssetAccessDecision =

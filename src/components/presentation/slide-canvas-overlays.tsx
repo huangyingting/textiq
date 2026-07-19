@@ -13,14 +13,7 @@ import { isSelected } from "./selection-model";
 import { frameToCss, nodeLayoutTransformToCss } from "./slide-node-renderer";
 
 export type ResizeHandlePosition =
-  | "nw"
-  | "n"
-  | "ne"
-  | "e"
-  | "se"
-  | "s"
-  | "sw"
-  | "w";
+  "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
 export type CropHandlePosition = "top" | "right" | "bottom" | "left";
 

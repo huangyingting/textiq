@@ -17,8 +17,7 @@ export const PASSWORD_HASH_COST = 12;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /* node:coverage ignore start -- Password validation result variants are TypeScript-only facade rows. */
 export type PasswordValidationResult =
-  | { ok: true }
-  | { ok: false; message: string };
+  { ok: true } | { ok: false; message: string };
 /* node:coverage ignore stop */
 
 /**

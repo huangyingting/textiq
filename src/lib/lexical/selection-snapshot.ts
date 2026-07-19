@@ -14,28 +14,13 @@ import {
 import { $getSelectedDocumentTableKey } from "@/lib/lexical/table-controls";
 
 export type EditorContextKind =
-  | "range"
-  | "collapsed"
-  | "empty-block"
-  | "visual"
-  | "table"
-  | "none";
+  "range" | "collapsed" | "empty-block" | "visual" | "table" | "none";
 
 export type EditorBlockType =
-  | "paragraph"
-  | "h1"
-  | "h2"
-  | "h3"
-  | "quote"
-  | "bullet"
-  | "number";
+  "paragraph" | "h1" | "h2" | "h3" | "quote" | "bullet" | "number";
 
 export type EditorTextFormat =
-  | "bold"
-  | "italic"
-  | "underline"
-  | "strikethrough"
-  | "code";
+  "bold" | "italic" | "underline" | "strikethrough" | "code";
 
 export type RectSnapshot = {
   top: number;

@@ -12,8 +12,7 @@ export interface DeckExportErrorContext {
 }
 
 export type DeckExportContext =
-  | PresentationDeckExportContext
-  | DeckExportErrorContext;
+  PresentationDeckExportContext | DeckExportErrorContext;
 
 function pickFreshestDeck(
   freshestDeckJson: unknown,

@@ -52,8 +52,7 @@ type ModuleHooks = {
 
 type Locale = "en" | "es";
 type LocaleActionResult =
-  | { ok: true; data: undefined }
-  | { ok: false; error: string };
+  { ok: true; data: undefined } | { ok: false; error: string };
 
 type LanguageSwitcherTestState = {
   calls: unknown[][];

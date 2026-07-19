@@ -456,8 +456,7 @@ function createFakeRateLimitClient() {
   type Row = { subject: string; count: number; resetAt: Date };
   type CasWhere = { subject: string; count: number; resetAt: Date };
   type CasData =
-    | { count: { increment: number } }
-    | { count: number; resetAt: Date };
+    { count: { increment: number } } | { count: number; resetAt: Date };
   const rows = new Map<string, Row>();
 
   function cloneRow(row: Row): Row {

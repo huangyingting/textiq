@@ -38,8 +38,7 @@ export interface VisualExecutionSuccess {
 }
 
 export type VisualExecutionResult =
-  | VisualExecutionSuccess
-  | VisualCommandResult;
+  VisualExecutionSuccess | VisualCommandResult;
 
 export function uniqueIds(values: readonly string[]): string[] {
   return [...new Set(values)];

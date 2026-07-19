@@ -13,9 +13,7 @@ export type IsoDateTime = string;
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue =
-  | JsonPrimitive
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type DeepPartial<T> = { [K in keyof T]?: DeepPartial<T[K]> };
 

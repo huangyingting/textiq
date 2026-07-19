@@ -39,8 +39,7 @@ type ModuleHooks = {
 type Validation = { ok: true; mime: string } | { ok: false; error: unknown };
 type OkOnly = { ok: true } | { ok: false; error: unknown };
 type MetaResult =
-  | { ok: true; meta: Record<string, unknown> }
-  | { ok: false; error: unknown };
+  { ok: true; meta: Record<string, unknown> } | { ok: false; error: unknown };
 
 type SlideAssetTestState = {
   calls: unknown[];

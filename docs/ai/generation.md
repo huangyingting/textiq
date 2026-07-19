@@ -72,9 +72,7 @@ payloads and validates them against the current visual schema. The response is:
 
 ```json
 {
-  "candidates": [
-    /* Visual[] */
-  ]
+  "candidates": [/* Visual[] */]
 }
 ```
 

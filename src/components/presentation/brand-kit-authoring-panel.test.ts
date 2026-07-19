@@ -58,8 +58,7 @@ function firstElement(
 
 function changeValue(element: ElementLike, value: string): void {
   const onChange = element.props.onChange as
-    | ((event: { currentTarget: { value: string } }) => void)
-    | undefined;
+    ((event: { currentTarget: { value: string } }) => void) | undefined;
   assert.equal(typeof onChange, "function");
   onChange?.({ currentTarget: { value } });
 }

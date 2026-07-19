@@ -133,8 +133,7 @@ test("UPDATE_THEME_OVERRIDES resets overrides when reset is true", () => {
   // from the package's own defaults rather than clearing it to undefined.
   const resetTokenSet = (
     result.deck.design?.themeOverrides as
-      | { tokenSet?: { id?: string; name?: string } }
-      | undefined
+      { tokenSet?: { id?: string; name?: string } } | undefined
   )?.tokenSet;
   assert.notEqual(resetTokenSet?.id, "custom:aurora");
   assert.notEqual(resetTokenSet?.name, "Custom");

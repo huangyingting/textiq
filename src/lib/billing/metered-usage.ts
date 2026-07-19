@@ -49,8 +49,7 @@ export type ReserveMeteredUsageResult =
     };
 
 export type CaptureMeteredUsageResult =
-  | { ok: true }
-  | { ok: false; error: unknown; insufficientCredits: boolean };
+  { ok: true } | { ok: false; error: unknown; insufficientCredits: boolean };
 
 export interface ReserveMeteredUsageOptions {
   idempotencyKey: string;

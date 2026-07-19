@@ -139,8 +139,7 @@ describe("inspector panels render and wire controls", () => {
     );
     assert.ok(fontSelect);
     const onChange = fontSelect.props.onChange as
-      | ((event: { currentTarget: { value: string } }) => void)
-      | undefined;
+      ((event: { currentTarget: { value: string } }) => void) | undefined;
     assert.ok(onChange);
     onChange?.({ currentTarget: { value: "jetbrains-mono" } });
 
@@ -273,8 +272,7 @@ describe("inspector panels render and wire controls", () => {
     );
     assert.ok(strokeWidthInput);
     const onChange = strokeWidthInput.props.onChange as
-      | ((event: { currentTarget: { value: string } }) => void)
-      | undefined;
+      ((event: { currentTarget: { value: string } }) => void) | undefined;
     assert.ok(onChange);
     onChange?.({ currentTarget: { value: "6" } });
 
@@ -314,8 +312,7 @@ describe("inspector panels render and wire controls", () => {
     );
     assert.ok(lineWidthInput);
     const onChange = lineWidthInput.props.onChange as
-      | ((event: { currentTarget: { value: string } }) => void)
-      | undefined;
+      ((event: { currentTarget: { value: string } }) => void) | undefined;
     assert.ok(onChange);
     onChange?.({ currentTarget: { value: "4" } });
 

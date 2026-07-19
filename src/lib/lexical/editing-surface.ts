@@ -36,10 +36,7 @@ type EditingSurfaceMode = "float" | "sheet" | "none";
  * - `"overall"` ← no element selection (document-level adjustments)
  */
 export type EditingSurfaceGroup =
-  | "text-format"
-  | "visual-edit"
-  | "table-edit"
-  | "overall";
+  "text-format" | "visual-edit" | "table-edit" | "overall";
 
 /** The selection kinds the resolver distinguishes (a projection of {@link EditorContextKind}). */
 export type EditingSurfaceSelectionKind = "range" | "visual" | "table" | "none";

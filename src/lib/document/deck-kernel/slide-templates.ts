@@ -24,11 +24,7 @@ import type {
 
 /** The set of templates the "+ Add slide" picker can insert. */
 export type SlideTemplateKind =
-  | "title"
-  | "content"
-  | "visual"
-  | "two-column"
-  | "blank";
+  "title" | "content" | "visual" | "two-column" | "blank";
 
 /** Context threaded into {@link buildTemplateSlide} from the editor. */
 export interface SlideTemplateContext {

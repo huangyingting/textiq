@@ -14,9 +14,7 @@ import type { SlideCommand, PatchOp } from "./slide-command-contracts";
 
 export type SlideCommandType = SlideCommand["type"];
 export type SlideCommandCoalescing =
-  | { kind: "none" }
-  | { kind: "by-slide" }
-  | { kind: "by-element" };
+  { kind: "none" } | { kind: "by-slide" } | { kind: "by-element" };
 
 export interface SlideCommandAffectedIds {
   slideIds: string[];

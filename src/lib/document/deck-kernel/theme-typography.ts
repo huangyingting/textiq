@@ -103,11 +103,7 @@ export type RoleStyleHint = {
 };
 
 export type TypographyHintRole =
-  | "title"
-  | "subtitle"
-  | "body"
-  | "visual"
-  | "footer";
+  "title" | "subtitle" | "body" | "visual" | "footer";
 
 /* node:coverage disable */
 /* roleStyle is exhaustively covered by theme-typography.test.ts; tsx maps switch signature rows as residual. */

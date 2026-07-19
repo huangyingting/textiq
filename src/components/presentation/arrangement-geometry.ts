@@ -2,12 +2,7 @@ import type { LayoutBox, SlideChildNode } from "@/lib/presentation/schema";
 import { orderSiblingsByVisualOrder } from "@/lib/presentation/render-order";
 
 export type ArrangementAlignMode =
-  | "left"
-  | "center"
-  | "right"
-  | "top"
-  | "middle"
-  | "bottom";
+  "left" | "center" | "right" | "top" | "middle" | "bottom";
 export type ArrangementDistributeMode = "horizontal" | "vertical";
 export type ArrangementMatchSizeMode = "width" | "height" | "both";
 export type ArrangementZOrderKind = "forward" | "backward" | "front" | "back";

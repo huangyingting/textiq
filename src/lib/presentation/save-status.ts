@@ -14,13 +14,7 @@
 
 /** Save states surfaced to the user by the slide editor. */
 export type SaveQueueStatus =
-  | "idle"
-  | "queued"
-  | "saving"
-  | "retrying"
-  | "offline"
-  | "failed"
-  | "conflict";
+  "idle" | "queued" | "saving" | "retrying" | "offline" | "failed" | "conflict";
 
 export type SaveStatus =
   | "saved"

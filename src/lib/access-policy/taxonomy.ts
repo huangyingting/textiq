@@ -8,17 +8,11 @@
  */
 
 export type AccessSubject =
-  | { kind: "anonymous" }
-  | { kind: "user"; userId?: string };
+  { kind: "anonymous" } | { kind: "user"; userId?: string };
 
 /* node:coverage ignore next 7 -- Access resource kind union is a TypeScript-only taxonomy facade. */
 export type AccessResourceKind =
-  | "document"
-  | "workspace"
-  | "share"
-  | "invite"
-  | "slide-asset"
-  | "collab-room";
+  "document" | "workspace" | "share" | "invite" | "slide-asset" | "collab-room";
 
 export type AccessResource = {
   kind: AccessResourceKind;
