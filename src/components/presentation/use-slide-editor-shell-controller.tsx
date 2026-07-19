@@ -171,7 +171,8 @@ export function createSlideEditorShellController({
     setToolbarError(null);
     try {
       await onExportPptx();
-    } catch {
+    } catch (error) {
+      console.error("PPTX export failed", error);
       setToolbarError("PPTX export failed. Please try again.");
     }
   }
@@ -181,7 +182,8 @@ export function createSlideEditorShellController({
     setToolbarError(null);
     try {
       await onExportPdf();
-    } catch {
+    } catch (error) {
+      console.error("PDF export failed", error);
       setToolbarError("PDF export failed. Please try again.");
     }
   }
@@ -191,7 +193,8 @@ export function createSlideEditorShellController({
     setToolbarError(null);
     try {
       await onExportPng();
-    } catch {
+    } catch (error) {
+      console.error("PNG export failed", error);
       setToolbarError("PNG export failed. Please try again.");
     }
   }

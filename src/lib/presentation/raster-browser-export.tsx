@@ -57,6 +57,73 @@ function inlineComputedStyles(source: Element, clone: Element): void {
   });
 }
 
+/**
+ * Converts an ArrayBuffer + MIME type to a base64 data URI.
+ * Uses ArrayBuffer (not FileReader) so it works in both browser
+ * and Node.js test environments.
+ */
+export function arrayBufferToDataUrl(
+  buffer: ArrayBuffer,
+  mimeType: string,
+): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
+/**
+ * For every <img> in `root` whose src is not already a data: URI, fetches
+ * the resource (same-origin with credentials) and replaces the src with a
+ * base64 data URI so it cannot taint a canvas during SVG rasterization.
+ * Best-effort per image: a fetch failure leaves the original src unchanged.
+ *
+ * Also inlines single-URL background-image values copied verbatim by
+ * inlineComputedStyles. NOTE: Complex background-image expressions that
+ * combine a url() with a gradient or multiple URLs are not inlined here —
+ * any external url() within such expressions will still taint the canvas.
+ */
+export async function inlineImageSources(root: Element): Promise<void> {
+  await Promise.all(
+    Array.from(root.querySelectorAll("img")).map(async (img) => {
+      const src = img.getAttribute("src");
+      if (!src || src.startsWith("data:")) return;
+      try {
+        const response = await fetch(src, { credentials: "include" });
+        const blob = await response.blob();
+        const buffer = await blob.arrayBuffer();
+        img.src = arrayBufferToDataUrl(buffer, blob.type || "image/png");
+        img.removeAttribute("crossorigin");
+        img.removeAttribute("srcset");
+      } catch {
+        // Best-effort: on fetch failure leave the original src intact.
+      }
+    }),
+  );
+
+  await Promise.all(
+    Array.from(root.querySelectorAll("*")).map(async (el) => {
+      const htmlEl = el as HTMLElement;
+      const bgImage = htmlEl.style?.backgroundImage;
+      if (!bgImage) return;
+      const match = bgImage.match(/^url\(["']?([^"')]+)["']?\)$/);
+      if (!match?.[1]) return;
+      const url = match[1];
+      if (url.startsWith("data:")) return;
+      try {
+        const response = await fetch(url, { credentials: "include" });
+        const blob = await response.blob();
+        const buffer = await blob.arrayBuffer();
+        htmlEl.style.backgroundImage = `url("${arrayBufferToDataUrl(buffer, blob.type || "image/png")}")`;
+      } catch {
+        // Best-effort: on fetch failure leave the original background-image intact.
+      }
+    }),
+  );
+}
+
 /* node:coverage ignore next 28 */
 export function selectedNodeBounds(
   nodes: readonly ResolvedRenderNode[],
@@ -186,6 +253,7 @@ export async function renderSlideToPng(
     if (!rendered) throw new Error("Slide render produced no DOM");
     const clone = rendered.cloneNode(true) as Element;
     inlineComputedStyles(rendered, clone);
+    await inlineImageSources(clone);
     const html = new XMLSerializer().serializeToString(clone);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dimensions.widthPx}" height="${dimensions.heightPx}" viewBox="0 0 ${dimensions.widthPx} ${dimensions.heightPx}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
     return await drawSvgToPngDataUrl(svg, dimensions);
@@ -236,6 +304,7 @@ export async function renderSelectedNodesToPngBlob(
     if (!rendered) throw new Error("Slide render produced no DOM");
     const clone = rendered.cloneNode(true) as Element;
     inlineComputedStyles(rendered, clone);
+    await inlineImageSources(clone);
     removeUnselectedNodes(clone, selectedIds);
 
     const cropX = Math.floor((bounds.x / 100) * dimensions.widthPx);
