@@ -27,6 +27,7 @@ import type { ImageElement, TextElement } from "../deck-elements";
 import { createBlankVisual } from "@/lib/visual/blank";
 import {
   exportDeckAsSlideImages,
+  buildDeckSlideSvgStrings,
   type DeckSlideImageDiagnostic,
 } from "./deck-export-slide-images";
 
@@ -186,10 +187,7 @@ test("exportDeckAsSlideImages renders text, shape, image, and connector ops into
   const [svg] = Object.values(await zipEntries(blob!));
 
   assert.match(svg!, /<rect[^>]*fill="#6366F1"/); // shape rect fill
-  assert.match(
-    svg!,
-    /<foreignObject[^>]*>[\s\S]*Hello[\s\S]*<\/foreignObject>/,
-  ); // text content
+  assert.match(svg!, /<text[^>]*>[\s\S]*Hello[\s\S]*<\/text>/); // text content (native SVG)
   assert.match(svg!, /<image href="data:image\/png;base64,AAA"/); // image element
   assert.match(svg!, /<line x1="0" y1="0" x2="799\.98" y2="450"/); // connector line
 });
@@ -450,4 +448,43 @@ test("exportDeckAsSlideImages produces identical SVG content across repeated cal
   const [svgA] = Object.values(await zipEntries(blobA!));
   const [svgB] = Object.values(await zipEntries(blobB!));
   assert.equal(svgA, svgB);
+});
+
+// ---------------------------------------------------------------------------
+// No foreignObject regression (canvas taint guard — #2028)
+// ---------------------------------------------------------------------------
+
+test("buildDeckSlideSvgStrings produces SVG strings containing no <foreignObject> for decks with text, bullets, images, and shapes", async () => {
+  const text: TextElement = {
+    id: "t1",
+    kind: "text",
+    box: { x: 5, y: 5, w: 40, h: 10 },
+    zIndex: 3,
+    content: { kind: "text", text: "Hello world" },
+  };
+  const image: ImageElement = {
+    id: "i1",
+    kind: "image",
+    box: { x: 5, y: 20, w: 20, h: 20 },
+    zIndex: 4,
+    content: { kind: "image", src: "data:image/png;base64,AAA" },
+  };
+  const shape = makeShape("s1", { zIndex: 0 });
+  const slide = makeSlide({ id: "sl1", elements: [shape, text, image] });
+  const deck = makeDeck([slide]);
+
+  const svgStrings = buildDeckSlideSvgStrings(deck);
+  assert.equal(svgStrings.length, 1);
+  const svg = svgStrings[0]!;
+
+  // The regression guard: no foreignObject must appear in any rasterization SVG.
+  assert.ok(
+    !svg.includes("<foreignObject") && !svg.includes("foreignObject>"),
+    `SVG must not contain <foreignObject> but got: ${svg.slice(0, 200)}`,
+  );
+  // Text content should appear as native SVG <text>
+  assert.match(svg, /<text[^>]*>/);
+  assert.ok(svg.includes("Hello"), "text content should be present");
+  // Image should be a native <image> element
+  assert.match(svg, /<image href="data:image\/png;base64,AAA"/);
 });
