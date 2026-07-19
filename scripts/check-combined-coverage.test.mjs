@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { spec } from "node:test/reporters";
@@ -431,7 +432,7 @@ test("runCombinedCoverageGate fails with the validation error message and skips 
   assert.ok(h.errors.some((line) => line.includes("does not exist")));
 });
 
-// --- script coverage stage (unchanged CLI-spawn semantics) -----------------
+// --- script coverage stage (c8 union CLI-spawn semantics) ------------------
 
 test("runCombinedCoverageGate spawns the script coverage stage with the same command shape as check-line-coverage.mjs", async () => {
   const h = harness();
@@ -440,19 +441,14 @@ test("runCombinedCoverageGate spawns the script coverage stage with the same com
   assert.equal(h.spawnCalls.length, 1);
   const [{ command, args, spawnOptions }] = h.spawnCalls;
   assert.equal(command, SCRIPT_STAGE.command);
+  assert.equal(command, "node_modules/.bin/c8");
+  assert.ok(args.includes(`--lines=${SCRIPT_STAGE.defaultMinimum}`));
+  assert.ok(args.includes(`--branches=${SCRIPT_STAGE.defaultBranchMinimum}`));
   assert.ok(
-    args.includes(`--test-coverage-lines=${SCRIPT_STAGE.defaultMinimum}`),
+    args.includes(`--functions=${SCRIPT_STAGE.defaultFunctionMinimum}`),
   );
-  assert.ok(
-    args.includes(
-      `--test-coverage-branches=${SCRIPT_STAGE.defaultBranchMinimum}`,
-    ),
-  );
-  assert.ok(
-    args.includes(
-      `--test-coverage-functions=${SCRIPT_STAGE.defaultFunctionMinimum}`,
-    ),
-  );
+  assert.ok(args.includes("--check-coverage"));
+  assert.ok(args.includes("--reporter=text-summary"));
   assert.deepEqual(args.slice(-1), SCRIPT_STAGE.testFiles);
   assert.equal(spawnOptions.stdio, "inherit");
 });
@@ -501,6 +497,11 @@ test("check-combined-coverage CLI entrypoint runs and reports pass when invoked 
   // real (not mocked) shared source-suite run without paying the cost of a
   // full repository run.
   const root = createTestFixtureRoot("check-combined-coverage-cli-entry", t);
+  const c8Shim = path.join(root, "node_modules", ".bin", "c8");
+  mkdirSync(path.dirname(c8Shim), { recursive: true });
+  writeFileSync(c8Shim, "#!/usr/bin/env node\nprocess.exit(0);\n", {
+    mode: 0o755,
+  });
   const scriptPath = path.resolve(
     import.meta.dirname,
     "check-combined-coverage.mjs",

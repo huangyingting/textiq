@@ -492,6 +492,31 @@ pid-placeholder`,
     /authenticated HTTPS origin/,
   );
 
+  const listenerMismatch = await healthyEnv(
+    "credential-listener-mismatch",
+    "credential-listener-mismatch",
+  );
+  const listenerIdentity = JSON.parse(
+    readFileSync(listenerMismatch.env.E2E_PROFILE_IDENTITY_FILE, "utf8"),
+  );
+  atomicWriteSecureJson(
+    listenerMismatch.env.E2E_PROFILE_IDENTITY_FILE,
+    signE2ERecord(
+      {
+        ...listenerIdentity,
+        app: { ...listenerIdentity.app, inodes: ["9"] },
+      },
+      listenerMismatch.privateKey,
+    ),
+  );
+  await assert.rejects(
+    assertLiveE2ECredentialGate({
+      env: listenerMismatch.env,
+      assertOwnedListener: () => ({ inodes: ["1"] }),
+    }),
+    /listener changed/,
+  );
+
   for (const [rootName, runId, handler, expected] of [
     [
       "credential-capability-status",
@@ -571,7 +596,15 @@ pid-placeholder`,
   const pinFixture = await healthyEnv("credential-pin", "credential-pin");
   const pinServer = createHttpsServer(
     { cert: pinFixture.certificate, key: pinFixture.privateKey },
-    (_request, response) => response.end("ok"),
+    (request, response) => {
+      if (request.url === "/early-close") {
+        response.writeHead(200, { "content-length": "10" });
+        response.write("hi");
+        response.destroy();
+        return;
+      }
+      response.end("ok");
+    },
   );
   pinServer.listen(5600, "127.0.0.1");
   await once(pinServer, "listening");
@@ -582,6 +615,24 @@ pid-placeholder`,
     }),
     /SPKI pin/,
   );
+  const earlyChannel = await openVerifiedProxyChannel(
+    resolveLiveCredentialGateConfig(pinFixture.env),
+  );
+  await assert.rejects(
+    requestOnVerifiedProxyChannel(
+      earlyChannel,
+      resolveLiveCredentialGateConfig(pinFixture.env),
+      {
+        headers: { host: new URL(pinFixture.env.E2E_BASE_URL).host },
+        method: "GET",
+        path: "/early-close",
+        timeoutMs: 1_000,
+      },
+    ),
+    /aborted|closed early|closed before completion|socket hang up/,
+  );
+  earlyChannel.agent.destroy();
+  earlyChannel.socket.destroy();
   const channel = await openVerifiedProxyChannel(
     resolveLiveCredentialGateConfig(pinFixture.env),
   );

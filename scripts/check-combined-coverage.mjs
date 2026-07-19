@@ -47,9 +47,10 @@
  * call, against the correctly-filtered totals.
  *
  * The "Script line coverage" stage is unrelated to source breadth (it
- * covers `scripts/**\/*.mjs`, not `src/**`), so it keeps running exactly as
- * `check-line-coverage.mjs` always has: a spawned CLI child process with
- * `stdio: "inherit"`.
+ * covers `scripts/**\/*.mjs`, not `src/**`), so it stays a spawned CLI child
+ * process with `stdio: "inherit"`. That child uses c8 to merge V8 coverage
+ * from every process-isolated script test subprocess before enforcing its
+ * line/branch/function floors.
  *
  * Standalone `npm run test:line-coverage` and `npm run test:coverage-breadth`
  * are untouched by this file and continue to run the source suite

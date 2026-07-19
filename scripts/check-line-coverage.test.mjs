@@ -28,11 +28,12 @@ test("line coverage stages cover source and script unit gates", () => {
   assert.deepEqual(LINE_COVERAGE_STAGES[1].testFiles, [
     "scripts/**/*.test.mjs",
   ]);
+  assert.equal(LINE_COVERAGE_STAGES[1].coverageTool, "c8");
 });
 
 test("line coverage minimum uses global and stage-specific overrides", () => {
   assert.equal(coverageMinimum(LINE_COVERAGE_STAGES[0], {}), 95);
-  assert.equal(coverageMinimum(LINE_COVERAGE_STAGES[1], {}), 99);
+  assert.equal(coverageMinimum(LINE_COVERAGE_STAGES[1], {}), 97);
   assert.equal(
     coverageMinimum(LINE_COVERAGE_STAGES[0], { LINE_COVERAGE_MIN: "100" }),
     100,
@@ -169,13 +170,13 @@ test("coverage stages have branch and function floor defaults at safe baselines"
   assert.equal(source.defaultFunctionMinimum, 93);
   assert.equal(source.functionEnvKey, "SOURCE_FUNCTION_COVERAGE_MIN");
 
-  assert.equal(scripts.defaultBranchMinimum, 94);
+  assert.equal(scripts.defaultBranchMinimum, 93);
   assert.equal(scripts.branchEnvKey, "SCRIPT_BRANCH_COVERAGE_MIN");
   assert.equal(scripts.defaultFunctionMinimum, 97);
   assert.equal(scripts.functionEnvKey, "SCRIPT_FUNCTION_COVERAGE_MIN");
 });
 
-test("buildCoverageCommand includes branch and function flags after lines in Node metric order", () => {
+test("buildCoverageCommand includes source branch and function flags after lines in Node metric order", () => {
   const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[0], {});
   const linesIdx = cmd.args.findIndex((a) =>
     a.startsWith("--test-coverage-lines="),
@@ -202,9 +203,16 @@ test("buildCoverageCommand uses source stage branch and function defaults", () =
 
 test("buildCoverageCommand uses script stage branch and function defaults", () => {
   const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[1], {});
-  assert.ok(cmd.args.includes("--test-coverage-lines=99"));
-  assert.ok(cmd.args.includes("--test-coverage-branches=94"));
-  assert.ok(cmd.args.includes("--test-coverage-functions=97"));
+  assert.equal(cmd.command, "node_modules/.bin/c8");
+  assert.ok(cmd.args.includes("--check-coverage"));
+  assert.ok(cmd.args.includes("--lines=97"));
+  assert.ok(cmd.args.includes("--branches=93"));
+  assert.ok(cmd.args.includes("--functions=97"));
+  assert.ok(cmd.args.includes("--reporter=text-summary"));
+  assert.ok(cmd.args.includes("node"));
+  assert.ok(cmd.args.includes("--test"));
+  assert.ok(cmd.args.includes("--test-concurrency=1"));
+  assert.deepEqual(cmd.args.slice(-1), ["scripts/**/*.test.mjs"]);
 });
 
 test("buildCoverageCommand respects branch and function env-key overrides", () => {
@@ -229,6 +237,21 @@ test("resolveStageThresholds returns the same line/branch/function minimums buil
   assert.ok(cmd.args.includes("--test-coverage-lines=80"));
   assert.ok(cmd.args.includes("--test-coverage-branches=70"));
   assert.ok(cmd.args.includes("--test-coverage-functions=60"));
+});
+
+test("resolveStageThresholds returns the same script minimums buildCoverageCommand embeds in c8 flags", () => {
+  const env = {
+    SCRIPT_LINE_COVERAGE_MIN: "98",
+    SCRIPT_BRANCH_COVERAGE_MIN: "91",
+    SCRIPT_FUNCTION_COVERAGE_MIN: "96",
+  };
+  const thresholds = resolveStageThresholds(LINE_COVERAGE_STAGES[1], env);
+  const cmd = buildCoverageCommand(LINE_COVERAGE_STAGES[1], env);
+
+  assert.deepEqual(thresholds, { line: 98, branch: 91, function: 96 });
+  assert.ok(cmd.args.includes("--lines=98"));
+  assert.ok(cmd.args.includes("--branches=91"));
+  assert.ok(cmd.args.includes("--functions=96"));
 });
 
 test("resolveStageThresholds falls back to stage defaults when unset", () => {

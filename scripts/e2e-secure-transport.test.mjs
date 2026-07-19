@@ -337,7 +337,10 @@ test("request capabilities reject forgery, replay, and request/channel mutation"
     }
     const requestCapability =
       mutation === "signature"
-        ? `${capability.slice(0, -1)}${capability.endsWith("A") ? "B" : "A"}`
+        ? capability.replace(
+            /\.([A-Za-z0-9_-])/,
+            (_match, first) => `.${first === "A" ? "B" : "A"}`,
+          )
         : capability;
     const first = await requestOnVerifiedProxyChannel(
       requestChannel,
