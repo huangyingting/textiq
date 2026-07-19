@@ -46,6 +46,14 @@ const deterministicProfileSpecs = [
 ];
 
 export default defineConfig({
+  // scripts/**/*.mjs files are native ESM and must not go through Playwright's
+  // Babel/esbuild transpiler. Without this exclusion the transpiler converts
+  // their `export` statements to CJS `exports.X = ...`, which then fails at
+  // link time with "does not provide an export named '...'" because .mjs
+  // files are always loaded as ESM by Node.js.
+  build: {
+    external: ["scripts/**/*.mjs"],
+  },
   testDir: "e2e",
   testMatch: deterministicProfile ? deterministicProfileSpecs : /.*\.spec\.ts/,
   grep: deterministicProfile ? profileGrep : undefined,
