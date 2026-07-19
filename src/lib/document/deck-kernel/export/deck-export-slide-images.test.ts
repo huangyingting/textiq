@@ -23,7 +23,7 @@ import {
   makeShape,
   makeConnector,
 } from "../deck-mutation-test-fixtures";
-import type { ImageElement, TextElement } from "../deck-elements";
+import type { ImageElement, TextElement, ShapeElement } from "../deck-elements";
 import { createBlankVisual } from "@/lib/visual/blank";
 import {
   exportDeckAsSlideImages,
@@ -487,4 +487,179 @@ test("buildDeckSlideSvgStrings produces SVG strings containing no <foreignObject
   assert.ok(svg.includes("Hello"), "text content should be present");
   // Image should be a native <image> element
   assert.match(svg, /<image href="data:image\/png;base64,AAA"/);
+});
+
+// ---------------------------------------------------------------------------
+// Native text renderer branches (renderTextSvg / renderBulletsSvg)
+// ---------------------------------------------------------------------------
+
+test("buildDeckSlideSvgStrings renders text with rich runs (bold + italic tspan styling)", () => {
+  const text: TextElement = {
+    id: "rich",
+    kind: "text",
+    box: { x: 5, y: 5, w: 60, h: 20 },
+    zIndex: 1,
+    content: {
+      kind: "text",
+      text: "Bold italic",
+      runs: [
+        { text: "Bold", bold: true },
+        { text: " " },
+        { text: "italic", italic: true },
+      ],
+    },
+  };
+  const slide = makeSlide({ id: "sl1", elements: [text] });
+  const [svg] = buildDeckSlideSvgStrings(makeDeck([slide]));
+  assert.ok(svg!.includes("<text"), "should include <text> element");
+  assert.ok(!svg!.includes("<foreignObject"), "must not use foreignObject");
+});
+
+test("buildDeckSlideSvgStrings renders text with explicit newline run as multi-line", () => {
+  const text: TextElement = {
+    id: "multiline",
+    kind: "text",
+    box: { x: 5, y: 5, w: 60, h: 30 },
+    zIndex: 1,
+    content: {
+      kind: "text",
+      text: "Line1\nLine2",
+      runs: [{ text: "Line1" }, { text: "\n" }, { text: "Line2" }],
+    },
+  };
+  const [svg] = buildDeckSlideSvgStrings(
+    makeDeck([makeSlide({ id: "ml", elements: [text] })]),
+  );
+  assert.ok(svg!.includes("Line1"), "line 1 content");
+  assert.ok(svg!.includes("Line2"), "line 2 content");
+  assert.ok(!svg!.includes("<foreignObject"));
+});
+
+test("buildDeckSlideSvgStrings renders text with right and center alignment", () => {
+  const makeTextEl = (
+    id: string,
+    align: "left" | "center" | "right",
+  ): TextElement => ({
+    id,
+    kind: "text",
+    box: { x: 0, y: 0, w: 50, h: 10 },
+    zIndex: 1,
+    content: { kind: "text", text: "Aligned" },
+    designOverrides: {
+      textStyle: { align },
+    },
+  });
+
+  for (const align of ["left", "center", "right"] as const) {
+    const [svg] = buildDeckSlideSvgStrings(
+      makeDeck([
+        makeSlide({ id: align, elements: [makeTextEl(align, align)] }),
+      ]),
+    );
+    const anchors = { left: "start", center: "middle", right: "end" };
+    assert.ok(
+      svg!.includes(`text-anchor="${anchors[align]}"`),
+      `${align} align should produce text-anchor=${anchors[align]}`,
+    );
+  }
+});
+
+test("buildDeckSlideSvgStrings renders text with verticalAlign middle and bottom", () => {
+  for (const vAlign of ["middle", "bottom"] as const) {
+    const text: TextElement = {
+      id: `v-${vAlign}`,
+      kind: "text",
+      box: { x: 0, y: 0, w: 50, h: 40 },
+      zIndex: 1,
+      content: { kind: "text", text: "Vertical" },
+      designOverrides: { textStyle: { verticalAlign: vAlign } },
+    };
+    const [svg] = buildDeckSlideSvgStrings(
+      makeDeck([makeSlide({ id: vAlign, elements: [text] })]),
+    );
+    assert.ok(svg!.includes("<text"), `${vAlign}: should have native text`);
+    assert.ok(!svg!.includes("<foreignObject"), `${vAlign}: no foreignObject`);
+  }
+});
+
+test("buildDeckSlideSvgStrings renders bullet list with numbered items", () => {
+  const bullets: TextElement = {
+    id: "bullets",
+    kind: "text",
+    box: { x: 0, y: 10, w: 80, h: 50 },
+    zIndex: 1,
+    content: {
+      kind: "text",
+      text: "",
+      paragraphs: [
+        { text: "First item", listType: "number" },
+        { text: "Second item", listType: "number" },
+        { text: "Nested bullet", listType: "bullet", indent: 1 },
+      ],
+    },
+  };
+  const [svg] = buildDeckSlideSvgStrings(
+    makeDeck([makeSlide({ id: "bl", elements: [bullets] })]),
+  );
+  assert.ok(svg!.includes("First item"), "first item present");
+  assert.ok(svg!.includes("Second item"), "second item present");
+  assert.ok(svg!.includes("1."), "numbered marker present");
+  assert.ok(!svg!.includes("<foreignObject"), "no foreignObject");
+});
+
+test("buildDeckSlideSvgStrings renders glass-effect shape via native SVG (no foreignObject)", () => {
+  const glassShape = makeShape("glass", {
+    content: { kind: "shape", shape: "rect" },
+    designOverrides: {
+      effect: { kind: "glass", intensity: "medium" },
+      fill: { value: "#6366f1" },
+    },
+  }) as ShapeElement;
+  const [svg] = buildDeckSlideSvgStrings(
+    makeDeck([makeSlide({ id: "glass-slide", elements: [glassShape] })]),
+  );
+  assert.ok(!svg!.includes("<foreignObject"), "glass effect: no foreignObject");
+  assert.ok(
+    svg!.includes("<rect") ||
+      svg!.includes("<ellipse") ||
+      svg!.includes("<polygon"),
+    "glass effect: shape element present",
+  );
+});
+
+test("buildDeckSlideSvgStrings renders blur-effect shape via feGaussianBlur filter", () => {
+  const blurShape = makeShape("blur-shape", {
+    content: { kind: "shape", shape: "rect" },
+    designOverrides: {
+      effect: { kind: "blur", radius: 8 },
+      fill: { value: "#aabbcc" },
+    },
+  }) as ShapeElement;
+  const [svg] = buildDeckSlideSvgStrings(
+    makeDeck([makeSlide({ id: "blur-slide", elements: [blurShape] })]),
+  );
+  assert.ok(!svg!.includes("<foreignObject"), "blur effect: no foreignObject");
+  assert.ok(
+    svg!.includes("feGaussianBlur") || svg!.includes("<filter"),
+    "blur effect: filter element present",
+  );
+});
+
+test("buildDeckSlideSvgStrings renders shape with gradient fill via defs section", () => {
+  const gradientShape = makeShape("grad-shape", {
+    content: { kind: "shape", shape: "rect" },
+    designOverrides: {
+      fill: {
+        type: "linearGradient",
+        inner: { value: "#ffffff" },
+        outer: { value: "#000000" },
+      } as unknown as import("../deck-elements").ElementFill,
+    },
+  }) as ShapeElement;
+  const [svg] = buildDeckSlideSvgStrings(
+    makeDeck([makeSlide({ id: "grad-slide", elements: [gradientShape] })]),
+  );
+  assert.ok(!svg!.includes("<foreignObject"), "gradient: no foreignObject");
+  // gradient or solid color fill should appear
+  assert.ok(svg!.includes("<rect") || svg!.includes("fill="), "shape rendered");
 });

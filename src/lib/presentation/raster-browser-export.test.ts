@@ -12,6 +12,9 @@ import {
 import type { ExportSlideSpec } from "./export-spec-types";
 import type { RasterSlideDimensions } from "./raster-export";
 import type { ResolvedRenderNode } from "./render-tree";
+// style-schema types used in make-spec helpers
+import type { FillStyle } from "./style-schema";
+import type { CanvasSpec } from "./types";
 
 function renderNode(
   id: string,
@@ -155,6 +158,663 @@ describe("inlineImageSources", () => {
       assert.equal(img.getAttribute("src"), "/api/slide-assets/fail");
     });
   });
+
+  test("inlines background-image CSS url reference to data URI", async () => {
+    await withHappyDom(async (window) => {
+      const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+      globalThis.fetch = async () =>
+        ({
+          blob: async () => new Blob([pngBytes], { type: "image/png" }),
+        }) as unknown as Response;
+
+      const container = window.document.createElement("div");
+      window.document.body.appendChild(container);
+      const el = window.document.createElement("div");
+      (el as unknown as HTMLElement).style.backgroundImage =
+        "url('/api/bg.png')";
+      container.appendChild(el);
+
+      await inlineImageSources(container as unknown as Element);
+
+      const expected = arrayBufferToDataUrl(
+        pngBytes.buffer as ArrayBuffer,
+        "image/png",
+      );
+      const bgImage = (el as unknown as HTMLElement).style.backgroundImage;
+      assert.ok(
+        bgImage.includes(expected),
+        "background-image should be a data URI",
+      );
+    });
+  });
+
+  test("skips already-data: background-image url without fetching", async () => {
+    await withHappyDom(async (window) => {
+      let fetchCalled = false;
+      globalThis.fetch = async () => {
+        fetchCalled = true;
+        return {} as Response;
+      };
+
+      const container = window.document.createElement("div");
+      window.document.body.appendChild(container);
+      const el = window.document.createElement("div");
+      const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+      (el as unknown as HTMLElement).style.backgroundImage =
+        `url("${dataUrl}")`;
+      container.appendChild(el);
+
+      await inlineImageSources(container as unknown as Element);
+
+      assert.equal(fetchCalled, false, "should not fetch for data: url");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers shared by the buildSvgFromSlideSpec describe blocks
+// ---------------------------------------------------------------------------
+
+const testDims: RasterSlideDimensions = {
+  widthPx: 960,
+  heightPx: 540,
+  widthIn: 10,
+  heightIn: 5.625,
+};
+const testCanvas: CanvasSpec = {
+  format: "16:9",
+  width: 100,
+  height: 56.25,
+  unit: "percent",
+};
+
+function makeSpec(
+  operations: ExportSlideSpec["operations"],
+  backgroundFill?: FillStyle,
+): ExportSlideSpec {
+  return {
+    id: "test-slide",
+    background: {
+      type: "background",
+      ...(backgroundFill ? { fill: backgroundFill } : {}),
+    },
+    operations,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Pure SVG-builder renderer branches (coverage for raster-browser-export.tsx)
+// ---------------------------------------------------------------------------
+
+describe("buildSvgFromSlideSpec — fill variants", () => {
+  test("solid fill renders rect with color attr", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "s",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: { fill: { type: "solid", color: "#aabbcc" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("#aabbcc"));
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("linearGradient fill produces <linearGradient> defs block with from/to stops", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "lg",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: {
+            fill: {
+              type: "linearGradient",
+              from: "#ffffff",
+              to: "#000000",
+              angle: 90,
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<defs>"), "should emit defs");
+    assert.ok(svg.includes("<linearGradient"), "should emit linearGradient");
+    assert.ok(svg.includes("stop-color="), "should emit gradient stops");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("linearGradient fill with explicit stops array emits per-stop offsets", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "lg-stops",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: {
+            fill: {
+              type: "linearGradient",
+              from: "#ff0000",
+              to: "#0000ff",
+              stops: [
+                { offsetPct: 0, color: "#ff0000" },
+                { offsetPct: 50, color: "#00ff00" },
+                { offsetPct: 100, color: "#0000ff" },
+              ],
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<linearGradient"));
+    assert.ok(svg.includes('offset="0%"'));
+    assert.ok(svg.includes('offset="50%"'));
+    assert.ok(svg.includes('offset="100%"'));
+  });
+
+  test("radialGradient fill produces <radialGradient> defs block with inner/outer stops", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "rg",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: {
+            fill: {
+              type: "radialGradient",
+              inner: "#ffffff",
+              outer: "#000000",
+              cx: 50,
+              cy: 50,
+              r: 70,
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<defs>"), "should emit defs");
+    assert.ok(svg.includes("<radialGradient"), "should emit radialGradient");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("radialGradient fill with explicit stops array emits stops", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "rg-stops",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: {
+            fill: {
+              type: "radialGradient",
+              inner: "#ff0000",
+              outer: "#0000ff",
+              stops: [
+                { offsetPct: 0, color: "#ff0000" },
+                { offsetPct: 100, color: "#0000ff" },
+              ],
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<radialGradient"));
+    assert.ok(svg.includes('offset="0%"'));
+  });
+
+  test("unknown fill type falls back to flat color", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "unk",
+          shape: "rectangle",
+          frame: { x: 0, y: 0, w: 240, h: 135 },
+          style: { fill: { type: "pattern" } as unknown as FillStyle },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<rect"), "should still render a rect");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("background image fill type renders <image> element", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([], { type: "image", assetId: "data:image/png;base64,AAA" }),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes('<image href="data:image/png;base64,AAA"'));
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+});
+
+describe("buildSvgFromSlideSpec — shape variants", () => {
+  const shapeVariants: Array<{ shape: string; expectTag: string }> = [
+    { shape: "ellipse", expectTag: "<ellipse" },
+    { shape: "circle", expectTag: "<ellipse" },
+    { shape: "triangle", expectTag: "<polygon" },
+    { shape: "diamond", expectTag: "<polygon" },
+    { shape: "line", expectTag: "<line" },
+    { shape: "rectangle", expectTag: "<rect" },
+  ];
+
+  for (const { shape, expectTag } of shapeVariants) {
+    test(`${shape} renders as ${expectTag}`, () => {
+      const svg = buildSvgFromSlideSpec(
+        makeSpec([
+          {
+            type: "shape",
+            id: "s",
+            shape,
+            frame: { x: 96, y: 54, w: 192, h: 108 },
+            style: { fill: { type: "solid", color: "#ff0000" } },
+            zIndex: 1,
+          },
+        ]),
+        testCanvas,
+        testDims,
+      );
+      assert.ok(
+        svg.includes(expectTag),
+        `${shape} should render as ${expectTag}`,
+      );
+      assert.ok(!svg.includes("<foreignObject"));
+    });
+  }
+
+  test("shape with stroke attributes emits stroke fields", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "stroked",
+          shape: "rectangle",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          style: {
+            fill: { type: "solid", color: "#ffffff" },
+            stroke: { color: "#cc0000", widthPt: 3 },
+            opacity: 0.75,
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("stroke="), "should have stroke attribute");
+    assert.ok(svg.includes("opacity="), "should have opacity attribute");
+  });
+
+  test("shape with rotation emits transform attribute", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "shape",
+          id: "rotated",
+          shape: "rectangle",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          style: { fill: { type: "solid", color: "#ff0000" } },
+          rotation: 45,
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("rotate(45"), "should have rotate transform");
+  });
+
+  test("image op with rotation emits transform attribute", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "image",
+          id: "img-rot",
+          assetId: "data:image/png;base64,AAA",
+          frame: { x: 0, y: 0, w: 240, h: 135 },
+          style: {},
+          rotation: 30,
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("rotate(30"), "image should have rotate transform");
+  });
+});
+
+describe("buildSvgFromSlideSpec — text renderer branches", () => {
+  test("left alignment uses text-anchor start and left x-origin", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Left" }] },
+          style: { text: { align: "left" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('text-anchor="start"'),
+      "left align → text-anchor start",
+    );
+  });
+
+  test("center alignment uses text-anchor middle and center x-origin", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Center" }] },
+          style: { text: { align: "center" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('text-anchor="middle"'),
+      "center align → text-anchor middle",
+    );
+  });
+
+  test("right alignment uses text-anchor end and right x-origin", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Right" }] },
+          style: { text: { align: "right" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('text-anchor="end"'),
+      "right align → text-anchor end",
+    );
+  });
+
+  test("bold weight renders font-weight bold", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Bold" }] },
+          style: { text: { weight: 700 } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('font-weight="bold"'),
+      "weight ≥ 600 → font-weight bold",
+    );
+  });
+
+  test("italic style renders font-style italic", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Italic" }] },
+          style: { text: { italic: true } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('font-style="italic"'),
+      "italic → font-style italic",
+    );
+  });
+
+  test("explicit fontSizePt uses pt-to-px conversion", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Sized" }] },
+          style: { text: { fontSizePt: 36 } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    // 36pt at 96 ppi/72pt = 48px
+    assert.ok(svg.includes("font-size="), "should have font-size attribute");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("verticalAlign middle adjusts y start position upward from center", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 270 },
+          content: { paragraphs: [{ id: "p", text: "Middle" }] },
+          style: { text: { verticalAlign: "middle" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<text"), "should render <text>");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("verticalAlign bottom adjusts y start to bottom of box", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 270 },
+          content: { paragraphs: [{ id: "p", text: "Bottom" }] },
+          style: { text: { verticalAlign: "bottom" } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<text"), "should render <text>");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("text with rotation emits transform attribute", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Rotated" }] },
+          style: {},
+          rotation: 30,
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("rotate(30"), "rotated text should have transform");
+  });
+
+  test("empty paragraph produces empty line in output", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 192, h: 270 },
+          content: {
+            paragraphs: [
+              { id: "p1", text: "" }, // empty paragraph
+              { id: "p2", text: "After empty" },
+            ],
+          },
+          style: {},
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes("After empty"),
+      "non-empty paragraph text should appear",
+    );
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("runs-based paragraph emits joined run text", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: {
+            paragraphs: [
+              {
+                id: "p",
+                text: "Full text",
+                runs: [{ text: "Full " }, { text: "text" }],
+              },
+            ],
+          },
+          style: {},
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("Full"), "run text should appear in output");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("long text wraps into multiple <text> lines", () => {
+    // Very narrow box forces wrapSvgLine to split
+    const longText = "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa";
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "t",
+          frame: { x: 0, y: 0, w: 48, h: 540 }, // very narrow
+          content: { paragraphs: [{ id: "p", text: longText }] },
+          style: { text: { fontSizePt: 14 } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    const lineCount = (svg.match(/<text /g) ?? []).length;
+    assert.ok(
+      lineCount > 1,
+      `expected multiple <text> lines, got ${lineCount}`,
+    );
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+});
+
+describe("buildSvgFromSlideSpec — connector and visual ops", () => {
+  test("connector op renders as <line>", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "connector",
+          id: "c",
+          from: { kind: "point", point: { x: 0, y: 0 } },
+          to: { kind: "point", point: { x: 100, y: 100 } },
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: { stroke: { color: "#333333", widthPt: 2 } },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(svg.includes("<line"), "connector → <line>");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("visual op with assetId renders as <image>", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "visual",
+          id: "v",
+          assetId: "data:image/svg+xml;base64,PHN2Zz4=",
+          frame: { x: 192, y: 108, w: 192, h: 108 },
+          style: {},
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+    assert.ok(
+      svg.includes('href="data:image/svg+xml;base64,PHN2Zz4="'),
+      "visual with assetId → <image>",
+    );
+    assert.ok(!svg.includes("<foreignObject"));
+  });
 });
 
 describe("buildSvgFromSlideSpec — foreignObject regression", () => {
@@ -164,7 +824,7 @@ describe("buildSvgFromSlideSpec — foreignObject regression", () => {
     widthIn: 10,
     heightIn: 5.625,
   };
-  const canvas: import("./types").CanvasSpec = {
+  const canvas: CanvasSpec = {
     format: "16:9",
     width: 100,
     height: 56.25,
