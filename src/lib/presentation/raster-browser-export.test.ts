@@ -4,10 +4,13 @@ import { Window } from "happy-dom";
 
 import {
   arrayBufferToDataUrl,
+  buildSvgFromSlideSpec,
   dataUrlToBlob,
   inlineImageSources,
   selectedNodeBounds,
 } from "./raster-browser-export";
+import type { ExportSlideSpec } from "./export-spec-types";
+import type { RasterSlideDimensions } from "./raster-export";
 import type { ResolvedRenderNode } from "./render-tree";
 
 function renderNode(
@@ -151,5 +154,112 @@ describe("inlineImageSources", () => {
 
       assert.equal(img.getAttribute("src"), "/api/slide-assets/fail");
     });
+  });
+});
+
+describe("buildSvgFromSlideSpec — foreignObject regression", () => {
+  const dims: RasterSlideDimensions = {
+    widthPx: 960,
+    heightPx: 540,
+    widthIn: 10,
+    heightIn: 5.625,
+  };
+  const canvas: import("./types").CanvasSpec = {
+    format: "16:9",
+    width: 100,
+    height: 56.25,
+    unit: "percent",
+  };
+
+  test("slide with text + image + shape produces no <foreignObject>", () => {
+    const spec: ExportSlideSpec = {
+      id: "slide-1",
+      background: {
+        type: "background",
+        fill: { type: "solid", color: "#ffffff" },
+      },
+      operations: [
+        {
+          type: "text",
+          id: "t1",
+          frame: { x: 48, y: 27, w: 480, h: 108 },
+          content: {
+            paragraphs: [
+              {
+                id: "p1",
+                text: "Hello World",
+                runs: [{ text: "Hello World", bold: true }],
+              },
+            ],
+          },
+          style: {},
+          zIndex: 1,
+        },
+        {
+          type: "image",
+          id: "i1",
+          assetId: "data:image/png;base64,iVBORw0KGgo=",
+          frame: { x: 480, y: 135, w: 240, h: 135 },
+          style: {},
+          zIndex: 2,
+        },
+        {
+          type: "shape",
+          id: "s1",
+          shape: "rectangle",
+          frame: { x: 192, y: 216, w: 192, h: 108 },
+          style: { fill: { type: "solid", color: "#3b82f6" } },
+          zIndex: 3,
+        },
+      ],
+    };
+
+    const svg = buildSvgFromSlideSpec(spec, canvas, dims);
+
+    assert.ok(
+      !svg.includes("<foreignObject"),
+      "SVG must not contain <foreignObject>",
+    );
+    assert.ok(svg.includes("<text"), "SVG must contain native <text> elements");
+    assert.ok(
+      svg.includes("<image"),
+      "SVG must contain native <image> elements",
+    );
+    assert.ok(svg.includes("<rect"), "SVG must contain native <rect> elements");
+  });
+
+  test("selected-nodes crop path produces no <foreignObject>", () => {
+    const spec: ExportSlideSpec = {
+      id: "slide-2",
+      background: { type: "background" },
+      operations: [
+        {
+          type: "text",
+          id: "node-a",
+          frame: { x: 96, y: 54, w: 384, h: 108 },
+          content: {
+            paragraphs: [{ id: "p1", text: "Cropped text" }],
+          },
+          style: {},
+          zIndex: 1,
+        },
+      ],
+    };
+
+    // Simulate the crop viewBox used by renderSelectedNodesToPngBlob
+    const crop = { viewBoxX: 96, viewBoxY: 54, viewBoxW: 384, viewBoxH: 108 };
+    const svg = buildSvgFromSlideSpec(spec, canvas, dims, crop);
+
+    assert.ok(
+      !svg.includes("<foreignObject"),
+      "cropped SVG must not contain <foreignObject>",
+    );
+    // Viewbox should be set to the crop region
+    assert.ok(
+      svg.includes(
+        `viewBox="${crop.viewBoxX} ${crop.viewBoxY} ${crop.viewBoxW} ${crop.viewBoxH}`,
+      ),
+      "cropped SVG must use crop region as viewBox",
+    );
   });
 });

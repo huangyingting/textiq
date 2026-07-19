@@ -1,15 +1,9 @@
 "use client";
 
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
-
-import { SlideCanvas } from "@/components/presentation/slide-canvas";
-import { loadSlideFonts } from "@/lib/presentation/slide-font-loading";
-
-import { buildExportSpec } from "./export-spec";
+import { buildExportSpec, buildSingleSlideExportSpec } from "./export-spec";
 import { resolveExportSpecAssetSources } from "./pptx-appliers/asset-sources";
 import type { ExportOperation, ExportSlideSpec } from "./export-spec-types";
-import { resolveDeckAssetSource } from "./deck-asset-source";
+import { loadSlideFonts } from "./slide-font-loading";
 import { resolveDeckRenderTree } from "./render-resolver";
 import type {
   ResolvedRenderNode,
@@ -28,41 +22,6 @@ import {
   type RasterPngOutput,
   type RasterSlideDimensions,
 } from "./raster-export";
-
-/* node:coverage ignore next 34 */
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-async function waitForImages(root: HTMLElement): Promise<void> {
-  const images = Array.from(root.querySelectorAll("img"));
-  await Promise.allSettled(
-    images.map((image) => {
-      if (image.complete) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        image.onload = () => resolve();
-        image.onerror = () => resolve();
-      });
-    }),
-  );
-}
-
-function inlineComputedStyles(source: Element, clone: Element): void {
-  const computed = window.getComputedStyle(source);
-  const cloneElement = clone as HTMLElement;
-  for (const property of computed) {
-    cloneElement.style.setProperty(
-      property,
-      computed.getPropertyValue(property),
-      computed.getPropertyPriority(property),
-    );
-  }
-
-  Array.from(source.children).forEach((child, index) => {
-    const cloneChild = clone.children.item(index);
-    if (cloneChild) inlineComputedStyles(child, cloneChild);
-  });
-}
 
 /**
  * Converts an ArrayBuffer + MIME type to a base64 data URI.
@@ -161,26 +120,6 @@ export function selectedNodeBounds(
   };
 }
 
-/* node:coverage ignore next 18 */
-function removeUnselectedNodes(
-  clone: Element,
-  selectedIds: ReadonlySet<string>,
-) {
-  clone.querySelectorAll("[data-node-id]").forEach((element) => {
-    const id = element.getAttribute("data-node-id");
-    if (!id || !selectedIds.has(id)) return;
-    let current: Element | null = element;
-    while (current && current !== clone.parentElement) {
-      current.setAttribute("data-copy-keep", "true");
-      if (current === clone) break;
-      current = current.parentElement;
-    }
-  });
-  clone.querySelectorAll("[data-node-id]").forEach((element) => {
-    if (element.getAttribute("data-copy-keep") !== "true") element.remove();
-  });
-}
-
 /* node:coverage ignore next 10 */
 export function dataUrlToBlob(dataUrl: string): Blob {
   const [metadata, base64] = dataUrl.split(",", 2);
@@ -225,51 +164,14 @@ function drawSvgToPngDataUrl(
   });
 }
 
-export async function renderSlideToPng(
-  deck: Deck,
-  slide: ResolvedSlideRenderTree,
-  dimensions: RasterSlideDimensions,
-): Promise<string> {
-  await loadSlideFonts();
-
-  const host = document.createElement("div");
-  host.style.position = "fixed";
-  host.style.left = "-10000px";
-  host.style.top = "0";
-  host.style.width = `${dimensions.widthPx}px`;
-  host.style.height = `${dimensions.heightPx}px`;
-  host.style.pointerEvents = "none";
-  document.body.appendChild(host);
-
-  const root = createRoot(host);
-  try {
-    root.render(
-      createElement(SlideCanvas, {
-        slide,
-        canvas: deck.canvas,
-        assetResolver: (assetId: string) =>
-          resolveDeckAssetSource(deck, assetId),
-        preview: true,
-      }),
-    );
-    await nextFrame();
-    await nextFrame();
-    await waitForImages(host);
-
-    const rendered = host.firstElementChild;
-    if (!rendered) throw new Error("Slide render produced no DOM");
-    const clone = rendered.cloneNode(true) as Element;
-    inlineComputedStyles(rendered, clone);
-    await inlineImageSources(clone);
-    const html = new XMLSerializer().serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dimensions.widthPx}" height="${dimensions.heightPx}" viewBox="0 0 ${dimensions.widthPx} ${dimensions.heightPx}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
-    return await drawSvgToPngDataUrl(svg, dimensions);
-  } finally {
-    root.unmount();
-    host.remove();
-  }
-}
-
+/* node:coverage ignore next 30 */
+/**
+ * Renders selected nodes from a slide to a PNG Blob using the native SVG
+ * pipeline (foreignObject-free). The SVG viewBox is cropped to the bounding
+ * box of the selected nodes; only the selected operations are rendered
+ * (background is always included). Returns null if nothing is selected or the
+ * selection has no matching export operations.
+ */
 export async function renderSelectedNodesToPngBlob(
   deck: Deck,
   slide: ResolvedSlideRenderTree,
@@ -283,54 +185,50 @@ export async function renderSelectedNodesToPngBlob(
 
   await loadSlideFonts();
 
-  const host = document.createElement("div");
-  host.style.position = "fixed";
-  host.style.left = "-10000px";
-  host.style.top = "0";
-  host.style.width = `${dimensions.widthPx}px`;
-  host.style.height = `${dimensions.heightPx}px`;
-  host.style.pointerEvents = "none";
-  document.body.appendChild(host);
+  // Build a foreignObject-free SVG for the full slide, then crop the viewBox.
+  const singleDeckSpec = buildSingleSlideExportSpec(slide, deck.canvas);
+  const resolvedSpec = resolveExportSpecAssetSources(deck, singleDeckSpec);
+  const slideSpec = resolvedSpec.slides[0];
+  if (!slideSpec) return null;
 
-  const root = createRoot(host);
-  try {
-    root.render(
-      createElement(SlideCanvas, {
-        slide,
-        canvas: deck.canvas,
-        assetResolver: (assetId: string) =>
-          resolveDeckAssetSource(deck, assetId),
-        preview: true,
-      }),
-    );
-    await nextFrame();
-    await nextFrame();
-    await waitForImages(host);
+  // Filter to background + selected-node operations only.
+  const filteredSpec: ExportSlideSpec = {
+    ...slideSpec,
+    operations: slideSpec.operations.filter((op) =>
+      selectedIds.has((op as { id?: string }).id ?? ""),
+    ),
+  };
 
-    const rendered = host.firstElementChild;
-    if (!rendered) throw new Error("Slide render produced no DOM");
-    const clone = rendered.cloneNode(true) as Element;
-    inlineComputedStyles(rendered, clone);
-    await inlineImageSources(clone);
-    removeUnselectedNodes(clone, selectedIds);
+  // Build the full-slide SVG and crop its viewBox to the selection bounding box.
+  const cropX = Math.floor((bounds.x / 100) * dimensions.widthPx);
+  const cropY = Math.floor((bounds.y / 100) * dimensions.heightPx);
+  const cropWidth = Math.max(
+    1,
+    Math.ceil((bounds.w / 100) * dimensions.widthPx),
+  );
+  const cropHeight = Math.max(
+    1,
+    Math.ceil((bounds.h / 100) * dimensions.heightPx),
+  );
+  const cropDimensions: RasterSlideDimensions = {
+    ...dimensions,
+    widthPx: cropWidth,
+    heightPx: cropHeight,
+  };
 
-    const cropX = Math.floor((bounds.x / 100) * dimensions.widthPx);
-    const cropY = Math.floor((bounds.y / 100) * dimensions.heightPx);
-    const cropWidth = Math.ceil((bounds.w / 100) * dimensions.widthPx);
-    const cropHeight = Math.ceil((bounds.h / 100) * dimensions.heightPx);
-    const html = new XMLSerializer().serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cropWidth}" height="${cropHeight}" viewBox="0 0 ${cropWidth} ${cropHeight}"><foreignObject x="${-cropX}" y="${-cropY}" width="${dimensions.widthPx}" height="${dimensions.heightPx}">${html}</foreignObject></svg>`;
-    return dataUrlToBlob(
-      await drawSvgToPngDataUrl(svg, {
-        ...dimensions,
-        widthPx: cropWidth,
-        heightPx: cropHeight,
-      }),
-    );
-  } finally {
-    root.unmount();
-    host.remove();
-  }
+  const svgString = buildSvgFromSlideSpec(
+    filteredSpec,
+    deck.canvas,
+    dimensions,
+    {
+      viewBoxX: cropX,
+      viewBoxY: cropY,
+      viewBoxW: cropWidth,
+      viewBoxH: cropHeight,
+    },
+  );
+  const inlined = await inlineSvgImageSources(svgString);
+  return dataUrlToBlob(await drawSvgToPngDataUrl(inlined, cropDimensions));
 }
 
 /* node:coverage ignore next 25 */
@@ -392,16 +290,21 @@ function xmlEsc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Convert percent-of-canvas frame to absolute pixel coordinates. */
-function pctToPx(
+/** Convert spec-frame coordinates (960×540 basis) to absolute pixel coordinates. */
+// ExportOperation.frame values come from resolvedFrame() in the export lowerers,
+// which prefers node.layout.framePx (pixels at a 960×540 basis by default) over
+// node.layout.frame (percent). This basis matches buildPptxSpec's default basisW/H.
+const SPEC_BASIS_W = 960;
+const SPEC_BASIS_H = 540;
+function specFrameToPx(
   frame: { x: number; y: number; w: number; h: number },
   dims: RasterSlideDimensions,
 ): { x: number; y: number; w: number; h: number } {
   return {
-    x: (frame.x * dims.widthPx) / 100,
-    y: (frame.y * dims.heightPx) / 100,
-    w: (frame.w * dims.widthPx) / 100,
-    h: (frame.h * dims.heightPx) / 100,
+    x: (frame.x / SPEC_BASIS_W) * dims.widthPx,
+    y: (frame.y / SPEC_BASIS_H) * dims.heightPx,
+    w: (frame.w / SPEC_BASIS_W) * dims.widthPx,
+    h: (frame.h / SPEC_BASIS_H) * dims.heightPx,
   };
 }
 
@@ -487,7 +390,7 @@ function renderSvgText(
   op: Extract<ExportOperation, { type: "text" }>,
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
-  const { x, y, w, h } = pctToPx(op.frame, dims);
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
   const ts: TextStyle = op.style.text ?? {};
   const pxPerIn = dims.widthPx / dims.widthIn;
   const fontSize = ts.fontSizePt
@@ -550,7 +453,7 @@ function renderSvgShape(
   op: Extract<ExportOperation, { type: "shape" }>,
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
-  const { x, y, w, h } = pctToPx(op.frame, dims);
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
   const fillResult = renderSvgFill(op.style.fill);
   const stroke = op.style.stroke;
   const strokeColor = stroke ? svgColor(stroke.color, "none") : "none";
@@ -592,7 +495,7 @@ function renderSvgImage(
   op: Extract<ExportOperation, { type: "image" }>,
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
-  const { x, y, w, h } = pctToPx(op.frame, dims);
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
   const rotation = op.rotation;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -610,7 +513,7 @@ function renderSvgConnector(
   op: Extract<ExportOperation, { type: "connector" }>,
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
-  const { x, y, w, h } = pctToPx(op.frame, dims);
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
   const stroke = op.style.stroke;
   const strokeColor = stroke ? svgColor(stroke.color, "#888888") : "#888888";
   const pxPerIn = dims.widthPx / dims.widthIn;
@@ -621,32 +524,45 @@ function renderSvgConnector(
 
 /**
  * Build a foreignObject-free SVG string for one slide from its ExportSlideSpec.
- * Frames are in percent-of-canvas; canvas dimensions are used to compute pixel coords.
+ * ExportOperation frames are in 960×540-basis pixels (specFrameToPx converts
+ * them to the output resolution). An optional `crop` viewBox can be passed to
+ * clip the SVG output to a sub-region (e.g. for copy-as-image of selected nodes).
+ *
+ * Exported for unit testing; use `exportDeckRasterBrowser` / `renderSelectedNodesToPngBlob`
+ * for live browser exports.
  */
-function buildSvgFromSlideSpec(
+export function buildSvgFromSlideSpec(
   spec: ExportSlideSpec,
   canvas: CanvasSpec,
   dims: RasterSlideDimensions,
+  crop?: {
+    viewBoxX: number;
+    viewBoxY: number;
+    viewBoxW: number;
+    viewBoxH: number;
+  },
 ): string {
-  const W = dims.widthPx;
-  const H = dims.heightPx;
+  const W = crop ? crop.viewBoxW : dims.widthPx;
+  const H = crop ? crop.viewBoxH : dims.heightPx;
+  const viewBox = crop
+    ? `${crop.viewBoxX} ${crop.viewBoxY} ${crop.viewBoxW} ${crop.viewBoxH}`
+    : `0 0 ${dims.widthPx} ${dims.heightPx}`;
 
   const defs: string[] = [];
   const bodies: string[] = [];
 
-  // Background
+  // Background (full slide — viewBox clips it when cropping)
   const bgFill = renderSvgFill(spec.background.fill);
   if (bgFill.def) defs.push(bgFill.def);
 
-  // Check for image background fill separately
   const bgFillSpec = spec.background.fill;
   if (bgFillSpec?.type === "image" && bgFillSpec.assetId) {
     bodies.push(
-      `<image href="${xmlEsc(bgFillSpec.assetId)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`,
+      `<image href="${xmlEsc(bgFillSpec.assetId)}" x="0" y="0" width="${dims.widthPx}" height="${dims.heightPx}" preserveAspectRatio="xMidYMid slice"/>`,
     );
   } else {
     bodies.push(
-      `<rect x="0" y="0" width="${W}" height="${H}" fill="${xmlEsc(bgFill.attr)}"/>`,
+      `<rect x="0" y="0" width="${dims.widthPx}" height="${dims.heightPx}" fill="${xmlEsc(bgFill.attr)}"/>`,
     );
   }
 
@@ -676,10 +592,10 @@ function buildSvgFromSlideSpec(
 
   const defsBlock = defs.length > 0 ? `<defs>${defs.join("\n")}</defs>\n` : "";
   void canvas; // canvas is reserved for future per-canvas settings
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n${defsBlock}${bodies.join("\n")}\n</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${viewBox}">\n${defsBlock}${bodies.join("\n")}\n</svg>`;
 }
 
-/* node:coverage ignore next 30 */
+/* node:coverage ignore next 33 */
 export async function exportDeckRasterBrowser(
   deck: Deck,
   themePackage?: ThemePackageV1,
@@ -689,6 +605,8 @@ export async function exportDeckRasterBrowser(
     themePackage ?? resolveThemePackageForDeck(deck).package;
   const renderTree = resolveDeckRenderTree(deck, resolvedThemePackage);
   const dimensions = resolveRasterSlideDimensions(deck, options.widthPx);
+
+  await loadSlideFonts();
 
   // Build the v7 export spec (same pipeline as PPTX, but we render to native SVG).
   // resolveExportSpecAssetSources rewrites assetId fields to resolved URLs so
