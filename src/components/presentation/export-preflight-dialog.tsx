@@ -9,6 +9,7 @@ import type {
   PresentationExportFallbackTier,
   PresentationExportPreflightResult,
 } from "@/lib/presentation/export-preflight";
+import { Dialog } from "@/components/ui/dialog";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -76,13 +77,15 @@ export function ExportPreflightDialog({
   const isBlocked = !result.canExport;
 
   return (
-    <div className="absolute inset-0 z-modal flex items-center justify-center bg-black/30 p-4">
+    <Dialog
+      open={true}
+      onClose={onClose}
+      aria-labelledby={titleId}
+      className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface p-0 shadow-ds-overlay"
+    >
       <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
         data-export-preflight-dialog={result.format}
-        className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-ds-lg border border-ds-border-subtle bg-ds-surface shadow-ds-overlay"
+        className="flex min-h-0 flex-1 flex-col"
       >
         <header className="flex items-start gap-3 border-b border-ds-border-subtle px-4 py-3">
           <div
@@ -175,6 +178,6 @@ export function ExportPreflightDialog({
           </button>
         </footer>
       </section>
-    </div>
+    </Dialog>
   );
 }

@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import React, {
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { act } from "react-test-renderer";
 
 import type { PresentationExportPreflightResult } from "@/lib/presentation/export-preflight";
+import { Dialog } from "@/components/ui/dialog";
 import { Popover } from "@/components/ui/popover";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
 import { SlideEditor } from "./slide-editor";
@@ -22,6 +27,7 @@ import {
 import { waitForAsyncDrain } from "@/test/render-text";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
+type Listener = (event: Record<string, unknown>) => void;
 
 function collectElements(
   node: ReactNode,
@@ -48,6 +54,191 @@ function flattenText(node: ReactNode): string {
   return flattenText((node.props as { children?: ReactNode }).children);
 }
 
+function event(overrides: Record<string, unknown> = {}) {
+  return {
+    key: "Enter",
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+    ...overrides,
+  };
+}
+
+function createFocusable(
+  name: string,
+  setActive: (element: HTMLElement) => void,
+  focusLog: string[],
+) {
+  return {
+    tagName: "BUTTON",
+    parentElement: null,
+    focus: function focus(this: HTMLElement) {
+      focusLog.push(name);
+      setActive(this);
+    },
+    getAttribute: () => null,
+    hasAttribute: () => false,
+  } as unknown as HTMLElement;
+}
+
+function withModalDom(
+  callback: (dom: {
+    focusLog: string[];
+    makeFocusable(name: string): HTMLElement;
+    fireDocument(type: string, event: Record<string, unknown>): void;
+  }) => void,
+) {
+  const previousDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const listeners = new Map<string, Listener[]>();
+  const focusLog: string[] = [];
+  let activeElement: HTMLElement;
+  const setActive = (element: HTMLElement) => {
+    activeElement = element;
+  };
+  const trigger = createFocusable("export trigger", setActive, focusLog);
+  activeElement = trigger;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      body: { nodeType: 1, style: {} },
+      get activeElement() {
+        return activeElement;
+      },
+      addEventListener: (type: string, listener: Listener) => {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      },
+      removeEventListener: (type: string, listener: Listener) => {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((entry) => entry !== listener),
+        );
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        addEventListener: () => undefined,
+        matches: false,
+        removeEventListener: () => undefined,
+      }),
+    },
+  });
+
+  try {
+    callback({
+      focusLog,
+      makeFocusable(name) {
+        return createFocusable(name, setActive, focusLog);
+      },
+      fireDocument(type, firedEvent) {
+        for (const listener of listeners.get(type) ?? []) {
+          listener({ type, ...firedEvent });
+        }
+      },
+    });
+  } finally {
+    if (previousDocument) {
+      Object.defineProperty(globalThis, "document", previousDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+    if (previousWindow) {
+      Object.defineProperty(globalThis, "window", previousWindow);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
+    }
+  }
+}
+
+function withPatchedReact<T>(
+  refs: unknown[],
+  callback: (cleanups: Array<() => void>) => T,
+): T {
+  const mutableReact = React as unknown as Record<string, unknown>;
+  const original = {
+    useCallback: React.useCallback,
+    useContext: React.useContext,
+    useEffect: React.useEffect,
+    useId: React.useId,
+    useLayoutEffect: React.useLayoutEffect,
+    useMemo: React.useMemo,
+    useRef: React.useRef,
+    useState: React.useState,
+    useSyncExternalStore: React.useSyncExternalStore,
+  };
+  const cleanups: Array<() => void> = [];
+  let refIndex = 0;
+  mutableReact.useCallback = (fn: unknown) => fn;
+  mutableReact.useContext = () => null;
+  mutableReact.useEffect = (effect: () => void | (() => void)) => {
+    const cleanup = effect();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  };
+  mutableReact.useId = () => "fake-id";
+  mutableReact.useLayoutEffect = (effect: () => void | (() => void)) => {
+    const cleanup = effect();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  };
+  mutableReact.useMemo = (factory: () => unknown) => factory();
+  mutableReact.useRef = (initial: unknown) => ({
+    current: refIndex < refs.length ? refs[refIndex++] : initial,
+  });
+  mutableReact.useState = (initial: unknown) => [
+    typeof initial === "function" ? (initial as () => unknown)() : initial,
+    () => undefined,
+  ];
+  mutableReact.useSyncExternalStore = (
+    _subscribe: unknown,
+    getSnapshot: () => unknown,
+  ) => getSnapshot();
+  try {
+    return callback(cleanups);
+  } finally {
+    Object.assign(React, original);
+  }
+}
+
+function walkPortal(node: ReactNode, visit: (element: ElementLike) => void) {
+  if (Array.isArray(node)) {
+    for (const child of node) walkPortal(child, visit);
+    return;
+  }
+  if (!isValidElement(node)) {
+    const portalChildren = (node as { children?: ReactNode } | null)?.children;
+    if (portalChildren) walkPortal(portalChildren, visit);
+    return;
+  }
+  const element = node as ElementLike;
+  visit(element);
+  walkPortal(element.props.children as ReactNode, visit);
+}
+
+function collectElementsFromPortal(
+  node: ReactNode,
+  predicate: (element: ElementLike) => boolean,
+) {
+  const matches: ElementLike[] = [];
+  walkPortal(node, (element) => {
+    if (predicate(element)) matches.push(element);
+  });
+  return matches;
+}
+
+function resolveDialogSurface(dialog: ElementLike) {
+  const surface = (
+    dialog.type as (props: Record<string, unknown>) => ReactNode
+  )(dialog.props) as ElementLike;
+  return (surface.type as (props: Record<string, unknown>) => ReactNode)(
+    surface.props,
+  );
+}
+
 function createHookRenderer() {
   return createReactRenderHarness();
 }
@@ -71,6 +262,20 @@ function renderTopToolbar(root: ReactNode): ReactNode {
   return SlideEditorTopToolbar(
     toolbar.props as unknown as Parameters<typeof SlideEditorTopToolbar>[0],
   );
+}
+
+function buildWarningPreflight(): PresentationExportPreflightResult {
+  return {
+    format: "pptx",
+    label: "PPTX",
+    diagnostics: [],
+    fatalDiagnostics: [],
+    warningDiagnostics: [],
+    fallbackTiers: ["native"],
+    hasFatal: false,
+    hasWarnings: true,
+    canExport: true,
+  };
 }
 
 /**
@@ -101,6 +306,65 @@ async function runWithSettledDom(body: () => Promise<void> | void) {
 }
 
 describe("SlideEditor export preflight", () => {
+  test("routes export preflight through Dialog focus management and restores focus to the export trigger", () => {
+    withModalDom((dom) => {
+      let closeCalls = 0;
+      let continueCalls = 0;
+      const cancel = dom.makeFocusable("cancel");
+      const continueExport = dom.makeFocusable("continue");
+      const panel = {
+        focus: () => dom.focusLog.push("panel"),
+        querySelectorAll: () => [cancel, continueExport],
+      };
+      const dialog = ExportPreflightDialog({
+        result: buildWarningPreflight(),
+        onClose: () => {
+          closeCalls += 1;
+        },
+        onContinue: () => {
+          continueCalls += 1;
+        },
+      }) as ElementLike;
+
+      assert.equal(dialog.type, Dialog);
+      assert.equal(dialog.props.open, true);
+      assert.match(String(dialog.props.className), /max-w-xl/);
+
+      withPatchedReact([panel], (cleanups) => {
+        const portal = resolveDialogSurface(dialog);
+        const [dialogPanel] = collectElementsFromPortal(
+          portal,
+          (element) => element.props.role === "dialog",
+        );
+        assert.ok(dialogPanel, "expected Dialog to render a modal panel");
+        assert.deepEqual(dom.focusLog, ["cancel"]);
+
+        (dialogPanel.props.onKeyDown as (key: unknown) => void)(
+          event({ key: "Tab" }),
+        );
+        assert.deepEqual(dom.focusLog, ["cancel", "continue"]);
+
+        (dialogPanel.props.onKeyDown as (key: unknown) => void)(
+          event({ key: "Tab", shiftKey: true }),
+        );
+        assert.deepEqual(dom.focusLog, ["cancel", "continue", "cancel"]);
+
+        dom.fireDocument("keydown", event({ key: "Escape" }));
+        const cancelButton = collectElements(dialog, () => true).find(
+          (element) =>
+            element.type === "button" && flattenText(element) === "Cancel",
+        );
+        assert.ok(cancelButton, "expected Cancel button");
+        (cancelButton.props.onClick as () => void)();
+        cleanups.forEach((cleanup) => cleanup());
+      });
+
+      assert.equal(closeCalls, 2);
+      assert.equal(continueCalls, 0);
+      assert.equal(dom.focusLog.at(-1), "export trigger");
+    });
+  });
+
   test("portals the export menu so real pointer activation escapes toolbar clipping", () => {
     const renderer = createHookRenderer();
     try {

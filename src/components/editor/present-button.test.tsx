@@ -19,9 +19,12 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import React, {
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { act } from "react-test-renderer";
-import { renderToStaticMarkup } from "react-dom/server";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 import { createReactRenderHarness } from "@/test/react-render-harness";
@@ -29,8 +32,11 @@ import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { FetchDeckResult } from "@/lib/document/persistence-types";
 import { createBlankDeck } from "@/lib/presentation/empty-deck";
 import { PresentMode } from "@/components/presentation/present-mode";
+import { Dialog } from "@/components/ui/dialog";
 
 import { PresentButton } from "./present-button";
+
+type Listener = (event: Record<string, unknown>) => void;
 
 function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -48,6 +54,156 @@ function createDeferred<T>() {
     resolve: (value: T) => resolve?.(value),
     reject: (reason: unknown) => reject?.(reason),
   };
+}
+
+function event(overrides: Record<string, unknown> = {}) {
+  return {
+    key: "Enter",
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+    ...overrides,
+  };
+}
+
+function createFocusable(
+  name: string,
+  setActive: (element: HTMLElement) => void,
+  focusLog: string[],
+) {
+  return {
+    tagName: "BUTTON",
+    parentElement: null,
+    focus: function focus(this: HTMLElement) {
+      focusLog.push(name);
+      setActive(this);
+    },
+    getAttribute: () => null,
+    hasAttribute: () => false,
+  } as unknown as HTMLElement;
+}
+
+function withModalDom(
+  callback: (dom: {
+    focusLog: string[];
+    makeFocusable(name: string): HTMLElement;
+    fireDocument(type: string, event: Record<string, unknown>): void;
+  }) => void,
+) {
+  const previousDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const listeners = new Map<string, Listener[]>();
+  const focusLog: string[] = [];
+  let activeElement: HTMLElement;
+  const setActive = (element: HTMLElement) => {
+    activeElement = element;
+  };
+  const trigger = createFocusable("present trigger", setActive, focusLog);
+  activeElement = trigger;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      body: { nodeType: 1, style: {} },
+      get activeElement() {
+        return activeElement;
+      },
+      addEventListener: (type: string, listener: Listener) => {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      },
+      removeEventListener: (type: string, listener: Listener) => {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((entry) => entry !== listener),
+        );
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        addEventListener: () => undefined,
+        matches: false,
+        removeEventListener: () => undefined,
+      }),
+    },
+  });
+
+  try {
+    callback({
+      focusLog,
+      makeFocusable(name) {
+        return createFocusable(name, setActive, focusLog);
+      },
+      fireDocument(type, firedEvent) {
+        for (const listener of listeners.get(type) ?? []) {
+          listener({ type, ...firedEvent });
+        }
+      },
+    });
+  } finally {
+    if (previousDocument) {
+      Object.defineProperty(globalThis, "document", previousDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+    if (previousWindow) {
+      Object.defineProperty(globalThis, "window", previousWindow);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
+    }
+  }
+}
+
+function withPatchedReact<T>(
+  refs: unknown[],
+  callback: (cleanups: Array<() => void>) => T,
+): T {
+  const mutableReact = React as unknown as Record<string, unknown>;
+  const original = {
+    useCallback: React.useCallback,
+    useContext: React.useContext,
+    useEffect: React.useEffect,
+    useId: React.useId,
+    useLayoutEffect: React.useLayoutEffect,
+    useMemo: React.useMemo,
+    useRef: React.useRef,
+    useState: React.useState,
+    useSyncExternalStore: React.useSyncExternalStore,
+  };
+  const cleanups: Array<() => void> = [];
+  let refIndex = 0;
+  mutableReact.useCallback = (fn: unknown) => fn;
+  mutableReact.useContext = () => null;
+  mutableReact.useEffect = (effect: () => void | (() => void)) => {
+    const cleanup = effect();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  };
+  mutableReact.useId = () => "fake-id";
+  mutableReact.useLayoutEffect = (effect: () => void | (() => void)) => {
+    const cleanup = effect();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  };
+  mutableReact.useMemo = (factory: () => unknown) => factory();
+  mutableReact.useRef = (initial: unknown) => ({
+    current: refIndex < refs.length ? refs[refIndex++] : initial,
+  });
+  mutableReact.useState = (initial: unknown) => [
+    typeof initial === "function" ? (initial as () => unknown)() : initial,
+    () => undefined,
+  ];
+  mutableReact.useSyncExternalStore = (
+    _subscribe: unknown,
+    getSnapshot: () => unknown,
+  ) => getSnapshot();
+  try {
+    return callback(cleanups);
+  } finally {
+    Object.assign(React, original);
+  }
 }
 
 function stubDeckPort(
@@ -78,6 +234,48 @@ function collectElements(node: ReactNode, collected: ElementLike[] = []) {
     collected,
   );
   return collected;
+}
+
+function walkPortal(node: ReactNode, visit: (element: ElementLike) => void) {
+  if (Array.isArray(node)) {
+    for (const child of node) walkPortal(child, visit);
+    return;
+  }
+  if (!isValidElement(node)) {
+    const portalChildren = (node as { children?: ReactNode } | null)?.children;
+    if (portalChildren) walkPortal(portalChildren, visit);
+    return;
+  }
+  const element = node as ElementLike;
+  visit(element);
+  walkPortal(element.props.children as ReactNode, visit);
+}
+
+function collectElementsFromPortal(
+  node: ReactNode,
+  predicate: (element: ElementLike) => boolean,
+) {
+  const matches: ElementLike[] = [];
+  walkPortal(node, (element) => {
+    if (predicate(element)) matches.push(element);
+  });
+  return matches;
+}
+
+function resolveDialogSurface(dialog: ElementLike) {
+  const surface = (
+    dialog.type as (props: Record<string, unknown>) => ReactNode
+  )(dialog.props) as ElementLike;
+  return (surface.type as (props: Record<string, unknown>) => ReactNode)(
+    surface.props,
+  );
+}
+
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join("");
+  if (!isValidElement(node)) return "";
+  return textContent((node.props as { children?: ReactNode }).children);
 }
 
 function findButton(tree: ReactNode): ElementLike {
@@ -333,13 +531,16 @@ describe("PresentButton", () => {
       assert.ok(recovery, "expected the PresentOpenRecovery dialog element");
       const rendered = (recovery!.type as (props: unknown) => ReactNode)(
         recovery!.props,
-      );
-      const html = renderToStaticMarkup(rendered as ReactElement);
-      assert.match(html, /role="dialog"/);
-      assert.match(html, /aria-modal="true"/);
-      assert.match(html, /Presentation deck could not be opened/);
+      ) as ElementLike;
+      assert.equal(rendered.type, Dialog);
+      assert.equal(rendered.props.open, true);
+      assert.equal(rendered.props["aria-labelledby"], "present-recovery-title");
       assert.match(
-        html,
+        textContent(rendered),
+        /Presentation deck could not be opened/,
+      );
+      assert.match(
+        textContent(rendered),
         /Check your connection and retry\.\s*\(connection reset\)/,
       );
 
@@ -359,6 +560,95 @@ describe("PresentButton", () => {
           }),
         }),
       );
+      assert.equal(fragmentChildren(tree).length, 1);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test("recovery dialog traps focus, closes on Escape, and restores focus to the Present trigger", async () => {
+    const harness = createReactRenderHarness();
+    const renderButton = () =>
+      PresentButton({
+        documentId: "doc-focus",
+        deckPort: stubDeckPort(async () => {
+          throw new Error("invalid deck");
+        }),
+      });
+    const openRecovery = async () => {
+      let tree = harness.run(renderButton);
+      await act(async () => {
+        await clickPresentButton(tree);
+      });
+      tree = harness.run(renderButton);
+      const recovery = fragmentChildren(tree).find(
+        (element) => typeof element.type === "function",
+      );
+      assert.ok(recovery, "expected recovery dialog");
+      return (recovery!.type as (props: unknown) => ReactNode)(
+        recovery!.props,
+      ) as ElementLike;
+    };
+
+    try {
+      let rendered = await openRecovery();
+      assert.equal(rendered.type, Dialog);
+
+      withModalDom((dom) => {
+        const close = dom.makeFocusable("close");
+        const panel = {
+          focus: () => dom.focusLog.push("panel"),
+          querySelectorAll: () => [close],
+        };
+
+        withPatchedReact([panel], (cleanups) => {
+          const portal = resolveDialogSurface(rendered);
+          const [dialogPanel] = collectElementsFromPortal(
+            portal,
+            (element) => element.props.role === "dialog",
+          );
+          assert.ok(dialogPanel, "expected Dialog to render a modal panel");
+          assert.deepEqual(dom.focusLog, ["close"]);
+
+          (dialogPanel.props.onKeyDown as (key: unknown) => void)(
+            event({ key: "Tab" }),
+          );
+          assert.deepEqual(dom.focusLog, ["close", "close"]);
+
+          act(() => {
+            dom.fireDocument("keydown", event({ key: "Escape" }));
+          });
+          cleanups.forEach((cleanup) => cleanup());
+        });
+
+        assert.equal(dom.focusLog.at(-1), "present trigger");
+      });
+
+      let tree = harness.run(renderButton);
+      assert.equal(fragmentChildren(tree).length, 1);
+
+      rendered = await openRecovery();
+      withModalDom((dom) => {
+        const close = dom.makeFocusable("close");
+        const panel = {
+          focus: () => dom.focusLog.push("panel"),
+          querySelectorAll: () => [close],
+        };
+        withPatchedReact([panel], (cleanups) => {
+          resolveDialogSurface(rendered);
+          const closeButton = collectElements(rendered).find(
+            (element) => element.type === "button",
+          );
+          assert.ok(closeButton, "expected Close button");
+          act(() => {
+            (closeButton!.props.onClick as () => void)();
+          });
+          cleanups.forEach((cleanup) => cleanup());
+        });
+        assert.equal(dom.focusLog.at(-1), "present trigger");
+      });
+
+      tree = harness.run(renderButton);
       assert.equal(fragmentChildren(tree).length, 1);
     } finally {
       harness.cleanup();
