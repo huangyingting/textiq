@@ -26,6 +26,26 @@ async function waitForScheduledEffects(): Promise<void> {
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 }
 
+function abortError(): Error {
+  const error = new Error("aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject };
+}
+
 function successfulDeckResponse(): Response {
   return new Response(
     JSON.stringify({
@@ -120,6 +140,57 @@ test("useDeckGeneration reset starts a new idempotency lifecycle", async () => {
 
     assert.equal(seenKeys.length, 2);
     assert.notEqual(seenKeys[0], seenKeys[1]);
+  } finally {
+    renderer.cleanup();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("useDeckGeneration returns superseded when a newer request replaces an in-flight request", async () => {
+  const originalFetch = globalThis.fetch;
+  const renderer = createReactRenderHarness();
+  const firstFetch = createDeferred<Response>();
+  const secondFetch = createDeferred<Response>();
+  let callCount = 0;
+
+  globalThis.fetch = (async (_input, init) => {
+    callCount += 1;
+    if (callCount === 1) {
+      init?.signal?.addEventListener(
+        "abort",
+        () => firstFetch.reject(abortError()),
+        { once: true },
+      );
+      return firstFetch.promise;
+    }
+    return secondFetch.promise;
+  }) as typeof fetch;
+
+  try {
+    const render = () => renderer.run(() => useDeckGeneration());
+    const first = render().generate(
+      { root: { children: [{ type: "paragraph", text: "first" }] } },
+      { length: "medium" },
+      { themePackageId: "noir" },
+    );
+    const second = render().generate(
+      { root: { children: [{ type: "paragraph", text: "second" }] } },
+      { length: "medium" },
+      { themePackageId: "noir" },
+    );
+
+    const firstResult = await first;
+    assert.equal(firstResult.ok, false);
+    if (!firstResult.ok) {
+      assert.equal(firstResult.canceled, true);
+      if (firstResult.canceled) {
+        assert.equal(firstResult.cancelKind, "superseded");
+      }
+    }
+
+    secondFetch.resolve(successfulDeckResponse());
+    const secondResult = await second;
+    assert.equal(secondResult.ok, true);
   } finally {
     renderer.cleanup();
     globalThis.fetch = originalFetch;

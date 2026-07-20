@@ -11,8 +11,8 @@
  * (via {@link useGenerationStatus}), and a cancel/reset affordance on top.
  *
  * Every failure mode — network error, timeout, credit/quota, and the 404
- * returned when the server feature flag is OFF — is classified so the caller can
- * transparently fall back to the deterministic derive path.
+ * returned when the server feature flag is OFF — is classified separately from
+ * cancellation so the caller can fall back only for genuine failures.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -20,6 +20,7 @@ import { useCallback, useRef, useState } from "react";
 import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import {
   requestDeckGeneration,
+  type DeckGenerateCancelKind,
   type DeckGenerateError,
   type DeckGenerateResult,
   type DeckGenerationOptions,
@@ -34,6 +35,7 @@ import {
 } from "@/lib/telemetry/product";
 
 export type {
+  DeckGenerateCancelKind,
   DeckGenerateError,
   DeckGenerateErrorKind,
   DeckGenerateResult,
@@ -90,6 +92,9 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<DeckGenerateError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const cancelReasonRef = useRef<
+    WeakMap<AbortController, DeckGenerateCancelKind>
+  >(new WeakMap());
   const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
     null,
   );
@@ -99,7 +104,10 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   );
 
   const reset = useCallback(() => {
-    abortRef.current?.abort();
+    if (abortRef.current) {
+      cancelReasonRef.current.set(abortRef.current, "canceled");
+      abortRef.current.abort();
+    }
     abortRef.current = null;
     operationIdempotencyRef.current = null;
     setStatus("idle");
@@ -114,7 +122,10 @@ export function useDeckGeneration(): UseDeckGenerationResult {
       options: DeckGenerationOptions = {},
       request?: DeckGenerationRequest,
     ): Promise<DeckGenerateResult> => {
-      abortRef.current?.abort();
+      if (abortRef.current) {
+        cancelReasonRef.current.set(abortRef.current, "superseded");
+        abortRef.current.abort();
+      }
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -173,9 +184,18 @@ export function useDeckGeneration(): UseDeckGenerationResult {
         },
       );
 
-      // A newer request (or a reset) superseded this one — ignore the result.
+      // A newer request (or reset) made this result stale — ignore it.
+      const cancelKind = cancelReasonRef.current.get(controller);
+      if (cancelKind) {
+        cancelReasonRef.current.delete(controller);
+        return { ok: false, canceled: true, cancelKind };
+      }
       if (abortRef.current !== controller) {
-        return result;
+        return {
+          ok: false,
+          canceled: true,
+          cancelKind: abortRef.current ? "superseded" : "canceled",
+        };
       }
       abortRef.current = null;
 
@@ -190,6 +210,8 @@ export function useDeckGeneration(): UseDeckGenerationResult {
         setDeck(result.deck);
         setTruncated(result.truncated);
         setStatus("success");
+      } else if (result.canceled) {
+        setStatus("idle");
       } else {
         emitProductTelemetry("product.ai.deck.failed", {
           durationBucket: bucketDurationMs(performance.now() - startedAt),

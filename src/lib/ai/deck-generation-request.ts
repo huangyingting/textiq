@@ -36,7 +36,7 @@ export type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 /**
  * Classifies a failed deck-generation request:
  * - `network`  — the request never reached the server (fetch threw).
- * - `timeout`  — the request was aborted or the server returned 504.
+ * - `timeout`  — the request timed out or the server returned 504.
  * - `credit`   — insufficient credits / quota (402).
  * - `unavailable` — the feature flag is OFF server-side (404): the caller
  *   should silently fall back to the deterministic derive path.
@@ -48,13 +48,15 @@ export type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 export type DeckGenerateErrorKind =
   "network" | "timeout" | "credit" | "unavailable" | "empty" | "other";
 
+export type DeckGenerateCancelKind = "canceled" | "superseded";
+
 /** A user-facing error plus its classification. */
 export interface DeckGenerateError {
   message: string;
   kind: DeckGenerateErrorKind;
 }
 
-/** Result of a deck-generation request: a usable deck or a classified error. */
+/** Result of a deck-generation request: a usable deck, cancellation, or error. */
 export interface DeckGenerationResponseMetadata {
   planner?: "ai";
   mode?: NonNullable<DeckGenerationOptions["mode"]>;
@@ -72,7 +74,19 @@ export type DeckGenerateResult =
       diagnostics: PresentationDiagnostic[];
       metadata?: DeckGenerationResponseMetadata;
     }
-  | { ok: false; error: string; errorKind: DeckGenerateErrorKind };
+  | {
+      ok: false;
+      canceled: true;
+      cancelKind: DeckGenerateCancelKind;
+      error?: never;
+      errorKind?: never;
+    }
+  | {
+      ok: false;
+      canceled?: false;
+      error: string;
+      errorKind: DeckGenerateErrorKind;
+    };
 
 const FALLBACK_REQUEST_ERROR =
   "We couldn't generate a deck from that document. Please try again.";
@@ -434,19 +448,21 @@ export function parseDeckResponse(payload: unknown): {
   return null;
 }
 
-/** True when a thrown fetch error is an abort (client cancel or timeout). */
-function isAbortError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === "AbortError" || error.name === "TimeoutError")
-  );
+/** True when a thrown fetch error is a client-side cancellation. */
+function isCanceledError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+/** True when a thrown fetch error is a timeout. */
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 /**
  * POST the document `contentJson` + tuning options to `/api/generate-deck` and
- * return a parsed deck or a classified error. This is the ONE place the fetch +
- * status/error handling lives. `fetchImpl` is injectable for tests, and an
- * optional `signal` supports cancellation/timeout.
+ * return a parsed deck, cancellation, or a classified error. This is the ONE
+ * place the fetch + status/error handling lives. `fetchImpl` is injectable for
+ * tests, and an optional `signal` supports cancellation/timeout.
  */
 export async function requestDeckGeneration(
   contentJson: unknown,
@@ -486,7 +502,10 @@ export async function requestDeckGeneration(
       signal,
     });
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isCanceledError(error)) {
+      return { ok: false, canceled: true, cancelKind: "canceled" };
+    }
+    if (isTimeoutError(error)) {
       return { ok: false, error: TIMEOUT_ERROR, errorKind: "timeout" };
     }
     return { ok: false, error: NETWORK_ERROR, errorKind: "network" };
