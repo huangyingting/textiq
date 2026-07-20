@@ -289,7 +289,8 @@ function buildMonoFilterDef(): string {
  * 4. **Aspect ratio** — letterboxes/pillarboxes the canvas to the requested
  *    ratio by expanding the viewBox and centering the content.
  *
- * All transforms are pure string operations so they work in Node without a DOM.
+ * Transforms avoid broad tag regexes for SVG structure; when a DOM parser is
+ * unavailable, narrow root/first-child scanning keeps the helpers Node-safe.
  */
 export function applyExportOptionsToSvg(
   svgString: string,
@@ -308,13 +309,7 @@ export function applyExportOptionsToSvg(
       },
     );
 
-    // Remove a leading background rect (commonly added by renderers).
-    // We match a <rect> that appears to be a backdrop: covers most of the
-    // canvas and has no `id` that suggests it is a data shape.
-    svg = svg.replace(
-      /<rect\b(?=[^>]*\bfill=["'][^"']*["'])(?=[^>]*\bwidth=["'][^"']*["'])(?=[^>]*\bheight=["'][^"']*["'])[^>]*(?:\s+x=["']0["']|\s+y=["']0["'])[^>]*\/?>(?:<\/rect>)?/,
-      "",
-    );
+    svg = removeLeadingBackgroundRect(svg);
   } else if (options.background === "custom") {
     const fill = options.customBackground ?? "#ffffff";
     // Inject a full-coverage background rect immediately after the opening <svg …> tag.
@@ -364,6 +359,255 @@ export function applyExportOptionsToSvg(
   }
 
   return svg;
+}
+
+type SvgViewBox = { x: number; y: number; width: number; height: number };
+
+type ParsedTag = {
+  name: string;
+  attrs: Map<string, string>;
+  end: number;
+  selfClosing: boolean;
+};
+
+function removeLeadingBackgroundRect(svgString: string): string {
+  return (
+    removeLeadingBackgroundRectWithDom(svgString) ??
+    removeLeadingBackgroundRectWithScanner(svgString)
+  );
+}
+
+function removeLeadingBackgroundRectWithDom(svgString: string): string | null {
+  if (
+    typeof DOMParser === "undefined" ||
+    typeof XMLSerializer === "undefined"
+  ) {
+    return null;
+  }
+
+  const parsed = new DOMParser().parseFromString(svgString, "image/svg+xml");
+  if (parsed.querySelector("parsererror")) {
+    return null;
+  }
+
+  const root = parsed.documentElement;
+  if (root.localName.toLowerCase() !== "svg") {
+    return null;
+  }
+
+  const viewBox = parseViewBox(root.getAttribute("viewBox") ?? "");
+  const firstChild = root.firstElementChild;
+  if (
+    !viewBox ||
+    !firstChild ||
+    firstChild.localName.toLowerCase() !== "rect"
+  ) {
+    return svgString;
+  }
+
+  if (
+    hasSemanticIdentifier(firstChild.getAttributeNames()) ||
+    !rectCoversViewBox((name) => firstChild.getAttribute(name), viewBox)
+  ) {
+    return svgString;
+  }
+
+  firstChild.remove();
+  return new XMLSerializer().serializeToString(root);
+}
+
+function removeLeadingBackgroundRectWithScanner(svgString: string): string {
+  const svgStart = findElementStart(svgString, "svg", 0);
+  if (svgStart < 0) return svgString;
+
+  const svgTag = parseTagAt(svgString, svgStart);
+  if (!svgTag) return svgString;
+
+  const viewBox = parseViewBox(svgTag.attrs.get("viewbox") ?? "");
+  if (!viewBox) return svgString;
+
+  const childStart = findFirstChildElementStart(svgString, svgTag.end + 1);
+  if (childStart < 0) return svgString;
+
+  const childTag = parseTagAt(svgString, childStart);
+  if (!childTag || childTag.name !== "rect") return svgString;
+
+  if (
+    hasSemanticIdentifier(childTag.attrs.keys()) ||
+    !rectCoversViewBox((name) => childTag.attrs.get(name) ?? null, viewBox)
+  ) {
+    return svgString;
+  }
+
+  const childEnd = findEmptyElementEnd(svgString, childTag);
+  if (childEnd < 0) return svgString;
+
+  return svgString.slice(0, childStart) + svgString.slice(childEnd);
+}
+
+function parseViewBox(value: string): SvgViewBox | null {
+  const parts = value
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+  return {
+    x: parts[0]!,
+    y: parts[1]!,
+    width: parts[2]!,
+    height: parts[3]!,
+  };
+}
+
+function hasSemanticIdentifier(attributeNames: Iterable<string>): boolean {
+  const names = Array.from(attributeNames, (name) => name.toLowerCase());
+  return names.some(
+    (name) =>
+      name === "id" ||
+      name === "class" ||
+      name === "aria-label" ||
+      name === "aria-labelledby" ||
+      name === "role" ||
+      name.startsWith("data-"),
+  );
+}
+
+function rectCoversViewBox(
+  getAttr: (name: string) => string | null,
+  viewBox: SvgViewBox,
+): boolean {
+  const x = parseSvgLength(getAttr("x") ?? "0");
+  const y = parseSvgLength(getAttr("y") ?? "0");
+  const width = parseSvgLength(getAttr("width") ?? "");
+  const height = parseSvgLength(getAttr("height") ?? "");
+
+  return (
+    lengthEquals(x, viewBox.x) &&
+    lengthEquals(y, viewBox.y) &&
+    lengthEquals(width, viewBox.width) &&
+    lengthEquals(height, viewBox.height)
+  );
+}
+
+function parseSvgLength(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.endsWith("%")) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function lengthEquals(actual: number | null, expected: number): boolean {
+  return actual !== null && Math.abs(actual - expected) < 0.000001;
+}
+
+function findElementStart(
+  source: string,
+  tagName: string,
+  fromIndex: number,
+): number {
+  let cursor = fromIndex;
+  const needle = `<${tagName}`;
+  while (cursor < source.length) {
+    const index = source.indexOf(needle, cursor);
+    if (index < 0) return -1;
+    const next = source[index + needle.length];
+    if (next === undefined || /[\s>/]/.test(next)) return index;
+    cursor = index + needle.length;
+  }
+  return -1;
+}
+
+function findFirstChildElementStart(source: string, fromIndex: number): number {
+  let cursor = fromIndex;
+  while (cursor < source.length) {
+    const char = source[cursor];
+    if (/\s/.test(char ?? "")) {
+      cursor++;
+      continue;
+    }
+
+    if (source.startsWith("<!--", cursor)) {
+      const end = source.indexOf("-->", cursor + 4);
+      if (end < 0) return -1;
+      cursor = end + 3;
+      continue;
+    }
+
+    if (source.startsWith("<?", cursor)) {
+      const end = source.indexOf("?>", cursor + 2);
+      if (end < 0) return -1;
+      cursor = end + 2;
+      continue;
+    }
+
+    if (source.startsWith("<!", cursor)) {
+      const end = source.indexOf(">", cursor + 2);
+      if (end < 0) return -1;
+      cursor = end + 1;
+      continue;
+    }
+
+    return source[cursor] === "<" && source[cursor + 1] !== "/" ? cursor : -1;
+  }
+  return -1;
+}
+
+function parseTagAt(source: string, start: number): ParsedTag | null {
+  if (source[start] !== "<" || source[start + 1] === "/") return null;
+
+  const end = findTagEnd(source, start + 1);
+  if (end < 0) return null;
+
+  const raw = source.slice(start + 1, end);
+  const nameMatch = raw.match(/^([A-Za-z][\w:-]*)/);
+  if (!nameMatch) return null;
+
+  const name = nameMatch[1]!.toLowerCase();
+  const attrSource = raw.slice(nameMatch[0].length);
+  return {
+    name,
+    attrs: parseAttributes(attrSource),
+    end,
+    selfClosing: /\/\s*$/.test(raw),
+  };
+}
+
+function findTagEnd(source: string, fromIndex: number): number {
+  let quote: string | null = null;
+  for (let index = fromIndex; index < source.length; index++) {
+    const char = source[index];
+    if ((char === `"` || char === "'") && source[index - 1] !== "\\") {
+      quote = quote === char ? null : (quote ?? char);
+      continue;
+    }
+    if (char === ">" && !quote) return index;
+  }
+  return -1;
+}
+
+function parseAttributes(source: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  const attrPattern = /([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  for (const match of source.matchAll(attrPattern)) {
+    attrs.set(match[1]!.toLowerCase(), match[2] ?? match[3] ?? "");
+  }
+  return attrs;
+}
+
+function findEmptyElementEnd(source: string, tag: ParsedTag): number {
+  if (tag.selfClosing) return tag.end + 1;
+
+  const closeStart = source.indexOf(`</${tag.name}`, tag.end + 1);
+  if (closeStart < 0) return -1;
+
+  if (source.slice(tag.end + 1, closeStart).trim() !== "") {
+    return -1;
+  }
+
+  const closeEnd = findTagEnd(source, closeStart + 2);
+  return closeEnd < 0 ? -1 : closeEnd + 1;
 }
 
 /**

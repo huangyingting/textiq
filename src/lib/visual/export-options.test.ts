@@ -97,6 +97,10 @@ test("background include: SVG is unchanged (no background transform applied)", (
 test("background transparent: strips a leading background rect", () => {
   const opts = makeOptions({ background: "transparent", colorMode: "color" });
   const result = applyExportOptionsToSvg(BASE_SVG, opts);
+  assert.ok(
+    !result.includes('fill="#ffffff"'),
+    "full-viewBox background rect should be removed",
+  );
   // The white background rect should be gone; the content circle should remain
   assert.ok(
     result.includes("#6366f1"),
@@ -115,6 +119,18 @@ test("background transparent: SVG without background rect is unchanged", () => {
   const result = applyExportOptionsToSvg(BASE_SVG_NO_BG, opts);
   assert.ok(result.includes("#6366f1"), "content fill should still be present");
   assert.ok(result.includes("<svg"), "svg element should still be present");
+});
+
+test("background transparent: preserves a data rect that starts on an axis", () => {
+  const opts = makeOptions({ background: "transparent", colorMode: "color" });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect x="0" y="0" width="120" height="600" fill="#ef4444" data-point-id="bar-1"/><circle cx="400" cy="300" r="50" fill="#6366f1"/></svg>`;
+  const result = applyExportOptionsToSvg(svg, opts);
+
+  assert.ok(
+    result.includes('data-point-id="bar-1"'),
+    "chart data rect at x=0/y=0 must be preserved",
+  );
+  assert.ok(result.includes("#ef4444"), "chart data fill should remain");
 });
 
 // ---------------------------------------------------------------------------

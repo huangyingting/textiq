@@ -286,7 +286,12 @@ export async function exportPPTX(
       reader.readAsDataURL(pngBlob);
     });
 
-    const visualAspect = width / height;
+    const { canvasW, canvasH } = computeLetterboxedDimensions(
+      viewBox,
+      options?.aspectRatio,
+      options?.padding ?? 0,
+    );
+    const visualAspect = canvasW / canvasH;
     const slideAspect = SLIDE_W / SLIDE_H;
 
     let imageWidth: number;
