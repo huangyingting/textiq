@@ -63,6 +63,18 @@ const RESPONSE_EXCEPTIONS = new Set([
   "Provider contract",
   "Shared {error, code} body",
 ]);
+const CONDITIONAL_ABUSE_BUDGET_RATE_LIMITS = [
+  {
+    route: "account/export",
+    declaration: "Per authenticated user",
+    namespace: "account.export.user",
+  },
+  {
+    route: "brand-assets/[ownerId]/[...path]",
+    declaration: "Per client IP",
+    namespace: "public.asset.ip",
+  },
+] as const;
 
 type MatrixHeader = (typeof MATRIX_HEADERS)[number];
 type MatrixRow = Record<MatrixHeader, string>;
@@ -219,6 +231,38 @@ test("#985: explicit response exceptions are scoped to known route contracts", (
       ["slide-assets/[documentId]/[...path]", "Binary/plain-text"],
     ],
   );
+});
+
+test("#2072: conditional abuse-budget routes declare rate limits in the matrix", () => {
+  const rows = new Map(parseMatrixRows().map((row) => [row.Route, row]));
+
+  for (const contract of CONDITIONAL_ABUSE_BUDGET_RATE_LIMITS) {
+    const source = readFileSync(
+      join(API_DIR, ...contract.route.split("/"), "route.ts"),
+      "utf8",
+    );
+    assert.match(
+      source,
+      /checkAbuseBudget/,
+      `${contract.route}: source no longer checks an abuse budget`,
+    );
+    assert.ok(
+      source.includes(`namespace: "${contract.namespace}"`),
+      `${contract.route}: source no longer uses ${contract.namespace}`,
+    );
+
+    const row = rows.get(contract.route);
+    assert.ok(row, `${contract.route}: missing matrix row`);
+    assert.equal(
+      row["Rate limit"],
+      contract.declaration,
+      `${contract.route}: matrix rate-limit cell drifted from ${contract.namespace}`,
+    );
+    assert.ok(
+      row.Notes.includes(contract.namespace),
+      `${contract.route}: matrix notes must name ${contract.namespace}`,
+    );
+  }
 });
 
 test("#509: the security matrix has no stale rows for deleted routes", () => {

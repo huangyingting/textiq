@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-20"
 description: "This subsystem covers sign-in, account creation, provider linking, account settings, self-serve recovery, email verification, export, and deletion. Route authorization and document/workspace capabilities live in ../security/; this document covers how a user becomes and remains an authenticated account."
 ---
 
@@ -70,8 +70,11 @@ Password reset and email verification share the same token model:
   same kind.
 
 Password reset deliberately returns the same success message whether or not an
-email exists. Email verification requests mark previous unconsumed verification
-tokens as used before creating a new one.
+email exists. Email verification requests keep previously delivered, unconsumed
+verification tokens active when issuing a new link, so concurrent verification
+emails remain valid until they are consumed or expire. Each token is still
+single-use: consuming one verification token marks it used, verifies the email,
+and invalidates that user's other outstanding verification tokens.
 
 ## JWT Session Revocation
 
