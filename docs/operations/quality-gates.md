@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-13"
+last_updated: "2026-07-20"
 description: "This document is the inventory for local and CI quality gates. It explains what each command protects and where ownership lives. Release sign-off sequence lives in release-gate.md; local setup and troubleshooting live in developer-bootstrap.md."
 ---
 
@@ -830,8 +830,8 @@ chain.
 - `scripts/check-coverage-breadth.test.mjs`
 - `scripts/check-docs-source-inventory.test.mjs`
 - `scripts/check-docs-links.test.mjs`
-- `scripts/check-import-graph.test.mjs`
-- `scripts/check-client-boundary.test.mjs`
+- `scripts/import-graph.test.mjs`
+- `scripts/client-boundary.test.mjs`
 - `scripts/check-action-ports.test.mjs`
 - `scripts/check-design-system.test.mjs`
 - `scripts/check-next-build-constraints.test.mjs`

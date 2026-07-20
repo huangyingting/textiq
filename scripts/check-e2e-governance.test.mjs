@@ -126,7 +126,7 @@ test("e2e governance: deterministic workflows use the canonical localhost origin
   );
 });
 
-test("e2e governance: runnable profile docs use the canonical localhost origin", () => {
+test("e2e governance: runnable profile docs leave static URL env vars unset", () => {
   const profileCommands = [];
 
   for (const rootName of ["docs", "e2e"]) {
@@ -153,15 +153,12 @@ test("e2e governance: runnable profile docs use the canonical localhost origin",
     } else {
       assert.equal(env.E2E_PROFILE, "1", label);
     }
-    if (env.E2E_BASE_URL === undefined) {
-      assert.equal(env.BASE_URL, undefined, label);
-      assert.equal(env.AUTH_URL, undefined, label);
-      continue;
-    }
-    assert.match(env.E2E_BASE_URL, /^https:\/\/localhost:[1-9]\d*$/, label);
-    if (env.PORT !== undefined) {
-      assert.match(String(env.PORT), /^[1-9]\d*$/, label);
-      assert.equal(env.E2E_BASE_URL, `https://localhost:${env.PORT}`, label);
+    for (const name of ["E2E_BASE_URL", "BASE_URL", "AUTH_URL"]) {
+      assert.equal(
+        env[name],
+        undefined,
+        `${label} must not set a static ${name}`,
+      );
     }
   }
 });
