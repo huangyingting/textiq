@@ -1350,7 +1350,7 @@ export function ContextToolbar({
               }
             />
             <ContextToolbarColorInput
-              label="Border color"
+              label="Stroke color"
               value={shapeStrokeColor}
               onChange={(color) =>
                 onUpdateSelectedLocalStyle?.({
@@ -1362,7 +1362,7 @@ export function ContextToolbar({
               }
             />
             <ContextToolbarNumberInput
-              label="Border width"
+              label="Stroke width"
               value={shapeStrokeWidth}
               min={0}
               max={24}

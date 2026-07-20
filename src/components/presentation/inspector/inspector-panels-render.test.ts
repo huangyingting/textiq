@@ -167,6 +167,7 @@ describe("inspector panels render and wire controls", () => {
     assert.match(html, /Local Style/);
     assert.match(html, /Fill color/);
     assert.match(html, /Stroke width/);
+    assert.match(html, /80%/);
     assert.ok(invokeHandlers(element) >= 4);
     assert.ok(updates.length >= 4);
   });

@@ -773,7 +773,12 @@ export function LocalStylePanel({
         </div>
       ) : null}
       <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-        Opacity
+        <span className="flex items-center justify-between gap-2">
+          <span>Opacity</span>
+          <span className="text-ds-text-muted">
+            {Math.round(opacity * 100)}%
+          </span>
+        </span>
         <input
           type="range"
           value={opacity}
