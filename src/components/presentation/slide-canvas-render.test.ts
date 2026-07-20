@@ -1672,7 +1672,7 @@ describe("SlideCanvas stage editing render affordances", () => {
     );
 
     assert.match(html, /aria-label="Slide filmstrip"/);
-    assert.match(html, /aria-label="Slides"/);
+    assert.match(html, /aria-label="Slide thumbnails"/);
     assert.doesNotMatch(html, /role="listbox"/);
     assert.doesNotMatch(html, /role="option"/);
     assert.match(html, /data-slide-index="0"/);
