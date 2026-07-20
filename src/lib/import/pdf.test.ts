@@ -250,6 +250,26 @@ test("parsePdf abort signal destroys parser and rejects without continuing", asy
   assert.equal(destroyCount, 1);
 });
 
+test("parsePdf rejects an already-aborted signal before creating parser", async () => {
+  let createParserCalled = false;
+  const deps = {
+    createParser: () => {
+      createParserCalled = true;
+      return fakeParser({ text: "should not parse" });
+    },
+  };
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(() =>
+    parsePdf(Buffer.from("ignored"), {
+      deps,
+      signal: controller.signal,
+    }),
+  );
+  assert.equal(createParserCalled, false);
+});
+
 test("parsePdf reports destroy cleanup errors without changing a successful parse result", async () => {
   const cleanupErrors: unknown[] = [];
   const deps = {

@@ -43,6 +43,14 @@ test("resolveImportMime falls back to file extension for octet-stream", () => {
   );
 });
 
+test("resolveImportMime falls back to file extension for empty browser MIME", () => {
+  assert.equal(resolveImportMime("", "report.pdf"), "application/pdf");
+});
+
+test("resolveImportMime rejects conflicting specific MIME despite supported extension", () => {
+  assert.equal(resolveImportMime("image/png", "report.pdf"), null);
+});
+
 test("resolveImportMime returns null for unsupported types and extensions", () => {
   assert.equal(resolveImportMime("image/png", "photo.png"), null);
   assert.equal(resolveImportMime("application/octet-stream", "data.xyz"), null);
@@ -162,6 +170,14 @@ test("validateImportFile resolves via extension when MIME is octet-stream", () =
       result.mime,
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     );
+  }
+});
+
+test("validateImportFile rejects conflicting specific MIME before extension fallback", () => {
+  const result = validateImportFile("image/png", "report.pdf", 1024);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "unsupported_type");
   }
 });
 
