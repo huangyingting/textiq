@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import {
+  act,
+  create,
+  type ReactTestRenderer,
+  type TestRendererOptions,
+} from "react-test-renderer";
 
 import "@/test/react-render-harness";
 import type { ImportActionResult } from "@/lib/action-ports";
@@ -11,16 +16,21 @@ function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function mountImportButton(props: {
-  onImport: (markdown: string) => void;
-  importFile: (file: File) => Promise<ImportActionResult<{ markdown: string }>>;
-  label?: string;
-  compact?: boolean;
-  iconOnly?: boolean;
-}): ReactTestRenderer {
+function mountImportButton(
+  props: {
+    onImport: (markdown: string) => void;
+    importFile: (
+      file: File,
+    ) => Promise<ImportActionResult<{ markdown: string }>>;
+    label?: string;
+    compact?: boolean;
+    iconOnly?: boolean;
+  },
+  options?: TestRendererOptions,
+): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
   act(() => {
-    renderer = create(<ImportButton {...props} />);
+    renderer = create(<ImportButton {...props} />, options);
   });
   return renderer;
 }
@@ -207,13 +217,31 @@ describe("ImportButton (drop-zone / full mode)", () => {
       ok: true;
       data: { markdown: string };
     }) => void;
-    const renderer = mountImportButton({
-      onImport: () => undefined,
-      importFile: () =>
-        new Promise((resolve) => {
-          resolveImport = resolve;
-        }),
-    });
+    let importCalls = 0;
+    let inputClicks = 0;
+    const renderer = mountImportButton(
+      {
+        onImport: () => undefined,
+        importFile: () => {
+          importCalls += 1;
+          return new Promise((resolve) => {
+            resolveImport = resolve;
+          });
+        },
+      },
+      {
+        createNodeMock: (element) => {
+          if (element.type === "input") {
+            return {
+              click: () => {
+                inputClicks += 1;
+              },
+            };
+          }
+          return null;
+        },
+      },
+    );
     try {
       const file = new File(["x"], "notes.md", { type: "text/markdown" });
       act(() => {
@@ -227,10 +255,26 @@ describe("ImportButton (drop-zone / full mode)", () => {
       const status = renderer.root.findByProps({ role: "status" });
       assert.equal(status.props.children, "Uploading and validating file…");
       const dropZone = renderer.root.findByProps({ role: "button" });
+      assert.equal(dropZone.props["aria-disabled"], true);
       assert.match(
         JSON.stringify(dropZone.props.className),
         /cursor-not-allowed/,
       );
+      const duplicate = new File(["duplicate"], "duplicate.md", {
+        type: "text/markdown",
+      });
+      const preventDefault = () => undefined;
+      act(() => {
+        dropZone.props.onDrop({
+          preventDefault,
+          dataTransfer: { files: [duplicate] },
+        });
+        dropZone.props.onClick();
+        dropZone.props.onKeyDown({ key: "Enter", preventDefault });
+        dropZone.props.onKeyDown({ key: " ", preventDefault });
+      });
+      assert.equal(importCalls, 1);
+      assert.equal(inputClicks, 0);
 
       await act(async () => {
         resolveImport({ ok: true, data: { markdown: "done" } });
@@ -238,6 +282,10 @@ describe("ImportButton (drop-zone / full mode)", () => {
         await waitForAsyncDrain();
       });
       assert.throws(() => renderer.root.findByProps({ role: "status" }));
+      assert.equal(
+        renderer.root.findByProps({ role: "button" }).props["aria-disabled"],
+        false,
+      );
     } finally {
       act(() => renderer.unmount());
     }
