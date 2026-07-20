@@ -26,6 +26,10 @@ function decodeSvg(dataUri: string): string {
   return Buffer.from(encoded, "base64").toString("utf8");
 }
 
+function assertApproxEqual(actual: number, expected: number): void {
+  assert.ok(Math.abs(actual - expected) < 0.000001);
+}
+
 describe("pptx lowerer shared helpers", () => {
   test("converts canvas and frames into PPTX dimensions", () => {
     assert.deepEqual(
@@ -55,15 +59,24 @@ describe("pptx lowerer shared helpers", () => {
       }),
       { layout: "LAYOUT_CUSTOM", slideW: 7.5, slideH: 7.5 },
     );
-    assert.equal(
+    assert.deepEqual(
       canvasToPptxDimensions({
         format: "custom",
         width: 200,
         height: 100,
         unit: "percent",
-      }).slideH,
-      6.6665,
+      }),
+      { layout: "LAYOUT_CUSTOM", slideW: 13.333, slideH: 6.6665 },
     );
+    const portraitCustom = canvasToPptxDimensions({
+      format: "custom",
+      width: 9,
+      height: 16,
+      unit: "percent",
+    });
+    assert.equal(portraitCustom.layout, "LAYOUT_CUSTOM");
+    assert.equal(portraitCustom.slideH, 13.333);
+    assertApproxEqual(portraitCustom.slideW, 7.4998125);
     assert.deepEqual(pxToIn({ x: 50, y: 25, w: 25, h: 50 }, 100, 100, 10, 8), {
       x: 5,
       y: 2,

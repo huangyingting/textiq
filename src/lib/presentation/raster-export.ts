@@ -1,6 +1,10 @@
 import { slideFormatConfig } from "@/lib/presentation/slide-format";
 
 import type { PresentationDiagnostic } from "./diagnostics";
+import {
+  resolveCanvasAspectRatio,
+  resolveCappedCanvasInches,
+} from "./export-geometry";
 import { buildExportSpec } from "./export-spec";
 import type { ExportDeckSpec } from "./export-spec";
 import { resolveDeckRenderTree } from "./render-resolver";
@@ -58,20 +62,25 @@ export function resolveRasterSlideDimensions(
   deck: Deck,
   widthPx = DEFAULT_RASTER_WIDTH_PX,
 ): RasterSlideDimensions {
-  const format = isNativePhysicalFormat(deck.canvas.format)
+  const nativeFormat = isNativePhysicalFormat(deck.canvas.format)
     ? deck.canvas.format
-    : "16:9";
-  const config = slideFormatConfig(format);
-  const aspectRatio =
-    deck.canvas.width > 0 && deck.canvas.height > 0
-      ? deck.canvas.width / deck.canvas.height
-      : config.width / config.height;
+    : undefined;
+  const config = slideFormatConfig(nativeFormat ?? "16:9");
+  const aspectRatio = resolveCanvasAspectRatio(
+    deck.canvas.width,
+    deck.canvas.height,
+    config.width / config.height,
+  );
+  const physicalSize =
+    nativeFormat !== undefined
+      ? { widthIn: config.pptxWidthIn, heightIn: config.pptxHeightIn }
+      : resolveCappedCanvasInches(deck.canvas.width, deck.canvas.height);
 
   return {
     widthPx,
     heightPx: Math.round(widthPx / aspectRatio),
-    widthIn: config.pptxWidthIn,
-    heightIn: config.pptxHeightIn,
+    widthIn: physicalSize.widthIn,
+    heightIn: physicalSize.heightIn,
   };
 }
 
