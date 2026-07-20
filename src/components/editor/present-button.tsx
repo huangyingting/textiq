@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 
 import { PresentMode } from "@/components/presentation/present-mode";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
+import { Dialog } from "@/components/ui/dialog";
 import type { DeckFetchPort } from "@/lib/action-ports";
 import { logInfo } from "@/lib/log";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
@@ -61,36 +62,34 @@ function PresentOpenRecovery({
     ...(recovery.validationErrors ?? []),
   ];
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <Dialog
+      open={true}
+      onClose={onClose}
       aria-labelledby="present-recovery-title"
-      className="fixed inset-0 z-modal flex items-center justify-center bg-ds-backdrop p-6"
+      className="max-w-xl rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay p-5 shadow-ds-overlay"
     >
-      <section className="max-w-xl rounded-ds-lg border border-ds-border-subtle bg-ds-surface-overlay p-5 shadow-ds-overlay">
-        <h2
-          id="present-recovery-title"
-          className="text-lg font-semibold text-ds-text-primary"
-        >
-          Presentation deck could not be opened
-        </h2>
-        <p className="mt-2 text-sm text-ds-text-secondary">{recovery.error}</p>
-        {details.length > 0 ? (
-          <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-ds-text-secondary">
-            {details.slice(0, 6).map((detail, index) => (
-              <li key={`${detail}-${index}`}>{detail}</li>
-            ))}
-          </ul>
-        ) : null}
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 rounded-ds-sm bg-ds-accent px-3 py-2 text-sm font-medium text-ds-text-on-accent"
-        >
-          Close
-        </button>
-      </section>
-    </div>
+      <h2
+        id="present-recovery-title"
+        className="text-lg font-semibold text-ds-text-primary"
+      >
+        Presentation deck could not be opened
+      </h2>
+      <p className="mt-2 text-sm text-ds-text-secondary">{recovery.error}</p>
+      {details.length > 0 ? (
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-ds-text-secondary">
+          {details.slice(0, 6).map((detail, index) => (
+            <li key={`${detail}-${index}`}>{detail}</li>
+          ))}
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-5 rounded-ds-sm bg-ds-accent px-3 py-2 text-sm font-medium text-ds-text-on-accent"
+      >
+        Close
+      </button>
+    </Dialog>
   );
 }
 
