@@ -29,11 +29,17 @@ function textContent(node: ReactNode): string {
 }
 
 function findElementByText(tree: ReactNode, label: string): ReactElement {
-  const element = collectElements(tree).find(
+  const matches = collectElements(tree).filter(
     (candidate) =>
       textContent((candidate.props as { children?: ReactNode }).children) ===
       label,
   );
+  const element =
+    matches.find(
+      (candidate) =>
+        typeof (candidate.props as { onClick?: unknown }).onClick ===
+        "function",
+    ) ?? matches[0];
   assert.ok(element, `Missing ${label} element`);
   return element;
 }
