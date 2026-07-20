@@ -62,9 +62,14 @@ export function ImportButton({
   const isUploading = state.status === "uploading";
   const surface: ImportSurface = compact ? "toolbar" : "dropzone";
   const inputRef = useRef<HTMLInputElement>(null);
+  const isUploadingRef = useRef(false);
 
   const processFile = useCallback(
     async (file: File) => {
+      if (isUploadingRef.current) {
+        return;
+      }
+
       const fileType = classifyFileType(file);
       const fileSizeBucket = bucketBytes(file.size);
       if (file.size > IMPORT_MAX_UPLOAD_BYTES) {
@@ -81,6 +86,7 @@ export function ImportButton({
         return;
       }
 
+      isUploadingRef.current = true;
       setState({ status: "uploading" });
       const startedAt = performance.now();
       emitProductTelemetry("product.import.started", {
@@ -103,6 +109,7 @@ export function ImportButton({
           fileType,
           surface,
         });
+        isUploadingRef.current = false;
         setState({ status: "idle" });
         onImport(result.data.markdown);
         return;
@@ -116,6 +123,7 @@ export function ImportButton({
         status: result.error.status,
         surface,
       });
+      isUploadingRef.current = false;
       setState({ status: "error", message: result.error.message });
     },
     [importFile, onImport, surface],
@@ -134,6 +142,9 @@ export function ImportButton({
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragging(false);
+    if (isUploading) {
+      return;
+    }
     const file = event.dataTransfer.files[0];
     if (file) {
       void processFile(file);
@@ -142,6 +153,9 @@ export function ImportButton({
 
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
+    if (isUploading) {
+      return;
+    }
     setIsDragging(true);
   };
 
@@ -231,11 +245,18 @@ export function ImportButton({
           role="button"
           tabIndex={0}
           aria-label={`${label} — drag and drop or click to browse`}
-          onClick={() => inputRef.current?.click()}
+          aria-disabled={isUploading}
+          onClick={() => {
+            if (!isUploading) {
+              inputRef.current?.click();
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              inputRef.current?.click();
+              if (!isUploading) {
+                inputRef.current?.click();
+              }
             }
           }}
           className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--ds-radius-xl,18px)] border-2 border-dashed px-6 py-8 text-center transition-colors ${
