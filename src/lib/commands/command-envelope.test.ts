@@ -328,6 +328,135 @@ test("validateCommandEnvelope rejects edge ops with a missing/blank edgeId", () 
   );
 });
 
+test("validateCommandEnvelope validates add_edge endpoints at the command boundary", () => {
+  const base = {
+    schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
+    type: "visual.add_edge",
+    timestamp: BASE_TIMESTAMP,
+    actor: ACTOR,
+    target: { surface: "visual" as const, visualId: "vis-3" },
+    source: "user" as const,
+  };
+
+  const malformedCases = [
+    {
+      edge: { to: "n2" },
+      expected: "payload.edge.from must be a non-empty string.",
+    },
+    {
+      edge: { from: "n1" },
+      expected: "payload.edge.to must be a non-empty string.",
+    },
+    {
+      edge: { from: 42, to: "n2" },
+      expected: "payload.edge.from must be a non-empty string.",
+    },
+    {
+      edge: { from: "", to: "n2" },
+      expected: "payload.edge.from must be a non-empty string.",
+    },
+    {
+      edge: { from: "n1", to: " " },
+      expected: "payload.edge.to must be a non-empty string.",
+    },
+  ];
+
+  for (const [index, { edge, expected }] of malformedCases.entries()) {
+    const validation = validateCommandEnvelope(
+      invalidEnvelope({
+        ...base,
+        id: commandId(`2101${index}`),
+        payload: { op: "visual.add_edge", edge },
+      }),
+    );
+
+    assert.equal(validation.valid, false);
+    assert.ok(validation.errors.includes(expected), expected);
+  }
+
+  const valid = validateCommandEnvelope(
+    invalidEnvelope({
+      ...base,
+      id: commandId("21018"),
+      payload: {
+        op: "visual.add_edge",
+        edge: {
+          id: "e1",
+          from: "n1",
+          to: "n2",
+          label: "",
+          directed: false,
+          style: "curved",
+          arrowStyle: "open",
+          lineStyle: "dashed",
+          lineWidth: 2,
+        },
+      },
+    }),
+  );
+
+  assert.equal(valid.valid, true);
+});
+
+test("validateCommandEnvelope validates add_edge optional edge fields", () => {
+  const validation = validateCommandEnvelope(
+    invalidEnvelope({
+      id: commandId("21019"),
+      schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
+      type: "visual.add_edge",
+      timestamp: BASE_TIMESTAMP,
+      actor: ACTOR,
+      target: { surface: "visual", visualId: "vis-3" },
+      payload: {
+        op: "visual.add_edge",
+        edge: {
+          id: "",
+          from: "n1",
+          to: "n2",
+          label: 7,
+          directed: "yes",
+          style: "angled",
+          arrowStyle: "triangle",
+          lineStyle: "wavy",
+          lineWidth: 0,
+          extra: true,
+        },
+      },
+      source: "user",
+    }),
+  );
+
+  assert.equal(validation.valid, false);
+  assert.ok(validation.errors.includes("payload.edge.extra is not supported."));
+  assert.ok(
+    validation.errors.includes("payload.edge.id must be a non-empty string."),
+  );
+  assert.ok(validation.errors.includes("payload.edge.label must be a string."));
+  assert.ok(
+    validation.errors.includes("payload.edge.directed must be a boolean."),
+  );
+  assert.ok(
+    validation.errors.includes(
+      "payload.edge.style must be one of: straight, curved.",
+    ),
+  );
+  assert.ok(
+    validation.errors.includes(
+      "payload.edge.arrowStyle must be one of: filled, open, circle, diamond.",
+    ),
+  );
+  assert.ok(
+    validation.errors.includes(
+      "payload.edge.lineStyle must be one of: solid, dashed, dotted.",
+    ),
+  );
+  assert.ok(
+    validation.errors.includes(
+      "payload.edge.lineWidth must be a positive number.",
+    ),
+  );
+});
+
 test("command envelopes remain JSON-serializable", () => {
   const envelope: CommandEnvelope = {
     id: commandId("2"),
