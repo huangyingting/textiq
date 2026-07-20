@@ -61,6 +61,7 @@ export async function parsePdf(
   const deps = options.deps ?? defaultParsePdfDeps;
   const onCleanupError = options.onCleanupError ?? deps.onCleanupError;
   const signal = options.signal;
+  throwIfAborted(signal);
   const parser = deps.createParser(buffer);
   let destroyed = false;
   const destroyParser = async () => {

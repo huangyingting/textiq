@@ -27,22 +27,28 @@ export function maxBytesForMime(mime: AcceptedMimeType): number {
 /**
  * Resolves the effective MIME type for an uploaded file.
  *
- * Browsers sometimes report `application/octet-stream` for binary office
- * files. When that happens, we fall back to the file extension so the right
- * parser is chosen. Returns `null` when neither the MIME type nor the
+ * Browsers sometimes omit MIME values or report `application/octet-stream` for
+ * binary office files. When that happens, we fall back to the file extension so
+ * the right parser is chosen. Returns `null` when neither the MIME type nor the
  * extension map to a supported format.
  */
+const GENERIC_IMPORT_MIME_TYPES = new Set(["", "application/octet-stream"]);
+
 export function resolveImportMime(
   mimeType: string,
   filename: string,
 ): AcceptedMimeType | null {
+  const normalized = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
   const byMime = importResourceForMime(mimeType);
   if (byMime) {
-    const normalized = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
     const resolved = byMime.mimes.find((mime) => mime === normalized);
     if (resolved) {
       return resolved;
     }
+  }
+
+  if (!GENERIC_IMPORT_MIME_TYPES.has(normalized)) {
+    return null;
   }
 
   const byExtension = importResourceForExtension(filename);
