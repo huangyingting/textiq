@@ -7,10 +7,12 @@
  * also the access boundary: only the authenticated owner may fetch the bytes.
  *
  * Access rules:
- *  1. The asset row must exist for the reconstructed storage key (else 404 —
- *     existence must not leak).
- *  2. The request must be authenticated (else 401).
- *  3. The session user id must equal the owner partition in the URL (else 403).
+ *  1. The request must be authenticated.
+ *  2. The session user id must equal the owner partition in the URL.
+ *  3. The asset row must exist for the reconstructed storage key.
+ *
+ * All denials return the same 404/plain-text response, so anonymous and
+ * non-owner callers cannot distinguish missing keys from private assets.
  *
  * URL pattern: GET /api/brand-assets/[ownerId]/[...path]
  *
@@ -66,29 +68,24 @@ export async function GET(
   // Reconstruct the storage key: `${ownerId}/${filename}`.
   const storageKey = `${ownerId}/${filenamePart}`;
 
+  const user = await getCurrentUser();
+  if (!user || user.id !== ownerId) {
+    return brandAssetPrivacyResponse();
+  }
+
   const asset = await prisma.asset.findFirst({
     where: { storageKey, deletedAt: null },
     select: { id: true, mimeType: true, storageKey: true },
   });
 
-  const user = await getCurrentUser();
-
   const decision = decideBrandAssetAccess({
     asset: asset ? { id: asset.id } : null,
     requestedOwnerId: ownerId,
-    userId: user?.id ?? null,
+    userId: user.id,
   });
 
   if (!decision.allow) {
-    // Privacy: missing assets and unauthorized requests both surface as plain
-    // text; existence is never leaked (a 404 stays a 404).
-    const body =
-      decision.status === 404
-        ? "Not found"
-        : decision.status === 401
-          ? "Unauthorized"
-          : "Forbidden";
-    return plainTextResponse(body, decision.status);
+    return brandAssetPrivacyResponse();
   }
 
   // `asset` is non-null here (a null asset would have denied with 404 above).
@@ -98,6 +95,10 @@ export async function GET(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function brandAssetPrivacyResponse(): NextResponse {
+  return plainTextResponse("Not found", 404);
+}
 
 /**
  * Reads the asset via the brand storage adapter and streams the bytes.
