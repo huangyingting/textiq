@@ -183,6 +183,7 @@ function TrashRow({ doc }: { doc: TrashDocumentData }) {
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
+          aria-label={`Restore ${doc.title}`}
           onClick={() => setRestoreOpen(true)}
           disabled={isPending}
           className="flex h-8 items-center justify-center rounded-full border border-ds-border-strong px-3 text-xs font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary disabled:opacity-60"
@@ -191,6 +192,7 @@ function TrashRow({ doc }: { doc: TrashDocumentData }) {
         </button>
         <button
           type="button"
+          aria-label={`Permanently delete ${doc.title}`}
           onClick={() => setDeleteOpen(true)}
           disabled={isPending}
           className="flex h-8 items-center justify-center rounded-full border border-ds-danger/30 px-3 text-xs font-medium text-ds-danger transition hover:bg-ds-danger/10 disabled:opacity-60"

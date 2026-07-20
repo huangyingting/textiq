@@ -205,6 +205,37 @@ describe("TrashList", () => {
     });
   });
 
+  test("each row's Restore and Delete-permanently buttons expose a document-scoped aria-label so multiple trashed docs are distinguishable to assistive tech", () => {
+    withPortalDom(() => {
+      const renderer = mount([
+        doc({ id: "doc-1", title: "March draft" }),
+        doc({ id: "doc-2", title: "Old notes" }),
+      ]);
+      try {
+        // Visible text stays short/generic ("Restore" / "Delete permanently"),
+        // but the accessible name is scoped to each document's title.
+        assert.equal(
+          restoreButtonFor(renderer, "March draft").props["aria-label"],
+          "Restore March draft",
+        );
+        assert.equal(
+          deleteButtonFor(renderer, "March draft").props["aria-label"],
+          "Permanently delete March draft",
+        );
+        assert.equal(
+          restoreButtonFor(renderer, "Old notes").props["aria-label"],
+          "Restore Old notes",
+        );
+        assert.equal(
+          deleteButtonFor(renderer, "Old notes").props["aria-label"],
+          "Permanently delete Old notes",
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("formatRemaining renders days+hours, hours+minutes, minutes-only, and Expired for the corresponding remainingMs ranges", () => {
     withPortalDom(() => {
       const renderer = mount([
