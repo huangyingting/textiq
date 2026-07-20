@@ -170,7 +170,7 @@ test("envelope structure validation covers non-object and optional field errors"
     invalidEnvelope({
       id: commandId("7"),
       schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION + 1,
-      type: "deck.slide_command",
+      type: "UPDATE_SLIDE_TITLE",
       timestamp: BASE_TIMESTAMP,
       actor: { id: "actor-1", sessionId: "" },
       target: { surface: "deck", documentId: "doc-1" },
@@ -201,6 +201,67 @@ test("envelope structure validation covers non-object and optional field errors"
   assert.equal(missingActorAndPayload.valid, false);
   assert.ok(missingActorAndPayload.errors.includes("actor must be an object."));
   assert.ok(missingActorAndPayload.errors.includes("payload must be present."));
+});
+
+function commentEnvelope(payload: unknown, suffix: string): CommandEnvelope {
+  return invalidEnvelope({
+    id: commandId(suffix),
+    schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
+    type: "comment.update",
+    timestamp: BASE_TIMESTAMP,
+    actor: ACTOR,
+    target: { surface: "comment", commentId: "comment-1" },
+    payload,
+    source: "user",
+  });
+}
+
+test("command envelope validation accepts JSON-safe payloads for generic surfaces", () => {
+  const validation = validateCommandEnvelope(
+    commentEnvelope(
+      {
+        text: "Looks good",
+        tags: ["review", "resolved"],
+        pinned: false,
+        count: 1,
+        metadata: null,
+      },
+      "10",
+    ),
+  );
+
+  assert.equal(validation.valid, true);
+  assert.deepEqual(validation.errors, []);
+});
+
+test("envelope structure validation rejects non-JSON payload values", () => {
+  const cyclic: Record<string, unknown> = { text: "cycle" };
+  cyclic.self = cyclic;
+
+  const cases: Array<[string, unknown, string]> = [
+    ["function", () => undefined, "function"],
+    ["symbol", Symbol("payload"), "symbol"],
+    ["bigint", BigInt(1), "bigint"],
+    ["nested undefined", { nested: { value: undefined } }, "undefined"],
+    ["array undefined", [undefined], "undefined"],
+    ["cyclic object", cyclic, "cycle"],
+  ];
+
+  for (const [index, [label, payload, expectedError]] of cases.entries()) {
+    const validation = validateCommandEnvelopeStructure(
+      commentEnvelope(payload, `b${index}`),
+    );
+
+    assert.equal(validation.valid, false, label);
+    assert.ok(
+      validation.errors.some(
+        (error) =>
+          error.includes("payload must be JSON-safe") &&
+          error.includes(expectedError),
+      ),
+      label,
+    );
+  }
 });
 
 test("validateCommandEnvelope accepts the new edge flip/toggle + label ops", () => {
@@ -285,8 +346,7 @@ test("command envelopes remain JSON-serializable", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(envelope)), envelope);
 });
 
-// @compat — ensures deck command envelopes remain compatible with existing persisted slide metadata
-test("deck envelopes stay compatible with existing slide metadata", () => {
+test("deck envelopes validate when the envelope type matches the slide command type", () => {
   const payload: SlideCommand = {
     type: "UPDATE_SLIDE_TITLE",
     slideId: "s1",
@@ -296,7 +356,7 @@ test("deck envelopes stay compatible with existing slide metadata", () => {
   const envelope: CommandEnvelope<SlideCommand> = {
     id: commandId("3"),
     schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
-    type: "deck.slide_command",
+    type: "UPDATE_SLIDE_TITLE",
     timestamp: BASE_TIMESTAMP,
     actor: ACTOR,
     target: { surface: "deck", documentId: "doc-9", slideId: "s1" },
@@ -320,6 +380,25 @@ test("deck envelopes stay compatible with existing slide metadata", () => {
   assert.deepEqual(adapted.patches, result.patches);
 });
 
+test("deck envelopes reject mismatched envelope and payload command types", () => {
+  const envelope = invalidEnvelope({
+    id: commandId("9"),
+    schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
+    type: "REMOVE_SLIDE",
+    timestamp: BASE_TIMESTAMP,
+    actor: ACTOR,
+    target: { surface: "deck", documentId: "doc-1" },
+    payload: { type: "ADD_SLIDE", afterSlideId: null },
+    source: "user",
+  });
+
+  const validation = validateCommandEnvelope(envelope);
+  assert.equal(validation.valid, false);
+  assert.ok(
+    validation.errors.includes("Deck envelope type must match payload.type."),
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Server-side acceptance boundary (#508)
 // ---------------------------------------------------------------------------
@@ -331,7 +410,7 @@ function deckEnvelope(
   return {
     id: commandId("a"),
     schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
-    type: "deck.slide_command",
+    type: payload.type,
     timestamp: BASE_TIMESTAMP,
     actor: ACTOR,
     target: { surface: "deck", documentId: "doc-1" },
@@ -415,7 +494,7 @@ test("acceptDeckCommandEnvelope rejects a malformed envelope", () => {
   const bad = invalidEnvelope({
     id: "not-a-uuid",
     schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
-    type: "deck.slide_command",
+    type: "UPDATE_ELEMENT_SOURCE",
     timestamp: BASE_TIMESTAMP,
     actor: ACTOR,
     target: { surface: "deck", documentId: "doc-1" },

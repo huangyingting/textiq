@@ -70,7 +70,7 @@ function makeDeckEnvelope(
   return {
     id: commandId("4", String(payload.type.length)),
     schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
-    type: "deck.slide_command",
+    type: payload.type,
     timestamp: "2026-06-23T00:00:00.000Z",
     actor: ACTOR,
     target: {
