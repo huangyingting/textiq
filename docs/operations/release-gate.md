@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-07-18"
+last_updated: "2026-07-20"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -192,14 +192,15 @@ export DB_PROVIDER=sqlite DATABASE_URL="file:./prisma/dev.db" AUTH_SECRET=ci-pla
 npm run db:reset        # or db:push
 npm run db:seed:e2e     # writes e2e/.e2e-fixture.json + storage/slide-assets/…
 
-# 2. Run the profile suite; the runner starts the app on the canonical origin.
-E2E_PROFILE=1 E2E_BASE_URL=https://localhost:4000 npm run test:e2e:profile
+# 2. Run the profile suite; leave URL env vars unset so the runner derives
+#    the per-run r-<32hex>.localhost origin.
+E2E_PROFILE=1 npm run test:e2e:profile
 ```
 
 For fresh checkouts or CI parity, prefer the self-contained profile runner:
 
 ```bash
-E2E_PROFILE=1 E2E_BASE_URL=https://localhost:4000 npm run test:e2e:profile:self-contained
+E2E_PROFILE=1 npm run test:e2e:profile:self-contained
 ```
 
 Key properties:
