@@ -31,6 +31,13 @@ async function serializeOne(row: BrandRow): Promise<BrandStyle> {
   return style;
 }
 
+function requiresFontUploadEntitlement(data: {
+  fontFamily?: string | null;
+  fontAssetId?: string | null;
+}): boolean {
+  return Boolean(data.fontAssetId) || isCustomFontFamily(data.fontFamily);
+}
+
 /** Lists all brands owned by the current user. */
 export async function listBrands(): Promise<BrandStyle[]> {
   const user = await requireUser(redirect);
@@ -57,7 +64,7 @@ export async function createBrand(
   }
   const { data } = validation;
 
-  if (isCustomFontFamily(data.fontFamily) && !entitlements.canFontUpload) {
+  if (requiresFontUploadEntitlement(data) && !entitlements.canFontUpload) {
     return actionError(FONT_UPLOAD_UPGRADE_MESSAGE);
   }
 
@@ -90,7 +97,7 @@ export async function updateBrand(
   if (!validation.ok) return actionError(validation.error);
   const { data } = validation;
 
-  if (isCustomFontFamily(data.fontFamily) && !entitlements.canFontUpload) {
+  if (requiresFontUploadEntitlement(data) && !entitlements.canFontUpload) {
     return actionError(FONT_UPLOAD_UPGRADE_MESSAGE);
   }
 
