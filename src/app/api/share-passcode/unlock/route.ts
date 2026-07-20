@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { publicSharePasscodeBudgetExceeded } from "@/app/public-abuse";
+import { readFormData } from "@/lib/api/route-adapters";
 import { auth } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import {
@@ -18,6 +19,8 @@ import {
   verifySharePasscode,
 } from "@/lib/share-passcode";
 
+const SHARE_PASSCODE_UNLOCK_FORM_MAX_BYTES = 8 * 1024;
+
 function modeFromForm(value: FormDataEntryValue | null): ShareMode {
   return value === "embed" || value === "present" ? value : "view";
 }
@@ -33,7 +36,17 @@ function redirectWithStatus(
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const form = await request.formData();
+  const parsedForm = await readFormData(
+    request,
+    "Request must be form data.",
+    undefined,
+    {
+      maxBytes: SHARE_PASSCODE_UNLOCK_FORM_MAX_BYTES,
+    },
+  );
+  if (!parsedForm.ok) return parsedForm.response;
+
+  const form = parsedForm.formData;
   const shareId = normalizeSharePasscode(form.get("shareId"));
   const mode = modeFromForm(form.get("mode"));
   const returnTo = safeReturnPath(form.get("returnTo"));
