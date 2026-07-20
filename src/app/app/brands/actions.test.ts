@@ -368,6 +368,48 @@ describe("createBrand", () => {
     assert.equal(callsOf("createBrandForOwner").length, 0);
   });
 
+  it("rejects a curated font carrying a font asset when the plan lacks font-upload entitlement", async () => {
+    state().entitlements = { canBrand: true, canFontUpload: false };
+
+    const result = await actions.createBrand(
+      validBrandInput({
+        fontFamily: "'Inter', sans-serif",
+        fontAssetId: "font-asset-1",
+      }),
+    );
+
+    assert.deepEqual(result, {
+      ok: false,
+      error:
+        "Custom font upload requires a Pro plan. Upgrade to Pro to upload and use custom fonts.",
+    });
+    assert.equal(callsOf("createBrandForOwner").length, 0);
+  });
+
+  it("allows a Pro user to create a brand with a curated font carrying a font asset", async () => {
+    const result = await actions.createBrand(
+      validBrandInput({
+        fontFamily: "'Inter', sans-serif",
+        fontAssetId: "font-asset-1",
+      }),
+    );
+
+    assert.equal(result.ok, true);
+    const [createCall] = callsOf("createBrandForOwner") as [unknown[]];
+    assert.deepEqual(createCall[2], {
+      name: "Acme",
+      palette: null,
+      background: null,
+      nodeFill: null,
+      nodeStroke: null,
+      nodeText: null,
+      edgeColor: null,
+      fontFamily: "'Inter', sans-serif",
+      fontAssetId: "font-asset-1",
+      logoAssetId: null,
+    });
+  });
+
   it("maps a BrandAssetValidationError from the persistence service to a safe error", async () => {
     state().createBrandForOwner = async (_ownerId, _data, ErrorCtor) => {
       throw new ErrorCtor("Logo asset not found or unauthorized.");
@@ -439,6 +481,50 @@ describe("updateBrand", () => {
       error: "Brand name must be 1–80 characters.",
     });
     assert.equal(callsOf("updateBrandForOwner").length, 0);
+  });
+
+  it("rejects a curated font carrying a font asset when the plan lacks font-upload entitlement", async () => {
+    state().entitlements = { canBrand: true, canFontUpload: false };
+
+    const result = await actions.updateBrand(
+      "brand-1",
+      validBrandInput({
+        fontFamily: "'Inter', sans-serif",
+        fontAssetId: "font-asset-1",
+      }),
+    );
+
+    assert.deepEqual(result, {
+      ok: false,
+      error:
+        "Custom font upload requires a Pro plan. Upgrade to Pro to upload and use custom fonts.",
+    });
+    assert.equal(callsOf("updateBrandForOwner").length, 0);
+  });
+
+  it("allows a Pro user to update a brand with a curated font carrying a font asset", async () => {
+    const result = await actions.updateBrand(
+      "brand-1",
+      validBrandInput({
+        fontFamily: "'Inter', sans-serif",
+        fontAssetId: "font-asset-1",
+      }),
+    );
+
+    assert.equal(result.ok, true);
+    const [updateCall] = callsOf("updateBrandForOwner") as [unknown[]];
+    assert.deepEqual(updateCall[3], {
+      name: "Acme",
+      palette: null,
+      background: null,
+      nodeFill: null,
+      nodeStroke: null,
+      nodeText: null,
+      edgeColor: null,
+      fontFamily: "'Inter', sans-serif",
+      fontAssetId: "font-asset-1",
+      logoAssetId: null,
+    });
   });
 
   it("returns Brand not found when the persistence service reports a missing row", async () => {
