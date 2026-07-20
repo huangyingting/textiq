@@ -29,3 +29,13 @@ test("parseCollabFlushPayload preserves validation messages", () => {
   );
   assert.equal(isValidBase64(""), false);
 });
+
+test("parseCollabFlushPayload rejects non-object JSON as missing documentId", () => {
+  for (const body of [null, 42, "payload", ["doc", "AQID"]]) {
+    assert.deepEqual(parseCollabFlushPayload(body), {
+      ok: false,
+      status: 400,
+      message: "Missing documentId.",
+    });
+  }
+});
