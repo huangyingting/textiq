@@ -252,9 +252,7 @@ function FeatureRow({ enabled, label }: { enabled: boolean; label: string }) {
         {enabled ? "✓" : "✗"}
       </span>
       <span
-        className={
-          enabled ? "text-ds-text-primary" : "text-ds-text-secondary/60"
-        }
+        className={enabled ? "text-ds-text-primary" : "text-ds-text-muted"}
         dangerouslySetInnerHTML={{ __html: label }}
       />
     </li>

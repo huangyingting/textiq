@@ -260,9 +260,10 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     );
 
     assert.match(html, /aria-label="Slide filmstrip"/);
-    assert.match(html, /aria-label="Slides"/);
+    assert.match(html, /aria-label="Slide thumbnails"/);
     assert.doesNotMatch(html, /role="listbox"/);
     assert.doesNotMatch(html, /role="option"/);
+    assert.doesNotMatch(html, /role="none"/);
     assert.match(html, /Slide 2/);
     assert.match(html, /Duplicate slide 2/);
     assert.match(html, /Delete slide 2/);
@@ -479,7 +480,7 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     );
 
     assert.match(html, /aria-hidden="true"/);
-    assert.match(html, /aria-label="Slides"[^>]*tabindex="-1"/);
+    assert.match(html, /aria-label="Slide thumbnails"[^>]*tabindex="-1"/);
     assert.match(
       html,
       /aria-label="Slide 1"[^>]*disabled=""[^>]*tabindex="-1"/,
