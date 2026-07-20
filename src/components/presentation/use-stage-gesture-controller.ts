@@ -257,7 +257,6 @@ export interface StageGestureControllerArgs {
   clearTableEditing: () => void;
   focusSelectedNodeSoon: (nodeId: string) => void;
   focusStageNodeSoon: (nodeId: string) => void;
-  handleCloseRequest: () => void;
   handleCopyNodes: () => void;
   handleCutNodes: () => void;
   handleDeleteSelection: () => void;
@@ -391,7 +390,6 @@ export function useStageGestureController(
     clearTableEditing,
     focusSelectedNodeSoon,
     focusStageNodeSoon,
-    handleCloseRequest,
     handleCopyNodes,
     handleCutNodes,
     handleDeleteSelection,
@@ -1608,10 +1606,8 @@ export function useStageGestureController(
       }
       if (selectedIds.length > 0) {
         setSelection((s) => clearSelection(s));
-      } else {
-        handleCloseRequest();
+        event.preventDefault();
       }
-      event.preventDefault();
       return;
     }
 

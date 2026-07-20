@@ -116,6 +116,10 @@ export function defaultShapeNode(zIndex: number): SlideChildNode {
     role: "card",
     layout: { frame: { x: 16, y: 20, w: 28, h: 18 }, zIndex },
     style: { ref: "surface.card" },
+    localStyle: {
+      fill: { type: "solid", color: "#e2e8f0" },
+      stroke: { color: "#94a3b8", widthPt: 1.5 },
+    },
     content: { shape: "rect" },
   };
 }

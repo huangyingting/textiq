@@ -2097,7 +2097,6 @@ export function SlideEditor({
     clearTableEditing,
     focusSelectedNodeSoon,
     focusStageNodeSoon,
-    handleCloseRequest,
     handleCopyNodes,
     handleCutNodes,
     handleDeleteSelection,
