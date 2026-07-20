@@ -1,4 +1,5 @@
 import type { PayloadParseResult } from "@/lib/ai/generation-route";
+import { isPlainObject } from "@/lib/type-guards";
 
 export interface CollabFlushPayload {
   documentId: string;
@@ -16,10 +17,11 @@ export function isValidBase64(value: unknown): value is string {
 export function parseCollabFlushPayload(
   body: unknown,
 ): PayloadParseResult<CollabFlushPayload> {
-  const payload = body as {
-    documentId?: unknown;
-    update?: unknown;
-  };
+  if (!isPlainObject(body)) {
+    return { ok: false, status: 400, message: "Missing documentId." };
+  }
+
+  const payload = body;
   const documentId =
     typeof payload.documentId === "string" && payload.documentId.trim()
       ? payload.documentId.trim()

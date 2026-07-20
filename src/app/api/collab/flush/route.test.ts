@@ -290,6 +290,20 @@ test("#1875: payload missing documentId returns 400 with parser message", async 
   assert.strictEqual(body.error, "Missing documentId.");
 });
 
+test("#2099: non-object JSON payloads return 400 with parser message", async (t) => {
+  replacePrismaDocument(t, {});
+
+  for (const payload of [null, 42, "payload", ["doc", VALID_UPDATE]]) {
+    const response = await POST(
+      makeRequest({ rawBody: JSON.stringify(payload) }),
+    );
+    assert.strictEqual(response.status, 400);
+    const body = await response.json();
+    assert.strictEqual(body.code, "VALIDATION_ERROR");
+    assert.strictEqual(body.error, "Missing documentId.");
+  }
+});
+
 test("#1875: payload with invalid base64 update returns 400 with parser message", async (t) => {
   replacePrismaDocument(t, {});
   const response = await POST(
