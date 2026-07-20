@@ -95,6 +95,28 @@ describe("DeckDiagnosticsReview", () => {
     );
   });
 
+  test("hides navigation and action buttons when handlers are omitted", () => {
+    const diagnostics: PresentationDiagnostic[] = [
+      makeDiagnostic("missing-asset", "error", "Image asset missing", {
+        slideId: "slide-1",
+        nodeId: "image-1",
+        details: { assetId: "hero" },
+        action: { type: "open-asset-panel" },
+      }),
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(DeckDiagnosticsReview, {
+        diagnostics,
+        onClose: () => undefined,
+      }),
+    );
+
+    assert.match(html, /Diagnostics review/);
+    assert.doesNotMatch(html, /Go to target/);
+    assert.doesNotMatch(html, /Open asset panel/);
+  });
+
   test("renders validation, source, asset, theme, render, and export diagnostics in one surface", () => {
     const diagnostics: PresentationDiagnostic[] = [
       makeDiagnostic("duplicate-id", "info", "Duplicate id in deck"),

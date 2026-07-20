@@ -29,8 +29,8 @@ const SEVERITY_STYLES: Record<string, string> = {
 export interface DeckDiagnosticsReviewProps {
   diagnostics: readonly PresentationDiagnostic[];
   onClose: () => void;
-  onNavigate: (diagnostic: PresentationDiagnostic) => void;
-  onAction: (
+  onNavigate?: (diagnostic: PresentationDiagnostic) => void;
+  onAction?: (
     action: DiagnosticAction,
     diagnostic: PresentationDiagnostic,
   ) => void;
@@ -180,7 +180,7 @@ export function DeckDiagnosticsReview({
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 pl-0 sm:pl-16">
-                            {canNavigate(diagnostic) ? (
+                            {onNavigate && canNavigate(diagnostic) ? (
                               <button
                                 type="button"
                                 aria-label={diagnosticReviewActionAriaLabel(
@@ -196,7 +196,7 @@ export function DeckDiagnosticsReview({
                                 Go to target
                               </button>
                             ) : null}
-                            {action && actionDescriptor ? (
+                            {onAction && action && actionDescriptor ? (
                               <button
                                 type="button"
                                 aria-label={diagnosticReviewActionAriaLabel(

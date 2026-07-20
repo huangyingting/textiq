@@ -380,8 +380,6 @@ export function DeckGenerationPreview({
         <DeckDiagnosticsReview
           diagnostics={diagnostics}
           onClose={() => setDiagnosticsReviewOpen(false)}
-          onNavigate={() => undefined}
-          onAction={() => undefined}
         />
       ) : null}
     </Dialog>
