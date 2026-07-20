@@ -50,6 +50,8 @@ export interface PublicPresentationRecovery {
 
 const PUBLIC_ASSET_ROUTE_PREFIX = "/api/slide-assets/";
 const URL_PARSE_BASE = "https://textiq.local";
+const URL_PARSE_BASE_ORIGIN = new URL(URL_PARSE_BASE).origin;
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^[a-z][a-z\d+.-]*:|\/\//i;
 
 function bindSlideAssetUrlToShare(
   src: string,
@@ -66,7 +68,14 @@ function bindSlideAssetUrlToShare(
     return src;
   }
 
-  if (!parsed.pathname.startsWith(PUBLIC_ASSET_ROUTE_PREFIX)) {
+  const isRelativeAppUrl =
+    !ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(src) &&
+    parsed.origin === URL_PARSE_BASE_ORIGIN;
+
+  if (
+    !isRelativeAppUrl ||
+    !parsed.pathname.startsWith(PUBLIC_ASSET_ROUTE_PREFIX)
+  ) {
     return src;
   }
 

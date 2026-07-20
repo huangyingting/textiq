@@ -192,6 +192,10 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
   resetBuilderCounter();
   const boundImageSrc = "/api/slide-assets/doc-1/uploads/protected.png?cache=1";
   const externalSrc = "https://cdn.example.com/hero.png";
+  const externalSlideAssetSrc =
+    "https://attacker.example/api/slide-assets/doc-1/uploads/protected.png?cache=1";
+  const sameOriginAbsoluteSlideAssetSrc =
+    "https://textiq.local/api/slide-assets/doc-1/uploads/protected.png?cache=1";
   const presentationDeck = buildDeck(
     [buildSlide("content", [buildImageNode("protected-img")])],
     {
@@ -205,6 +209,20 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
             src: externalSrc,
             alt: "External image",
           }),
+          "external-slide-asset-img": buildImageAsset(
+            "external-slide-asset-img",
+            {
+              src: externalSlideAssetSrc,
+              alt: "External slide asset image",
+            },
+          ),
+          "same-origin-absolute-slide-asset-img": buildImageAsset(
+            "same-origin-absolute-slide-asset-img",
+            {
+              src: sameOriginAbsoluteSlideAssetSrc,
+              alt: "Same-origin absolute slide asset image",
+            },
+          ),
         },
       },
     },
@@ -225,6 +243,14 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
     "/api/slide-assets/doc-1/uploads/protected.png?cache=1&shareId=share123&shareMode=present",
   );
   assert.equal(model.deck.assets.images["external-img"]?.src, externalSrc);
+  assert.equal(
+    model.deck.assets.images["external-slide-asset-img"]?.src,
+    externalSlideAssetSrc,
+  );
+  assert.equal(
+    model.deck.assets.images["same-origin-absolute-slide-asset-img"]?.src,
+    sameOriginAbsoluteSlideAssetSrc,
+  );
 });
 
 test("buildPublicPresentationModel exposes live document visuals for present rendering", () => {
