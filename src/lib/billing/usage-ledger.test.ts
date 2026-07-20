@@ -576,6 +576,12 @@ describe("usage-ledger sqlite integration", () => {
       client,
     });
 
+    const debited = await harness.client.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    assert.equal(debited.creditBalance, 6);
+
     const refunds = await Promise.all([
       refundUsage({
         idempotencyKey,
@@ -641,7 +647,7 @@ describe("usage-ledger sqlite integration", () => {
     assert.ok(user.creditPeriodStart instanceof Date);
   });
 
-  it("period reset racing with refund keeps refund increment intact", async (t) => {
+  it("does not restore prior-period holds after a rollover reset", async (t) => {
     const stalePeriodStart = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     const { userId } = await createIntegrationUser(harness, t, {
       creditBalance: 0,
@@ -662,33 +668,41 @@ describe("usage-ledger sqlite integration", () => {
         creditCost: 2,
         status: "reserved",
         reservationVersion: USAGE_LEDGER_RESERVATION_VERSION_CURRENT,
+        reservedAt: new Date(stalePeriodStart.getTime() + 60 * 60 * 1000),
       },
     });
 
-    await Promise.all([
-      loadAndSyncBillingState(userId, asBillingClient(harness.client)),
-      refundUsage({
-        idempotencyKey,
-        userId,
-        operation: "generate",
-        creditCost: 2,
-        client: asUsageLedgerClient(harness.client),
-      }),
-    ]);
+    const firstRefund = await refundUsage({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+      creditCost: 2,
+      client: asUsageLedgerClient(harness.client),
+    });
+    const secondRefund = await refundUsage({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+      creditCost: 2,
+      client: asUsageLedgerClient(harness.client),
+    });
+
+    assert.equal(firstRefund?.status, "refunded");
+    assert.equal(secondRefund?.status, "refunded");
 
     const user = await harness.client.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { creditBalance: true },
+      select: { creditBalance: true, creditPeriodStart: true },
     });
-    assert.equal(
-      user.creditBalance,
-      PLAN_ENTITLEMENTS.free.creditsPerPeriod + 2,
-    );
+    assert.equal(user.creditBalance, PLAN_ENTITLEMENTS.free.creditsPerPeriod);
+    assert.ok(user.creditPeriodStart instanceof Date);
   });
 
   it("reconciles stale hold rows by refunding exactly once", async (t) => {
+    const currentPeriodStart = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const { userId } = await createIntegrationUser(harness, t, {
       creditBalance: 10,
+      creditPeriodStart: currentPeriodStart,
     });
     const idempotencyKey = testRawKey("sqlite-reconcile-hold");
     const usageClient = asUsageLedgerClient(harness.client);
@@ -709,7 +723,7 @@ describe("usage-ledger sqlite integration", () => {
     await harness.client.usageLedgerEntry.update({
       where: { keyHash: reserved.keyHash },
       data: {
-        reservedAt: new Date(Date.now() - 60 * 60 * 1000),
+        reservedAt: new Date(currentPeriodStart.getTime() + 60 * 60 * 1000),
       },
     });
 

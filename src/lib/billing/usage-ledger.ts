@@ -6,7 +6,7 @@
  * - reserve: atomically decrement balance + create `reserved`.
  * - capture: compare-and-swap `reserved` -> `captured` (no balance mutation).
  * - refund: compare-and-swap `reserved` -> `refunded` (+ one balance increment
- *   only for hold-on-reserve rows).
+ *   only for current-period hold-on-reserve rows).
  *
  * Captured/refunded are terminal states.
  */
@@ -188,6 +188,17 @@ function assertReservationFingerprint(
 
 function isUniqueConstraintError(error: unknown): boolean {
   return (error as { code?: string }).code === "P2002";
+}
+
+function isReservationInBillingPeriod(
+  entry: Pick<UsageLedgerEntry, "reservedAt">,
+  period: { periodStart: Date; periodEnd: Date },
+): boolean {
+  const reservedAtMs = entry.reservedAt.getTime();
+  return (
+    reservedAtMs >= period.periodStart.getTime() &&
+    reservedAtMs < period.periodEnd.getTime()
+  );
 }
 
 function isRetryableUsageLedgerError(error: unknown): boolean {
@@ -492,8 +503,9 @@ export async function captureUsage(
 }
 
 /**
- * Refunds by scoped key hash. New-format holds increment balance exactly once;
- * legacy pre-hold rows transition to refunded without incrementing.
+ * Refunds by scoped key hash. New-format current-period holds increment balance
+ * exactly once; legacy and prior-period rows transition to refunded without
+ * incrementing.
  */
 export async function refundUsageByKeyHash(
   opts: RefundByKeyHashOptions,
@@ -535,7 +547,7 @@ export async function refundUsageByKeyHash(
         return current;
       }
 
-      await syncBillingPeriodState({
+      const billingPeriod = await syncBillingPeriodState({
         userId: current.userId,
         now: new Date(),
         userClient: tx.user,
@@ -578,7 +590,8 @@ export async function refundUsageByKeyHash(
       if (
         current.reservationVersion >=
           USAGE_LEDGER_RESERVATION_VERSION_CURRENT &&
-        current.creditCost > 0
+        current.creditCost > 0 &&
+        isReservationInBillingPeriod(current, billingPeriod)
       ) {
         const creditRestore = await tx.user.updateMany({
           where: { id: current.userId },
