@@ -624,74 +624,18 @@ describe("sanitizeRestoredDeck", () => {
     assert.equal(result, Prisma.DbNull);
   });
 
-  test("strips orphaned visual element from restored deck", () => {
-    // Restored content only has vis-keep; vis-drop is orphaned.
-    const restoredContent = lexicalStateWithVisual("vis-keep");
-    const result = sanitizeRestoredDeck(
-      prismaJson(VALID_LEGACY_DECK),
-      restoredContent,
-    );
-    // The result should be a Prisma.InputJsonValue (not DbNull)
-    assert.notEqual(result, Prisma.DbNull);
-    const deck = result as typeof VALID_LEGACY_DECK;
-    const elements = deck.slides[0].elements ?? [];
-    const visIds = elements
-      .filter(isLegacyVisualElement)
-      .map((element) => element.content?.visualId);
-    assert.ok(visIds.includes("vis-keep"), "vis-keep should remain");
-    assert.ok(!visIds.includes("vis-drop"), "vis-drop should be stripped");
-  });
-
-  test("returns all visuals intact when all are known", () => {
-    // Build a content with both vis-keep AND vis-drop.
-    const restoredContent = {
-      root: {
-        children: [
-          {
-            type: "visual",
-            visualId: "vis-keep",
-            visual: {
-              version: 1,
-              type: "flowchart",
-              width: 760,
-              height: 480,
-              nodes: [{ id: "n1", label: "A" }],
-              edges: [],
-            },
-          },
-          {
-            type: "visual",
-            visualId: "vis-drop",
-            visual: {
-              version: 1,
-              type: "flowchart",
-              width: 760,
-              height: 480,
-              nodes: [{ id: "n2", label: "B" }],
-              edges: [],
-            },
-          },
-        ],
-        direction: "ltr",
-        format: "",
-        indent: 0,
-        type: "root",
-        version: 1,
-      },
-    };
-    const result = sanitizeRestoredDeck(
-      prismaJson(VALID_LEGACY_DECK),
-      restoredContent,
-    );
-    assert.notEqual(result, Prisma.DbNull);
-    const deck = result as typeof VALID_LEGACY_DECK;
-    const elements = deck.slides[0].elements ?? [];
-    // Both vis-keep and vis-drop are in the restored content, so both should remain.
-    const visualElements = elements.filter((e) => e.kind === "visual");
-    assert.equal(
-      visualElements.length,
-      2,
-      "both visual elements should remain",
+  test("rejects legacy v6 deckJson during restore sanitization", () => {
+    assert.throws(
+      () =>
+        sanitizeRestoredDeck(
+          prismaJson(VALID_LEGACY_DECK),
+          lexicalStateWithVisual("vis-keep"),
+        ),
+      (error: unknown) =>
+        error instanceof RestoredDeckValidationError &&
+        error.failure.code === "invalid_deck" &&
+        error.diagnosticCode === "invalid_version" &&
+        error.issueCount === 1,
     );
   });
 
@@ -1828,6 +1772,41 @@ describe("document snapshot and restore operations", () => {
       (documentUpdates[0] as { data: { content: string } }).data.content,
       "",
     );
+  });
+
+  test("restoreVersion rejects legacy v6 deck snapshots before writing", async () => {
+    let snapshotCalls = 0;
+    let transactionCalls = 0;
+
+    await assert.rejects(
+      () =>
+        restoreVersion("doc-restore", "version-legacy", "user-editor", {
+          db: {
+            documentVersion: {
+              findUniqueOrThrow: async () => ({
+                documentId: "doc-restore",
+                contentJson: EMPTY_LEXICAL_STATE,
+                deckJson: VALID_LEGACY_DECK,
+                createdAt: new Date("2026-01-01T00:00:00Z"),
+              }),
+            },
+            $transaction: async () => {
+              transactionCalls += 1;
+              throw new Error("transaction must not run");
+            },
+          } as never,
+          snapshot: async () => {
+            snapshotCalls += 1;
+          },
+        }),
+      (error: unknown) =>
+        error instanceof RestoredDeckValidationError &&
+        error.failure.code === "invalid_deck" &&
+        error.diagnosticCode === "invalid_version" &&
+        error.issueCount === 1,
+    );
+    assert.equal(snapshotCalls, 0);
+    assert.equal(transactionCalls, 0);
   });
 
   test("restoreVersion rotates deck tokens so pre-restore CAS writes conflict", async (t) => {
