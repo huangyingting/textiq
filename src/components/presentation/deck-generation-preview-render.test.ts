@@ -8,6 +8,7 @@ import {
   buildTextNode,
 } from "@/test/builders/presentation-deck";
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import { makeDiagnostic } from "@/lib/presentation/diagnostics";
 import { DeckDiagnosticsReview } from "./deck-diagnostics-review";
 import {
   DeckGenerationDiagnosticsNotice,
@@ -119,13 +120,12 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
       baselineDeck: baseline,
       truncated: true,
       generationDiagnostics: [
-        {
-          code: "unsupported-template-control",
-          category: "validation",
-          severity: "warning",
-          message: "Layout repaired",
-          target: { scope: "deck" },
-        },
+        makeDiagnostic("missing-asset", "error", "Image asset missing", {
+          slideId: "slide-b",
+          nodeId: "text-b",
+          details: { assetId: "hero" },
+          action: { type: "open-asset-panel" },
+        }),
       ],
       contentJson: "{}",
       options: { length: "short" },
@@ -147,11 +147,13 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
       target: { scope: "deck" },
     },
   ]);
-  assert.ok(
-    collectElements(secondTree).some(
-      (element) => element.type === DeckDiagnosticsReview,
-    ),
+  const review = collectElements(secondTree).find(
+    (element) => element.type === DeckDiagnosticsReview,
   );
+  assert.ok(review);
+  const reviewProps = review.props as Record<string, unknown>;
+  assert.equal("onNavigate" in reviewProps, false);
+  assert.equal("onAction" in reviewProps, false);
 });
 
 test("DeckGenerationPreview sends the original theme package on regenerate", async () => {

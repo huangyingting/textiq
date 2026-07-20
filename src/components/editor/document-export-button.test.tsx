@@ -227,6 +227,12 @@ describe("DocumentExportButton", () => {
         menuItemLabels.some((label) => label.includes("Infographic PDF")),
         "expected an Infographic PDF menu item",
       );
+      assert.equal(
+        renderer.root.findAll((instance) => instance.props.role === "status")
+          .length,
+        0,
+        "expected no unreachable export warning status surface",
+      );
     } finally {
       act(() => renderer.unmount());
       restoreDom();

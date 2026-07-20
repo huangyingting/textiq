@@ -81,7 +81,6 @@ export function DocumentExportButton({
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<ExportStatus>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [infogramWidth, setInfogramWidth] =
     useState<InfographicWidthPreset>("1080");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -183,7 +182,6 @@ export function DocumentExportButton({
 
   const handleExportPDF = async () => {
     setErrorMsg(null);
-    setWarningMsg(null);
     setStatus("exporting");
     setIsOpen(false);
     const startedAt = trackExportStart("pdf");
@@ -217,7 +215,6 @@ export function DocumentExportButton({
   const handleExportPPTX = async () => {
     if (!canPptx) return;
     setErrorMsg(null);
-    setWarningMsg(null);
     setStatus("exporting");
     setIsOpen(false);
     const startedAt = trackExportStart("pptx");
@@ -464,14 +461,6 @@ export function DocumentExportButton({
                   {errorMsg}
                 </div>
               ) : null}
-              {warningMsg ? (
-                <div
-                  role="status"
-                  className="border-t border-ds-warning-border bg-ds-warning-surface px-3 py-2 text-xs text-ds-warning-text"
-                >
-                  {warningMsg}
-                </div>
-              ) : null}
             </div>
           </div>
         </>
@@ -484,11 +473,6 @@ export function DocumentExportButton({
       ) : null}
       {status === "error" && !isOpen && errorMsg ? (
         <ExportWorkflowMessage kind="error">{errorMsg}</ExportWorkflowMessage>
-      ) : null}
-      {status !== "error" && !isOpen && warningMsg ? (
-        <ExportWorkflowMessage kind="warning">
-          {warningMsg}
-        </ExportWorkflowMessage>
       ) : null}
     </div>
   );
