@@ -95,15 +95,38 @@ test("POST wraps webhook handler failures in the canonical server error", async 
       STRIPE_WEBHOOK_SECRET: "whsec_test_placeholder",
     },
     async () => {
-      const response = await POST(
-        makeRequest("{}", { "stripe-signature": "test-signature" }),
+      const originalConsoleError = console.error;
+      const errorLogs: unknown[][] = [];
+      console.error = (...args: unknown[]) => {
+        errorLogs.push(args);
+      };
+      try {
+        const response = await POST(
+          makeRequest("{}", { "stripe-signature": "test-signature" }),
+        );
+        assert.strictEqual(response.status, 500);
+        assert.deepEqual(await response.json(), {
+          error: "Webhook handler failed.",
+          code: "SERVER_ERROR",
+        });
+      } finally {
+        console.error = originalConsoleError;
+      }
+
+      assert.equal(errorLogs.length, 1);
+      const [line] = errorLogs[0] ?? [];
+      assert.equal(typeof line, "string");
+      const record = JSON.parse(line as string) as {
+        level?: string;
+        scope?: string;
+        message?: string;
+      };
+      assert.equal(record.level, "error");
+      assert.equal(record.scope, "billing.webhook.handler");
+      assert.equal(
+        record.message,
+        "The `stripe` package is not installed. Run `npm install stripe` to enable Stripe billing.",
       );
-      assert.strictEqual(response.status, 500);
-      assert.deepEqual(await response.json(), {
-        error:
-          "The `stripe` package is not installed. Run `npm install stripe` to enable Stripe billing.",
-        code: "SERVER_ERROR",
-      });
     },
   );
 });
