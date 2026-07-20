@@ -5,7 +5,11 @@ export type {
   DocumentSourcePlanV1,
   DocumentSourcePlanBuildResult,
 } from "./document-source-plan";
-export { buildDocumentSourcePlanV1 } from "./document-source-plan";
+export {
+  buildDocumentSourcePlanV1,
+  buildDocumentSourceVisualInventory,
+  renderDocumentSourcePlanForPrompt,
+} from "./document-source-plan";
 
 export type {
   DocumentSlidePlanner,

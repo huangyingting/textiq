@@ -5,7 +5,9 @@ import {
   buildDocumentSourcePlanV1,
   compileDocumentSlidePlanToDeck,
   deriveDocumentSlidePlanDeterministic,
+  renderDocumentSourcePlanForPrompt,
 } from "./document-slide-plan";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 import type { SlideChildNode } from "./schema";
 import type { JsonValue } from "./types";
 
@@ -98,6 +100,44 @@ test("buildDocumentSourcePlanV1 extracts sections, block ids, and content hash",
     "table-1",
   ]);
   assert.equal(result.blockMap.get("table-1")?.kind, "table");
+});
+
+test("buildDocumentSourcePlanV1 budgets sections to the prompted source plan", () => {
+  const children: JsonValue[] = [
+    {
+      type: "heading",
+      tag: "h1",
+      bid: "heading-1",
+      children: [{ type: "text", text: "Large source" }],
+    },
+  ];
+  for (let i = 0; i < 120; i++) {
+    children.push({
+      type: "paragraph",
+      bid: `paragraph-${i}`,
+      children: [{ type: "text", text: `detail ${i} ${"x".repeat(200)}` }],
+    });
+  }
+
+  const result = buildDocumentSourcePlanV1({
+    contentJson: JSON.stringify({
+      root: {
+        type: "root",
+        children,
+      },
+    }),
+  });
+  const rendered = renderDocumentSourcePlanForPrompt(result.sourcePlan);
+
+  assert.equal(result.sourcePlan.truncated, true);
+  assert.ok(result.sourcePlan.originalChars > AI_GENERATION_INPUT_MAX_CHARS);
+  assert.equal(result.sourcePlan.keptChars, rendered.length);
+  assert.ok(
+    rendered.length <= AI_GENERATION_INPUT_MAX_CHARS,
+    `source plan prompt length ${rendered.length} exceeds ${AI_GENERATION_INPUT_MAX_CHARS}`,
+  );
+  assert.ok(rendered.includes("heading-1"));
+  assert.ok(!rendered.includes("detail 119"));
 });
 
 test("deterministic planner emits DocumentSlidePlanV1 with slot source ids", () => {

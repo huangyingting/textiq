@@ -120,8 +120,11 @@ function makeInput(
   };
 }
 
-function makeInputWithVisual(complete: CompleteFn): RunDeckGenerationInput {
-  const visual: Visual = {
+function makeInputWithVisual(
+  complete: CompleteFn,
+  overrides: { embeddedVisual?: Visual; inventoryVisual?: Visual } = {},
+): RunDeckGenerationInput {
+  const visual: Visual = overrides.embeddedVisual ?? {
     version: VISUAL_SCHEMA_VERSION,
     type: "flowchart",
     title: "Journey map",
@@ -131,6 +134,7 @@ function makeInputWithVisual(complete: CompleteFn): RunDeckGenerationInput {
     edges: [],
     style: { ...DEFAULT_STYLE },
   };
+  const inventoryVisual = overrides.inventoryVisual ?? visual;
   return {
     contentJson: {
       root: {
@@ -149,7 +153,7 @@ function makeInputWithVisual(complete: CompleteFn): RunDeckGenerationInput {
         ],
       },
     },
-    visuals: new Map([["visual-1", visual]]),
+    visuals: new Map([["visual-1", inventoryVisual]]),
     themePackageId: "clarity",
     complete,
   };
@@ -403,5 +407,65 @@ describe("runDeckGeneration", () => {
     assert.equal(visualNode?.type, "visual");
     if (visualNode?.type !== "visual") return;
     assert.equal(visualNode.content.visualId, "visual-1");
+  });
+
+  test("prompt visual inventory uses authoritative input visuals map", async () => {
+    const visualPlan = JSON.stringify({
+      planVersion: 1,
+      planner: "ai",
+      mode: "faithful",
+      source: { contentHash: "ignored-by-repair", truncated: false },
+      slides: [
+        {
+          id: "plan-slide-1",
+          kind: "visual-focus",
+          sourceBlockIds: ["visual-1"],
+          slotSources: {
+            title: ["visual-1"],
+            visualId: ["visual-1"],
+          },
+          slots: {
+            title: { type: "shortText", text: "Authoritative journey" },
+            visualId: { type: "visual", visualId: "visual-1" },
+          },
+        },
+      ],
+    });
+    const embeddedVisual: Visual = {
+      version: VISUAL_SCHEMA_VERSION,
+      type: "flowchart",
+      title: "Embedded journey",
+      width: 960,
+      height: 540,
+      nodes: [{ id: "n1", label: "Embedded node" }],
+      edges: [],
+      style: { ...DEFAULT_STYLE },
+    };
+    const inventoryVisual: Visual = {
+      ...embeddedVisual,
+      title: "Authoritative journey",
+      nodes: [{ id: "n1", label: "Authoritative node" }],
+    };
+    let capturedMessages: Parameters<CompleteFn>[0] | undefined;
+    const complete: CompleteFn = async (messages) => {
+      capturedMessages = messages;
+      return visualPlan;
+    };
+
+    await runDeckGeneration(
+      makeInputWithVisual(complete, { embeddedVisual, inventoryVisual }),
+    );
+
+    const userContent = capturedMessages?.[1]?.content ?? "";
+    assert.ok(
+      userContent.includes(
+        "visual-1 | Authoritative journey (flowchart): Authoritative node",
+      ),
+    );
+    assert.ok(
+      !userContent.includes(
+        "visual-1 | Embedded journey (flowchart): Embedded node",
+      ),
+    );
   });
 });

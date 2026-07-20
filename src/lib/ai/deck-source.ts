@@ -24,16 +24,14 @@
  */
 
 import type { DeckVisualInventoryItem } from "@/lib/ai/deck-generation-options";
-import {
-  AI_GENERATION_INPUT_MAX_CHARS,
-  AI_VISUAL_INVENTORY_MAX_ITEMS,
-} from "@/lib/limits";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits";
 import type { TextRun } from "@/lib/content/text-run";
 import {
   collectDocumentBlocks,
   documentTableBlockToMarkdown,
   type DocumentBlock,
 } from "@/lib/content";
+import { buildDocumentSourceVisualInventory } from "@/lib/presentation/document-source-plan";
 import type { Visual } from "@/lib/visual/schema";
 
 /**
@@ -51,9 +49,6 @@ export interface DeckGenerationSource {
   /** Length (chars) of the outline actually kept (`outline.length`). */
   keptChars: number;
 }
-
-/** Upper bound on a visual inventory `summary` (ids/titles are never cut). */
-const MAX_SUMMARY_CHARS = 120;
 
 // ---------------------------------------------------------------------------
 // Inline / block serialisation
@@ -217,75 +212,6 @@ function buildOutline(blocks: ReadonlyArray<DocumentBlock>): BuiltOutline {
 }
 
 // ---------------------------------------------------------------------------
-// Visual inventory
-// ---------------------------------------------------------------------------
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
-}
-
-/** Human-readable fallback title derived from the visual kind. */
-function titleFromType(type: string): string {
-  if (type.length === 0) return "Untitled visual";
-  return type.charAt(0).toUpperCase() + type.slice(1);
-}
-
-/** Short, ≤{@link MAX_SUMMARY_CHARS} description from the visual's node labels. */
-function summarizeVisual(visual: Visual): string {
-  const labels = Array.isArray(visual.nodes)
-    ? visual.nodes
-        .map((node) =>
-          typeof node?.label === "string" ? node.label.trim() : "",
-        )
-        .filter((label) => label.length > 0)
-    : [];
-  return truncate(labels.join(", "), MAX_SUMMARY_CHARS);
-}
-
-function toInventoryItem(
-  visualId: string,
-  visual: Visual,
-): DeckVisualInventoryItem {
-  const title =
-    typeof visual.title === "string" && visual.title.trim().length > 0
-      ? visual.title.trim()
-      : titleFromType(String(visual.type ?? ""));
-  return {
-    id: visualId,
-    title,
-    type: String(visual.type ?? ""),
-    summary: summarizeVisual(visual),
-  };
-}
-
-/**
- * Builds the inventory for the REAL document visual ids, in reading order and
- * deduplicated. The authoritative {@link Visual} is taken from the `visuals`
- * map when present, otherwise the copy embedded in the document block. Visuals
- * present only in the map (not referenced by the document) are excluded.
- */
-function buildInventory(
-  blocks: ReadonlyArray<DocumentBlock>,
-  visuals: ReadonlyMap<string, Visual>,
-): DeckVisualInventoryItem[] {
-  const inventory: DeckVisualInventoryItem[] = [];
-  const seen = new Set<string>();
-
-  for (const block of blocks) {
-    if (inventory.length >= AI_VISUAL_INVENTORY_MAX_ITEMS) break;
-    if (block.kind !== "visual") continue;
-    if (seen.has(block.visualId)) continue;
-    seen.add(block.visualId);
-
-    const visual = visuals.get(block.visualId) ?? block.visual;
-    inventory.push(toInventoryItem(block.visualId, visual));
-  }
-
-  return inventory;
-}
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -307,7 +233,7 @@ export function buildDeckSource(
   const outline = buildOutline(blocks);
   return {
     outline: outline.outline,
-    visualInventory: buildInventory(blocks, visuals),
+    visualInventory: buildDocumentSourceVisualInventory(blocks, visuals),
     truncated: outline.truncated,
     originalChars: outline.originalChars,
     keptChars: outline.keptChars,
