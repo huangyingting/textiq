@@ -71,6 +71,48 @@ describe("buildSchemaDiagnostic", () => {
       schemaVersion: 7,
     });
   });
+
+  test("keeps well-formed opaque repair identifiers", () => {
+    const record = buildSchemaDiagnostic("visual-parse-failed", {
+      documentId: "clx0abc123",
+      rowId: "row_42",
+      anchorBlockId: "blk-AbC9",
+    });
+
+    assert.deepEqual(record, {
+      category: "visual-parse-failed",
+      code: "schema_validation_failed",
+      documentId: "clx0abc123",
+      rowId: "row_42",
+      anchorBlockId: "blk-AbC9",
+    });
+  });
+
+  test("drops malformed identifiers and content-bearing fields", () => {
+    const record = buildSchemaDiagnostic("visual-parse-failed", {
+      documentId: "has space",
+      rowId: "https://x/y",
+      anchorBlockId: "a".repeat(200),
+      reason: "PRIVATE validator reason",
+      path: "slides.0.secret",
+      message: "PRIVATE parser message",
+      stack: "PRIVATE stack trace",
+      data: { text: "PRIVATE nested content" },
+    });
+    const serialized = JSON.stringify(record);
+
+    assert.deepEqual(record, {
+      category: "visual-parse-failed",
+      code: "schema_validation_failed",
+    });
+    assert.ok(!("documentId" in record));
+    assert.ok(!("rowId" in record));
+    assert.ok(!("anchorBlockId" in record));
+    assert.ok(!serialized.includes("has space"));
+    assert.ok(!serialized.includes("https://x/y"));
+    assert.ok(!serialized.includes("PRIVATE"));
+    assert.ok(!serialized.includes("slides.0.secret"));
+  });
 });
 
 describe("isContentKey", () => {

@@ -75,10 +75,9 @@ Persisted schema failures use `schema.persisted` and one of these categories:
 | `content-visual-parse-failed` | Visual embedded in `contentJson` failed parse. |
 
 The diagnostic can include safe identifiers such as `documentId`, `rowId`,
-`area`, `anchorBlockId`, counters, and a sanitized validator `reason`. Content
-keys such as `text`, `input`, `deckJson`, `contentJson`, and `data` are dropped
-before logging. Validator reasons are compacted, overlong reasons are
-truncated, and likely content-bearing quoted segments are redacted.
+`area`, `anchorBlockId`, and counters. Content keys such as `text`, `input`,
+`deckJson`, `contentJson`, `data`, and validator reason/message fields are
+dropped before logging.
 
 These categories intentionally remain telemetry categories rather than
 `ERROR_CODES`; they support repair workflows without expanding the user-facing
@@ -96,6 +95,7 @@ Current abuse categories are:
 - `rate-limit-hit`;
 - `anon-quota-denied`;
 - `parser-timeout`;
+- `parser-budget`;
 - `ai-timeout`;
 - `credit-denied`.
 

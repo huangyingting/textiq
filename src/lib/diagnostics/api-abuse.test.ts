@@ -7,6 +7,7 @@
  *     emitted context contains only an allowlisted set of safe scalar keys.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -73,6 +74,17 @@ test("buildRouteDenialContext: every abuse category is a stable string", () => {
     "parser-timeout",
     "rate-limit-hit",
   ]);
+});
+
+test("diagnostics taxonomy lists every abuse category", () => {
+  const taxonomy = readFileSync("docs/diagnostics/taxonomy.md", "utf8");
+
+  for (const category of Object.values(ABUSE_CATEGORIES)) {
+    assert.ok(
+      taxonomy.includes(`\`${category}\``),
+      `missing abuse category in diagnostics taxonomy: ${category}`,
+    );
+  }
 });
 
 test("buildRouteDenialContext: never emits keys outside the safe allowlist", () => {

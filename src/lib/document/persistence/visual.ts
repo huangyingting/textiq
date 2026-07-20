@@ -177,6 +177,9 @@ export async function mirrorVisualNodesInTx(
         reportSchemaFailure("visual-parse-failed", {
           area: "Visual.data",
           code: "schema_validation_failed",
+          documentId,
+          rowId: row.id,
+          anchorBlockId: row.anchorBlockId ?? undefined,
           issueCount: 1,
         });
       }
@@ -336,6 +339,7 @@ export async function reconcileDeckAfterMirror(
     reportSchemaFailure("deck-parse-failed", {
       area: "Document.deckJson",
       code: "schema_validation_failed",
+      documentId,
       issueCount: 1,
     });
     return;
