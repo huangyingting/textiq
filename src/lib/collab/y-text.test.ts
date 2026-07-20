@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as Y from "yjs";
 
-import { adjustIndex, applyTextDiff, colorFromId, initialsOf } from "./y-text";
+import {
+  adjustIndex,
+  applyTextDiff,
+  colorFromId,
+  contrastRatio,
+  initialsOf,
+  PRESENCE_COLORS,
+  readableAvatarColors,
+  relativeLuminance,
+} from "./y-text";
 
 // ---------------------------------------------------------------------------
 // applyTextDiff — minimal single-region insert/delete/retain onto a Y.Text
@@ -183,6 +192,39 @@ test("colorFromId: truncates non-integer ids", () => {
 
 test("colorFromId: zero id resolves to the first palette entry", () => {
   assert.equal(colorFromId(0), "#6366f1");
+});
+
+// ---------------------------------------------------------------------------
+// avatar contrast — WCAG AA readable initials from shared presence colors
+// ---------------------------------------------------------------------------
+
+test("relativeLuminance: computes WCAG endpoints for black and white", () => {
+  assert.equal(relativeLuminance("#000000"), 0);
+  assert.equal(relativeLuminance("#ffffff"), 1);
+});
+
+test("contrastRatio: computes the WCAG maximum for black against white", () => {
+  assert.equal(contrastRatio("#000000", "#ffffff"), 21);
+});
+
+test("readableAvatarColors: all shared palette colors meet WCAG AA for small text", () => {
+  for (const color of PRESENCE_COLORS) {
+    const avatarColors = readableAvatarColors(color);
+    assert.ok(
+      contrastRatio(avatarColors.text, avatarColors.background) >= 4.5,
+      `${color} should produce readable avatar colors`,
+    );
+  }
+});
+
+test("readableAvatarColors: hard colors meet WCAG AA contrast", () => {
+  for (const color of ["#6366f1", "#f59e0b"]) {
+    const avatarColors = readableAvatarColors(color);
+    assert.ok(
+      contrastRatio(avatarColors.text, avatarColors.background) >= 4.5,
+      `${color} should produce readable avatar colors`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

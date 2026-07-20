@@ -2,7 +2,7 @@
 
 import { Tooltip } from "@/components/ui";
 import { type CollabStatus, type Peer } from "@/lib/collab/use-collaboration";
-import { initialsOf } from "@/lib/collab/y-text";
+import { initialsOf, readableAvatarColors } from "@/lib/collab/y-text";
 
 const STATUS_META: Record<
   CollabStatus,
@@ -49,15 +49,16 @@ export function Presence({
         <div className="flex items-center -space-x-2" aria-label="People here">
           {shown.map((peer) => {
             const label = peer.self ? `${peer.name} (you)` : peer.name;
+            const { background, text } = readableAvatarColors(peer.color);
             return (
               <Tooltip key={peer.clientId} label={label} side="bottom">
                 <span
                   aria-label={label}
                   className={[
-                    "flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-ds-inverse-text ring-2",
+                    "flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ring-2",
                     peer.self ? "ring-ds-control" : "ring-ds-surface-overlay",
                   ].join(" ")}
-                  style={{ backgroundColor: peer.color }}
+                  style={{ backgroundColor: background, color: text }}
                 >
                   {initialsOf(peer.name)}
                 </span>
