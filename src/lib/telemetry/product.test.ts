@@ -76,6 +76,36 @@ describe("product telemetry emitter", () => {
       "product.editor.undo",
     );
   });
+
+  test("swallows async sink rejections without an unhandled rejection", async () => {
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    const restore = configureProductTelemetrySink(() =>
+      Promise.reject(new Error("telemetry sink failed")),
+    );
+    try {
+      assert.doesNotThrow(() =>
+        emitProductTelemetry("product.export.failed", {
+          exportKind: "document",
+          outputFormat: "pdf",
+          failureReason: "server",
+          status: 500,
+        }),
+      );
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+    } finally {
+      restore();
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+
+    assert.deepEqual(unhandledRejections, []);
+  });
 });
 
 describe("product telemetry bucketing", () => {

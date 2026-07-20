@@ -177,7 +177,9 @@ export function emitProductTelemetry<TName extends ProductEventName>(
     if (!currentSink) {
       return;
     }
-    void currentSink(buildProductTelemetryEvent(eventName, fields));
+    void Promise.resolve(
+      currentSink(buildProductTelemetryEvent(eventName, fields)),
+    ).catch(() => {});
   } catch {
     // Telemetry must never affect product behavior.
   }
