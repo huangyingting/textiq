@@ -37,7 +37,19 @@ export const collabLimits = () => ({
   ),
 });
 
+export const trustProxyForUpgrade = () => {
+  const raw = process.env.COLLAB_TRUST_PROXY;
+  return (
+    raw === "1" || (typeof raw === "string" && raw.toLowerCase() === "true")
+  );
+};
+
 export const clientIpFromUpgrade = (req) => {
+  const remoteAddress = req.socket?.remoteAddress || "unknown";
+  if (!trustProxyForUpgrade()) {
+    return remoteAddress;
+  }
+
   const forwarded = req.headers?.["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
     return forwarded.split(",")[0].trim();
@@ -46,7 +58,15 @@ export const clientIpFromUpgrade = (req) => {
   if (typeof realIp === "string" && realIp.trim()) {
     return realIp.trim();
   }
-  return req.socket?.remoteAddress || "unknown";
+  return remoteAddress;
+};
+
+export const pruneExpiredUpgradeWindows = (now = Date.now()) => {
+  for (const [subject, window] of upgradeWindows.entries()) {
+    if (now >= window.resetAt) {
+      upgradeWindows.delete(subject);
+    }
+  }
 };
 
 export const allowUpgradeAttempt = (subject, now = Date.now()) => {
@@ -58,8 +78,9 @@ export const allowUpgradeAttempt = (subject, now = Date.now()) => {
     process.env.COLLAB_UPGRADE_RATE_WINDOW_MS,
     DEFAULT_UPGRADE_RATE_WINDOW_MS,
   );
+  pruneExpiredUpgradeWindows(now);
   const existing = upgradeWindows.get(subject);
-  if (!existing || now >= existing.resetAt) {
+  if (!existing) {
     upgradeWindows.set(subject, { count: 1, resetAt: now + windowMs });
     return true;
   }

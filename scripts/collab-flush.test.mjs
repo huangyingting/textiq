@@ -23,6 +23,7 @@ const originalConsole = {
   warn: console.warn,
   error: console.error,
 };
+const originalEnv = { ...process.env };
 
 /** Reset the shared observability ring + counters between tests. */
 function resetObservability() {
@@ -41,6 +42,7 @@ afterEach(() => {
   console.info = originalConsole.info;
   console.warn = originalConsole.warn;
   console.error = originalConsole.error;
+  process.env = { ...originalEnv };
 });
 
 const ROOM = "doc-flush-room";
@@ -76,6 +78,17 @@ describe("createEvictionFlusher: no-op when not configured", () => {
     });
     await flush(ROOM, UPDATE);
     assert.equal(called, false, "fetch must not be called without a URL");
+  });
+
+  it("can build a no-op without an injected fetch implementation", async () => {
+    const flush = createEvictionFlusher({
+      flushUrl: "http://app/api/collab/flush",
+      internalSecret: undefined,
+    });
+
+    await flush(ROOM, UPDATE);
+
+    assert.equal(flushStats().flushAttempts, 0);
   });
 });
 
@@ -178,6 +191,64 @@ describe("createEvictionFlusher: failed flush observability", () => {
     assert.equal(flushStats().flushFailures, 1);
     assert.equal(recentFlushFailures().length, 1);
     assert.equal(recentFlushFailures()[0].room, ROOM);
+  });
+
+  it("uses network_error for nameless or non-Error fetch failures", async () => {
+    const nameless = new Error("socket closed");
+    nameless.name = "";
+    const failures = [nameless, "socket closed"];
+    const flush = createEvictionFlusher({
+      flushUrl: "http://app/api/collab/flush",
+      internalSecret: "s3cret",
+      fetchImpl: async () => {
+        throw failures.shift();
+      },
+    });
+
+    await flush(`${ROOM}-nameless`, UPDATE);
+    await flush(`${ROOM}-string`, UPDATE);
+
+    assert.equal(flushStats().flushFailures, 2);
+    assert.deepEqual(
+      recentFlushFailures().map((failure) => failure.reason),
+      ["network_error", "network_error"],
+    );
+  });
+
+  it("aborts and records a handled failure when the flush request times out", async () => {
+    process.env.COLLAB_FLUSH_TIMEOUT_MS = "1";
+    let capturedSignal = null;
+    let abortObserved = false;
+    const flush = createEvictionFlusher({
+      flushUrl: "http://app/api/collab/flush",
+      internalSecret: "s3cret",
+      fetchImpl: async (_url, init) =>
+        new Promise((_resolve, reject) => {
+          capturedSignal = init.signal;
+          const abort = () => {
+            abortObserved = true;
+            const err = new Error("flush timed out");
+            err.name = "AbortError";
+            reject(err);
+          };
+          init.signal.addEventListener("abort", abort, { once: true });
+          if (init.signal.aborted) abort();
+        }),
+    });
+
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      await flush(ROOM, UPDATE);
+    } finally {
+      clearInterval(keepAlive);
+    }
+
+    assert.ok(capturedSignal, "fetch should receive an AbortSignal");
+    assert.equal(capturedSignal.aborted, true);
+    assert.equal(abortObserved, true);
+    assert.equal(flushStats().flushAttempts, 1);
+    assert.equal(flushStats().flushFailures, 1);
+    assert.equal(recentFlushFailures()[0].reason, "AbortError");
   });
 
   it("caps the failure ring at 20 entries", async () => {

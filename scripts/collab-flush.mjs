@@ -29,6 +29,9 @@ import {
   logScriptWarning,
   logScriptError,
 } from "./structured-log.mjs";
+import { readPositiveInt } from "./collab-utils.mjs";
+
+const DEFAULT_FLUSH_TIMEOUT_MS = 5000;
 
 /** Convert a Uint8Array Yjs update to a base64 string for JSON transport. */
 const toBase64 = (update) => Buffer.from(update).toString("base64");
@@ -42,12 +45,17 @@ const toBase64 = (update) => Buffer.from(update).toString("base64");
  * @param {string} [options.internalSecret] Shared secret sent as the
  *   `x-collab-internal-secret` header. When falsy the flusher is a no-op.
  * @param {typeof fetch} [options.fetchImpl] Override for testing.
+ * @param {number} [options.timeoutMs] Flush request timeout.
  * @returns {(roomName: string, update: Uint8Array) => Promise<void>}
  */
 export function createEvictionFlusher(options = {}) {
   const flushUrl = options.flushUrl;
   const internalSecret = options.internalSecret;
   const fetchImpl = options.fetchImpl || fetch;
+  const timeoutMs = readPositiveInt(
+    options.timeoutMs ?? process.env.COLLAB_FLUSH_TIMEOUT_MS,
+    DEFAULT_FLUSH_TIMEOUT_MS,
+  );
 
   if (!internalSecret) {
     // No-op flusher: dev without the secret still runs. Warn once at startup so
@@ -76,6 +84,10 @@ export function createEvictionFlusher(options = {}) {
       flushAttempt: true,
     });
 
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+    timeout.unref?.();
+
     try {
       const res = await fetchImpl(flushUrl, {
         method: "POST",
@@ -88,6 +100,7 @@ export function createEvictionFlusher(options = {}) {
           room: roomName,
           update: toBase64(update),
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -125,6 +138,8 @@ export function createEvictionFlusher(options = {}) {
         ok: false,
         failureReason,
       });
+    } finally {
+      clearTimeout(timeout);
     }
   };
 }
