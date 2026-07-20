@@ -10,7 +10,10 @@
 import type { ChatMessage } from "@/lib/ai/prompt";
 import type { DeckGenerationOptions } from "@/lib/ai/deck-generation-options";
 import { createDefaultTemplateRegistry } from "@/lib/presentation/theme-packages";
-import type { DocumentSourcePlanV1 } from "@/lib/presentation/document-slide-plan";
+import {
+  renderDocumentSourcePlanForPrompt,
+  type DocumentSourcePlanV1,
+} from "@/lib/presentation/document-slide-plan";
 import type {
   SemanticTemplateV1,
   SlotContract,
@@ -76,19 +79,6 @@ function renderInventory(sourcePlan: DocumentSourcePlanV1): string {
         `  - ${item.id} | ${item.title} (${item.type}): ${item.summary}`,
     ),
   ].join("\n");
-}
-
-function renderSourcePlan(sourcePlan: DocumentSourcePlanV1): string {
-  return JSON.stringify(
-    {
-      planVersion: sourcePlan.planVersion,
-      contentHash: sourcePlan.contentHash,
-      truncated: sourcePlan.truncated,
-      sections: sourcePlan.sections,
-    },
-    null,
-    2,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +194,7 @@ export function buildDeckMessages(
     renderInventory(options.sourcePlan),
     "",
     "Document source plan (use block ids exactly):",
-    renderSourcePlan(options.sourcePlan),
+    renderDocumentSourcePlanForPrompt(options.sourcePlan),
     "",
     "Outline fallback:",
     '"""',

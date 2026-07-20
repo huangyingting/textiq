@@ -31,6 +31,7 @@ import {
   buildDocumentSourcePlanV1,
   compileDocumentSlidePlanToDeck,
   repairDocumentSlidePlan,
+  renderDocumentSourcePlanForPrompt,
   type DocumentSlidePlanV1,
 } from "@/lib/presentation/document-slide-plan";
 
@@ -92,12 +93,19 @@ export async function runDeckGeneration(
     input.source ?? buildDeckGenerationSource(input.contentJson, input.visuals);
   const documentSource = buildDocumentSourcePlanV1({
     contentJson: input.contentJson,
+    visuals: input.visuals,
   });
 
   const outline = source.outline.trim();
   if (!outline) throw new EmptyInputError();
   if (outline.length > AI_GENERATION_INPUT_MAX_CHARS) {
     throw new InputTooLongError(outline.length);
+  }
+  const sourcePlanLength = renderDocumentSourcePlanForPrompt(
+    documentSource.sourcePlan,
+  ).length;
+  if (sourcePlanLength > AI_GENERATION_INPUT_MAX_CHARS) {
+    throw new InputTooLongError(sourcePlanLength);
   }
 
   const repairedPlan = await runGenerationAttempts<
@@ -178,7 +186,7 @@ export async function runDeckGeneration(
 
   return {
     deck: compiled.deck,
-    truncated: source.truncated,
+    truncated: source.truncated || documentSource.sourcePlan.truncated,
     selectedKindCounts: repairedPlan.selectedKindCounts,
     diagnostics: allDiagnostics,
   };

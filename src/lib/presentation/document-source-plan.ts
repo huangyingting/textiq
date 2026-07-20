@@ -12,6 +12,7 @@ import {
   hashDocumentBlock,
 } from "@/lib/presentation/document-block-hash";
 import { fnv1aHash32 } from "@/lib/presentation/fnv-hash";
+import type { Visual } from "@/lib/visual/schema";
 
 const DEFAULT_DERIVE_TITLE = "Document";
 const MAX_VISUAL_SUMMARY_CHARS = 120;
@@ -86,9 +87,9 @@ function titleFromType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function summarizeVisual(block: Extract<DocumentBlock, { kind: "visual" }>) {
-  const labels = Array.isArray(block.visual.nodes)
-    ? block.visual.nodes
+function summarizeVisual(visual: Visual) {
+  const labels = Array.isArray(visual.nodes)
+    ? visual.nodes
         .map((node) =>
           typeof node?.label === "string" ? node.label.trim() : "",
         )
@@ -106,14 +107,16 @@ function sourceIdForBlock(block: DocumentBlock, index: number): string {
 function sourceBlockForDocumentBlock(
   block: DocumentBlock,
   id: string,
+  visuals: ReadonlyMap<string, Visual> | undefined,
 ): DocumentSourceBlockV1 | null {
   if (block.kind === "visual") {
+    const visual = visuals?.get(block.visualId) ?? block.visual;
     return {
       id,
       kind: "visual",
       visualId: block.visualId,
-      ...(block.visual.title ? { title: block.visual.title } : {}),
-      summary: summarizeVisual(block),
+      ...(visual.title ? { title: visual.title } : {}),
+      summary: summarizeVisual(visual),
     };
   }
   if (block.kind === "table") {
@@ -139,6 +142,7 @@ function sourceBlockForDocumentBlock(
 function buildSourceSections(
   blocks: readonly DocumentBlock[],
   ids: readonly string[],
+  visuals?: ReadonlyMap<string, Visual>,
 ): DocumentSourceSectionV1[] {
   const sections: DocumentSourceSectionV1[] = [];
   let current: DocumentSourceSectionV1 | null = null;
@@ -158,7 +162,7 @@ function buildSourceSections(
     const block = blocks[i];
     const id = ids[i];
     if (!block || !id) continue;
-    const sourceBlock = sourceBlockForDocumentBlock(block, id);
+    const sourceBlock = sourceBlockForDocumentBlock(block, id, visuals);
     if (!sourceBlock) continue;
 
     if (block.kind === "text" && block.blockType === "heading") {
@@ -179,8 +183,9 @@ function buildSourceSections(
   return sections.filter((section) => section.blocks.length > 0);
 }
 
-function buildVisualInventory(
+export function buildDocumentSourceVisualInventory(
   blocks: readonly DocumentBlock[],
+  visuals: ReadonlyMap<string, Visual> = new Map(),
 ): DocumentSourceVisualInventoryItem[] {
   const inventory: DocumentSourceVisualInventoryItem[] = [];
   const seen = new Set<string>();
@@ -189,49 +194,39 @@ function buildVisualInventory(
     if (block.kind !== "visual") continue;
     if (seen.has(block.visualId)) continue;
     seen.add(block.visualId);
-    const type = String(block.visual.type ?? "");
+    const visual = visuals.get(block.visualId) ?? block.visual;
+    const type = String(visual.type ?? "");
     inventory.push({
       id: block.visualId,
       title:
-        typeof block.visual.title === "string" &&
-        block.visual.title.trim().length > 0
-          ? block.visual.title.trim()
+        typeof visual.title === "string" && visual.title.trim().length > 0
+          ? visual.title.trim()
           : titleFromType(type),
       type,
-      summary: summarizeVisual(block),
+      summary: summarizeVisual(visual),
     });
   }
   return inventory;
 }
 
-function serializeSourcePlanForBudget(
-  sections: readonly DocumentSourceSectionV1[],
+export function renderDocumentSourcePlanForPrompt(
+  sourcePlan: Pick<
+    DocumentSourcePlanV1,
+    "planVersion" | "contentHash" | "truncated"
+  > & {
+    sections: readonly DocumentSourceSectionV1[];
+  },
 ): string {
-  return sections
-    .flatMap((section) =>
-      section.blocks.map((block) => {
-        if (block.kind === "heading") {
-          return `${"#".repeat(block.level ?? 2)} ${block.text}`.trimEnd();
-        }
-        if (block.kind === "listitem") return `- ${block.text}`;
-        if (block.kind === "quote") return `> ${block.text}`;
-        if (block.kind === "hr") return "---";
-        if (block.kind === "table") {
-          return [
-            block.caption,
-            `| ${block.columns.join(" | ")} |`,
-            `| ${block.columns.map(() => "---").join(" | ")} |`,
-            ...block.rows.map((row) => `| ${row.join(" | ")} |`),
-          ]
-            .filter((line): line is string => typeof line === "string")
-            .join("\n");
-        }
-        if (block.kind === "visual") return `[visual: ${block.visualId}]`;
-        return block.text;
-      }),
-    )
-    .filter((line) => line.trim().length > 0)
-    .join("\n");
+  return JSON.stringify(
+    {
+      planVersion: sourcePlan.planVersion,
+      contentHash: sourcePlan.contentHash,
+      truncated: sourcePlan.truncated,
+      sections: sourcePlan.sections,
+    },
+    null,
+    2,
+  );
 }
 
 function buildContentHash(blocks: readonly DocumentBlock[]): string {
@@ -251,28 +246,139 @@ function blockMapFor(
   return map;
 }
 
+function cloneSectionShell(
+  section: DocumentSourceSectionV1,
+): DocumentSourceSectionV1 {
+  return {
+    id: section.id,
+    ...(section.title ? { title: section.title } : {}),
+    sourceBlockIds: [],
+    blocks: [],
+  };
+}
+
+function addBlockToSection(
+  sections: DocumentSourceSectionV1[],
+  sourceSection: DocumentSourceSectionV1,
+  block: DocumentSourceBlockV1,
+) {
+  let target = sections.find((section) => section.id === sourceSection.id);
+  if (!target) {
+    target = cloneSectionShell(sourceSection);
+    sections.push(target);
+    sections.sort(
+      (a, b) =>
+        Number(a.id.replace("section-", "")) -
+        Number(b.id.replace("section-", "")),
+    );
+  }
+  target.sourceBlockIds.push(block.id);
+  target.blocks.push(block);
+}
+
+function planPromptLength({
+  contentHash,
+  truncated,
+  sections,
+}: {
+  contentHash: string;
+  truncated: boolean;
+  sections: readonly DocumentSourceSectionV1[];
+}): number {
+  return renderDocumentSourcePlanForPrompt({
+    planVersion: 1,
+    contentHash,
+    truncated,
+    sections,
+  }).length;
+}
+
+function fitSectionsToPromptBudget(
+  sections: readonly DocumentSourceSectionV1[],
+  contentHash: string,
+): {
+  sections: DocumentSourceSectionV1[];
+  originalChars: number;
+  keptChars: number;
+  truncated: boolean;
+} {
+  const originalChars = planPromptLength({
+    contentHash,
+    truncated: false,
+    sections,
+  });
+  if (originalChars <= AI_GENERATION_INPUT_MAX_CHARS) {
+    return {
+      sections: [...sections],
+      originalChars,
+      keptChars: originalChars,
+      truncated: false,
+    };
+  }
+
+  const candidates = sections.flatMap((section) =>
+    section.blocks.map((block) => ({ section, block })),
+  );
+  const prioritized = [
+    ...candidates.filter(({ block }) => block.kind === "heading"),
+    ...candidates.filter(({ block }) => block.kind !== "heading"),
+  ];
+
+  const keptSections: DocumentSourceSectionV1[] = [];
+  for (const { section, block } of prioritized) {
+    const nextSections = keptSections.map((kept) => ({
+      ...kept,
+      sourceBlockIds: [...kept.sourceBlockIds],
+      blocks: [...kept.blocks],
+    }));
+    addBlockToSection(nextSections, section, block);
+    if (
+      planPromptLength({
+        contentHash,
+        truncated: true,
+        sections: nextSections,
+      }) <= AI_GENERATION_INPUT_MAX_CHARS
+    ) {
+      keptSections.splice(0, keptSections.length, ...nextSections);
+    }
+  }
+
+  return {
+    sections: keptSections,
+    originalChars,
+    keptChars: planPromptLength({
+      contentHash,
+      truncated: true,
+      sections: keptSections,
+    }),
+    truncated: true,
+  };
+}
+
 export function buildDocumentSourcePlanV1({
   contentJson,
   documentId,
+  visuals,
 }: {
   contentJson: unknown;
   documentId?: string;
+  visuals?: ReadonlyMap<string, Visual>;
 }): DocumentSourcePlanBuildResult {
   const blocks = collectDocumentBlocks(contentJson);
   const ids = blocks.map(sourceIdForBlock);
-  const sections = buildSourceSections(blocks, ids);
-  const fullOutline = serializeSourcePlanForBudget(sections);
-  const truncated = fullOutline.length > AI_GENERATION_INPUT_MAX_CHARS;
+  const sections = buildSourceSections(blocks, ids, visuals);
+  const contentHash = buildContentHash(blocks);
+  const budgeted = fitSectionsToPromptBudget(sections, contentHash);
   return {
     sourcePlan: {
       planVersion: 1,
       ...(documentId ? { documentId } : {}),
-      contentHash: buildContentHash(blocks),
-      truncated,
-      originalChars: fullOutline.length,
-      keptChars: Math.min(fullOutline.length, AI_GENERATION_INPUT_MAX_CHARS),
-      sections,
-      visualInventory: buildVisualInventory(blocks),
+      contentHash,
+      truncated: budgeted.truncated,
+      originalChars: budgeted.originalChars,
+      keptChars: budgeted.keptChars,
+      sections: budgeted.sections,
+      visualInventory: buildDocumentSourceVisualInventory(blocks, visuals),
     },
     blocks,
     blockMap: blockMapFor(blocks, ids),
