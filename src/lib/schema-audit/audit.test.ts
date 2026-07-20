@@ -385,6 +385,8 @@ describe("auditRows — invalid rows", () => {
         documentId: "doc-1",
         workspaceId: null,
         brandId: null,
+        storageKey:
+          "doc-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
       }),
       [],
     );
@@ -394,7 +396,19 @@ describe("auditRows — invalid rows", () => {
         documentId: null,
         workspaceId: null,
         brandId: null,
+        storageKey: "orphan/no-checksum.png",
         deletedAt: new Date("2026-06-25T00:00:00Z"),
+      }),
+      [],
+    );
+    assert.deepEqual(
+      auditAssetScope({
+        id: "asset-brand-staging",
+        documentId: null,
+        workspaceId: null,
+        brandId: null,
+        storageKey:
+          "owner-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.woff2",
       }),
       [],
     );
@@ -404,6 +418,7 @@ describe("auditRows — invalid rows", () => {
         documentId: null,
         workspaceId: null,
         brandId: null,
+        storageKey: "orphan/no-checksum.png",
       })[0]?.area,
       "Asset.scope",
     );
@@ -413,6 +428,8 @@ describe("auditRows — invalid rows", () => {
         documentId: "doc-1",
         workspaceId: "workspace-1",
         brandId: null,
+        storageKey:
+          "owner-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
         deletedAt: new Date("2026-06-25T00:00:00Z"),
       })[0]?.reason,
       "Deleted asset rows may have at most one scope.",
@@ -450,6 +467,7 @@ describe("auditRows — invalid rows", () => {
           documentId: null,
           workspaceId: null,
           brandId: null,
+          storageKey: "orphan/no-checksum.png",
         },
       ],
     });

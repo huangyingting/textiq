@@ -23,6 +23,8 @@ export type ExportSection =
   | "commentReads"
   | "tags"
   | "brands"
+  | "brandKitDrafts"
+  | "themePackageSnapshots"
   | "assets"
   | "subscription"
   | "inviteLinkUses"
@@ -59,6 +61,8 @@ export const PERSONAL_DATA_EXPORT_SECTIONS = [
   "commentReads",
   "tags",
   "brands",
+  "brandKitDrafts",
+  "themePackageSnapshots",
   "assets",
   "subscription",
   "inviteLinkUses",
@@ -381,22 +385,42 @@ export const PERSONAL_DATA_INVENTORY = [
   {
     model: "BrandKitDraft",
     fields: {
-      id: field("identifier", "delete_owned"),
-      slug: field("user_content", "delete_owned"),
-      name: field("user_content", "delete_owned"),
-      ownerId: field("identifier", "delete_owned"),
-      workspaceId: field("identifier", "delete_owned"),
-      scope: field("operational_metadata", "delete_owned"),
-      scopeKey: field("identifier", "delete_owned"),
-      sourcePresetId: field("operational_metadata", "delete_owned"),
-      version: field("operational_metadata", "delete_owned"),
-      revisionId: field("identifier", "delete_owned"),
-      revisionNumber: field("operational_metadata", "delete_owned"),
-      draftJson: field("user_content", "delete_owned"),
-      latestPackageId: field("identifier", "delete_owned"),
-      latestPackageVersion: field("operational_metadata", "delete_owned"),
-      createdAt: field("operational_metadata", "delete_owned"),
-      updatedAt: field("operational_metadata", "delete_owned"),
+      id: field("identifier", "delete_owned", "brandKitDrafts"),
+      slug: field("user_content", "delete_owned", "brandKitDrafts"),
+      name: field("user_content", "delete_owned", "brandKitDrafts"),
+      ownerId: field("identifier", "delete_owned", "brandKitDrafts"),
+      workspaceId: field("identifier", "delete_owned", "brandKitDrafts"),
+      scope: field("operational_metadata", "delete_owned", "brandKitDrafts"),
+      scopeKey: field("identifier", "delete_owned", "brandKitDrafts"),
+      sourcePresetId: field(
+        "operational_metadata",
+        "delete_owned",
+        "brandKitDrafts",
+      ),
+      version: field("operational_metadata", "delete_owned", "brandKitDrafts"),
+      revisionId: field("identifier", "delete_owned", "brandKitDrafts"),
+      revisionNumber: field(
+        "operational_metadata",
+        "delete_owned",
+        "brandKitDrafts",
+      ),
+      draftJson: field("user_content", "delete_owned", "brandKitDrafts"),
+      latestPackageId: field("identifier", "delete_owned", "brandKitDrafts"),
+      latestPackageVersion: field(
+        "operational_metadata",
+        "delete_owned",
+        "brandKitDrafts",
+      ),
+      createdAt: field(
+        "operational_metadata",
+        "delete_owned",
+        "brandKitDrafts",
+      ),
+      updatedAt: field(
+        "operational_metadata",
+        "delete_owned",
+        "brandKitDrafts",
+      ),
       owner: relation(),
       workspace: relation(),
       snapshots: relation(),
@@ -405,15 +429,31 @@ export const PERSONAL_DATA_INVENTORY = [
   {
     model: "ThemePackageSnapshot",
     fields: {
-      id: field("identifier", "delete_owned"),
-      packageId: field("identifier", "delete_owned"),
-      packageVersion: field("operational_metadata", "delete_owned"),
-      draftId: field("identifier", "delete_owned"),
-      ownerId: field("identifier", "delete_owned"),
-      workspaceId: field("identifier", "delete_owned"),
-      publishedById: field("identifier", "delete_attributed"),
-      packageJson: field("user_content", "delete_owned"),
-      createdAt: field("operational_metadata", "delete_owned"),
+      id: field("identifier", "delete_owned", "themePackageSnapshots"),
+      packageId: field("identifier", "delete_owned", "themePackageSnapshots"),
+      packageVersion: field(
+        "operational_metadata",
+        "delete_owned",
+        "themePackageSnapshots",
+      ),
+      draftId: field("identifier", "delete_owned", "themePackageSnapshots"),
+      ownerId: field("identifier", "delete_owned", "themePackageSnapshots"),
+      workspaceId: field("identifier", "delete_owned", "themePackageSnapshots"),
+      publishedById: field(
+        "identifier",
+        "delete_attributed",
+        "themePackageSnapshots",
+      ),
+      packageJson: field(
+        "user_content",
+        "delete_owned",
+        "themePackageSnapshots",
+      ),
+      createdAt: field(
+        "operational_metadata",
+        "delete_owned",
+        "themePackageSnapshots",
+      ),
       draft: relation(),
       owner: relation(),
       workspace: relation(),
