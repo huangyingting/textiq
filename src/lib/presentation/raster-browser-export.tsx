@@ -522,6 +522,245 @@ function renderSvgConnector(
   return { defs: "", body };
 }
 
+function tableColumnWidths(
+  op: Extract<ExportOperation, { type: "tableShape" }>,
+  totalWidth: number,
+): number[] {
+  const weights = op.table.columns.map((column) =>
+    typeof column.width === "number" && Number.isFinite(column.width)
+      ? Math.max(0, column.width)
+      : 1,
+  );
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight <= 0) {
+    return op.table.columns.map(() => totalWidth / op.table.columns.length);
+  }
+  return weights.map((weight) => (weight / totalWeight) * totalWidth);
+}
+
+function tableTextValue(cell: {
+  text: string;
+  runs?: { text: string }[];
+}): string {
+  if (!cell.runs || cell.runs.length === 0) return cell.text;
+  return cell.runs.map((run) => run.text).join("");
+}
+
+function renderSvgTableText(
+  text: string,
+  cell: { x: number; y: number; w: number; h: number },
+  textStyle: TextStyle,
+  defaults: { weight?: number },
+  padding: { top: number; right: number; bottom: number; left: number },
+  clipId: string,
+  dims: RasterSlideDimensions,
+): string {
+  const pxPerIn = dims.widthPx / dims.widthIn;
+  const fontSize = textStyle.fontSizePt
+    ? (textStyle.fontSizePt * pxPerIn) / 72
+    : (9 * pxPerIn) / 72;
+  const lineH = fontSize * (textStyle.lineHeight ?? 1.25);
+  const fontFamily =
+    typeof textStyle.fontFamily === "string"
+      ? textStyle.fontFamily
+      : "sans-serif";
+  const color = svgColor(textStyle.color, "#111111");
+  const weight = textStyle.weight ?? defaults.weight ?? 400;
+  const fontWeight = weight >= 600 ? "bold" : "normal";
+  const fontStyle = textStyle.italic ? "italic" : "normal";
+  const availableW = Math.max(1, cell.w - padding.left - padding.right);
+  const availableH = Math.max(lineH, cell.h - padding.top - padding.bottom);
+  const lines = wrapSvgLine(text, availableW, fontSize);
+  const maxLines = Math.max(1, Math.floor(availableH / lineH));
+  const visibleLines = lines.slice(0, maxLines);
+  const align = textStyle.align ?? "left";
+  const textAnchor =
+    align === "center" ? "middle" : align === "right" ? "end" : "start";
+  const textX =
+    align === "center"
+      ? cell.x + cell.w / 2
+      : align === "right"
+        ? cell.x + cell.w - padding.right
+        : cell.x + padding.left;
+  const textY = cell.y + padding.top + fontSize;
+
+  return visibleLines
+    .map((line, index) => {
+      const ly = textY + index * lineH;
+      return `<text x="${textX.toFixed(1)}" y="${ly.toFixed(1)}" font-size="${fontSize.toFixed(1)}" fill="${xmlEsc(color)}" font-family="${xmlEsc(fontFamily)}" font-weight="${fontWeight}" font-style="${fontStyle}" text-anchor="${textAnchor}" clip-path="url(#${clipId})">${xmlEsc(line)}</text>`;
+    })
+    .join("\n");
+}
+
+function tableStrokeDashArray(
+  dash: string | undefined,
+  strokeW: number,
+): string {
+  if (dash === "dashed")
+    return `${(strokeW * 4).toFixed(1)} ${(strokeW * 3).toFixed(1)}`;
+  if (dash === "dotted")
+    return `${strokeW.toFixed(1)} ${(strokeW * 3).toFixed(1)}`;
+  return "";
+}
+
+/** Render a tableShape operation as native SVG cell rectangles, grid lines, and text. */
+function renderSvgTableShape(
+  op: Extract<ExportOperation, { type: "tableShape" }>,
+  dims: RasterSlideDimensions,
+): { defs: string; body: string } {
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
+  const columnCount = op.table.columns.length;
+  const includeHeader = op.table.header === true && columnCount > 0;
+  const bodyRows = op.table.rows;
+  const rowCount = bodyRows.length + (includeHeader ? 1 : 0);
+  const tableStyle = op.style.table;
+  const pxPerIn = dims.widthPx / dims.widthIn;
+  const border = tableStyle?.border;
+  const strokeW = border ? (border.widthPt * pxPerIn) / 72 : 1;
+  const strokeColor = border ? svgColor(border.color, "#d1d5db") : "#d1d5db";
+  const dashArray = tableStrokeDashArray(border?.dash, strokeW);
+  const opacity = op.style.opacity ?? 1;
+
+  if (columnCount === 0 || rowCount === 0) {
+    const emptyStroke =
+      strokeW > 0
+        ? ` stroke="${xmlEsc(strokeColor)}" stroke-width="${strokeW.toFixed(1)}"`
+        : ' stroke="none"';
+    return {
+      defs: "",
+      body: `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none"${emptyStroke} opacity="${opacity}"/>`,
+    };
+  }
+
+  const defs: string[] = [];
+  const body: string[] = [];
+  const colWidths = tableColumnWidths(op, w);
+  const rowH = h / rowCount;
+  const paddingPt = tableStyle?.cellPaddingPt ?? {
+    top: 3,
+    right: 6,
+    bottom: 3,
+    left: 6,
+  };
+  const padding = {
+    top: (paddingPt.top * pxPerIn) / 72,
+    right: (paddingPt.right * pxPerIn) / 72,
+    bottom: (paddingPt.bottom * pxPerIn) / 72,
+    left: (paddingPt.left * pxPerIn) / 72,
+  };
+  const textStyle = tableStyle?.text ?? op.style.text ?? {};
+  const headerTextStyle = tableStyle?.headerText ?? textStyle;
+  const rowEntries = [
+    ...(includeHeader
+      ? [
+          {
+            kind: "header" as const,
+            cells: op.table.columns.map((column) => column.label),
+          },
+        ]
+      : []),
+    ...bodyRows.map((row, rowIndex) => ({
+      kind: "body" as const,
+      rowIndex,
+      cells: op.table.columns.map((_, columnIndex) =>
+        tableTextValue(row.cells[columnIndex] ?? { text: "" }),
+      ),
+    })),
+  ];
+
+  let currentY = y;
+  for (const [rowIndex, row] of rowEntries.entries()) {
+    let currentX = x;
+    const fill =
+      row.kind === "header"
+        ? renderSvgFill(tableStyle?.headerFill)
+        : renderSvgFill(
+            row.rowIndex % 2 === 1
+              ? (tableStyle?.alternateRowFill ?? tableStyle?.rowFill)
+              : tableStyle?.rowFill,
+          );
+    if (fill.def) defs.push(fill.def);
+
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const cellW = colWidths[columnIndex] ?? w / columnCount;
+      if (fill.attr !== "none") {
+        body.push(
+          `<rect x="${currentX.toFixed(1)}" y="${currentY.toFixed(1)}" width="${cellW.toFixed(1)}" height="${rowH.toFixed(1)}" fill="${xmlEsc(fill.attr)}"/>`,
+        );
+      }
+      const clipId = nextDefId();
+      defs.push(
+        `<clipPath id="${clipId}"><rect x="${(currentX + padding.left).toFixed(1)}" y="${(currentY + padding.top).toFixed(1)}" width="${Math.max(1, cellW - padding.left - padding.right).toFixed(1)}" height="${Math.max(1, rowH - padding.top - padding.bottom).toFixed(1)}"/></clipPath>`,
+      );
+      body.push(
+        renderSvgTableText(
+          row.cells[columnIndex] ?? "",
+          { x: currentX, y: currentY, w: cellW, h: rowH },
+          row.kind === "header" ? headerTextStyle : textStyle,
+          row.kind === "header" ? { weight: 600 } : {},
+          padding,
+          clipId,
+          dims,
+        ),
+      );
+      currentX += cellW;
+    }
+    currentY = y + (rowIndex + 1) * rowH;
+  }
+
+  if (strokeW > 0) {
+    const boundariesX = [x];
+    let currentX = x;
+    for (const colW of colWidths) {
+      currentX += colW;
+      boundariesX.push(currentX);
+    }
+    const boundariesY = Array.from(
+      { length: rowCount + 1 },
+      (_, index) => y + index * rowH,
+    );
+    const gridPath = [
+      ...boundariesX.map(
+        (boundaryX) =>
+          `M ${boundaryX.toFixed(1)} ${y.toFixed(1)} V ${(y + h).toFixed(1)}`,
+      ),
+      ...boundariesY.map(
+        (boundaryY) =>
+          `M ${x.toFixed(1)} ${boundaryY.toFixed(1)} H ${(x + w).toFixed(1)}`,
+      ),
+    ].join(" ");
+    body.push(
+      `<path d="${gridPath}" fill="none" stroke="${xmlEsc(strokeColor)}" stroke-width="${strokeW.toFixed(1)}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ""}/>`,
+    );
+  }
+
+  if (op.table.caption) {
+    const captionHeight = 0.3 * pxPerIn;
+    const captionGap = 0.05 * pxPerIn;
+    const captionY = Math.max(0, y - captionHeight - captionGap);
+    const clipId = nextDefId();
+    defs.push(
+      `<clipPath id="${clipId}"><rect x="${x.toFixed(1)}" y="${captionY.toFixed(1)}" width="${w.toFixed(1)}" height="${captionHeight.toFixed(1)}"/></clipPath>`,
+    );
+    body.unshift(
+      renderSvgTableText(
+        op.table.caption,
+        { x, y: captionY, w, h: captionHeight },
+        { ...textStyle, italic: textStyle.italic ?? true },
+        {},
+        { top: 0, right: 0, bottom: 0, left: 0 },
+        clipId,
+        dims,
+      ),
+    );
+  }
+
+  return {
+    defs: defs.join("\n"),
+    body: `<g opacity="${opacity}">\n${body.filter(Boolean).join("\n")}\n</g>`,
+  };
+}
+
 /**
  * Build a foreignObject-free SVG string for one slide from its ExportSlideSpec.
  * ExportOperation frames are in 960×540-basis pixels (specFrameToPx converts
@@ -576,6 +815,7 @@ export function buildSvgFromSlideSpec(
     else if (op.type === "shape") result = renderSvgShape(op, dims);
     else if (op.type === "image") result = renderSvgImage(op, dims);
     else if (op.type === "connector") result = renderSvgConnector(op, dims);
+    else if (op.type === "tableShape") result = renderSvgTableShape(op, dims);
     else if (op.type === "visual" && op.assetId) {
       // Render visual as image if it has a resolved asset
       result = renderSvgImage(
@@ -583,7 +823,7 @@ export function buildSvgFromSlideSpec(
         dims,
       );
     }
-    // tableShape and unresolved visuals: skip for now
+    // Unresolved visuals: skip for now
     if (result) {
       if (result.defs) defs.push(result.defs);
       bodies.push(result.body);
