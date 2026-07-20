@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
+import JSZip from "jszip";
+
 import {
   DEFAULT_EXPORT_OPTIONS,
   downloadBlob,
@@ -42,6 +44,12 @@ function svgElement(width = 100, height = 50): SVGSVGElement {
   return {
     viewBox: { baseVal: { width, height } },
   } as SVGSVGElement;
+}
+
+async function slideXml(blob: Blob, n: number): Promise<string> {
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const zip = await JSZip.loadAsync(buffer);
+  return zip.files[`ppt/slides/slide${n}.xml`]!.async("string");
 }
 
 function installBrowserStubs(
@@ -288,4 +296,25 @@ test("exportPPTX deliberately falls back to raster when native cannot honor expo
   assert.match(transformedSvg, /data-export-bg="true"/);
   assert.match(transformedSvg, /__export_mono__/);
   assert.match(transformedSvg, /data-letterbox="true"/);
+});
+
+test("exportPPTX raster fallback sizes the image from the transformed export canvas", async () => {
+  installBrowserStubs();
+  const blob = await exportPPTX(svgElement(120, 80), FIXTURES.flowchart, {
+    ...DEFAULT_EXPORT_OPTIONS,
+    background: "custom",
+    customBackground: "#112233",
+    aspectRatio: "1:1",
+    padding: 10,
+  });
+
+  assert.ok(blob);
+  const xml = await slideXml(blob, 1);
+  const imageExt = xml.match(
+    /<p:pic>[\s\S]*?<p:spPr>[\s\S]*?<a:xfrm>[\s\S]*?<a:ext cx="(\d+)" cy="(\d+)"/,
+  );
+
+  assert.ok(imageExt, "expected fallback image dimensions in slide XML");
+  assert.equal(imageExt[1], "6172200");
+  assert.equal(imageExt[2], "6172200");
 });
