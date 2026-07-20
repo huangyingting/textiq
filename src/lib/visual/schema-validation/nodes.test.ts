@@ -114,6 +114,37 @@ test("validateNode requires color, stroke, and textColor to be strings when pres
   }
 });
 
+test("validateNode rejects unsafe paint and accepts safe color grammar", () => {
+  const safeColors = [
+    "#fff",
+    "#ffffffff",
+    "rgb(255, 255, 255)",
+    "hsl(0 0% 100%)",
+    "white",
+    "brand.primary",
+  ];
+  for (const color of safeColors) {
+    assert.equal(
+      validateNode({ id: "a", label: "Alpha", color }, 0).color,
+      color,
+    );
+  }
+
+  const unsafePaint = [
+    "url(#paint)",
+    "image(url(foo.png))",
+    "element(#source)",
+    "var(--visual-color)",
+    "linear-gradient(red, blue)",
+  ];
+  for (const color of unsafePaint) {
+    assert.throws(
+      () => validateNode({ id: "a", label: "Alpha", color }, 0),
+      /nodes\[0\]\.color must be a safe color/,
+    );
+  }
+});
+
 test("validateNode keeps a known icon and silently drops unknown or non-string icons", () => {
   const known = validateNode({ id: "a", label: "Idea", icon: "Lightbulb" }, 0);
   assert.equal(known.icon, "Lightbulb");

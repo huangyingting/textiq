@@ -21,6 +21,17 @@ import {
 export type { ExportOptions };
 export { DEFAULT_EXPORT_OPTIONS };
 /* node:coverage disable */
+function shouldRasterizePptxOptions(options?: ExportOptions): boolean {
+  if (!options) return false;
+  return (
+    options.background !== DEFAULT_EXPORT_OPTIONS.background ||
+    options.colorMode !== DEFAULT_EXPORT_OPTIONS.colorMode ||
+    (options.aspectRatio !== undefined && options.aspectRatio !== "auto") ||
+    (options.padding ?? 0) !== 0 ||
+    options.watermark === true
+  );
+}
+
 function sizeSvgForRasterization(
   svgString: string,
   width: number,
@@ -244,8 +255,11 @@ export async function exportPPTX(
     const SLIDE_W = 10;
     const SLIDE_H = 7.5;
 
-    // Attempt native shapes when a Visual payload is available
-    if (visual) {
+    const useRasterForOptions = shouldRasterizePptxOptions(options);
+
+    // Attempt native shapes when a Visual payload is available and the requested
+    // export options do not require SVG transforms that native specs cannot carry.
+    if (visual && !useRasterForOptions) {
       const layout = computeVisualSlideLayout(visual);
       const specs = visualToNativeSpecs(visual, layout);
 

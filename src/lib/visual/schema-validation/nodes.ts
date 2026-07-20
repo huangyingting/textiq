@@ -10,6 +10,7 @@ import {
   type VisualNode,
 } from "@/lib/visual/schema-types";
 import { isPlainObject } from "@/lib/type-guards";
+import { isSafeVisualColor } from "./colors";
 import { VisualValidationError, numberField } from "./utils";
 
 export function validateNode(input: unknown, index: number): VisualNode {
@@ -52,6 +53,9 @@ export function validateNode(input: unknown, index: number): VisualNode {
     if (typeof input.color !== "string") {
       throw new VisualValidationError(`${context}.color must be a string`);
     }
+    if (!isSafeVisualColor(input.color)) {
+      throw new VisualValidationError(`${context}.color must be a safe color`);
+    }
     node.color = input.color;
   }
 
@@ -59,12 +63,20 @@ export function validateNode(input: unknown, index: number): VisualNode {
     if (typeof input.stroke !== "string") {
       throw new VisualValidationError(`${context}.stroke must be a string`);
     }
+    if (!isSafeVisualColor(input.stroke)) {
+      throw new VisualValidationError(`${context}.stroke must be a safe color`);
+    }
     node.stroke = input.stroke;
   }
 
   if (input.textColor !== undefined) {
     if (typeof input.textColor !== "string") {
       throw new VisualValidationError(`${context}.textColor must be a string`);
+    }
+    if (!isSafeVisualColor(input.textColor)) {
+      throw new VisualValidationError(
+        `${context}.textColor must be a safe color`,
+      );
     }
     node.textColor = input.textColor;
   }
