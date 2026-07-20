@@ -113,18 +113,33 @@ export function SelectMenu({
     [options],
   );
 
-  const selectIndex = (index: number) => {
-    const option = options[index];
-    if (!option || option.disabled) return;
-    onChange(option.value);
+  const closeMenu = useCallback((restoreFocus = false) => {
     setOpen(false);
     onOpenChangeRef.current?.(false);
-    buttonRef.current?.focus();
-  };
+    if (restoreFocus) {
+      buttonRef.current?.focus();
+    }
+  }, []);
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      const option = options[index];
+      if (!option || option.disabled) return;
+      onChange(option.value);
+      closeMenu(true);
+    },
+    [closeMenu, onChange, options],
+  );
+
+  const selectActiveOption = useCallback(() => {
+    selectIndex(activeIndex);
+  }, [activeIndex, selectIndex]);
 
   const openMenu = () => {
     setActiveIndex(
-      selectedIndex >= 0 ? selectedIndex : Math.max(0, enabledIndexFrom(0, 1)),
+      selectedIndex >= 0 && !options[selectedIndex]?.disabled
+        ? selectedIndex
+        : Math.max(0, enabledIndexFrom(0, 1)),
     );
     setOpen(true);
     onOpenChangeRef.current?.(true);
@@ -207,19 +222,27 @@ export function SelectMenu({
   ) => {
     if (event.key === "Escape" && open) {
       event.preventDefault();
-      setOpen(false);
-      onOpenChangeRef.current?.(false);
+      closeMenu();
+      return;
+    }
+    if ((event.key === "Enter" || event.key === " ") && open) {
+      event.preventDefault();
+      selectActiveOption();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
       setOpen(true);
       onOpenChangeRef.current?.(true);
+      if (open) {
+        setActiveIndex((current) => enabledIndexFrom(current + direction, 1));
+        return;
+      }
+      const selectedEnabled =
+        selectedIndex >= 0 && !options[selectedIndex]?.disabled;
       setActiveIndex(
-        enabledIndexFrom(
-          selectedIndex >= 0 ? selectedIndex : 0,
-          event.key === "ArrowDown" ? 1 : -1,
-        ),
+        enabledIndexFrom(selectedEnabled ? selectedIndex : 0, direction),
       );
     }
   };
@@ -227,14 +250,12 @@ export function SelectMenu({
   const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      setOpen(false);
-      onOpenChangeRef.current?.(false);
-      buttonRef.current?.focus();
+      closeMenu(true);
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      selectIndex(activeIndex);
+      selectActiveOption();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
