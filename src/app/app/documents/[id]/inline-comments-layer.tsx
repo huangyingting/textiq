@@ -65,12 +65,32 @@ function threadsByTextAnchor(
     if (thread.anchorType !== "text" || !thread.anchorText) {
       continue;
     }
-    const key = normalizeInlineAnchorText(thread.anchorText);
+    const key = textAnchorKey({
+      nodeId: thread.anchorNodeId,
+      text: normalizeInlineAnchorText(thread.anchorText),
+    });
     const current = map.get(key) ?? [];
     current.push(thread);
     map.set(key, current);
   }
   return map;
+}
+
+function textAnchorKey(
+  anchor: Pick<AnchorPosition, "nodeId" | "text">,
+): string {
+  return anchor.nodeId ? `${anchor.nodeId}\u0000${anchor.text}` : anchor.text;
+}
+
+function threadsForAnchor(
+  map: Map<string, CommentThread[]>,
+  anchor: AnchorPosition,
+): CommentThread[] {
+  const exact = map.get(textAnchorKey(anchor)) ?? [];
+  if (!anchor.nodeId) {
+    return exact;
+  }
+  return [...exact, ...(map.get(anchor.text) ?? [])];
 }
 
 export function InlineCommentsLayer({
@@ -119,14 +139,18 @@ export function InlineCommentsLayer({
         continue;
       }
       const position = anchorPositionForBlock(child, root);
-      if (!position || seen.has(position.text)) {
+      if (!position) {
         continue;
       }
-      const count = (byAnchor.get(position.text) ?? []).filter(
+      const key = textAnchorKey(position);
+      if (seen.has(key)) {
+        continue;
+      }
+      const count = threadsForAnchor(byAnchor, position).filter(
         (thread) => !thread.resolved,
       ).length;
       if (count > 0) {
-        seen.add(position.text);
+        seen.add(key);
         dots.push({ ...position, count });
       }
     }
@@ -238,6 +262,7 @@ export function InlineCommentsLayer({
                 body: trimmed,
                 anchorType: "text",
                 anchorText: anchor.text,
+                anchorNodeId: anchor.nodeId,
               },
         );
         if (!result.ok) {
@@ -258,13 +283,13 @@ export function InlineCommentsLayer({
   }, [activeAnchor, body, documentId, replyingToId]);
 
   const activeThreads = activeAnchor
-    ? (byAnchor.get(activeAnchor.text) ?? [])
+    ? threadsForAnchor(byAnchor, activeAnchor)
     : [];
   const replyingToThread =
     activeThreads.find((thread) => thread.id === replyingToId) ?? null;
   const visibleHoverAnchor =
     hoverAnchor &&
-    (byAnchor.get(hoverAnchor.text) ?? []).some((thread) => !thread.resolved)
+    threadsForAnchor(byAnchor, hoverAnchor).some((thread) => !thread.resolved)
       ? null
       : hoverAnchor;
   const iconAnchor = activeAnchor ?? visibleHoverAnchor;
@@ -321,7 +346,7 @@ export function InlineCommentsLayer({
     <div className="pointer-events-none fixed inset-0 z-raised">
       {commentDots.map((dot) => (
         <button
-          key={dot.text}
+          key={textAnchorKey(dot)}
           type="button"
           aria-label={`${dot.count} comment${dot.count === 1 ? "" : "s"}`}
           onClick={() => setActiveAnchor(dot)}

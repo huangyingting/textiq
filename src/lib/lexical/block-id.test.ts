@@ -509,6 +509,59 @@ test("block id runtime hydrates bid values from imported JSON", () => {
   unregister();
 });
 
+test("block id runtime exposes the durable bid on rendered block DOM", () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    writable: true,
+    value: {
+      createElement: () => {
+        const attributes = new Map<string, string>();
+        return {
+          classList: { add: () => undefined },
+          className: "",
+          dir: "",
+          style: {},
+          setAttribute(name: string, value: string) {
+            attributes.set(name, value);
+          },
+          getAttribute(name: string) {
+            return attributes.get(name) ?? null;
+          },
+        };
+      },
+    },
+  });
+
+  const { editor, unregister } = makeHeadlessEditor();
+  try {
+    const state = bidlessState();
+    state.root.children = [state.root.children[0]];
+    (state.root.children[0] as { bid?: string }).bid = "stored-block-id";
+    editor.setEditorState(editor.parseEditorState(JSON.stringify(state)));
+
+    const renderedBid = editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChild();
+      assert.ok(paragraph, "expected paragraph");
+      return paragraph
+        .createDOM({ theme: { paragraph: "" } } as never, editor)
+        .getAttribute("data-lexical-block-id");
+    });
+
+    assert.equal(renderedBid, "stored-block-id");
+  } finally {
+    unregister();
+    if (previousDocument) {
+      Object.defineProperty(globalThis, "document", previousDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+  }
+});
+
 function seedPlainParagraph(editor: LexicalEditor, text: string): void {
   editor.update(
     () => {

@@ -11,6 +11,7 @@ const COMMENT_CARD_VIEWPORT_INLINE_GAP = 36;
 
 export type AnchorPosition = {
   text: string;
+  nodeId: string | null;
   top: number;
   iconLeft: number;
   markerLeft: number;
@@ -25,6 +26,10 @@ export type CommentCardPosition = {
 
 export function normalizeInlineAnchorText(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, MAX_ANCHOR_TEXT_LENGTH);
+}
+
+function durableBlockIdForElement(element: HTMLElement): string | null {
+  return element.getAttribute("data-lexical-block-id") || null;
 }
 
 export function isVisualCommentBlock(element: HTMLElement): boolean {
@@ -97,6 +102,7 @@ export function anchorPositionForBlock(
   }
   return {
     text,
+    nodeId: durableBlockIdForElement(block),
     top: blockRect.top + blockRect.height / 2,
     iconLeft,
     markerLeft: iconLeft,
