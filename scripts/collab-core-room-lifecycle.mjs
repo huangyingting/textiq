@@ -153,6 +153,63 @@ const getYDoc = (docName) =>
     return doc;
   });
 
+const findAwarenessOwner = (doc, clientId) => {
+  for (const [ownerConn, controlledIds] of doc.conns.entries()) {
+    if (controlledIds.has(clientId)) {
+      return ownerConn;
+    }
+  }
+  return null;
+};
+
+const filterAwarenessUpdateForConnection = (doc, conn, update) => {
+  const controlledIds = doc.conns.get(conn);
+  if (controlledIds === undefined) {
+    return null;
+  }
+
+  const decoder = decoding.createDecoder(update);
+  const authorizedEntries = [];
+  const claimedClientIds = [];
+  const len = decoding.readVarUint(decoder);
+  for (let i = 0; i < len; i += 1) {
+    const clientId = decoding.readVarUint(decoder);
+    const clock = decoding.readVarUint(decoder);
+    const state = JSON.parse(decoding.readVarString(decoder));
+    const owner = findAwarenessOwner(doc, clientId);
+    const controlledByConn = owner === conn || controlledIds.has(clientId);
+    const existingState = doc.awareness.getStates().has(clientId);
+
+    if (owner !== null && owner !== conn) {
+      continue;
+    }
+    if (!controlledByConn && (existingState || state === null)) {
+      continue;
+    }
+
+    if (state !== null) {
+      if (!controlledIds.has(clientId)) {
+        claimedClientIds.push(clientId);
+      }
+      controlledIds.add(clientId);
+    }
+    authorizedEntries.push({ clientId, clock, state });
+  }
+
+  if (authorizedEntries.length === 0) {
+    return null;
+  }
+
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, authorizedEntries.length);
+  for (const { clientId, clock, state } of authorizedEntries) {
+    encoding.writeVarUint(encoder, clientId);
+    encoding.writeVarUint(encoder, clock);
+    encoding.writeVarString(encoder, JSON.stringify(state));
+  }
+  return { update: encoding.toUint8Array(encoder), claimedClientIds };
+};
+
 export const messageListener = (
   conn,
   doc,
@@ -235,7 +292,24 @@ export const messageListener = (
           closeConn(doc, conn, onBeforeEvict);
           return;
         }
-        awarenessProtocol.applyAwarenessUpdate(doc.awareness, update, conn);
+        const authorized = filterAwarenessUpdateForConnection(
+          doc,
+          conn,
+          update,
+        );
+        if (authorized !== null) {
+          awarenessProtocol.applyAwarenessUpdate(
+            doc.awareness,
+            authorized.update,
+            conn,
+          );
+          const controlledIds = doc.conns.get(conn);
+          for (const clientId of authorized.claimedClientIds) {
+            if (!doc.awareness.getStates().has(clientId)) {
+              controlledIds?.delete(clientId);
+            }
+          }
+        }
         break;
       }
       case messageQueryAwareness:
