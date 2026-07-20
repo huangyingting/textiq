@@ -46,6 +46,16 @@ function fakeConn() {
   };
 }
 
+function awarenessMessageFrom(awareness) {
+  const message = encoding.createEncoder();
+  encoding.writeVarUint(message, 1);
+  encoding.writeVarUint8Array(
+    message,
+    awarenessProtocol.encodeAwarenessUpdate(awareness, [awareness.clientID]),
+  );
+  return encoding.toUint8Array(message);
+}
+
 test("collab upgrade limiter blocks after configured budget", () => {
   process.env.COLLAB_UPGRADE_RATE_LIMIT = "1";
   process.env.COLLAB_UPGRADE_RATE_WINDOW_MS = "1000";
@@ -209,6 +219,71 @@ test("collab message listener handles sync, awareness, query, default, and malfo
   assert.equal(writer.sent.length > 0, true);
   source.destroy();
   remoteAwareness.doc.destroy();
+  connCleanup(writer, viewer);
+});
+
+test("collab awareness updates cannot spoof another connection's presence", () => {
+  const writer = fakeConn();
+  const viewer = fakeConn();
+  _testOnly.setupConnection(writer, "doc-awareness-ownership");
+  _testOnly.setupConnection(viewer, "doc-awareness-ownership", true);
+  const doc = _testOnly.docs.get("doc-awareness-ownership");
+  const writerAwareness = new awarenessProtocol.Awareness(new Y.Doc());
+  const viewerAwareness = new awarenessProtocol.Awareness(new Y.Doc());
+
+  writerAwareness.setLocalState({ name: "Writer" });
+  _testOnly.messageListener(
+    writer,
+    doc,
+    awarenessMessageFrom(writerAwareness),
+    false,
+  );
+
+  assert.deepEqual(doc.awareness.getStates().get(writerAwareness.clientID), {
+    name: "Writer",
+  });
+  assert.equal(doc.conns.get(writer).has(writerAwareness.clientID), true);
+
+  writerAwareness.setLocalState({ name: "Spoofed" });
+  _testOnly.messageListener(
+    viewer,
+    doc,
+    awarenessMessageFrom(writerAwareness),
+    true,
+  );
+
+  assert.deepEqual(doc.awareness.getStates().get(writerAwareness.clientID), {
+    name: "Writer",
+  });
+  assert.equal(doc.conns.get(viewer).has(writerAwareness.clientID), false);
+
+  writerAwareness.setLocalState(null);
+  _testOnly.messageListener(
+    viewer,
+    doc,
+    awarenessMessageFrom(writerAwareness),
+    true,
+  );
+
+  assert.deepEqual(doc.awareness.getStates().get(writerAwareness.clientID), {
+    name: "Writer",
+  });
+
+  viewerAwareness.setLocalState({ name: "Viewer" });
+  _testOnly.messageListener(
+    viewer,
+    doc,
+    awarenessMessageFrom(viewerAwareness),
+    true,
+  );
+
+  assert.deepEqual(doc.awareness.getStates().get(viewerAwareness.clientID), {
+    name: "Viewer",
+  });
+  assert.equal(doc.conns.get(viewer).has(viewerAwareness.clientID), true);
+
+  writerAwareness.doc.destroy();
+  viewerAwareness.doc.destroy();
   connCleanup(writer, viewer);
 });
 
