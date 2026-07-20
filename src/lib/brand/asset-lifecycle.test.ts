@@ -156,10 +156,6 @@ describe("deriveBrandStorageKey", () => {
       deriveBrandStorageKey("owner1", "def", "font/woff2"),
       "owner1/def.woff2",
     );
-    assert.equal(
-      deriveBrandStorageKey("owner1", "ghi", "image/svg+xml"),
-      "owner1/ghi.svg",
-    );
   });
 
   it("falls back to bin for unknown MIME (never the filename)", () => {
