@@ -405,30 +405,6 @@ export function findAllByRole(
   return renderer.root.findAll((instance) => instance.props.role === role);
 }
 
-export function findByRole(
-  renderer: ReactTestRenderer,
-  role: string,
-): ReactTestInstance {
-  const matches = findAllByRole(renderer, role);
-  if (matches.length !== 1) {
-    throw new Error(
-      `expected exactly one element with role "${role}", found ${matches.length}`,
-    );
-  }
-  return matches[0] as ReactTestInstance;
-}
-
-export function findByLabel(
-  renderer: ReactTestRenderer,
-  type: string,
-  label: string,
-): ReactTestInstance {
-  return renderer.root.find(
-    (instance) =>
-      instance.type === type && instance.props["aria-label"] === label,
-  );
-}
-
 export type {
   ReactTestInstance,
   ReactTestRenderer,

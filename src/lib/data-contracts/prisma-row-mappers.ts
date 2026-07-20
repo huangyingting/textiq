@@ -22,7 +22,7 @@ import {
 } from "./literals";
 import { getPersistedJsonContract } from "./persisted-json";
 
-export const documentDtoSelect = {
+const _documentDtoSelect = {
   id: true,
   title: true,
   content: true,
@@ -41,7 +41,7 @@ export const documentDtoSelect = {
 } satisfies Prisma.DocumentSelect;
 
 export type DocumentDtoRow = Prisma.DocumentGetPayload<{
-  select: typeof documentDtoSelect;
+  select: typeof _documentDtoSelect;
 }>;
 
 export interface DocumentDto {
@@ -62,7 +62,7 @@ export interface DocumentDto {
   deletedAt: string | null;
 }
 
-export const visualDtoSelect = {
+const _visualDtoSelect = {
   id: true,
   documentId: true,
   anchorBlockId: true,
@@ -75,7 +75,7 @@ export const visualDtoSelect = {
 } satisfies Prisma.VisualSelect;
 
 export type VisualDtoRow = Prisma.VisualGetPayload<{
-  select: typeof visualDtoSelect;
+  select: typeof _visualDtoSelect;
 }>;
 
 export interface VisualDto {
@@ -90,7 +90,7 @@ export interface VisualDto {
   updatedAt: string;
 }
 
-export const commentDtoSelect = {
+const _commentDtoSelect = {
   id: true,
   documentId: true,
   authorId: true,
@@ -108,7 +108,7 @@ export const commentDtoSelect = {
 } satisfies Prisma.CommentSelect;
 
 export type CommentDtoRow = Prisma.CommentGetPayload<{
-  select: typeof commentDtoSelect;
+  select: typeof _commentDtoSelect;
 }>;
 
 export interface CommentDto {
@@ -123,7 +123,7 @@ export interface CommentDto {
   updatedAt: string;
 }
 
-export const tagDtoSelect = {
+const _tagDtoSelect = {
   id: true,
   name: true,
   slug: true,
@@ -132,7 +132,7 @@ export const tagDtoSelect = {
   updatedAt: true,
 } satisfies Prisma.TagSelect;
 
-export type TagDtoRow = Prisma.TagGetPayload<{ select: typeof tagDtoSelect }>;
+export type TagDtoRow = Prisma.TagGetPayload<{ select: typeof _tagDtoSelect }>;
 
 export interface TagDto {
   id: string;
@@ -143,7 +143,7 @@ export interface TagDto {
   updatedAt: string;
 }
 
-export const workspaceDtoSelect = {
+const _workspaceDtoSelect = {
   id: true,
   name: true,
   ownerId: true,
@@ -160,7 +160,7 @@ export const workspaceDtoSelect = {
 } satisfies Prisma.WorkspaceSelect;
 
 export type WorkspaceDtoRow = Prisma.WorkspaceGetPayload<{
-  select: typeof workspaceDtoSelect;
+  select: typeof _workspaceDtoSelect;
 }>;
 
 export interface WorkspaceMemberDto {

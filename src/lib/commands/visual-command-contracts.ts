@@ -1,7 +1,6 @@
 /** Visual command payload/result contracts with no executor imports. */
 
 import type { CommandEnvelope, CommandTarget } from "./envelope-core";
-import type { DeckPatch } from "@/lib/document/deck-kernel/slide-commands";
 import type {
   ArrowStyle,
   AspectRatioPreset,
@@ -116,5 +115,3 @@ export interface VisualCommandResult {
   patches: VisualPatch[];
   sideEffects: VisualSideEffect[];
 }
-
-export type CrossSurfacePatch = DeckPatch | VisualPatch;

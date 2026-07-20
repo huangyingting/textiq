@@ -206,85 +206,9 @@ export async function persistDeckWithRecovery({
   }
 }
 
-interface CreateSerializedDeckPersistorParams<TDeck> {
-  persistDeck: (deck: TDeck) => Promise<ActionResult>;
-}
-
-export function createSerializedDeckPersistor<TDeck>({
-  persistDeck,
-}: CreateSerializedDeckPersistorParams<TDeck>): (
-  deck: TDeck,
-) => Promise<ActionResult> {
-  let latestDeck: TDeck | null = null;
-  let inFlightSave: Promise<ActionResult> | null = null;
-  let saveAgain = false;
-
-  return (deck: TDeck): Promise<ActionResult> => {
-    latestDeck = deck;
-    if (inFlightSave) {
-      saveAgain = true;
-      return inFlightSave;
-    }
-
-    const savePromise = (async (): Promise<ActionResult> => {
-      let lastResult: ActionResult = actionOk();
-      try {
-        do {
-          saveAgain = false;
-          const deckToSave: TDeck | null = latestDeck;
-          if (deckToSave === null) {
-            return lastResult;
-          }
-          lastResult = await persistDeck(deckToSave);
-          if (latestDeck !== deckToSave) {
-            saveAgain = true;
-          }
-        } while (saveAgain);
-        return lastResult;
-      } finally {
-        saveAgain = false;
-      }
-    })();
-
-    inFlightSave = savePromise;
-    void savePromise.finally(() => {
-      if (inFlightSave === savePromise) {
-        inFlightSave = null;
-      }
-    });
-    return savePromise;
-  };
-}
-
-interface CreateDeckAutosaveOnDueParams {
-  persistDeck: (deck: Deck) => Promise<ActionResult>;
-  log: typeof logInfo;
-}
-
 interface QueuedPersistDeck {
   deck: Deck;
   requestId: number;
-}
-
-export function createDeckAutosaveOnDue({
-  persistDeck,
-  log,
-}: CreateDeckAutosaveOnDueParams): (deck: Deck) => void {
-  return (deck: Deck) => {
-    void persistDeck(deck)
-      .then((result) => {
-        if (!result.ok) {
-          log("editor.slide-editor", "presentation-autosave-error", {
-            error: result.error,
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        log("editor.slide-editor", "presentation-autosave-error", {
-          error: resolveDeckSaveRejectionError(error),
-        });
-      });
-  };
 }
 
 interface ApplyAiDeckProposalParams {
