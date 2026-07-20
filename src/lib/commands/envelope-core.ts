@@ -109,6 +109,80 @@ export function pushUnknownKeyErrors(
   }
 }
 
+function findNonJsonPayloadReason(
+  value: unknown,
+  path = "payload",
+  seen: WeakSet<object> = new WeakSet(),
+): string | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return undefined;
+    case "number":
+      return Number.isFinite(value)
+        ? undefined
+        : `${path} must be a finite number.`;
+    case "undefined":
+    case "function":
+    case "symbol":
+    case "bigint":
+      return `${path} contains non-JSON value ${typeof value}.`;
+    case "object":
+      break;
+  }
+
+  const objectValue = value as object;
+  if (seen.has(objectValue)) {
+    return `${path} contains a cycle.`;
+  }
+
+  seen.add(objectValue);
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const reason = findNonJsonPayloadReason(
+        value[index],
+        `${path}[${index}]`,
+        seen,
+      );
+      if (reason) {
+        return reason;
+      }
+    }
+    seen.delete(objectValue);
+    return undefined;
+  }
+
+  if (!isPlainObject(value)) {
+    seen.delete(objectValue);
+    return `${path} must contain only JSON objects, arrays, and primitives.`;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    seen.delete(objectValue);
+    return `${path} must contain only plain JSON objects.`;
+  }
+
+  const symbolKeys = Object.getOwnPropertySymbols(value);
+  if (symbolKeys.length > 0) {
+    seen.delete(objectValue);
+    return `${path} contains non-JSON symbol keys.`;
+  }
+
+  for (const [key, entryValue] of Object.entries(value)) {
+    const reason = findNonJsonPayloadReason(entryValue, `${path}.${key}`, seen);
+    if (reason) {
+      return reason;
+    }
+  }
+
+  seen.delete(objectValue);
+  return undefined;
+}
+
 export function validateTarget(target: unknown): {
   surface?: CommandTargetSurface;
   errors: string[];
@@ -240,6 +314,11 @@ export function validateCommandEnvelopeStructure(
 
   if (env.payload === undefined) {
     errors.push("payload must be present.");
+  } else {
+    const nonJsonPayloadReason = findNonJsonPayloadReason(env.payload);
+    if (nonJsonPayloadReason) {
+      errors.push(`payload must be JSON-safe: ${nonJsonPayloadReason}`);
+    }
   }
 
   if (env.coalesceKey !== undefined && !isNonEmptyString(env.coalesceKey)) {

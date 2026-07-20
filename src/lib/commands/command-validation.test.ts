@@ -54,7 +54,7 @@ function makeDeckCommand(
   return {
     id: commandId("2"),
     schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
-    type: "deck.slide_command",
+    type: "UPDATE_SLIDE_TITLE",
     timestamp: "2026-06-23T00:00:00.000Z",
     actor: ACTOR,
     target: {

@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "accepted"
-last_updated: "2026-07-01"
+last_updated: "2026-07-20"
 description: "Date: 2026-06-23 Issue: #438 / Epic #436 — Cross-surface command envelope for document visuals and deck artifacts Authors: Switch (Frontend Dev)"
 ---
 
@@ -63,7 +63,9 @@ interface CommandEnvelope<P = unknown> {
 - `timestamp` is a valid ISO-8601 timestamp.
 - `target.surface` determines the minimum stable identifiers required.
 - `coalesceKey` is advisory metadata for undo/history grouping, not execution.
-- payloads are JSON-safe and versioned through the envelope schema version.
+- payloads are JSON-safe and versioned through the envelope schema version:
+  plain objects/arrays/primitives only, with no functions, symbols, bigint,
+  undefined values, or cycles.
 
 ---
 
@@ -139,6 +141,8 @@ type DeckCommandEnvelope<P = unknown> = CommandEnvelope<P>;
 `acceptDeckCommandEnvelope` validates `target.surface === "deck"` and the
 submitted `documentId`. Command execution remains outside the envelope parser;
 Deck mutations are implemented in `src/lib/presentation/editor-commands.ts`.
+The envelope `type` for deck commands must exactly equal the wrapped
+`payload.type`; mismatched deck envelope and payload command types are rejected.
 
 ---
 

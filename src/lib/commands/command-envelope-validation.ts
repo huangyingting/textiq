@@ -1,4 +1,5 @@
 import { validateDeckCommandPayload } from "@/lib/commands/deck-command-metadata";
+import { isPlainObject } from "@/lib/type-guards";
 import { validateVisualCommandPayload } from "./visual-command-metadata";
 import {
   validateCommandEnvelopeStructure,
@@ -21,6 +22,13 @@ export function validateCommandEnvelope(
     }
     validateVisualCommandPayload(envelopeType, env.payload, errors);
   } else if (structural.surface === "deck") {
+    if (
+      isPlainObject(env.payload) &&
+      typeof env.payload.type === "string" &&
+      env.type !== env.payload.type
+    ) {
+      errors.push("Deck envelope type must match payload.type.");
+    }
     validateDeckCommandPayload(env.payload, env.target, errors);
   }
 
