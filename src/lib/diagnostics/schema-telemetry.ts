@@ -12,8 +12,9 @@
  * The contract is deliberately narrow:
  *  - Callers pass a {@link SchemaFailureCategory} and canonical non-sensitive
  *    codes/counts only.
- *  - Validator messages, paths, row ids, document ids, property keys, and
- *    caught errors are never accepted into the emitted record.
+ *  - Validator messages, paths, property keys, and caught errors are never
+ *    accepted into the emitted record.
+ *  - Only strict opaque identifiers for known repair keys are accepted.
  *
  * The pure {@link buildSchemaDiagnostic} builder is exported for unit testing
  * the no-content-leak guarantee; production code calls
@@ -63,6 +64,20 @@ const SCHEMA_FAILURE_AREAS = new Set([
   "persistDeck.input",
 ]);
 
+const SAFE_SCHEMA_IDENTIFIER_KEYS = [
+  "documentId",
+  "rowId",
+  "anchorBlockId",
+] as const;
+
+const SAFE_SCHEMA_IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isSafeSchemaIdentifier(value: unknown): value is string {
+  return (
+    typeof value === "string" && SAFE_SCHEMA_IDENTIFIER_PATTERN.test(value)
+  );
+}
+
 /* node:coverage disable */
 /* Redaction policy prose is documentation-only. */
 /**
@@ -81,6 +96,9 @@ export interface SchemaFailureContext {
   area?: string;
   issueCount?: number;
   schemaVersion?: number;
+  documentId?: unknown;
+  rowId?: unknown;
+  anchorBlockId?: unknown;
   [key: string]: unknown;
 }
 
@@ -90,6 +108,9 @@ export interface SchemaDiagnosticRecord {
   area?: string;
   issueCount?: number;
   schemaVersion?: number;
+  documentId?: string;
+  rowId?: string;
+  anchorBlockId?: string;
   [key: string]: unknown;
 }
 
@@ -129,6 +150,12 @@ export function buildSchemaDiagnostic(
     Number(context.schemaVersion) >= 0
   ) {
     diagnostic.schemaVersion = Number(context.schemaVersion);
+  }
+  for (const key of SAFE_SCHEMA_IDENTIFIER_KEYS) {
+    const value = context[key];
+    if (isSafeSchemaIdentifier(value)) {
+      diagnostic[key] = value;
+    }
   }
   return diagnostic;
 }
