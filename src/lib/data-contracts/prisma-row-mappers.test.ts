@@ -150,6 +150,29 @@ test("maps comment, tag, workspace, and literal rows", () => {
   assert.equal(comment.anchor.kind, "text");
   assert.equal(comment.updatedAt, "2026-06-25T15:15:00.000Z");
 
+  const tableComment = mapCommentRowToDto({
+    id: "comment-table",
+    documentId: "doc-1",
+    authorId: "user-1",
+    body: "Table note",
+    resolved: false,
+    parentId: null,
+    anchorType: "table",
+    anchorText: "Quarterly metrics",
+    anchorNodeId: "table-1",
+    slideId: null,
+    elementId: null,
+    anchorGeometry: null,
+    createdAt: now,
+    updatedAt: now,
+  } as CommentDtoRow);
+  assert.deepEqual(tableComment.anchor, {
+    kind: "document-block",
+    blockKind: "table",
+    text: "Quarterly metrics",
+    nodeId: "table-1",
+  });
+
   const tag = mapTagRowToDto({
     id: "tag-1",
     name: "Product Plan",
