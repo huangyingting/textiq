@@ -251,7 +251,7 @@ test("exportPPTX returns null when the source SVG has no drawable area", async (
 });
 
 test("exportPPTX uses native shapes for supported visual payloads", async () => {
-  installBrowserStubs();
+  const calls = installBrowserStubs();
   const blob = await exportPPTX(
     svgElement(120, 80),
     FIXTURES.flowchart,
@@ -263,4 +263,29 @@ test("exportPPTX uses native shapes for supported visual payloads", async () => 
     blob.type,
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   );
+  assert.deepEqual(calls.scaled, [], "native PPTX must not rasterize defaults");
+});
+
+test("exportPPTX deliberately falls back to raster when native cannot honor export options", async () => {
+  const calls = installBrowserStubs();
+  const blob = await exportPPTX(svgElement(120, 80), FIXTURES.flowchart, {
+    ...DEFAULT_EXPORT_OPTIONS,
+    background: "custom",
+    customBackground: "#112233",
+    colorMode: "mono",
+    aspectRatio: "1:1",
+    padding: 10,
+  });
+
+  assert.ok(blob);
+  assert.equal(
+    blob.type,
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  );
+  assert.deepEqual(calls.scaled, [[2, 2]]);
+  assert.equal(calls.objectUrlBlobs.length, 1);
+  const transformedSvg = await calls.objectUrlBlobs[0].text();
+  assert.match(transformedSvg, /data-export-bg="true"/);
+  assert.match(transformedSvg, /__export_mono__/);
+  assert.match(transformedSvg, /data-letterbox="true"/);
 });

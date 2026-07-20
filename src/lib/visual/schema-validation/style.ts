@@ -3,6 +3,7 @@
 /* node:coverage ignore next -- type-bearing import is erased/mapped as uncovered by tsx. @preserve */
 import { DEFAULT_STYLE, type VisualStyle } from "@/lib/visual/schema-types";
 import { isFiniteNumber, isPlainObject } from "@/lib/type-guards";
+import { isSafeVisualColor } from "./colors";
 import { VisualValidationError } from "./utils";
 
 export function normalizeStyle(input: unknown): VisualStyle {
@@ -20,23 +21,38 @@ export function normalizeStyle(input: unknown): VisualStyle {
     if (
       !Array.isArray(input.palette) ||
       input.palette.length === 0 ||
-      !input.palette.every((color) => typeof color === "string")
+      !input.palette.every(
+        (color) => typeof color === "string" && isSafeVisualColor(color),
+      )
     ) {
       throw new VisualValidationError(
-        "style.palette must be a non-empty array of strings",
+        "style.palette must be a non-empty array of safe colors",
       );
     }
     style.palette = input.palette as string[];
   }
 
-  const stringKeys = [
+  const colorKeys = [
     "background",
     "nodeFill",
     "nodeStroke",
     "nodeText",
     "edgeColor",
-    "fontFamily",
   ] as const;
+  for (const key of colorKeys) {
+    const value = input[key];
+    if (value !== undefined) {
+      if (typeof value !== "string") {
+        throw new VisualValidationError(`style.${key} must be a string`);
+      }
+      if (!isSafeVisualColor(value)) {
+        throw new VisualValidationError(`style.${key} must be a safe color`);
+      }
+      style[key] = value;
+    }
+  }
+
+  const stringKeys = ["fontFamily"] as const;
   for (const key of stringKeys) {
     const value = input[key];
     if (value !== undefined) {
