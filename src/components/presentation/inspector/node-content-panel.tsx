@@ -78,6 +78,20 @@ export function emptyTableRow(table: TableContent, id: string) {
   return { id, cells: table.columns.map(() => ({ text: "" })) };
 }
 
+function uniqueTableItemId(prefix: string, existingIds: string[]): string {
+  const usedIds = new Set(existingIds);
+  const baseId = `${prefix}-${Date.now().toString(36)}`;
+  let candidate = baseId;
+  let suffix = 1;
+
+  while (usedIds.has(candidate)) {
+    candidate = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
 export function insertTableRow(
   table: TableContent,
   index: number,
@@ -89,7 +103,13 @@ export function insertTableRow(
   rows.splice(
     Math.max(0, Math.min(rows.length, target)),
     0,
-    emptyTableRow(table, `${nodeId}-row-${Date.now().toString(36)}`),
+    emptyTableRow(
+      table,
+      uniqueTableItemId(
+        `${nodeId}-row`,
+        table.rows.map((row) => row.id),
+      ),
+    ),
   );
   return { ...table, rows };
 }
@@ -111,7 +131,10 @@ export function insertTableColumn(
   const target = position === "before" ? index : index + 1;
   const columnIndex = Math.max(0, Math.min(table.columns.length, target));
   const column = {
-    id: `${nodeId}-col-${Date.now().toString(36)}`,
+    id: uniqueTableItemId(
+      `${nodeId}-col`,
+      table.columns.map((column) => column.id),
+    ),
     label: `Column ${columnIndex + 1}`,
   };
   return {
@@ -608,15 +631,14 @@ export function NodeContentPanel({
             <button
               type="button"
               onClick={() =>
-                onUpdateContent({
-                  rows: [
-                    ...node.content.rows,
-                    {
-                      id: `${node.id}-row-${node.content.rows.length + 1}`,
-                      cells: node.content.columns.map(() => ({ text: "" })),
-                    },
-                  ],
-                })
+                onUpdateContent(
+                  insertTableRow(
+                    node.content,
+                    node.content.rows.length - 1,
+                    "after",
+                    node.id,
+                  ),
+                )
               }
               className="rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs text-ds-text-secondary hover:bg-ds-state-hover"
             >
@@ -625,19 +647,14 @@ export function NodeContentPanel({
             <button
               type="button"
               onClick={() =>
-                onUpdateContent({
-                  columns: [
-                    ...node.content.columns,
-                    {
-                      id: `${node.id}-col-${node.content.columns.length + 1}`,
-                      label: `Column ${node.content.columns.length + 1}`,
-                    },
-                  ],
-                  rows: node.content.rows.map((row) => ({
-                    ...row,
-                    cells: [...row.cells, { text: "" }],
-                  })),
-                })
+                onUpdateContent(
+                  insertTableColumn(
+                    node.content,
+                    node.content.columns.length - 1,
+                    "after",
+                    node.id,
+                  ),
+                )
               }
               className="rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs text-ds-text-secondary hover:bg-ds-state-hover"
             >

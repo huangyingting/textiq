@@ -10,7 +10,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { NodeContentPanel } from "./node-content-panel";
-import type { SlideChildNode } from "@/lib/presentation/schema";
+import type { SlideChildNode, TableContent } from "@/lib/presentation/schema";
 import { createReactRenderHarness } from "@/test/react-render-harness";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
@@ -34,6 +34,45 @@ function elements(root: ReactNode): ElementWithProps[] {
   }
   visit(root);
   return found;
+}
+
+function textContent(node: ReactNode): string {
+  let text = "";
+
+  Children.forEach(node, (child) => {
+    if (typeof child === "string" || typeof child === "number") {
+      text += child;
+      return;
+    }
+
+    if (isValidElement(child)) {
+      text += textContent(
+        (child as ElementWithProps).props.children as ReactNode,
+      );
+    }
+  });
+
+  return text;
+}
+
+function clickButton(root: ReactNode, label: string): void {
+  const button = elements(root).find((element) => {
+    const props = element.props as {
+      children?: ReactNode;
+      disabled?: boolean;
+      onClick?: () => void;
+      type?: string;
+    };
+    return (
+      props.type === "button" &&
+      props.disabled !== true &&
+      props.onClick !== undefined &&
+      textContent(props.children).trim() === label
+    );
+  });
+
+  assert.ok(button, `Expected to find enabled ${label} button`);
+  (button.props as { onClick: () => void }).onClick();
 }
 
 function invokeHandlers(root: ReactNode): number {
@@ -295,6 +334,55 @@ describe("NodeContentPanel render coverage", () => {
     );
     assert.ok(updates.includes("replace-image"));
     assert.ok(updates.includes("replace-visual"));
+  });
+
+  test("uses unique ids when bottom add follows a middle table delete", () => {
+    const updates: Record<string, unknown>[] = [];
+    const originalNow = Date.now;
+    Date.now = () => Number.parseInt("3", 36);
+
+    try {
+      const table = withMockUseState(() =>
+        NodeContentPanel({
+          node: baseNode({
+            id: "table-1",
+            type: "table",
+            content: {
+              columns: [
+                { id: "table-1-col-1", label: "Metric" },
+                { id: "table-1-col-3", label: "Value" },
+              ],
+              rows: [
+                {
+                  id: "table-1-row-1",
+                  cells: [{ text: "NPS" }, { text: "72" }],
+                },
+                {
+                  id: "table-1-row-3",
+                  cells: [{ text: "Growth" }, { text: "15%" }],
+                },
+              ],
+            },
+          }),
+          onUpdateContent: (patch) => updates.push(patch),
+        }),
+      );
+
+      clickButton(table, "Add row");
+      clickButton(table, "Add column");
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const rowUpdate = updates[0] as TableContent;
+    const rowIds = rowUpdate.rows.map((row) => row.id);
+    assert.equal(rowIds.length, new Set(rowIds).size);
+    assert.equal(rowIds[rowIds.length - 1], "table-1-row-3-1");
+
+    const columnUpdate = updates[1] as TableContent;
+    const columnIds = columnUpdate.columns.map((column) => column.id);
+    assert.equal(columnIds.length, new Set(columnIds).size);
+    assert.equal(columnIds[columnIds.length - 1], "table-1-col-3-1");
   });
 
   test("wires table and connector structural handlers", () => {
