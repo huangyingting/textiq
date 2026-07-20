@@ -821,6 +821,69 @@ describe("safeParseDeck", () => {
     }
   });
 
+  test("rejects unknown slide template, controls, and props keys", () => {
+    resetBuilderCounter();
+    const slide = invalidSlide({
+      ...buildCoverSlide(),
+      template: {
+        kind: "cover",
+        unexpectedTemplateKey: true,
+      },
+      controls: {
+        tone: "neutral",
+        unexpectedControlsKey: true,
+      },
+      props: {
+        chrome: "default",
+        unexpectedPropsKey: true,
+      },
+    });
+
+    const result = safeParseDeck(buildDeck([slide]));
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      for (const pattern of [
+        /unsupported_property: slides\[0\]\.template:/,
+        /unsupported_property: slides\[0\]\.controls:/,
+        /unsupported_property: slides\[0\]\.props:/,
+      ]) {
+        assert.ok(
+          result.errors.some((error) => pattern.test(error)),
+          `missing error matching ${pattern}\n${result.errors.join("\n")}`,
+        );
+      }
+    }
+  });
+
+  test("rejects non-string templateVersion and layoutId", () => {
+    resetBuilderCounter();
+    const slide = invalidSlide({
+      ...buildCoverSlide(),
+      template: {
+        kind: "cover",
+        templateVersion: 7,
+        layoutId: 123,
+      },
+    });
+
+    const result = safeParseDeck(buildDeck([slide]));
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        result.errors.some((error) =>
+          /slides\[0\]\.template\.templateVersion/.test(error),
+        ),
+      );
+      assert.ok(
+        result.errors.some((error) =>
+          /slides\[0\]\.template\.layoutId/.test(error),
+        ),
+      );
+    }
+  });
+
   test("rejects non-string slide notes", () => {
     resetBuilderCounter();
     const invalidNotesValues: unknown[] = [
@@ -2014,6 +2077,34 @@ describe("safeParseDeck", () => {
       if (!result.success && matrixCase.errorPattern) {
         assert.ok(result.errors.some((e) => matrixCase.errorPattern?.test(e)));
       }
+    }
+  });
+
+  test("rejects unknown slide deckChrome override keys", () => {
+    resetBuilderCounter();
+    const slide = invalidSlide({
+      ...buildCoverSlide(),
+      props: {
+        deckChrome: {
+          footer: {
+            mode: "disabled",
+            unexpectedOverrideKey: true,
+          },
+        },
+      },
+    });
+
+    const result = safeParseDeck(buildDeck([slide]));
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        result.errors.some((error) =>
+          /unsupported_property: slides\[0\]\.props\.deckChrome\.footer:/.test(
+            error,
+          ),
+        ),
+      );
     }
   });
 

@@ -2560,6 +2560,12 @@ const SLIDE_CHROME_OVERRIDE_MODES = [
   "detached",
   "override",
 ];
+const SLIDE_TEMPLATE_KEYS = new Set(["kind", "templateVersion", "layoutId"]);
+const SLIDE_CONTROLS_KEYS = new Set(["tone", "density", "emphasis"]);
+const SLIDE_PROPS_KEYS = new Set(["decoration", "chrome", "deckChrome"]);
+const SLIDE_DECK_CHROME_BASE_OVERRIDE_KEYS = new Set(["mode"]);
+const SLIDE_DECK_CHROME_DETACHED_OVERRIDE_KEYS = new Set(["mode", "nodeId"]);
+const SLIDE_DECK_CHROME_VALUE_OVERRIDE_KEYS = new Set(["mode", "value"]);
 
 function validateSlideProps(
   input: unknown,
@@ -2571,6 +2577,7 @@ function validateSlideProps(
     fail(errors, `${ctx} must be an object`);
     return;
   }
+  rejectUnknownProperties(input, SLIDE_PROPS_KEYS, ctx, errors);
   if (
     input.decoration !== undefined &&
     !SLIDE_DECORATION_LEVELS.includes(input.decoration as string)
@@ -2606,16 +2613,49 @@ function validateSlideProps(
           fail(errors, `${ctx}.deckChrome.${kind} must be an object`);
           continue;
         }
+        const overrideCtx = `${ctx}.deckChrome.${kind}`;
         if (!SLIDE_CHROME_OVERRIDE_MODES.includes(override.mode as string)) {
-          fail(errors, `${ctx}.deckChrome.${kind}.mode is not supported`);
+          fail(errors, `${overrideCtx}.mode is not supported`);
+        } else if (override.mode === "detached") {
+          rejectUnknownProperties(
+            override,
+            SLIDE_DECK_CHROME_DETACHED_OVERRIDE_KEYS,
+            overrideCtx,
+            errors,
+          );
+        } else if (override.mode === "override") {
+          rejectUnknownProperties(
+            override,
+            SLIDE_DECK_CHROME_VALUE_OVERRIDE_KEYS,
+            overrideCtx,
+            errors,
+          );
+        } else {
+          rejectUnknownProperties(
+            override,
+            SLIDE_DECK_CHROME_BASE_OVERRIDE_KEYS,
+            overrideCtx,
+            errors,
+          );
+        }
+        validateOptionalString(
+          override.nodeId,
+          `${overrideCtx}.nodeId`,
+          errors,
+        );
+        if (override.value !== undefined && override.mode !== "override") {
+          fail(
+            errors,
+            `${overrideCtx}.value is only supported in override mode`,
+          );
         }
         if (override.mode === "override") {
           if (!isPlainObject(override.value)) {
-            fail(errors, `${ctx}.deckChrome.${kind}.value must be an object`);
+            fail(errors, `${overrideCtx}.value must be an object`);
           } else {
             validateDeckChromeConfig(
               { [kind]: override.value },
-              `${ctx}.deckChrome.${kind}.value`,
+              `${overrideCtx}.value`,
               errors,
             );
           }
@@ -2679,6 +2719,12 @@ function validateSlideNode(
   if (!isPlainObject(input.template)) {
     fail(errors, `${ctx}.template must be an object`);
   } else {
+    rejectUnknownProperties(
+      input.template,
+      SLIDE_TEMPLATE_KEYS,
+      `${ctx}.template`,
+      errors,
+    );
     if (
       !SEMANTIC_TEMPLATE_KINDS.includes(
         input.template.kind as (typeof SEMANTIC_TEMPLATE_KINDS)[number],
@@ -2690,10 +2736,28 @@ function validateSlideNode(
         "invalid_type",
       );
     }
+    validateOptionalString(
+      input.template.templateVersion,
+      `${ctx}.template.templateVersion`,
+      errors,
+    );
+    validateOptionalString(
+      input.template.layoutId,
+      `${ctx}.template.layoutId`,
+      errors,
+    );
   }
 
   // Controls (optional)
-  if (isPlainObject(input.controls)) {
+  if (input.controls !== undefined && !isPlainObject(input.controls)) {
+    fail(errors, `${ctx}.controls must be an object`);
+  } else if (isPlainObject(input.controls)) {
+    rejectUnknownProperties(
+      input.controls,
+      SLIDE_CONTROLS_KEYS,
+      `${ctx}.controls`,
+      errors,
+    );
     const { tone, density, emphasis } = input.controls;
     if (
       tone !== undefined &&

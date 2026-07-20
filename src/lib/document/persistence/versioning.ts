@@ -8,15 +8,12 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
-import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
-import { LEGACY_DECK_SCHEMA_VERSION } from "@/lib/document/deck-kernel/deck";
 import {
   DECK_SCHEMA_VERSION,
   safeParseDeck,
   type Deck,
   type SlideChildNode,
 } from "@/lib/document/persistence/current-deck-schema";
-import { reconcileDocumentDeckDependencies } from "@/lib/document/source-ref-model";
 import { reportSchemaFailure } from "@/lib/diagnostics/schema-telemetry";
 import {
   classifyValidationDiagnostics,
@@ -109,23 +106,7 @@ export function sanitizeRestoredDeck(
     return toPrismaJsonInput(sanitized);
   }
 
-  if (!looksLikeLegacyDeck(rawDeckJson)) {
-    throw invalidRestoredDeck({ code: "invalid_version", issueCount: 1 });
-  }
-
-  const parsedLegacy = safeParseLegacyDeck(rawDeckJson);
-  if (!parsedLegacy.success) {
-    throw invalidRestoredDeck({
-      code: "invalid_structure",
-      issueCount: 1,
-    });
-  }
-
-  const { deck: sanitizedLegacy } = reconcileDocumentDeckDependencies({
-    deck: parsedLegacy.data,
-    visualsById: knownVisualIds,
-  });
-  return toPrismaJsonInput(sanitizedLegacy);
+  throw invalidRestoredDeck({ code: "invalid_version", issueCount: 1 });
 }
 
 function invalidRestoredDeck({
@@ -150,15 +131,6 @@ function looksLikeDeck(rawDeckJson: Prisma.JsonValue): boolean {
     rawDeckJson !== null &&
     !Array.isArray(rawDeckJson) &&
     rawDeckJson.schemaVersion === DECK_SCHEMA_VERSION
-  );
-}
-
-function looksLikeLegacyDeck(rawDeckJson: Prisma.JsonValue): boolean {
-  return (
-    typeof rawDeckJson === "object" &&
-    rawDeckJson !== null &&
-    !Array.isArray(rawDeckJson) &&
-    rawDeckJson.schemaVersion === LEGACY_DECK_SCHEMA_VERSION
   );
 }
 
