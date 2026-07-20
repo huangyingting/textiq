@@ -112,6 +112,7 @@ test("comment anchor contract rejects inconsistent persisted anchors", () => {
   const commentContract = PERSISTED_JSON_CONTRACTS["Comment.anchor"];
 
   assert.equal(commentContract.validate("not an object").success, false);
+  assert.equal(commentContract.validate({ anchorType: "table" }).success, true);
   assert.equal(commentContract.validate({ elementId: "e1" }).success, false);
   assert.equal(
     commentContract.validate({ slideId: "s1", anchorType: "text" }).success,

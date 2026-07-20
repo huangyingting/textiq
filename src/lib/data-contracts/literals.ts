@@ -28,7 +28,11 @@ function parseLiteral<T extends string>(
   };
 }
 
-export const COMMENT_ANCHOR_TYPE_LITERALS = ["text", "visual"] as const;
+export const COMMENT_ANCHOR_TYPE_LITERALS = [
+  "text",
+  "visual",
+  "table",
+] as const;
 
 export const PLAN_LITERALS = [
   "free",
