@@ -171,23 +171,27 @@ class FakeElement extends FakeNode {
   textContent: string;
   private rect: Rect;
   private visual: boolean;
+  private attributes: Record<string, string>;
 
   constructor({
     text = "",
     rect = { top: 0, bottom: 0, left: 0, right: 0 },
     visual = false,
     children = [],
+    attributes = {},
   }: {
     text?: string;
     rect?: Rect;
     visual?: boolean;
     children?: FakeElement[];
+    attributes?: Record<string, string>;
   } = {}) {
     super();
     this.textContent = text;
     this.rect = rect;
     this.visual = visual;
     this.children = children;
+    this.attributes = attributes;
   }
 
   closest(): FakeElement | null {
@@ -196,6 +200,10 @@ class FakeElement extends FakeNode {
 
   querySelector(): FakeElement | null {
     return this.visual ? this : null;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
   }
 
   getBoundingClientRect(): Rect & { height: number } {
@@ -467,11 +475,13 @@ const FIRST_TEXT = "First paragraph text";
 const SECOND_TEXT = "Second paragraph text";
 const THIRD_TEXT = "Third paragraph with many comments";
 const FOURTH_TEXT = "Fourth paragraph text";
+const REPEATED_TEXT = "Repeated paragraph text";
 
 function buildRoot(): FakeElement {
   const blockFirst = new FakeElement({
     text: FIRST_TEXT,
     rect: BLOCK_FIRST_RECT,
+    attributes: { "data-lexical-block-id": "bid-first" },
   });
   const blockVisual = new FakeElement({
     text: "caption",
@@ -481,18 +491,39 @@ function buildRoot(): FakeElement {
   const blockSecond = new FakeElement({
     text: SECOND_TEXT,
     rect: BLOCK_SECOND_RECT,
+    attributes: { "data-lexical-block-id": "bid-second" },
   });
   const blockThird = new FakeElement({
     text: THIRD_TEXT,
     rect: BLOCK_THIRD_RECT,
+    attributes: { "data-lexical-block-id": "bid-third" },
   });
   const blockFourth = new FakeElement({
     text: FOURTH_TEXT,
     rect: BLOCK_FOURTH_RECT,
+    attributes: { "data-lexical-block-id": "bid-fourth" },
   });
   return new FakeElement({
     rect: ROOT_RECT,
     children: [blockFirst, blockVisual, blockSecond, blockThird, blockFourth],
+  });
+}
+
+function buildRepeatedRoot(): FakeElement {
+  return new FakeElement({
+    rect: ROOT_RECT,
+    children: [
+      new FakeElement({
+        text: REPEATED_TEXT,
+        rect: BLOCK_FIRST_RECT,
+        attributes: { "data-lexical-block-id": "bid-repeat-a" },
+      }),
+      new FakeElement({
+        text: REPEATED_TEXT,
+        rect: BLOCK_SECOND_RECT,
+        attributes: { "data-lexical-block-id": "bid-repeat-b" },
+      }),
+    ],
   });
 }
 
@@ -664,6 +695,46 @@ describe("comment dots — anchor positioning, filtering, resolution", () => {
     });
   });
 
+  test("renders separate dots for identical text anchors when their durable block ids differ", () => {
+    withCommentsDom(() => {
+      const { editor } = makeFakeEditor(buildRepeatedRoot());
+      const renderer = mount(editor, [
+        makeThread({
+          id: "thread-repeat-a",
+          body: "Comment on first repeated block",
+          anchorText: REPEATED_TEXT,
+          anchorNodeId: "bid-repeat-a",
+          anchor: {
+            kind: "text",
+            text: REPEATED_TEXT,
+            nodeId: "bid-repeat-a",
+          },
+        }),
+        makeThread({
+          id: "thread-repeat-b",
+          body: "Comment on second repeated block",
+          anchorText: REPEATED_TEXT,
+          anchorNodeId: "bid-repeat-b",
+          anchor: {
+            kind: "text",
+            text: REPEATED_TEXT,
+            nodeId: "bid-repeat-b",
+          },
+        }),
+      ]);
+      try {
+        const dots = findDotButtons(renderer.root);
+        assert.equal(dots.length, 2);
+        assert.deepEqual(
+          dots.map((dot) => dot.props.style.top),
+          [120, 250],
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("a dot's numeric badge shows the raw count when <=9 and caps at '9+' beyond that; no badge at all for a count of exactly 1", () => {
     withCommentsDom(() => {
       const { editor } = makeFakeEditor(buildRoot());
@@ -814,6 +885,73 @@ describe("card expansion/selection — thread listing", () => {
         assert.match(textOf(items[0]!), /First comment on paragraph one/);
         assert.match(textOf(items[1]!), /Bob/);
         assert.match(textOf(items[1]!), /Second comment on paragraph one/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("clicking repeated-text dots opens only the thread anchored to that block id", () => {
+    withCommentsDom(() => {
+      const { editor } = makeFakeEditor(buildRepeatedRoot());
+      const renderer = mount(editor, [
+        makeThread({
+          id: "thread-repeat-a",
+          body: "First block only",
+          anchorText: REPEATED_TEXT,
+          anchorNodeId: "bid-repeat-a",
+          anchor: {
+            kind: "text",
+            text: REPEATED_TEXT,
+            nodeId: "bid-repeat-a",
+          },
+        }),
+        makeThread({
+          id: "thread-repeat-b",
+          body: "Second block only",
+          anchorText: REPEATED_TEXT,
+          anchorNodeId: "bid-repeat-b",
+          anchor: {
+            kind: "text",
+            text: REPEATED_TEXT,
+            nodeId: "bid-repeat-b",
+          },
+        }),
+      ]);
+      try {
+        const dots = findDotButtons(renderer.root);
+        const secondDot = dots.find((dot) => dot.props.style.top === 250)!;
+        act(() => secondDot.props.onClick());
+
+        assert.match(textOf(renderer.root), /Second block only/);
+        assert.doesNotMatch(textOf(renderer.root), /First block only/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("legacy text-only anchors still open by matching normalized text", () => {
+    withCommentsDom(() => {
+      const { editor } = makeFakeEditor(buildRepeatedRoot());
+      const renderer = mount(editor, [
+        makeThread({
+          id: "thread-legacy",
+          body: "Legacy text-only thread",
+          anchorText: REPEATED_TEXT,
+          anchorNodeId: null,
+          anchor: {
+            kind: "text",
+            text: REPEATED_TEXT,
+            nodeId: null,
+          },
+        }),
+      ]);
+      try {
+        const firstDot = findDotButtons(renderer.root)[0]!;
+        act(() => firstDot.props.onClick());
+
+        assert.match(textOf(renderer.root), /Legacy text-only thread/);
       } finally {
         act(() => renderer.unmount());
       }
@@ -1032,6 +1170,7 @@ describe("submit", () => {
                 body: "A new reply",
                 anchorType: "text",
                 anchorText: FIRST_TEXT,
+                anchorNodeId: "bid-first",
               },
             },
           ],

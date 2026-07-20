@@ -235,13 +235,10 @@ export function createCommentService({
               ?.trim()
               .slice(0, COMMENT_ANCHOR_TEXT_MAX_LENGTH) ?? null)
           : null;
-        const anchorNodeId =
-          anchorType === "visual" || anchorType === "table"
-            ? (input.anchorNodeId?.slice(
-                0,
-                COMMENT_ANCHOR_NODE_ID_MAX_LENGTH,
-              ) ?? null)
-            : null;
+        const anchorNodeId = anchorType
+          ? (input.anchorNodeId?.slice(0, COMMENT_ANCHOR_NODE_ID_MAX_LENGTH) ??
+            null)
+          : null;
         await db.comment.create({
           data: {
             documentId,

@@ -16,6 +16,7 @@ import {
 function anchor(partial: Partial<AnchorPosition> = {}): AnchorPosition {
   return {
     text: "Paragraph",
+    nodeId: null,
     top: 120,
     iconLeft: 820,
     markerLeft: 820,
@@ -34,12 +35,14 @@ class FakeElement {
     height: number;
   };
   private visual: boolean;
+  private attributes: Record<string, string>;
 
   constructor({
     text = "",
     rect = { top: 0, bottom: 0, left: 0, right: 0, height: 0 },
     visual = false,
     children = [],
+    attributes = {},
   }: {
     text?: string;
     rect?: {
@@ -51,11 +54,13 @@ class FakeElement {
     };
     visual?: boolean;
     children?: FakeElement[];
+    attributes?: Record<string, string>;
   } = {}) {
     this.textContent = text;
     this.rect = rect;
     this.visual = visual;
     this.children = children;
+    this.attributes = attributes;
   }
 
   closest(): FakeElement | null {
@@ -70,6 +75,10 @@ class FakeElement {
 
   getBoundingClientRect() {
     return this.rect;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
   }
 }
 
@@ -199,6 +208,7 @@ test("anchorPositionForBlock and gutter hit testing use right-side button geomet
     const block = new FakeElement({
       text: "  Paragraph\nanchor  ",
       rect: { top: 20, bottom: 60, left: 120, right: 280, height: 40 },
+      attributes: { "data-lexical-block-id": "bid-anchor" },
     });
 
     assert.equal(isInRightCommentGutter(asHTMLElement(root), 320), true);
@@ -206,6 +216,7 @@ test("anchorPositionForBlock and gutter hit testing use right-side button geomet
       anchorPositionForBlock(asHTMLElement(block), asHTMLElement(root)),
       {
         text: "Paragraph anchor",
+        nodeId: "bid-anchor",
         top: 40,
         iconLeft: 308,
         markerLeft: 308,

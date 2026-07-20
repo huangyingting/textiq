@@ -17,6 +17,7 @@ import { generateBlockId } from "./block-id";
 type NodeWithBid = LexicalNode & {
   __bid?: string;
   afterCloneFrom(prevNode: NodeWithBid): void;
+  createDOM(...args: unknown[]): HTMLElement;
   exportJSON(): SerializedLexicalNode;
   updateFromJSON(serializedNode: SerializedLexicalNode): NodeWithBid;
 };
@@ -69,6 +70,7 @@ function patchNodeClass(klass: PatchableNodeClass): void {
   }
 
   const originalAfterCloneFrom = proto.afterCloneFrom;
+  const originalCreateDOM = proto.createDOM;
   const originalExportJSON = proto.exportJSON;
   const originalUpdateFromJSON = proto.updateFromJSON;
 
@@ -91,6 +93,17 @@ function patchNodeClass(klass: PatchableNodeClass): void {
       readSerializedBid(serializedNode) ?? self.__bid ?? generateBlockId();
     /* node:coverage ignore next 2 */ /* updateFromJSON bid hydration is asserted; tsx maps the return/closure as uncovered. */
     return self;
+  };
+
+  proto.createDOM = function createDOMWithBid(
+    this: NodeWithBid,
+    ...args: unknown[]
+  ): HTMLElement {
+    const element = originalCreateDOM.apply(this, args);
+    if (hasNodeBid(this)) {
+      element.setAttribute("data-lexical-block-id", this.__bid);
+    }
+    return element;
   };
 
   proto.exportJSON = function exportJSONWithBid(

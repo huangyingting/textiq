@@ -678,6 +678,22 @@ test("comment service creates table anchor root comment persisting anchorNodeId 
   assert.equal(db.comments[0].anchorText, "Row 3");
 });
 
+test("comment service creates text anchor root comment persisting durable anchorNodeId", async () => {
+  const db = new FakeDb();
+  const { service } = makeService(db, "author-1");
+
+  await service.createComment("doc-1", {
+    body: "Text anchor",
+    anchorType: "text",
+    anchorNodeId: "bid-text-42",
+    anchorText: "Repeated paragraph",
+  });
+
+  assert.equal(db.comments[0].anchorType, "text");
+  assert.equal(db.comments[0].anchorNodeId, "bid-text-42");
+  assert.equal(db.comments[0].anchorText, "Repeated paragraph");
+});
+
 test("comment service creates trimmed text and visual root comments", async () => {
   const db = new FakeDb();
   const { service } = makeService(db, "author-1");
