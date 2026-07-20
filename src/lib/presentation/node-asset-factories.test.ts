@@ -68,6 +68,20 @@ describe("default node factories", () => {
     assert.equal(node.type, "text");
     assert.deepEqual(node.layout?.frame, { x: 58, y: 88, w: 42, h: 12 });
   });
+
+  test("gives default shapes a visible local style", () => {
+    const node = defaultShapeNode(1);
+
+    assert.equal(node.style?.ref, "surface.card");
+    assert.deepEqual(node.localStyle?.fill, {
+      type: "solid",
+      color: "#e2e8f0",
+    });
+    assert.deepEqual(node.localStyle?.stroke, {
+      color: "#94a3b8",
+      widthPt: 1.5,
+    });
+  });
 });
 
 describe("uploaded image asset factory", () => {
