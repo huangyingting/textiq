@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-20"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -338,14 +338,15 @@ screens default open when no preference exists, while narrow screens use a
 bottom sheet. `Layers` is a normal panel rather than a separate inspector mode.
 
 The available panel set is computed from the selection by `availablePanels`
-(`slide-panel-ui.ts`), which also powers the canvas toolbar `...` menu so the two
-never drift. With no element selected the current object is the slide
-(`Slide / Notes / Layers`); a single element exposes its kind-specific panels
-(`Text`, `Shape`, `Image` + `Adjust`, or `Line`) plus `Arrange`,
-`Effects`, and `Layers`, with `Source` only when the element has a `source`; a
-multi-selection exposes `Arrange / Effects / Layers`. There is no fallback
-routing: when the selection changes so the active panel no longer applies,
-`SlideEditor` closes the right panel instead of guessing a replacement.
+(`src/lib/presentation/inspector-panel-ui.ts`), which also powers the canvas
+toolbar `...` menu so the two never drift. With no element selected the current
+object is the slide (`Slide / Notes / Layers`); a single element exposes its
+kind-specific panels (`Text`, `Shape`, `Image` + `Adjust`, or `Line`) plus
+`Arrange`, `Effects`, and `Layers`, with `Source` only when the element has a
+`source`; a multi-selection exposes `Arrange / Effects / Layers`. Panel
+continuity is resolved by `resolveInspectorPanelContinuity`: when the selection
+changes it preserves a still-valid active panel, otherwise it routes to the
+first available panel or the selection default.
 The object-identity header names the current object but no longer exposes a
 permanent `Name` input — element naming lives in `Layers`.
 
