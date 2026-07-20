@@ -122,7 +122,6 @@ export function validateAssetMagicBytes(
   declaredMime: string,
   bytes: Uint8Array,
 ): { ok: true } | { ok: false; error: AssetUploadPolicyError } {
-  if (declaredMime === "image/svg+xml") return { ok: true };
   const sniffed = sniffAssetMime(bytes);
   if (sniffed === null) {
     return { ok: false, error: { code: "signature_mismatch" } };

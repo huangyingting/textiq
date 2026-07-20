@@ -16,7 +16,6 @@ export const BRAND_MIME_TO_EXT: Record<string, string> = {
   // Logo images
   "image/png": "png",
   "image/jpeg": "jpg",
-  "image/svg+xml": "svg",
   "image/webp": "webp",
   // Fonts
   "font/ttf": "ttf",
@@ -37,6 +36,10 @@ const BRAND_EXTENSION_MIME_MAP = {
   woff2: "font/woff2",
 };
 
+const BRAND_LOGO_UPLOAD_ACCEPTED_TYPES = BRAND_LOGO_ACCEPTED_TYPES.filter(
+  (mime) => mime !== "image/svg+xml",
+);
+
 export const BRAND_FONT_UPLOAD_POLICY: AssetUploadPolicy<string> = {
   storageRoot: "storage/brand-assets",
   urlPrefix: "/api/brand-assets",
@@ -51,7 +54,7 @@ export const BRAND_LOGO_UPLOAD_POLICY: AssetUploadPolicy<string> = {
   storageRoot: "storage/brand-assets",
   urlPrefix: "/api/brand-assets",
   scopeIdKind: "ownerId",
-  acceptedMimeTypes: BRAND_LOGO_ACCEPTED_TYPES,
+  acceptedMimeTypes: BRAND_LOGO_UPLOAD_ACCEPTED_TYPES,
   mimeToExt: BRAND_MIME_TO_EXT,
   maxBytes: BRAND_LOGO_MAX_BYTES,
   dimensions: { maxPx: SLIDE_ASSET_MAX_DIMENSION_PX },

@@ -226,6 +226,28 @@ describe("brand upload route service validation errors", () => {
     assert.match(result.error, /Unsupported file type/);
   });
 
+  it("rejects SVG logo uploads before storage", async () => {
+    const result = await uploadBrandLogo(
+      formRequest(
+        fileForm(
+          "logo",
+          new File(
+            [new Blob(["<svg><script>alert(1)</script></svg>"])],
+            "logo.svg",
+            {
+              type: "image/svg+xml",
+            },
+          ),
+        ),
+      ),
+      "owner-1",
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 415);
+    assert.match(result.error, /Unsupported file type/);
+  });
+
   it("rejects files whose magic bytes do not match the declared MIME", async () => {
     const result = await uploadBrandLogo(
       formRequest(

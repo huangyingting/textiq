@@ -364,7 +364,6 @@ describe("storeBrandAsset — protected URL and extension identity", () => {
 
     const cases: Array<{ mimeType: string; ext: string }> = [
       { mimeType: "image/png", ext: "png" },
-      { mimeType: "image/svg+xml", ext: "svg" },
       { mimeType: "font/woff2", ext: "woff2" },
       { mimeType: "font/ttf", ext: "ttf" },
     ];

@@ -286,9 +286,10 @@ describe("validateLogoUpload", () => {
     assert.equal(r.ok, true);
   });
 
-  it("accepts svg", () => {
+  it("rejects svg", () => {
     const r = validateLogoUpload("image/svg+xml", "logo.svg", 512);
-    assert.equal(r.ok, true);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.error.code, "type_rejected");
   });
 
   it("rejects oversized file", () => {

@@ -119,14 +119,15 @@ describe("asset upload policy validation", () => {
     if (!svg.ok) assert.equal(svg.error.code, "type_rejected");
   });
 
-  it("keeps brand logo SVG accepted by policy", () => {
+  it("rejects brand logo SVG by policy", () => {
     const svg = validateAssetUploadPolicy(
       BRAND_LOGO_UPLOAD_POLICY,
       "image/svg+xml",
       "logo.svg",
       1024,
     );
-    assert.equal(svg.ok, true);
+    assert.equal(svg.ok, false);
+    if (!svg.ok) assert.equal(svg.error.code, "type_rejected");
   });
 
   it("uses the shared file-too-large and dimension error formatting", () => {
@@ -192,6 +193,13 @@ describe("asset upload policy validation", () => {
       assert.equal(bad.error.code, "signature_mismatch");
       assert.match(formatAssetUploadPolicyError(bad.error), /contents/);
     }
+
+    const svg = validateAssetMagicBytes(
+      "image/svg+xml",
+      Buffer.from("<svg></svg>"),
+    );
+    assert.equal(svg.ok, false);
+    if (!svg.ok) assert.equal(svg.error.code, "signature_mismatch");
   });
 
   it("sniffs GIF content and extracts GIF dimensions", () => {
