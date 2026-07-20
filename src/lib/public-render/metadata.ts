@@ -45,7 +45,7 @@ export function buildPublicMetadata({
   baseUrl,
   siteName = PUBLIC_SITE_NAME,
 }: BuildPublicMetadataInput): PublicPageMetadata {
-  if (!document?.shareId) {
+  if (!document?.shareId || !document.slug?.trim()) {
     return {
       title:
         surface === "share"

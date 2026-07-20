@@ -17,6 +17,29 @@ test("buildPublicMetadata returns no-index defaults when a share is denied", () 
   );
 });
 
+test("buildPublicMetadata returns no-index defaults when a shared row has no slug", () => {
+  assert.deepEqual(
+    buildPublicMetadata({
+      document: {
+        title: "Legacy Shared Document",
+        contentJson: {
+          root: { children: [{ type: "paragraph", children: [] }] },
+        },
+        slug: null,
+        shareId: "share123",
+        metadataMode: "title-excerpt",
+        discoverable: true,
+      },
+      surface: "share",
+      baseUrl: "https://textiq.test",
+    }),
+    {
+      title: "Shared Document — TextIQ",
+      robots: { index: false, follow: false },
+    },
+  );
+});
+
 test("buildPublicMetadata builds share canonical, excerpt, and OG image", () => {
   const metadata = buildPublicMetadata({
     document: {
