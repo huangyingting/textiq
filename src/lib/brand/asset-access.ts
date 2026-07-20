@@ -10,10 +10,8 @@
  * path. It performs no I/O — the caller does the asset lookup and passes the row
  * in.
  *
- * Privacy contract (do NOT weaken):
- *   - missing asset → `404` (existence must not leak),
- *   - unauthenticated request → `401`,
- *   - authenticated but not the partition owner → `403`.
+ * Privacy contract (do NOT weaken): every denial returns the same `404` so
+ * callers cannot distinguish missing keys from private assets they cannot read.
  */
 /* node:coverage ignore stop */
 
@@ -23,8 +21,7 @@ export type BrandAssetDenyReason =
 
 /** Outcome of a brand-asset access check. */
 export type BrandAssetAccessDecision =
-  | { allow: true }
-  | { allow: false; status: 401 | 403 | 404; reason: BrandAssetDenyReason };
+  { allow: true } | { allow: false; status: 404; reason: BrandAssetDenyReason };
 
 /** Inputs to the decision — already-fetched rows, no I/O performed here. */
 export interface BrandAssetAccessInput {
@@ -39,21 +36,20 @@ export interface BrandAssetAccessInput {
 /**
  * Decides whether a brand-asset request may be served.
  *
- * Ordering: asset existence → authentication → ownership. A missing asset
- * resolves to a privacy `404`; an unauthenticated caller to `401`; an
- * authenticated non-owner to `403`.
+ * Ordering: authentication → ownership → asset existence. Every denied outcome
+ * resolves to the same privacy `404`.
  */
 export function decideBrandAssetAccess(
   input: BrandAssetAccessInput,
 ): BrandAssetAccessDecision {
-  if (!input.asset) {
-    return { allow: false, status: 404, reason: "asset-not-found" };
-  }
   if (!input.userId) {
-    return { allow: false, status: 401, reason: "unauthenticated" };
+    return { allow: false, status: 404, reason: "unauthenticated" };
   }
   if (input.userId !== input.requestedOwnerId) {
-    return { allow: false, status: 403, reason: "forbidden" };
+    return { allow: false, status: 404, reason: "forbidden" };
+  }
+  if (!input.asset) {
+    return { allow: false, status: 404, reason: "asset-not-found" };
   }
   return { allow: true };
 }

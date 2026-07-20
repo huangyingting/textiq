@@ -4,8 +4,8 @@
  * Invokes the actual GET handler with stubbed dependencies so no real DB,
  * Auth.js session, or filesystem access is required. Covers:
  *   - Missing asset (privacy 404 — existence must not leak)
- *   - Unauthenticated caller with existing asset → 401
- *   - Authenticated wrong-owner caller → 403
+ *   - Unauthenticated caller → same privacy 404 without asset lookup
+ *   - Authenticated wrong-owner caller → same privacy 404 without asset lookup
  *   - Authenticated owner, happy path → 200 with bytes and cache headers
  *   - Storage adapter failure → 404 (handler absorbs the error)
  *
@@ -139,11 +139,15 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
   object: T,
   methodName: K,
   implementation: (...args: unknown[]) => unknown,
-): void {
+): { calls: unknown[][] } {
   const original = object[methodName];
+  const calls: unknown[][] = [];
   Object.defineProperty(object, methodName, {
     configurable: true,
-    value: (...args: unknown[]) => implementation(...args),
+    value: (...args: unknown[]) => {
+      calls.push(args);
+      return implementation(...args);
+    },
   });
   t.after(() => {
     Object.defineProperty(object, methodName, {
@@ -151,6 +155,7 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
       value: original,
     });
   });
+  return { calls };
 }
 
 // ---------------------------------------------------------------------------
@@ -228,22 +233,25 @@ test("#1853: missing asset returns 404 plain-text (existence must not leak)", as
   assert.equal(await resp.text(), "Not found");
 });
 
-test("#1853: unauthenticated caller with existing asset receives 401", async (t) => {
+test("#2065: unauthenticated caller receives the privacy 404 without asset lookup", async (t) => {
   global.__testBrandAssetUser = null;
 
-  stubPrismaMethod(t, prismaAsset, "findFirst", async () => ASSET_ROW);
+  const findFirst = stubPrismaMethod(t, prismaAsset, "findFirst", async () => {
+    throw new Error("asset lookup should not run before authentication");
+  });
 
   const resp = await GET(
     makeRequest(OWNER_ID, "abc123.png"),
     makeParams(OWNER_ID, ["abc123.png"]),
   );
 
-  assert.equal(resp.status, 401);
+  assert.equal(resp.status, 404);
   assert.match(resp.headers.get("content-type") ?? "", /text/);
-  assert.equal(await resp.text(), "Unauthorized");
+  assert.equal(await resp.text(), "Not found");
+  assert.equal(findFirst.calls.length, 0);
 });
 
-test("#1853: authenticated non-owner receives 403 (cross-owner access denied)", async (t) => {
+test("#2065: authenticated non-owner receives the privacy 404 without asset lookup", async (t) => {
   global.__testBrandAssetUser = {
     id: OTHER_USER_ID,
     sessionInvalidatedAt: null,
@@ -252,16 +260,19 @@ test("#1853: authenticated non-owner receives 403 (cross-owner access denied)", 
     global.__testBrandAssetUser = null;
   });
 
-  stubPrismaMethod(t, prismaAsset, "findFirst", async () => ASSET_ROW);
+  const findFirst = stubPrismaMethod(t, prismaAsset, "findFirst", async () => {
+    throw new Error("asset lookup should not run before owner check");
+  });
 
   const resp = await GET(
     makeRequest(OWNER_ID, "abc123.png"),
     makeParams(OWNER_ID, ["abc123.png"]),
   );
 
-  assert.equal(resp.status, 403);
+  assert.equal(resp.status, 404);
   assert.match(resp.headers.get("content-type") ?? "", /text/);
-  assert.equal(await resp.text(), "Forbidden");
+  assert.equal(await resp.text(), "Not found");
+  assert.equal(findFirst.calls.length, 0);
 });
 
 test("#1853: authenticated owner receives 200 with asset bytes and cache headers", async (t) => {

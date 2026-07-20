@@ -81,17 +81,20 @@ describe("decideBrandAssetAccess", () => {
     }
   });
 
-  it("401 when unauthenticated", () => {
+  it("returns the privacy 404 when unauthenticated", () => {
     const d = decideBrandAssetAccess({
       asset,
       requestedOwnerId: "u1",
       userId: null,
     });
     assert.equal(d.allow, false);
-    if (!d.allow) assert.equal(d.status, 401);
+    if (!d.allow) {
+      assert.equal(d.status, 404);
+      assert.equal(d.reason, "unauthenticated");
+    }
   });
 
-  it("403 when authenticated but not the partition owner", () => {
+  it("returns the privacy 404 when authenticated but not the partition owner", () => {
     const d = decideBrandAssetAccess({
       asset,
       requestedOwnerId: "u1",
@@ -99,7 +102,7 @@ describe("decideBrandAssetAccess", () => {
     });
     assert.equal(d.allow, false);
     if (!d.allow) {
-      assert.equal(d.status, 403);
+      assert.equal(d.status, 404);
       assert.equal(d.reason, "forbidden");
     }
   });
@@ -113,14 +116,29 @@ describe("decideBrandAssetAccess", () => {
     assert.equal(d.allow, true);
   });
 
-  it("missing-asset 404 is never downgraded to 403 for a non-owner", () => {
-    const d = decideBrandAssetAccess({
-      asset: null,
-      requestedOwnerId: "u1",
-      userId: "u2",
-    });
-    assert.equal(d.allow, false);
-    if (!d.allow) assert.equal(d.status, 404);
+  it("denial outcomes are indistinguishable by status", () => {
+    const cases = [
+      decideBrandAssetAccess({
+        asset: null,
+        requestedOwnerId: "u1",
+        userId: "u1",
+      }),
+      decideBrandAssetAccess({
+        asset,
+        requestedOwnerId: "u1",
+        userId: null,
+      }),
+      decideBrandAssetAccess({
+        asset,
+        requestedOwnerId: "u1",
+        userId: "u2",
+      }),
+    ];
+
+    for (const d of cases) {
+      assert.equal(d.allow, false);
+      if (!d.allow) assert.equal(d.status, 404);
+    }
   });
 });
 
