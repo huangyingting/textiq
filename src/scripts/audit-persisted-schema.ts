@@ -313,6 +313,7 @@ async function loadAssets(
       documentId: true,
       workspaceId: true,
       brandId: true,
+      storageKey: true,
       deletedAt: true,
     },
     pageSize,

@@ -23,15 +23,17 @@
  *   - comments authored by the user (body, timestamps; document id for context)
  *   - tags owned by the user
  *   - brands owned by the user (incl. logo/font asset references — ids only)
- *   - assets owned by the user via documents, workspaces, OR brands (metadata
- *     only — mimeType/byteSize/checksum/createdAt; NOT the raw file bytes)
+ *   - brand-kit drafts and theme-package snapshots owned by the user
+ *   - assets owned by the user via documents, workspaces, brands, OR owner-
+ *     partitioned brand-staging uploads (metadata only — mimeType/byteSize/
+ *     checksum/createdAt; NOT the raw file bytes)
  *   - active subscription (if any)
  *
  *   EXCLUDED:
  *   - other users' data (docs, comments, profiles)
  *   - soft-deleted documents (deletedAt != null)
- *   - raw file bytes for assets, including brand logo/font bytes (referenced by
- *     storageKey / asset id, never inlined)
+ *   - raw file bytes for assets, including brand logo/font bytes (identified by
+ *     asset id only, never inlined)
  *   - Stripe webhook events, rate-limit hits, and other operational tables
  *   - invite-link tokens (security — tokens are not user data)
  *
@@ -43,7 +45,7 @@
 import { PERSONAL_DATA_EXPORT_SECTIONS } from "@/lib/privacy/personal-data-inventory";
 import { lexicalStateToPlainText } from "@/lib/content/plain-text";
 
-export const ACCOUNT_EXPORT_VERSION = 3;
+export const ACCOUNT_EXPORT_VERSION = 4;
 
 /* node:coverage ignore next 46 -- Export snapshot interfaces are TypeScript-only payload contracts. */
 export interface ExportUserInput {
@@ -141,6 +143,37 @@ export interface ExportBrandInput {
   fontAssetId?: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ExportBrandKitDraftInput {
+  id: string;
+  slug: string;
+  name: string;
+  ownerId: string;
+  workspaceId: string | null;
+  scope: string;
+  scopeKey: string;
+  sourcePresetId: string | null;
+  version: string;
+  revisionId: string;
+  revisionNumber: number;
+  draftJson: unknown;
+  latestPackageId: string | null;
+  latestPackageVersion: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ExportThemePackageSnapshotInput {
+  id: string;
+  packageId: string;
+  packageVersion: string;
+  draftId: string | null;
+  ownerId: string;
+  workspaceId: string | null;
+  publishedById: string | null;
+  packageJson: unknown;
+  createdAt: Date;
 }
 
 export interface ExportAssetInput {
@@ -295,6 +328,35 @@ export interface AccountExport {
     createdAt: string;
     updatedAt: string;
   }>;
+  brandKitDrafts: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    ownerId: string;
+    workspaceId: string | null;
+    scope: string;
+    scopeKey: string;
+    sourcePresetId: string | null;
+    version: string;
+    revisionId: string;
+    revisionNumber: number;
+    draftJson: unknown;
+    latestPackageId: string | null;
+    latestPackageVersion: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  themePackageSnapshots: Array<{
+    id: string;
+    packageId: string;
+    packageVersion: string;
+    draftId: string | null;
+    ownerId: string;
+    workspaceId: string | null;
+    publishedById: string | null;
+    packageJson: unknown;
+    createdAt: string;
+  }>;
   assets: Array<{
     id: string;
     mimeType: string;
@@ -352,7 +414,9 @@ const EXPORT_SCOPE: {
     "comment read state",
     "owned tags",
     "owned brands (logo/font asset references — ids only)",
-    "owned assets via documents/workspaces/brands (display metadata only, not raw file bytes)",
+    "owned brand-kit drafts",
+    "owned theme-package snapshots",
+    "owned assets via documents/workspaces/brands and owner-partitioned brand-staging uploads (display metadata only, not raw file bytes)",
     "active subscription",
     "invite-link uses attributed to the user (without invite tokens)",
     "usage ledger entries attributed to the user",
@@ -396,6 +460,8 @@ export function buildAccountExport(input: {
   commentReads: ExportCommentReadInput[];
   tags: ExportTagInput[];
   brands: ExportBrandInput[];
+  brandKitDrafts: ExportBrandKitDraftInput[];
+  themePackageSnapshots: ExportThemePackageSnapshotInput[];
   assets: ExportAssetInput[];
   subscription: ExportSubscriptionInput | null;
   inviteLinkUses: ExportInviteLinkUseInput[];
@@ -411,6 +477,8 @@ export function buildAccountExport(input: {
     commentReads,
     tags,
     brands,
+    brandKitDrafts,
+    themePackageSnapshots,
     assets,
     subscription,
     inviteLinkUses,
@@ -510,6 +578,35 @@ export function buildAccountExport(input: {
       fontAssetId: b.fontAssetId ?? null,
       createdAt: b.createdAt.toISOString(),
       updatedAt: b.updatedAt.toISOString(),
+    })),
+    brandKitDrafts: brandKitDrafts.map((draft) => ({
+      id: draft.id,
+      slug: draft.slug,
+      name: draft.name,
+      ownerId: draft.ownerId,
+      workspaceId: draft.workspaceId,
+      scope: draft.scope,
+      scopeKey: draft.scopeKey,
+      sourcePresetId: draft.sourcePresetId,
+      version: draft.version,
+      revisionId: draft.revisionId,
+      revisionNumber: draft.revisionNumber,
+      draftJson: draft.draftJson ?? null,
+      latestPackageId: draft.latestPackageId,
+      latestPackageVersion: draft.latestPackageVersion,
+      createdAt: draft.createdAt.toISOString(),
+      updatedAt: draft.updatedAt.toISOString(),
+    })),
+    themePackageSnapshots: themePackageSnapshots.map((snapshot) => ({
+      id: snapshot.id,
+      packageId: snapshot.packageId,
+      packageVersion: snapshot.packageVersion,
+      draftId: snapshot.draftId,
+      ownerId: snapshot.ownerId,
+      workspaceId: snapshot.workspaceId,
+      publishedById: snapshot.publishedById,
+      packageJson: snapshot.packageJson ?? null,
+      createdAt: snapshot.createdAt.toISOString(),
     })),
     assets: assets.map((a) => ({
       id: a.id,

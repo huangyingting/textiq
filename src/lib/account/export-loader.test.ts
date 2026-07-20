@@ -117,6 +117,10 @@ function stubEmptyParallelLookups(t: TestContext) {
   replacePrismaProperty(t, "commentRead", { findMany: async () => [] });
   replacePrismaProperty(t, "tag", { findMany: async () => [] });
   replacePrismaProperty(t, "brand", { findMany: async () => [] });
+  replacePrismaProperty(t, "brandKitDraft", { findMany: async () => [] });
+  replacePrismaProperty(t, "themePackageSnapshot", {
+    findMany: async () => [],
+  });
   replacePrismaProperty(t, "asset", { findMany: async () => [] });
   replacePrismaProperty(t, "subscription", { findUnique: async () => null });
   replacePrismaProperty(t, "inviteLinkUse", { findMany: async () => [] });
@@ -172,7 +176,7 @@ describe("loadAccountExport — query scoping", () => {
     }
   });
 
-  it("scopes documents/workspaces/comments/tags/brands/subscription/invites/ledger to the acting user", async (t) => {
+  it("scopes documents/workspaces/comments/tags/brands/brand drafts/theme snapshots/subscription/invites/ledger to the acting user", async (t) => {
     replacePrismaProperty(t, "user", {
       findUnique: async () => baseUserRow({ id: "user-9" }),
     });
@@ -191,6 +195,14 @@ describe("loadAccountExport — query scoping", () => {
     replacePrismaProperty(t, "tag", { findMany: tagFindMany.fn });
     const brandFindMany = trackedCalls(async () => []);
     replacePrismaProperty(t, "brand", { findMany: brandFindMany.fn });
+    const brandKitDraftFindMany = trackedCalls(async () => []);
+    replacePrismaProperty(t, "brandKitDraft", {
+      findMany: brandKitDraftFindMany.fn,
+    });
+    const themePackageSnapshotFindMany = trackedCalls(async () => []);
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: themePackageSnapshotFindMany.fn,
+    });
     const assetFindMany = trackedCalls(async () => []);
     replacePrismaProperty(t, "asset", { findMany: assetFindMany.fn });
     const subscriptionFindUnique = trackedCalls(async () => null);
@@ -236,6 +248,15 @@ describe("loadAccountExport — query scoping", () => {
     ];
     assert.deepEqual(brandArgs.where, { ownerId: "user-9" });
 
+    const [brandKitDraftArgs] = brandKitDraftFindMany.calls[0] as [
+      { where: { ownerId: string } },
+    ];
+    assert.deepEqual(brandKitDraftArgs.where, { ownerId: "user-9" });
+
+    const [themePackageSnapshotArgs] = themePackageSnapshotFindMany
+      .calls[0] as [{ where: { ownerId: string } }];
+    assert.deepEqual(themePackageSnapshotArgs.where, { ownerId: "user-9" });
+
     const [assetArgs] = assetFindMany.calls[0] as [
       {
         where: {
@@ -249,6 +270,12 @@ describe("loadAccountExport — query scoping", () => {
         { document: { ownerId: "user-9" } },
         { workspace: { ownerId: "user-9" } },
         { brand: { ownerId: "user-9" } },
+        {
+          documentId: null,
+          workspaceId: null,
+          brandId: null,
+          storageKey: { startsWith: "user-9/" },
+        },
       ],
       deletedAt: null,
     });
@@ -366,6 +393,10 @@ describe("loadAccountExport — invite link use mapping", () => {
     replacePrismaProperty(t, "commentRead", { findMany: async () => [] });
     replacePrismaProperty(t, "tag", { findMany: async () => [] });
     replacePrismaProperty(t, "brand", { findMany: async () => [] });
+    replacePrismaProperty(t, "brandKitDraft", { findMany: async () => [] });
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: async () => [],
+    });
     replacePrismaProperty(t, "asset", { findMany: async () => [] });
     replacePrismaProperty(t, "subscription", { findUnique: async () => null });
     replacePrismaProperty(t, "usageLedgerEntry", { findMany: async () => [] });
@@ -432,7 +463,57 @@ describe("loadAccountExport — assembled export", () => {
     replacePrismaProperty(t, "commentRead", { findMany: async () => [] });
     replacePrismaProperty(t, "tag", { findMany: async () => [] });
     replacePrismaProperty(t, "brand", { findMany: async () => [] });
-    replacePrismaProperty(t, "asset", { findMany: async () => [] });
+    replacePrismaProperty(t, "brandKitDraft", {
+      findMany: async () => [
+        {
+          id: "draft-1",
+          slug: "acme",
+          name: "Acme Draft",
+          ownerId: "user-3",
+          workspaceId: "ws-1",
+          scope: "workspace",
+          scopeKey: "workspace:ws-1",
+          sourcePresetId: null,
+          version: "v1",
+          revisionId: "rev-1",
+          revisionNumber: 3,
+          draftJson: { palette: ["#111111"] },
+          latestPackageId: "pkg-1",
+          latestPackageVersion: "1",
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      ],
+    });
+    replacePrismaProperty(t, "themePackageSnapshot", {
+      findMany: async () => [
+        {
+          id: "snapshot-1",
+          packageId: "pkg-1",
+          packageVersion: "1",
+          draftId: "draft-1",
+          ownerId: "user-3",
+          workspaceId: "ws-1",
+          publishedById: "user-3",
+          packageJson: { theme: "acme" },
+          createdAt: NOW,
+        },
+      ],
+    });
+    replacePrismaProperty(t, "asset", {
+      findMany: async () => [
+        {
+          id: "asset-staged-1",
+          mimeType: "font/woff2",
+          byteSize: 2048,
+          widthPx: null,
+          heightPx: null,
+          checksum: "abc123",
+          originalName: "Acme.woff2",
+          createdAt: NOW,
+        },
+      ],
+    });
     replacePrismaProperty(t, "subscription", { findUnique: async () => null });
     replacePrismaProperty(t, "inviteLinkUse", { findMany: async () => [] });
     replacePrismaProperty(t, "usageLedgerEntry", { findMany: async () => [] });
@@ -445,6 +526,16 @@ describe("loadAccountExport — assembled export", () => {
     assert.equal(result!.user.plan, "pro");
     assert.equal(result!.workspacesOwned.length, 1);
     assert.equal(result!.workspacesOwned[0]?.id, "ws-1");
+    assert.equal(result!.brandKitDrafts[0]?.id, "draft-1");
+    assert.deepEqual(result!.brandKitDrafts[0]?.draftJson, {
+      palette: ["#111111"],
+    });
+    assert.equal(result!.themePackageSnapshots[0]?.id, "snapshot-1");
+    assert.deepEqual(result!.themePackageSnapshots[0]?.packageJson, {
+      theme: "acme",
+    });
+    assert.equal(result!.assets[0]?.id, "asset-staged-1");
+    assert.equal(result!.assets[0]?.displayName, "Acme.woff2");
     assert.equal(result!.subscription, null);
     assert.deepEqual(result!.documents, []);
   });

@@ -44,6 +44,8 @@ function minimalInput() {
     commentReads: [],
     tags: [],
     brands: [],
+    brandKitDrafts: [],
+    themePackageSnapshots: [],
     assets: [],
     subscription: null,
     inviteLinkUses: [],
@@ -58,8 +60,8 @@ test("stamps the export version and a deterministic exportedAt", () => {
   assert.equal(result.exportedAt, NOW.toISOString());
 });
 
-test("export version is 3", () => {
-  assert.equal(ACCOUNT_EXPORT_VERSION, 3);
+test("export version is 4", () => {
+  assert.equal(ACCOUNT_EXPORT_VERSION, 4);
 });
 
 test("includes a compliance scope block", () => {
@@ -74,6 +76,7 @@ test("includes a manifest covering every exportable personal-data section", () =
   const result = buildAccountExport(minimalInput());
   assert.deepEqual(result.manifest.personalDataSections.toSorted(), [
     "assets",
+    "brandKitDrafts",
     "brands",
     "commentReads",
     "comments",
@@ -81,6 +84,7 @@ test("includes a manifest covering every exportable personal-data section", () =
     "inviteLinkUses",
     "subscription",
     "tags",
+    "themePackageSnapshots",
     "usageLedger",
     "user",
     "workspaceMemberships",
@@ -278,6 +282,58 @@ test("maps brands", () => {
   });
   assert.equal(result.brands.length, 1);
   assert.equal(result.brands[0].name, "Acme");
+});
+
+test("maps brand-kit drafts and theme-package snapshots", () => {
+  const result = buildAccountExport({
+    ...minimalInput(),
+    brandKitDrafts: [
+      {
+        id: "draft_1",
+        slug: "acme",
+        name: "Acme",
+        ownerId: "user_1",
+        workspaceId: "ws_1",
+        scope: "workspace",
+        scopeKey: "workspace:ws_1",
+        sourcePresetId: null,
+        version: "v1",
+        revisionId: "rev_1",
+        revisionNumber: 2,
+        draftJson: { palette: ["#fff"] },
+        latestPackageId: "pkg_1",
+        latestPackageVersion: "1",
+        createdAt: CREATED,
+        updatedAt: NOW,
+      },
+    ],
+    themePackageSnapshots: [
+      {
+        id: "snapshot_1",
+        packageId: "pkg_1",
+        packageVersion: "1",
+        draftId: "draft_1",
+        ownerId: "user_1",
+        workspaceId: "ws_1",
+        publishedById: "user_1",
+        packageJson: { theme: "acme" },
+        createdAt: CREATED,
+      },
+    ],
+  });
+
+  assert.equal(result.brandKitDrafts.length, 1);
+  assert.equal(result.brandKitDrafts[0].revisionNumber, 2);
+  assert.deepEqual(result.brandKitDrafts[0].draftJson, { palette: ["#fff"] });
+  assert.equal(result.brandKitDrafts[0].updatedAt, NOW.toISOString());
+  assert.equal(result.themePackageSnapshots.length, 1);
+  assert.deepEqual(result.themePackageSnapshots[0].packageJson, {
+    theme: "acme",
+  });
+  assert.equal(
+    result.themePackageSnapshots[0].createdAt,
+    CREATED.toISOString(),
+  );
 });
 
 test("maps assets (metadata only)", () => {

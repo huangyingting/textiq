@@ -141,6 +141,7 @@ export interface AssetAuditRow {
   documentId: string | null;
   workspaceId: string | null;
   brandId: string | null;
+  storageKey: string;
   deletedAt?: Date | null;
 }
 
@@ -483,12 +484,26 @@ export function auditUsageLedgerEntry(
       ];
 }
 
+const BRAND_STAGING_STORAGE_KEY_RE =
+  /^[^/\s]+\/[a-f0-9]{64}\.(?:bin|jpg|otf|png|ttf|webp|woff|woff2)$/;
+
+function hasOwnerPartitionedBrandStagingKey(row: AssetAuditRow): boolean {
+  return BRAND_STAGING_STORAGE_KEY_RE.test(row.storageKey);
+}
+
 export function auditAssetScope(row: AssetAuditRow): SchemaViolation[] {
   const scopeCount = [row.documentId, row.workspaceId, row.brandId].filter(
     (value) => value != null,
   ).length;
   const deleted = row.deletedAt != null;
-  if ((deleted && scopeCount <= 1) || (!deleted && scopeCount === 1)) {
+  if (deleted && scopeCount <= 1) {
+    return [];
+  }
+  if (
+    !deleted &&
+    (scopeCount === 1 ||
+      (scopeCount === 0 && hasOwnerPartitionedBrandStagingKey(row)))
+  ) {
     return [];
   }
   return [
