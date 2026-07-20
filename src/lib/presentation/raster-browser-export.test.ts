@@ -817,6 +817,59 @@ describe("buildSvgFromSlideSpec — connector and visual ops", () => {
   });
 });
 
+describe("buildSvgFromSlideSpec — tableShape ops", () => {
+  test("renders table cells, header, borders, and cell text as native SVG", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "tableShape",
+          id: "table-1",
+          frame: { x: 96, y: 108, w: 384, h: 162 },
+          style: {
+            table: {
+              headerFill: { type: "solid", color: "#0f172a" },
+              rowFill: { type: "solid", color: "#ffffff" },
+              alternateRowFill: { type: "solid", color: "#e2e8f0" },
+              border: { color: "#334155", widthPt: 1 },
+              cellPaddingPt: { top: 3, right: 6, bottom: 3, left: 6 },
+              text: { fontFamily: "Arial", fontSizePt: 9, color: "#111827" },
+              headerText: { color: "#ffffff", fontSizePt: 9, weight: 700 },
+            },
+          },
+          table: {
+            header: true,
+            columns: [
+              { id: "metric", label: "Metric", width: 2 },
+              { id: "value", label: "Value", width: 1 },
+            ],
+            rows: [
+              {
+                id: "row-1",
+                cells: [{ text: "Revenue" }, { text: "$42M" }],
+              },
+              {
+                id: "row-2",
+                cells: [{ text: "Growth" }, { text: "18%" }],
+              },
+            ],
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(svg.includes("Metric"), "header text should render");
+    assert.ok(svg.includes("Revenue"), "body cell text should render");
+    assert.ok(svg.includes("#0f172a"), "header fill should render");
+    assert.ok(svg.includes("#e2e8f0"), "alternate row fill should render");
+    assert.ok(svg.includes('stroke="#334155"'), "grid border should render");
+    assert.ok(svg.includes("<clipPath"), "cell text should be clipped");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+});
+
 describe("buildSvgFromSlideSpec — foreignObject regression", () => {
   const dims: RasterSlideDimensions = {
     widthPx: 960,
