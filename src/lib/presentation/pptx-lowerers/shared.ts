@@ -12,6 +12,7 @@ import type {
   PptxEffect,
   PptxTextStyle,
 } from "../pptx-export-types";
+import { resolveCappedCanvasInches } from "@/lib/presentation/export-geometry";
 import { slideFontExportFace } from "@/lib/presentation/slide-fonts";
 
 export type PptxDimensions = {
@@ -38,9 +39,10 @@ export function canvasToPptxDimensions(canvas: CanvasSpec): PptxDimensions {
       return { layout: "LAYOUT_CUSTOM", slideW: 7.5, slideH: 7.5 };
     case "custom": {
       // Scale so the larger axis is 13.333 in.
-      const ratio = canvas.width / Math.max(canvas.height, 0.01);
-      const slideW = Math.min(13.333, 13.333);
-      const slideH = slideW / ratio;
+      const { widthIn: slideW, heightIn: slideH } = resolveCappedCanvasInches(
+        canvas.width,
+        canvas.height,
+      );
       return { layout: "LAYOUT_CUSTOM", slideW, slideH };
     }
   }

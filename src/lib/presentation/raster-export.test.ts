@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   exportDeckRaster,
+  resolveRasterSlideDimensions,
   type RasterSlideDimensions,
 } from "@/lib/presentation/raster-export";
 import {
+  buildCanvasSpec,
   buildDeck,
   buildImageNode,
   buildMinimalThemePackage,
@@ -18,6 +20,65 @@ const ONE_PIXEL_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=";
 
 describe("exportDeckRaster", () => {
+  test("resolves native raster physical dimensions without changing standard formats", () => {
+    const wideDeck = buildDeck([], {
+      canvas: buildCanvasSpec({
+        format: "16:9",
+        width: 100,
+        height: 56.25,
+      }),
+    });
+    assert.deepEqual(resolveRasterSlideDimensions(wideDeck, 960), {
+      widthPx: 960,
+      heightPx: 540,
+      widthIn: 13.333,
+      heightIn: 7.5,
+    });
+
+    const standardDeck = buildDeck([], {
+      canvas: buildCanvasSpec({
+        format: "4:3",
+        width: 100,
+        height: 75,
+      }),
+    });
+    assert.deepEqual(resolveRasterSlideDimensions(standardDeck, 960), {
+      widthPx: 960,
+      heightPx: 720,
+      widthIn: 10,
+      heightIn: 7.5,
+    });
+  });
+
+  test("resolves custom raster physical dimensions from the canvas aspect ratio", () => {
+    const squareDeck = buildDeck([], {
+      canvas: buildCanvasSpec({
+        format: "square",
+        width: 100,
+        height: 100,
+      }),
+    });
+    assert.deepEqual(resolveRasterSlideDimensions(squareDeck, 960), {
+      widthPx: 960,
+      heightPx: 960,
+      widthIn: 13.333,
+      heightIn: 13.333,
+    });
+
+    const portraitDeck = buildDeck([], {
+      canvas: buildCanvasSpec({
+        format: "custom",
+        width: 9,
+        height: 16,
+      }),
+    });
+    const portraitDims = resolveRasterSlideDimensions(portraitDeck, 900);
+    assert.equal(portraitDims.widthPx, 900);
+    assert.equal(portraitDims.heightPx, 1600);
+    assert.equal(portraitDims.heightIn, 13.333);
+    assert.ok(Math.abs(portraitDims.widthIn - 7.4998125) < 0.000001);
+  });
+
   test("renders one PNG per slide and assembles an N-page PDF", async () => {
     resetBuilderCounter();
     const deck = buildDeck([
