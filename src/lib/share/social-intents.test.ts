@@ -281,7 +281,7 @@ describe("browser sharing capability detection", () => {
     assert.equal(canWebShare(file), false);
   });
 
-  test("canCopyImageToClipboard requires navigator clipboard and ClipboardItem", (t) => {
+  test("canCopyImageToClipboard requires navigator clipboard write and ClipboardItem", (t) => {
     const setNavigator = replaceGlobal(t, "navigator", {
       clipboard: { write() {} },
     });
@@ -296,6 +296,15 @@ describe("browser sharing capability detection", () => {
     assert.equal(canCopyImageToClipboard(), false);
 
     setNavigator({ clipboard: null });
+    assert.equal(canCopyImageToClipboard(), false);
+  });
+
+  test("canCopyImageToClipboard returns false when clipboard write is missing", (t) => {
+    replaceGlobal(t, "navigator", {
+      clipboard: {},
+    });
+    replaceGlobal(t, "ClipboardItem", class ClipboardItem {});
+
     assert.equal(canCopyImageToClipboard(), false);
   });
 });
