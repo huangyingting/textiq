@@ -46,13 +46,17 @@ type ModuleHooks = {
 
 type AbuseTestState = {
   budgetExceeded: boolean;
+  budgetChecks: number;
 };
 
 const globalForAbuse = globalThis as typeof globalThis & {
   __sharePasscodeAbuseState: AbuseTestState;
 };
 
-globalForAbuse.__sharePasscodeAbuseState = { budgetExceeded: false };
+globalForAbuse.__sharePasscodeAbuseState = {
+  budgetExceeded: false,
+  budgetChecks: 0,
+};
 
 const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
@@ -64,6 +68,7 @@ const stubbedModules = new Map<string, string>([
     "@/app/public-abuse",
     `
       export async function publicSharePasscodeBudgetExceeded() {
+        globalThis.__sharePasscodeAbuseState.budgetChecks += 1;
         return globalThis.__sharePasscodeAbuseState.budgetExceeded;
       }
     `,
@@ -109,7 +114,10 @@ before(async () => {
 });
 
 beforeEach(() => {
-  globalForAbuse.__sharePasscodeAbuseState = { budgetExceeded: false };
+  globalForAbuse.__sharePasscodeAbuseState = {
+    budgetExceeded: false,
+    budgetChecks: 0,
+  };
   process.env.AUTH_SECRET = "ci-placeholder";
 });
 
@@ -189,6 +197,40 @@ test("#1852: empty shareId string redirects with invalid status", async (t) => {
   );
   assert.strictEqual(response.status, 303);
   assert.ok(redirectLocation(response).includes("passcode=invalid"));
+});
+
+test("#2097: oversized form body returns 413 before rate limit or document lookup", async (t) => {
+  replacePrismaDocument(t, async () => {
+    assert.fail("oversized unlock forms must not query documents");
+  });
+  const response = await POST(
+    new NextRequest("http://localhost/api/share-passcode/unlock", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": String(9 * 1024),
+      },
+      body: "shareId=ignored",
+    }),
+  );
+
+  assert.strictEqual(response.status, 413);
+  assert.strictEqual(globalForAbuse.__sharePasscodeAbuseState.budgetChecks, 0);
+});
+
+test("#2097: malformed form body returns 400 before rate limit or document lookup", async (t) => {
+  replacePrismaDocument(t, async () => {
+    assert.fail("malformed unlock forms must not query documents");
+  });
+  const response = await POST(
+    new NextRequest("http://localhost/api/share-passcode/unlock", {
+      method: "POST",
+      body: "not form data",
+    }),
+  );
+
+  assert.strictEqual(response.status, 400);
+  assert.strictEqual(globalForAbuse.__sharePasscodeAbuseState.budgetChecks, 0);
 });
 
 // ---------------------------------------------------------------------------
