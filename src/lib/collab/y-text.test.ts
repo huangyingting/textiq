@@ -214,6 +214,10 @@ test("readableAvatarColors: all shared palette colors meet WCAG AA for small tex
       contrastRatio(avatarColors.text, avatarColors.background) >= 4.5,
       `${color} should produce readable avatar colors`,
     );
+    assert.ok(
+      contrastRatio(avatarColors.text, avatarColors.background) >= 4.6,
+      `${color} should include a rounding buffer above WCAG AA`,
+    );
   }
 });
 

@@ -111,7 +111,7 @@ type Rgb = { r: number; g: number; b: number };
 
 const AVATAR_LIGHT_TEXT = "#ffffff";
 const AVATAR_DARK_TEXT = "#111827";
-const MIN_AVATAR_CONTRAST = 4.5;
+const AVATAR_MIN_CONTRAST = 4.6;
 
 function normalizeHex(hex: string): string {
   const raw = hex.trim().replace(/^#/, "");
@@ -193,10 +193,10 @@ export function readableAvatarColors(baseHex: string): {
   const lightContrast = contrastRatio(AVATAR_LIGHT_TEXT, background);
   const darkContrast = contrastRatio(AVATAR_DARK_TEXT, background);
 
-  if (lightContrast >= MIN_AVATAR_CONTRAST) {
+  if (lightContrast >= AVATAR_MIN_CONTRAST) {
     return { background, text: AVATAR_LIGHT_TEXT };
   }
-  if (darkContrast >= MIN_AVATAR_CONTRAST) {
+  if (darkContrast >= AVATAR_MIN_CONTRAST) {
     return { background, text: AVATAR_DARK_TEXT };
   }
 
@@ -207,7 +207,7 @@ export function readableAvatarColors(baseHex: string): {
   for (let i = 0; i < 24; i += 1) {
     const mid = (low + high) / 2;
     const candidate = darken(background, mid);
-    if (contrastRatio(AVATAR_LIGHT_TEXT, candidate) >= MIN_AVATAR_CONTRAST) {
+    if (contrastRatio(AVATAR_LIGHT_TEXT, candidate) >= AVATAR_MIN_CONTRAST) {
       readableBackground = candidate;
       high = mid;
     } else {
@@ -216,7 +216,7 @@ export function readableAvatarColors(baseHex: string): {
   }
 
   while (
-    contrastRatio(AVATAR_LIGHT_TEXT, readableBackground) < MIN_AVATAR_CONTRAST
+    contrastRatio(AVATAR_LIGHT_TEXT, readableBackground) < AVATAR_MIN_CONTRAST
   ) {
     high = Math.min(1, high + 0.001);
     readableBackground = darken(background, high);
