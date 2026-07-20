@@ -35,7 +35,7 @@
   /* Text (all ≥4.5:1 on their intended surface) */
   --ds-text-primary: #172033;
   --ds-text-secondary: #4d5b6a;
-  --ds-text-muted: #738091;
+  --ds-text-muted: #637081;
   --ds-text-on-accent: #ffffff;
 
   /* Borders */
@@ -305,7 +305,7 @@
 
   --ds-text-primary: #102a36;
   --ds-text-secondary: #48626e;
-  --ds-text-muted: #718391;
+  --ds-text-muted: #607181;
   --ds-border-subtle: rgba(16, 42, 54, 0.1);
   --ds-border-strong: rgba(16, 42, 54, 0.18);
 
@@ -338,7 +338,7 @@
 
   --ds-text-primary: #12261f;
   --ds-text-secondary: #4c6259;
-  --ds-text-muted: #74857d;
+  --ds-text-muted: #617265;
   --ds-border-subtle: rgba(18, 38, 31, 0.1);
   --ds-border-strong: rgba(18, 38, 31, 0.18);
 
@@ -371,7 +371,7 @@
 
   --ds-text-primary: #33202a;
   --ds-text-secondary: #684f5b;
-  --ds-text-muted: #8b7480;
+  --ds-text-muted: #7c6570;
   --ds-border-subtle: rgba(51, 32, 42, 0.1);
   --ds-border-strong: rgba(51, 32, 42, 0.18);
 
@@ -404,7 +404,7 @@
 
   --ds-text-primary: #302411;
   --ds-text-secondary: #695a42;
-  --ds-text-muted: #8b7b63;
+  --ds-text-muted: #7b6b53;
   --ds-border-subtle: rgba(48, 36, 17, 0.1);
   --ds-border-strong: rgba(48, 36, 17, 0.18);
 

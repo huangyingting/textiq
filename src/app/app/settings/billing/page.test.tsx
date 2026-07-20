@@ -191,7 +191,7 @@ describe("renderBillingView", () => {
     );
     assert.match(
       html,
-      /text-ds-text-secondary\/40"[^>]*>✗<\/span><span class="text-ds-text-secondary\/60"[^>]*>PPTX export/,
+      /text-ds-text-secondary\/40"[^>]*>✗<\/span><span class="text-ds-text-muted"[^>]*>PPTX export/,
     );
   });
 

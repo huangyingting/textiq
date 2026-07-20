@@ -244,7 +244,7 @@ export function TrashList({ documents }: { documents: TrashDocumentData[] }) {
         <p className="text-sm font-medium text-ds-text-secondary">
           Trash is empty
         </p>
-        <p className="mt-1 text-xs text-ds-text-secondary/60">
+        <p className="mt-1 text-xs text-ds-text-muted">
           Deleted documents appear here for 30 days.
         </p>
       </div>

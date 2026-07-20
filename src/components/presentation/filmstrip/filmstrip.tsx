@@ -221,7 +221,7 @@ export function Filmstrip({
           {/* Thumbnails */}
           <ol
             ref={containerRef}
-            aria-label="Slides"
+            aria-label="Slide thumbnails"
             className="flex min-w-0 flex-1 gap-2 overflow-x-auto px-3 py-1.5"
             onKeyDown={handleKeyDown}
             tabIndex={collapsed ? -1 : 0}
@@ -266,27 +266,23 @@ export function Filmstrip({
                 className="my-1 w-0.5 shrink-0 rounded-full bg-ds-accent-fill"
               />
             ) : null}
-
-            {/* Add slide button */}
-            <li className="shrink-0" role="none">
-              <button
-                type="button"
-                aria-label="Add slide"
-                disabled={collapsed}
-                tabIndex={collapsed ? -1 : 0}
-                onClick={onInsertSlide}
-                className={cx(
-                  "flex h-full min-h-[72px] w-14 items-center justify-center rounded-[var(--ds-radius-sm,6px)] border border-dashed border-ds-border-subtle text-ds-text-muted transition-colors hover:border-ds-border hover:text-ds-text-primary disabled:pointer-events-none",
-                  FOCUS_RING,
-                )}
-              >
-                <Plus size={16} aria-hidden />
-                <span className="sr-only sm:not-sr-only sm:ml-1 sm:text-xs">
-                  Add
-                </span>
-              </button>
-            </li>
           </ol>
+          <button
+            type="button"
+            aria-label="Add slide"
+            disabled={collapsed}
+            tabIndex={collapsed ? -1 : 0}
+            onClick={onInsertSlide}
+            className={cx(
+              "flex h-full min-h-[72px] w-14 shrink-0 items-center justify-center rounded-[var(--ds-radius-sm,6px)] border border-dashed border-ds-border-subtle text-ds-text-muted transition-colors hover:border-ds-border hover:text-ds-text-primary disabled:pointer-events-none",
+              FOCUS_RING,
+            )}
+          >
+            <Plus size={16} aria-hidden />
+            <span className="sr-only sm:not-sr-only sm:ml-1 sm:text-xs">
+              Add
+            </span>
+          </button>
         </div>
       </div>
     </div>

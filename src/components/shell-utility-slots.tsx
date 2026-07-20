@@ -43,7 +43,7 @@ export function ShellCreditsSlot({
   const link = (
     <Link href={summary.href} aria-label={summary.title} className={className}>
       <span className="tabular-nums">{summary.countLabel}</span>
-      <span className="text-ds-text-secondary/60">credits</span>
+      <span className="text-ds-text-muted">credits</span>
     </Link>
   );
 
