@@ -20,6 +20,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { serverError, validationError } from "@/lib/api/errors";
 import { stripe as stripeEnv } from "@/lib/env"; /*! node:coverage ignore next */
+import { logError } from "@/lib/log";
 export const runtime = "nodejs";
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!stripeEnv.isConfigured()) {
@@ -43,8 +44,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     return NextResponse.json({ message }, { status });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Webhook handler failed";
-    return serverError(message);
+    logError("billing.webhook.handler", err);
+    return serverError("Webhook handler failed.");
   }
 }
