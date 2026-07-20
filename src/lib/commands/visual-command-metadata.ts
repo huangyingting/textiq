@@ -14,6 +14,7 @@ import {
   isVisualKind,
   safeParseVisual,
 } from "@/lib/visual/schema";
+import { EDGE_STYLES } from "@/lib/visual/schema-types";
 import { STYLE_THEMES } from "@/lib/visual/themes";
 import { VISUAL_DISPLAY_STYLES } from "@/lib/visual/display-styles";
 import type {
@@ -174,6 +175,63 @@ function validateEdgeStylePatch(
     context,
     errors,
   );
+  if (
+    value.arrowStyle !== undefined &&
+    !isOneOf(value.arrowStyle, ARROW_STYLES)
+  ) {
+    errors.push(
+      `${context}.arrowStyle must be one of: ${ARROW_STYLES.join(", ")}.`,
+    );
+  }
+  if (value.lineStyle !== undefined && !isOneOf(value.lineStyle, LINE_STYLES)) {
+    errors.push(
+      `${context}.lineStyle must be one of: ${LINE_STYLES.join(", ")}.`,
+    );
+  }
+  if (value.lineWidth !== undefined && !isPositiveNumber(value.lineWidth)) {
+    errors.push(`${context}.lineWidth must be a positive number.`);
+  }
+}
+
+function validateAddEdgeSpec(
+  value: Record<string, unknown>,
+  context: string,
+  errors: string[],
+): void {
+  pushUnknownKeyErrors(
+    value,
+    [
+      "id",
+      "from",
+      "to",
+      "label",
+      "directed",
+      "style",
+      "arrowStyle",
+      "lineStyle",
+      "lineWidth",
+    ],
+    context,
+    errors,
+  );
+  if (value.id !== undefined && !isNonEmptyString(value.id)) {
+    errors.push(`${context}.id must be a non-empty string.`);
+  }
+  if (!isNonEmptyString(value.from)) {
+    errors.push(`${context}.from must be a non-empty string.`);
+  }
+  if (!isNonEmptyString(value.to)) {
+    errors.push(`${context}.to must be a non-empty string.`);
+  }
+  if (value.label !== undefined && typeof value.label !== "string") {
+    errors.push(`${context}.label must be a string.`);
+  }
+  if (value.directed !== undefined && typeof value.directed !== "boolean") {
+    errors.push(`${context}.directed must be a boolean.`);
+  }
+  if (value.style !== undefined && !isOneOf(value.style, EDGE_STYLES)) {
+    errors.push(`${context}.style must be one of: ${EDGE_STYLES.join(", ")}.`);
+  }
   if (
     value.arrowStyle !== undefined &&
     !isOneOf(value.arrowStyle, ARROW_STYLES)
@@ -472,7 +530,9 @@ function validatePayloadDetails(
       pushUnknownKeyErrors(payload, ["op", "edge"], "payload", errors);
       if (!isPlainObject(payload.edge)) {
         errors.push("payload.edge must be an object.");
+        return;
       }
+      validateAddEdgeSpec(payload.edge, "payload.edge", errors);
       return;
     case "visual.delete_edge":
       pushUnknownKeyErrors(payload, ["op", "edgeId"], "payload", errors);
