@@ -943,8 +943,8 @@ describe("ContextToolbar render branches", () => {
     assert.equal(renderedLabels.includes("Text role"), false);
     assert.equal(renderedLabels.includes("Bullet list"), false);
     assert.ok(renderedLabels.includes("Fill color"));
-    assert.ok(renderedLabels.includes("Border color"));
-    assert.ok(renderedLabels.includes("Border width"));
+    assert.ok(renderedLabels.includes("Stroke color"));
+    assert.ok(renderedLabels.includes("Stroke width"));
     assert.ok(renderedLabels.includes("Opacity"));
     assert.ok(renderedLabels.includes("Rotate left 15°"));
     assert.ok(renderedLabels.includes("Bring forward"));
