@@ -9,8 +9,9 @@
  *   • "Generate with AI" — POST the live document content + length/tone/audience
  *     options to `/api/generate-deck`, showing staged progress (aria-live) + an
  *     ETA while in flight, with a Cancel. On success the generated deck is handed
- *     to {@link onApply}; on ANY failure (error/timeout/credit/flag-off/404) we
- *     transparently fall back to the deterministic derive via {@link onDerive}.
+ *     to {@link onApply}; on any non-canceled failure
+ *     (error/timeout/credit/flag-off/404) we transparently fall back to the
+ *     deterministic derive via {@link onDerive}.
  *
  *   • "Derive from document" — the existing deterministic build, always the
  *     default/fallback so the user is never blocked.
@@ -68,7 +69,7 @@ export interface SlideEditorOpenDialogProps {
     diagnostics: PresentationDiagnostic[];
     options: DeckGenerationOptions;
   }) => void;
-  /** Run the deterministic derive (default and fallback for every failure). */
+  /** Run the deterministic derive (default and fallback for non-canceled failures). */
   onDerive: () => void;
   /** Dismiss the chooser without opening anything. */
   onClose: () => void;
@@ -116,6 +117,9 @@ export function SlideEditorOpenDialog({
       });
       return;
     }
+    // Canceled or superseded requests are deliberate no-ops: the user either
+    // backed out or a newer request owns the eventual open/derive decision.
+    if (result.canceled) return;
     // An empty-outline 400 (the editor was still seeding at request time) is
     // shown as a friendly "add content first" notice rather than silently
     // deriving (issue #280). Any other failure

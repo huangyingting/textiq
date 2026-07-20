@@ -274,7 +274,7 @@ test("requestDeckGeneration rejects invalid caller-provided idempotency keys", a
 
   assert.equal(called, false);
   assert.equal(result.ok, false);
-  if (!result.ok) {
+  if (!result.ok && !result.canceled) {
     assert.match(result.error, /idempotency key/i);
   }
 });
@@ -349,7 +349,7 @@ test("requestDeckGeneration returns a network error when fetch throws", async ()
   if (!result.ok) assert.equal(result.errorKind, "network");
 });
 
-test("requestDeckGeneration classifies an aborted fetch as timeout", async () => {
+test("requestDeckGeneration classifies an aborted fetch as canceled", async () => {
   const fetchImpl: typeof fetch = async () => {
     const err = new Error("aborted");
     err.name = "AbortError";
@@ -357,7 +357,10 @@ test("requestDeckGeneration classifies an aborted fetch as timeout", async () =>
   };
   const result = await requestDeckGeneration(CONTENT_JSON, {}, fetchImpl);
   assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.errorKind, "timeout");
+  if (!result.ok) {
+    assert.equal(result.canceled, true);
+    if (result.canceled) assert.equal(result.cancelKind, "canceled");
+  }
 });
 
 test("requestDeckGeneration classifies an unparseable success payload as other", async () => {
