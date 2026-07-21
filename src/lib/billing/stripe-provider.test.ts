@@ -865,6 +865,46 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
       assert.equal(client._subs.get("u1")?.stripeSubscriptionId, "sub_123");
     });
 
+    it("skips stale checkout completion after a newer subscription update", async () => {
+      const client = makeWebhookClient();
+      const existingPeriodStart = new Date("2099-01-01T00:00:00.000Z");
+      const existingPeriodEnd = new Date("2099-02-01T00:00:00.000Z");
+      client._users.set("u1", {
+        id: "u1",
+        plan: "pro",
+        creditBalance: 12_345,
+        creditPeriodStart: existingPeriodStart,
+      });
+      client._subs.set("u1", {
+        userId: "u1",
+        plan: "pro",
+        status: "active",
+        stripeCustomerId: "cus_123",
+        stripeSubscriptionId: "sub_123",
+        currentPeriodStart: existingPeriodStart,
+        currentPeriodEnd: existingPeriodEnd,
+        cancelAtPeriodEnd: false,
+        updatedAt: new Date("2099-01-01T00:05:00.000Z"),
+      });
+
+      const outcome = await applyStripeWebhookEvent(client, {
+        ...checkoutEvent,
+        id: "evt_checkout_stale",
+        created: 4_071_849_600,
+      });
+
+      assert.equal(outcome, "stale");
+      assert.equal(client._users.get("u1")?.creditBalance, 12_345);
+      assert.deepEqual(
+        client._users.get("u1")?.creditPeriodStart,
+        existingPeriodStart,
+      );
+      assert.deepEqual(
+        client._subs.get("u1")?.currentPeriodEnd,
+        existingPeriodEnd,
+      );
+    });
+
     it("rolls back the idempotency row and user plan when subscription persistence fails", async () => {
       const client = makeWebhookClient({ failSubscriptionUpsert: true });
 
