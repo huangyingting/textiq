@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "accepted"
-last_updated: "2026-07-20"
+last_updated: "2026-07-21"
 description: "Date: 2026-06-23 Issue: #438 / Epic #436 — Cross-surface command envelope for document visuals and deck artifacts Authors: Switch (Frontend Dev)"
 ---
 
@@ -122,11 +122,22 @@ Current supported ops:
 - `visual.set_node_icon`
 - `visual.clear_node_icon`
 - `visual.set_node_label`
+- `visual.set_edge_label`
 - `visual.set_edge_style`
+- `visual.flip_edge`
+- `visual.toggle_edge_directed`
+- `visual.toggle_edge_style`
 - `visual.set_all_edges_style`
 - `visual.set_effect`
 - `visual.clear_effect`
 - `visual.merge_content`
+- `visual.add_node`
+- `visual.delete_node`
+- `visual.add_edge`
+- `visual.delete_edge`
+- `visual.reconnect_edge`
+- `visual.duplicate_node`
+- `visual.relayout_graph`
 
 ### Deck payloads
 
@@ -202,12 +213,30 @@ what must happen after a successful command.
 - visual payload structure and supported literal values,
 - deck payload shape (`payload.type` string present).
 
+For `visual.add_edge`, structural validation now rejects malformed edge
+envelopes at the boundary: `target.surface` must be `visual`, `target.visualId`
+must be a non-empty string, `type` must match `payload.op`, `payload.edge` must
+be an object, and `payload.edge.from` / `payload.edge.to` must be non-empty
+strings. Optional edge fields are still validated before execution:
+`payload.edge.id` must be a non-empty string when provided, `label` must be a
+string, `directed` must be boolean, `style` must be a supported edge style, and
+`arrowStyle` / `lineStyle` / `lineWidth` must match the edge-style contract.
+Unknown fields under `payload.edge` are rejected. Graph-aware checks such as
+whether the source/target node ids exist remain executor concerns because the
+pure envelope validator does not load the visual graph.
+
 Server validation layers add context-aware checks such as:
 
 - actor authorization against a document,
 - target existence,
 - optimistic revision conflicts,
 - future schema rejection (`schemaVersion > CURRENT_COMMAND_SCHEMA_VERSION`).
+
+For visual commands, `validateVisualCommand()` layers those checks onto the
+envelope result: a missing or wrong visual target is rejected before execution,
+`target.documentId` / `target.visualId` must match the request context when
+present, and `target.expectedRevision` must match the current revision or the
+command is rejected with `stale_revision`.
 
 For the deck-command write path these checks are implemented by
 `acceptDeckCommandEnvelope()` (in `command-envelope.ts`), which layers

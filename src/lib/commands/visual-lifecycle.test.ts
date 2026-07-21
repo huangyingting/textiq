@@ -256,6 +256,8 @@ test("add_edge fails when source node does not exist", () => {
   });
   const result = executeVisualCommand(visual, cmd);
   assert.equal(result.ok, false);
+  assert.equal(result.visual, visual);
+  assert.match(result.error ?? "", /Source node "missing" does not exist/);
 });
 
 test("add_edge fails when target node does not exist", () => {
@@ -266,6 +268,8 @@ test("add_edge fails when target node does not exist", () => {
   });
   const result = executeVisualCommand(visual, cmd);
   assert.equal(result.ok, false);
+  assert.equal(result.visual, visual);
+  assert.match(result.error ?? "", /Target node "missing" does not exist/);
 });
 
 test("add_edge fails for kind that does not support edges (venn)", () => {

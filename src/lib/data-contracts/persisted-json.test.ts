@@ -110,15 +110,33 @@ test("registry rejects superseded deck and invalid comment anchor shapes", () =>
 
 test("comment anchor contract rejects inconsistent persisted anchors", () => {
   const commentContract = PERSISTED_JSON_CONTRACTS["Comment.anchor"];
+  const tableAnchor = {
+    anchorType: "table",
+    anchorText: "Revenue by quarter",
+    anchorNodeId: "bid-table-1",
+  };
 
   assert.equal(commentContract.validate("not an object").success, false);
-  assert.equal(commentContract.validate({ anchorType: "table" }).success, true);
+  assert.equal(commentContract.validate(tableAnchor).success, true);
+  assert.equal(
+    commentContract.validate({ anchorType: "table", anchorNodeId: null })
+      .success,
+    true,
+  );
   assert.equal(commentContract.validate({ elementId: "e1" }).success, false);
   assert.equal(
     commentContract.validate({ slideId: "s1", anchorType: "text" }).success,
     false,
   );
+  assert.equal(
+    commentContract.validate({ slideId: "s1", anchorType: "table" }).success,
+    false,
+  );
   assert.equal(commentContract.validate({ anchorType: "text" }).success, false);
+  assert.equal(
+    commentContract.validate({ anchorType: " table" }).success,
+    false,
+  );
   assert.equal(
     commentContract.validate({ slideId: 42, anchorGeometry: { x: 10, y: 20 } })
       .success,

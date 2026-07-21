@@ -74,6 +74,19 @@ function makeDeckCommand(
   };
 }
 
+function makeAddEdgeCommand(
+  overrides: Partial<VisualCommand> = {},
+): VisualCommand {
+  return makeVisualCommand({
+    type: "visual.add_edge",
+    payload: {
+      op: "visual.add_edge",
+      edge: { id: "e2", from: "n1", to: "n2" },
+    },
+    ...overrides,
+  });
+}
+
 test("validateVisualCommand rejects actor/document mismatches as unauthorized", () => {
   const ctx: VisualCommandContext = {
     documentId: "doc-1",
@@ -376,6 +389,72 @@ test("validateVisualCommand rejects invalid visual payloads", () => {
   const result = validateVisualCommand(cmd, ctx);
   assert.equal(result.valid, false);
   assert.equal(result.errorCode, "invalid_command");
+});
+
+test("validateVisualCommand rejects malformed add_edge envelopes before execution", () => {
+  const ctx: VisualCommandContext = {
+    documentId: "doc-1",
+    visualId: "vis-1",
+    visualExists: true,
+    actorDocumentId: "doc-1",
+    currentRevision: "rev-1",
+  };
+
+  const missingEndpoint = validateVisualCommand(
+    makeAddEdgeCommand({
+      payload: {
+        op: "visual.add_edge",
+        edge: { id: "e2", from: "n1" },
+      } as never,
+    }),
+    ctx,
+  );
+  assert.equal(missingEndpoint.valid, false);
+  assert.equal(missingEndpoint.errorCode, "invalid_command");
+  assert.match(missingEndpoint.errorMessage ?? "", /payload\.edge\.to/);
+
+  const missingVisualTarget = validateVisualCommand(
+    makeAddEdgeCommand({
+      target: { surface: "visual", documentId: "doc-1", visualId: "" },
+    }),
+    ctx,
+  );
+  assert.equal(missingVisualTarget.valid, false);
+  assert.equal(missingVisualTarget.errorCode, "invalid_command");
+  assert.match(missingVisualTarget.errorMessage ?? "", /target\.visualId/);
+});
+
+test("validateVisualCommand applies target and revision checks to add_edge", () => {
+  const ctx: VisualCommandContext = {
+    documentId: "doc-1",
+    visualId: "vis-1",
+    visualExists: true,
+    actorDocumentId: "doc-1",
+    currentRevision: "rev-2",
+  };
+
+  const staleRevision = validateVisualCommand(
+    makeAddEdgeCommand({
+      target: {
+        surface: "visual",
+        documentId: "doc-1",
+        visualId: "vis-1",
+        expectedRevision: "rev-1",
+      },
+    }),
+    ctx,
+  );
+  assert.equal(staleRevision.valid, false);
+  assert.equal(staleRevision.errorCode, "stale_revision");
+
+  const wrongTarget = validateVisualCommand(
+    makeAddEdgeCommand({
+      target: { surface: "visual", documentId: "doc-1", visualId: "vis-2" },
+    }),
+    { ...ctx, currentRevision: "rev-1" },
+  );
+  assert.equal(wrongTarget.valid, false);
+  assert.equal(wrongTarget.errorCode, "unauthorized");
 });
 
 test("validateVisualCommand rejects stale revisions", () => {
