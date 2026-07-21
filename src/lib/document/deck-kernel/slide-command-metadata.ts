@@ -12,6 +12,16 @@ import {
 } from "@/lib/commands/envelope-core";
 import type { SlideCommand, PatchOp } from "./slide-command-contracts";
 import { ARRANGE_MODES, isArrangeMode } from "./element-arrange";
+import {
+  ALIGN_MODES,
+  DISTRIBUTE_MODES,
+  MATCH_SIZE_MODES,
+  isAlignMode,
+  isDistributeMode,
+  isMatchSizeMode,
+} from "./element-align";
+import { validateTextRuns } from "./deck-validation/elements";
+import { validateSourceRef as validateStrictSourceRef } from "./deck-validation/source-refs";
 
 export type SlideCommandType = SlideCommand["type"];
 export type SlideCommandCoalescing =
@@ -181,25 +191,29 @@ function validateSourceRef(
     context,
     errors,
   );
-  if (!isNonEmptyString(value.documentId)) {
-    errors.push(`${context}.documentId must be a non-empty string.`);
-  }
-  if (!isNonEmptyString(value.blockId)) {
-    errors.push(`${context}.blockId must be a non-empty string.`);
-  }
-  if (!isNonEmptyString(value.linkedAt)) {
-    errors.push(`${context}.linkedAt must be a non-empty string.`);
-  }
-  if (value.contentHash !== undefined && !isNonEmptyString(value.contentHash)) {
+  try {
+    validateStrictSourceRef(value, context);
+  } catch (error) {
     errors.push(
-      `${context}.contentHash must be a non-empty string when provided.`,
+      error instanceof Error
+        ? error.message
+        : `${context} must be a valid source reference.`,
     );
   }
-  if (value.unlinked !== undefined && typeof value.unlinked !== "boolean") {
-    errors.push(`${context}.unlinked must be a boolean when provided.`);
-  }
-  if (!isOneOf(value.blockKind, ["text", "visual", "table"] as const)) {
-    errors.push(`${context}.blockKind must be "text", "visual", or "table".`);
+}
+
+function validateOptionalTextRuns(
+  value: unknown,
+  context: string,
+  errors: string[],
+): void {
+  if (value === undefined) return;
+  try {
+    validateTextRuns(value, context);
+  } catch (error) {
+    errors.push(
+      error instanceof Error ? error.message : `${context} must be valid.`,
+    );
   }
 }
 
@@ -373,6 +387,10 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       if (payload.unlink !== undefined && typeof payload.unlink !== "boolean") {
         errors.push("payload.unlink must be a boolean when provided.");
       }
+      if (payload.text !== undefined && typeof payload.text !== "string") {
+        errors.push("payload.text must be a string when provided.");
+      }
+      validateOptionalTextRuns(payload.runs, "payload.runs", errors);
       if (payload.unlink !== true) {
         /* node:coverage ignore next 2 */
         /* Source-ref validation is asserted by valid and invalid source command tests; tsx maps this call as residual. */
@@ -440,14 +458,31 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
           errors.push("payload.dy must be a finite number.");
         }
       } else if (
+        payload.type === "ALIGN_ELEMENTS" &&
+        !isAlignMode(payload.mode)
+      ) {
+        errors.push(`payload.mode must be one of: ${ALIGN_MODES.join(", ")}.`);
+      } else if (
+        payload.type === "DISTRIBUTE_ELEMENTS" &&
+        !isDistributeMode(payload.mode)
+      ) {
+        errors.push(
+          `payload.mode must be one of: ${DISTRIBUTE_MODES.join(", ")}.`,
+        );
+      } else if (
+        payload.type === "MATCH_SIZE_ELEMENTS" &&
+        !isMatchSizeMode(payload.mode)
+      ) {
+        errors.push(
+          `payload.mode must be one of: ${MATCH_SIZE_MODES.join(", ")}.`,
+        );
+      } else if (
         payload.type === "ARRANGE_ELEMENTS" &&
         !isArrangeMode(payload.mode)
       ) {
         errors.push(
           `payload.mode must be one of: ${ARRANGE_MODES.join(", ")}.`,
         );
-      } else if (!isNonEmptyString(payload.mode)) {
-        errors.push("payload.mode must be a non-empty string.");
       }
       break;
     /* node:coverage enable */

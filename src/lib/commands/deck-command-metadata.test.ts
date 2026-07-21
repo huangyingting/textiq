@@ -5,6 +5,11 @@ import type { CommandTarget } from "@/lib/commands/envelope-core";
 import type { SlideCommand } from "@/lib/document/deck-kernel/slide-commands";
 import { ARRANGE_MODES } from "@/lib/document/deck-kernel/element-arrange";
 import {
+  ALIGN_MODES,
+  DISTRIBUTE_MODES,
+  MATCH_SIZE_MODES,
+} from "@/lib/document/deck-kernel/element-align";
+import {
   canCoalesceSlideCommands,
   getSlideCommandMetadata,
   mergeCoalescedSlideCommands,
@@ -276,6 +281,8 @@ const validPayloads: Record<string, Record<string, unknown>> = {
     slideId: "slide-1",
     elementId: "el-1",
     source: sourceRef,
+    text: "Refreshed text",
+    runs: [{ text: "Refreshed", bold: true }],
   },
   REMOVE_SOURCE_ELEMENT: {
     type: "REMOVE_SOURCE_ELEMENT",
@@ -543,8 +550,28 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     [
       "payload.slideId must be a non-empty string.",
       "payload.elementIds must be an array of strings.",
-      "payload.mode must be a non-empty string.",
+      "payload.mode must be one of: left, hcenter, right, top, vmiddle, bottom.",
     ],
+  ],
+  [
+    "DISTRIBUTE_ELEMENTS",
+    {
+      type: "DISTRIBUTE_ELEMENTS",
+      slideId: "slide-1",
+      elementIds: ["el-1"],
+      mode: "diagonal",
+    },
+    ["payload.mode must be one of: horizontal, vertical."],
+  ],
+  [
+    "MATCH_SIZE_ELEMENTS",
+    {
+      type: "MATCH_SIZE_ELEMENTS",
+      slideId: "slide-1",
+      elementIds: ["el-1"],
+      mode: "area",
+    },
+    ["payload.mode must be one of: width, height, both."],
   ],
   [
     "ARRANGE_ELEMENTS",
@@ -765,12 +792,26 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     },
     [
       "payload.source.extra is not supported.",
-      "payload.source.documentId must be a non-empty string.",
-      "payload.source.blockId must be a non-empty string.",
-      "payload.source.linkedAt must be a non-empty string.",
-      "payload.source.contentHash must be a non-empty string when provided.",
-      "payload.source.unlinked must be a boolean when provided.",
-      'payload.source.blockKind must be "text", "visual", or "table".',
+      "payload.source.documentId must be a non-empty string",
+    ],
+  ],
+  [
+    "UPDATE_ELEMENT_SOURCE",
+    {
+      type: "UPDATE_ELEMENT_SOURCE",
+      slideId: "slide-1",
+      elementId: "el-1",
+      source: {
+        ...sourceRef,
+        linkedAt: "not-iso",
+      },
+      text: 42,
+      runs: [{ text: 42 }],
+    },
+    [
+      "payload.text must be a string when provided.",
+      "payload.runs[0].text must be a string",
+      "payload.source.linkedAt must be a valid ISO timestamp",
     ],
   ],
 ];
@@ -813,6 +854,50 @@ test("ARRANGE_ELEMENTS validation accepts only arrange modes", () => {
   assert.deepEqual(errors, [
     "payload.mode must be one of: front, back, forward, backward.",
   ]);
+});
+
+test("layout command validation accepts only declared layout mode literals", () => {
+  const cases = [
+    {
+      type: "ALIGN_ELEMENTS",
+      modes: ALIGN_MODES,
+      invalidMode: "middle",
+      expected:
+        "payload.mode must be one of: left, hcenter, right, top, vmiddle, bottom.",
+    },
+    {
+      type: "DISTRIBUTE_ELEMENTS",
+      modes: DISTRIBUTE_MODES,
+      invalidMode: "diagonal",
+      expected: "payload.mode must be one of: horizontal, vertical.",
+    },
+    {
+      type: "MATCH_SIZE_ELEMENTS",
+      modes: MATCH_SIZE_MODES,
+      invalidMode: "area",
+      expected: "payload.mode must be one of: width, height, both.",
+    },
+  ] as const;
+
+  for (const { type, modes, invalidMode, expected } of cases) {
+    for (const mode of modes) {
+      const errors: string[] = [];
+      validateDeckCommandPayload(
+        { type, slideId: "slide-1", elementIds: ["el-1"], mode },
+        deckTarget,
+        errors,
+      );
+      assert.deepEqual(errors, [], `${type}:${mode}`);
+    }
+
+    const errors: string[] = [];
+    validateDeckCommandPayload(
+      { type, slideId: "slide-1", elementIds: ["el-1"], mode: invalidMode },
+      deckTarget,
+      errors,
+    );
+    assert.deepEqual(errors, [expected], type);
+  }
 });
 
 test("affected id metadata extracts slide ids and string element ids", () => {

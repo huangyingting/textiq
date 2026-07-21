@@ -3,7 +3,8 @@
  *
  * Thin DB-reading wrapper around the pure audit core in
  * `src/lib/schema-audit/audit.ts`. Connects via the app Prisma client (honoring
- * `DB_PROVIDER` / `DATABASE_URL`), scans every `Document.deckJson`, embedded
+ * `DB_PROVIDER` / `DATABASE_URL`), scans every `BrandKitDraft.draftJson`,
+ * `ThemePackageSnapshot.packageJson`, `Document.deckJson`, embedded
  * `Document.contentJson` visual, `Visual.data` / `VisualRevision.data` row,
  * `Brand.palette`, and active Deck source
  * metadata (`slides[].source` and `slides[].children[].source`), and reports
@@ -20,7 +21,7 @@
  * Run as part of the release gate (see docs/operations/release-gate.md) with
  * `--ci` so any persisted-schema drift blocks the release.
  *
- * The twelve loaders and the CLI orchestration (`runAuditMain`) are
+ * The fourteen loaders and the CLI orchestration (`runAuditMain`) are
  * dependency-injected on an {@link AuditDb} seam — mirroring
  * `src/lib/maintenance/retention-runner.ts`'s injectable `db`/`RetentionDb`
  * pattern — so `audit-persisted-schema.test.ts` can drive pagination,
@@ -48,12 +49,14 @@ import {
   auditRows,
   formatAuditReport,
   type AssetAuditRow,
+  type BrandKitDraftAuditRow,
   type BrandAuditRow,
   type CommentAuditRow,
   type DocumentAuditRow,
   type DocumentVersionAuditRow,
   type SubscriptionAuditRow,
   type TagAuditRow,
+  type ThemePackageSnapshotAuditRow,
   type UsageLedgerAuditRow,
   type UserPlanAuditRow,
   type VisualAuditRow,
@@ -83,12 +86,14 @@ interface RoleDelegate {
 }
 
 /**
- * Injectable DB seam for the audit CLI's twelve read-only loaders — the same
+ * Injectable DB seam for the audit CLI's fourteen read-only loaders — the same
  * shape as the real Prisma client's delegates, narrowed to only the
  * `findMany` overloads each loader actually calls. Never mutates data: every
  * method here is a plain paginated (or single-shot) read.
  */
 export interface AuditDb {
+  brandKitDraft: PagedDelegate<BrandKitDraftAuditRow>;
+  themePackageSnapshot: PagedDelegate<ThemePackageSnapshotAuditRow>;
   document: PagedDelegate<DocumentAuditRow>;
   visual: PagedDelegate<VisualAuditRow>;
   visualRevision: PagedDelegate<VisualRevisionAuditRow>;
@@ -123,6 +128,16 @@ export interface AuditDb {
 
 function defaultDb(): AuditDb {
   return {
+    brandKitDraft: {
+      findMany: (args) =>
+        prisma.brandKitDraft.findMany(args as Prisma.BrandKitDraftFindManyArgs),
+    },
+    themePackageSnapshot: {
+      findMany: (args) =>
+        prisma.themePackageSnapshot.findMany(
+          args as Prisma.ThemePackageSnapshotFindManyArgs,
+        ),
+    },
     document: {
       findMany: (args) =>
         prisma.document.findMany(args as Prisma.DocumentFindManyArgs),
@@ -209,6 +224,24 @@ async function paginate<Row extends { id: string }>(
     cursor = { id: page[page.length - 1].id };
   }
   return rows;
+}
+
+async function loadBrandKitDrafts(
+  db: AuditDb,
+  pageSize: number,
+): Promise<BrandKitDraftAuditRow[]> {
+  return paginate(db.brandKitDraft, { id: true, draftJson: true }, pageSize);
+}
+
+async function loadThemePackageSnapshots(
+  db: AuditDb,
+  pageSize: number,
+): Promise<ThemePackageSnapshotAuditRow[]> {
+  return paginate(
+    db.themePackageSnapshot,
+    { id: true, packageJson: true },
+    pageSize,
+  );
 }
 
 async function loadDocuments(
@@ -390,6 +423,8 @@ export async function runAuditMain(
     const json = args.has("--json");
 
     const [
+      brandKitDrafts,
+      themePackageSnapshots,
       documents,
       visuals,
       visualRevisions,
@@ -403,6 +438,8 @@ export async function runAuditMain(
       assets,
       brands,
     ] = await Promise.all([
+      loadBrandKitDrafts(db, pageSize),
+      loadThemePackageSnapshots(db, pageSize),
       loadDocuments(db, pageSize),
       loadVisuals(db, pageSize),
       loadVisualRevisions(db, pageSize),
@@ -418,6 +455,8 @@ export async function runAuditMain(
     ]);
 
     const report = auditRows({
+      brandKitDrafts,
+      themePackageSnapshots,
       documents,
       visuals,
       visualRevisions,

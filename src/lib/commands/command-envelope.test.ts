@@ -642,8 +642,12 @@ test("acceptDeckCommandEnvelope rejects a source command with malformed source",
       type: "UPDATE_ELEMENT_SOURCE",
       slideId: "s1",
       elementId: "el-1",
-      // Missing required blockId / linkedAt and invalid blockKind.
-      source: { documentId: "doc-1", blockKind: "bogus" },
+      source: {
+        documentId: "doc-1",
+        blockId: "block-1",
+        linkedAt: "not-iso",
+        blockKind: "text",
+      },
     }),
   );
   const acceptance = acceptDeckCommandEnvelope(envelope, {
@@ -652,10 +656,7 @@ test("acceptDeckCommandEnvelope rejects a source command with malformed source",
   assert.equal(acceptance.ok, false);
   assert.equal(acceptance.code, "malformed");
   assert.ok(
-    acceptance.errors.some((e) => e.includes("payload.source.blockId")),
-  );
-  assert.ok(
-    acceptance.errors.some((e) => e.includes("payload.source.blockKind")),
+    acceptance.errors.some((e) => e.includes("payload.source.linkedAt")),
   );
 });
 

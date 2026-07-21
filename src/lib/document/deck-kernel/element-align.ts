@@ -18,8 +18,19 @@
 import type { ElementBox } from "./deck-elements";
 
 /** The six alignment modes: three on the x-axis, three on the y-axis. */
-export type AlignMode =
-  "left" | "hcenter" | "right" | "top" | "vmiddle" | "bottom";
+export const ALIGN_MODES = [
+  "left",
+  "hcenter",
+  "right",
+  "top",
+  "vmiddle",
+  "bottom",
+] as const;
+export type AlignMode = (typeof ALIGN_MODES)[number];
+
+export function isAlignMode(value: unknown): value is AlignMode {
+  return typeof value === "string" && ALIGN_MODES.includes(value as AlignMode);
+}
 
 interface Bounds {
   minX: number;
@@ -80,10 +91,26 @@ export function alignBoxes(
 }
 
 /** The two distribution axes. */
-export type DistributeMode = "horizontal" | "vertical";
+export const DISTRIBUTE_MODES = ["horizontal", "vertical"] as const;
+export type DistributeMode = (typeof DISTRIBUTE_MODES)[number];
+
+export function isDistributeMode(value: unknown): value is DistributeMode {
+  return (
+    typeof value === "string" &&
+    DISTRIBUTE_MODES.includes(value as DistributeMode)
+  );
+}
 
 /** The three size-matching modes. */
-export type MatchSizeMode = "width" | "height" | "both";
+export const MATCH_SIZE_MODES = ["width", "height", "both"] as const;
+export type MatchSizeMode = (typeof MATCH_SIZE_MODES)[number];
+
+export function isMatchSizeMode(value: unknown): value is MatchSizeMode {
+  return (
+    typeof value === "string" &&
+    MATCH_SIZE_MODES.includes(value as MatchSizeMode)
+  );
+}
 
 /**
  * Distributes `boxes` with equal spacing between their bounding boxes along
