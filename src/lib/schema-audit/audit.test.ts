@@ -414,6 +414,16 @@ describe("auditRows — invalid rows", () => {
     );
     assert.equal(
       auditAssetScope({
+        id: "asset-brand-staging-prefix-only",
+        documentId: null,
+        workspaceId: null,
+        brandId: null,
+        storageKey: "owner-1/logo.png",
+      })[0]?.area,
+      "Asset.scope",
+    );
+    assert.equal(
+      auditAssetScope({
         id: "asset-unscoped",
         documentId: null,
         workspaceId: null,

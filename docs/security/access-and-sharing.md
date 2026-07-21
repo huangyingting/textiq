@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-14"
+last_updated: "2026-07-21"
 description: "This document defines document-level access control and public share behavior. It covers authenticated app permissions, public share/embed/present routes, and collaboration upgrade authorization."
 ---
 
@@ -24,6 +24,7 @@ collaboration upgrade authorization.
 | Embed route            | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                 |
 | Present route          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)             |
 | Present embed route    | [`src/app/present/[shareId]/embed/page.tsx`](../../src/app/present/%5BshareId%5D/embed/page.tsx) |
+| Passcode unlock route  | [`src/app/api/share-passcode/unlock/route.ts`](../../src/app/api/share-passcode/unlock/route.ts) |
 | Collab authorize route | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)           |
 | Share actions          | [`src/app/app/documents/[id]/actions.ts`](../../src/app/app/documents/%5Bid%5D/actions.ts)       |
 
@@ -124,6 +125,12 @@ Passcode unlocks are stored as signed, HTTP-only cookies scoped by the current
 `shareId` and `sharePasscodeHash`. Regenerating a share link changes the share id,
 and changing/removing the passcode changes the hash state, so prior unlock cookies
 stop authorizing both pages and share-bound slide assets.
+
+The unlock POST endpoint reads bounded `FormData` fields: `shareId`, `mode`,
+`returnTo`, and `passcode`. Malformed or oversize form submissions return
+`400`/`413` before abuse-budget checks or document lookup. Once a normalized
+`shareId` is present, the public share passcode abuse budget is checked before
+the document row is loaded and the submitted `passcode` field is verified.
 
 ## Read-List Scoping
 

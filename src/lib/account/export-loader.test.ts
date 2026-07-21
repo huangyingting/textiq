@@ -298,6 +298,129 @@ describe("loadAccountExport — query scoping", () => {
   });
 });
 
+describe("loadAccountExport — owner-scoped assets", () => {
+  it("exports only active unlinked brand-staging assets in the requesting owner's storage partition", async (t) => {
+    replacePrismaProperty(t, "user", {
+      findUnique: async () => baseUserRow({ id: "owner-1" }),
+    });
+    stubEmptyParallelLookups(t);
+    replacePrismaProperty(t, "asset", {
+      findMany: async (args: unknown) => {
+        const { where } = args as {
+          where: {
+            OR: Array<{
+              documentId?: null;
+              workspaceId?: null;
+              brandId?: null;
+              storageKey?: { startsWith: string };
+            }>;
+            deletedAt: null;
+          };
+        };
+        const stagingScope = where.OR.at(-1);
+        assert.deepEqual(stagingScope, {
+          documentId: null,
+          workspaceId: null,
+          brandId: null,
+          storageKey: { startsWith: "owner-1/" },
+        });
+        assert.equal(where.deletedAt, null);
+
+        const fixtures = [
+          {
+            id: "asset-owner-active",
+            documentId: null,
+            workspaceId: null,
+            brandId: null,
+            storageKey:
+              "owner-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+            deletedAt: null,
+            mimeType: "image/png",
+            byteSize: 1024,
+            widthPx: 64,
+            heightPx: 64,
+            checksum: "owner-checksum",
+            originalName: "Owner logo.png",
+            createdAt: NOW,
+          },
+          {
+            id: "asset-other-owner",
+            documentId: null,
+            workspaceId: null,
+            brandId: null,
+            storageKey:
+              "owner-2/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png",
+            deletedAt: null,
+            mimeType: "image/png",
+            byteSize: 2048,
+            widthPx: 128,
+            heightPx: 128,
+            checksum: "other-checksum",
+            originalName: "Other logo.png",
+            createdAt: NOW,
+          },
+          {
+            id: "asset-owner-deleted",
+            documentId: null,
+            workspaceId: null,
+            brandId: null,
+            storageKey:
+              "owner-1/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.png",
+            deletedAt: NOW,
+            mimeType: "image/png",
+            byteSize: 4096,
+            widthPx: 256,
+            heightPx: 256,
+            checksum: "deleted-checksum",
+            originalName: "Deleted logo.png",
+            createdAt: NOW,
+          },
+        ];
+        const prefix = stagingScope?.storageKey?.startsWith ?? "";
+        return fixtures
+          .filter(
+            (asset) =>
+              asset.documentId === null &&
+              asset.workspaceId === null &&
+              asset.brandId === null &&
+              asset.deletedAt === where.deletedAt &&
+              asset.storageKey.startsWith(prefix),
+          )
+          .map(
+            ({
+              id,
+              mimeType,
+              byteSize,
+              widthPx,
+              heightPx,
+              checksum,
+              originalName,
+              createdAt,
+            }) => ({
+              id,
+              mimeType,
+              byteSize,
+              widthPx,
+              heightPx,
+              checksum,
+              originalName,
+              createdAt,
+            }),
+          );
+      },
+    });
+
+    const result = await loadAccountExport("owner-1", NOW);
+
+    assert.ok(result);
+    assert.deepEqual(
+      result!.assets.map((asset) => asset.id),
+      ["asset-owner-active"],
+    );
+    assert.equal(result!.assets[0]?.displayName, "Owner logo.png");
+  });
+});
+
 describe("loadAccountExport — sharePolicy defaults", () => {
   it("applies embed/present/metadataMode/discoverable/expiresAt defaults when the document fields are nullish", async (t) => {
     replacePrismaProperty(t, "user", {

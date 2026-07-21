@@ -686,9 +686,17 @@ describe("usage-ledger sqlite integration", () => {
       creditCost: 2,
       client: asUsageLedgerClient(harness.client),
     });
+    const thirdRefund = await refundUsage({
+      idempotencyKey,
+      userId,
+      operation: "generate",
+      creditCost: 2,
+      client: asUsageLedgerClient(harness.client),
+    });
 
     assert.equal(firstRefund?.status, "refunded");
     assert.equal(secondRefund?.status, "refunded");
+    assert.equal(thirdRefund?.status, "refunded");
 
     const user = await harness.client.user.findUniqueOrThrow({
       where: { id: userId },
@@ -696,6 +704,13 @@ describe("usage-ledger sqlite integration", () => {
     });
     assert.equal(user.creditBalance, PLAN_ENTITLEMENTS.free.creditsPerPeriod);
     assert.ok(user.creditPeriodStart instanceof Date);
+
+    const ledgerRow = await harness.client.usageLedgerEntry.findUniqueOrThrow({
+      where: { keyHash },
+      select: { status: true, refundedAt: true },
+    });
+    assert.equal(ledgerRow.status, "refunded");
+    assert.ok(ledgerRow.refundedAt instanceof Date);
   });
 
   it("reconciles stale hold rows by refunding exactly once", async (t) => {

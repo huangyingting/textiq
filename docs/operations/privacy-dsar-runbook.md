@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-21"
 description: "src/lib/privacy/personal-data-inventory.ts is the authoritative personal-data inventory. Its drift test compares every Prisma model field in prisma/schema.prisma to an explicit classification."
 ---
 
@@ -13,22 +13,23 @@ inventory. Its drift test compares every Prisma model field in
 
 ## Account export
 
-`GET /api/account/export` returns export version 3. The JSON `manifest` lists
+`GET /api/account/export` returns export version 4. The JSON `manifest` lists
 every export section required by the inventory:
 
 - user profile
 - documents, share policy, visuals, and versions
 - owned workspaces and memberships
 - authored comments and comment read state
-- tags and brands
-- asset display metadata only
+- tags, brands, brand-kit drafts, and theme-package snapshots
+- asset display metadata only, including owner-partitioned brand-staging assets
 - active subscription
 - invite-link uses without invite tokens
 - usage ledger entries
 
 Raw asset bytes are not embedded in the JSON export. The export includes
-sanitized display metadata so a recipient can identify protected assets without
-copying blobs into the DSAR artifact.
+sanitized display metadata so a recipient can identify protected assets,
+including active unlinked brand uploads staged under their owner partition,
+without copying blobs into the DSAR artifact.
 
 ## Account erasure
 
