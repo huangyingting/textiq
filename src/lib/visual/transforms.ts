@@ -52,12 +52,23 @@ function cloneEdge(edge: VisualEdge): VisualEdge {
   return { ...edge };
 }
 
+function assertUniqueEdgeIds(edges: readonly VisualEdge[]): void {
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    if (seen.has(edge.id)) {
+      throw new Error(`Duplicate edge id: ${edge.id}`);
+    }
+    seen.add(edge.id);
+  }
+}
+
 /**
  * Deep-enough clone of a {@link Visual}: a fresh top-level object with cloned
  * `style` (palette array copied), `nodes`, and `edges` so callers can never
  * observe a mutation of their input. The shared base for every transform below.
  */
 function cloneVisual(visual: Visual): Visual {
+  assertUniqueEdgeIds(visual.edges);
   return {
     ...visual,
     style: cloneStyle(visual.style),
@@ -354,6 +365,7 @@ export function setEdgeLabel(
   id: string,
   label: string,
 ): Visual {
+  assertUniqueEdgeIds(visual.edges);
   return {
     ...visual,
     edges: visual.edges.map((edge) =>
@@ -364,6 +376,7 @@ export function setEdgeLabel(
 
 /** Flips a connector's direction by swapping its `from`/`to` endpoints. */
 export function flipEdge(visual: Visual, id: string): Visual {
+  assertUniqueEdgeIds(visual.edges);
   return {
     ...visual,
     edges: visual.edges.map((edge) =>
@@ -374,6 +387,7 @@ export function flipEdge(visual: Visual, id: string): Visual {
 
 /** Toggles a connector's arrowhead (the `directed` flag; default shown). */
 export function toggleEdgeDirected(visual: Visual, id: string): Visual {
+  assertUniqueEdgeIds(visual.edges);
   return {
     ...visual,
     edges: visual.edges.map((edge) =>
@@ -384,6 +398,7 @@ export function toggleEdgeDirected(visual: Visual, id: string): Visual {
 
 /** Toggles a connector between curved and straight (default straight). */
 export function toggleEdgeStyle(visual: Visual, id: string): Visual {
+  assertUniqueEdgeIds(visual.edges);
   return {
     ...visual,
     edges: visual.edges.map((edge) =>

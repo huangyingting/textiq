@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getBrandStorageAdapter } from "@/lib/brand/asset-storage";
+import { parsePalette } from "@/lib/brand/schema";
 import type { BrandStyle } from "@/lib/brand/schema";
 
 /** The Prisma `select` shape required to serialize a brand. */
@@ -94,7 +95,7 @@ export function toBrandStyle(
     id: row.id,
     name: row.name,
     ownerId: row.ownerId,
-    palette: Array.isArray(row.palette) ? (row.palette as string[]) : null,
+    palette: parsePalette(row.palette),
     background: row.background,
     nodeFill: row.nodeFill,
     nodeStroke: row.nodeStroke,

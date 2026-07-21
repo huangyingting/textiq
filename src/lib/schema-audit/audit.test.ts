@@ -21,8 +21,10 @@ import {
   auditUsageLedgerEntry,
   auditUserPlan,
   formatAuditReport,
+  type BrandAuditRow,
   type DocumentAuditRow,
   type VisualAuditRow,
+  type VisualRevisionAuditRow,
 } from "./audit";
 
 // ---------------------------------------------------------------------------
@@ -94,9 +96,16 @@ describe("auditRows — valid rows", () => {
     const visuals: VisualAuditRow[] = [
       { id: "v-1", documentId: "doc-1", data: validVisual() },
     ];
+    const visualRevisions: VisualRevisionAuditRow[] = [
+      { id: "vr-1", visualId: "v-1", data: validVisual() },
+    ];
+    const brands: BrandAuditRow[] = [
+      { id: "brand-1", palette: ["#ff0000", "#00ff00"] },
+    ];
     const report = auditRows({
       documents,
       visuals,
+      visualRevisions,
       documentVersions: [
         {
           id: "version-1",
@@ -105,11 +114,14 @@ describe("auditRows — valid rows", () => {
           contentJson: contentWithVisual(validVisual()),
         },
       ],
+      brands,
     });
     assert.equal(report.summary.violations, 0);
     assert.equal(report.summary.scannedDocuments, 1);
     assert.equal(report.summary.scannedVisuals, 1);
+    assert.equal(report.summary.scannedVisualRevisions, 1);
     assert.equal(report.summary.scannedDocumentVersions, 1);
+    assert.equal(report.summary.scannedBrands, 1);
   });
 
   test("null deckJson / contentJson are skipped, not flagged", () => {
@@ -201,6 +213,29 @@ describe("auditRows — invalid rows", () => {
     assert.ok(v);
     assert.equal(v?.rowId, "v-bad");
     assert.equal(v?.documentId, "doc-1");
+  });
+
+  test("flags an invalid VisualRevision.data row", () => {
+    const report = auditRows({
+      visualRevisions: [
+        { id: "vr-bad", visualId: "v-1", data: { type: "nope" } },
+      ],
+    });
+    const v = report.violations.find((x) => x.area === "VisualRevision.data");
+    assert.ok(v);
+    assert.equal(v?.rowId, "vr-bad");
+    assert.equal(v?.anchorId, "v-1");
+    assert.equal(report.summary.byArea["VisualRevision.data"], 1);
+  });
+
+  test("flags an invalid Brand.palette row", () => {
+    const report = auditRows({
+      brands: [{ id: "brand-bad", palette: ["#ff0000", "not-a-color"] }],
+    });
+    const v = report.violations.find((x) => x.area === "Brand.palette");
+    assert.ok(v);
+    assert.equal(v?.rowId, "brand-bad");
+    assert.equal(report.summary.byArea["Brand.palette"], 1);
   });
 
   test("flags invalid Deck source metadata under slides[].children[].source", () => {

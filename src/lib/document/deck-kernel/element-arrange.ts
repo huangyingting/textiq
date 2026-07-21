@@ -14,7 +14,14 @@
 import type { SlideElement } from "./deck-elements";
 
 /** The four arrange modes. */
-export type ArrangeMode = "front" | "back" | "forward" | "backward";
+export const ARRANGE_MODES = ["front", "back", "forward", "backward"] as const;
+export type ArrangeMode = (typeof ARRANGE_MODES)[number];
+
+export function isArrangeMode(value: unknown): value is ArrangeMode {
+  return (
+    typeof value === "string" && ARRANGE_MODES.includes(value as ArrangeMode)
+  );
+}
 
 /**
  * Returns a new copy of `elements` with updated `zIndex` values reflecting the

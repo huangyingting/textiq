@@ -168,6 +168,48 @@ test("validateVisual propagates per-edge validation errors with edge context", (
   );
 });
 
+test("validateVisual rejects duplicate edge ids and accepts unique edge ids", () => {
+  const unique = validateVisual(
+    baseVisual(
+      [
+        { id: "a", label: "Alpha" },
+        { id: "b", label: "Beta" },
+        { id: "c", label: "Gamma" },
+      ],
+      {
+        edges: [
+          { id: "e1", from: "a", to: "b" },
+          { id: "e2", from: "b", to: "c" },
+        ],
+      },
+    ),
+  );
+  assert.deepEqual(
+    unique.edges.map((edge) => edge.id),
+    ["e1", "e2"],
+  );
+
+  assert.throws(
+    () =>
+      validateVisual(
+        baseVisual(
+          [
+            { id: "a", label: "Alpha" },
+            { id: "b", label: "Beta" },
+            { id: "c", label: "Gamma" },
+          ],
+          {
+            edges: [
+              { id: "dup", from: "a", to: "b" },
+              { id: "dup", from: "b", to: "c" },
+            ],
+          },
+        ),
+      ),
+    /Duplicate edge id: dup/,
+  );
+});
+
 test("validateVisual requires title to be a string when present", () => {
   assert.throws(
     () =>

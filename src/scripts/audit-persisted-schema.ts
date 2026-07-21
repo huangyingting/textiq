@@ -4,7 +4,8 @@
  * Thin DB-reading wrapper around the pure audit core in
  * `src/lib/schema-audit/audit.ts`. Connects via the app Prisma client (honoring
  * `DB_PROVIDER` / `DATABASE_URL`), scans every `Document.deckJson`, embedded
- * `Document.contentJson` visual, `Visual.data` row, and active Deck source
+ * `Document.contentJson` visual, `Visual.data` / `VisualRevision.data` row,
+ * `Brand.palette`, and active Deck source
  * metadata (`slides[].source` and `slides[].children[].source`), and reports
  * violations using SAFE identifiers only (row id / document id / schema area /
  * failure reason) — never document content.
@@ -19,7 +20,7 @@
  * Run as part of the release gate (see docs/operations/release-gate.md) with
  * `--ci` so any persisted-schema drift blocks the release.
  *
- * The ten loaders and the CLI orchestration (`runAuditMain`) are
+ * The twelve loaders and the CLI orchestration (`runAuditMain`) are
  * dependency-injected on an {@link AuditDb} seam — mirroring
  * `src/lib/maintenance/retention-runner.ts`'s injectable `db`/`RetentionDb`
  * pattern — so `audit-persisted-schema.test.ts` can drive pagination,
@@ -47,6 +48,7 @@ import {
   auditRows,
   formatAuditReport,
   type AssetAuditRow,
+  type BrandAuditRow,
   type CommentAuditRow,
   type DocumentAuditRow,
   type DocumentVersionAuditRow,
@@ -55,6 +57,7 @@ import {
   type UsageLedgerAuditRow,
   type UserPlanAuditRow,
   type VisualAuditRow,
+  type VisualRevisionAuditRow,
   type WorkspaceRoleAuditRow,
 } from "@/lib/schema-audit/audit";
 
@@ -80,7 +83,7 @@ interface RoleDelegate {
 }
 
 /**
- * Injectable DB seam for the audit CLI's ten read-only loaders — the same
+ * Injectable DB seam for the audit CLI's twelve read-only loaders — the same
  * shape as the real Prisma client's delegates, narrowed to only the
  * `findMany` overloads each loader actually calls. Never mutates data: every
  * method here is a plain paginated (or single-shot) read.
@@ -88,6 +91,7 @@ interface RoleDelegate {
 export interface AuditDb {
   document: PagedDelegate<DocumentAuditRow>;
   visual: PagedDelegate<VisualAuditRow>;
+  visualRevision: PagedDelegate<VisualRevisionAuditRow>;
   documentVersion: PagedDelegate<DocumentVersionAuditRow>;
   comment: PagedDelegate<CommentAuditRow>;
   tag: PagedDelegate<TagAuditRow>;
@@ -113,6 +117,7 @@ export interface AuditDb {
     }): Promise<UsageLedgerAuditRow[]>;
   };
   asset: PagedDelegate<AssetAuditRow>;
+  brand: PagedDelegate<BrandAuditRow>;
   $disconnect(): Promise<void>;
 }
 
@@ -125,6 +130,12 @@ function defaultDb(): AuditDb {
     visual: {
       findMany: (args) =>
         prisma.visual.findMany(args as Prisma.VisualFindManyArgs),
+    },
+    visualRevision: {
+      findMany: (args) =>
+        prisma.visualRevision.findMany(
+          args as Prisma.VisualRevisionFindManyArgs,
+        ),
     },
     documentVersion: {
       findMany: (args) =>
@@ -170,6 +181,10 @@ function defaultDb(): AuditDb {
       findMany: (args) =>
         prisma.asset.findMany(args as Prisma.AssetFindManyArgs),
     },
+    brand: {
+      findMany: (args) =>
+        prisma.brand.findMany(args as Prisma.BrandFindManyArgs),
+    },
     $disconnect: () => prisma.$disconnect(),
   };
 }
@@ -214,6 +229,17 @@ async function loadVisuals(
   return paginate(
     db.visual,
     { id: true, documentId: true, data: true },
+    pageSize,
+  );
+}
+
+async function loadVisualRevisions(
+  db: AuditDb,
+  pageSize: number,
+): Promise<VisualRevisionAuditRow[]> {
+  return paginate(
+    db.visualRevision,
+    { id: true, visualId: true, data: true },
     pageSize,
   );
 }
@@ -320,6 +346,13 @@ async function loadAssets(
   );
 }
 
+async function loadBrands(
+  db: AuditDb,
+  pageSize: number,
+): Promise<BrandAuditRow[]> {
+  return paginate(db.brand, { id: true, palette: true }, pageSize);
+}
+
 export interface AuditMainOptions {
   /** Defaults to `process.argv.slice(2)`. */
   argv?: string[];
@@ -327,7 +360,7 @@ export interface AuditMainOptions {
   db?: AuditDb;
   /** Defaults to the real {@link resolveProvider}. */
   resolveProviderFn?: () => "postgres" | "sqlite";
-  /** Page size for the seven cursor-paginated loaders. Defaults to 500. */
+  /** Page size for the eight cursor-paginated loaders. Defaults to 500. */
   pageSize?: number;
   stdout?: (message: string) => void;
   stderr?: (message: string) => void;
@@ -359,6 +392,7 @@ export async function runAuditMain(
     const [
       documents,
       visuals,
+      visualRevisions,
       documentVersions,
       comments,
       tags,
@@ -367,9 +401,11 @@ export async function runAuditMain(
       subscriptions,
       usageLedgerEntries,
       assets,
+      brands,
     ] = await Promise.all([
       loadDocuments(db, pageSize),
       loadVisuals(db, pageSize),
+      loadVisualRevisions(db, pageSize),
       loadDocumentVersions(db, pageSize),
       loadComments(db, pageSize),
       loadTags(db, pageSize),
@@ -378,11 +414,13 @@ export async function runAuditMain(
       loadSubscriptions(db),
       loadUsageLedgerEntries(db),
       loadAssets(db, pageSize),
+      loadBrands(db, pageSize),
     ]);
 
     const report = auditRows({
       documents,
       visuals,
+      visualRevisions,
       documentVersions,
       comments,
       tags,
@@ -393,6 +431,7 @@ export async function runAuditMain(
       subscriptions,
       usageLedgerEntries,
       assets,
+      brands,
     });
 
     if (json) {

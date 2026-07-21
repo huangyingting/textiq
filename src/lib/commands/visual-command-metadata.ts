@@ -550,6 +550,25 @@ function validatePayloadDetails(
       if (!isNonEmptyString(payload.edgeId)) {
         errors.push("payload.edgeId must be a non-empty string.");
       }
+      if (payload.fromNodeId === undefined && payload.toNodeId === undefined) {
+        errors.push("payload.fromNodeId or payload.toNodeId must be provided.");
+      }
+      if (
+        payload.fromNodeId !== undefined &&
+        !isNonEmptyString(payload.fromNodeId)
+      ) {
+        errors.push(
+          "payload.fromNodeId must be a non-empty string when provided.",
+        );
+      }
+      if (
+        payload.toNodeId !== undefined &&
+        !isNonEmptyString(payload.toNodeId)
+      ) {
+        errors.push(
+          "payload.toNodeId must be a non-empty string when provided.",
+        );
+      }
       return;
     case "visual.duplicate_node":
       pushUnknownKeyErrors(

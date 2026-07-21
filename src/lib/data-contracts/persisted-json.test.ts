@@ -25,12 +25,14 @@ function validVisual(): Record<string, unknown> {
 
 test("persisted JSON registry points at current validators", () => {
   assert.deepEqual(Object.keys(PERSISTED_JSON_CONTRACTS).sort(), [
+    "Brand.palette",
     "Comment.anchor",
     "Document.contentJson:visual",
     "Document.deckJson",
     "DocumentVersion.contentJson:visual",
     "DocumentVersion.deckJson",
     "Visual.data",
+    "VisualRevision.data",
   ]);
   assert.equal(
     PERSISTED_JSON_CONTRACTS["Document.deckJson"].validate(validDeck()).success,
@@ -49,12 +51,25 @@ test("persisted JSON registry points at current validators", () => {
     true,
   );
   assert.equal(
+    PERSISTED_JSON_CONTRACTS["VisualRevision.data"].validate(validVisual())
+      .success,
+    true,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["Brand.palette"].validate(["#ff0000"]).success,
+    true,
+  );
+  assert.equal(
     PERSISTED_JSON_CONTRACTS["DocumentVersion.deckJson"].validate(
       buildMinimalDeck(),
     ).success,
     true,
   );
   assert.equal(getPersistedJsonContract("Visual.data").name, "Visual.data");
+  assert.equal(
+    getPersistedJsonContract("VisualRevision.data").name,
+    "VisualRevision.data",
+  );
 });
 
 // @compat — confirms superseded deck shapes and retired anchor types are rejected at the persistence boundary
@@ -150,6 +165,17 @@ test("visual JSON contracts reject malformed embedded and row visuals", () => {
       ...validVisual(),
       type: "legacy",
     }).success,
+    false,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["VisualRevision.data"].validate({
+      ...validVisual(),
+      type: "legacy",
+    }).success,
+    false,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["Brand.palette"].validate(["not-a-color"]).success,
     false,
   );
   assert.equal(

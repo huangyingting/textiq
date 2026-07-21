@@ -17,6 +17,8 @@ const COMMAND_SURFACES = [
 ] as const;
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ISO_8601_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/;
 
 export type CommandSource = (typeof COMMAND_SOURCES)[number];
 export type CommandTargetSurface = (typeof COMMAND_SURFACES)[number];
@@ -79,6 +81,48 @@ export function isOneOf<T extends readonly string[]>(
 export function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function isIso8601Timestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = ISO_8601_TIMESTAMP_PATTERN.exec(value);
+  if (!match) return false;
+
+  const [
+    ,
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText,
+    ,
+    zoneText,
+  ] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+  if (zoneText !== "Z") {
+    const zoneHour = Number(zoneText.slice(1, 3));
+    const zoneMinute = Number(zoneText.slice(4, 6));
+    if (zoneHour > 23 || zoneMinute > 59) return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
   );
 }
 
@@ -289,10 +333,7 @@ export function validateCommandEnvelopeStructure(
   if (!isNonEmptyString(env.type)) {
     errors.push("type must be a non-empty string.");
   }
-  if (
-    typeof env.timestamp !== "string" ||
-    Number.isNaN(Date.parse(env.timestamp))
-  ) {
+  if (!isIso8601Timestamp(env.timestamp)) {
     errors.push("timestamp must be a valid ISO-8601 string.");
   }
 
