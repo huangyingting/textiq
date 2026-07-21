@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-21"
 description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
@@ -52,7 +52,18 @@ The usage ledger lifecycle is:
 1. `reserve` atomically decrements credits and writes `status="reserved"` once.
 2. `capture` compare-and-swaps `reserved -> captured` with no balance mutation.
 3. `refund` compare-and-swaps `reserved -> refunded`; new-format hold rows
-   increment balance exactly once, legacy pre-hold rows do not.
+   increment balance exactly once when the hold belongs to the synced current
+   billing period, and legacy pre-hold rows do not.
+
+`refund` calls `syncBillingPeriodState` before deciding whether to restore
+credits. If the user has rolled into a new billing period, the period sync first
+resets the balance to the new allowance; a reservation whose `reservedAt` falls
+outside that synced period is still marked `refunded`, but it does not add the
+prior-period hold back on top of the refreshed allowance. `reservationVersion`
+continues to distinguish hold-on-reserve rows from legacy rows, while the
+current-period check prevents a valid v1 hold from crossing a period boundary as
+extra credit. Repeated refund attempts see the terminal `refunded` row and do
+not restore credits a second time.
 
 Rows are idempotent by scoped hash (`keyHash`) derived from
 `userId + operation + raw Idempotency-Key`; raw keys are never written by new
@@ -111,6 +122,8 @@ outlive an individual subscription.
 6. Capture/refund settlement failures fail closed (5xx) until terminal state.
 7. Legacy key backfill never changes `reservationVersion`; it updates
    `keyHashVersion`/`keyHash` only.
+8. Prior-period reservations refund to a terminal ledger state without
+   increasing the new period's refreshed allowance.
 
 ## Primary Tests
 

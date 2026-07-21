@@ -167,6 +167,19 @@ function makeRequest(formFields: Record<string, string> = {}): NextRequest {
   });
 }
 
+function makeMultipartRequest(
+  formFields: Record<string, string> = {},
+): NextRequest {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(formFields)) {
+    form.set(key, value);
+  }
+  return new NextRequest("http://localhost/api/share-passcode/unlock", {
+    method: "POST",
+    body: form,
+  });
+}
+
 function redirectLocation(response: Response): string {
   return response.headers.get("location") ?? "";
 }
@@ -316,6 +329,37 @@ test("#1852: wrong passcode redirects with ?passcode=invalid", async (t) => {
   assert.ok(redirectLocation(response).includes("passcode=invalid"));
 });
 
+test("#2097: missing FormData passcode redirects invalid without setting an unlock cookie", async (t) => {
+  replacePrismaDocument(t, async () => makeSharedDocument());
+  const response = await POST(
+    makeMultipartRequest({
+      shareId: SHARE_ID,
+      returnTo: RETURN_TO,
+    }),
+  );
+
+  assert.strictEqual(response.status, 303);
+  assert.ok(redirectLocation(response).includes("passcode=invalid"));
+  assert.strictEqual(response.headers.get("set-cookie"), null);
+  assert.strictEqual(globalForAbuse.__sharePasscodeAbuseState.budgetChecks, 1);
+});
+
+test("#2097: incorrect FormData passcode redirects invalid without setting an unlock cookie", async (t) => {
+  replacePrismaDocument(t, async () => makeSharedDocument());
+  const response = await POST(
+    makeMultipartRequest({
+      shareId: SHARE_ID,
+      passcode: "totally-wrong-passcode",
+      returnTo: RETURN_TO,
+    }),
+  );
+
+  assert.strictEqual(response.status, 303);
+  assert.ok(redirectLocation(response).includes("passcode=invalid"));
+  assert.strictEqual(response.headers.get("set-cookie"), null);
+  assert.strictEqual(globalForAbuse.__sharePasscodeAbuseState.budgetChecks, 1);
+});
+
 // ---------------------------------------------------------------------------
 // Missing AUTH_SECRET
 // ---------------------------------------------------------------------------
@@ -384,4 +428,24 @@ test("#1852: unlock cookie for a safe returnTo path uses the full return path", 
   );
   assert.strictEqual(response.status, 303);
   assert.ok(redirectLocation(response).includes("/present/abc123"));
+});
+
+test("#2097: correct FormData passcode sets unlock cookie", async (t) => {
+  replacePrismaDocument(t, async () => makeSharedDocument());
+  const response = await POST(
+    makeMultipartRequest({
+      shareId: SHARE_ID,
+      passcode: TEST_PASSCODE,
+      returnTo: RETURN_TO,
+    }),
+  );
+
+  assert.strictEqual(response.status, 303);
+  assert.ok(!redirectLocation(response).includes("passcode="));
+  assert.ok(
+    (response.headers.get("set-cookie") ?? "").includes(
+      sharePasscodeCookieName(SHARE_ID),
+    ),
+  );
+  assert.strictEqual(globalForAbuse.__sharePasscodeAbuseState.budgetChecks, 1);
 });

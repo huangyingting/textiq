@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-06-29"
+last_updated: "2026-07-21"
 description: "This document describes saved brand styles, brand media assets, brand entitlement gates, and applying brands to visuals. Billing plans and credits live in billing.md."
 ---
 
@@ -69,7 +69,12 @@ Brand create/update happens inside a transaction:
 4. Create or update the brand row.
 5. Link referenced assets to the brand and reconcile old brand assets.
 
-Brand asset ownership is checked by storage key prefix. User-supplied filenames
+Brand asset assignment requires active asset rows with no document/workspace
+scope and an owner-scoped storage key prefix. Pre-save brand uploads may be
+active without a `brandId` while a brand row has not been created yet; those
+staging assets are valid only when they are unscoped
+(`documentId`/`workspaceId`/`brandId` are null) and their storage key is in the
+owner partition (`<ownerId>/<sha256>.<validated-ext>`). User-supplied filenames
 do not determine storage extension; the extension is derived from validated MIME
 type.
 
@@ -82,6 +87,11 @@ active brand references it through `logoAssetId` or `fontAssetId`.
 When a brand replaces media, no-longer-referenced assets are soft-deleted. When
 a brand is deleted, its active brand assets are also soft-deleted. Physical
 purge happens only after the brand-asset retention window elapses.
+
+Account export includes display metadata for active owner-partitioned brand
+staging assets in addition to assets linked through the user's documents,
+workspaces, or brands. Export scoping remains owner-bound and does not include
+raw asset bytes.
 
 ## Applying A Brand
 
@@ -98,6 +108,8 @@ changed by applying a brand.
 4. Replacing or deleting brand media soft-deletes orphaned brand assets.
 5. Applying a brand changes style only, never visual content or topology.
 6. Brand styles and custom font upload are separate entitlement gates.
+7. Active unlinked brand-staging assets are valid only in the owner's storage
+   partition and are exported as metadata for that owner only.
 
 ## Primary Tests
 
