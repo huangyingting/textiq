@@ -508,6 +508,62 @@ describe("buildSvgFromSlideSpec — shape variants", () => {
     );
     assert.ok(svg.includes("rotate(30"), "image should have rotate transform");
   });
+
+  test("image op preserves contain fit in SVG preserveAspectRatio", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "image",
+          id: "img-contain",
+          assetId: "data:image/png;base64,AAA",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          style: {},
+          fit: "contain",
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(
+      svg.includes('preserveAspectRatio="xMidYMid meet"'),
+      "contain fit should use SVG meet behavior",
+    );
+    assert.ok(
+      !svg.includes("<clipPath"),
+      "uncropped contain image is unclipped",
+    );
+  });
+
+  test("image op applies live-renderer crop geometry and cover fit", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "image",
+          id: "img-crop",
+          assetId: "data:image/png;base64,AAA",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          style: {},
+          fit: "cover",
+          crop: { top: 20, right: 30, bottom: 40, left: 10 },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(svg.includes("<clipPath"), "cropped image should clip to frame");
+    assert.ok(
+      svg.includes('preserveAspectRatio="xMidYMid slice"'),
+      "cover fit should use SVG slice behavior",
+    );
+    assert.ok(svg.includes('x="76.8"'), "crop left offsets image x");
+    assert.ok(svg.includes('y="32.4"'), "crop top offsets image y");
+    assert.ok(svg.includes('width="268.8"'), "crop expands image width");
+    assert.ok(svg.includes('height="172.8"'), "crop expands image height");
+  });
 });
 
 describe("buildSvgFromSlideSpec — text renderer branches", () => {
@@ -765,6 +821,59 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
     assert.ok(!svg.includes("<foreignObject"));
   });
 
+  test("ordered list prefixes preserve alphabetic and roman number styles", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "styled-list",
+          frame: { x: 96, y: 54, w: 384, h: 216 },
+          content: {
+            paragraphs: [
+              {
+                id: "lower-alpha",
+                text: "Alpha",
+                list: { kind: "number", numberStyle: "lower-alpha" },
+              },
+              {
+                id: "upper-alpha",
+                text: "Upper",
+                list: { kind: "number", numberStyle: "upper-alpha" },
+              },
+              { id: "reset", text: "Reset counters" },
+              {
+                id: "roman-one",
+                text: "Roman one",
+                list: { kind: "number", numberStyle: "lower-roman" },
+              },
+              {
+                id: "roman-two",
+                text: "Roman two",
+                list: { kind: "number", numberStyle: "lower-roman" },
+              },
+            ],
+          },
+          style: {},
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(svg.includes("a. "), "lower-alpha marker should render");
+    assert.ok(svg.includes("B. "), "upper-alpha marker should render");
+    assert.ok(
+      svg.includes("i. "),
+      "roman counter should reset after body text",
+    );
+    assert.ok(svg.includes("ii. "), "lower-roman marker should render");
+    assert.ok(
+      !svg.includes("2. Upper"),
+      "upper-alpha must not fall back to decimal",
+    );
+  });
+
   test("long text wraps into multiple <text> lines", () => {
     // Very narrow box forces wrapSvgLine to split
     const longText = "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa";
@@ -792,14 +901,14 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
 });
 
 describe("buildSvgFromSlideSpec — connector and visual ops", () => {
-  test("connector op renders as <line>", () => {
+  test("connector op renders a path from endpoint percentages", () => {
     const svg = buildSvgFromSlideSpec(
       makeSpec([
         {
           type: "connector",
           id: "c",
-          from: { kind: "point", point: { x: 0, y: 0 } },
-          to: { kind: "point", point: { x: 100, y: 100 } },
+          from: { kind: "point", point: { x: 25, y: 75 } },
+          to: { kind: "point", point: { x: 75, y: 25 } },
           frame: { x: 0, y: 0, w: 480, h: 270 },
           style: { stroke: { color: "#333333", widthPt: 2 } },
           zIndex: 1,
@@ -808,8 +917,48 @@ describe("buildSvgFromSlideSpec — connector and visual ops", () => {
       testCanvas,
       testDims,
     );
-    assert.ok(svg.includes("<line"), "connector → <line>");
+    assert.ok(svg.includes("<path"), "connector → routed path");
+    assert.ok(
+      svg.includes('d="M 120.0 202.5 L 360.0 67.5"'),
+      "point endpoints should be converted within the frame",
+    );
+    assert.ok(svg.includes("marker-end="), "default end arrow should render");
     assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("connector op mirrors live elbow routing, connector stroke, dashes, and arrows", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "connector",
+          id: "c-elbow",
+          from: { kind: "point", point: { x: 10, y: 20 } },
+          to: { kind: "point", point: { x: 90, y: 80 } },
+          frame: { x: 0, y: 0, w: 480, h: 270 },
+          style: {
+            stroke: { color: "#999999", widthPt: 1 },
+            connector: {
+              stroke: { color: "#123456", widthPt: 3, dash: "dotted" },
+              routing: "elbow",
+              startArrow: "filled",
+              endArrow: "arrow",
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(
+      svg.includes('d="M 48.0 54.0 L 240.0 54.0 L 240.0 216.0 L 432.0 216.0"'),
+      "elbow routing should use endpoint-derived segments",
+    );
+    assert.ok(svg.includes("#123456"), "connector stroke should win");
+    assert.ok(svg.includes('stroke-dasharray="1 4"'), "dotted dash survives");
+    assert.ok(svg.includes("marker-start="), "start arrow should render");
+    assert.ok(svg.includes("marker-end="), "end arrow should render");
   });
 
   test("visual op with assetId renders as <image>", () => {

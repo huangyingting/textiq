@@ -408,7 +408,57 @@ function wrapSvgLine(text: string, boxW: number, fontSize: number): string[] {
 function listPrefix(marker: ListMarker | undefined, number: number): string {
   if (!marker) return "";
   if (marker.kind === "bullet") return "• ";
-  return `${number}. `;
+  switch (marker.numberStyle) {
+    case "lower-alpha":
+      return `${toAlphabeticMarker(number, false)}. `;
+    case "upper-alpha":
+      return `${toAlphabeticMarker(number, true)}. `;
+    case "lower-roman":
+      return `${toLowerRomanMarker(number)}. `;
+    case "decimal":
+    default:
+      return `${number}. `;
+  }
+}
+
+function toAlphabeticMarker(value: number, uppercase: boolean): string {
+  if (value <= 0) return "0";
+  let remaining = Math.floor(value);
+  let marker = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    marker = String.fromCharCode(97 + (remaining % 26)) + marker;
+    remaining = Math.floor(remaining / 26);
+  }
+  return uppercase ? marker.toUpperCase() : marker;
+}
+
+function toLowerRomanMarker(value: number): string {
+  if (value <= 0) return "0";
+  const numerals: Array<[number, string]> = [
+    [1000, "m"],
+    [900, "cm"],
+    [500, "d"],
+    [400, "cd"],
+    [100, "c"],
+    [90, "xc"],
+    [50, "l"],
+    [40, "xl"],
+    [10, "x"],
+    [9, "ix"],
+    [5, "v"],
+    [4, "iv"],
+    [1, "i"],
+  ];
+  let remaining = Math.floor(value);
+  let marker = "";
+  for (const [amount, symbol] of numerals) {
+    while (remaining >= amount) {
+      marker += symbol;
+      remaining -= amount;
+    }
+  }
+  return marker;
 }
 
 function segmentStyleKey(segment: SvgTextSegment): string {
@@ -570,16 +620,22 @@ function renderSvgText(
 
   // Collect all lines for vertical alignment
   const allLines: SvgTextLine[] = [];
-  const listCounters = new Map<number, number>();
+  const listCounters = new Array(6).fill(0) as number[];
   for (const para of op.content.paragraphs) {
     const indentPx = (para.list?.indent ?? 0) * fontSize * 1.5;
-    const listIndent = para.list?.indent ?? 0;
-    const number =
-      para.list?.kind === "number"
-        ? (listCounters.get(listIndent) ?? 0) + 1
-        : 0;
+    let number = 0;
     if (para.list?.kind === "number") {
-      listCounters.set(listIndent, number);
+      const indent = Math.max(
+        0,
+        Math.min(listCounters.length - 1, para.list.indent ?? 0),
+      );
+      for (let depth = indent + 1; depth < listCounters.length; depth += 1) {
+        listCounters[depth] = 0;
+      }
+      listCounters[indent] += 1;
+      number = listCounters[indent];
+    } else {
+      listCounters.fill(0);
     }
     const prefix = listPrefix(para.list, number);
     const segments: SvgTextSegment[] = [];
@@ -700,10 +756,35 @@ function renderSvgImage(
   const transform = rotation
     ? ` transform="rotate(${rotation},${cx.toFixed(1)},${cy.toFixed(1)})"`
     : "";
+  const crop = op.crop;
+  const hasCrop = crop
+    ? [crop.top, crop.right, crop.bottom, crop.left].some((value) => value > 0)
+    : false;
+  const imageX = hasCrop && crop ? x - (w * crop.left) / 100 : x;
+  const imageY = hasCrop && crop ? y - (h * crop.top) / 100 : y;
+  const imageW =
+    hasCrop && crop ? (w * (100 + crop.left + crop.right)) / 100 : w;
+  const imageH =
+    hasCrop && crop ? (h * (100 + crop.top + crop.bottom)) / 100 : h;
+  const preserveAspectRatio =
+    op.fit === "cover"
+      ? "xMidYMid slice"
+      : op.fit === "fill"
+        ? "none"
+        : "xMidYMid meet";
   // op.assetId contains the resolved URL after resolveExportSpecAssetSources
   const href = xmlEsc(op.assetId);
-  const body = `<image href="${href}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" preserveAspectRatio="xMidYMid meet"${transform}/>`;
-  return { defs: "", body };
+  const image = `<image href="${href}" x="${imageX.toFixed(1)}" y="${imageY.toFixed(1)}" width="${imageW.toFixed(1)}" height="${imageH.toFixed(1)}" preserveAspectRatio="${preserveAspectRatio}"/>`;
+  if (!hasCrop) {
+    const body = `<g${transform}>${image}</g>`;
+    return { defs: "", body };
+  }
+
+  const clipId = nextDefId();
+  return {
+    defs: `<clipPath id="${clipId}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"/></clipPath>`,
+    body: `<g clip-path="url(#${clipId})"${transform}>${image}</g>`,
+  };
 }
 
 /** Render a connector operation as a native SVG <line> or <path>. */
@@ -712,12 +793,92 @@ function renderSvgConnector(
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
   const { x, y, w, h } = specFrameToPx(op.frame, dims);
-  const stroke = op.style.stroke;
+  const connectorStyle = op.style.connector;
+  const stroke = connectorStyle?.stroke ?? op.style.stroke;
   const strokeColor = stroke ? svgColor(stroke.color, "#888888") : "#888888";
   const pxPerIn = dims.widthPx / dims.widthIn;
-  const strokeW = stroke ? (stroke.widthPt * pxPerIn) / 72 : 1;
-  const body = `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + w).toFixed(1)}" y2="${(y + h).toFixed(1)}" stroke="${xmlEsc(strokeColor)}" stroke-width="${strokeW.toFixed(1)}"/>`;
-  return { defs: "", body };
+  const strokeW = stroke ? (stroke.widthPt * pxPerIn) / 72 : 2;
+  const dashArray =
+    stroke?.dash === "dashed"
+      ? "6 4"
+      : stroke?.dash === "dotted"
+        ? "1 4"
+        : undefined;
+  const startArrow = connectorStyle?.startArrow ?? "none";
+  const endArrow = connectorStyle?.endArrow ?? "arrow";
+  const routing = op.routing ?? connectorStyle?.routing ?? "straight";
+  const start = connectorEndpointToSvgPoint(op.from, { x, y, w, h });
+  const end = connectorEndpointToSvgPoint(op.to, { x, y, w, h });
+  const midX = start.x + (end.x - start.x) / 2;
+  const path =
+    routing === "curved"
+      ? `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${midX.toFixed(1)} ${start.y.toFixed(1)} ${midX.toFixed(1)} ${end.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`
+      : routing === "elbow"
+        ? `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} L ${midX.toFixed(1)} ${start.y.toFixed(1)} L ${midX.toFixed(1)} ${end.y.toFixed(1)} L ${end.x.toFixed(1)} ${end.y.toFixed(1)}`
+        : `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} L ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+  const defs: string[] = [];
+  const startMarkerId = startArrow !== "none" ? nextDefId() : undefined;
+  const endMarkerId = endArrow !== "none" ? nextDefId() : undefined;
+
+  if (startMarkerId && startArrow !== "none") {
+    defs.push(
+      renderConnectorMarker(startMarkerId, "start", startArrow, strokeColor),
+    );
+  }
+  if (endMarkerId && endArrow !== "none") {
+    defs.push(renderConnectorMarker(endMarkerId, "end", endArrow, strokeColor));
+  }
+
+  const opacity =
+    op.style.opacity !== undefined ? ` opacity="${op.style.opacity}"` : "";
+  const body = `<path d="${path}" fill="none" stroke="${xmlEsc(strokeColor)}" stroke-width="${strokeW.toFixed(1)}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ""} vector-effect="non-scaling-stroke"${startMarkerId ? ` marker-start="url(#${startMarkerId})"` : ""}${endMarkerId ? ` marker-end="url(#${endMarkerId})"` : ""}${opacity}/>`;
+  return { defs: defs.join("\n"), body };
+}
+
+function connectorEndpointToSvgPoint(
+  endpoint: Extract<ExportOperation, { type: "connector" }>["from"],
+  frame: { x: number; y: number; w: number; h: number },
+): { x: number; y: number } {
+  const point =
+    endpoint.kind === "point"
+      ? endpoint.point
+      : connectorAnchorPoint(endpoint.anchor);
+  return {
+    x: frame.x + (frame.w * point.x) / 100,
+    y: frame.y + (frame.h * point.y) / 100,
+  };
+}
+
+function connectorAnchorPoint(
+  anchor: Extract<
+    Extract<ExportOperation, { type: "connector" }>["from"],
+    { kind: "node" }
+  >["anchor"],
+): { x: number; y: number } {
+  switch (anchor) {
+    case "top":
+      return { x: 50, y: 0 };
+    case "right":
+      return { x: 100, y: 50 };
+    case "bottom":
+      return { x: 50, y: 100 };
+    case "left":
+      return { x: 0, y: 50 };
+    case "center":
+    default:
+      return { x: 50, y: 50 };
+  }
+}
+
+function renderConnectorMarker(
+  id: string,
+  side: "start" | "end",
+  arrow: "arrow" | "filled",
+  strokeColor: string,
+): string {
+  const path = side === "start" ? "M 8 0 L 0 3 L 8 6" : "M 0 0 L 8 3 L 0 6";
+  const refX = side === "start" ? 1 : 7;
+  return `<marker id="${id}" markerWidth="8" markerHeight="6" refX="${refX}" refY="3" orient="auto"><path d="${path}" fill="${arrow === "filled" ? xmlEsc(strokeColor) : "none"}" stroke="${xmlEsc(strokeColor)}" stroke-width="1"/></marker>`;
 }
 
 function tableColumnWidths(
