@@ -45,6 +45,35 @@ export function connectorEndpointFromSlidePoint(
   };
 }
 
+export function connectorEndpointSlidePoint(
+  endpoint: ConnectorEndpoint,
+  connectorFrame: LayoutBox["frame"],
+  resolveNodeFrame: (nodeId: string) => LayoutBox["frame"] | undefined,
+): { x: number; y: number } {
+  if (endpoint.kind === "point") {
+    return {
+      x: connectorFrame.x + (connectorFrame.w * endpoint.point.x) / 100,
+      y: connectorFrame.y + (connectorFrame.h * endpoint.point.y) / 100,
+    };
+  }
+  const targetFrame = resolveNodeFrame(endpoint.nodeId);
+  return targetFrame
+    ? connectorAnchorPoint(targetFrame, endpoint.anchor)
+    : connectorAnchorPoint(connectorFrame, endpoint.anchor);
+}
+
+export function connectorFrameFromSlidePoints(
+  fromPoint: { x: number; y: number },
+  toPoint: { x: number; y: number },
+): LayoutBox["frame"] {
+  return {
+    x: Math.min(fromPoint.x, toPoint.x),
+    y: Math.min(fromPoint.y, toPoint.y),
+    w: Math.max(Math.abs(toPoint.x - fromPoint.x), 1),
+    h: Math.max(Math.abs(toPoint.y - fromPoint.y), 1),
+  };
+}
+
 export function connectorEndpointToPointFallback(
   endpoint: ConnectorEndpoint,
   connectorFrame: LayoutBox["frame"] | undefined,

@@ -19,6 +19,8 @@ import { cx, MENU_CHROME, UI_LAYER, type UILayer } from "./tokens";
 const PANEL_GAP = 8;
 const VIEWPORT_INSET = 8;
 
+type FocusRef = { readonly current: HTMLElement | null };
+
 export type PopoverProps = {
   /** Controls panel visibility. The caller owns the open/close state. */
   open: boolean;
@@ -50,6 +52,12 @@ export type PopoverProps = {
   layer?: UILayer;
   /** ARIA role for the panel. Defaults to `"dialog"`. */
   role?: string;
+  /** Element to focus when the panel opens. */
+  initialFocusRef?: FocusRef;
+  /** Element to focus after the panel closes. Defaults to the previously focused element. */
+  restoreFocusRef?: FocusRef;
+  /** Restores focus to the opener (or restoreFocusRef) after an interactive popover closes. */
+  restoreFocusOnClose?: boolean;
   "aria-label"?: string;
 };
 
@@ -86,10 +94,15 @@ export function Popover({
   portal = false,
   layer = "dropdown",
   role = "dialog",
+  initialFocusRef,
+  restoreFocusRef,
+  restoreFocusOnClose = false,
   "aria-label": ariaLabel,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(open);
   const popMotion = usePopMotion();
   // Fixed-viewport coordinates: anchor the panel near the trigger, then clamp
   // the measured panel box inside the viewport.
@@ -180,6 +193,26 @@ export function Popover({
       window.visualViewport?.removeEventListener("scroll", reposition);
     };
   }, [open, reposition]);
+
+  useEffect(() => {
+    if (open) {
+      previouslyFocusedElementRef.current =
+        typeof document !== "undefined"
+          ? (document.activeElement as HTMLElement | null)
+          : null;
+      initialFocusRef?.current?.focus({ preventScroll: true });
+      wasOpenRef.current = true;
+      return;
+    }
+    if (!wasOpenRef.current) return;
+    wasOpenRef.current = false;
+    if (restoreFocusOnClose) {
+      const restoreTarget =
+        restoreFocusRef?.current ?? previouslyFocusedElementRef.current;
+      restoreTarget?.focus({ preventScroll: true });
+    }
+    previouslyFocusedElementRef.current = null;
+  }, [initialFocusRef, open, restoreFocusOnClose, restoreFocusRef]);
 
   // Escape closes the popover.
   useEffect(() => {

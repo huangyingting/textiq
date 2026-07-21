@@ -122,6 +122,8 @@ test("ThemePreviewPicker opens, searches previews, and applies a theme", () => {
   (trigger.props.onClick as () => void)();
   tree = harness.run(render);
   assert.equal(tree.props.open, true);
+  assert.equal(tree.props.restoreFocusOnClose, true);
+  assert.ok(tree.props.initialFocusRef);
   assert.match(String(tree.props.className), /w-\[min\(460px/);
 
   const listbox = collectElements(

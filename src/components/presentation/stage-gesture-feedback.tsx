@@ -48,6 +48,8 @@ export interface ConnectorGestureDraft {
   nodeId: string;
   endpoint: ConnectorEndpointHandle;
   value: ConnectorEndpoint;
+  frame?: LayoutBox["frame"];
+  endpoints?: Partial<Record<ConnectorEndpointHandle, ConnectorEndpoint>>;
 }
 
 interface NodeMovePreviewArgs {
@@ -295,11 +297,17 @@ export function buildStageNodeGestureDrafts({
     });
   }
   if (connectorGestureDraft) {
+    const currentDraft = drafts.get(connectorGestureDraft.nodeId) ?? {};
     drafts.set(connectorGestureDraft.nodeId, {
-      ...(drafts.get(connectorGestureDraft.nodeId) ?? {}),
+      ...currentDraft,
+      ...(connectorGestureDraft.frame
+        ? { frame: connectorGestureDraft.frame }
+        : {}),
       connectorEndpoints: {
-        ...(drafts.get(connectorGestureDraft.nodeId)?.connectorEndpoints ?? {}),
-        [connectorGestureDraft.endpoint]: connectorGestureDraft.value,
+        ...(currentDraft.connectorEndpoints ?? {}),
+        ...(connectorGestureDraft.endpoints ?? {
+          [connectorGestureDraft.endpoint]: connectorGestureDraft.value,
+        }),
       },
     });
   }

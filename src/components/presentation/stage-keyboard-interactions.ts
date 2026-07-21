@@ -7,6 +7,8 @@ import type {
 import {
   connectorAnchorPoint,
   connectorEndpointFromSlidePoint,
+  connectorEndpointSlidePoint,
+  connectorFrameFromSlidePoints,
 } from "@/lib/presentation/connector-geometry";
 import { nodeFactoryId } from "@/lib/presentation/node-asset-factories";
 
@@ -133,18 +135,6 @@ function defaultConnectorAnchorPairPresentation(
     : { from: "top", to: "bottom" };
 }
 
-function connectorBoundingFramePresentation(
-  fromPoint: { x: number; y: number },
-  toPoint: { x: number; y: number },
-): LayoutBox["frame"] {
-  return {
-    x: Math.min(fromPoint.x, toPoint.x),
-    y: Math.min(fromPoint.y, toPoint.y),
-    w: Math.max(Math.abs(toPoint.x - fromPoint.x), 1),
-    h: Math.max(Math.abs(toPoint.y - fromPoint.y), 1),
-  };
-}
-
 export function buildKeyboardConnectorNodePresentation({
   from,
   to,
@@ -163,7 +153,7 @@ export function buildKeyboardConnectorNodePresentation({
     type: "connector",
     role: "connector",
     layout: {
-      frame: connectorBoundingFramePresentation(
+      frame: connectorFrameFromSlidePoints(
         connectorAnchorPoint(from.layout.frame, anchors.from),
         connectorAnchorPoint(to.layout.frame, anchors.to),
       ),
@@ -183,16 +173,11 @@ function connectorEndpointSlidePointPresentation(
   connectorFrame: LayoutBox["frame"],
   endpoint: ConnectorEndpoint,
 ): { x: number; y: number } {
-  if (endpoint.kind === "point") {
-    return {
-      x: connectorFrame.x + (connectorFrame.w * endpoint.point.x) / 100,
-      y: connectorFrame.y + (connectorFrame.h * endpoint.point.y) / 100,
-    };
-  }
-  const target = findNodeById(nodes, endpoint.nodeId);
-  return target?.layout
-    ? connectorAnchorPoint(target.layout.frame, endpoint.anchor)
-    : connectorAnchorPoint(connectorFrame, endpoint.anchor);
+  return connectorEndpointSlidePoint(
+    endpoint,
+    connectorFrame,
+    (nodeId) => findNodeById(nodes, nodeId)?.layout?.frame,
+  );
 }
 
 export function connectorFrameForEndpointsPresentation(
@@ -201,7 +186,7 @@ export function connectorFrameForEndpointsPresentation(
   from: ConnectorEndpoint,
   to: ConnectorEndpoint,
 ): LayoutBox["frame"] {
-  return connectorBoundingFramePresentation(
+  return connectorFrameFromSlidePoints(
     connectorEndpointSlidePointPresentation(nodes, connectorFrame, from),
     connectorEndpointSlidePointPresentation(nodes, connectorFrame, to),
   );
