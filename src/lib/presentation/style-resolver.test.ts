@@ -373,7 +373,7 @@ describe("validateThemePackage", () => {
           "brand-font": {
             id: "brand-font",
             family: "Inter",
-            src: "https://example.com/inter.woff2",
+            src: "/api/brand-assets/example/inter.woff2",
             weight: [400, 700],
             style: "normal",
           },

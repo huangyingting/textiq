@@ -564,6 +564,40 @@ describe("buildSvgFromSlideSpec — shape variants", () => {
     assert.ok(svg.includes('width="268.8"'), "crop expands image width");
     assert.ok(svg.includes('height="172.8"'), "crop expands image height");
   });
+
+  test("image op preserves container paint, opacity, and image filters", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "image",
+          id: "img-style",
+          assetId: "data:image/png;base64,AAA",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          style: {
+            fill: { type: "solid", color: "#f8fafc" },
+            stroke: { color: "#0f172a", widthPt: 2 },
+            radius: { allPt: 6 },
+            opacity: 0.75,
+            image: { brightness: 1.1, contrast: 0.9, saturation: 1.2 },
+          },
+          fit: "contain",
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.match(
+      svg,
+      /<rect x="96\.0" y="54\.0" width="192\.0" height="108\.0" rx="8\.0" ry="8\.0" fill="#f8fafc" stroke="#0f172a"/,
+    );
+    assert.ok(svg.includes('opacity="0.75"'), "node opacity should survive");
+    assert.ok(
+      svg.includes('filter="brightness(1.1) contrast(0.9) saturate(1.2)"'),
+      "image filters should survive",
+    );
+  });
 });
 
 describe("buildSvgFromSlideSpec — text renderer branches", () => {
@@ -874,6 +908,37 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
     );
   });
 
+  test("text op preserves container paint and opacity", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "text",
+          id: "painted-text",
+          frame: { x: 96, y: 54, w: 192, h: 108 },
+          content: { paragraphs: [{ id: "p", text: "Painted text" }] },
+          style: {
+            fill: { type: "solid", color: "#fff7ed" },
+            stroke: { color: "#ea580c", widthPt: 1.5, dash: "dashed" },
+            radius: { allPt: 4 },
+            opacity: 0.6,
+            text: { color: "#111827" },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.match(
+      svg,
+      /<rect x="96\.0" y="54\.0" width="192\.0" height="108\.0" rx="5\.3" ry="5\.3" fill="#fff7ed" stroke="#ea580c"/,
+    );
+    assert.ok(svg.includes('stroke-dasharray="6 4"'));
+    assert.ok(svg.includes('opacity="0.6"'));
+    assert.ok(svg.includes("Painted text"));
+  });
+
   test("long text wraps into multiple <text> lines", () => {
     // Very narrow box forces wrapSvgLine to split
     const longText = "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa";
@@ -980,6 +1045,43 @@ describe("buildSvgFromSlideSpec — connector and visual ops", () => {
       svg.includes('href="data:image/svg+xml;base64,PHN2Zz4="'),
       "visual with assetId → <image>",
     );
+    assert.ok(!svg.includes("<foreignObject"));
+  });
+
+  test("visual op without assetId renders deterministic placeholder", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "visual",
+          id: "v-placeholder",
+          visualId: "visual-1",
+          frame: { x: 120, y: 80, w: 240, h: 160 },
+          style: {
+            visual: {
+              channelColors: {
+                primary: "#111111",
+                secondary: "#222222",
+                accent: "#333333",
+                muted: "#444444",
+              },
+              transparentBackground: false,
+            },
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(
+      svg.includes('fill="#44444422"'),
+      "placeholder background should match live fallback",
+    );
+    assert.ok(svg.includes('stroke="#444444"'), "placeholder border renders");
+    assert.ok(svg.includes('fill="#111111"'), "primary channel bar renders");
+    assert.ok(svg.includes('fill="#222222"'), "secondary channel bar renders");
+    assert.ok(svg.includes('fill="#333333"'), "accent channel bar renders");
     assert.ok(!svg.includes("<foreignObject"));
   });
 });

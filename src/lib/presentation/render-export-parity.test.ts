@@ -137,7 +137,7 @@ function buildCustomBrandKitPackage() {
         "parity-sans": {
           id: "parity-sans",
           family: "Parity Sans",
-          src: "/brand-assets/parity-user/parity-sans.woff2",
+          src: "/api/brand-assets/parity-user/parity-sans.woff2",
           weight: [400, 700],
           style: "normal",
         },

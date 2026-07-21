@@ -283,7 +283,7 @@ describe("safeParseDeck coverage branches", () => {
           "font-rich": {
             id: "font-rich",
             family: "Inter",
-            src: "https://example.com/inter.woff2",
+            src: "/api/brand-assets/example/inter.woff2",
             weight: [400, 700],
             style: "normal",
             contentHash: "font-hash",

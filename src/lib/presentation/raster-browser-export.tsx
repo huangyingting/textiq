@@ -2,7 +2,11 @@
 
 import { buildExportSpec, buildSingleSlideExportSpec } from "./export-spec";
 import { resolveExportSpecAssetSources } from "./pptx-appliers/asset-sources";
-import type { ExportOperation, ExportSlideSpec } from "./export-spec-types";
+import type {
+  ExportDeckSpec,
+  ExportOperation,
+  ExportSlideSpec,
+} from "./export-spec-types";
 import { loadSlideFonts } from "./slide-font-loading";
 import { resolveDeckRenderTree } from "./render-resolver";
 import type {
@@ -11,9 +15,16 @@ import type {
 } from "./render-tree";
 import type { CanvasSpec } from "./types";
 import type { Deck, ListMarker, TextRun } from "./schema";
-import type { FillStyle, ColorValue, TextStyle } from "./style-schema";
+import type {
+  FillStyle,
+  ColorValue,
+  TextStyle,
+  StyleObject,
+} from "./style-schema";
 import type { ThemePackageV1 } from "./theme-package-schema";
 import { resolveThemePackageForDeck } from "./theme-package-registry";
+import { makeDiagnostic } from "./diagnostics";
+import { visualChannelColorWithDefaults } from "./visual-channel-colors";
 import {
   buildRasterPdfFromPngs,
   resolveRasterSlideDimensions,
@@ -366,6 +377,133 @@ function renderSvgFill(fill: FillStyle | undefined): {
   return { attr: "#f0f0f0", def: "" };
 }
 
+function pxPerPt(dims: RasterSlideDimensions): number {
+  return dims.widthPx / dims.widthIn / 72;
+}
+
+function svgRotationTransform(
+  rotation: number | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): string {
+  if (!rotation) return "";
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  return ` transform="rotate(${rotation},${cx.toFixed(1)},${cy.toFixed(1)})"`;
+}
+
+function svgRadiusAttrs(
+  radius: StyleObject["radius"] | undefined,
+  dims: RasterSlideDimensions,
+): string {
+  if (!radius) return "";
+  const toPx = pxPerPt(dims);
+  const r =
+    "allPt" in radius
+      ? radius.allPt
+      : Math.max(
+          radius.topLeftPt,
+          radius.topRightPt,
+          radius.bottomRightPt,
+          radius.bottomLeftPt,
+        );
+  const px = Math.max(0, r * toPx);
+  return px > 0 ? ` rx="${px.toFixed(1)}" ry="${px.toFixed(1)}"` : "";
+}
+
+function svgStrokeAttrs(
+  stroke: StyleObject["stroke"] | undefined,
+  dims: RasterSlideDimensions,
+): string {
+  if (!stroke) return ` stroke="none" stroke-width="0"`;
+  const dashArray =
+    stroke.dash === "dashed"
+      ? "6 4"
+      : stroke.dash === "dotted"
+        ? "1 4"
+        : undefined;
+  return ` stroke="${xmlEsc(svgColor(stroke.color, "transparent"))}" stroke-width="${(stroke.widthPt * pxPerPt(dims)).toFixed(1)}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ""}`;
+}
+
+function svgEffectFilter(style: StyleObject): string {
+  const filters: string[] = [];
+  const shadow = style.shadow;
+  if (shadow) {
+    filters.push(
+      `drop-shadow(${shadow.xPt}pt ${shadow.yPt}pt ${shadow.blurPt}pt ${svgColor(shadow.color, "rgba(0,0,0,0.2)")})`,
+    );
+  }
+  const effect = style.effect;
+  if (effect && effect.kind !== "none") {
+    if (effect.kind === "blur") {
+      filters.push(`blur(${effect.radiusPt}pt)`);
+    } else if (effect.kind === "glow") {
+      filters.push(
+        `drop-shadow(0 0 ${effect.blurPt}pt ${svgColor(effect.color, "currentColor")})`,
+      );
+    } else if (effect.kind === "glass") {
+      const blur =
+        effect.intensity === "strong"
+          ? 22
+          : effect.intensity === "light"
+            ? 8
+            : 14;
+      filters.push(`blur(${blur}px) saturate(1.25)`);
+    }
+  }
+  return filters.join(" ");
+}
+
+function svgImageFilter(style: StyleObject["image"] | undefined): string {
+  return [
+    style?.brightness !== undefined ? `brightness(${style.brightness})` : "",
+    style?.contrast !== undefined ? `contrast(${style.contrast})` : "",
+    style?.saturation !== undefined ? `saturate(${style.saturation})` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function renderSvgContainerPaint(
+  style: StyleObject,
+  frame: { x: number; y: number; w: number; h: number },
+  dims: RasterSlideDimensions,
+): { defs: string; body: string } {
+  const fill = style.fill?.type === "image" ? undefined : style.fill;
+  const fillResult = renderSvgFill(fill);
+  const hasFill = fill !== undefined;
+  const hasStroke = style.stroke !== undefined;
+  if (!hasFill && !hasStroke) return { defs: "", body: "" };
+  const strokeAttrs = svgStrokeAttrs(style.stroke, dims);
+  return {
+    defs: fillResult.def,
+    body: `<rect x="${frame.x.toFixed(1)}" y="${frame.y.toFixed(1)}" width="${frame.w.toFixed(1)}" height="${frame.h.toFixed(1)}"${svgRadiusAttrs(style.radius, dims)} fill="${xmlEsc(hasFill ? fillResult.attr : "none")}"${strokeAttrs}/>`,
+  };
+}
+
+function wrapSvgStyledNode(
+  style: StyleObject,
+  frame: { x: number; y: number; w: number; h: number },
+  rotation: number | undefined,
+  content: string,
+): string {
+  const nodeOpacity =
+    style.opacity ??
+    (style.effect?.kind === "glow" ? style.effect.opacity : undefined);
+  const nodeFilter = svgEffectFilter(style);
+  const attrs = [
+    svgRotationTransform(rotation, frame.x, frame.y, frame.w, frame.h),
+    nodeOpacity !== undefined ? ` opacity="${nodeOpacity}"` : "",
+    nodeFilter ? ` filter="${xmlEsc(nodeFilter)}"` : "",
+    style.blendMode && style.blendMode !== "normal"
+      ? ` style="mix-blend-mode:${xmlEsc(style.blendMode)}"`
+      : "",
+  ].join("");
+  return `<g${attrs}>${content}</g>`;
+}
+
 const CHAR_WIDTH_RATIO_SVG = 0.54;
 
 type SvgTextSegment = {
@@ -679,14 +817,7 @@ function renderSvgText(
         ? y + h - totalH + fontSize
         : y + fontSize;
 
-  const rotation = op.rotation;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const transform = rotation
-    ? ` transform="rotate(${rotation},${cx.toFixed(1)},${cy.toFixed(1)})"`
-    : "";
-
-  const body = allLines
+  const textBody = allLines
     .map((line, i) =>
       renderSvgTextLine(line, textX, startY + i * lineH, textAnchor, {
         fontSize,
@@ -694,12 +825,19 @@ function renderSvgText(
         fontFamily,
         fontWeight,
         fontStyle,
-        transform,
+        transform: "",
       }),
     )
     .join("\n");
+  const container = renderSvgContainerPaint(op.style, { x, y, w, h }, dims);
+  const body = wrapSvgStyledNode(
+    op.style,
+    { x, y, w, h },
+    op.rotation,
+    `${container.body}${textBody}`,
+  );
 
-  return { defs: "", body };
+  return { defs: container.defs, body };
 }
 
 /** Render a shape operation as native SVG (rect, ellipse, polygon, etc). */
@@ -750,12 +888,6 @@ function renderSvgImage(
   dims: RasterSlideDimensions,
 ): { defs: string; body: string } {
   const { x, y, w, h } = specFrameToPx(op.frame, dims);
-  const rotation = op.rotation;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const transform = rotation
-    ? ` transform="rotate(${rotation},${cx.toFixed(1)},${cy.toFixed(1)})"`
-    : "";
   const crop = op.crop;
   const hasCrop = crop
     ? [crop.top, crop.right, crop.bottom, crop.left].some((value) => value > 0)
@@ -774,16 +906,63 @@ function renderSvgImage(
         : "xMidYMid meet";
   // op.assetId contains the resolved URL after resolveExportSpecAssetSources
   const href = xmlEsc(op.assetId);
-  const image = `<image href="${href}" x="${imageX.toFixed(1)}" y="${imageY.toFixed(1)}" width="${imageW.toFixed(1)}" height="${imageH.toFixed(1)}" preserveAspectRatio="${preserveAspectRatio}"/>`;
-  if (!hasCrop) {
-    const body = `<g${transform}>${image}</g>`;
-    return { defs: "", body };
-  }
+  const filter = svgImageFilter(op.style.image);
+  const image = `<image href="${href}" x="${imageX.toFixed(1)}" y="${imageY.toFixed(1)}" width="${imageW.toFixed(1)}" height="${imageH.toFixed(1)}" preserveAspectRatio="${preserveAspectRatio}"${filter ? ` filter="${xmlEsc(filter)}"` : ""}/>`;
+  const defs: string[] = [];
+  const bodies: string[] = [];
+  const container = renderSvgContainerPaint(op.style, { x, y, w, h }, dims);
+  if (container.defs) defs.push(container.defs);
+  if (container.body) bodies.push(container.body);
+  let imageBody = image;
 
-  const clipId = nextDefId();
+  if (hasCrop) {
+    const clipId = nextDefId();
+    defs.push(
+      `<clipPath id="${clipId}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"/></clipPath>`,
+    );
+    imageBody = `<g clip-path="url(#${clipId})">${image}</g>`;
+  }
+  bodies.push(imageBody);
   return {
-    defs: `<clipPath id="${clipId}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"/></clipPath>`,
-    body: `<g clip-path="url(#${clipId})"${transform}>${image}</g>`,
+    defs: defs.join("\n"),
+    body: wrapSvgStyledNode(
+      op.style,
+      { x, y, w, h },
+      op.rotation,
+      bodies.join(""),
+    ),
+  };
+}
+
+function renderSvgVisualPlaceholder(
+  op: Extract<ExportOperation, { type: "visual" }>,
+  dims: RasterSlideDimensions,
+): { defs: string; body: string } {
+  const { x, y, w, h } = specFrameToPx(op.frame, dims);
+  const colors = visualChannelColorWithDefaults({
+    ...(op.style.visual?.channelColors ?? {}),
+    ...(op.channelColors ?? {}),
+  });
+  const isTransparent =
+    op.transparentBackground ?? op.style.visual?.transparentBackground ?? false;
+  const backgroundColor = isTransparent ? "transparent" : `${colors.muted}22`;
+  const scaleX = w / 120;
+  const scaleY = h / 80;
+  const bar = (bx: number, by: number, bw: number, bh: number, fill: string) =>
+    `<rect x="${(x + bx * scaleX).toFixed(1)}" y="${(y + by * scaleY).toFixed(1)}" width="${(bw * scaleX).toFixed(1)}" height="${(bh * scaleY).toFixed(1)}" rx="${(4 * Math.min(scaleX, scaleY)).toFixed(1)}" fill="${xmlEsc(fill)}"/>`;
+  const container = renderSvgContainerPaint(op.style, { x, y, w, h }, dims);
+  const fallbackBorder = `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${(4 * Math.min(scaleX, scaleY)).toFixed(1)}" fill="${xmlEsc(backgroundColor)}" stroke="${xmlEsc(colors.muted)}" stroke-width="1"/>`;
+  const placeholder = [
+    container.body,
+    fallbackBorder,
+    bar(14, 18, 18, 44, colors.primary),
+    bar(51, 31, 18, 31, colors.secondary),
+    bar(88, 10, 18, 52, colors.accent),
+    `<path d="M ${(x + 12 * scaleX).toFixed(1)} ${(y + 68 * scaleY).toFixed(1)} H ${(x + 108 * scaleX).toFixed(1)}" stroke="${xmlEsc(colors.muted)}" stroke-width="${(4 * Math.min(scaleX, scaleY)).toFixed(1)}" stroke-linecap="round"/>`,
+  ].join("");
+  return {
+    defs: container.defs,
+    body: wrapSvgStyledNode(op.style, { x, y, w, h }, op.rotation, placeholder),
   };
 }
 
@@ -1181,8 +1360,9 @@ export function buildSvgFromSlideSpec(
         { ...op, type: "image" } as Extract<ExportOperation, { type: "image" }>,
         dims,
       );
+    } else if (op.type === "visual") {
+      result = renderSvgVisualPlaceholder(op, dims);
     }
-    // Unresolved visuals: skip for now
     if (result) {
       if (result.defs) defs.push(result.defs);
       bodies.push(result.body);
@@ -1192,6 +1372,36 @@ export function buildSvgFromSlideSpec(
   const defsBlock = defs.length > 0 ? `<defs>${defs.join("\n")}</defs>\n` : "";
   void canvas; // canvas is reserved for future per-canvas settings
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${viewBox}">\n${defsBlock}${bodies.join("\n")}\n</svg>`;
+}
+
+function rasterVisualFallbackDiagnostics(exportSpec: ExportDeckSpec) {
+  return exportSpec.slides.flatMap((slide) =>
+    slide.operations.flatMap((op) => {
+      if (op.type !== "visual" || op.assetId) return [];
+      return [
+        makeDiagnostic(
+          "unsupported-export-feature",
+          "warning",
+          `Raster export rendered a visual placeholder because no rendered asset was available for ${op.visualId ?? op.id}.`,
+          {
+            category: "export",
+            slideId: slide.id,
+            nodeId: op.id,
+            target: {
+              scope: "export",
+              exportFeature: "raster-visual-placeholder",
+              slideId: slide.id,
+              nodeId: op.id,
+            },
+            details: {
+              ...(op.visualId !== undefined ? { visualId: op.visualId } : {}),
+              ...(op.assetId !== undefined ? { assetId: op.assetId } : {}),
+            },
+          },
+        ),
+      ];
+    }),
+  );
 }
 
 /* node:coverage ignore next 33 */
@@ -1235,7 +1445,10 @@ export async function exportDeckRasterBrowser(
 
   return {
     pngs,
-    diagnostics: exportSpec.diagnostics,
+    diagnostics: [
+      ...exportSpec.diagnostics,
+      ...rasterVisualFallbackDiagnostics(exportSpec),
+    ],
     ...(await buildRasterPdfFromPngs(pngs, dimensions)),
   };
 }

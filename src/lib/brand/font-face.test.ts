@@ -169,6 +169,29 @@ describe("buildFontFaceCss", () => {
     assert.match(css, /font-family: 'Acme\\0 \\9 \\A \\D \\1F '/);
     assert.equal(/[\u0000-\u001F\u007F]/.test(css), false);
   });
+
+  it("escapes quote, backslash, and newline payloads in font URLs", () => {
+    const css = buildFontFaceCss(
+      "Acme",
+      "/api/brand-assets/font\\bad'\nbody{display:none}.woff2",
+    );
+    assert.match(
+      css,
+      /src: url\('\/api\/brand-assets\/font\\\\bad\\'\\A body\{display:none\}\.woff2'\)/,
+    );
+    assert.equal((css.match(/'\); font-display/g) ?? []).length, 1);
+    assert.equal(/[\u0000-\u001F\u007F]/.test(css), false);
+  });
+
+  it("escapes style-close payloads in font URLs", () => {
+    const css = buildFontFaceCss(
+      "Acme",
+      "/api/brand-assets/font.woff2</style><script>alert(1)</script>",
+    );
+    assert.match(css, /\\3C \/style\\3E \\3C script\\3E /);
+    assert.equal(css.includes("</style>"), false);
+    assert.equal(css.includes("<script>"), false);
+  });
 });
 
 // ---------------------------------------------------------------------------

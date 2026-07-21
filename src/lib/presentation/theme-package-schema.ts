@@ -193,6 +193,16 @@ const STYLE_SLIDE_DECORATION = [
   "default",
   "expressive",
 ] as const;
+
+const SAFE_THEME_FONT_ROUTE_PREFIXES = [
+  "/api/brand-assets/",
+  "/api/slide-assets/",
+] as const;
+const SAFE_THEME_FONT_DATA_URL =
+  /^data:(?:font\/(?:woff2?|ttf|otf|collection)|application\/(?:font-woff2?|x-font-ttf|x-font-otf|vnd\.ms-fontobject))(?:;[^,]*)?,/i;
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^[a-z][a-z\d+.-]*:|\/\//i;
+const URL_PARSE_BASE = "https://textiq.local";
+const CSS_BREAKOUT_CHARS = /[\\'"<>\u0000-\u001f\u007f]/;
 const STYLE_EFFECT_KINDS = ["none", "glass", "blur", "glow"] as const;
 const STYLE_EFFECT_GLASS_INTENSITIES = ["light", "medium", "strong"] as const;
 const IMAGE_MIME_TYPES = [
@@ -202,6 +212,23 @@ const IMAGE_MIME_TYPES = [
   "image/webp",
   "image/svg+xml",
 ] as const;
+
+function isSafeThemeFontSource(src: string): boolean {
+  const trimmed = src.trim();
+  if (!trimmed) return false;
+  if (CSS_BREAKOUT_CHARS.test(trimmed)) return false;
+  if (SAFE_THEME_FONT_DATA_URL.test(trimmed)) return true;
+  if (ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(trimmed)) return false;
+  try {
+    const parsed = new URL(trimmed, URL_PARSE_BASE);
+    if (parsed.origin !== URL_PARSE_BASE) return false;
+    return SAFE_THEME_FONT_ROUTE_PREFIXES.some((prefix) =>
+      parsed.pathname.startsWith(prefix),
+    );
+  } catch {
+    return false;
+  }
+}
 const FONT_STYLES = ["normal", "italic"] as const;
 
 function validateKnownKeys(
@@ -795,6 +822,10 @@ function validateThemeAssetManifest(
         }
         if (!isValidationNonEmptyString(font.src)) {
           errors.push(`${fontCtx}.src must be a non-empty string`);
+        } else if (!isSafeThemeFontSource(font.src)) {
+          errors.push(
+            `${fontCtx}.src must be a safe app font asset path or data font URL`,
+          );
         }
         if (font.weight !== undefined) {
           if (Array.isArray(font.weight)) {
