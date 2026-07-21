@@ -70,7 +70,9 @@ class WSSharedDoc extends Y.Doc {
         awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClients),
       );
       const message = encoding.toUint8Array(encoder);
-      this.conns.forEach((_, c) => send(this, c, message));
+      this.conns.forEach((_, c) =>
+        send(this, c, message, c.__textiqOnBeforeEvict ?? null),
+      );
     };
     this.awareness.on("update", awarenessChangeHandler);
     this.on("update", updateHandler);
@@ -83,7 +85,9 @@ const updateHandler = (update, _origin, doc) => {
   encoding.writeVarUint(encoder, messageSync);
   syncProtocol.writeUpdate(encoder, update);
   const message = encoding.toUint8Array(encoder);
-  doc.conns.forEach((_, conn) => send(doc, conn, message));
+  doc.conns.forEach((_, conn) =>
+    send(doc, conn, message, conn.__textiqOnBeforeEvict ?? null),
+  );
 };
 
 /** Returns true when a room with the given active-connection count should be evicted. */
@@ -419,6 +423,7 @@ export const setupConnection = (
   }
   const doc = getYDoc(room);
   conn.__textiqReadOnly = readOnly;
+  conn.__textiqOnBeforeEvict = onBeforeEvict;
   // Cancel any pending eviction — this connection revives the room.
   cancelEviction(room);
   doc.conns.set(conn, new Set());
