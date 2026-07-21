@@ -256,6 +256,11 @@ describe("ImportButton (drop-zone / full mode)", () => {
       assert.equal(status.props.children, "Uploading and validating file…");
       const dropZone = renderer.root.findByProps({ role: "button" });
       assert.equal(dropZone.props["aria-disabled"], true);
+      assert.equal(dropZone.props.tabIndex, 0);
+      assert.equal(findInput(renderer).props.disabled, undefined);
+      assert.equal(typeof dropZone.props.onClick, "function");
+      assert.equal(typeof dropZone.props.onKeyDown, "function");
+      assert.equal(typeof dropZone.props.onDrop, "function");
       assert.match(
         JSON.stringify(dropZone.props.className),
         /cursor-not-allowed/,
@@ -275,6 +280,10 @@ describe("ImportButton (drop-zone / full mode)", () => {
       });
       assert.equal(importCalls, 1);
       assert.equal(inputClicks, 0);
+      assert.equal(
+        renderer.root.findByProps({ role: "button" }).props["aria-disabled"],
+        true,
+      );
 
       await act(async () => {
         resolveImport({ ok: true, data: { markdown: "done" } });

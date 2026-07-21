@@ -1,7 +1,7 @@
 ---
 Type: "architecture"
 Status: "current"
-Last updated: "2026-07-15"
+Last updated: "2026-07-21"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -53,6 +53,11 @@ Editor in-place import
 The client rejects files above the global import ceiling before upload and emits
 product telemetry for start/success/failure. The server repeats validation and
 is authoritative.
+
+Editor drop-zone imports remain focusable while an upload is in flight, expose
+`aria-disabled="true"`, and keep the hidden file input mounted. Click, drop, and
+keyboard activation are guarded during that pending state so a second file cannot
+start a concurrent parse.
 
 ## Accepted Formats
 
@@ -119,6 +124,8 @@ blank imported document accidentally.
    through `/api/import`.
 7. Import telemetry uses file type, size/duration buckets, surface, and stable
    failure reasons; it does not include document content.
+8. Drop-zone upload affordances stay keyboard-reachable while pending, but
+   duplicate activations are ignored until the current upload settles.
 
 ## Primary Tests
 

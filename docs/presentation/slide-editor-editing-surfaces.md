@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-17"
+last_updated: "2026-07-21"
 description: "Interaction ownership rules for the slide editor canvas popover, element popover toolbar, right inspector panel, right-click menu, and layer management."
 ---
 
@@ -77,6 +77,9 @@ Table popover:
 
 - Includes enter table edit, add row, add column, delete row, delete column, and header row toggle.
 - Table row and column commands are allowed here because they are core table content editing, not generic object operations.
+- Add/insert row and column commands generate collision-free row and column IDs
+  even after middle rows or columns are deleted, so repeated table edits do not
+  duplicate structural identifiers.
 
 Multi-selection popover:
 
