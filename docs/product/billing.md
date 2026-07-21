@@ -107,9 +107,12 @@ subscription cancellation for account deletion.
 ## Subscription Writes
 
 Local plan changes update both `User.plan` / credit fields and the one-row
-`Subscription` model inside a transaction. Stripe webhooks and checkout paths
-write Stripe customer/subscription ids separately so customer identity can
-outlive an individual subscription.
+`Subscription` model inside a transaction. Stripe checkout is used for new paid
+conversions without an active Stripe subscription; active paid tier changes
+update the existing Stripe subscription item instead of opening a second
+subscription. Stripe webhooks and checkout paths write Stripe
+customer/subscription ids separately so customer identity can outlive an
+individual subscription.
 
 ## Invariants
 

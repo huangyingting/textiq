@@ -51,6 +51,7 @@ type StripeClientLike = {
   };
   subscriptions: {
     cancel(id: string): Promise<unknown>;
+    retrieve?(id: string): Promise<StripeSubscriptionLike>;
     update(id: string, args: unknown): Promise<unknown>;
   };
   webhooks: {
@@ -98,6 +99,43 @@ function getPriceId(plan: Plan): string {
     return stripeEnv.proPriceId();
   }
   throw new Error(`No Stripe price for plan: ${plan}`);
+}
+
+function isLivePaidStripeSubscription(
+  sub: Awaited<ReturnType<typeof getBillingSubscription>>,
+): sub is NonNullable<Awaited<ReturnType<typeof getBillingSubscription>>> & {
+  stripeSubscriptionId: string;
+} {
+  if (!sub?.stripeSubscriptionId) return false;
+  if (!isPlan(sub.plan) || sub.plan === "free") return false;
+  return (
+    sub.status === "active" ||
+    sub.status === "trialing" ||
+    sub.status === "past_due"
+  );
+}
+
+async function updateExistingStripeSubscriptionPlan(
+  stripe: StripeClientLike,
+  stripeSubscriptionId: string,
+  targetPlan: Plan,
+): Promise<void> {
+  const retrieveSubscription = stripe.subscriptions.retrieve;
+  if (!retrieveSubscription) {
+    throw new Error("Stripe subscription retrieval is not available.");
+  }
+
+  const stripeSubscription = await retrieveSubscription(stripeSubscriptionId);
+  const itemId = stripeSubscription.items?.data?.[0]?.id;
+  if (!itemId) {
+    throw new Error("Stripe subscription did not include an item to update.");
+  }
+
+  await stripe.subscriptions.update(stripeSubscriptionId, {
+    items: [{ id: itemId, price: getPriceId(targetPlan), quantity: 1 }],
+    proration_behavior: "create_prorations",
+    cancel_at_period_end: false,
+  });
 }
 
 // Dynamic Stripe import (SDK is optional — ignore at bundle time, load at runtime)
@@ -167,6 +205,19 @@ export class StripeBillingProvider implements BillingProvider {
     // Look up or create a Stripe customer (reuse the stored customer id; it can
     // outlive any single subscription).
     const sub = await getBillingSubscription(userId);
+    if (isLivePaidStripeSubscription(sub)) {
+      await updateExistingStripeSubscriptionPlan(
+        stripe,
+        sub.stripeSubscriptionId,
+        targetPlan,
+      );
+      return {
+        success: true,
+        plan: targetPlan,
+        message: `Plan change to ${targetPlan} submitted. Your billing page will update shortly.`,
+      };
+    }
+
     let customerId: string | undefined = sub?.stripeCustomerId ?? undefined;
 
     if (!customerId) {
@@ -256,7 +307,7 @@ export interface StripeSubscriptionLike {
   current_period_start?: number;
   /** Unix seconds. */
   current_period_end?: number;
-  items?: { data?: Array<{ price?: { id?: string } }> };
+  items?: { data?: Array<{ id?: string | null; price?: { id?: string } }> };
 }
 
 /** The subset of subscription state a webhook event resolves to. */
