@@ -77,6 +77,26 @@ describe("product telemetry emitter", () => {
     );
   });
 
+  test("swallows synchronous sink throws without propagating to callers", () => {
+    const sinkError = new Error("telemetry sink failed synchronously");
+    const restore = configureProductTelemetrySink(() => {
+      throw sinkError;
+    });
+    try {
+      assert.doesNotThrow(() =>
+        emitProductTelemetry("product.editor.command.failed", {
+          commandName: "align-left",
+          durationBucket: "lt100ms",
+          failureReason: "validation",
+          status: 400,
+          surface: "slide-editor",
+        }),
+      );
+    } finally {
+      restore();
+    }
+  });
+
   test("swallows async sink rejections without an unhandled rejection", async () => {
     const unhandledRejections: unknown[] = [];
     const onUnhandledRejection = (reason: unknown) => {
@@ -84,9 +104,12 @@ describe("product telemetry emitter", () => {
     };
     process.on("unhandledRejection", onUnhandledRejection);
 
-    const restore = configureProductTelemetrySink(() =>
-      Promise.reject(new Error("telemetry sink failed")),
-    );
+    const sinkError = new Error("telemetry sink failed asynchronously");
+    let sinkCalls = 0;
+    const restore = configureProductTelemetrySink(() => {
+      sinkCalls += 1;
+      return Promise.reject(sinkError);
+    });
     try {
       assert.doesNotThrow(() =>
         emitProductTelemetry("product.export.failed", {
@@ -94,6 +117,14 @@ describe("product telemetry emitter", () => {
           outputFormat: "pdf",
           failureReason: "server",
           status: 500,
+        }),
+      );
+      assert.doesNotThrow(() =>
+        emitProductTelemetry("product.export.failed", {
+          exportKind: "document",
+          outputFormat: "pdf",
+          failureReason: "timeout",
+          status: 504,
         }),
       );
       await new Promise<void>((resolve) => {
@@ -104,6 +135,7 @@ describe("product telemetry emitter", () => {
       process.off("unhandledRejection", onUnhandledRejection);
     }
 
+    assert.equal(sinkCalls, 2);
     assert.deepEqual(unhandledRejections, []);
   });
 });
