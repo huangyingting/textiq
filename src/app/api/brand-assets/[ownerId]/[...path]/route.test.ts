@@ -232,6 +232,9 @@ const ASSET_ROW = {
   id: "asset-1",
   mimeType: "image/png",
   storageKey: STORAGE_KEY,
+  documentId: null,
+  workspaceId: null,
+  brand: null,
 };
 
 const FAKE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -428,4 +431,94 @@ test("#2148: anonymous shared presentation viewers can fetch active theme packag
 
   assert.equal(resp.status, 200);
   assert.match(resp.headers.get("content-type") ?? "", /image\/png/);
+});
+
+test("#2177: shared presentations cannot expose another owner's brand asset", async (t) => {
+  global.__testBrandAssetUser = null;
+  global.__testBrandAssetThemePackage = {
+    assets: {
+      fonts: {
+        "font-1": {
+          id: "font-1",
+          family: "Acme Sans",
+          src: `/api/brand-assets/${OWNER_ID}/abc123.png`,
+        },
+      },
+    },
+  };
+  t.after(() => {
+    global.__testBrandAssetUser = null;
+    global.__testBrandAssetThemePackage = undefined;
+  });
+
+  stubPrismaMethod(t, prismaAsset, "findFirst", async () => ASSET_ROW);
+  stubPrismaMethod(t, prismaDocument, "findFirst", async () => ({
+    deckJson: {},
+    ownerId: OTHER_USER_ID,
+    workspaceId: null,
+    isShared: true,
+    shareId: "share123",
+    shareExpiresAt: null,
+    shareEmbedEnabled: true,
+    sharePresentEnabled: true,
+    sharePasscodeHash: null,
+    deletedAt: null,
+    workspace: null,
+  }));
+
+  const resp = await GET(
+    new NextRequest(
+      `http://localhost/api/brand-assets/${OWNER_ID}/abc123.png?shareId=share123&shareMode=present`,
+    ),
+    makeParams(OWNER_ID, ["abc123.png"]),
+  );
+
+  assert.equal(resp.status, 404);
+  assert.equal(await resp.text(), "Not found");
+});
+
+test("#2177: shared presentations cannot expose a brand-owned asset from another owner", async (t) => {
+  global.__testBrandAssetUser = null;
+  global.__testBrandAssetThemePackage = {
+    assets: {
+      images: {
+        "logo-1": {
+          id: "logo-1",
+          src: `/api/brand-assets/${OWNER_ID}/abc123.png`,
+        },
+      },
+    },
+  };
+  t.after(() => {
+    global.__testBrandAssetUser = null;
+    global.__testBrandAssetThemePackage = undefined;
+  });
+
+  stubPrismaMethod(t, prismaAsset, "findFirst", async () => ({
+    ...ASSET_ROW,
+    brand: { ownerId: OTHER_USER_ID },
+  }));
+  stubPrismaMethod(t, prismaDocument, "findFirst", async () => ({
+    deckJson: {},
+    ownerId: OWNER_ID,
+    workspaceId: null,
+    isShared: true,
+    shareId: "share123",
+    shareExpiresAt: null,
+    shareEmbedEnabled: true,
+    sharePresentEnabled: true,
+    sharePasscodeHash: null,
+    deletedAt: null,
+    workspace: null,
+  }));
+
+  const resp = await GET(
+    new NextRequest(
+      `http://localhost/api/brand-assets/${OWNER_ID}/abc123.png?shareId=share123&shareMode=present`,
+    ),
+    makeParams(OWNER_ID, ["abc123.png"]),
+  );
+
+  assert.equal(resp.status, 404);
+  assert.equal(await resp.text(), "Not found");
 });

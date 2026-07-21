@@ -30,7 +30,7 @@ import {
   getBillingSubscription,
   markSubscriptionCancelAtPeriodEnd,
   recordStripeCustomer,
-  writeLocalPlanChange,
+  writeCheckoutSessionCompletedPlanChange,
   writeLocalSubscriptionDeleted,
   writeLocalSubscriptionUpdate,
 } from "@/lib/billing/service";
@@ -60,6 +60,7 @@ type StripeClientLike = {
       secret: string,
     ): {
       id: string;
+      created?: number;
       type: string;
       data: { object: Record<string, unknown> };
     };
@@ -356,6 +357,7 @@ export async function handleStripeWebhookEvent(
 
   let event: {
     id: string;
+    created?: number;
     type: string;
     data: { object: Record<string, unknown> };
   };
@@ -408,6 +410,7 @@ export async function handleStripeWebhookEvent(
 
 export type StripeWebhookEventLike = {
   id: string;
+  created?: number;
   type: string;
   data: { object: Record<string, unknown> };
 };
@@ -438,6 +441,10 @@ export async function applyStripeWebhookEvent(
         const plan = (session.metadata as Record<string, string>)?.plan;
         if (userId && isPlan(plan)) {
           const now = new Date();
+          const eventCreatedAt =
+            typeof event.created === "number"
+              ? new Date(event.created * 1000)
+              : undefined;
           const stripeSubscriptionId =
             typeof session.subscription === "string"
               ? session.subscription
@@ -445,18 +452,26 @@ export async function applyStripeWebhookEvent(
           const stripeCustomerId =
             typeof session.customer === "string" ? session.customer : undefined;
 
-          await writeLocalPlanChange(tx, userId, plan, {
-            status: "active",
-            stripeCustomerId,
-            stripeSubscriptionId,
-            currentPeriodStart: now,
-            currentPeriodEnd: new Date(
-              now.getTime() +
-                getEntitlements(plan).periodDays * 24 * 60 * 60 * 1000,
-            ),
-            updateSubscriptionPeriodOnExisting: true,
-            cancelAtPeriodEnd: false,
-          });
+          const applied = await writeCheckoutSessionCompletedPlanChange(
+            tx,
+            userId,
+            plan,
+            {
+              status: "active",
+              stripeCustomerId,
+              stripeSubscriptionId,
+              currentPeriodStart: now,
+              currentPeriodEnd: new Date(
+                now.getTime() +
+                  getEntitlements(plan).periodDays * 24 * 60 * 60 * 1000,
+              ),
+              cancelAtPeriodEnd: false,
+              eventCreatedAt,
+            },
+          );
+          if (applied === "stale") {
+            return "stale";
+          }
         }
         return "success";
       }

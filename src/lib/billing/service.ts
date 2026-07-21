@@ -263,6 +263,16 @@ export interface LocalSubscriptionUpdate {
   currentPeriodEnd?: Date;
 }
 
+export interface CheckoutPlanChangeOptions {
+  status: string;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  cancelAtPeriodEnd: boolean;
+  eventCreatedAt?: Date;
+}
+
 export function shouldApplySubscriptionUpdate(
   storedPeriodEnd: Date | null | undefined,
   incomingPeriodEnd: Date | null | undefined,
@@ -270,6 +280,68 @@ export function shouldApplySubscriptionUpdate(
   if (!storedPeriodEnd) return true;
   if (!incomingPeriodEnd) return false;
   return incomingPeriodEnd.getTime() >= storedPeriodEnd.getTime();
+}
+
+export function shouldApplyCheckoutPlanChange(
+  stored:
+    | {
+        currentPeriodEnd?: Date | null;
+        updatedAt?: Date | null;
+      }
+    | null
+    | undefined,
+  incomingPeriodEnd: Date,
+  eventCreatedAt?: Date,
+): boolean {
+  if (!stored) return true;
+  if (
+    stored.currentPeriodEnd &&
+    stored.currentPeriodEnd.getTime() >= incomingPeriodEnd.getTime()
+  ) {
+    return false;
+  }
+  if (
+    eventCreatedAt &&
+    stored.updatedAt &&
+    stored.updatedAt.getTime() >= eventCreatedAt.getTime()
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export async function writeCheckoutSessionCompletedPlanChange(
+  client: BillingWriteClient,
+  userId: string,
+  targetPlan: Plan,
+  options: CheckoutPlanChangeOptions,
+): Promise<"applied" | "stale"> {
+  if (options.stripeSubscriptionId) {
+    const existing = await client.subscription.findUnique({
+      where: { stripeSubscriptionId: options.stripeSubscriptionId },
+    });
+    if (
+      existing &&
+      !shouldApplyCheckoutPlanChange(
+        existing,
+        options.currentPeriodEnd,
+        options.eventCreatedAt,
+      )
+    ) {
+      return "stale";
+    }
+  }
+
+  await writeLocalPlanChange(client, userId, targetPlan, {
+    status: options.status,
+    stripeCustomerId: options.stripeCustomerId,
+    stripeSubscriptionId: options.stripeSubscriptionId,
+    currentPeriodStart: options.currentPeriodStart,
+    currentPeriodEnd: options.currentPeriodEnd,
+    updateSubscriptionPeriodOnExisting: true,
+    cancelAtPeriodEnd: options.cancelAtPeriodEnd,
+  });
+  return "applied";
 }
 
 export async function applyLocalSubscriptionUpdate(

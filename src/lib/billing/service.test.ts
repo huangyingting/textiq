@@ -11,7 +11,9 @@ import {
   loadAndSyncBillingState,
   markSubscriptionCancelAtPeriodEnd,
   recordStripeCustomer,
+  shouldApplyCheckoutPlanChange,
   shouldApplySubscriptionUpdate,
+  writeCheckoutSessionCompletedPlanChange,
   writeLocalSubscriptionDeleted,
   writeLocalSubscriptionUpdate,
 } from "@/lib/billing/service";
@@ -33,6 +35,7 @@ interface FakeSub {
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   cancelAtPeriodEnd: boolean;
+  updatedAt?: Date;
 }
 
 function makeFakeClient() {
@@ -389,6 +392,100 @@ describe("billing service state", () => {
       client._users.get("u1")?.creditPeriodStart,
       new Date("2026-07-01T00:00:00Z"),
     );
+  });
+
+  it("skips checkout plan changes when local subscription state is already current", async () => {
+    const client = makeFakeClient();
+    const existingPeriodStart = new Date("2026-07-01T00:00:00Z");
+    const existingPeriodEnd = new Date("2026-08-01T00:00:00Z");
+    client._users.set("u1", {
+      id: "u1",
+      plan: "pro",
+      creditBalance: 12_345,
+      creditPeriodStart: existingPeriodStart,
+    });
+    client._subs.set("u1", {
+      userId: "u1",
+      plan: "pro",
+      status: "active",
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: existingPeriodStart,
+      currentPeriodEnd: existingPeriodEnd,
+      cancelAtPeriodEnd: false,
+      updatedAt: new Date("2026-07-01T00:05:00Z"),
+    });
+
+    assert.equal(
+      shouldApplyCheckoutPlanChange(
+        client._subs.get("u1"),
+        new Date("2026-08-01T00:00:00Z"),
+      ),
+      false,
+    );
+    assert.equal(
+      shouldApplyCheckoutPlanChange(
+        {
+          currentPeriodEnd: new Date("2026-07-15T00:00:00Z"),
+          updatedAt: new Date("2026-07-01T00:05:00Z"),
+        },
+        new Date("2026-08-01T00:00:00Z"),
+        new Date("2026-07-01T00:00:00Z"),
+      ),
+      false,
+    );
+    assert.equal(
+      await writeCheckoutSessionCompletedPlanChange(client, "u1", "pro", {
+        status: "active",
+        stripeCustomerId: "cus_123",
+        stripeSubscriptionId: "sub_123",
+        currentPeriodStart: new Date("2026-07-01T00:10:00Z"),
+        currentPeriodEnd: new Date("2026-07-31T00:10:00Z"),
+        cancelAtPeriodEnd: false,
+      }),
+      "stale",
+    );
+
+    assert.equal(client._users.get("u1")?.creditBalance, 12_345);
+    assert.deepEqual(
+      client._users.get("u1")?.creditPeriodStart,
+      existingPeriodStart,
+    );
+    assert.deepEqual(
+      client._subs.get("u1")?.currentPeriodEnd,
+      existingPeriodEnd,
+    );
+  });
+
+  it("applies checkout plan changes when no matching Stripe subscription is stored", async () => {
+    const client = makeFakeClient();
+    const periodStart = new Date("2026-07-01T00:00:00Z");
+    const periodEnd = new Date("2026-08-01T00:00:00Z");
+    client._users.set("u1", {
+      id: "u1",
+      plan: "free",
+      creditBalance: 500,
+      creditPeriodStart: new Date("2026-06-01T00:00:00Z"),
+    });
+
+    assert.equal(
+      await writeCheckoutSessionCompletedPlanChange(client, "u1", "pro", {
+        status: "active",
+        stripeCustomerId: "cus_123",
+        stripeSubscriptionId: "sub_123",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: false,
+      }),
+      "applied",
+    );
+
+    assert.equal(client._users.get("u1")?.plan, "pro");
+    assert.equal(
+      client._users.get("u1")?.creditBalance,
+      PLAN_ENTITLEMENTS.pro.creditsPerPeriod,
+    );
+    assert.deepEqual(client._subs.get("u1")?.currentPeriodEnd, periodEnd);
   });
 
   it("resets credits when Stripe downgrades a subscription plan", async () => {

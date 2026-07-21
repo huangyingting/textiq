@@ -88,7 +88,14 @@ export async function GET(
 
   const asset = await prisma.asset.findFirst({
     where: { storageKey, deletedAt: null },
-    select: { id: true, mimeType: true, storageKey: true },
+    select: {
+      id: true,
+      mimeType: true,
+      storageKey: true,
+      documentId: true,
+      workspaceId: true,
+      brand: { select: { ownerId: true } },
+    },
   });
 
   if (canUseOwnerAccess) {
@@ -108,7 +115,7 @@ export async function GET(
     requestedShareId &&
     requestedShareModeParam &&
     (await canServePublicThemeAsset({
-      assetStorageKey: asset.storageKey,
+      asset,
       request,
       requestedShareId,
       requestedShareModeParam,
@@ -129,12 +136,17 @@ function brandAssetPrivacyResponse(): NextResponse {
 }
 
 async function canServePublicThemeAsset({
-  assetStorageKey,
+  asset,
   request,
   requestedShareId,
   requestedShareModeParam,
 }: {
-  assetStorageKey: string;
+  asset: {
+    storageKey: string;
+    documentId: string | null;
+    workspaceId: string | null;
+    brand: { ownerId: string } | null;
+  };
   request: NextRequest;
   requestedShareId: string;
   requestedShareModeParam: string;
@@ -161,6 +173,7 @@ async function canServePublicThemeAsset({
     passcodeUnlocked,
   );
   if (!publicAssetAccess.allow || !document) return false;
+  if (!brandAssetBelongsToDocumentOwner(asset, document.ownerId)) return false;
 
   const customThemes = await loadCustomThemePackagesForDeckJson(
     document.deckJson,
@@ -168,7 +181,7 @@ async function canServePublicThemeAsset({
   const pkg = customThemes.activePackage;
   if (!pkg?.assets) return false;
 
-  const expectedPath = `/api/brand-assets/${assetStorageKey}`;
+  const expectedPath = `/api/brand-assets/${asset.storageKey}`;
   const assetSources = [
     ...Object.values(pkg.assets.images ?? {}).map((asset) => asset.src),
     ...Object.values(pkg.assets.fonts ?? {}).map((asset) => asset.src),
@@ -180,6 +193,29 @@ async function canServePublicThemeAsset({
       return false;
     }
   });
+}
+
+function brandAssetStorageOwnerId(storageKey: string): string | null {
+  const [ownerId, filename] = storageKey.split("/");
+  return ownerId && filename ? ownerId : null;
+}
+
+function brandAssetBelongsToDocumentOwner(
+  asset: {
+    storageKey: string;
+    documentId: string | null;
+    workspaceId: string | null;
+    brand: { ownerId: string } | null;
+  },
+  documentOwnerId: string,
+): boolean {
+  if (asset.documentId !== null || asset.workspaceId !== null) {
+    return false;
+  }
+  if (brandAssetStorageOwnerId(asset.storageKey) !== documentOwnerId) {
+    return false;
+  }
+  return asset.brand === null || asset.brand.ownerId === documentOwnerId;
 }
 
 /**
