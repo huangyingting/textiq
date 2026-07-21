@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-21"
 description: "Operational retention runner for expired rate-limit windows, single-use auth tokens, and soft-deleted assets."
 ---
 
@@ -54,5 +54,7 @@ Dry-run mode performs the same bounded candidate selection without database
 deletes or storage deletes.
 
 Asset cleanup is domain-scoped before touching storage: slide assets must remain
-document-scoped, and brand assets must remain explicitly `brandId`-scoped.
-Rows with no document/workspace/brand scope are skipped rather than guessed.
+document-scoped. Brand cleanup covers soft-deleted brand-origin assets with no
+document/workspace scope, including rows whose `brandId` was nulled by brand
+deletion; the runner skips any candidate still referenced by a live brand before
+deleting storage or database rows.

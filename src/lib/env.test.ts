@@ -74,15 +74,27 @@ describe("readPositiveIntEnv", () => {
     process.env.POSITIVE_INT_TEST = "abc";
     assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
 
+    process.env.POSITIVE_INT_TEST = "";
+    assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
+
     process.env.POSITIVE_INT_TEST = "0";
     assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
 
     process.env.POSITIVE_INT_TEST = "-3";
     assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
+
+    process.env.POSITIVE_INT_TEST = "1e6";
+    assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
+
+    process.env.POSITIVE_INT_TEST = "5000ms";
+    assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
+
+    process.env.POSITIVE_INT_TEST = `${Number.MAX_SAFE_INTEGER + 1}`;
+    assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 7);
   });
 
   it("returns a valid positive integer value", () => {
-    process.env.POSITIVE_INT_TEST = "42";
+    process.env.POSITIVE_INT_TEST = " 42 ";
     assert.equal(readPositiveIntEnv("POSITIVE_INT_TEST", 7), 42);
   });
 });

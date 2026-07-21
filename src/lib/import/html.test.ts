@@ -79,6 +79,16 @@ test("htmlToMarkdown converts simple tables to Markdown pipe tables", () => {
   );
 });
 
+test("htmlToMarkdown escapes pipes inside table cells", () => {
+  const result = htmlToMarkdown(
+    "<table><tr><th>Metric | Name</th><th>Value</th></tr><tr><td>ACV | ARR</td><td>10 | 20</td></tr></table>",
+  );
+  assert.equal(
+    result.trim(),
+    "| Metric \\| Name | Value |\n| --- | --- |\n| ACV \\| ARR | 10 \\| 20 |",
+  );
+});
+
 test("htmlToMarkdown returns empty string for empty input", () => {
   assert.equal(htmlToMarkdown("").trim(), "");
   assert.equal(htmlToMarkdown("   ").trim(), "");

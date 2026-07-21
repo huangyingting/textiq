@@ -116,8 +116,9 @@ non-object JSON values such as `null`, arrays, strings, or numbers are rejected
 with HTTP 400 before the best-effort persistence path runs.
 
 Flush observability is kept in memory as counters and a capped ring of recent
-safe failure ids. Health surfaces can expose `flushAttempts`, `flushFailures`,
-and recent failures without including document content.
+failure details for internal logging. Public health surfaces expose only
+aggregate counts such as `flushFailures` and `recentFlushFailureCount`; they do
+not include room or document ids.
 
 ## Websocket URL Resolution
 

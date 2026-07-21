@@ -36,6 +36,11 @@ interface AssetCandidate {
   storageKey: string;
 }
 
+interface BrandReferenceCandidate {
+  logoAssetId: string | null;
+  fontAssetId: string | null;
+}
+
 type DateCutoff = { lt: Date };
 
 export interface RetentionDb {
@@ -52,6 +57,17 @@ export interface RetentionDb {
   };
   passwordResetToken: TokenDelegate;
   emailVerificationToken: TokenDelegate;
+  brand: {
+    findMany(args: {
+      where: {
+        OR: [
+          { logoAssetId: { in: string[] } },
+          { fontAssetId: { in: string[] } },
+        ];
+      };
+      select: { logoAssetId: true; fontAssetId: true };
+    }): Promise<BrandReferenceCandidate[]>;
+  };
   asset: {
     findMany(args: {
       where:
@@ -60,10 +76,10 @@ export interface RetentionDb {
             deletedAt: { not: null; lt: Date };
           }
         | {
-            brandId: { not: null };
             documentId: null;
             workspaceId: null;
             deletedAt: { not: null; lt: Date };
+            OR: [{ brandId: { not: null } }, { brandId: null }];
           };
       select: { id: true; storageKey: true };
       orderBy: { deletedAt: "asc" };
@@ -168,6 +184,10 @@ function defaultDb(): RetentionDb {
         prisma.emailVerificationToken.deleteMany(
           args as Prisma.EmailVerificationTokenDeleteManyArgs,
         ),
+    },
+    brand: {
+      findMany: (args) =>
+        prisma.brand.findMany(args as Prisma.BrandFindManyArgs),
     },
     asset: {
       findMany: (args) =>
@@ -379,19 +399,24 @@ async function purgeAssetRows(opts: {
             deletedAt: { not: null, lt: opts.cutoff },
           }
         : {
-            brandId: { not: null },
             documentId: null,
             workspaceId: null,
             deletedAt: { not: null, lt: opts.cutoff },
+            OR: [{ brandId: { not: null } }, { brandId: null }],
           },
     select: { id: true, storageKey: true },
     orderBy: { deletedAt: "asc" },
     take: opts.batchSize,
   });
 
-  if (opts.dryRun || candidates.length === 0) {
+  const purgeableCandidates =
+    opts.domain === "brand"
+      ? await filterAssetsWithoutBrandRefs(opts.db, candidates)
+      : candidates;
+
+  if (opts.dryRun || purgeableCandidates.length === 0) {
     return {
-      candidateCount: candidates.length,
+      candidateCount: purgeableCandidates.length,
       deletedCount: 0,
       failedStorageDeleteCount: 0,
     };
@@ -399,7 +424,7 @@ async function purgeAssetRows(opts: {
 
   const deletedIds: string[] = [];
   let failedStorageDeleteCount = 0;
-  for (const asset of candidates) {
+  for (const asset of purgeableCandidates) {
     try {
       await opts.storage.delete(asset.storageKey);
       deletedIds.push(asset.id);
@@ -418,7 +443,7 @@ async function purgeAssetRows(opts: {
 
   if (deletedIds.length === 0) {
     return {
-      candidateCount: candidates.length,
+      candidateCount: purgeableCandidates.length,
       deletedCount: 0,
       failedStorageDeleteCount,
     };
@@ -429,8 +454,30 @@ async function purgeAssetRows(opts: {
   });
 
   return {
-    candidateCount: candidates.length,
+    candidateCount: purgeableCandidates.length,
     deletedCount: result.count,
     failedStorageDeleteCount,
   };
+}
+
+async function filterAssetsWithoutBrandRefs(
+  db: RetentionDb,
+  candidates: AssetCandidate[],
+): Promise<AssetCandidate[]> {
+  if (candidates.length === 0) return candidates;
+
+  const ids = candidates.map((asset) => asset.id);
+  const brands = await db.brand.findMany({
+    where: {
+      OR: [{ logoAssetId: { in: ids } }, { fontAssetId: { in: ids } }],
+    },
+    select: { logoAssetId: true, fontAssetId: true },
+  });
+  const liveRefs = new Set<string>();
+  for (const brand of brands) {
+    if (brand.logoAssetId) liveRefs.add(brand.logoAssetId);
+    if (brand.fontAssetId) liveRefs.add(brand.fontAssetId);
+  }
+
+  return candidates.filter((asset) => !liveRefs.has(asset.id));
 }

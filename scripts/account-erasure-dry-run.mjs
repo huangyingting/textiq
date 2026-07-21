@@ -36,9 +36,13 @@ export async function runAccountErasureDryRun({
   }
 
   const [{ prisma }, { verifyAccountErasure }] = await importDeps();
-  const findings = await verifyAccountErasure(prisma, userId);
-  stdout(JSON.stringify(buildAccountErasureDryRunReport(userId, findings)));
-  process.exitCode = findings.length === 0 ? 0 : 2;
+  try {
+    const findings = await verifyAccountErasure(prisma, userId);
+    stdout(JSON.stringify(buildAccountErasureDryRunReport(userId, findings)));
+    process.exitCode = findings.length === 0 ? 0 : 2;
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

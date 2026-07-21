@@ -56,14 +56,20 @@ test("account erasure dry-run emits JSON and sets status from findings", async (
   });
 
   const output = [];
+  const disconnects = [];
   process.exitCode = undefined;
   await runAccountErasureDryRun({
     argv: ["node", "script", "user_1"],
     importDeps: async () => [
-      { prisma: { source: "test" } },
+      {
+        prisma: {
+          source: "test",
+          $disconnect: async () => disconnects.push("user_1"),
+        },
+      },
       {
         verifyAccountErasure: async (prisma, userId) => {
-          assert.deepEqual(prisma, { source: "test" });
+          assert.equal(prisma.source, "test");
           assert.equal(userId, "user_1");
           return [{ model: "Document", count: 1 }];
         },
@@ -79,17 +85,44 @@ test("account erasure dry-run emits JSON and sets status from findings", async (
     residualCount: 1,
     findings: [{ model: "Document", count: 1 }],
   });
+  assert.deepEqual(disconnects, ["user_1"]);
 
   process.exitCode = undefined;
   await runAccountErasureDryRun({
     argv: ["node", "script", "user_2"],
     importDeps: async () => [
-      { prisma: {} },
+      { prisma: { $disconnect: async () => disconnects.push("user_2") } },
       { verifyAccountErasure: async () => [] },
     ],
     stdout: (message) => output.push(message),
   });
   assert.equal(process.exitCode, 0);
+  assert.deepEqual(disconnects, ["user_1", "user_2"]);
+});
+
+test("account erasure dry-run disconnects Prisma when verification fails", async (t) => {
+  const originalExitCode = process.exitCode;
+  t.after(() => {
+    process.exitCode = originalExitCode;
+  });
+
+  let disconnected = false;
+  process.exitCode = undefined;
+  await assert.rejects(
+    runAccountErasureDryRun({
+      argv: ["node", "script", "user_1"],
+      importDeps: async () => [
+        { prisma: { $disconnect: async () => void (disconnected = true) } },
+        {
+          verifyAccountErasure: async () => {
+            throw new Error("verification failed");
+          },
+        },
+      ],
+    }),
+    /verification failed/,
+  );
+  assert.equal(disconnected, true);
 });
 
 test("account erasure dry-run CLI catches dependency load failures", () => {

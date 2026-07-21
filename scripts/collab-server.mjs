@@ -53,7 +53,7 @@ const collabHealthHandler = createCollabHealthHandler({
     rooms: roomCount(),
     connections: connCount(),
     flushFailures: flushStats().flushFailures,
-    recentFlushFailures: recentFlushFailures(),
+    recentFlushFailureCount: recentFlushFailures().length,
   }),
 });
 

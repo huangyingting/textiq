@@ -64,10 +64,10 @@ function readOptional(name: string): string | undefined {
  * values all return the provided fallback.
  */
 export function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const raw = process.env[name]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /** Reads a required env var, throwing {@link MissingEnvError} when absent. */

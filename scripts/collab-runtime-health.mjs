@@ -7,7 +7,7 @@
  *   warnings: string[],
  *   healthy: boolean,
  *   flushFailures: number,
- *   recentFlushFailures: Array<{ room: string, docId: string, reason: string, at: string }>,
+ *   recentFlushFailureCount: number,
  * }} CollabHealthSummary
  */
 
@@ -20,7 +20,7 @@
  *   rooms: number,
  *   connections: number,
  *   flushFailures: number,
- *   recentFlushFailures: Array<{ room: string, docId: string, reason: string, at: string }>,
+ *   recentFlushFailureCount: number,
  * }} input
  * @returns {CollabHealthSummary}
  */
@@ -33,7 +33,7 @@ export function buildCollabHealthSummary(input) {
     warnings: input.deploymentConfig.warnings,
     healthy: input.deploymentConfig.healthy,
     flushFailures: input.flushFailures,
-    recentFlushFailures: input.recentFlushFailures,
+    recentFlushFailureCount: input.recentFlushFailureCount,
   };
 }
 
@@ -44,7 +44,7 @@ export function buildCollabHealthSummary(input) {
  *
  * @param {{
  *   deploymentConfig: { mode: string, warnings: string[], healthy: boolean },
- *   getStats: () => { rooms: number, connections: number, flushFailures: number, recentFlushFailures: unknown[] },
+ *   getStats: () => { rooms: number, connections: number, flushFailures: number, recentFlushFailureCount: number },
  * }} options
  * @returns {(req: unknown, res: { writeHead: Function, end: Function }) => void}
  */
@@ -56,7 +56,7 @@ export function createCollabHealthHandler({ deploymentConfig, getStats }) {
       rooms: stats.rooms,
       connections: stats.connections,
       flushFailures: stats.flushFailures,
-      recentFlushFailures: stats.recentFlushFailures,
+      recentFlushFailureCount: stats.recentFlushFailureCount,
     });
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(summary));
