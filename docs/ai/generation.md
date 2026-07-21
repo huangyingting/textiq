@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-21"
 description: "Describes AI visual and deck generation routes, shared validation and billing flow, deck source extraction, presentation deck orchestration, template materialization, output validation, UI flow, quota, credits, and invariants."
 ---
 
@@ -22,6 +22,7 @@ validate/normalize output, and charge only successful generations.
 | Deadline wrapper       | [`src/lib/ai/deadline.ts`](../../src/lib/ai/deadline.ts)                                                       |
 | Visual generation core | [`src/lib/ai/generate.ts`](../../src/lib/ai/generate.ts)                                                       |
 | Deck source extraction | [`src/lib/ai/deck-source.ts`](../../src/lib/ai/deck-source.ts)                                                 |
+| Document source plan   | [`src/lib/presentation/document-source-plan.ts`](../../src/lib/presentation/document-source-plan.ts)           |
 | Deck route logic       | [`src/app/api/generate-deck/route-logic.ts`](../../src/app/api/generate-deck/route-logic.ts)                   |
 | Deck orchestration     | [`src/lib/ai/run-deck-generation.ts`](../../src/lib/ai/run-deck-generation.ts)                                 |
 | Deck prompt            | [`src/lib/ai/deck-prompt.ts`](../../src/lib/ai/deck-prompt.ts)                                                 |
@@ -95,9 +96,10 @@ deck tuning:
 The route is gated by the deck-generation feature flag. When disabled, it
 returns 404 before doing any work.
 
-Deck generation does not accept a document id. It derives text blocks and visual
-inventory directly from the supplied `contentJson`, so there is no cross-document
-read and no document permission lookup inside the route.
+Deck generation does not accept a document id. It derives text blocks directly
+from the supplied `contentJson` and receives the authoritative document visual
+map from the caller, so there is no cross-document read and no document
+permission lookup inside the route.
 
 The pure core is:
 
@@ -119,6 +121,16 @@ source ids and normalizes the semantic slide specs, then the shared document
 slide plan compiler materializes editable Deck slide nodes with derivation
 provenance. The final deck must pass `safeParseDeck` before it can open in
 the editor.
+
+Prompt construction enforces the AI input budget on both compatibility surfaces
+used in the deck request. The legacy outline is compacted/truncated by
+`buildDeckGenerationSource(...)`, while the structured `DocumentSourcePlanV1`
+sections are fit against the exact JSON emitted by
+`renderDocumentSourcePlanForPrompt(...)`; `originalChars`, `keptChars`, and
+`truncated` describe that prompted source-plan payload. The prompt visual
+inventory is built from the authoritative `input.visuals` map for visual blocks
+referenced by the document, falling back to embedded visual payloads only when
+the map lacks an entry.
 
 Template text nodes are never left blank when a slot is absent. `compileSlide`
 uses static template text when provided, otherwise it fills a readable fallback
@@ -150,6 +162,11 @@ The slide editor open button controls deck generation UI:
    editor runtime sees the deck.
 7. Generation failure falls back to deterministic derivation, except empty
    content, which stays in the chooser with an "add content first" prompt.
+8. Cancelled or superseded generations are no-ops. Client aborts return a
+   cancelled result instead of a timeout, and `SlideEditorOpenDialog` must not
+   call `onDerive()`, `onApply()`, auto-open a deck, or persist generated deck
+   content for those results. Genuine timeouts and other failures still follow
+   the failure fallback behavior.
 
 ## Quota And Credits
 
@@ -170,6 +187,8 @@ entitlements/configuration.
 4. Deck output must pass current `safeParseDeck` before it reaches the editor.
 5. Generated deck visuals may reference only the document visual inventory.
 6. AI routes do not directly mutate documents.
+7. Cancelled deck generations do not derive, apply, open, or persist deck
+   content.
 
 ## Primary Tests
 

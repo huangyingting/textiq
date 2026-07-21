@@ -196,3 +196,39 @@ test("useDeckGeneration returns superseded when a newer request replaces an in-f
     globalThis.fetch = originalFetch;
   }
 });
+
+test("useDeckGeneration reset ignores a late success from an aborted request", async () => {
+  const originalFetch = globalThis.fetch;
+  const renderer = createReactRenderHarness();
+  const pendingFetch = createDeferred<Response>();
+
+  globalThis.fetch = (async () => pendingFetch.promise) as typeof fetch;
+
+  try {
+    const render = () => renderer.run(() => useDeckGeneration());
+    const generation = render().generate(
+      { root: { children: [{ type: "paragraph", text: "cancel me" }] } },
+      { length: "medium" },
+      { themePackageId: "noir" },
+    );
+    await waitForScheduledEffects();
+
+    render().reset();
+    pendingFetch.resolve(successfulDeckResponse());
+
+    const result = await generation;
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.canceled, true);
+      if (result.canceled) assert.equal(result.cancelKind, "canceled");
+    }
+
+    const state = render();
+    assert.equal(state.status, "idle");
+    assert.equal(state.deck, null);
+    assert.equal(state.error, null);
+  } finally {
+    renderer.cleanup();
+    globalThis.fetch = originalFetch;
+  }
+});

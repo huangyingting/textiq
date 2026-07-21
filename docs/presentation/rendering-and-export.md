@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-17"
+last_updated: "2026-07-21"
 description: "This document describes how authored decks render in the editor, present mode, public viewers, and export pipeline. For the deck JSON shape, see ../data-model/deck.md. For theme/layout resolution, see theme-packages.md."
 ---
 
@@ -23,8 +23,11 @@ see [theme-packages.md](theme-packages.md).
 | In-app present mode   | [`src/components/presentation/present-mode.tsx`](../../src/components/presentation/present-mode.tsx)                   |
 | Public present viewer | [`src/components/presentation/public-present-viewer.tsx`](../../src/components/presentation/public-present-viewer.tsx) |
 | Export spec builder   | [`src/lib/presentation/export-spec.ts`](../../src/lib/presentation/export-spec.ts)                                     |
+| Export geometry       | [`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts)                             |
+| Raster export         | [`src/lib/presentation/raster-browser-export.tsx`](../../src/lib/presentation/raster-browser-export.tsx)               |
 | PPTX spec adapter     | [`src/lib/presentation/pptx-export-adapter.ts`](../../src/lib/presentation/pptx-export-adapter.ts)                     |
 | PPTX applier          | [`src/lib/presentation/pptx-apply.ts`](../../src/lib/presentation/pptx-apply.ts)                                       |
+| Visual export         | [`src/lib/visual/export.ts`](../../src/lib/visual/export.ts)                                                           |
 
 ## Rendering Contract
 
@@ -116,6 +119,18 @@ operations, and carries diagnostics forward. `buildPptxSpec` converts those
 operations into inch-based PPTX operations; `applyPptxSpec` owns PptxGenJS
 side effects.
 
+Custom and square export sizing is centralized in
+[`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts).
+`CUSTOM_EXPORT_MAX_AXIS_IN` is `13.333`, matching the wide-slide maximum axis.
+`resolveCanvasAspectRatio(width, height, fallbackRatio)` returns the real canvas
+ratio when both axes are positive and otherwise uses the supplied fallback.
+`resolveCappedCanvasInches(width, height, maxAxisIn)` letterboxes physical export
+dimensions by capping the larger axis and scaling the smaller axis from the
+canvas ratio. Raster PDF export uses this helper for non-native physical
+formats (`square` and `custom`) so PDF pages match the deck's actual aspect
+ratio. Custom PPTX export uses the same helper so landscape canvases cap width,
+portrait canvases cap height, and neither axis exceeds the shared maximum.
+
 Table export currently stays as a native table operation end to end:
 `buildExportSpec` emits `tableShape`, `buildPptxSpec` maps it to
 `PptxTableOp`, and `applyPptxSpec` calls `slide.addTable(...)`.
@@ -125,6 +140,13 @@ Current adapter coverage maps column labels, row cell `text`, per-cell rich
 export as separate PPTX text boxes positioned above the native table.
 Unsupported table fill types (for example pattern or gradient) use deterministic
 solid fallbacks and emit `unsupported-export-feature` diagnostics.
+
+Raster PDF/PNG export also renders `tableShape` operations rather than dropping
+them. The browser raster path lowers tables into native SVG: per-cell
+rectangles, header/body/alternate fills, grid borders and dash styles,
+clipped/wrapped text, rich text run text, padding, opacity, and captions. It
+does not use `foreignObject`, so table slides can be rasterized through the
+same SVG-to-PNG pipeline as other slide content.
 
 Visual operations use a rendered asset when one is available and otherwise emit
 a deterministic placeholder with channel colors and diagnostics. PptxGenJS 4.0.1
@@ -212,6 +234,13 @@ Visual export has two tiers:
    `visualToNativeSpecs` and `applySpecsToSlide`.
 2. **Image retry**: unsupported or fidelity-sensitive cases can embed a rendered
    image produced from the visual SVG/PNG path.
+
+When visual export options force raster fallback for PPTX, the inserted image is
+sized from `computeLetterboxedDimensions(...)`, so requested aspect-ratio
+presets and padding match the PNG canvas instead of the original SVG viewBox.
+Transparent-background SVG export strips only a leading, full-viewBox background
+rect without semantic identifiers; chart bars or other data rectangles at
+`x="0"`/`y="0"` remain intact.
 
 Preflight warnings describe expected fidelity changes before the export starts.
 

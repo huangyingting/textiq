@@ -133,6 +133,30 @@ test("background transparent: preserves a data rect that starts on an axis", () 
   assert.ok(result.includes("#ef4444"), "chart data fill should remain");
 });
 
+test("background transparent: preserves semantic full-bleed rects", () => {
+  const opts = makeOptions({ background: "transparent", colorMode: "color" });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect id="plot-area" x="0" y="0" width="800" height="600" fill="#f8fafc"/><circle cx="400" cy="300" r="50" fill="#6366f1"/></svg>`;
+  const result = applyExportOptionsToSvg(svg, opts);
+
+  assert.ok(
+    result.includes('id="plot-area"'),
+    "semantic full-bleed rect should be preserved",
+  );
+  assert.ok(result.includes("#f8fafc"), "semantic rect fill should remain");
+});
+
+test("background transparent: strips true full-bleed rects with omitted origin", () => {
+  const opts = makeOptions({ background: "transparent", colorMode: "color" });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect width="800" height="600" fill="#ffffff"/><rect x="0" y="0" width="120" height="600" fill="#ef4444" data-point-id="bar-1"/></svg>`;
+  const result = applyExportOptionsToSvg(svg, opts);
+
+  assert.ok(!result.includes('fill="#ffffff"'), "background should be gone");
+  assert.ok(
+    result.includes('data-point-id="bar-1"'),
+    "following data rect should remain",
+  );
+});
+
 // ---------------------------------------------------------------------------
 // applyExportOptionsToSvg — background: custom
 // ---------------------------------------------------------------------------
