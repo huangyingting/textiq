@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-21"
 description: "This subsystem covers the application-level collaboration contract: Yjs room identity, client readiness, degraded local-only mode, title sync, presence, and room authorization. Deployment and scaling procedures live in ../operations/collaboration-deployment.md."
 ---
 
@@ -109,6 +109,11 @@ last confirmed durable save, it calls the optional eviction flusher with the
 room name and a full Yjs update. That flush is best-effort recovery only: errors
 are logged, eviction still completes, and the saved-state vector is cleared so
 the database remains the durable source of truth.
+
+`POST /api/collab/flush` accepts only object JSON payloads with a non-empty
+`documentId` and a valid base64 `update`. Malformed JSON, missing bodies, and
+non-object JSON values such as `null`, arrays, strings, or numbers are rejected
+with HTTP 400 before the best-effort persistence path runs.
 
 Flush observability is kept in memory as counters and a capped ring of recent
 safe failure ids. Health surfaces can expose `flushAttempts`, `flushFailures`,

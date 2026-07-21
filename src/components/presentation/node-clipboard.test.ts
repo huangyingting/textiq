@@ -139,10 +139,26 @@ describe("TextIQ browser node clipboard helpers", () => {
     );
   });
 
-  test("returns failure states when clipboard writes are unsupported, denied, or fail", async () => {
-    setNavigator({ clipboard: {} });
-    installTestClipboardItem();
-    assert.deepEqual(await writeTextIqNodesToClipboard([node]), {
+  test("checks clipboard.write before constructing clipboard items", async () => {
+    let clipboardItemConstructed = false;
+    let writeTextCalled = false;
+    setNavigator({
+      clipboard: {
+        writeText: async () => {
+          writeTextCalled = true;
+        },
+      },
+    });
+    globalThis.ClipboardItem = clipboardItemConstructor(
+      class {
+        constructor() {
+          clipboardItemConstructed = true;
+        }
+      },
+    );
+
+    const result = await writeTextIqNodesToClipboard([node]);
+    assert.deepEqual(result, {
       ok: false,
       state: "unsupported",
       imageIncluded: false,
@@ -151,6 +167,12 @@ describe("TextIQ browser node clipboard helpers", () => {
       textIqPayloadIncluded: false,
       plainTextFallbackWritten: false,
     });
+    assert.equal(clipboardItemConstructed, false);
+    assert.equal(writeTextCalled, false);
+  });
+
+  test("returns failure states when clipboard writes are denied or fail", async () => {
+    installTestClipboardItem();
 
     setNavigator({
       clipboard: {

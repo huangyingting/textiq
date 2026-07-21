@@ -173,6 +173,7 @@ function makeRequest(
     body?: unknown;
     rawBody?: string;
     contentLength?: string;
+    noBody?: boolean;
   } = {},
 ): NextRequest {
   const headers: Record<string, string> = {
@@ -184,19 +185,21 @@ function makeRequest(
   if (options.contentLength !== undefined) {
     headers["content-length"] = options.contentLength;
   }
-  const body =
-    options.rawBody ??
-    JSON.stringify(
-      options.body ?? {
-        documentId: DOCUMENT_ID,
-        update: VALID_UPDATE,
-      },
-    );
-  return new NextRequest("http://localhost/api/collab/flush", {
-    method: "POST",
-    headers,
-    body,
-  });
+  const requestInit = options.noBody
+    ? { method: "POST", headers }
+    : {
+        method: "POST",
+        headers,
+        body:
+          options.rawBody ??
+          JSON.stringify(
+            options.body ?? {
+              documentId: DOCUMENT_ID,
+              update: VALID_UPDATE,
+            },
+          ),
+      };
+  return new NextRequest("http://localhost/api/collab/flush", requestInit);
 }
 
 // ---------------------------------------------------------------------------
@@ -290,17 +293,43 @@ test("#1875: payload missing documentId returns 400 with parser message", async 
   assert.strictEqual(body.error, "Missing documentId.");
 });
 
-test("#2099: non-object JSON payloads return 400 with parser message", async (t) => {
+test("#2099: non-object and missing JSON payloads return 400", async (t) => {
   replacePrismaDocument(t, {});
 
-  for (const payload of [null, 42, "payload", ["doc", VALID_UPDATE]]) {
-    const response = await POST(
-      makeRequest({ rawBody: JSON.stringify(payload) }),
-    );
-    assert.strictEqual(response.status, 400);
+  const cases = [
+    {
+      label: "null",
+      request: makeRequest({ rawBody: "null" }),
+      error: "Missing documentId.",
+    },
+    {
+      label: "array",
+      request: makeRequest({ rawBody: JSON.stringify(["doc", VALID_UPDATE]) }),
+      error: "Missing documentId.",
+    },
+    {
+      label: "string",
+      request: makeRequest({ rawBody: JSON.stringify("payload") }),
+      error: "Missing documentId.",
+    },
+    {
+      label: "number",
+      request: makeRequest({ rawBody: "42" }),
+      error: "Missing documentId.",
+    },
+    {
+      label: "missing body",
+      request: makeRequest({ noBody: true }),
+      error: "Invalid JSON body.",
+    },
+  ];
+
+  for (const { label, request, error } of cases) {
+    const response = await POST(request);
+    assert.strictEqual(response.status, 400, `${label} should return 400`);
     const body = await response.json();
-    assert.strictEqual(body.code, "VALIDATION_ERROR");
-    assert.strictEqual(body.error, "Missing documentId.");
+    assert.strictEqual(body.code, "VALIDATION_ERROR", label);
+    assert.strictEqual(body.error, error, label);
   }
 });
 

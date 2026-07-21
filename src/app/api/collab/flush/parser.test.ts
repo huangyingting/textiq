@@ -31,7 +31,7 @@ test("parseCollabFlushPayload preserves validation messages", () => {
 });
 
 test("parseCollabFlushPayload rejects non-object JSON as missing documentId", () => {
-  for (const body of [null, 42, "payload", ["doc", "AQID"]]) {
+  for (const body of [null, 42, true, "payload", ["doc", "AQID"]]) {
     assert.deepEqual(parseCollabFlushPayload(body), {
       ok: false,
       status: 400,

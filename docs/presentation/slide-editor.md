@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-20"
+last_updated: "2026-07-21"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -395,8 +395,9 @@ panel bridge.
 
 Stage copy and cut serialize selected nodes to the versioned
 `application/x-textiq-nodes+json` payload and write it through the async
-Clipboard API when the browser allows it. The editor also keeps an in-memory
-buffer so same-instance paste keeps working when clipboard permission is denied
+Clipboard API only after feature-detecting `navigator.clipboard.write` and
+`ClipboardItem`. The editor also keeps an in-memory buffer so same-instance paste
+keeps working when clipboard permission is denied, `clipboard.write` is missing,
 or the API is unavailable.
 
 Paste prefers a validated TextIQ payload, remaps ids, and inserts through the

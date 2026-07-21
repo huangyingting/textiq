@@ -300,11 +300,12 @@ describe("browser sharing capability detection", () => {
   });
 
   test("canCopyImageToClipboard returns false when clipboard write is missing", (t) => {
-    replaceGlobal(t, "navigator", {
-      clipboard: {},
-    });
+    const setNavigator = replaceGlobal(t, "navigator", { clipboard: {} });
     replaceGlobal(t, "ClipboardItem", class ClipboardItem {});
 
+    assert.equal(canCopyImageToClipboard(), false);
+
+    setNavigator({ clipboard: { write: "not-a-function" } });
     assert.equal(canCopyImageToClipboard(), false);
   });
 });
