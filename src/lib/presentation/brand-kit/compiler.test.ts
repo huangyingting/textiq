@@ -295,7 +295,7 @@ test("custom and registry brand-kit fonts resolve for render, font CSS, and PPTX
           "acme-sans": {
             id: "acme-sans",
             family: "Acme Sans",
-            src: "/brand-assets/user-1/acme-sans.woff2",
+            src: "/api/brand-assets/user-1/acme-sans.woff2",
             weight: [400, 700],
             style: "normal",
           },
@@ -312,7 +312,7 @@ test("custom and registry brand-kit fonts resolve for render, font CSS, and PPTX
   );
   assert.match(
     buildThemePackageFontFaceCss(result.package),
-    /font-family: 'Acme Sans'; src: url\('\/brand-assets\/user-1\/acme-sans\.woff2'\)/,
+    /font-family: 'Acme Sans'; src: url\('\/api\/brand-assets\/user-1\/acme-sans\.woff2'\)/,
   );
 
   const deck = buildDeck(
@@ -422,7 +422,7 @@ test("compileBrandKitDraft reports malformed optional assets, scope, decorations
         fontKey: {
           id: "other",
           family: "Inter",
-          src: "https://example.com/font.woff2",
+          src: "/api/brand-assets/example/font.woff2",
           weight: [400, Number.NaN],
           style: "oblique" as "italic",
           contentHash: invalidString(7),
@@ -486,7 +486,7 @@ test("compileBrandKitDraft supports workspace drafts, font assets, and defaults"
         "font-1": {
           id: "font-1",
           family: "Acme Sans",
-          src: "https://example.com/acme.woff2",
+          src: "/api/brand-assets/example/acme.woff2",
           weight: 400,
           style: "normal",
         },

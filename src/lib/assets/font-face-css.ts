@@ -6,7 +6,7 @@
  */
 
 function escapeCssSingleQuotedString(value: string): string {
-  return value.replace(/[\\'\0-\x1f\x7f]/g, (char) => {
+  return value.replace(/[\\'<>\0-\x1f\x7f]/g, (char) => {
     if (char === "\\" || char === "'") return `\\${char}`;
     return `\\${char.charCodeAt(0).toString(16).toUpperCase()} `;
   });
@@ -34,5 +34,6 @@ export function buildFontFaceCss(
     .trim();
   if (!bare) return "";
   const escapedBare = escapeCssSingleQuotedString(bare);
-  return `@font-face { font-family: '${escapedBare}'; src: url('${fontAssetUrl}'); font-display: swap; }`;
+  const escapedUrl = escapeCssSingleQuotedString(fontAssetUrl);
+  return `@font-face { font-family: '${escapedBare}'; src: url('${escapedUrl}'); font-display: swap; }`;
 }

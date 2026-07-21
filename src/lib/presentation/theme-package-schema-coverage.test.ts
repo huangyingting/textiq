@@ -54,7 +54,7 @@ describe("validateThemePackage coverage branches", () => {
           "decor-font": {
             id: "decor-font",
             family: "Inter",
-            src: "https://example.com/inter.woff2",
+            src: "/api/brand-assets/example/inter.woff2",
             weight: [400, 700],
             style: "italic",
             contentHash: "font-hash",
@@ -168,6 +168,44 @@ describe("validateThemePackage coverage branches", () => {
     if (result.valid) {
       assert.equal(result.package.id, "coverage-theme");
     }
+  });
+
+  test("rejects unsafe theme font sources", () => {
+    const remote = validateThemePackage(
+      buildMinimalThemePackage("unsafe-font-remote", {
+        assets: {
+          fonts: {
+            brandFont: {
+              id: "brandFont",
+              family: "Brand",
+              src: "https://example.com/brand.woff2",
+            },
+          },
+        },
+      }),
+    );
+    assertDiagnostic(
+      remote,
+      /ThemePackage\.assets\.fonts\.brandFont\.src must be a safe app font asset path or data font URL/,
+    );
+
+    const styleBreakout = validateThemePackage(
+      buildMinimalThemePackage("unsafe-font-style", {
+        assets: {
+          fonts: {
+            brandFont: {
+              id: "brandFont",
+              family: "Brand",
+              src: "/api/brand-assets/brand.woff2</style>",
+            },
+          },
+        },
+      }),
+    );
+    assertDiagnostic(
+      styleBreakout,
+      /ThemePackage\.assets\.fonts\.brandFont\.src must be a safe app font asset path or data font URL/,
+    );
   });
 
   test("reports invalid package, asset, decoration, style-token, and chrome branches", () => {
