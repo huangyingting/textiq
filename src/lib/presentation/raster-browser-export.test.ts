@@ -868,6 +868,62 @@ describe("buildSvgFromSlideSpec — tableShape ops", () => {
     assert.ok(svg.includes("<clipPath"), "cell text should be clipped");
     assert.ok(!svg.includes("<foreignObject"));
   });
+
+  test("renders headerless table captions, rich-run text, and zero-width columns", () => {
+    const svg = buildSvgFromSlideSpec(
+      makeSpec([
+        {
+          type: "tableShape",
+          id: "table-edge",
+          frame: { x: 96, y: 108, w: 384, h: 162 },
+          style: {
+            opacity: 0.8,
+            table: {
+              rowFill: { type: "solid", color: "#f8fafc" },
+              border: { color: "#475569", widthPt: 2, dash: "dashed" },
+              cellPaddingPt: { top: 4, right: 4, bottom: 4, left: 4 },
+              text: { fontFamily: "Arial", fontSizePt: 8, color: "#0f172a" },
+            },
+          },
+          table: {
+            header: false,
+            caption: "Quarterly KPIs",
+            columns: [
+              { id: "metric", label: "Metric", width: 0 },
+              { id: "value", label: "Value", width: 0 },
+            ],
+            rows: [
+              {
+                id: "row-1",
+                cells: [
+                  { text: "ignored", runs: [{ text: "Revenue" }] },
+                  {
+                    text: "ignored",
+                    runs: [{ text: "$" }, { text: "42M" }],
+                  },
+                ],
+              },
+            ],
+          },
+          zIndex: 1,
+        },
+      ]),
+      testCanvas,
+      testDims,
+    );
+
+    assert.ok(svg.includes("Quarterly KPIs"), "caption text should render");
+    assert.ok(svg.includes("Revenue"), "rich-run cell text should render");
+    assert.ok(svg.includes("$42M"), "runs should be concatenated per cell");
+    assert.ok(svg.includes("#f8fafc"), "body row fill should render");
+    assert.ok(
+      svg.includes("stroke-dasharray="),
+      "dashed grid border should render",
+    );
+    assert.ok(svg.includes('opacity="0.8"'), "table opacity should render");
+    assert.ok(!svg.includes("Metric"), "header labels should not render");
+    assert.ok(!svg.includes("<foreignObject"));
+  });
 });
 
 describe("buildSvgFromSlideSpec — foreignObject regression", () => {

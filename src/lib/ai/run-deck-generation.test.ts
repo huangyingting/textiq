@@ -15,6 +15,7 @@ import {
   type RunDeckGenerationInput,
 } from "@/lib/ai/run-deck-generation";
 import type { CompleteFn } from "@/lib/ai/generate";
+import { AI_GENERATION_INPUT_MAX_CHARS } from "@/lib/limits/ai";
 import type { Visual } from "@/lib/visual/schema";
 import { DEFAULT_STYLE, VISUAL_SCHEMA_VERSION } from "@/lib/visual/schema";
 import {
@@ -467,5 +468,54 @@ describe("runDeckGeneration", () => {
         "visual-1 | Embedded journey (flowchart): Embedded node",
       ),
     );
+  });
+
+  test("prompted document source plan stays within budget for very large documents", async () => {
+    const children: unknown[] = [
+      {
+        type: "heading",
+        tag: "h1",
+        bid: "heading-1",
+        children: [{ text: "Budgeted source" }],
+      },
+    ];
+    for (let i = 0; i < 160; i += 1) {
+      children.push({
+        type: "paragraph",
+        bid: `paragraph-${i}`,
+        children: [{ text: `detail ${i} ${"x".repeat(220)}` }],
+      });
+    }
+
+    let capturedSourcePlan = "";
+    const complete: CompleteFn = async (messages) => {
+      const userContent = messages[1]?.content ?? "";
+      const marker = "Document source plan (use block ids exactly):\n";
+      const start = userContent.indexOf(marker);
+      const end = userContent.indexOf("\nOutline fallback:", start);
+      assert.ok(start >= 0, "prompt should include source-plan marker");
+      assert.ok(end > start, "prompt should include outline fallback marker");
+      capturedSourcePlan = userContent.slice(start + marker.length, end).trim();
+      assert.ok(
+        capturedSourcePlan.length <= AI_GENERATION_INPUT_MAX_CHARS,
+        `source-plan prompt length ${capturedSourcePlan.length} exceeds ${AI_GENERATION_INPUT_MAX_CHARS}`,
+      );
+      return VALID_PLAN_JSON;
+    };
+
+    const result = await runDeckGeneration(
+      makeInput(complete, {
+        contentJson: { root: { children } },
+      }),
+    );
+
+    const parsedSourcePlan = JSON.parse(capturedSourcePlan) as {
+      truncated?: unknown;
+      sections?: Array<{ blocks?: Array<{ id?: string; text?: string }> }>;
+    };
+    assert.equal(parsedSourcePlan.truncated, true);
+    assert.equal(result.truncated, true);
+    assert.ok(capturedSourcePlan.includes("heading-1"));
+    assert.ok(!capturedSourcePlan.includes("detail 159"));
   });
 });

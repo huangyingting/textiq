@@ -318,3 +318,24 @@ test("exportPPTX raster fallback sizes the image from the transformed export can
   assert.equal(imageExt[1], "6172200");
   assert.equal(imageExt[2], "6172200");
 });
+
+test("exportPPTX raster fallback respects portrait aspect ratio placement", async () => {
+  installBrowserStubs();
+  const blob = await exportPPTX(svgElement(120, 80), FIXTURES.flowchart, {
+    ...DEFAULT_EXPORT_OPTIONS,
+    aspectRatio: "9:16",
+  });
+
+  assert.ok(blob);
+  const xml = await slideXml(blob, 1);
+  const imageExt = xml.match(
+    /<p:pic>[\s\S]*?<p:spPr>[\s\S]*?<a:xfrm>[\s\S]*?<a:ext cx="(\d+)" cy="(\d+)"/,
+  );
+
+  assert.ok(imageExt, "expected fallback image dimensions in slide XML");
+  assert.equal(imageExt[2], "6172200");
+  assert.ok(
+    Math.abs(Number(imageExt[1]) / Number(imageExt[2]) - 9 / 16) < 0.001,
+    "fallback image should preserve the requested portrait aspect ratio",
+  );
+});

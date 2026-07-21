@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildPublicMetadata } from "./metadata";
+import { buildPublicMetadata, type BuildPublicMetadataInput } from "./metadata";
 
 test("buildPublicMetadata returns no-index defaults when a share is denied", () => {
   assert.deepEqual(
@@ -27,6 +27,58 @@ test("buildPublicMetadata returns no-index defaults when a shared row has no slu
         },
         slug: null,
         shareId: "share123",
+        metadataMode: "title-excerpt",
+        discoverable: true,
+      },
+      surface: "share",
+      baseUrl: "https://textiq.test",
+    }),
+    {
+      title: "Shared Document — TextIQ",
+      robots: { index: false, follow: false },
+    },
+  );
+});
+
+test("buildPublicMetadata treats empty, whitespace, and undefined slugs as no-index defaults", () => {
+  const baseDocument = {
+    title: "Legacy Shared Document",
+    contentJson: {
+      root: { children: [{ type: "paragraph", children: [] }] },
+    },
+    shareId: "share123",
+    metadataMode: "title-excerpt",
+    discoverable: true,
+  };
+
+  for (const slug of ["", "   ", undefined]) {
+    assert.deepEqual(
+      buildPublicMetadata({
+        document: {
+          ...baseDocument,
+          slug,
+        } as BuildPublicMetadataInput["document"],
+        surface: "present",
+        baseUrl: "https://textiq.test",
+      }),
+      {
+        title: "Presentation — TextIQ",
+        robots: { index: false, follow: false },
+      },
+    );
+  }
+});
+
+test("buildPublicMetadata treats missing share ids as no-index defaults", () => {
+  assert.deepEqual(
+    buildPublicMetadata({
+      document: {
+        title: "Legacy Shared Document",
+        contentJson: {
+          root: { children: [{ type: "paragraph", children: [] }] },
+        },
+        slug: "legacy-shared-document",
+        shareId: null,
         metadataMode: "title-excerpt",
         discoverable: true,
       },

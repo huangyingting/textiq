@@ -7,6 +7,11 @@ import {
   type RasterSlideDimensions,
 } from "@/lib/presentation/raster-export";
 import {
+  CUSTOM_EXPORT_MAX_AXIS_IN,
+  resolveCanvasAspectRatio,
+  resolveCappedCanvasInches,
+} from "@/lib/presentation/export-geometry";
+import {
   buildCanvasSpec,
   buildDeck,
   buildImageNode,
@@ -19,7 +24,37 @@ import {
 const ONE_PIXEL_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=";
 
+function assertApproxEqual(actual: number, expected: number): void {
+  assert.ok(Math.abs(actual - expected) < 0.000001);
+}
+
 describe("exportDeckRaster", () => {
+  test("resolves capped custom export inches across boundary and extreme ratios", () => {
+    assert.equal(resolveCanvasAspectRatio(0, 100, 4 / 3), 4 / 3);
+    assert.equal(resolveCanvasAspectRatio(100, 0, 1), 1);
+    assert.equal(resolveCanvasAspectRatio(100, 100), 1);
+
+    assert.deepEqual(resolveCappedCanvasInches(100, 100), {
+      widthIn: CUSTOM_EXPORT_MAX_AXIS_IN,
+      heightIn: CUSTOM_EXPORT_MAX_AXIS_IN,
+    });
+    const wide = resolveCappedCanvasInches(1920, 1080);
+    assert.equal(wide.widthIn, CUSTOM_EXPORT_MAX_AXIS_IN);
+    assertApproxEqual(wide.heightIn, 7.4998125);
+
+    const portrait = resolveCappedCanvasInches(1080, 1920);
+    assertApproxEqual(portrait.widthIn, 7.4998125);
+    assert.equal(portrait.heightIn, CUSTOM_EXPORT_MAX_AXIS_IN);
+
+    const ultrawide = resolveCappedCanvasInches(3200, 900);
+    assert.equal(ultrawide.widthIn, CUSTOM_EXPORT_MAX_AXIS_IN);
+    assert.ok(ultrawide.heightIn < 4);
+
+    const ultraPortrait = resolveCappedCanvasInches(900, 3200);
+    assert.equal(ultraPortrait.heightIn, CUSTOM_EXPORT_MAX_AXIS_IN);
+    assert.ok(ultraPortrait.widthIn < 4);
+  });
+
   test("resolves native raster physical dimensions without changing standard formats", () => {
     const wideDeck = buildDeck([], {
       canvas: buildCanvasSpec({

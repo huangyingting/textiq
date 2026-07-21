@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-14"
+last_updated: "2026-07-21"
 description: "The public-render subsystem resolves share/embed/present/OG requests into read-only models and shares one public-asset policy for slide asset serving."
 ---
 
@@ -87,6 +87,12 @@ more specific metadata mode, share and present pages use generic title and
 description values and mark robots as non-indexable. Discoverability controls
 both `index` and `follow`.
 
+Metadata canonical URLs are built only when both `slug` and `shareId` are
+present and the slug has non-whitespace content. Legacy shared rows with a
+`null`, empty, or whitespace slug degrade to the generic no-index defaults
+instead of building a share segment, so metadata rendering does not throw for
+older public documents.
+
 Attribution is derived from the owner name and plan. Paid-plan attribution rules
 live in billing; public render consumes only the resulting `showAttribution`
 decision.
@@ -97,7 +103,8 @@ decision.
 2. Invalid mode/projection pairs fail before any source lookup.
 3. Public asset access requires active share-bound present/embed access.
 4. Missing shares are concealed as not found with visible generic fallback text.
-5. Public metadata defaults to generic, non-discoverable output.
+5. Public metadata defaults to generic, non-discoverable output, including
+   denied rows and shared rows without usable slugs.
 6. Public presentation output reconciles deck refs with available visuals.
 
 ## Primary Tests
