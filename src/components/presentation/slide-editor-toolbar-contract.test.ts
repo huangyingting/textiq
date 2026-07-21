@@ -116,6 +116,10 @@ describe("SlideEditor toolbar command ownership", () => {
       topToolbarSource,
       /<Popover[\s\S]*aria-label="More deck commands"[\s\S]*portal[\s\S]*className="w-64 p-2"/,
     );
+    assert.match(
+      topToolbarSource,
+      /<Popover[\s\S]*aria-label="Export slides"[\s\S]*portal[\s\S]*className="w-44 p-1"/,
+    );
   });
 
   test("keeps compact toolbar menu keyboard navigable", () => {
@@ -131,6 +135,34 @@ describe("SlideEditor toolbar command ownership", () => {
     );
     assert.equal(
       source.includes("closeCompactToolbarMenuAndRestoreFocus();"),
+      true,
+    );
+  });
+
+  test("keeps the export menu keyboard navigable from the toolbar trigger", () => {
+    assert.equal(
+      source.includes("focusFirstMenuCommand(exportMenuPanelRef.current)"),
+      true,
+    );
+    assert.equal(
+      topToolbarSource.includes("buttonRef={exportMenuTriggerRef}"),
+      true,
+    );
+    assert.equal(topToolbarSource.includes('hasPopup="menu"'), true);
+    assert.equal(topToolbarSource.includes("expanded={exportMenuOpen}"), true);
+    assert.equal(
+      topToolbarSource.includes(
+        "controls={exportMenuOpen ? exportMenuId : undefined}",
+      ),
+      true,
+    );
+    assert.equal(
+      topToolbarSource.includes("onKeyDown={handleExportMenuKeyDown}"),
+      true,
+    );
+    assert.equal(
+      source.includes("closeExportMenuAndRestoreFocus();") &&
+        source.includes("container: exportMenuPanelRef.current"),
       true,
     );
   });

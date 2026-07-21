@@ -11,6 +11,7 @@ import {
   type StyleObject,
   type StylePatch,
 } from "@/lib/presentation";
+import type { PresentationExportFormat } from "@/lib/presentation/export-preflight";
 import type { SaveStatus } from "@/lib/presentation/save-status";
 import {
   availablePanels,
@@ -58,9 +59,7 @@ export interface SlideCommandPaletteControllerArgs {
     action: (() => Promise<ActionResult>) | undefined,
     fallbackError: string,
   ) => Promise<void>;
-  handleExportPptx: () => Promise<void>;
-  handleExportPdf: () => Promise<void>;
-  handleExportPng: () => Promise<void>;
+  handleExportRequest: (format: PresentationExportFormat) => void;
   handleInsertSlide: () => void;
   handleDuplicateActiveSlide: () => void;
   handleDeleteActiveSlide: () => void;
@@ -313,9 +312,7 @@ export function useSlideCommandPaletteController(
         args.setDeckDiagnosticsReviewOpen(true);
         break;
       case "export":
-        if (command.intent.format === "pptx") void args.handleExportPptx();
-        if (command.intent.format === "pdf") void args.handleExportPdf();
-        if (command.intent.format === "png") void args.handleExportPng();
+        args.handleExportRequest(command.intent.format);
         break;
     }
     args.setStageAnnouncement(command.liveMessage);

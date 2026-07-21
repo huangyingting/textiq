@@ -11,6 +11,7 @@ import type { PresentationExportPreflightResult } from "@/lib/presentation/expor
 import { Dialog } from "@/components/ui/dialog";
 import { Popover } from "@/components/ui/popover";
 import { ExportPreflightDialog } from "./export-preflight-dialog";
+import { SlideCommandPalette } from "./slide-command-palette";
 import { SlideEditor } from "./slide-editor";
 import { SlideEditorTopToolbar } from "./slide-editor-top-toolbar";
 import {
@@ -485,6 +486,81 @@ describe("SlideEditor export preflight", () => {
       assert.match(result.fatalDiagnostics[0]?.message ?? "", /missing-image/);
       assert.equal(continueButton.props.disabled, true);
       assert.match(flattenText(dialog), /Fix blockers/);
+    }));
+
+  test("routes command palette PDF export through the same preflight gate", () =>
+    runWithSettledDom(() => {
+      const deck = buildDeck([
+        buildSlide(
+          "content",
+          [
+            buildImageNode("missing-image", {
+              id: "image-missing",
+            }),
+          ],
+          { id: "slide-1" },
+        ),
+      ]);
+      const renderer = createHookRenderer();
+      let pdfExports = 0;
+
+      let tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-command-palette-export-preflight",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPdf: async () => {
+            pdfExports += 1;
+          },
+        }),
+      );
+
+      const commandPalette = findRequiredElement(
+        tree,
+        (element) => element.type === SlideCommandPalette,
+        "expected slide command palette",
+      );
+      const commands = commandPalette.props.commands as ReadonlyArray<{
+        id: string;
+        disabledReason?: string;
+      }>;
+      const pdfExportCommand = commands.find(
+        (command) => command.id === "export.pdf",
+      );
+      assert.ok(pdfExportCommand, "expected PDF export command");
+      assert.equal(pdfExportCommand.disabledReason, undefined);
+
+      const runCommand = commandPalette.props.onRun;
+      if (typeof runCommand !== "function") {
+        throw new TypeError("Expected command palette to expose a runner");
+      }
+      runCommand(pdfExportCommand);
+
+      tree = renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-command-palette-export-preflight",
+          deck,
+          themePackage: buildMinimalThemePackage(),
+          onDeckChange: () => undefined,
+          onExportPdf: async () => {
+            pdfExports += 1;
+          },
+        }),
+      );
+
+      const dialogElement = findRequiredElement(
+        tree,
+        (element) => element.type === ExportPreflightDialog,
+        "expected command palette export preflight dialog",
+      );
+      const result = dialogElement.props
+        .result as PresentationExportPreflightResult;
+
+      assert.equal(pdfExports, 0);
+      assert.equal(result.format, "pdf");
+      assert.equal(result.canExport, false);
+      assert.match(result.fatalDiagnostics[0]?.message ?? "", /missing-image/);
     }));
 
   test("continues PPTX export after warning preflight review", () =>

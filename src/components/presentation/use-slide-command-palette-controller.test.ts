@@ -33,9 +33,7 @@ function controllerArgs(
     canRedo: false,
     handleEditorKeyDown: () => undefined,
     handleRoundtripAction: async () => undefined,
-    handleExportPptx: async () => undefined,
-    handleExportPdf: async () => undefined,
-    handleExportPng: async () => undefined,
+    handleExportRequest: () => undefined,
     handleInsertSlide: () => undefined,
     handleDuplicateActiveSlide: () => undefined,
     handleDeleteActiveSlide: () => undefined,
@@ -110,5 +108,28 @@ describe("useSlideCommandPaletteController", () => {
     assert.equal(command.disabledReason, undefined);
     controller.handleRunCommandPaletteCommand(command);
     assert.deepEqual(reorderModes, ["back"]);
+  });
+
+  test("routes export palette commands through the shared export request path", () => {
+    const requestedFormats: string[] = [];
+    const controller = useSlideCommandPaletteController(
+      controllerArgs({
+        onExportPptx: async () => undefined,
+        onExportPdf: async () => undefined,
+        onExportPng: async () => undefined,
+        handleExportRequest: (format) => requestedFormats.push(format),
+      }),
+    );
+
+    for (const commandId of ["export.pptx", "export.pdf", "export.png"]) {
+      const command = controller.commandPaletteCommands.find(
+        (entry) => entry.id === commandId,
+      );
+      assert.ok(command, `${commandId} should be discoverable`);
+      assert.equal(command.disabledReason, undefined);
+      controller.handleRunCommandPaletteCommand(command);
+    }
+
+    assert.deepEqual(requestedFormats, ["pptx", "pdf", "png"]);
   });
 });
