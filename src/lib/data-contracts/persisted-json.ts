@@ -4,6 +4,8 @@ import {
   validateSlideId,
 } from "@/lib/comments/anchors";
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
+import { compileBrandKitDraft } from "@/lib/presentation/brand-kit/compiler";
+import { validateThemePackage } from "@/lib/presentation/theme-package-schema";
 import { safeParseDeck } from "@/lib/presentation/validation";
 import { safeParseVisual } from "@/lib/visual/schema";
 import { parsePalette } from "@/lib/brand/schema";
@@ -38,6 +40,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validateDeckContract(value: unknown): ContractValidationResult {
   const parsed = safeParseDeck(value);
   return parsed.success ? ok() : fail(parsed.errors.join("; "));
+}
+
+function diagnosticMessages(
+  diagnostics: readonly { path?: string; message: string }[],
+  fallback: string,
+): string {
+  const messages = diagnostics.map((diagnostic) =>
+    diagnostic.path
+      ? `${diagnostic.path}: ${diagnostic.message}`
+      : diagnostic.message,
+  );
+  return messages.length > 0 ? messages.join("; ") : fallback;
+}
+
+function validateBrandKitDraftContract(
+  value: unknown,
+): ContractValidationResult {
+  const compiled = compileBrandKitDraft(value);
+  return compiled.ok
+    ? ok()
+    : fail(
+        diagnosticMessages(
+          compiled.diagnostics,
+          "BrandKitDraft.draftJson must be a valid brand-kit draft.",
+        ),
+      );
+}
+
+function validateThemePackageContract(
+  value: unknown,
+): ContractValidationResult {
+  const validation = validateThemePackage(value);
+  return validation.valid
+    ? ok()
+    : fail(
+        diagnosticMessages(
+          validation.diagnostics,
+          "ThemePackageSnapshot.packageJson must be a valid theme package.",
+        ),
+      );
 }
 
 function validateContentVisualsContract(
@@ -120,6 +162,20 @@ function validateCommentAnchorContract(
 
 export const PERSISTED_JSON_CONTRACTS = {
   /* node:coverage ignore next 15 -- Contract registry entries are asserted; tsx maps object literals as uncovered. */
+  "BrandKitDraft.draftJson": {
+    name: "BrandKitDraft.draftJson",
+    sourceOfTruth:
+      "BrandKitDraft.draftJson stores the editable brand-kit draft contract.",
+    validator: "@/lib/presentation/brand-kit/compiler#compileBrandKitDraft",
+    validate: validateBrandKitDraftContract,
+  },
+  "ThemePackageSnapshot.packageJson": {
+    name: "ThemePackageSnapshot.packageJson",
+    sourceOfTruth:
+      "ThemePackageSnapshot.packageJson stores compiled ThemePackageV1 snapshots.",
+    validator: "@/lib/presentation/theme-package-schema#validateThemePackage",
+    validate: validateThemePackageContract,
+  },
   "Document.deckJson": {
     name: "Document.deckJson",
     sourceOfTruth: "Document.deckJson is the source of truth for slides.",

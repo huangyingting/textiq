@@ -2,6 +2,8 @@
  * Persisted-payload schema audit (#501).
  *
  * Pure, DB-free auditing of the persisted shapes that the runtime trusts:
+ *  - `BrandKitDraft.draftJson`   → {@link compileBrandKitDraft}
+ *  - `ThemePackageSnapshot.packageJson` → {@link validateThemePackage}
  *  - `Document.deckJson`          → {@link safeParseDeck}
  *  - `Document.contentJson` visuals → {@link safeParseVisual} per visual node
  *  - `Visual.data`                → {@link safeParseVisual}
@@ -37,6 +39,8 @@ import {
 
 /** Schema areas the audit covers. */
 export const SCHEMA_AREAS = [
+  "BrandKitDraft.draftJson",
+  "ThemePackageSnapshot.packageJson",
   "Document.deckJson",
   "Document.contentJson:visual",
   "DocumentVersion.deckJson",
@@ -107,6 +111,16 @@ export interface DocumentVersionAuditRow {
   contentJson: unknown;
 }
 
+export interface BrandKitDraftAuditRow {
+  id: string;
+  draftJson: unknown;
+}
+
+export interface ThemePackageSnapshotAuditRow {
+  id: string;
+  packageJson: unknown;
+}
+
 export interface CommentAuditRow {
   id: string;
   documentId: string;
@@ -161,6 +175,8 @@ export interface BrandAuditRow {
 }
 
 export interface AuditInput {
+  brandKitDrafts?: readonly BrandKitDraftAuditRow[];
+  themePackageSnapshots?: readonly ThemePackageSnapshotAuditRow[];
   documents?: readonly DocumentAuditRow[];
   visuals?: readonly VisualAuditRow[];
   visualRevisions?: readonly VisualRevisionAuditRow[];
@@ -179,6 +195,8 @@ export interface AuditInput {
 
 export interface AuditSummary {
   /** Total rows scanned. */
+  scannedBrandKitDrafts: number;
+  scannedThemePackageSnapshots: number;
   scannedDocuments: number;
   scannedVisuals: number;
   scannedVisualRevisions: number;
@@ -218,6 +236,8 @@ function contractViolation(
     | "Visual.data"
     | "VisualRevision.data"
     | "Brand.palette"
+    | "BrandKitDraft.draftJson"
+    | "ThemePackageSnapshot.packageJson"
     | "Comment.anchor"
   >,
   value: unknown,
@@ -402,6 +422,39 @@ export function auditBrandPalette(row: BrandAuditRow): SchemaViolation[] {
     : [];
 }
 
+export function auditBrandKitDraftRow(
+  row: BrandKitDraftAuditRow,
+): SchemaViolation[] {
+  const result = contractViolation("BrandKitDraft.draftJson", row.draftJson);
+  return result
+    ? [
+        {
+          area: "BrandKitDraft.draftJson",
+          rowId: row.id,
+          reason: result,
+        },
+      ]
+    : [];
+}
+
+export function auditThemePackageSnapshotRow(
+  row: ThemePackageSnapshotAuditRow,
+): SchemaViolation[] {
+  const result = contractViolation(
+    "ThemePackageSnapshot.packageJson",
+    row.packageJson,
+  );
+  return result
+    ? [
+        {
+          area: "ThemePackageSnapshot.packageJson",
+          rowId: row.id,
+          reason: result,
+        },
+      ]
+    : [];
+}
+
 export function auditDocumentVersionRow(
   row: DocumentVersionAuditRow,
 ): SchemaViolation[] {
@@ -568,6 +621,8 @@ export function auditAssetScope(row: AssetAuditRow): SchemaViolation[] {
 
 function emptyByArea(): Record<SchemaArea, number> {
   return {
+    "BrandKitDraft.draftJson": 0,
+    "ThemePackageSnapshot.packageJson": 0,
     "Document.deckJson": 0,
     "Document.contentJson:visual": 0,
     "DocumentVersion.deckJson": 0,
@@ -594,6 +649,8 @@ function emptyByArea(): Record<SchemaArea, number> {
  * a summary. Pure — callers (CLI, tests) supply the rows.
  */
 export function auditRows(input: AuditInput): AuditReport {
+  const brandKitDrafts = input.brandKitDrafts ?? [];
+  const themePackageSnapshots = input.themePackageSnapshots ?? [];
   const documents = input.documents ?? [];
   const visuals = input.visuals ?? [];
   const visualRevisions = input.visualRevisions ?? [];
@@ -610,6 +667,12 @@ export function auditRows(input: AuditInput): AuditReport {
   const brands = input.brands ?? [];
   const violations: SchemaViolation[] = [];
 
+  for (const draft of brandKitDrafts) {
+    violations.push(...auditBrandKitDraftRow(draft));
+  }
+  for (const snapshot of themePackageSnapshots) {
+    violations.push(...auditThemePackageSnapshotRow(snapshot));
+  }
   for (const doc of documents) {
     violations.push(...auditDocumentDeck(doc));
     violations.push(...auditDocumentContentVisuals(doc));
@@ -662,6 +725,8 @@ export function auditRows(input: AuditInput): AuditReport {
   return {
     violations,
     summary: {
+      scannedBrandKitDrafts: brandKitDrafts.length,
+      scannedThemePackageSnapshots: themePackageSnapshots.length,
       scannedDocuments: documents.length,
       scannedVisuals: visuals.length,
       scannedVisualRevisions: visualRevisions.length,
@@ -690,7 +755,9 @@ export function auditRows(input: AuditInput): AuditReport {
 export function formatAuditReport(report: AuditReport): string[] {
   const lines: string[] = [];
   lines.push(
-    `Scanned ${report.summary.scannedDocuments} document(s), ` +
+    `Scanned ${report.summary.scannedBrandKitDrafts} brand kit draft(s), ` +
+      `${report.summary.scannedThemePackageSnapshots} theme package snapshot(s), ` +
+      `${report.summary.scannedDocuments} document(s), ` +
       `${report.summary.scannedVisuals} visual(s), ` +
       `${report.summary.scannedVisualRevisions} visual revision(s), ` +
       `${report.summary.scannedDocumentVersions} document version(s), ` +

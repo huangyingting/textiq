@@ -10,21 +10,26 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
+import { compileBrandKitDraft } from "@/lib/presentation/brand-kit/compiler";
 import {
   auditAssetScope,
+  auditBrandKitDraftRow,
   auditCommentAnchor,
   auditRows,
   auditDocumentDeck,
   auditDocumentVersionRow,
   auditSubscription,
+  auditThemePackageSnapshotRow,
   auditTagSlug,
   auditUsageLedgerEntry,
   auditUserPlan,
   formatAuditReport,
+  type BrandKitDraftAuditRow,
   type BrandAuditRow,
   type DocumentAuditRow,
   type VisualAuditRow,
   type VisualRevisionAuditRow,
+  type ThemePackageSnapshotAuditRow,
 } from "./audit";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +72,105 @@ function validVisual(): unknown {
   };
 }
 
+function validBrandKitDraft(): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    id: "draft-1",
+    name: "Acme Brand",
+    slug: "acme-brand",
+    scope: { kind: "user", ownerId: "user-1" },
+    sourcePresetId: "clarity",
+    version: "1.2.3",
+    revision: {
+      id: "revision-7",
+      number: 7,
+      createdAt: "2026-07-02T13:22:11.000Z",
+    },
+    palette: {
+      backgrounds: {
+        canvas: "#ffffff",
+        muted: "#f8fafc",
+        inverse: "#0f172a",
+      },
+      surfaces: {
+        default: "#ffffff",
+        elevated: "#f1f5f9",
+        subtle: "#e0f2fe",
+      },
+      text: {
+        primary: "#111827",
+        secondary: "#475569",
+        inverse: "#f8fafc",
+        accent: "#2563eb",
+      },
+      accents: {
+        primary: "#2563eb",
+        secondary: "#0ea5e9",
+      },
+      borders: {
+        default: "#cbd5e1",
+        strong: "#64748b",
+      },
+      charts: ["#2563eb", "#0ea5e9", "#22c55e", "#f59e0b"],
+      states: {
+        success: { fill: "#dcfce7", text: "#166534" },
+        warning: { fill: "#fef3c7", text: "#92400e" },
+        danger: { fill: "#fee2e2", text: "#991b1b" },
+      },
+    },
+    typography: {
+      display: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 42,
+        weight: 800,
+        lineHeight: 1.1,
+      },
+      heading: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 24,
+        weight: 700,
+        lineHeight: 1.2,
+      },
+      body: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 14,
+        weight: 400,
+        lineHeight: 1.45,
+      },
+      caption: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 10,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      mono: {
+        family: "Roboto Mono, monospace",
+        sizePt: 11,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      data: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 38,
+        weight: 800,
+        lineHeight: 1.05,
+      },
+    },
+    decorations: {
+      background: "subtle",
+      chrome: "default",
+    },
+  };
+}
+
+function validThemePackage(): Record<string, unknown> {
+  const compiled = compileBrandKitDraft(validBrandKitDraft());
+  if (!compiled.ok) {
+    throw new Error("Expected valid brand-kit draft fixture.");
+  }
+  return compiled.package as unknown as Record<string, unknown>;
+}
+
 function contentWithVisual(visual: unknown): unknown {
   return {
     root: {
@@ -99,10 +203,18 @@ describe("auditRows — valid rows", () => {
     const visualRevisions: VisualRevisionAuditRow[] = [
       { id: "vr-1", visualId: "v-1", data: validVisual() },
     ];
+    const brandKitDrafts: BrandKitDraftAuditRow[] = [
+      { id: "draft-1", draftJson: validBrandKitDraft() },
+    ];
+    const themePackageSnapshots: ThemePackageSnapshotAuditRow[] = [
+      { id: "snapshot-1", packageJson: validThemePackage() },
+    ];
     const brands: BrandAuditRow[] = [
       { id: "brand-1", palette: ["#ff0000", "#00ff00"] },
     ];
     const report = auditRows({
+      brandKitDrafts,
+      themePackageSnapshots,
       documents,
       visuals,
       visualRevisions,
@@ -121,6 +233,8 @@ describe("auditRows — valid rows", () => {
     assert.equal(report.summary.scannedVisuals, 1);
     assert.equal(report.summary.scannedVisualRevisions, 1);
     assert.equal(report.summary.scannedDocumentVersions, 1);
+    assert.equal(report.summary.scannedBrandKitDrafts, 1);
+    assert.equal(report.summary.scannedThemePackageSnapshots, 1);
     assert.equal(report.summary.scannedBrands, 1);
   });
 
@@ -236,6 +350,46 @@ describe("auditRows — invalid rows", () => {
     assert.ok(v);
     assert.equal(v?.rowId, "brand-bad");
     assert.equal(report.summary.byArea["Brand.palette"], 1);
+  });
+
+  test("flags invalid brand-kit draft JSON", () => {
+    const violations = auditBrandKitDraftRow({
+      id: "draft-bad",
+      draftJson: { ...validBrandKitDraft(), schemaVersion: 2 },
+    });
+    assert.equal(violations.length, 1);
+    assert.equal(violations[0]?.area, "BrandKitDraft.draftJson");
+    assert.equal(violations[0]?.rowId, "draft-bad");
+
+    const report = auditRows({
+      brandKitDrafts: [
+        {
+          id: "draft-bad",
+          draftJson: { ...validBrandKitDraft(), schemaVersion: 2 },
+        },
+      ],
+    });
+    assert.equal(report.summary.byArea["BrandKitDraft.draftJson"], 1);
+  });
+
+  test("flags invalid theme package snapshot JSON", () => {
+    const violations = auditThemePackageSnapshotRow({
+      id: "snapshot-bad",
+      packageJson: { ...validThemePackage(), schemaVersion: 2 },
+    });
+    assert.equal(violations.length, 1);
+    assert.equal(violations[0]?.area, "ThemePackageSnapshot.packageJson");
+    assert.equal(violations[0]?.rowId, "snapshot-bad");
+
+    const report = auditRows({
+      themePackageSnapshots: [
+        {
+          id: "snapshot-bad",
+          packageJson: { ...validThemePackage(), schemaVersion: 2 },
+        },
+      ],
+    });
+    assert.equal(report.summary.byArea["ThemePackageSnapshot.packageJson"], 1);
   });
 
   test("flags invalid Deck source metadata under slides[].children[].source", () => {

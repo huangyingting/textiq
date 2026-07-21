@@ -1,6 +1,6 @@
 /**
  * Direct behavior coverage for `runAuditMain` (#1964) — the injectable CLI
- * orchestration in `audit-persisted-schema.ts`: pagination, the twelve loaders'
+ * orchestration in `audit-persisted-schema.ts`: pagination, the fourteen loaders'
  * query-sequencing, `auditRows`/`formatAuditReport` wiring, `--json` vs
  * plain-text output, `--ci`/`--strict` exit-code gating, and
  * `db.$disconnect()`/error-propagation behavior in the `finally` block.
@@ -35,12 +35,14 @@ import {
 } from "./audit-persisted-schema";
 import type {
   AssetAuditRow,
+  BrandKitDraftAuditRow,
   BrandAuditRow,
   CommentAuditRow,
   DocumentAuditRow,
   DocumentVersionAuditRow,
   SubscriptionAuditRow,
   TagAuditRow,
+  ThemePackageSnapshotAuditRow,
   UsageLedgerAuditRow,
   UserPlanAuditRow,
   VisualAuditRow,
@@ -112,6 +114,8 @@ function createStaticDelegate<Row>(
 }
 
 interface Fixtures {
+  brandKitDrafts?: BrandKitDraftAuditRow[];
+  themePackageSnapshots?: ThemePackageSnapshotAuditRow[];
   documents?: DocumentAuditRow[];
   visuals?: VisualAuditRow[];
   visualRevisions?: VisualRevisionAuditRow[];
@@ -133,6 +137,16 @@ function createFakeDb(fixtures: Fixtures = {}) {
   let disconnectCalls = 0;
 
   const delegates = {
+    brandKitDraft: createPagedDelegate(
+      "brandKitDraft",
+      fixtures.brandKitDrafts ?? [],
+      callOrder,
+    ),
+    themePackageSnapshot: createPagedDelegate(
+      "themePackageSnapshot",
+      fixtures.themePackageSnapshots ?? [],
+      callOrder,
+    ),
     document: createPagedDelegate(
       "document",
       fixtures.documents ?? [],
@@ -272,7 +286,7 @@ describe("runAuditMain: pagination", () => {
 });
 
 describe("runAuditMain: loader query sequencing", () => {
-  test("starts all twelve loaders' first findMany call in the documented Promise.all order", async () => {
+  test("starts all fourteen loaders' first findMany call in the documented Promise.all order", async () => {
     const fake = createFakeDb();
     await runAuditMain({
       argv: [],
@@ -281,6 +295,8 @@ describe("runAuditMain: loader query sequencing", () => {
       stderr: () => {},
     });
     assert.deepEqual(fake.callOrder, [
+      "brandKitDraft",
+      "themePackageSnapshot",
       "document",
       "visual",
       "visualRevision",
@@ -360,7 +376,7 @@ describe("runAuditMain: --json vs plain-text output", () => {
       stderr: () => {},
     });
     assert.equal(out[0], "Persisted schema audit (provider: postgres)");
-    assert.match(out[1] ?? "", /^Scanned 0 document\(s\)/);
+    assert.match(out[1] ?? "", /^Scanned 0 brand kit draft\(s\)/);
     const rest = out.slice(1).join("\n");
     assert.match(rest, /Found 1 violation\(s\):/);
     assert.match(rest, /\[User\.plan\] row=u1 —/);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
+import { compileBrandKitDraft } from "@/lib/presentation/brand-kit/compiler";
 
 import {
   PERSISTED_JSON_CONTRACTS,
@@ -23,14 +24,115 @@ function validVisual(): Record<string, unknown> {
   };
 }
 
+function validBrandKitDraft(): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    id: "draft-1",
+    name: "Acme Brand",
+    slug: "acme-brand",
+    scope: { kind: "user", ownerId: "user-1" },
+    sourcePresetId: "clarity",
+    version: "1.2.3",
+    revision: {
+      id: "revision-7",
+      number: 7,
+      createdAt: "2026-07-02T13:22:11.000Z",
+    },
+    palette: {
+      backgrounds: {
+        canvas: "#ffffff",
+        muted: "#f8fafc",
+        inverse: "#0f172a",
+      },
+      surfaces: {
+        default: "#ffffff",
+        elevated: "#f1f5f9",
+        subtle: "#e0f2fe",
+      },
+      text: {
+        primary: "#111827",
+        secondary: "#475569",
+        inverse: "#f8fafc",
+        accent: "#2563eb",
+      },
+      accents: {
+        primary: "#2563eb",
+        secondary: "#0ea5e9",
+      },
+      borders: {
+        default: "#cbd5e1",
+        strong: "#64748b",
+      },
+      charts: ["#2563eb", "#0ea5e9", "#22c55e", "#f59e0b"],
+      states: {
+        success: { fill: "#dcfce7", text: "#166534" },
+        warning: { fill: "#fef3c7", text: "#92400e" },
+        danger: { fill: "#fee2e2", text: "#991b1b" },
+      },
+    },
+    typography: {
+      display: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 42,
+        weight: 800,
+        lineHeight: 1.1,
+      },
+      heading: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 24,
+        weight: 700,
+        lineHeight: 1.2,
+      },
+      body: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 14,
+        weight: 400,
+        lineHeight: 1.45,
+      },
+      caption: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 10,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      mono: {
+        family: "Roboto Mono, monospace",
+        sizePt: 11,
+        weight: 500,
+        lineHeight: 1.3,
+      },
+      data: {
+        family: "Inter, system-ui, sans-serif",
+        sizePt: 38,
+        weight: 800,
+        lineHeight: 1.05,
+      },
+    },
+    decorations: {
+      background: "subtle",
+      chrome: "default",
+    },
+  };
+}
+
+function validThemePackage(): Record<string, unknown> {
+  const compiled = compileBrandKitDraft(validBrandKitDraft());
+  if (!compiled.ok) {
+    throw new Error("Expected valid brand-kit draft fixture.");
+  }
+  return compiled.package as unknown as Record<string, unknown>;
+}
+
 test("persisted JSON registry points at current validators", () => {
   assert.deepEqual(Object.keys(PERSISTED_JSON_CONTRACTS).sort(), [
     "Brand.palette",
+    "BrandKitDraft.draftJson",
     "Comment.anchor",
     "Document.contentJson:visual",
     "Document.deckJson",
     "DocumentVersion.contentJson:visual",
     "DocumentVersion.deckJson",
+    "ThemePackageSnapshot.packageJson",
     "Visual.data",
     "VisualRevision.data",
   ]);
@@ -57,6 +159,18 @@ test("persisted JSON registry points at current validators", () => {
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["Brand.palette"].validate(["#ff0000"]).success,
+    true,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["BrandKitDraft.draftJson"].validate(
+      validBrandKitDraft(),
+    ).success,
+    true,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["ThemePackageSnapshot.packageJson"].validate(
+      validThemePackage(),
+    ).success,
     true,
   );
   assert.equal(
@@ -176,6 +290,20 @@ test("visual JSON contracts reject malformed embedded and row visuals", () => {
   );
   assert.equal(
     PERSISTED_JSON_CONTRACTS["Brand.palette"].validate(["not-a-color"]).success,
+    false,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["BrandKitDraft.draftJson"].validate({
+      ...validBrandKitDraft(),
+      schemaVersion: 2,
+    }).success,
+    false,
+  );
+  assert.equal(
+    PERSISTED_JSON_CONTRACTS["ThemePackageSnapshot.packageJson"].validate({
+      ...validThemePackage(),
+      schemaVersion: 2,
+    }).success,
     false,
   );
   assert.equal(
