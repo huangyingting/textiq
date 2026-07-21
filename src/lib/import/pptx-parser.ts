@@ -18,6 +18,7 @@ import type JSZip from "jszip";
 
 import { disposeZip, loadZipWithinBudget } from "./archive-budget";
 import { EncryptedImportError } from "./import-errors";
+import { escapeMarkdownTableCell } from "./markdown-table";
 import { hasOleCompoundFileSignature } from "./office-signature";
 import { throwIfAborted } from "./timeout";
 
@@ -81,10 +82,6 @@ function extractSlideShapeLines(slideXml: string): string[] {
     }
   }
   return lines;
-}
-
-function escapeMarkdownTableCell(cell: string): string {
-  return cell.replace(/\|/g, "\\|");
 }
 
 function toMarkdownTableRow(cells: string[], width: number): string {

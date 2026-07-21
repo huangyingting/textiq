@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-21"
 description: "Real-time collaborative editing (multiple cursors, presence, conflict-free merges) is powered by a self-hosted Yjs websocket sync server, scripts/collab-server.mjs. The browser editor connects to it through useLexicalCollaboration. The application-level room/readiness/access contract is documented in ../collaboration/README.md."
 ---
 
@@ -378,5 +378,7 @@ the source of truth and is not read on the normal load path. Configure it with:
   flusher is a no-op (logs one warning) and the endpoint returns `503`, so dev
   without the secret still runs — it just skips the recovery snapshot.
 
-Both health endpoints surface flush observability: `flushFailures` (counter) and
-`recentFlushFailures` (recent failures, safe ids only).
+Both health endpoints surface aggregate flush observability only:
+`flushFailures` (total counter) and `recentFlushFailureCount` (count of entries
+currently retained in the in-memory failure ring). Public health responses do
+not include room or document ids for individual failures.

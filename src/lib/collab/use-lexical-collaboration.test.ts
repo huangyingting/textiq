@@ -280,6 +280,13 @@ test("useLexicalCollaboration: a sync before the timeout leaves degraded false f
       assert.equal(get().ready, true);
       assert.equal(get().degraded, false);
 
+      act(() => {
+        timer.callback();
+      });
+      assert.equal(get().ready, true);
+      assert.equal(get().degraded, false);
+      assert.equal(timer.cleared, true);
+
       harness.cleanup();
       assert.equal(timer.cleared, true);
     } finally {

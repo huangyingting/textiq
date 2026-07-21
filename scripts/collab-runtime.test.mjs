@@ -56,14 +56,7 @@ describe("collab-runtime health summary", () => {
       rooms: 2,
       connections: 5,
       flushFailures: 1,
-      recentFlushFailures: [
-        {
-          room: "doc-1",
-          docId: "doc-1",
-          reason: "http_500",
-          at: "2026-06-25T00:00:00.000Z",
-        },
-      ],
+      recentFlushFailureCount: 1,
     });
 
     assert.deepEqual(summary, {
@@ -74,14 +67,7 @@ describe("collab-runtime health summary", () => {
       warnings: [],
       healthy: true,
       flushFailures: 1,
-      recentFlushFailures: [
-        {
-          room: "doc-1",
-          docId: "doc-1",
-          reason: "http_500",
-          at: "2026-06-25T00:00:00.000Z",
-        },
-      ],
+      recentFlushFailureCount: 1,
     });
   });
 
@@ -101,7 +87,7 @@ describe("collab-runtime health summary", () => {
         rooms: 1,
         connections: 2,
         flushFailures: 0,
-        recentFlushFailures: [],
+        recentFlushFailureCount: 0,
       }),
     });
 
@@ -114,6 +100,37 @@ describe("collab-runtime health summary", () => {
     assert.equal(JSON.parse(writes[1].body).connections, 2);
   });
 
+  test("createCollabHealthHandler omits per-room failure ids from the public payload", () => {
+    const writes = [];
+    const response = {
+      writeHead: (status, headers) => writes.push({ status, headers }),
+      end: (body) => writes.push({ body }),
+    };
+    const handler = createCollabHealthHandler({
+      deploymentConfig: {
+        mode: "single-instance",
+        warnings: [],
+        healthy: true,
+      },
+      getStats: () => ({
+        rooms: 1,
+        connections: 2,
+        flushFailures: 3,
+        recentFlushFailureCount: 1,
+      }),
+    });
+
+    handler({}, response);
+
+    const payload = JSON.parse(writes[1].body);
+    assert.equal(payload.flushFailures, 3);
+    assert.equal(payload.recentFlushFailureCount, 1);
+    assert.equal("recentFlushFailures" in payload, false);
+    assert.equal("room" in payload, false);
+    assert.equal("docId" in payload, false);
+    assert.equal(JSON.stringify(payload).includes("doc-1"), false);
+  });
+
   test("buildCollabHealthSummary reports unhealthy deployment as ok=false", () => {
     const deploymentConfig = resolveCollabDeployment({
       COLLAB_INSTANCE_COUNT: "2",
@@ -124,7 +141,7 @@ describe("collab-runtime health summary", () => {
       rooms: 0,
       connections: 0,
       flushFailures: 0,
-      recentFlushFailures: [],
+      recentFlushFailureCount: 0,
     });
 
     assert.equal(summary.ok, false);

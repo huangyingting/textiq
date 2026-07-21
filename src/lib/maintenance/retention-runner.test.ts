@@ -12,6 +12,7 @@ import {
 
 type RateRow = { subject: string; resetAt: Date };
 type TokenRow = { id: string; expiresAt: Date; usedAt: Date | null };
+type BrandRow = { logoAssetId: string | null; fontAssetId: string | null };
 type AssetRow = {
   id: string;
   storageKey: string;
@@ -60,12 +61,14 @@ function makeDb(seed?: {
   rateLimits?: RateRow[];
   passwordResetTokens?: TokenRow[];
   emailVerificationTokens?: TokenRow[];
+  brands?: BrandRow[];
   assets?: AssetRow[];
 }): RetentionDb & {
   rows: {
     rateLimits: RateRow[];
     passwordResetTokens: TokenRow[];
     emailVerificationTokens: TokenRow[];
+    brands: BrandRow[];
     assets: AssetRow[];
   };
 } {
@@ -73,6 +76,7 @@ function makeDb(seed?: {
     rateLimits: seed?.rateLimits ?? [],
     passwordResetTokens: seed?.passwordResetTokens ?? [],
     emailVerificationTokens: seed?.emailVerificationTokens ?? [],
+    brands: seed?.brands ?? [],
     assets: seed?.assets ?? [],
   };
   return {
@@ -98,6 +102,25 @@ function makeDb(seed?: {
     },
     passwordResetToken: makeTokenDelegate(rows.passwordResetTokens),
     emailVerificationToken: makeTokenDelegate(rows.emailVerificationTokens),
+    brand: {
+      async findMany(args: {
+        where: {
+          OR: [
+            { logoAssetId: { in: string[] } },
+            { fontAssetId: { in: string[] } },
+          ];
+        };
+      }) {
+        const [logoFilter, fontFilter] = args.where.OR;
+        const logoIds = new Set(logoFilter.logoAssetId.in);
+        const fontIds = new Set(fontFilter.fontAssetId.in);
+        return rows.brands.filter(
+          (brand) =>
+            (brand.logoAssetId !== null && logoIds.has(brand.logoAssetId)) ||
+            (brand.fontAssetId !== null && fontIds.has(brand.fontAssetId)),
+        );
+      },
+    },
     asset: {
       async findMany(args: { take: number; where: Record<string, unknown> }) {
         const deletedAt = args.where.deletedAt as { lt: Date };
@@ -106,13 +129,8 @@ function makeDb(seed?: {
             if (asset.deletedAt === null || asset.deletedAt >= deletedAt.lt) {
               return false;
             }
-            if ("brandId" in args.where) {
-              return (
-                asset.brandId !== null &&
-                asset.brandId !== undefined &&
-                asset.documentId === null &&
-                asset.workspaceId === null
-              );
+            if ("OR" in args.where) {
+              return asset.documentId === null && asset.workspaceId === null;
             }
             return asset.documentId !== null;
           })
@@ -139,6 +157,7 @@ function makeDb(seed?: {
       rateLimits: RateRow[];
       passwordResetTokens: TokenRow[];
       emailVerificationTokens: TokenRow[];
+      brands: BrandRow[];
       assets: AssetRow[];
     };
   };
@@ -371,16 +390,33 @@ describe("runOperationalRetention", () => {
     assert.ok(!JSON.stringify(logger.errors).includes("doc/fail.png"));
   });
 
-  it("does not purge document-null slide orphans through brand storage", async () => {
+  it("purges expired assets orphaned by brand deletion while preserving live ownerless assets", async () => {
     const db = makeDb({
+      brands: [{ logoAssetId: "ownerless-live", fontAssetId: null }],
       assets: [
         {
-          id: "slide-after-document-hard-delete",
-          storageKey: "doc-deleted/orphan.png",
+          id: "brand-after-delete",
+          storageKey: "owner/deleted-brand.png",
           brandId: null,
           documentId: null,
           workspaceId: null,
           deletedAt: daysAgo(8),
+        },
+        {
+          id: "ownerless-live",
+          storageKey: "owner/live.png",
+          brandId: null,
+          documentId: null,
+          workspaceId: null,
+          deletedAt: daysAgo(8),
+        },
+        {
+          id: "ownerless-current",
+          storageKey: "owner/current.png",
+          brandId: null,
+          documentId: null,
+          workspaceId: null,
+          deletedAt: null,
         },
         {
           id: "brand-expired",
@@ -403,13 +439,16 @@ describe("runOperationalRetention", () => {
     });
 
     assert.equal(result.slideAssets.candidateCount, 0);
-    assert.equal(result.brandAssets.candidateCount, 1);
-    assert.equal(result.brandAssets.deletedCount, 1);
+    assert.equal(result.brandAssets.candidateCount, 2);
+    assert.equal(result.brandAssets.deletedCount, 2);
     assert.deepEqual(slideStorage.deletedKeys, []);
-    assert.deepEqual(brandStorage.deletedKeys, ["owner/brand.png"]);
+    assert.deepEqual(brandStorage.deletedKeys, [
+      "owner/deleted-brand.png",
+      "owner/brand.png",
+    ]);
     assert.deepEqual(
       db.rows.assets.map((row) => row.id),
-      ["slide-after-document-hard-delete"],
+      ["ownerless-live", "ownerless-current"],
     );
   });
 });

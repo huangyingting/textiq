@@ -263,10 +263,11 @@ authorization callback and accepts an optional eviction-flush callback:
   endpoint stores a **best-effort recovery snapshot** on the `Document`
   (`collabRecoverySnapshot` / `collabRecoverySavedAt`); it never becomes the
   source of truth and is never read on the normal load path. Errors are recorded
-  in an in-memory observability ring (`recentFlushFailures()` / `flushStats()`,
-  surfaced in both health endpoints as `recentFlushFailures` / `flushFailures`)
-  and never advance the saved-state vector. When `COLLAB_INTERNAL_SECRET` is unset
-  the flusher is a no-op and the endpoint returns `503`.
+  in an in-memory observability ring (`recentFlushFailures()` / `flushStats()`).
+  Public health endpoints surface aggregate counts (`recentFlushFailureCount` /
+  `flushFailures`) without room or document ids and never advance the saved-state
+  vector. When `COLLAB_INTERNAL_SECRET` is unset the flusher is a no-op and the
+  endpoint returns `503`.
 
 Read-only connections (viewers) receive sync-step-1 replies but cannot send updates (sync-step-2 / update messages are dropped).
 

@@ -14,6 +14,7 @@
  *
  * Server-safe: no `document`, `window`, or DOM globals are used.
  */
+import { escapeMarkdownTableCell } from "./markdown-table";
 
 /** Strips all HTML tags, decoding common entities in the remaining text. */
 function stripTags(html: string): string {
@@ -76,9 +77,11 @@ function tableHtmlToMarkdown(tableHtml: string): string {
   );
   const [columns, ...bodyRows] = normalized;
   const tableLines = [
-    `| ${(columns ?? []).join(" | ")} |`,
+    `| ${(columns ?? []).map(escapeMarkdownTableCell).join(" | ")} |`,
     `| ${Array.from({ length: width }, () => "---").join(" | ")} |`,
-    ...bodyRows.map((row) => `| ${row.join(" | ")} |`),
+    ...bodyRows.map(
+      (row) => `| ${row.map(escapeMarkdownTableCell).join(" | ")} |`,
+    ),
   ];
   return [caption, ...tableLines].filter(Boolean).join("\n");
 }

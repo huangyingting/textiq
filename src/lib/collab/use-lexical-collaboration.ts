@@ -111,13 +111,19 @@ export function useLexicalCollaboration(opts: {
 
   useEffect(() => {
     const awareness = provider.awareness;
+    let degradeTimer: ReturnType<typeof setTimeout> | undefined;
 
     const onStatus = (event: { status: CollabStatus }) => {
       setStatus(event.status);
     };
     const onSync = (isSynced: boolean) => {
       if (isSynced) {
+        if (degradeTimer) {
+          clearTimeout(degradeTimer);
+          degradeTimer = undefined;
+        }
         setSynced(true);
+        setDegraded(false);
       }
     };
     const onAwareness = () => {
@@ -128,13 +134,14 @@ export function useLexicalCollaboration(opts: {
     provider.on("sync", onSync);
     awareness.on("change", onAwareness);
 
-    const degradeTimer = setTimeout(
-      () => setDegraded(true),
-      DEGRADED_TIMEOUT_MS,
-    );
+    degradeTimer = setTimeout(() => {
+      if (!degradeTimer) return;
+      degradeTimer = undefined;
+      setDegraded(true);
+    }, DEGRADED_TIMEOUT_MS);
 
     return () => {
-      clearTimeout(degradeTimer);
+      if (degradeTimer) clearTimeout(degradeTimer);
       provider.off("status", onStatus);
       provider.off("sync", onSync);
       awareness.off("change", onAwareness);

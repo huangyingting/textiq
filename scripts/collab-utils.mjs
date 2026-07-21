@@ -14,6 +14,8 @@
  * @returns {number}
  */
 export function readPositiveInt(value, fallback = 0) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const raw = String(value ?? "").trim();
+  if (!/^\d+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
