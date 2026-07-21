@@ -118,19 +118,21 @@ export type AssetTelemetryArea = "slide" | "brand";
 export type AssetTelemetryOperation = "mark" | "purge" | "storage_delete";
 
 export interface AssetOrphanTelemetryEvent {
+  domain?: AssetTelemetryArea;
   documentId?: string;
   brandId?: string;
+  assetId?: string;
   markedCount?: number;
   purgedCount?: number;
-  storageKey?: string;
 }
 
 const ASSET_ORPHAN_KEYS = [
+  "domain",
   "documentId",
   "brandId",
+  "assetId",
   "markedCount",
   "purgedCount",
-  "storageKey",
 ] as const;
 
 export function buildAssetOrphanContext(
@@ -148,7 +150,7 @@ export function logAssetOrphanEvent(
   logInfo(
     `asset.${area}.${operation}`,
     message,
-    buildAssetOrphanContext(event),
+    buildAssetOrphanContext({ domain: area, ...event }),
   );
 }
 
@@ -158,7 +160,11 @@ export function logAssetOrphanFailure(
   error: unknown,
   event: AssetOrphanTelemetryEvent,
 ): void {
-  logError(`asset.${area}.${operation}`, error, buildAssetOrphanContext(event));
+  logError(
+    `asset.${area}.${operation}`,
+    error,
+    buildAssetOrphanContext({ domain: area, ...event }),
+  );
 }
 
 export interface CommandValidationTelemetryEvent {

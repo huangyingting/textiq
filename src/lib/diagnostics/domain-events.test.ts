@@ -55,16 +55,21 @@ describe("domain telemetry event builders", () => {
 
   test("asset orphan context carries only safe purge metadata", () => {
     const context = buildAssetOrphanContext({
+      domain: "slide",
       documentId: "doc-1",
+      assetId: "asset-1",
       purgedCount: 2,
       storageKey: "assets/doc-1/dead.png",
       contentJson: "SECRET CONTENT",
       payload: { text: "nested leak" },
     } as never);
 
+    assert.equal(context.domain, "slide");
     assert.equal(context.documentId, "doc-1");
+    assert.equal(context.assetId, "asset-1");
     assert.equal(context.purgedCount, 2);
-    assert.equal(context.storageKey, "assets/doc-1/dead.png");
+    assert.equal("storageKey" in context, false);
+    assert.ok(!JSON.stringify(context).includes("assets/doc-1/dead.png"));
     assert.ok(!JSON.stringify(context).includes("SECRET CONTENT"));
     assert.ok(!JSON.stringify(context).includes("nested leak"));
   });

@@ -40,10 +40,16 @@ test("htmlToMarkdown strips inline tags and keeps text", () => {
 });
 
 test("htmlToMarkdown decodes HTML entities", () => {
-  const result = htmlToMarkdown("<p>&lt;code&gt; &amp; &quot;quotes&quot;</p>");
+  const result = htmlToMarkdown(
+    "<p>&lt;code&gt; &amp; &quot;quotes&quot; &#128512; &#x1F600; &#xD800; &#9999999999; &bogus;</p>",
+  );
   assert.ok(result.includes("<code>"));
   assert.ok(result.includes("&"));
   assert.ok(result.includes('"quotes"'));
+  assert.ok(result.includes("😀 😀"));
+  assert.ok(result.includes("&#xD800;"));
+  assert.ok(result.includes("&#9999999999;"));
+  assert.ok(result.includes("&bogus;"));
 });
 
 test("htmlToMarkdown removes script and style blocks entirely", () => {

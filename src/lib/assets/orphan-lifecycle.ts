@@ -69,7 +69,7 @@ export async function purgeExpiredAssetRows(opts: {
       purgedIds.push(asset.id);
     } catch (err) {
       logAssetOrphanFailure(opts.domain, "storage_delete", err, {
-        storageKey: asset.storageKey,
+        assetId: asset.id,
       });
     }
   }

@@ -22,7 +22,7 @@ test("parsePptx extracts shape text, native table cells, and linked notes", asyn
           </p:sp>
           <p:sp>
             <p:nvSpPr><p:nvPr/></p:nvSpPr>
-            <p:txBody><a:p><a:r><a:t>Intro text</a:t></a:r></a:p></p:txBody>
+            <p:txBody><a:p><a:r><a:t>Intro text &#128512; &#x1F600;</a:t></a:r></a:p></p:txBody>
           </p:sp>
           <p:graphicFrame>
             <a:graphic>
@@ -72,7 +72,7 @@ test("parsePptx extracts shape text, native table cells, and linked notes", asyn
   const text = await parsePptx(buffer);
 
   assert.ok(text.includes("## Quarterly update"));
-  assert.ok(text.includes("Intro text"));
+  assert.ok(text.includes("Intro text 😀 😀"));
   assert.ok(text.includes("| Region | ARR |"));
   assert.ok(text.includes("| NA | $12M |"));
   assert.ok(text.includes("### Speaker notes"));

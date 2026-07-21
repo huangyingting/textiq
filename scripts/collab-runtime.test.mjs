@@ -268,7 +268,7 @@ describe("collab-runtime service URL and secret resolution", () => {
     });
   });
 
-  test("standalone URLs resolve from AUTH_URL and COLLAB_AUTHORIZE_URL", () => {
+  test("standalone URLs derive flush from COLLAB_AUTHORIZE_URL when configured", () => {
     const urls = resolveCollabServiceUrls({
       runtimeMode: "standalone",
       env: {
@@ -278,9 +278,9 @@ describe("collab-runtime service URL and secret resolution", () => {
     });
 
     assert.deepEqual(urls, {
-      appBaseUrl: "https://app.example.com",
+      appBaseUrl: "https://authz.example.com",
       authorizeUrl: "https://authz.example.com/check",
-      flushUrl: "https://app.example.com/api/collab/flush",
+      flushUrl: "https://authz.example.com/api/collab/flush",
     });
   });
 
@@ -297,10 +297,46 @@ describe("collab-runtime service URL and secret resolution", () => {
     });
   });
 
-  test("COLLAB_INTERNAL_SECRET is forwarded unchanged to preserve existing behavior", () => {
+  test("standalone URLs trim AUTH_URL and ignore a blank COLLAB_AUTHORIZE_URL", () => {
+    const urls = resolveCollabServiceUrls({
+      runtimeMode: "standalone",
+      env: {
+        AUTH_URL: " https://app.example.com/ ",
+        COLLAB_AUTHORIZE_URL: "   ",
+      },
+    });
+
+    assert.deepEqual(urls, {
+      appBaseUrl: "https://app.example.com",
+      authorizeUrl: "https://app.example.com/api/collab/authorize",
+      flushUrl: "https://app.example.com/api/collab/flush",
+    });
+  });
+
+  test("standalone flush falls back to AUTH_URL when COLLAB_AUTHORIZE_URL is not absolute", () => {
+    const urls = resolveCollabServiceUrls({
+      runtimeMode: "standalone",
+      env: {
+        AUTH_URL: "https://app.example.com",
+        COLLAB_AUTHORIZE_URL: "/api/collab/authorize",
+      },
+    });
+
+    assert.deepEqual(urls, {
+      appBaseUrl: "https://app.example.com",
+      authorizeUrl: "/api/collab/authorize",
+      flushUrl: "https://app.example.com/api/collab/flush",
+    });
+  });
+
+  test("COLLAB_INTERNAL_SECRET is trimmed and blank-normalized like the flush route", () => {
     assert.equal(
       resolveCollabInternalSecret({ COLLAB_INTERNAL_SECRET: "  secret  " }),
-      "  secret  ",
+      "secret",
+    );
+    assert.equal(
+      resolveCollabInternalSecret({ COLLAB_INTERNAL_SECRET: "   " }),
+      undefined,
     );
     assert.equal(resolveCollabInternalSecret({}), undefined);
   });
@@ -341,8 +377,8 @@ describe("collab-runtime authorizer and flusher construction", () => {
     const flush = createRuntimeEvictionFlusher({
       runtimeMode: "standalone",
       env: {
-        AUTH_URL: "https://app.example.com/",
-        COLLAB_INTERNAL_SECRET: "s3cret",
+        COLLAB_AUTHORIZE_URL: "https://authz.example.com/check",
+        COLLAB_INTERNAL_SECRET: " s3cret ",
       },
       fetchImpl: async (url, init) => {
         captured = { url, init };
@@ -352,7 +388,7 @@ describe("collab-runtime authorizer and flusher construction", () => {
 
     await flush("doc-1", new Uint8Array([1, 2, 3]));
 
-    assert.equal(captured.url, "https://app.example.com/api/collab/flush");
+    assert.equal(captured.url, "https://authz.example.com/api/collab/flush");
     assert.equal(captured.init.headers["x-collab-internal-secret"], "s3cret");
     assert.equal(JSON.parse(captured.init.body).documentId, "doc-1");
   });

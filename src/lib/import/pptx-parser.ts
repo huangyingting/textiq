@@ -17,6 +17,7 @@ import { posix as pathPosix } from "node:path";
 import type JSZip from "jszip";
 
 import { disposeZip, loadZipWithinBudget } from "./archive-budget";
+import { decodeBasicCharacterEntities } from "./entities";
 import { EncryptedImportError } from "./import-errors";
 import { escapeMarkdownTableCell } from "./markdown-table";
 import { hasOleCompoundFileSignature } from "./office-signature";
@@ -41,18 +42,7 @@ const RELATIONSHIP_RE = /<Relationship\b[\s\S]*?\/>/g;
 
 /** Decodes basic XML character entities. */
 function decodeXml(s: string): string {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
-      String.fromCodePoint(parseInt(hex, 16)),
-    )
-    .replace(/&#(\d+);/g, (_, decimal: string) =>
-      String.fromCodePoint(parseInt(decimal, 10)),
-    )
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
+  return decodeBasicCharacterEntities(s);
 }
 
 /** Extracts all text runs from an XML snippet into a single line. */

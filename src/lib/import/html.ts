@@ -15,36 +15,17 @@
  * Server-safe: no `document`, `window`, or DOM globals are used.
  */
 import { escapeMarkdownTableCell } from "./markdown-table";
+import { decodeBasicCharacterEntities } from "./entities";
 
 /** Strips all HTML tags, decoding common entities in the remaining text. */
 function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&mdash;/gi, "—")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+  return decodeBasicCharacterEntities(html.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function stripTagsPreserveLines(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&mdash;/gi, "—")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+  return decodeBasicCharacterEntities(html.replace(/<[^>]*>/g, " "))
     .replace(/[^\S\n]+/g, " ")
     .replace(/ *\n */g, "\n")
     .trim();
