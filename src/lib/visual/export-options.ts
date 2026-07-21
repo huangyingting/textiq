@@ -184,6 +184,32 @@ export function computeLetterboxedDimensions(
   };
 }
 
+function parseSvgAttributeMap(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of tag.matchAll(
+    /\s([A-Za-z_:][\w:.-]*)=["']([^"']*)["']/g,
+  )) {
+    attrs[match[1]] = match[2];
+  }
+  return attrs;
+}
+
+function firstSolidRectFill(svgString: string): string | undefined {
+  for (const match of svgString.matchAll(/<rect\b[^>]*>/g)) {
+    const attrs = parseSvgAttributeMap(match[0]);
+    const fill = attrs.fill;
+    if (
+      fill &&
+      attrs.width !== undefined &&
+      attrs.height !== undefined &&
+      !fill.startsWith("url(")
+    ) {
+      return fill;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Apply aspect-ratio letterboxing to a raw SVG string. When `preset` is
  * `"auto"` or `undefined`, the SVG is returned unchanged.
@@ -234,11 +260,7 @@ export function applyAspectRatioToSvg(
   // Try to extract a background fill colour from the first solid-colour rect
   // (the visual background rect that comes right after the opening <svg> tag).
   // Fall back to white when none is found.
-  const bgMatch = svgString.match(
-    /* node:coverage enable */
-    /<rect\b[^>]*\bfill=["']([^"']+)["'][^>]*\bwidth=["'][^"']*["'][^>]*\bheight=["'][^"']*["']/,
-  );
-  const bgFill = bgMatch ? bgMatch[1] : "#ffffff";
+  const bgFill = firstSolidRectFill(svgString) ?? "#ffffff";
 
   // Update the viewBox attribute to the new canvas size
   let svg = svgString.replace(

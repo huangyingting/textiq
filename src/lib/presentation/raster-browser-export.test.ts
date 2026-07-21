@@ -720,7 +720,7 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
     assert.ok(!svg.includes("<foreignObject"));
   });
 
-  test("runs-based paragraph emits joined run text", () => {
+  test("runs-based paragraph emits per-run tspans with list prefix formatting", () => {
     const svg = buildSvgFromSlideSpec(
       makeSpec([
         {
@@ -732,7 +732,19 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
               {
                 id: "p",
                 text: "Full text",
-                runs: [{ text: "Full " }, { text: "text" }],
+                list: { kind: "bullet", indent: 2 },
+                runs: [
+                  {
+                    text: "Full ",
+                    bold: true,
+                    localStyle: { color: "#ef4444" },
+                  },
+                  {
+                    text: "text",
+                    italic: true,
+                    localStyle: { fontSizePt: 18, fontFamily: "Serif" },
+                  },
+                ],
               },
             ],
           },
@@ -743,7 +755,13 @@ describe("buildSvgFromSlideSpec — text renderer branches", () => {
       testCanvas,
       testDims,
     );
-    assert.ok(svg.includes("Full"), "run text should appear in output");
+    assert.ok(svg.includes("• "), "list bullet should appear in output");
+    assert.ok(svg.includes("<tspan"), "rich runs should render as tspans");
+    assert.ok(svg.includes('font-weight="bold"'), "bold run should survive");
+    assert.ok(svg.includes('font-style="italic"'), "italic run should survive");
+    assert.ok(svg.includes("#ef4444"), "run color should survive");
+    assert.ok(svg.includes("Serif"), "run font family should survive");
+    assert.ok(svg.includes("Full "), "run text should appear in output");
     assert.ok(!svg.includes("<foreignObject"));
   });
 

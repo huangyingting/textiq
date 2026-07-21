@@ -1971,7 +1971,7 @@ export function SlideEditor({
   }, [selectedIds, selectedNode, setStageAnnouncement]);
 
   function resolveDeckAsset(assetId: string): string | undefined {
-    return resolveDeckAssetSource(deck, assetId);
+    return resolveDeckAssetSource(deck, assetId, pkg);
   }
 
   // Alt-drag duplicates the dragged node(s) and drops the copies at the moved

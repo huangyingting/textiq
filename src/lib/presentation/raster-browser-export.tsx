@@ -10,7 +10,7 @@ import type {
   ResolvedSlideRenderTree,
 } from "./render-tree";
 import type { CanvasSpec } from "./types";
-import type { Deck } from "./schema";
+import type { Deck, ListMarker, TextRun } from "./schema";
 import type { FillStyle, ColorValue, TextStyle } from "./style-schema";
 import type { ThemePackageV1 } from "./theme-package-schema";
 import { resolveThemePackageForDeck } from "./theme-package-registry";
@@ -187,7 +187,11 @@ export async function renderSelectedNodesToPngBlob(
 
   // Build a foreignObject-free SVG for the full slide, then crop the viewBox.
   const singleDeckSpec = buildSingleSlideExportSpec(slide, deck.canvas);
-  const resolvedSpec = resolveExportSpecAssetSources(deck, singleDeckSpec);
+  const resolvedSpec = resolveExportSpecAssetSources(
+    deck,
+    singleDeckSpec,
+    resolveThemePackageForDeck(deck).package,
+  );
   const slideSpec = resolvedSpec.slides[0];
   if (!slideSpec) return null;
 
@@ -364,6 +368,22 @@ function renderSvgFill(fill: FillStyle | undefined): {
 
 const CHAR_WIDTH_RATIO_SVG = 0.54;
 
+type SvgTextSegment = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  color: string;
+  fontSize: number;
+  fontFamily: string;
+};
+
+type SvgTextLine = {
+  segments: SvgTextSegment[];
+  indentPx: number;
+};
+
 function wrapSvgLine(text: string, boxW: number, fontSize: number): string[] {
   const charsPerLine = Math.max(
     1,
@@ -383,6 +403,139 @@ function wrapSvgLine(text: string, boxW: number, fontSize: number): string[] {
   }
   if (cur) lines.push(cur);
   return lines.length ? lines : [""];
+}
+
+function listPrefix(marker: ListMarker | undefined, number: number): string {
+  if (!marker) return "";
+  if (marker.kind === "bullet") return "• ";
+  return `${number}. `;
+}
+
+function segmentStyleKey(segment: SvgTextSegment): string {
+  return [
+    segment.bold ? "1" : "0",
+    segment.italic ? "1" : "0",
+    segment.underline ? "1" : "0",
+    segment.strikethrough ? "1" : "0",
+    segment.color,
+    segment.fontSize,
+    segment.fontFamily,
+  ].join("\u0000");
+}
+
+function pushMergedSegment(
+  segments: SvgTextSegment[],
+  segment: SvgTextSegment,
+): void {
+  if (segment.text.length === 0) return;
+  const last = segments[segments.length - 1];
+  if (last && segmentStyleKey(last) === segmentStyleKey(segment)) {
+    last.text += segment.text;
+    return;
+  }
+  segments.push({ ...segment });
+}
+
+function textRunToSvgSegment(
+  run: TextRun,
+  defaults: {
+    color: string;
+    fontSize: number;
+    fontFamily: string;
+    bold: boolean;
+    italic: boolean;
+    pxPerPt: number;
+  },
+): SvgTextSegment {
+  return {
+    text: run.text,
+    bold: run.bold ?? defaults.bold,
+    italic: run.italic ?? defaults.italic,
+    underline: run.underline,
+    strikethrough: run.strikethrough,
+    color:
+      typeof run.localStyle?.color === "string"
+        ? svgColor(run.localStyle.color, defaults.color)
+        : defaults.color,
+    fontSize:
+      run.localStyle?.fontSizePt !== undefined
+        ? run.localStyle.fontSizePt * defaults.pxPerPt
+        : defaults.fontSize,
+    fontFamily:
+      typeof run.localStyle?.fontFamily === "string"
+        ? run.localStyle.fontFamily
+        : defaults.fontFamily,
+  };
+}
+
+function wrapSvgSegments(
+  segments: SvgTextSegment[],
+  boxW: number,
+  fontSize: number,
+  indentPx: number,
+): SvgTextLine[] {
+  const chars = segments.flatMap((segment) =>
+    Array.from(segment.text).map((char) => ({ char, segment })),
+  );
+  if (chars.length === 0) return [{ segments: [], indentPx }];
+
+  const charsPerLine = Math.max(
+    1,
+    Math.floor(
+      Math.max(1, boxW - indentPx) / (fontSize * CHAR_WIDTH_RATIO_SVG),
+    ),
+  );
+  const lines: SvgTextLine[] = [];
+  let start = 0;
+  while (start < chars.length) {
+    while (chars[start]?.char === " ") start += 1;
+    let end = Math.min(chars.length, start + charsPerLine);
+    if (end < chars.length) {
+      for (let i = end - 1; i > start; i -= 1) {
+        if (chars[i]?.char === " ") {
+          end = i;
+          break;
+        }
+      }
+    }
+    let nextStart = end;
+    while (end > start && chars[end - 1]?.char === " ") end -= 1;
+    if (chars[nextStart]?.char === " ") nextStart += 1;
+    const lineSegments: SvgTextSegment[] = [];
+    for (let i = start; i < end; i += 1) {
+      const { char, segment } = chars[i]!;
+      pushMergedSegment(lineSegments, { ...segment, text: char });
+    }
+    lines.push({ segments: lineSegments, indentPx });
+    start = Math.max(nextStart, start + 1);
+  }
+  return lines.length ? lines : [{ segments: [], indentPx }];
+}
+
+function renderSvgTextLine(
+  line: SvgTextLine,
+  x: number,
+  y: number,
+  textAnchor: "start" | "middle" | "end",
+  base: {
+    fontSize: number;
+    color: string;
+    fontFamily: string;
+    fontWeight: string;
+    fontStyle: string;
+    transform: string;
+  },
+): string {
+  const tspans = line.segments
+    .map((segment) => {
+      const decorations = [
+        segment.underline ? "underline" : "",
+        segment.strikethrough ? "line-through" : "",
+      ].filter(Boolean);
+      return `<tspan font-size="${segment.fontSize.toFixed(1)}" fill="${xmlEsc(segment.color)}" font-family="${xmlEsc(segment.fontFamily)}" font-weight="${segment.bold ? "bold" : "normal"}" font-style="${segment.italic ? "italic" : "normal"}"${decorations.length ? ` text-decoration="${decorations.join(" ")}"` : ""}>${xmlEsc(segment.text)}</tspan>`;
+    })
+    .join("");
+  return `<text x="${(x + line.indentPx).toFixed(1)}" y="${y.toFixed(1)}" font-size="${base.fontSize.toFixed(1)}" fill="${xmlEsc(base.color)}" font-family="${xmlEsc(base.fontFamily)}" font-weight="${base.fontWeight}" font-style="${base.fontStyle}" text-anchor="${textAnchor}"${base.transform}>${tspans}</text>`;
 }
 
 /** Render a text operation as native SVG <text> elements (no foreignObject). */
@@ -406,20 +559,59 @@ function renderSvgText(
     align === "center" ? "middle" : align === "right" ? "end" : "start";
   const textX = align === "center" ? x + w / 2 : align === "right" ? x + w : x;
   const lineH = fontSize * (ts.lineHeight ?? 1.4);
+  const defaults = {
+    color,
+    fontSize,
+    fontFamily,
+    bold: fontWeight === "bold",
+    italic: fontStyle === "italic",
+    pxPerPt: pxPerIn / 72,
+  };
 
   // Collect all lines for vertical alignment
-  const allLines: string[] = [];
+  const allLines: SvgTextLine[] = [];
+  const listCounters = new Map<number, number>();
   for (const para of op.content.paragraphs) {
-    if (para.text.trim() === "" && para.runs === undefined) {
-      allLines.push("");
+    const indentPx = (para.list?.indent ?? 0) * fontSize * 1.5;
+    const listIndent = para.list?.indent ?? 0;
+    const number =
+      para.list?.kind === "number"
+        ? (listCounters.get(listIndent) ?? 0) + 1
+        : 0;
+    if (para.list?.kind === "number") {
+      listCounters.set(listIndent, number);
+    }
+    const prefix = listPrefix(para.list, number);
+    const segments: SvgTextSegment[] = [];
+    if (prefix) {
+      segments.push({
+        text: prefix,
+        color,
+        fontSize,
+        fontFamily,
+        bold: fontWeight === "bold",
+        italic: fontStyle === "italic",
+      });
+    }
+    if (para.runs && para.runs.length > 0) {
+      for (const run of para.runs) {
+        segments.push(textRunToSvgSegment(run, defaults));
+      }
+    } else if (para.text.trim() !== "" || prefix) {
+      segments.push({
+        text: para.text,
+        color,
+        fontSize,
+        fontFamily,
+        bold: fontWeight === "bold",
+        italic: fontStyle === "italic",
+      });
+    }
+    if (segments.length === 0) {
+      allLines.push({ segments: [], indentPx });
       continue;
     }
-    const lineText =
-      para.runs
-        ?.map((r) => r.text)
-        .join("")
-        .trimEnd() ?? para.text;
-    for (const l of wrapSvgLine(lineText, w, fontSize)) allLines.push(l);
+    allLines.push(...wrapSvgSegments(segments, w, fontSize, indentPx));
   }
 
   const totalH = allLines.length * lineH;
@@ -439,10 +631,16 @@ function renderSvgText(
     : "";
 
   const body = allLines
-    .map((line, i) => {
-      const ly = (startY + i * lineH).toFixed(1);
-      return `<text x="${textX.toFixed(1)}" y="${ly}" font-size="${fontSize.toFixed(1)}" fill="${xmlEsc(color)}" font-family="${xmlEsc(fontFamily)}" font-weight="${fontWeight}" font-style="${fontStyle}" text-anchor="${textAnchor}"${transform}>${xmlEsc(line)}</text>`;
-    })
+    .map((line, i) =>
+      renderSvgTextLine(line, textX, startY + i * lineH, textAnchor, {
+        fontSize,
+        color,
+        fontFamily,
+        fontWeight,
+        fontStyle,
+        transform,
+      }),
+    )
     .join("\n");
 
   return { defs: "", body };
@@ -853,7 +1051,11 @@ export async function exportDeckRasterBrowser(
   // <image href> elements contain /api/slide-assets/... URLs that inlineSvgImageSources
   // will then fetch and replace with data: URIs to prevent canvas taint.
   const rawExportSpec = buildExportSpec(renderTree);
-  const exportSpec = resolveExportSpecAssetSources(deck, rawExportSpec);
+  const exportSpec = resolveExportSpecAssetSources(
+    deck,
+    rawExportSpec,
+    resolvedThemePackage,
+  );
 
   const pngs: RasterPngOutput[] = [];
   for (let i = 0; i < renderTree.slides.length; i++) {

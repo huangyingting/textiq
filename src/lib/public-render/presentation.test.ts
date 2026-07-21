@@ -6,6 +6,7 @@ import {
   buildCoverSlide,
   buildImageAsset,
   buildImageNode,
+  buildMinimalThemePackage,
   buildSlide,
   buildVisualNode,
   resetBuilderCounter,
@@ -250,6 +251,39 @@ test("buildPublicPresentationModel binds protected slide asset URLs to the expos
   assert.equal(
     model.deck.assets.images["same-origin-absolute-slide-asset-img"]?.src,
     sameOriginAbsoluteSlideAssetSrc,
+  );
+});
+
+test("buildPublicPresentationModel binds active theme-package font URLs to the exposing share link", () => {
+  resetBuilderCounter();
+  const presentationDeck = buildDeck([buildCoverSlide()], {
+    theme: { packageId: "custom-brand", packageVersion: "1.0.0" },
+  });
+  const model = buildPublicPresentationModel(
+    {
+      title: "Public deck",
+      contentJson: { root: { children: [] } },
+      deckJson: presentationDeck,
+      owner: { name: "Ava", plan: "pro" },
+      activeCustomThemePackage: {
+        ...buildMinimalThemePackage("custom-brand"),
+        assets: {
+          fonts: {
+            "brand-font": {
+              id: "brand-font",
+              family: "Acme Sans",
+              src: "/api/brand-assets/owner/font.woff2",
+            },
+          },
+        },
+      },
+    },
+    { shareId: "share123", mode: "present" },
+  );
+
+  assert.equal(
+    model.themePackage.assets?.fonts?.["brand-font"]?.src,
+    "/api/brand-assets/owner/font.woff2?shareId=share123&shareMode=present",
   );
 });
 

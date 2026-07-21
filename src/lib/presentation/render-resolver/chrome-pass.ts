@@ -295,7 +295,11 @@ export function resolveDeckChromePass(
       const item = slideChromeItem(base.logo, overrides?.logo);
       if (!item || item.enabled === false || !item.assetId) continue;
       const id = "deck-chrome-logo";
-      if (item.assetId !== "placeholder" && !deck.assets.images[item.assetId]) {
+      if (
+        item.assetId !== "placeholder" &&
+        !deck.assets.images[item.assetId] &&
+        !pkg.assets?.images?.[item.assetId]
+      ) {
         dc.error(
           "missing-asset",
           `Deck chrome logo references missing asset "${item.assetId}"`,

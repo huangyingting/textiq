@@ -57,6 +57,8 @@ const { registerHooks } = req("node:module") as {
 const NEXT_HEADERS_STUB = "next-headers:brand-assets-stub";
 const SESSION_STUB = "lib-session:brand-assets-stub";
 const ABUSE_BUDGET_STUB = "lib-abuse-budget:brand-assets-stub";
+const THEME_PERSISTENCE_STUB = "theme-persistence:brand-assets-stub";
+const SHARE_PASSCODE_STUB = "share-passcode:brand-assets-stub";
 
 registerHooks({
   resolve(
@@ -72,6 +74,12 @@ registerHooks({
     }
     if (specifier === "@/lib/abuse-budget") {
       return { url: ABUSE_BUDGET_STUB, shortCircuit: true };
+    }
+    if (specifier === "@/lib/presentation/brand-kit/persistence") {
+      return { url: THEME_PERSISTENCE_STUB, shortCircuit: true };
+    }
+    if (specifier === "@/lib/share-passcode-server") {
+      return { url: SHARE_PASSCODE_STUB, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
@@ -112,6 +120,26 @@ registerHooks({
         shortCircuit: true,
       };
     }
+    if (url === THEME_PERSISTENCE_STUB) {
+      return {
+        format: "commonjs" as const,
+        source: `module.exports = {
+  loadCustomThemePackagesForDeckJson: async () => ({
+    activePackage: global.__testBrandAssetThemePackage,
+  }),
+};`,
+        shortCircuit: true,
+      };
+    }
+    if (url === SHARE_PASSCODE_STUB) {
+      return {
+        format: "commonjs" as const,
+        source: `module.exports = {
+  isPublicSharePasscodeUnlocked: async () => true,
+};`,
+        shortCircuit: true,
+      };
+    }
     return nextLoad(url, context);
   },
 });
@@ -123,6 +151,7 @@ registerHooks({
 declare global {
   var __testBrandAssetUser:
     { id: string; sessionInvalidatedAt: Date | null } | null | undefined;
+  var __testBrandAssetThemePackage: unknown;
 }
 
 type AssetDelegate = {
@@ -164,15 +193,17 @@ function stubPrismaMethod<T extends object, K extends keyof T>(
 
 let GET: (req: NextRequest, ctx: RouteParams) => Promise<Response>;
 let prismaAsset: AssetDelegate;
+let prismaDocument: AssetDelegate;
 
 before(async () => {
   const route = await import("./route");
   GET = route.GET as typeof GET;
 
   const { prisma } = (await import("@/lib/prisma")) as unknown as {
-    prisma: { asset: AssetDelegate };
+    prisma: { asset: AssetDelegate; document: AssetDelegate };
   };
   prismaAsset = prisma.asset;
+  prismaDocument = prisma.document;
 });
 
 // ---------------------------------------------------------------------------
@@ -341,4 +372,60 @@ test("#1853: storage adapter failure returns 404 (handler absorbs the error)", a
 
   assert.equal(resp.status, 404);
   assert.equal(await resp.text(), "Not found");
+});
+
+test("#2148: anonymous shared presentation viewers can fetch active theme package assets", async (t) => {
+  global.__testBrandAssetUser = null;
+  global.__testBrandAssetThemePackage = {
+    schemaVersion: 1,
+    id: "brand-package",
+    version: "1.0.0",
+    name: "Brand package",
+    assets: {
+      fonts: {
+        "font-1": {
+          id: "font-1",
+          family: "Acme Sans",
+          src: `/api/brand-assets/${OWNER_ID}/abc123.png`,
+        },
+      },
+    },
+  };
+  t.after(() => {
+    global.__testBrandAssetUser = null;
+    global.__testBrandAssetThemePackage = undefined;
+    resetBrandStorageAdapter();
+  });
+
+  stubPrismaMethod(t, prismaAsset, "findFirst", async () => ASSET_ROW);
+  stubPrismaMethod(t, prismaDocument, "findFirst", async () => ({
+    deckJson: {},
+    ownerId: OWNER_ID,
+    workspaceId: null,
+    isShared: true,
+    shareId: "share123",
+    shareExpiresAt: null,
+    shareEmbedEnabled: true,
+    sharePresentEnabled: true,
+    sharePasscodeHash: null,
+    deletedAt: null,
+    workspace: null,
+  }));
+
+  setBrandStorageAdapter({
+    store: async () => `/api/brand-assets/${STORAGE_KEY}`,
+    urlFor: (key: string) => `/api/brand-assets/${key}`,
+    read: async (_key: string) => FAKE_PNG,
+    delete: async () => {},
+  });
+
+  const resp = await GET(
+    new NextRequest(
+      `http://localhost/api/brand-assets/${OWNER_ID}/abc123.png?shareId=share123&shareMode=present`,
+    ),
+    makeParams(OWNER_ID, ["abc123.png"]),
+  );
+
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get("content-type") ?? "", /image\/png/);
 });

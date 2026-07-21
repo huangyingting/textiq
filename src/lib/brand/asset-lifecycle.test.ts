@@ -343,15 +343,42 @@ interface MemAsset {
 }
 
 function makeDb(
-  brand: { logoAssetId: string | null; fontAssetId: string | null } | null,
+  brand: {
+    id?: string;
+    logoAssetId: string | null;
+    fontAssetId: string | null;
+  } | null,
   assets: MemAsset[],
+  additionalBrands: {
+    id: string;
+    logoAssetId: string | null;
+    fontAssetId: string | null;
+  }[] = [],
 ): { db: BrandOrphanDb; assets: MemAsset[] } {
+  const brands = [
+    ...(brand ? [{ id: brand.id ?? "b1", ...brand }] : []),
+    ...additionalBrands,
+  ];
   const db: BrandOrphanDb = {
     brand: {
       async findUnique() {
         return brand
           ? { logoAssetId: brand.logoAssetId, fontAssetId: brand.fontAssetId }
           : null;
+      },
+      async findMany(args) {
+        const logoIds = new Set(args.where.OR[0].logoAssetId.in);
+        const fontIds = new Set(args.where.OR[1].fontAssetId.in);
+        return brands
+          .filter(
+            (b) =>
+              (b.logoAssetId && logoIds.has(b.logoAssetId)) ||
+              (b.fontAssetId && fontIds.has(b.fontAssetId)),
+          )
+          .map((b) => ({
+            logoAssetId: b.logoAssetId,
+            fontAssetId: b.fontAssetId,
+          }));
       },
     },
     asset: {
@@ -448,6 +475,27 @@ describe("reconcileBrandAssets", () => {
     assert.equal(await reconcileBrandAssets("b1", db), 0);
   });
 
+  it("keeps a brand-scoped asset alive when any active brand still references it", async () => {
+    const assets: MemAsset[] = [
+      {
+        id: "shared-logo",
+        brandId: "b2",
+        documentId: null,
+        workspaceId: null,
+        storageKey: "u1/shared.png",
+        deletedAt: null,
+      },
+    ];
+    const { db } = makeDb(
+      { id: "b2", logoAssetId: null, fontAssetId: null },
+      assets,
+      [{ id: "b1", logoAssetId: "shared-logo", fontAssetId: null }],
+    );
+
+    assert.equal(await reconcileBrandAssets("b2", db, new Date()), 0);
+    assert.equal(assets[0].deletedAt, null);
+  });
+
   it("returns 0 for a missing brand", async () => {
     const { db } = makeDb(null, []);
     assert.equal(await reconcileBrandAssets("gone", db), 0);
@@ -527,6 +575,34 @@ describe("purgeExpiredBrandAssets", () => {
     );
     assert.equal(count, 0);
     assert.deepEqual(deleted, []);
+  });
+
+  it("does not purge soft-deleted brand assets still referenced by another active brand", async () => {
+    const assets: MemAsset[] = [
+      {
+        id: "shared-logo",
+        brandId: null,
+        documentId: null,
+        workspaceId: null,
+        storageKey: "u1/shared.png",
+        deletedAt: expiredAt,
+      },
+    ];
+    const { db } = makeDb(null, assets, [
+      { id: "brand-a", logoAssetId: "shared-logo", fontAssetId: null },
+    ]);
+    const deleted: string[] = [];
+
+    const count = await purgeExpiredBrandAssets(
+      db,
+      storage(deleted),
+      BRAND_ASSET_RETENTION_MS,
+      now,
+    );
+
+    assert.equal(count, 0);
+    assert.deepEqual(deleted, []);
+    assert.equal(assets.length, 1);
   });
 });
 
@@ -608,6 +684,9 @@ describe("brand persistence service", () => {
           logoAssetId: "logo-asset",
           fontAssetId: "font-asset",
         }),
+        findMany: async () => [
+          { logoAssetId: "logo-asset", fontAssetId: "font-asset" },
+        ],
       },
     };
     const transaction = stubObjectMethod(
@@ -670,6 +749,7 @@ describe("brand persistence service", () => {
             name: String(data.name),
             background: data.background as string,
           }),
+        findMany: async () => [],
       },
     };
     stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
@@ -691,6 +771,7 @@ describe("brand persistence service", () => {
     const tx = {
       brand: {
         findUnique: async () => existing,
+        findMany: async () => [],
         delete: async () => {
           throw new Error("delete should not run");
         },
@@ -719,6 +800,7 @@ describe("brand persistence service", () => {
     const tx = {
       brand: {
         findUnique: async () => ({ ownerId: "owner-1" }),
+        findMany: async () => [],
         delete: async () => ({}),
       },
       asset: {
@@ -736,5 +818,35 @@ describe("brand persistence service", () => {
     );
 
     assert.equal(await deleteBrandForOwner("brand-acme", "owner-1"), "deleted");
+  });
+
+  it("does not soft-delete an owned brand asset still referenced by another active brand", async (t) => {
+    const updateCalls: unknown[] = [];
+    const tx = {
+      brand: {
+        findUnique: async () => ({ ownerId: "owner-1" }),
+        findMany: async () => [
+          { logoAssetId: "shared-logo", fontAssetId: null },
+        ],
+        delete: async () => ({}),
+      },
+      asset: {
+        findMany: async () => [{ id: "shared-logo" }],
+        updateMany: async (rawArgs: unknown) => {
+          updateCalls.push(rawArgs);
+          const args = rawArgs as { where: { id: { in: string[] } } };
+          return { count: args.where.id.in.length };
+        },
+      },
+    };
+    stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+      (fn as (txArg: typeof tx) => unknown)(tx),
+    );
+
+    assert.equal(await deleteBrandForOwner("brand-b", "owner-1"), "deleted");
+    assert.deepEqual(
+      (updateCalls[0] as { where: { id: { in: string[] } } }).where.id.in,
+      [],
+    );
   });
 });

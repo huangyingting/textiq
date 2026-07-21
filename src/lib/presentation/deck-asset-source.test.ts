@@ -5,6 +5,7 @@ import { resolveDeckAssetSource } from "@/lib/presentation/deck-asset-source";
 import {
   buildDeck,
   buildImageAsset,
+  buildMinimalThemePackage,
   buildVisualNode,
   buildSlide,
 } from "@/test/builders/presentation-deck";
@@ -34,6 +35,26 @@ describe("resolveDeckAssetSource", () => {
     assert.equal(
       resolveDeckAssetSource(deck, "file-asset"),
       "data:image/svg+xml;base64,PHN2Zy8+",
+    );
+  });
+
+  test("resolves package image asset ids when deck assets do not contain them", () => {
+    const deck = buildDeck([buildSlide("content", [buildVisualNode()])], {
+      assets: { images: {} },
+    });
+
+    assert.equal(
+      resolveDeckAssetSource(deck, "package-logo", {
+        ...buildMinimalThemePackage("pkg"),
+        assets: {
+          images: {
+            "package-logo": buildImageAsset("package-logo", {
+              src: "/api/brand-assets/owner/package-logo.png",
+            }),
+          },
+        },
+      }),
+      "/api/brand-assets/owner/package-logo.png",
     );
   });
 

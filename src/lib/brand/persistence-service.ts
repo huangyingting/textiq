@@ -72,6 +72,28 @@ async function linkAndReconcileBrandAssets(
   await reconcileBrandAssets(brandId, tx, new Date());
 }
 
+async function referencedBrandAssetIds(
+  tx: PrismaTransactionClient,
+  assetIds: string[],
+): Promise<Set<string>> {
+  if (assetIds.length === 0) return new Set();
+  const refs = await tx.brand.findMany({
+    where: {
+      OR: [
+        { logoAssetId: { in: assetIds } },
+        { fontAssetId: { in: assetIds } },
+      ],
+    },
+    select: { logoAssetId: true, fontAssetId: true },
+  });
+  const live = new Set<string>();
+  for (const ref of refs) {
+    if (ref.logoAssetId) live.add(ref.logoAssetId);
+    if (ref.fontAssetId) live.add(ref.fontAssetId);
+  }
+  return live;
+}
+
 export async function createBrandForOwner(
   ownerId: string,
   data: BrandInput,
@@ -160,8 +182,15 @@ export async function deleteBrandForOwner(
     await tx.brand.delete({ where: { id } });
 
     if (brandAssets.length > 0) {
+      const liveRefs = await referencedBrandAssetIds(
+        tx,
+        brandAssets.map((a) => a.id),
+      );
+      const orphanIds = brandAssets
+        .map((a) => a.id)
+        .filter((assetId) => !liveRefs.has(assetId));
       await tx.asset.updateMany({
-        where: { id: { in: brandAssets.map((a) => a.id) }, deletedAt: null },
+        where: { id: { in: orphanIds }, deletedAt: null },
         data: { deletedAt: new Date() },
       });
     }

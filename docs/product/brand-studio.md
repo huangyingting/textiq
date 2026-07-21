@@ -84,9 +84,11 @@ Brand logos and fonts are stored under `storage/brand-assets` and served through
 protected `/api/brand-assets/...` URLs. A brand asset is live only while an
 active brand references it through `logoAssetId` or `fontAssetId`.
 
-When a brand replaces media, no-longer-referenced assets are soft-deleted. When
-a brand is deleted, its active brand assets are also soft-deleted. Physical
-purge happens only after the brand-asset retention window elapses.
+When a brand replaces media, no-longer-referenced assets are soft-deleted after
+checking references across all active brands, not just the asset row's `brandId`.
+When a brand is deleted, only assets with no remaining brand references are
+soft-deleted. Physical purge happens only after the brand-asset retention window
+elapses and repeats the same cross-brand liveness check.
 
 Account export includes display metadata for active owner-partitioned brand
 staging assets in addition to assets linked through the user's documents,
@@ -105,7 +107,8 @@ changed by applying a brand.
 1. Brand rows store asset ids, not raw media data or persisted display URLs.
 2. Brand media display URLs are derived from active asset rows at read time.
 3. Asset ids assigned to a brand must belong to the same owner.
-4. Replacing or deleting brand media soft-deletes orphaned brand assets.
+4. Replacing or deleting brand media soft-deletes only assets unreferenced by all
+   active brands.
 5. Applying a brand changes style only, never visual content or topology.
 6. Brand styles and custom font upload are separate entitlement gates.
 7. Active unlinked brand-staging assets are valid only in the owner's storage

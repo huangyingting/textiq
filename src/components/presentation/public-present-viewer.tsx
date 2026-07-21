@@ -22,6 +22,7 @@ import type { Deck } from "@/lib/presentation/schema";
 import type { ThemePackageV1 } from "@/lib/presentation/theme-package-schema";
 import { NEUTRAL_THEME_PACKAGE } from "@/lib/presentation/neutral-theme-package";
 import { resolveDeckAssetSource } from "@/lib/presentation/deck-asset-source";
+import { buildThemePackageFontFaceCss } from "@/lib/presentation/theme-package-fonts";
 import { presentCanvasAspectRatio } from "@/lib/presentation/present-shell";
 import type { Visual } from "@/lib/visual/schema";
 import {
@@ -169,6 +170,7 @@ export function PublicPresentViewer({
 }: PublicPresentViewerProps): JSX.Element {
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const renderTree = useDeckRenderTree(deck, pkg);
+  const fontFaceCss = buildThemePackageFontFaceCss(pkg);
 
   const total = renderTree?.slides.length ?? 0;
   const canvas = renderTree?.canvas;
@@ -221,7 +223,7 @@ export function PublicPresentViewer({
   });
 
   function resolveDeckAsset(assetId: string): string | undefined {
-    return resolveDeckAssetSource(deck, assetId);
+    return resolveDeckAssetSource(deck, assetId, pkg);
   }
 
   const resolveVisual = useCallback(
@@ -282,6 +284,12 @@ export function PublicPresentViewer({
       onTouchStart={swipeHandlers.onTouchStart}
       onTouchEnd={swipeHandlers.onTouchEnd}
     >
+      {fontFaceCss ? (
+        <style
+          data-theme-package-fonts={`${pkg.id}-${pkg.version ?? "unversioned"}`}
+          dangerouslySetInnerHTML={{ __html: fontFaceCss }}
+        />
+      ) : null}
       {/* Top HUD (suppressed in embed mode) */}
       {!embed && (
         <div

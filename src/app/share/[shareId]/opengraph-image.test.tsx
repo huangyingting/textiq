@@ -344,6 +344,20 @@ describe("Image (default export)", () => {
     assert.ok(html.includes("Ship the new dashboard."));
   });
 
+  it("renders the TextIQ brand initial on the public OG card", async () => {
+    globalThis.__ogTestResolverResult = metadataResult({
+      metadataMode: "title",
+    });
+
+    await ogModule.default({
+      params: Promise.resolve({ shareId: "share123" }),
+    });
+
+    const html = renderToStaticMarkup(globalThis.__ogTestCaptured!.element);
+    assert.ok(html.includes(">T</div>"));
+    assert.ok(!html.includes(">N</div>"));
+  });
+
   it("renders the ImageResponse with the exported size options", async () => {
     globalThis.__ogTestResolverResult = metadataResult({
       metadataMode: "title",
