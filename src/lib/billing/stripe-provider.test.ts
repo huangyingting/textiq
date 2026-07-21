@@ -339,6 +339,80 @@ describe("StripeBillingProvider local plan guards", () => {
     assert.equal(proSession.line_items[0]?.price, "price_pro");
   });
 
+  it("updates an active paid Stripe subscription instead of creating a second checkout subscription", async (t) => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_textiq";
+    process.env.STRIPE_PRO_PRICE_ID = "price_pro";
+    const customerCalls: unknown[] = [];
+    const sessionCalls: unknown[] = [];
+    const retrieved: string[] = [];
+    const updates: unknown[][] = [];
+    setStripeLoaderForTesting(async () => ({
+      customers: {
+        async create(args) {
+          customerCalls.push(args);
+          return { id: "cus_unused" };
+        },
+      },
+      checkout: {
+        sessions: {
+          async create(args) {
+            sessionCalls.push(args);
+            return { url: "https://checkout.example.test/unused" };
+          },
+        },
+      },
+      subscriptions: {
+        async cancel() {},
+        async retrieve(id) {
+          retrieved.push(id);
+          return { id, items: { data: [{ id: "si_existing" }] } };
+        },
+        async update(id, args) {
+          updates.push([id, args]);
+        },
+      },
+      webhooks: {
+        constructEvent() {
+          throw new Error("not used");
+        },
+      },
+    }));
+    t.after(() => setStripeLoaderForTesting(null));
+    stubObjectMethod(t, prisma.user, "findUniqueOrThrow", async () => ({
+      email: "billing@example.test",
+    }));
+    stubObjectMethod(t, prisma.subscription, "findUnique", async () => ({
+      plan: "plus",
+      status: "active",
+      stripeCustomerId: "cus_existing",
+      stripeSubscriptionId: "sub_active",
+      currentPeriodStart: new Date("2026-06-01T00:00:00Z"),
+      currentPeriodEnd: new Date("2026-07-01T00:00:00Z"),
+      cancelAtPeriodEnd: false,
+    }));
+    const provider = new StripeBillingProvider();
+
+    const result = await provider.changePlan("user-checkout", "pro");
+
+    assert.equal(result.success, true);
+    assert.equal(result.plan, "pro");
+    assert.equal(result.redirectUrl, undefined);
+    assert.match(result.message, /Plan change to pro submitted/);
+    assert.equal(customerCalls.length, 0);
+    assert.equal(sessionCalls.length, 0);
+    assert.deepEqual(retrieved, ["sub_active"]);
+    assert.deepEqual(updates, [
+      [
+        "sub_active",
+        {
+          items: [{ id: "si_existing", price: "price_pro", quantity: 1 }],
+          proration_behavior: "create_prorations",
+          cancel_at_period_end: false,
+        },
+      ],
+    ]);
+  });
+
   it("requires Stripe customer creation to return an id", async (t) => {
     process.env.STRIPE_SECRET_KEY = "sk_test_textiq";
     setStripeLoaderForTesting(async () => ({
