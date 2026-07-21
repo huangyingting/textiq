@@ -102,6 +102,10 @@ const BASE_ELEMENT_KEYS = [
   "content",
 ] as const;
 
+const ELEMENT_PATCH_KEYS = BASE_ELEMENT_KEYS.filter(
+  (key) => key !== "id" && key !== "kind",
+);
+
 const MASTER_ELEMENT_KEYS = [
   ...BASE_ELEMENT_KEYS,
   "layer",
@@ -149,6 +153,10 @@ function validatePresentationRole(input: unknown, context: string): string {
     );
   }
   return input;
+}
+
+export function validateElementRole(input: unknown, context: string): string {
+  return validatePresentationRole(input, context);
 }
 
 function validateColorRef(
@@ -1221,6 +1229,26 @@ function validateElementContent(
   }
 }
 
+export function validateElementContentPayload(
+  input: unknown,
+  context: string,
+): Record<string, unknown> {
+  if (!isPlainObject(input)) {
+    throw new DeckValidationError(`${context} must be an object`);
+  }
+  if (
+    typeof input.kind !== "string" ||
+    !["text", "visual", "image", "shape", "connector", "table"].includes(
+      input.kind,
+    )
+  ) {
+    throw new DeckValidationError(
+      `${context}.kind must be one of: text, visual, image, shape, connector, table`,
+    );
+  }
+  return validateElementContent(input.kind, input, context);
+}
+
 export function validateElement(input: unknown, context: string): SlideElement {
   if (!isPlainObject(input)) {
     throw new DeckValidationError(`${context} must be an object`);
@@ -1245,6 +1273,98 @@ export function validateElement(input: unknown, context: string): SlideElement {
     );
   }
   return validatedSlideElement({ ...base, content });
+}
+
+export function validateAddElementPayload(
+  input: unknown,
+  context: string,
+): SlideElement {
+  if (!isPlainObject(input)) {
+    throw new DeckValidationError(`${context} must be an object`);
+  }
+  return validateElement(
+    {
+      ...input,
+      id: input.id === undefined ? "__command_validation_element__" : input.id,
+      zIndex: input.zIndex === undefined ? 0 : input.zIndex,
+    },
+    context,
+  );
+}
+
+export function validateElementDesignOverridesPayload(
+  input: unknown,
+  context: string,
+): Record<string, unknown> {
+  return validateDesignOverrides(input, context);
+}
+
+export function validateElementPatchPayload(
+  input: unknown,
+  context: string,
+): Record<string, unknown> {
+  if (!isPlainObject(input)) {
+    throw new DeckValidationError(`${context} must be an object`);
+  }
+  rejectUnknownKeys(input, ELEMENT_PATCH_KEYS, context);
+  const out: Record<string, unknown> = {};
+  if (input.box !== undefined)
+    out.box = validateBox(input.box, `${context}.box`);
+  if (input.zIndex !== undefined) {
+    out.zIndex = validateFiniteNumber(input.zIndex, `${context}.zIndex`);
+  }
+  if (input.opacity !== undefined) {
+    out.opacity = validateOpacity(input.opacity, `${context}.opacity`);
+  }
+  if (input.rotation !== undefined) {
+    out.rotation = validateFiniteNumber(input.rotation, `${context}.rotation`);
+  }
+  if (input.shadow !== undefined) {
+    out.shadow = validateShadow(input.shadow, `${context}.shadow`);
+  }
+  if (input.locked !== undefined && typeof input.locked !== "boolean") {
+    throw new DeckValidationError(`${context}.locked must be a boolean`);
+  }
+  if (input.hidden !== undefined && typeof input.hidden !== "boolean") {
+    throw new DeckValidationError(`${context}.hidden must be a boolean`);
+  }
+  if (
+    input.name !== undefined &&
+    (typeof input.name !== "string" || input.name.length === 0)
+  ) {
+    throw new DeckValidationError(`${context}.name must be a non-empty string`);
+  }
+  if (
+    input.groupId !== undefined &&
+    (typeof input.groupId !== "string" || input.groupId.length === 0)
+  ) {
+    throw new DeckValidationError(
+      `${context}.groupId must be a non-empty string`,
+    );
+  }
+  if (input.role !== undefined) {
+    out.role = validatePresentationRole(input.role, `${context}.role`);
+  }
+  if (input.designOverrides !== undefined) {
+    out.designOverrides = validateDesignOverrides(
+      input.designOverrides,
+      `${context}.designOverrides`,
+    );
+  }
+  if (input.content !== undefined) {
+    out.content = validateElementContentPayload(
+      input.content,
+      `${context}.content`,
+    );
+  }
+  if (input.source !== undefined) {
+    out.source = validateElementSource(input.source, `${context}.source`);
+  }
+  if (input.locked !== undefined) out.locked = input.locked;
+  if (input.hidden !== undefined) out.hidden = input.hidden;
+  if (input.name !== undefined) out.name = input.name;
+  if (input.groupId !== undefined) out.groupId = input.groupId;
+  return out;
 }
 
 export function validateMasterElement(

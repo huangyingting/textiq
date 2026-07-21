@@ -209,11 +209,10 @@ function validateSlide(input: unknown, index: number): Slide {
   });
 }
 
-function validateSlideMaster(
+export function validateSlideMaster(
   input: unknown,
-  index: number,
+  context: string,
 ): Record<string, unknown> {
-  const context = `Deck.masters[${index}]`;
   if (!isPlainObject(input)) {
     throw new DeckValidationError(`${context} must be an object`);
   }
@@ -252,11 +251,65 @@ function validateSlideMaster(
   };
 }
 
-function validateCustomTemplate(
+export function validateSlideMasterPatch(
   input: unknown,
-  index: number,
+  context: string,
 ): Record<string, unknown> {
-  const context = `Deck.customTemplates[${index}]`;
+  if (!isPlainObject(input)) {
+    throw new DeckValidationError(`${context} must be an object`);
+  }
+  rejectUnknownKeys(
+    input,
+    ["name", "background", "designOverrides", "elements"],
+    context,
+  );
+  if (
+    input.name !== undefined &&
+    (typeof input.name !== "string" || input.name.length === 0)
+  ) {
+    throw new DeckValidationError(`${context}.name must be a non-empty string`);
+  }
+  return {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.background !== undefined
+      ? {
+          background: validateBackgroundDesign(
+            input.background,
+            `${context}.background`,
+          ),
+        }
+      : {}),
+    ...(input.designOverrides !== undefined
+      ? {
+          designOverrides: validateDesignOverrides(
+            input.designOverrides,
+            `${context}.designOverrides`,
+          ),
+        }
+      : {}),
+    ...(input.elements !== undefined
+      ? {
+          elements: Array.isArray(input.elements)
+            ? input.elements.map((element, elementIndex) =>
+                validateMasterElement(
+                  element,
+                  `${context}.elements[${elementIndex}]`,
+                ),
+              )
+            : (() => {
+                throw new DeckValidationError(
+                  `${context}.elements must be an array`,
+                );
+              })(),
+        }
+      : {}),
+  };
+}
+
+export function validateCustomTemplate(
+  input: unknown,
+  context: string,
+): Record<string, unknown> {
   if (!isPlainObject(input)) {
     throw new DeckValidationError(`${context} must be an object`);
   }
@@ -421,6 +474,30 @@ function validateCustomTemplate(
   };
 }
 
+export function validateCustomTemplatePatch(
+  input: unknown,
+  context: string,
+): Record<string, unknown> {
+  if (!isPlainObject(input)) {
+    throw new DeckValidationError(`${context} must be an object`);
+  }
+  rejectUnknownKeys(
+    input,
+    CUSTOM_TEMPLATE_KEYS.filter((key) => key !== "id"),
+    context,
+  );
+  return validateCustomTemplate(
+    {
+      id: "__command_validation_template__",
+      name: "__command_validation_template__",
+      category: "blank",
+      elements: [],
+      ...input,
+    },
+    context,
+  );
+}
+
 /**
  * Validates an unknown value against the deck schema, returning a fully
  * populated `Deck` or throwing a `DeckValidationError` describing the first
@@ -450,7 +527,9 @@ export function validateDeck(input: unknown): Deck {
   if (!Array.isArray(input.masters)) {
     throw new DeckValidationError("Deck.masters must be an array");
   }
-  const masters = input.masters.map(validateSlideMaster);
+  const masters = input.masters.map((master, index) =>
+    validateSlideMaster(master, `Deck.masters[${index}]`),
+  );
   if (
     typeof input.defaultMasterId !== "string" ||
     input.defaultMasterId.length === 0
@@ -481,7 +560,12 @@ export function validateDeck(input: unknown): Deck {
     ...(input.customTemplates !== undefined
       ? {
           customTemplates: Array.isArray(input.customTemplates)
-            ? input.customTemplates.map(validateCustomTemplate)
+            ? input.customTemplates.map((template, index) =>
+                validateCustomTemplate(
+                  template,
+                  `Deck.customTemplates[${index}]`,
+                ),
+              )
             : (() => {
                 throw new DeckValidationError(
                   "Deck.customTemplates must be an array",
