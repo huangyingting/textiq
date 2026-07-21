@@ -919,6 +919,11 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
       const sub = client._subs.get("u1");
       assert.equal(outcome, "success");
       assert.equal(client._users.get("u1")?.plan, "pro");
+      assert.equal(client._users.get("u1")?.creditBalance, 30_000);
+      assert.deepEqual(
+        client._users.get("u1")?.creditPeriodStart,
+        new Date("2026-07-01T00:00:00.000Z"),
+      );
       assert.equal(sub?.status, "past_due");
       assert.equal(sub?.plan, "pro");
       assert.equal(sub?.cancelAtPeriodEnd, true);
@@ -953,7 +958,7 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
       );
     });
 
-    it("returns missing or ignored when subscription webhooks cannot target a row", async () => {
+    it("rolls back idempotency when an update arrives before its subscription row", async () => {
       const client = makeWebhookClient();
 
       assert.equal(
@@ -964,10 +969,69 @@ describe("shouldApplySubscriptionUpdate — ordering guard", () => {
         }),
         "ignored",
       );
+      await assert.rejects(
+        () =>
+          applyStripeWebhookEvent(client, {
+            id: "evt_update_missing_row",
+            type: "customer.subscription.updated",
+            data: { object: { id: "sub_missing", status: "active" } },
+          }),
+        { name: "MissingStripeSubscriptionWebhookEventError" },
+      );
+      assert.equal(client._events.has("evt_update_missing_row"), false);
+    });
+
+    it("returns retryable failure for out-of-order subscription updates", async (t) => {
+      process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+      const client = makeWebhookClient();
+      stubObjectMethod(t, prisma, "$transaction", async (fn: unknown) =>
+        client.$transaction(fn as Parameters<typeof client.$transaction>[0]),
+      );
+      setStripeLoaderForTesting(async () => ({
+        customers: {
+          async create() {
+            return { id: "cus_unused" };
+          },
+        },
+        checkout: {
+          sessions: {
+            async create() {
+              return {};
+            },
+          },
+        },
+        subscriptions: {
+          async cancel() {},
+          async update() {},
+        },
+        webhooks: {
+          constructEvent() {
+            return {
+              id: "evt_update_missing_row",
+              type: "customer.subscription.updated",
+              data: { object: { id: "sub_missing", status: "active" } },
+            };
+          },
+        },
+      }));
+      t.after(() => setStripeLoaderForTesting(null));
+
+      const result = await handleStripeWebhookEvent("{}", "sig_ok");
+
+      assert.deepEqual(result, {
+        status: 500,
+        message: "subscription state missing; retry later",
+      });
+      assert.equal(client._events.has("evt_update_missing_row"), false);
+    });
+
+    it("returns missing for subscription deletions that cannot target a row", async () => {
+      const client = makeWebhookClient();
+
       assert.equal(
         await applyStripeWebhookEvent(client, {
           id: "evt_update_missing_row",
-          type: "customer.subscription.updated",
+          type: "customer.subscription.deleted",
           data: { object: { id: "sub_missing", status: "active" } },
         }),
         "missing",

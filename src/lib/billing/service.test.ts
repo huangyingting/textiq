@@ -381,6 +381,55 @@ describe("billing service state", () => {
     assert.equal(client._subs.get("u1")?.status, "past_due");
     assert.equal(client._subs.get("u1")?.plan, "pro");
     assert.equal(client._users.get("u1")?.plan, "pro");
+    assert.equal(
+      client._users.get("u1")?.creditBalance,
+      PLAN_ENTITLEMENTS.pro.creditsPerPeriod,
+    );
+    assert.deepEqual(
+      client._users.get("u1")?.creditPeriodStart,
+      new Date("2026-07-01T00:00:00Z"),
+    );
+  });
+
+  it("resets credits when Stripe downgrades a subscription plan", async () => {
+    const client = makeFakeClient();
+    const storedEnd = new Date("2026-08-01T00:00:00Z");
+    client._users.set("u1", {
+      id: "u1",
+      plan: "pro",
+      creditBalance: 123,
+      creditPeriodStart: new Date("2026-07-01T00:00:00Z"),
+    });
+    client._subs.set("u1", {
+      userId: "u1",
+      plan: "pro",
+      status: "active",
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: new Date("2026-07-01T00:00:00Z"),
+      currentPeriodEnd: storedEnd,
+      cancelAtPeriodEnd: false,
+    });
+
+    const periodStart = new Date("2026-08-01T00:00:00Z");
+    assert.equal(
+      await writeLocalSubscriptionUpdate(client, "sub_123", {
+        status: "active",
+        cancelAtPeriodEnd: false,
+        plan: "plus",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: new Date("2026-09-01T00:00:00Z"),
+      }),
+      "applied",
+    );
+
+    assert.equal(client._subs.get("u1")?.plan, "plus");
+    assert.equal(client._users.get("u1")?.plan, "plus");
+    assert.equal(
+      client._users.get("u1")?.creditBalance,
+      PLAN_ENTITLEMENTS.plus.creditsPerPeriod,
+    );
+    assert.deepEqual(client._users.get("u1")?.creditPeriodStart, periodStart);
   });
 
   it("applies subscription status updates without changing the user's plan", async () => {

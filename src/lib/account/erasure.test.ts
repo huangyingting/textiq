@@ -221,6 +221,7 @@ test("deleteAccountDatabaseRows deletes related rows inside a transaction", asyn
 
 test("eraseAccountPersonalData deletes asset bytes, rows, and verifies leftovers", async () => {
   const deleted: string[] = [];
+  const calls: string[] = [];
   const client = clientWithCounts({ Subscription: 1 });
   client.asset.findMany = async () => [
     {
@@ -236,8 +237,14 @@ test("eraseAccountPersonalData deletes asset bytes, rows, and verifies leftovers
   client.usageLedgerEntry.deleteMany = async () => ({ count: 0 });
   client.rateLimitHit.deleteMany = async () => ({ count: 0 });
   client.inviteLink.deleteMany = async () => ({ count: 0 });
-  client.asset.deleteMany = async () => ({ count: 1 });
-  client.user.delete = async () => ({});
+  client.asset.deleteMany = async () => {
+    calls.push("asset.deleteMany");
+    return { count: 1 };
+  };
+  client.user.delete = async () => {
+    calls.push("user.delete");
+    return {};
+  };
 
   const result = await eraseAccountPersonalData({
     client,
@@ -245,6 +252,7 @@ test("eraseAccountPersonalData deletes asset bytes, rows, and verifies leftovers
     storage: {
       slide: {
         delete: async (key) => {
+          calls.push(`slide.delete:${key}`);
           deleted.push(`slide:${key}`);
         },
       },
@@ -257,8 +265,59 @@ test("eraseAccountPersonalData deletes asset bytes, rows, and verifies leftovers
   });
 
   assert.deepEqual(deleted, ["slide:user/file.png"]);
+  assert.deepEqual(calls, [
+    "asset.deleteMany",
+    "user.delete",
+    "slide.delete:user/file.png",
+  ]);
   assert.deepEqual(result, {
     deletedAssetCount: 1,
     findings: [{ model: "Subscription", count: 1 }],
   });
+});
+
+test("eraseAccountPersonalData does not delete asset bytes when database erasure fails", async () => {
+  const deleted: string[] = [];
+  const client = clientWithCounts({});
+  client.asset.findMany = async () => [
+    {
+      id: "asset_1",
+      storageKey: "user/file.png",
+      thumbnailKey: null,
+      brandId: null,
+      documentId: "doc_1",
+      workspaceId: null,
+    },
+  ];
+  client.inviteLinkUse.deleteMany = async () => ({ count: 0 });
+  client.usageLedgerEntry.deleteMany = async () => ({ count: 0 });
+  client.rateLimitHit.deleteMany = async () => ({ count: 0 });
+  client.inviteLink.deleteMany = async () => ({ count: 0 });
+  client.asset.deleteMany = async () => {
+    throw new Error("db erasure failed");
+  };
+  client.user.delete = async () => ({});
+
+  await assert.rejects(
+    () =>
+      eraseAccountPersonalData({
+        client,
+        userId: "user_1",
+        storage: {
+          slide: {
+            delete: async (key) => {
+              deleted.push(`slide:${key}`);
+            },
+          },
+          brand: {
+            delete: async (key) => {
+              deleted.push(`brand:${key}`);
+            },
+          },
+        },
+      }),
+    /db erasure failed/,
+  );
+
+  assert.deepEqual(deleted, []);
 });

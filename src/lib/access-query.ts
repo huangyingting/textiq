@@ -1,9 +1,22 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { PERSISTED_WORKSPACE_MEMBER_ROLES } from "@/lib/workspace/roles";
+
+export function workspaceMemberAccessWhere(
+  userId: string,
+): Prisma.WorkspaceMemberWhereInput {
+  return {
+    userId,
+    role: { in: [...PERSISTED_WORKSPACE_MEMBER_ROLES] },
+  };
+}
 
 export function workspaceAccessOr(
   userId: string,
 ): NonNullable<Prisma.WorkspaceWhereInput["OR"]> {
-  return [{ ownerId: userId }, { members: { some: { userId } } }];
+  return [
+    { ownerId: userId },
+    { members: { some: workspaceMemberAccessWhere(userId) } },
+  ];
 }
 
 export function accessibleWorkspaceWhere(

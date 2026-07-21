@@ -50,6 +50,33 @@ describe("neutral LocalAssetStorageAdapter", () => {
       (err: NodeJS.ErrnoException) => err.code === "ENOENT",
     );
   });
+
+  it("rejects traversal-capable storage keys before touching disk", async () => {
+    const adapter = new LocalAssetStorageAdapter(TEST_ROOT, "/api/test-assets");
+    const traversalKeys = [
+      "../escape.png",
+      "/absolute/escape.png",
+      "scope/%2e%2e/escape.png",
+      "scope//escape.png",
+    ];
+
+    for (const key of traversalKeys) {
+      await assert.rejects(
+        () => adapter.store(key, Buffer.from("asset-bytes"), "image/png"),
+        /Invalid asset storage key/,
+      );
+      await assert.rejects(
+        () => adapter.read(key),
+        /Invalid asset storage key/,
+      );
+      assert.throws(() => adapter.urlFor(key), /Invalid asset storage key/);
+    }
+
+    await assert.rejects(
+      () => fs.stat(path.join(TEST_ROOT, "..", "escape.png")),
+      (err: NodeJS.ErrnoException) => err.code === "ENOENT",
+    );
+  });
 });
 
 describe("deriveAssetStorageKey", () => {

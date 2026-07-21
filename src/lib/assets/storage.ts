@@ -54,33 +54,77 @@ export class LocalAssetStorageAdapter implements AssetStorageAdapter {
     buffer: Buffer,
     _mimeType?: string,
   ): Promise<string> {
-    const dest = path.join(this.rootDir, key);
+    const dest = this.resolveStoragePath(key);
     await fs.mkdir(path.dirname(dest), { recursive: true });
     await fs.writeFile(dest, buffer);
     return this.urlFor(key);
   }
 
   urlFor(key: string): string {
+    assertSafeStorageKey(key);
     return `${this.baseUrl}/${key}`;
   }
 
   async read(key: string): Promise<Buffer> {
-    return fs.readFile(path.join(this.rootDir, key));
+    return fs.readFile(this.resolveStoragePath(key));
   }
 
   async stat(key: string): Promise<{ size: number; mtime: Date }> {
-    const stats = await fs.stat(path.join(this.rootDir, key));
+    const stats = await fs.stat(this.resolveStoragePath(key));
     return { size: stats.size, mtime: stats.mtime };
   }
 
   async stream(key: string): Promise<ReadableStream<Uint8Array>> {
     return Readable.toWeb(
-      fsSync.createReadStream(path.join(this.rootDir, key)),
+      fsSync.createReadStream(this.resolveStoragePath(key)),
     ) as ReadableStream<Uint8Array>;
   }
 
   async delete(key: string): Promise<void> {
-    await fs.rm(path.join(this.rootDir, key), { force: true });
+    await fs.rm(this.resolveStoragePath(key), { force: true });
+  }
+
+  private resolveStoragePath(key: string): string {
+    assertSafeStorageKey(key);
+    const root = path.resolve(this.rootDir);
+    const resolved = path.resolve(root, key);
+    const rootWithSeparator = root.endsWith(path.sep)
+      ? root
+      : `${root}${path.sep}`;
+    if (resolved !== root && resolved.startsWith(rootWithSeparator)) {
+      return resolved;
+    }
+    throw new Error(`Invalid asset storage key: ${key}`);
+  }
+}
+
+export function assertSafeStorageKey(key: string): void {
+  if (
+    key.length === 0 ||
+    path.isAbsolute(key) ||
+    path.win32.isAbsolute(key) ||
+    key.includes("\\")
+  ) {
+    throw new Error(`Invalid asset storage key: ${key}`);
+  }
+
+  let decodedKey: string;
+  try {
+    decodedKey = decodeURIComponent(key);
+  } catch {
+    throw new Error(`Invalid asset storage key: ${key}`);
+  }
+
+  for (const candidate of [key, decodedKey]) {
+    const segments = candidate.split("/");
+    if (
+      segments.some(
+        (segment) =>
+          segment.length === 0 || segment === "." || segment === "..",
+      )
+    ) {
+      throw new Error(`Invalid asset storage key: ${key}`);
+    }
   }
 }
 

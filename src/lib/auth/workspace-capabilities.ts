@@ -16,6 +16,7 @@
 /* @preserve node:coverage ignore stop */
 
 import { prisma } from "@/lib/prisma";
+import { workspaceMemberAccessWhere } from "@/lib/access-query";
 import {
   denyAccess,
   type AccessDecision,
@@ -201,7 +202,7 @@ async function getWorkspaceCapabilities(
       id: true,
       ownerId: true,
       members: {
-        where: { userId },
+        where: workspaceMemberAccessWhere(userId),
         select: { userId: true, role: true },
       },
     },

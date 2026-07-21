@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { workspaceMemberAccessWhere } from "@/lib/access-query";
 import { documentCapabilities } from "@/lib/auth/document-permissions";
 import { deriveFromContentJson } from "@/lib/document-stats";
 import { capList, DOCUMENT_LIST_LIMIT } from "@/lib/documents";
@@ -189,7 +190,7 @@ export async function listDashboardDocumentsForUser(
           select: {
             ...DASHBOARD_DOCUMENT_CARD_SELECT.workspace.select,
             members: {
-              where: { userId },
+              where: workspaceMemberAccessWhere(userId),
               select: { userId: true, role: true },
             },
           },
@@ -243,7 +244,7 @@ export async function searchDocumentsForUser(
         select: {
           ...DASHBOARD_DOCUMENT_CARD_SELECT.workspace.select,
           members: {
-            where: { userId },
+            where: workspaceMemberAccessWhere(userId),
             select: { userId: true, role: true },
           },
         },

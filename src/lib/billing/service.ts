@@ -299,6 +299,29 @@ export async function writeLocalSubscriptionUpdate(
     return "stale";
   }
 
+  const targetPlan = next.plan;
+  if (targetPlan !== undefined && targetPlan !== sub.plan) {
+    const currentPeriodStart =
+      next.currentPeriodStart ?? sub.currentPeriodStart ?? new Date();
+    const currentPeriodEnd =
+      next.currentPeriodEnd ??
+      sub.currentPeriodEnd ??
+      new Date(
+        currentPeriodStart.getTime() +
+          getEntitlements(targetPlan).periodDays * 24 * 60 * 60 * 1000,
+      );
+    await writeLocalPlanChange(client, sub.userId, targetPlan, {
+      status: next.status,
+      stripeCustomerId: sub.stripeCustomerId ?? undefined,
+      stripeSubscriptionId,
+      currentPeriodStart,
+      currentPeriodEnd,
+      updateSubscriptionPeriodOnExisting: true,
+      cancelAtPeriodEnd: next.cancelAtPeriodEnd,
+    });
+    return "applied";
+  }
+
   await client.subscription.update({
     where: { stripeSubscriptionId },
     data: {
@@ -314,12 +337,6 @@ export async function writeLocalSubscriptionUpdate(
     },
   });
 
-  if (next.plan) {
-    await client.user.update({
-      where: { id: sub.userId },
-      data: { plan: next.plan },
-    });
-  }
   return "applied";
 }
 

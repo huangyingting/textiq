@@ -5,13 +5,21 @@ import {
   accessibleDocumentWhere,
   accessibleWorkspaceWhere,
   documentAccessOr,
+  workspaceMemberAccessWhere,
   workspaceAccessOr,
 } from "./access-query";
 
-test("workspaceAccessOr preserves owner-or-member scope", () => {
+test("workspaceMemberAccessWhere only admits canonical member roles", () => {
+  assert.deepEqual(workspaceMemberAccessWhere("user-1"), {
+    userId: "user-1",
+    role: { in: ["EDITOR", "VIEWER"] },
+  });
+});
+
+test("workspaceAccessOr preserves owner-or-valid-member scope", () => {
   assert.deepEqual(workspaceAccessOr("user-1"), [
     { ownerId: "user-1" },
-    { members: { some: { userId: "user-1" } } },
+    { members: { some: workspaceMemberAccessWhere("user-1") } },
   ]);
 });
 

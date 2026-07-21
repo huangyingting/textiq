@@ -194,12 +194,12 @@ export async function eraseAccountPersonalData(input: {
     input.client,
     input.userId,
   );
-  await deleteAccountAssetStorage(assets, storage);
   await deleteAccountDatabaseRows(
     input.client,
     input.userId,
     assets.map((asset) => asset.id),
   );
+  await deleteAccountAssetStorage(assets, storage);
   const findings = await verifyAccountErasure(input.client, input.userId);
   return { deletedAssetCount: assets.length, findings };
 }

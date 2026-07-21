@@ -440,19 +440,32 @@ for (const [action, capability] of Object.entries(ACTION_CAPABILITY)) {
   });
 }
 
-test("requireWorkspaceCapability surfaces invalid persisted membership rows as invalid-role denials", async (t) => {
-  stubPrismaMethod(t, prisma.workspace, "findUnique", async () => ({
-    id: "ws-1",
-    ownerId: OWNER,
-    members: [{ userId: "user-bad", role: "OWNER" }],
-  }));
+test("requireWorkspaceCapability filters invalid persisted membership rows at lookup time", async (t) => {
+  const stub = stubPrismaMethod(
+    t,
+    prisma.workspace,
+    "findUnique",
+    async () => ({
+      id: "ws-1",
+      ownerId: OWNER,
+      members: [],
+    }),
+  );
 
   await assert.rejects(
     () => requireWorkspaceCapability("user-bad", "ws-1", "view"),
     (error: unknown) =>
       error instanceof WorkspacePermissionError &&
-      error.capability === "view" &&
-      error.accessDecision?.reason === "invalid-role",
+      error.capability === null &&
+      error.accessDecision?.reason === "resource-not-found",
+  );
+  assert.deepEqual(
+    (stub.calls[0]?.[0] as { select: { members: { where: unknown } } }).select
+      .members.where,
+    {
+      userId: "user-bad",
+      role: { in: ["EDITOR", "VIEWER"] },
+    },
   );
 });
 

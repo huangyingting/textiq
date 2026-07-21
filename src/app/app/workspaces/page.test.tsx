@@ -335,7 +335,12 @@ describe("WorkspacesPage", () => {
     });
     assert.deepEqual(callsOf("prisma.workspace.findMany")[1]?.[1], {
       where: {
-        members: { some: { userId: "user-9" } },
+        members: {
+          some: {
+            userId: "user-9",
+            role: { in: ["EDITOR", "VIEWER"] },
+          },
+        },
         ownerId: { not: "user-9" },
       },
       orderBy: { updatedAt: "desc" },
@@ -344,7 +349,10 @@ describe("WorkspacesPage", () => {
         name: true,
         updatedAt: true,
         _count: { select: { members: true, documents: true } },
-        members: { where: { userId: "user-9" }, select: { role: true } },
+        members: {
+          where: { userId: "user-9", role: { in: ["EDITOR", "VIEWER"] } },
+          select: { role: true },
+        },
       },
     });
   });
