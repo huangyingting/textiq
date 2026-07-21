@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { accessibleDocumentWhere } from "@/lib/access-query";
+import {
+  accessibleDocumentWhere,
+  workspaceMemberAccessWhere,
+} from "@/lib/access-query";
 import {
   createCommentService,
   type RequireCommentDocumentContext,
@@ -41,7 +44,7 @@ const documentEditorSelect = (userId: string) =>
         name: true,
         ownerId: true,
         members: {
-          where: { userId },
+          where: workspaceMemberAccessWhere(userId),
           select: { userId: true, role: true },
         },
       },

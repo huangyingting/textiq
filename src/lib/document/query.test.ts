@@ -47,7 +47,14 @@ test("buildDocumentListWhere composes accessible scope, text search, tags, and f
       workspace: {
         OR: [
           { ownerId: "user-1" },
-          { members: { some: { userId: "user-1" } } },
+          {
+            members: {
+              some: {
+                userId: "user-1",
+                role: { in: ["EDITOR", "VIEWER"] },
+              },
+            },
+          },
         ],
       },
     },
@@ -86,7 +93,17 @@ test("buildDocumentListWhere preserves dashboard workspace list access scope", (
     workspaceId: { not: null },
     deletedAt: null,
     workspace: {
-      OR: [{ ownerId: "user-1" }, { members: { some: { userId: "user-1" } } }],
+      OR: [
+        { ownerId: "user-1" },
+        {
+          members: {
+            some: {
+              userId: "user-1",
+              role: { in: ["EDITOR", "VIEWER"] },
+            },
+          },
+        },
+      ],
     },
     AND: [{ tags: { some: { slug: "design" } } }],
   });

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { EMPTY_STATE_CHROME, PANEL_CHROME, cx } from "@/components/ui";
+import { workspaceMemberAccessWhere } from "@/lib/access-query";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import {
@@ -41,9 +42,7 @@ export default async function WorkspacesPage() {
   const memberWorkspaces = await prisma.workspace.findMany({
     where: {
       members: {
-        some: {
-          userId: user.id,
-        },
+        some: workspaceMemberAccessWhere(user.id),
       },
       ownerId: { not: user.id },
     },
@@ -54,7 +53,7 @@ export default async function WorkspacesPage() {
       updatedAt: true,
       _count: { select: { members: true, documents: true } },
       members: {
-        where: { userId: user.id },
+        where: workspaceMemberAccessWhere(user.id),
         select: { role: true },
       },
     },

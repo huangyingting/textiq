@@ -45,6 +45,17 @@ test("dashboard list uses two capped document queries plus tags only", async () 
   assert.equal(result.documents.length, 0);
   assert.equal(documentCalls.length, 2);
   assert.equal(tagCalls.length, 1);
+  assert.deepEqual(
+    (
+      documentCalls[1] as {
+        select: { workspace: { select: { members: unknown } } };
+      }
+    ).select.workspace.select.members,
+    {
+      where: { userId: "user-1", role: { in: ["EDITOR", "VIEWER"] } },
+      select: { userId: true, role: true },
+    },
+  );
   for (const call of documentCalls as Array<{
     select: Record<string, unknown>;
   }>) {

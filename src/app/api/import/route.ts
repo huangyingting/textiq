@@ -23,6 +23,7 @@ import {
 } from "@/lib/import/contract";
 import { IMPORT_PARSE_TIMEOUT_MS } from "@/lib/import/format-registry";
 import { logError } from "@/lib/log";
+import { getCurrentUser } from "@/lib/session";
 import {
   bucketBytes,
   bucketDurationMs,
@@ -57,6 +58,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       status: failure.error.status,
     });
     return importFailureResponse(failure);
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    return importFailureResponse(
+      importFailure(
+        IMPORT_ERROR_CODES.UNAUTHORIZED,
+        "Sign in to import a document.",
+      ),
+    );
   }
 
   const ipCheck = await checkIpRateLimit({

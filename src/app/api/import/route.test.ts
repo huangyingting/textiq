@@ -42,6 +42,7 @@ type CreateDocumentFromImportResult =
     };
 
 type ImportRouteTestState = {
+  currentUser: { id: string } | null;
   ipCheckResult: IpCheckResult;
   checkIpRateLimitCalls: Array<{ namespace: string; secret: string }>;
   logRouteDenialCalls: Array<Record<string, unknown>>;
@@ -68,6 +69,7 @@ const globalForImportRoute = globalThis as typeof globalThis & {
 
 function createDefaultState(): ImportRouteTestState {
   return {
+    currentUser: { id: "user-default" },
     ipCheckResult: { allowed: true, subjectHash: "default-subject-hash" },
     checkIpRateLimitCalls: [],
     logRouteDenialCalls: [],
@@ -120,6 +122,14 @@ const stubbedModules = new Map<string, string>([
         globalThis.__importRouteTestState.logErrorCalls.push({ scope, context });
       }
       export function logInfo() {}
+    `,
+  ],
+  [
+    "@/lib/session",
+    `
+      export async function getCurrentUser() {
+        return globalThis.__importRouteTestState.currentUser;
+      }
     `,
   ],
   [
@@ -292,6 +302,30 @@ test("rate-limit budget exceeded returns 429 with Retry-After and logs denial", 
     "blocked-subject",
   );
   assert.strictEqual(state.logRouteDenialCalls[0]?.["retryAfterSeconds"], 42);
+  assert.strictEqual(state.createDocumentFromImportUploadCalls.length, 0);
+});
+
+test("missing session returns unauthorized before rate limit or multipart parsing", async () => {
+  const state = globalForImportRoute.__importRouteTestState;
+  state.currentUser = null;
+
+  const response = await POST(
+    makeRequest({
+      file: fakeFile("doc.md", "text/markdown"),
+      target: "personal",
+    }),
+  );
+
+  assert.strictEqual(response.status, 401);
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    error: {
+      code: "unauthorized",
+      status: 401,
+      message: "Sign in to import a document.",
+    },
+  });
+  assert.strictEqual(state.checkIpRateLimitCalls.length, 0);
   assert.strictEqual(state.createDocumentFromImportUploadCalls.length, 0);
 });
 

@@ -385,7 +385,14 @@ describe("WorkspacePage", () => {
         id: "missing-ws",
         OR: [
           { ownerId: "user-1" },
-          { members: { some: { userId: "user-1" } } },
+          {
+            members: {
+              some: {
+                userId: "user-1",
+                role: { in: ["EDITOR", "VIEWER"] },
+              },
+            },
+          },
         ],
       },
       select: {

@@ -76,6 +76,13 @@ class DuplicateStripeWebhookEventError extends Error {
     this.name = "DuplicateStripeWebhookEventError";
   }
 }
+
+class MissingStripeSubscriptionWebhookEventError extends Error {
+  constructor(readonly stripeSubscriptionId: string) {
+    super("Stripe subscription row is not ready for this webhook event");
+    this.name = "MissingStripeSubscriptionWebhookEventError";
+  }
+}
 /* node:coverage enable */
 
 function getStripeKey(): string {
@@ -371,6 +378,18 @@ export async function handleStripeWebhookEvent(
       });
       return { status: 200, message: "duplicate event ignored" };
     }
+    if (err instanceof MissingStripeSubscriptionWebhookEventError) {
+      logSecurityAudit("billing.webhook.processed", {
+        stripeEventId: event.id,
+        eventType: event.type,
+        outcome: "missing",
+        subscriptionId: err.stripeSubscriptionId,
+      });
+      return {
+        status: 500,
+        message: "subscription state missing; retry later",
+      };
+    }
     throw err;
   }
 
@@ -452,6 +471,11 @@ export async function applyStripeWebhookEvent(
           stripeSubscriptionId,
           next,
         );
+        if (applied === "missing") {
+          throw new MissingStripeSubscriptionWebhookEventError(
+            stripeSubscriptionId,
+          );
+        }
         return applied === "applied" ? "success" : applied;
       }
 
