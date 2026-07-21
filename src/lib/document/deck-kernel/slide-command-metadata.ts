@@ -11,6 +11,7 @@ import {
   type CommandTarget,
 } from "@/lib/commands/envelope-core";
 import type { SlideCommand, PatchOp } from "./slide-command-contracts";
+import { ARRANGE_MODES, isArrangeMode } from "./element-arrange";
 
 export type SlideCommandType = SlideCommand["type"];
 export type SlideCommandCoalescing =
@@ -438,6 +439,13 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
         if (!isFiniteNumber(payload.dy)) {
           errors.push("payload.dy must be a finite number.");
         }
+      } else if (
+        payload.type === "ARRANGE_ELEMENTS" &&
+        !isArrangeMode(payload.mode)
+      ) {
+        errors.push(
+          `payload.mode must be one of: ${ARRANGE_MODES.join(", ")}.`,
+        );
       } else if (!isNonEmptyString(payload.mode)) {
         errors.push("payload.mode must be a non-empty string.");
       }

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { CommandTarget } from "@/lib/commands/envelope-core";
 import type { SlideCommand } from "@/lib/document/deck-kernel/slide-commands";
+import { ARRANGE_MODES } from "@/lib/document/deck-kernel/element-arrange";
 import {
   canCoalesceSlideCommands,
   getSlideCommandMetadata,
@@ -546,6 +547,16 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ],
   ],
   [
+    "ARRANGE_ELEMENTS",
+    {
+      type: "ARRANGE_ELEMENTS",
+      slideId: "slide-1",
+      elementIds: ["el-1"],
+      mode: "sideways",
+    },
+    ["payload.mode must be one of: front, back, forward, backward."],
+  ],
+  [
     "UNGROUP_ELEMENTS",
     { type: "UNGROUP_ELEMENTS", slideId: "", groupId: "" },
     [
@@ -770,6 +781,38 @@ test("payload validation reports command-specific invalid fields", () => {
     validateDeckCommandPayload(payload, deckTarget, errors);
     assert.deepEqual(errors, expected, name);
   }
+});
+
+test("ARRANGE_ELEMENTS validation accepts only arrange modes", () => {
+  for (const mode of ARRANGE_MODES) {
+    const errors: string[] = [];
+    validateDeckCommandPayload(
+      {
+        type: "ARRANGE_ELEMENTS",
+        slideId: "slide-1",
+        elementIds: ["el-1"],
+        mode,
+      },
+      deckTarget,
+      errors,
+    );
+    assert.deepEqual(errors, [], mode);
+  }
+
+  const errors: string[] = [];
+  validateDeckCommandPayload(
+    {
+      type: "ARRANGE_ELEMENTS",
+      slideId: "slide-1",
+      elementIds: ["el-1"],
+      mode: "sideways",
+    },
+    deckTarget,
+    errors,
+  );
+  assert.deepEqual(errors, [
+    "payload.mode must be one of: front, back, forward, backward.",
+  ]);
 });
 
 test("affected id metadata extracts slide ids and string element ids", () => {

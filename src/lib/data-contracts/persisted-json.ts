@@ -6,6 +6,7 @@ import {
 import { collectVisualNodes } from "@/lib/lexical/visual-nodes";
 import { safeParseDeck } from "@/lib/presentation/validation";
 import { safeParseVisual } from "@/lib/visual/schema";
+import { parsePalette } from "@/lib/brand/schema";
 
 import {
   COMMENT_ANCHOR_TYPE_LITERALS,
@@ -59,6 +60,15 @@ function validateVisualContract(value: unknown): ContractValidationResult {
   return parseVisualKindLiteral(parsed.data.type).success
     ? ok()
     : fail("Visual type is not a current literal.");
+}
+
+function validateBrandPaletteContract(
+  value: unknown,
+): ContractValidationResult {
+  if (value == null) {
+    return ok();
+  }
+  return parsePalette(value) ? ok() : fail("Brand.palette must be a palette.");
 }
 
 function validateCommentAnchorContract(
@@ -145,6 +155,20 @@ export const PERSISTED_JSON_CONTRACTS = {
       "Visual rows are a derived projection of visual nodes in Document.contentJson.",
     validator: "@/lib/visual/schema#safeParseVisual",
     validate: validateVisualContract,
+  },
+  "VisualRevision.data": {
+    name: "VisualRevision.data",
+    sourceOfTruth:
+      "VisualRevision rows snapshot previous Visual.data payloads.",
+    validator: "@/lib/visual/schema#safeParseVisual",
+    validate: validateVisualContract,
+  },
+  "Brand.palette": {
+    name: "Brand.palette",
+    sourceOfTruth:
+      "Brand.palette stores optional validated brand color palettes.",
+    validator: "@/lib/brand/schema#parsePalette",
+    validate: validateBrandPaletteContract,
   },
   "Comment.anchor": {
     name: "Comment.anchor",

@@ -252,6 +252,23 @@ test("edge content transforms update only the selected connector", () => {
   assert.equal(straight.edges[0].style, "straight");
 });
 
+test("edge transforms reject duplicate edge ids", () => {
+  const source = sourceFor("flowchart");
+  assert.ok(source.edges.length >= 1, "flowchart fixture has an edge");
+  const duplicate = {
+    ...source,
+    edges: [
+      { ...source.edges[0], id: "dup-edge" },
+      { ...source.edges[0], id: "dup-edge" },
+    ],
+  };
+
+  assert.throws(
+    () => setEdgeLabel(duplicate, "dup-edge", "Reviewed"),
+    /Duplicate edge id: dup-edge/,
+  );
+});
+
 // ── Optional current fields ───────────────────────────────────────────────────
 
 test("validateVisual accepts visuals without optional node style fields", () => {

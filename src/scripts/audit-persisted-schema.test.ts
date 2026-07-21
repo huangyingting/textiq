@@ -1,6 +1,6 @@
 /**
  * Direct behavior coverage for `runAuditMain` (#1964) — the injectable CLI
- * orchestration in `audit-persisted-schema.ts`: pagination, the ten loaders'
+ * orchestration in `audit-persisted-schema.ts`: pagination, the twelve loaders'
  * query-sequencing, `auditRows`/`formatAuditReport` wiring, `--json` vs
  * plain-text output, `--ci`/`--strict` exit-code gating, and
  * `db.$disconnect()`/error-propagation behavior in the `finally` block.
@@ -35,6 +35,7 @@ import {
 } from "./audit-persisted-schema";
 import type {
   AssetAuditRow,
+  BrandAuditRow,
   CommentAuditRow,
   DocumentAuditRow,
   DocumentVersionAuditRow,
@@ -43,6 +44,7 @@ import type {
   UsageLedgerAuditRow,
   UserPlanAuditRow,
   VisualAuditRow,
+  VisualRevisionAuditRow,
   WorkspaceRoleAuditRow,
 } from "@/lib/schema-audit/audit";
 
@@ -112,6 +114,7 @@ function createStaticDelegate<Row>(
 interface Fixtures {
   documents?: DocumentAuditRow[];
   visuals?: VisualAuditRow[];
+  visualRevisions?: VisualRevisionAuditRow[];
   documentVersions?: DocumentVersionAuditRow[];
   comments?: CommentAuditRow[];
   tags?: TagAuditRow[];
@@ -122,6 +125,7 @@ interface Fixtures {
   subscriptions?: SubscriptionAuditRow[];
   usageLedgerEntries?: UsageLedgerAuditRow[];
   assets?: AssetAuditRow[];
+  brands?: BrandAuditRow[];
 }
 
 function createFakeDb(fixtures: Fixtures = {}) {
@@ -135,6 +139,11 @@ function createFakeDb(fixtures: Fixtures = {}) {
       callOrder,
     ),
     visual: createPagedDelegate("visual", fixtures.visuals ?? [], callOrder),
+    visualRevision: createPagedDelegate(
+      "visualRevision",
+      fixtures.visualRevisions ?? [],
+      callOrder,
+    ),
     documentVersion: createPagedDelegate(
       "documentVersion",
       fixtures.documentVersions ?? [],
@@ -169,6 +178,7 @@ function createFakeDb(fixtures: Fixtures = {}) {
       callOrder,
     ),
     asset: createPagedDelegate("asset", fixtures.assets ?? [], callOrder),
+    brand: createPagedDelegate("brand", fixtures.brands ?? [], callOrder),
   };
 
   const db: AuditDb = {
@@ -262,7 +272,7 @@ describe("runAuditMain: pagination", () => {
 });
 
 describe("runAuditMain: loader query sequencing", () => {
-  test("starts all ten loaders' first findMany call in the documented Promise.all order", async () => {
+  test("starts all twelve loaders' first findMany call in the documented Promise.all order", async () => {
     const fake = createFakeDb();
     await runAuditMain({
       argv: [],
@@ -273,6 +283,7 @@ describe("runAuditMain: loader query sequencing", () => {
     assert.deepEqual(fake.callOrder, [
       "document",
       "visual",
+      "visualRevision",
       "documentVersion",
       "comment",
       "tag",
@@ -283,6 +294,7 @@ describe("runAuditMain: loader query sequencing", () => {
       "subscription",
       "usageLedgerEntry",
       "asset",
+      "brand",
     ]);
   });
 });

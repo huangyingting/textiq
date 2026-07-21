@@ -285,6 +285,14 @@ describe("toBrandStyle", () => {
     assert.equal(style.fontAssetUrl, null);
   });
 
+  it("normalizes invalid persisted palette JSON to null", () => {
+    const style = toBrandStyle(
+      { ...baseRow, palette: ["#ff0000", "not-a-color"] },
+      new Map(),
+    );
+    assert.equal(style.palette, null);
+  });
+
   it("null URL when the referenced asset is missing from the map (purged)", () => {
     const style = toBrandStyle({ ...baseRow, logoAssetId: "gone" }, new Map());
     assert.equal(style.logoAssetUrl, null);

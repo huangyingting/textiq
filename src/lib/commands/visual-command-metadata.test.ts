@@ -138,6 +138,44 @@ describe("validateVisualCommandPayload", () => {
     assert.deepEqual(errors, ["payload.label must be a string."]);
   });
 
+  it("requires reconnect_edge to provide at least one valid endpoint", () => {
+    const validCases: VisualCommandPayload[] = [
+      { op: "visual.reconnect_edge", edgeId: "e1", fromNodeId: "n1" },
+      { op: "visual.reconnect_edge", edgeId: "e1", toNodeId: "n2" },
+    ];
+    for (const payload of validCases) {
+      const errors: string[] = [];
+      validateVisualCommandPayload("visual.reconnect_edge", payload, errors);
+      assert.deepEqual(errors, [], JSON.stringify(payload));
+    }
+
+    const noOpErrors: string[] = [];
+    validateVisualCommandPayload(
+      "visual.reconnect_edge",
+      { op: "visual.reconnect_edge", edgeId: "e1" },
+      noOpErrors,
+    );
+    assert.deepEqual(noOpErrors, [
+      "payload.fromNodeId or payload.toNodeId must be provided.",
+    ]);
+
+    const nonStringErrors: string[] = [];
+    validateVisualCommandPayload(
+      "visual.reconnect_edge",
+      {
+        op: "visual.reconnect_edge",
+        edgeId: "e1",
+        fromNodeId: 42,
+        toNodeId: "",
+      },
+      nonStringErrors,
+    );
+    assert.deepEqual(nonStringErrors, [
+      "payload.fromNodeId must be a non-empty string when provided.",
+      "payload.toNodeId must be a non-empty string when provided.",
+    ]);
+  });
+
   it("reports only edge id errors for edge-label payloads with a string label", () => {
     const errors: string[] = [];
 

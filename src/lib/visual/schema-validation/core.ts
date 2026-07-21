@@ -54,6 +54,13 @@ export function validateVisual(input: unknown): Visual {
   const edges = rawEdges.map((edge, index) =>
     validateEdge(edge, index, nodeIds),
   );
+  const edgeIds = new Set<string>();
+  for (const edge of edges) {
+    if (edgeIds.has(edge.id)) {
+      throw new VisualValidationError(`Duplicate edge id: ${edge.id}`);
+    }
+    edgeIds.add(edge.id);
+  }
 
   let title: string | undefined;
   if (input.title !== undefined) {

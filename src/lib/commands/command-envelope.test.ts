@@ -71,6 +71,46 @@ test("validateCommandEnvelope accepts a valid visual envelope", () => {
   );
 });
 
+test("validateCommandEnvelope requires strict ISO-8601 timestamps", () => {
+  const base = {
+    id: commandId("a1"),
+    schemaVersion: CURRENT_COMMAND_SCHEMA_VERSION,
+    type: "comment.update",
+    actor: ACTOR,
+    target: { surface: "comment" as const, commentId: "comment-1" },
+    payload: { text: "Looks good" },
+  };
+
+  for (const timestamp of [
+    "2026-06-23T00:00:00.000Z",
+    "2026-07-21T04:54:59.108+00:00",
+  ]) {
+    const validation = validateCommandEnvelope(
+      invalidEnvelope({ ...base, timestamp }),
+    );
+    assert.equal(validation.valid, true, timestamp);
+  }
+
+  for (const timestamp of [
+    "June 23, 2026",
+    "2026-06-23",
+    "2026-02-30T00:00:00Z",
+  ]) {
+    const validation = validateCommandEnvelope(
+      invalidEnvelope({
+        ...base,
+        id: commandId(`b${timestamp.length}`),
+        timestamp,
+      }),
+    );
+    assert.equal(validation.valid, false, timestamp);
+    assert.ok(
+      validation.errors.includes("timestamp must be a valid ISO-8601 string."),
+      timestamp,
+    );
+  }
+});
+
 test("validateCommandEnvelope reports invalid ids, targets, and payload mismatches", () => {
   const invalid = invalidEnvelope({
     id: "not-a-uuid",

@@ -5,6 +5,8 @@
  *  - `Document.deckJson`          → {@link safeParseDeck}
  *  - `Document.contentJson` visuals → {@link safeParseVisual} per visual node
  *  - `Visual.data`                → {@link safeParseVisual}
+ *  - `VisualRevision.data`        → {@link safeParseVisual}
+ *  - `Brand.palette`              → {@link parsePalette}
  *  - active Deck `source` metadata → {@link safeParseDeck}
  *
  * The audit reports ONLY safe identifiers and an opaque validator reason — row
@@ -40,6 +42,8 @@ export const SCHEMA_AREAS = [
   "DocumentVersion.deckJson",
   "DocumentVersion.contentJson:visual",
   "Visual.data",
+  "VisualRevision.data",
+  "Brand.palette",
   "NodeSourceMetadata",
   "Comment.anchor",
   "Tag.slug",
@@ -87,6 +91,12 @@ export interface DocumentAuditRow {
 export interface VisualAuditRow {
   id: string;
   documentId: string;
+  data: unknown;
+}
+
+export interface VisualRevisionAuditRow {
+  id: string;
+  visualId: string;
   data: unknown;
 }
 
@@ -145,9 +155,15 @@ export interface AssetAuditRow {
   deletedAt?: Date | null;
 }
 
+export interface BrandAuditRow {
+  id: string;
+  palette: unknown;
+}
+
 export interface AuditInput {
   documents?: readonly DocumentAuditRow[];
   visuals?: readonly VisualAuditRow[];
+  visualRevisions?: readonly VisualRevisionAuditRow[];
   documentVersions?: readonly DocumentVersionAuditRow[];
   comments?: readonly CommentAuditRow[];
   tags?: readonly TagAuditRow[];
@@ -158,12 +174,14 @@ export interface AuditInput {
   subscriptions?: readonly SubscriptionAuditRow[];
   usageLedgerEntries?: readonly UsageLedgerAuditRow[];
   assets?: readonly AssetAuditRow[];
+  brands?: readonly BrandAuditRow[];
 }
 
 export interface AuditSummary {
   /** Total rows scanned. */
   scannedDocuments: number;
   scannedVisuals: number;
+  scannedVisualRevisions: number;
   scannedDocumentVersions: number;
   scannedComments: number;
   scannedTags: number;
@@ -174,6 +192,7 @@ export interface AuditSummary {
   scannedSubscriptions: number;
   scannedUsageLedgerEntries: number;
   scannedAssets: number;
+  scannedBrands: number;
   /** Total violations found. */
   violations: number;
   /** Violation counts keyed by schema area. */
@@ -197,6 +216,8 @@ function contractViolation(
     | "DocumentVersion.deckJson"
     | "DocumentVersion.contentJson:visual"
     | "Visual.data"
+    | "VisualRevision.data"
+    | "Brand.palette"
     | "Comment.anchor"
   >,
   value: unknown,
@@ -351,6 +372,34 @@ export function auditVisualRow(row: VisualAuditRow): SchemaViolation[] {
       reason: result,
     },
   ];
+}
+
+export function auditVisualRevisionRow(
+  row: VisualRevisionAuditRow,
+): SchemaViolation[] {
+  const result = contractViolation("VisualRevision.data", row.data);
+  if (!result) return [];
+  return [
+    {
+      area: "VisualRevision.data",
+      rowId: row.id,
+      anchorId: row.visualId,
+      reason: result,
+    },
+  ];
+}
+
+export function auditBrandPalette(row: BrandAuditRow): SchemaViolation[] {
+  const result = contractViolation("Brand.palette", row.palette);
+  return result
+    ? [
+        {
+          area: "Brand.palette",
+          rowId: row.id,
+          reason: result,
+        },
+      ]
+    : [];
 }
 
 export function auditDocumentVersionRow(
@@ -524,6 +573,8 @@ function emptyByArea(): Record<SchemaArea, number> {
     "DocumentVersion.deckJson": 0,
     "DocumentVersion.contentJson:visual": 0,
     "Visual.data": 0,
+    "VisualRevision.data": 0,
+    "Brand.palette": 0,
     NodeSourceMetadata: 0,
     "Comment.anchor": 0,
     "Tag.slug": 0,
@@ -545,6 +596,7 @@ function emptyByArea(): Record<SchemaArea, number> {
 export function auditRows(input: AuditInput): AuditReport {
   const documents = input.documents ?? [];
   const visuals = input.visuals ?? [];
+  const visualRevisions = input.visualRevisions ?? [];
   const documentVersions = input.documentVersions ?? [];
   const comments = input.comments ?? [];
   const tags = input.tags ?? [];
@@ -555,6 +607,7 @@ export function auditRows(input: AuditInput): AuditReport {
   const subscriptions = input.subscriptions ?? [];
   const usageLedgerEntries = input.usageLedgerEntries ?? [];
   const assets = input.assets ?? [];
+  const brands = input.brands ?? [];
   const violations: SchemaViolation[] = [];
 
   for (const doc of documents) {
@@ -563,6 +616,9 @@ export function auditRows(input: AuditInput): AuditReport {
   }
   for (const visual of visuals) {
     violations.push(...auditVisualRow(visual));
+  }
+  for (const visualRevision of visualRevisions) {
+    violations.push(...auditVisualRevisionRow(visualRevision));
   }
   for (const version of documentVersions) {
     violations.push(...auditDocumentVersionRow(version));
@@ -594,6 +650,9 @@ export function auditRows(input: AuditInput): AuditReport {
   for (const asset of assets) {
     violations.push(...auditAssetScope(asset));
   }
+  for (const brand of brands) {
+    violations.push(...auditBrandPalette(brand));
+  }
 
   const byArea = emptyByArea();
   for (const violation of violations) {
@@ -605,6 +664,7 @@ export function auditRows(input: AuditInput): AuditReport {
     summary: {
       scannedDocuments: documents.length,
       scannedVisuals: visuals.length,
+      scannedVisualRevisions: visualRevisions.length,
       scannedDocumentVersions: documentVersions.length,
       scannedComments: comments.length,
       scannedTags: tags.length,
@@ -615,6 +675,7 @@ export function auditRows(input: AuditInput): AuditReport {
       scannedSubscriptions: subscriptions.length,
       scannedUsageLedgerEntries: usageLedgerEntries.length,
       scannedAssets: assets.length,
+      scannedBrands: brands.length,
       violations: violations.length,
       byArea,
     },
@@ -631,10 +692,12 @@ export function formatAuditReport(report: AuditReport): string[] {
   lines.push(
     `Scanned ${report.summary.scannedDocuments} document(s), ` +
       `${report.summary.scannedVisuals} visual(s), ` +
+      `${report.summary.scannedVisualRevisions} visual revision(s), ` +
       `${report.summary.scannedDocumentVersions} document version(s), ` +
       `${report.summary.scannedComments} comment(s), ` +
       `${report.summary.scannedTags} tag(s), ` +
-      `${report.summary.scannedAssets} asset(s).`,
+      `${report.summary.scannedAssets} asset(s), ` +
+      `${report.summary.scannedBrands} brand(s).`,
   );
   if (report.violations.length === 0) {
     lines.push("No schema violations found.");
