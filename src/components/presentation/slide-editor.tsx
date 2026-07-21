@@ -560,6 +560,8 @@ export function SlideEditor({
   const exportMenuId = useId();
   const zoomMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const zoomMenuPanelRef = useRef<HTMLDivElement | null>(null);
+  const exportMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const exportMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const footerStatusMenuId = useId();
   const footerStatusMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const footerStatusMenuPanelRef = useRef<HTMLDivElement | null>(null);
@@ -695,6 +697,11 @@ export function SlideEditor({
   }, [footerStatusMenuOpen]);
 
   useEffect(() => {
+    if (!exportMenuOpen) return;
+    focusFirstMenuCommand(exportMenuPanelRef.current);
+  }, [exportMenuOpen]);
+
+  useEffect(() => {
     if (!compactToolbarMenuOpen) return;
     focusFirstMenuCommand(compactToolbarMenuPanelRef.current);
   }, [compactToolbarMenuOpen]);
@@ -804,6 +811,11 @@ export function SlideEditor({
     footerStatusMenuTriggerRef.current?.focus();
   }
 
+  function closeExportMenuAndRestoreFocus() {
+    setExportMenuOpen(false);
+    exportMenuTriggerRef.current?.focus();
+  }
+
   function closeCompactToolbarMenuAndRestoreFocus() {
     setCompactToolbarMenuOpen(false);
     compactToolbarMenuTriggerRef.current?.focus();
@@ -860,6 +872,26 @@ export function SlideEditor({
     if (
       moveMenuCommandFocus({
         container: footerStatusMenuPanelRef.current,
+        key: event.key,
+        currentTarget: event.target,
+      })
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function handleExportMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeExportMenuAndRestoreFocus();
+      return;
+    }
+    if (!isMenuCommandNavigationKey(event.key)) return;
+    if (
+      moveMenuCommandFocus({
+        container: exportMenuPanelRef.current,
         key: event.key,
         currentTarget: event.target,
       })
@@ -2205,9 +2237,7 @@ export function SlideEditor({
     onExportPng,
     handleEditorKeyDown,
     handleRoundtripAction,
-    handleExportPptx,
-    handleExportPdf,
-    handleExportPng,
+    handleExportRequest,
     handleInsertSlide,
     handleDuplicateActiveSlide,
     handleDeleteActiveSlide,
@@ -2440,6 +2470,8 @@ export function SlideEditor({
         onExportPng={onExportPng}
         exportMenuOpen={exportMenuOpen}
         exportMenuId={exportMenuId}
+        exportMenuTriggerRef={exportMenuTriggerRef}
+        exportMenuPanelRef={exportMenuPanelRef}
         onClose={onClose}
         handleThemePackageChange={handleThemePackageChange}
         onCustomizeTheme={
@@ -2476,6 +2508,7 @@ export function SlideEditor({
         handleRoundtripAction={handleRoundtripAction}
         setExportMenuOpen={setExportMenuOpen}
         handleExportRequest={handleExportRequest}
+        handleExportMenuKeyDown={handleExportMenuKeyDown}
         handleCloseRequest={handleCloseRequest}
       />
       {/* Toolbar action error banner */}

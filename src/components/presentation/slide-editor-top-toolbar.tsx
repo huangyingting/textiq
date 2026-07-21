@@ -91,6 +91,8 @@ export interface SlideEditorTopToolbarProps {
   onExportPng: (() => Promise<void>) | undefined;
   exportMenuOpen: boolean;
   exportMenuId: string;
+  exportMenuTriggerRef: RefObject<HTMLButtonElement | null>;
+  exportMenuPanelRef: RefObject<HTMLDivElement | null>;
   onClose: (() => void) | undefined;
   handleThemePackageChange: (selection: ThemePackageSelection) => void;
   onCustomizeTheme?: () => void;
@@ -126,6 +128,7 @@ export interface SlideEditorTopToolbarProps {
   ) => Promise<void>;
   setExportMenuOpen: Dispatch<SetStateAction<boolean>>;
   handleExportRequest: (format: PresentationExportFormat) => void;
+  handleExportMenuKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   handleCloseRequest: () => void;
 }
 
@@ -162,6 +165,8 @@ export function SlideEditorTopToolbar({
   onExportPng,
   exportMenuOpen,
   exportMenuId,
+  exportMenuTriggerRef,
+  exportMenuPanelRef,
   onClose,
   handleThemePackageChange,
   onCustomizeTheme,
@@ -188,6 +193,7 @@ export function SlideEditorTopToolbar({
   handleRoundtripAction,
   setExportMenuOpen,
   handleExportRequest,
+  handleExportMenuKeyDown,
   handleCloseRequest,
 }: SlideEditorTopToolbarProps) {
   const hasSourceIssues = sourceReview.length > 0;
@@ -482,6 +488,10 @@ export function SlideEditorTopToolbar({
               trigger={
                 <DeckToolbarButton
                   label="Export slides"
+                  buttonRef={exportMenuTriggerRef}
+                  hasPopup="menu"
+                  expanded={exportMenuOpen}
+                  controls={exportMenuOpen ? exportMenuId : undefined}
                   onClick={() => setExportMenuOpen((open) => !open)}
                   className="font-semibold"
                 >
@@ -491,7 +501,12 @@ export function SlideEditorTopToolbar({
                 </DeckToolbarButton>
               }
             >
-              <div id={exportMenuId} className="flex flex-col">
+              <div
+                ref={exportMenuPanelRef}
+                id={exportMenuId}
+                className="flex flex-col"
+                onKeyDown={handleExportMenuKeyDown}
+              >
                 {onExportPptx ? (
                   <button
                     type="button"
