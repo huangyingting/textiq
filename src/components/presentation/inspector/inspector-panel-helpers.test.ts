@@ -118,6 +118,94 @@ describe("inspector panel pure helpers", () => {
     assert.equal(table.rows[0].cells[1].text, "$12M");
   });
 
+  test("generates unique table row and column ids after deletes and repeated inserts", () => {
+    const originalNow = Date.now;
+    Date.now = () => Number.parseInt("k", 36);
+    try {
+      const collisionProneTable: TableContent = {
+        columns: [
+          { id: "table-1-col-k", label: "Metric" },
+          { id: "table-1-col-old", label: "Prior" },
+          { id: "table-1-col-k-1", label: "Value" },
+        ],
+        rows: [
+          {
+            id: "table-1-row-k",
+            cells: [{ text: "A" }, { text: "B" }, { text: "C" }],
+          },
+          {
+            id: "table-1-row-old",
+            cells: [{ text: "D" }, { text: "E" }, { text: "F" }],
+          },
+          {
+            id: "table-1-row-k-1",
+            cells: [{ text: "G" }, { text: "H" }, { text: "I" }],
+          },
+        ],
+      };
+      const afterMiddleRowDelete = deleteTableRow(collisionProneTable, 1);
+      const afterMiddleColumnDelete = deleteTableColumn(
+        afterMiddleRowDelete,
+        1,
+      );
+
+      const withInsertedRows = [
+        "before",
+        "after",
+        "after",
+      ].reduce<TableContent>(
+        (current, position, index) =>
+          insertTableRow(
+            current,
+            index,
+            position as "before" | "after",
+            "table-1",
+          ),
+        afterMiddleColumnDelete,
+      );
+      const rowIds = withInsertedRows.rows.map((row) => row.id);
+      assert.equal(rowIds.length, new Set(rowIds).size);
+      assert.deepEqual(rowIds, [
+        "table-1-row-k-2",
+        "table-1-row-k",
+        "table-1-row-k-3",
+        "table-1-row-k-4",
+        "table-1-row-k-1",
+      ]);
+
+      const withInsertedColumns = [
+        "before",
+        "after",
+        "after",
+      ].reduce<TableContent>(
+        (current, position, index) =>
+          insertTableColumn(
+            current,
+            index,
+            position as "before" | "after",
+            "table-1",
+          ),
+        afterMiddleColumnDelete,
+      );
+      const columnIds = withInsertedColumns.columns.map((column) => column.id);
+      assert.equal(columnIds.length, new Set(columnIds).size);
+      assert.deepEqual(columnIds, [
+        "table-1-col-k-2",
+        "table-1-col-k",
+        "table-1-col-k-3",
+        "table-1-col-k-4",
+        "table-1-col-k-1",
+      ]);
+      assert.ok(
+        withInsertedColumns.rows.every(
+          (row) => row.cells.length === withInsertedColumns.columns.length,
+        ),
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
   test("updates connector point endpoints only when the endpoint is a point", () => {
     const connector: ConnectorContent = {
       from: { kind: "point", point: { x: 10, y: 20 } },

@@ -156,6 +156,65 @@ test("DeckGenerationPreview routes review, apply, derive, and cancel actions", a
   assert.equal("onAction" in reviewProps, false);
 });
 
+test("DeckDiagnosticsReview only renders controls backed by real handlers", () => {
+  const diagnostic = makeDiagnostic(
+    "missing-asset",
+    "error",
+    "Image asset missing",
+    {
+      slideId: "slide-b",
+      nodeId: "text-b",
+      details: { assetId: "hero" },
+      action: { type: "open-asset-panel" },
+    },
+  );
+
+  const previewReview = DeckDiagnosticsReview({
+    diagnostics: [diagnostic],
+    onClose: () => undefined,
+  });
+  assert.equal(
+    collectElements(previewReview).some(
+      (element) => textContent(element) === "Go to target",
+    ),
+    false,
+  );
+  assert.equal(
+    collectElements(previewReview).some(
+      (element) => textContent(element) === "Open asset panel",
+    ),
+    false,
+  );
+
+  const calls: string[] = [];
+  const interactiveReview = DeckDiagnosticsReview({
+    diagnostics: [diagnostic],
+    onClose: () => undefined,
+    onNavigate: (target) => calls.push(`navigate:${target.code}`),
+    onAction: (action, target) =>
+      calls.push(`action:${action.type}:${target.code}`),
+  });
+  const buttons = collectElements(interactiveReview).filter(
+    (element) => element.type === "button",
+  );
+  const goToTarget = buttons.find(
+    (element) => textContent(element) === "Go to target",
+  );
+  const openAssetPanel = buttons.find(
+    (element) => textContent(element) === "Open asset panel",
+  );
+  assert.ok(goToTarget);
+  assert.ok(openAssetPanel);
+
+  (goToTarget.props as { onClick: () => void }).onClick();
+  (openAssetPanel.props as { onClick: () => void }).onClick();
+
+  assert.deepEqual(calls, [
+    "navigate:missing-asset",
+    "action:open-asset-panel:missing-asset",
+  ]);
+});
+
 test("DeckGenerationPreview sends the original theme package on regenerate", async () => {
   const { baseline, proposal } = previewDecks();
   const hookRenderer = createHookRenderer();
