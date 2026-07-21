@@ -5,6 +5,7 @@ export type CommentErrorCode =
   | "edit_forbidden"
   | "delete_forbidden"
   | "thread_required"
+  | "invalid_anchor"
   | "invalid_anchor_geometry"
   | "invalid_slide_id"
   | "invalid_element_id"

@@ -1,4 +1,5 @@
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
+import { logInfo } from "@/lib/log";
 
 import { SLIDE_SAVE_DEBOUNCE_MS, type SaveQueueStatus } from "./save-status";
 import type {
@@ -72,6 +73,33 @@ const defaultTimer: AutosaveTimer = {
 };
 
 const defaultRetryDelaysMs = [1_000, 2_500, 5_000, 10_000] as const;
+
+function isQueuedSnapshot<TSnapshot>(
+  value: unknown,
+): value is QueuedSnapshot<TSnapshot> {
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.documentId === "string" &&
+    "snapshot" in record &&
+    (typeof record.baseRevisionToken === "string" ||
+      record.baseRevisionToken === null) &&
+    typeof record.enqueuedAt === "number" &&
+    Number.isFinite(record.enqueuedAt) &&
+    typeof record.attemptCount === "number" &&
+    Number.isInteger(record.attemptCount) &&
+    record.attemptCount >= 0 &&
+    (record.lastErrorClass === null ||
+      record.lastErrorClass === "offline" ||
+      record.lastErrorClass === "transient" ||
+      record.lastErrorClass === "fatal" ||
+      record.lastErrorClass === "conflict") &&
+    typeof record.serializedByteSize === "number" &&
+    Number.isFinite(record.serializedByteSize) &&
+    typeof record.sequence === "number" &&
+    Number.isInteger(record.sequence)
+  );
+}
 
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
@@ -283,7 +311,20 @@ export function createResilientLatestSnapshotQueue<TSnapshot>({
     },
 
     async recover(): Promise<QueuedSnapshot<TSnapshot> | null> {
-      const restored = await storage.load();
+      let restored: QueuedSnapshot<TSnapshot> | null = null;
+      try {
+        restored = await storage.load();
+      } catch (error) {
+        logInfo("presentation.autosave", "autosave-recovery-load-failed", {
+          documentId,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        try {
+          await storage.remove();
+        } catch {
+          // Recovery must not fail when corrupted storage also refuses removal.
+        }
+      }
       if (!restored || restored.documentId !== documentId) {
         pending = null;
         emit("idle");
@@ -366,16 +407,34 @@ export function createBrowserLocalStorageSaveQueueStorage<TSnapshot>({
 }): SaveQueueStorage<TSnapshot> {
   const key = `${storageKeyPrefix}:${documentId}`;
   const localStorageOrNull = (): Storage | null => {
-    /* node:coverage ignore next 3 */
-    if (typeof window === "undefined") {
+    try {
+      /* node:coverage ignore next 3 */
+      if (typeof window === "undefined") {
+        return null;
+      }
+      return window.localStorage;
+    } catch {
       return null;
     }
-    return window.localStorage;
   };
   return {
     async load() {
-      const stored = localStorageOrNull()?.getItem(key);
-      return stored ? (JSON.parse(stored) as QueuedSnapshot<TSnapshot>) : null;
+      const storage = localStorageOrNull();
+      if (!storage) return null;
+      try {
+        const stored = storage.getItem(key);
+        if (!stored) return null;
+        const parsed = JSON.parse(stored) as unknown;
+        if (isQueuedSnapshot<TSnapshot>(parsed)) return parsed;
+      } catch {
+        // Treat corrupt/inaccessible recovery state as absent.
+      }
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Storage cleanup is best-effort.
+      }
+      return null;
     },
     async save(snapshot) {
       const serialized = JSON.stringify(snapshot);

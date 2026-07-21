@@ -54,6 +54,7 @@ import {
   dispatchInlineTextCommand,
   type InlineTextCommandName,
 } from "@/lib/presentation/inline-text-commands";
+import { normalizeInlineTextLink } from "@/lib/presentation/rich-text-safety";
 import {
   CURRENT_OBJECT_INSERT_NODE_COMMAND_DESCRIPTORS,
   currentObjectAlignCommandDescriptor,
@@ -1292,7 +1293,7 @@ export function ContextToolbar({
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (!linkCommandEnabled) return;
-                    const url = linkDraft.trim();
+                    const url = normalizeInlineTextLink(linkDraft);
                     if (url) {
                       dispatchInlineTextCommand({
                         command: "link",

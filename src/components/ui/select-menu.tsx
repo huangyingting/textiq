@@ -236,7 +236,9 @@ export function SelectMenu({
       setOpen(true);
       onOpenChangeRef.current?.(true);
       if (open) {
-        setActiveIndex((current) => enabledIndexFrom(current + direction, 1));
+        setActiveIndex((current) =>
+          enabledIndexFrom(current + direction, direction),
+        );
         return;
       }
       const selectedEnabled =
@@ -260,8 +262,9 @@ export function SelectMenu({
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((current) =>
-        enabledIndexFrom(current + (event.key === "ArrowDown" ? 1 : -1), 1),
+        enabledIndexFrom(current + direction, direction),
       );
     }
   };

@@ -239,15 +239,25 @@ test("getTabbableElements: excludes element inside [inert] ancestor", () => {
   assert.equal(result.length, 0);
 });
 
-test("getTabbableElements: does not exclude element whose own aria-hidden is irrelevant to ancestor check", () => {
-  // The element itself might have aria-hidden but still be returned if no
-  // *ancestor* is hidden. (In practice, aria-hidden on an element does not
-  // prevent keyboard focus per spec.) This test documents the contract.
+test("getTabbableElements: excludes element with own aria-hidden=true", () => {
   const btn = makeElement("button", { "aria-hidden": "true" });
-  // No hidden ancestor
   const container = makeContainer([btn]);
   const result = getTabbableElements(container as unknown as HTMLElement);
-  assert.equal(result.length, 1);
+  assert.equal(result.length, 0);
+});
+
+test("getTabbableElements: excludes element with own hidden attribute", () => {
+  const btn = makeElement("button", { hidden: "" });
+  const container = makeContainer([btn]);
+  const result = getTabbableElements(container as unknown as HTMLElement);
+  assert.equal(result.length, 0);
+});
+
+test("getTabbableElements: excludes element with own inert attribute", () => {
+  const btn = makeElement("button", { inert: "" });
+  const container = makeContainer([btn]);
+  const result = getTabbableElements(container as unknown as HTMLElement);
+  assert.equal(result.length, 0);
 });
 
 // ---------------------------------------------------------------------------

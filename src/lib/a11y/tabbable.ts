@@ -6,7 +6,7 @@
  *   anchors/areas with href, contenteditable (not false), iframe/object/embed,
  *   and any element with an explicit non-negative tabindex.
  * - Exclude: disabled native controls, input[type=hidden], elements with
- *   tabindex="-1" (even if otherwise tabbable), and descendants of ancestors
+ *   tabindex="-1" (even if otherwise tabbable), and candidates/descendants
  *   marked [hidden], [aria-hidden="true"], or [inert].
  *
  * Does not cover: computed-style visibility, radio-group rules,
@@ -22,8 +22,8 @@ const ALWAYS_TABBABLE_TAGS = new Set(["IFRAME", "OBJECT", "EMBED"]);
 /** Tags that require an `href` attribute to participate in tab order. */
 const HREF_TAGS = new Set(["A", "AREA"]);
 
-function hasHiddenAncestor(el: { parentElement: Element | null }): boolean {
-  let node = el.parentElement;
+function hasHiddenSelfOrAncestor(el: Element): boolean {
+  let node: Element | null = el;
   while (node) {
     if (
       node.hasAttribute("hidden") ||
@@ -45,8 +45,8 @@ function isTabbable(el: Element): boolean {
     return false;
   }
 
-  // Hidden ancestor check.
-  if (hasHiddenAncestor(el as unknown as { parentElement: Element | null })) {
+  // Hidden candidate/ancestor check.
+  if (hasHiddenSelfOrAncestor(el)) {
     return false;
   }
 

@@ -717,6 +717,50 @@ test("comment service creates trimmed text and visual root comments", async () =
   assert.equal(db.comments[1].anchorNodeId, "visual-node-1");
 });
 
+test("comment service rejects incomplete text, visual, and table anchors", async () => {
+  const db = new FakeDb();
+  const { service } = makeService(db, "author-1");
+
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        body: "Empty text anchor",
+        anchorType: "text",
+        anchorText: "   ",
+      }),
+    /Text comment anchors require selected text/,
+  );
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        body: "Missing visual id",
+        anchorType: "visual",
+        anchorText: "Chart",
+      }),
+    /durable block id/,
+  );
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        body: "Blank visual id",
+        anchorType: "visual",
+        anchorNodeId: "   ",
+      }),
+    /durable block id/,
+  );
+  await assert.rejects(
+    () =>
+      service.createComment("doc-1", {
+        body: "Missing table id",
+        anchorType: "table",
+        anchorText: "Row",
+      }),
+    /durable block id/,
+  );
+
+  assert.equal(db.comments.length, 0);
+});
+
 test("comment service creates slide root comments with geometry", async () => {
   const db = new FakeDb();
   const { service } = makeService(

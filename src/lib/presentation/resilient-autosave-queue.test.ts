@@ -346,6 +346,27 @@ describe("createResilientLatestSnapshotQueue", () => {
     assert.match(retry.ok ? "" : retry.error, /resolve the conflict/);
   });
 
+  test("recover treats throwing storage loads as absent snapshots", async () => {
+    let removed = false;
+    const queue = createResilientLatestSnapshotQueue<TestDeck>({
+      documentId: "doc",
+      storage: {
+        load: async () => {
+          throw new SyntaxError("bad json");
+        },
+        save: async () => undefined,
+        remove: async () => {
+          removed = true;
+        },
+      },
+      save: async () => ({ ok: true, revisionToken: null }),
+    });
+
+    assert.equal(await queue.recover(), null);
+    assert.equal(queue.getStatus(), "idle");
+    assert.equal(removed, true);
+  });
+
   test("localStorage adapter handles size caps and missing browser storage", async () => {
     const previousWindow = Object.getOwnPropertyDescriptor(
       globalThis,
@@ -402,6 +423,50 @@ describe("createResilientLatestSnapshotQueue", () => {
           }),
         /local save cap/,
       );
+
+      stored.set("test:doc", "{not valid json");
+      assert.equal(await browserStorage.load(), null);
+      assert.equal(stored.has("test:doc"), false);
+
+      stored.set(
+        "test:doc",
+        JSON.stringify({
+          documentId: "doc",
+          snapshot: { title: "bad shape" },
+          baseRevisionToken: null,
+        }),
+      );
+      assert.equal(await browserStorage.load(), null);
+      assert.equal(stored.has("test:doc"), false);
+    } finally {
+      if (previousWindow)
+        Object.defineProperty(globalThis, "window", previousWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("localStorage adapter treats inaccessible browser storage as empty", async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: Object.defineProperty({}, "localStorage", {
+        get() {
+          throw new Error("storage denied");
+        },
+      }),
+    });
+    try {
+      const browserStorage = (
+        await import("./resilient-autosave-queue")
+      ).createBrowserLocalStorageSaveQueueStorage<TestDeck>({
+        documentId: "doc",
+        storageKeyPrefix: "test",
+      });
+
+      assert.equal(await browserStorage.load(), null);
     } finally {
       if (previousWindow)
         Object.defineProperty(globalThis, "window", previousWindow);

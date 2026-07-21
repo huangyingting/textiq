@@ -11,6 +11,7 @@ import {
 } from "@/lib/limits";
 
 import {
+  anchorNodeIdFromDurableBlockId,
   normalizeAnchorType,
   slideAnchorToRecord,
   validateAnchorGeometry,
@@ -229,16 +230,42 @@ export function createCommentService({
           });
         });
       } else {
-        const anchorType = normalizeAnchorType(input.anchorType ?? null);
-        const anchorText = anchorType
-          ? (input.anchorText
-              ?.trim()
-              .slice(0, COMMENT_ANCHOR_TEXT_MAX_LENGTH) ?? null)
-          : null;
-        const anchorNodeId = anchorType
-          ? (input.anchorNodeId?.slice(0, COMMENT_ANCHOR_NODE_ID_MAX_LENGTH) ??
-            null)
-          : null;
+        const requestedAnchorType = normalizeAnchorType(
+          input.anchorType ?? null,
+        );
+        const normalizedAnchorText =
+          input.anchorText?.trim().slice(0, COMMENT_ANCHOR_TEXT_MAX_LENGTH) ??
+          null;
+        const rawAnchorNodeId = input.anchorNodeId
+          ?.trim()
+          .slice(0, COMMENT_ANCHOR_NODE_ID_MAX_LENGTH);
+        const normalizedAnchorNodeId = anchorNodeIdFromDurableBlockId(
+          rawAnchorNodeId || null,
+        );
+        let anchorType = requestedAnchorType;
+        let anchorText: string | null = null;
+        let anchorNodeId: string | null = null;
+        if (anchorType === "text") {
+          if (!normalizedAnchorText) {
+            throw new CommentError(
+              "invalid_anchor",
+              "Text comment anchors require selected text.",
+            );
+          }
+          anchorText = normalizedAnchorText;
+          anchorNodeId = normalizedAnchorNodeId;
+        } else if (anchorType === "visual" || anchorType === "table") {
+          if (!normalizedAnchorNodeId) {
+            throw new CommentError(
+              "invalid_anchor",
+              "Document block comment anchors require a durable block id.",
+            );
+          }
+          anchorText = normalizedAnchorText;
+          anchorNodeId = normalizedAnchorNodeId;
+        } else {
+          anchorType = null;
+        }
         await db.comment.create({
           data: {
             documentId,
