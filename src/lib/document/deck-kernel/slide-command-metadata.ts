@@ -20,7 +20,22 @@ import {
   isDistributeMode,
   isMatchSizeMode,
 } from "./element-align";
-import { validateTextRuns } from "./deck-validation/elements";
+import {
+  validateAddElementPayload,
+  validateElementContentPayload,
+  validateElementDesignOverridesPayload,
+  validateElementPatchPayload,
+  validateElementRole,
+  validateTextRuns,
+} from "./deck-validation/elements";
+import {
+  validateCustomTemplate,
+  validateCustomTemplatePatch,
+  validateSlideMaster,
+  validateSlideMasterPatch,
+} from "./deck-validation/core";
+import { isSlideFormat } from "./deck-validation/shared";
+import { SLIDE_FORMATS } from "@/lib/document/deck-kernel/slide-format";
 import { validateSourceRef as validateStrictSourceRef } from "./deck-validation/source-refs";
 
 export type SlideCommandType = SlideCommand["type"];
@@ -51,6 +66,8 @@ export interface SlideCommandMetadata {
 /* node:coverage ignore next 2 */
 /* Type alias is erased by tsx and maps to a source row. */
 type Payload = Record<string, unknown>;
+
+const SLIDE_TEMPLATE_MODES = ["replace", "preserve"] as const;
 
 const SLIDE_COMMAND_TYPES = [
   "ADD_SLIDE",
@@ -217,6 +234,16 @@ function validateOptionalTextRuns(
   }
 }
 
+function pushDeckValidationError(errors: string[], validate: () => void): void {
+  try {
+    validate();
+  } catch (error) {
+    errors.push(
+      error instanceof Error ? error.message : "Payload validation failed.",
+    );
+  }
+}
+
 function slideIds(command: Partial<SlideCommand>): string[] {
   return "slideId" in command && typeof command.slideId === "string"
     ? [command.slideId]
@@ -289,6 +316,10 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       /* Add-element object validation is asserted in metadata tests; tsx maps the guard close row as residual. */
       if (!isPlainObject(payload.element)) {
         errors.push("payload.element must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateAddElementPayload(payload.element, "payload.element"),
+        );
       }
       break;
     case "UPDATE_ELEMENT":
@@ -304,6 +335,10 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (!isPlainObject(payload.patch)) {
         errors.push("payload.patch must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateElementPatchPayload(payload.patch, "payload.patch"),
+        );
       }
       break;
     case "UPDATE_ELEMENT_CONTENT":
@@ -318,9 +353,17 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (payload.content !== undefined && !isPlainObject(payload.content)) {
         errors.push("payload.content must be an object when provided.");
+      } else if (payload.content !== undefined) {
+        pushDeckValidationError(errors, () =>
+          validateElementContentPayload(payload.content, "payload.content"),
+        );
       }
       if (payload.role !== undefined && !isNonEmptyString(payload.role)) {
         errors.push("payload.role must be a non-empty string when provided.");
+      } else if (payload.role !== undefined) {
+        pushDeckValidationError(errors, () =>
+          validateElementRole(payload.role, "payload.role"),
+        );
       }
       break;
     case "UPDATE_ELEMENT_DESIGN_OVERRIDES":
@@ -332,6 +375,13 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (!isPlainObject(payload.designOverrides)) {
         errors.push("payload.designOverrides must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateElementDesignOverridesPayload(
+            payload.designOverrides,
+            "payload.designOverrides",
+          ),
+        );
       }
       break;
     case "REMOVE_ELEMENT":
@@ -519,6 +569,15 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (!isPlainObject(payload.patchesById)) {
         errors.push("payload.patchesById must be an object.");
+      } else {
+        for (const [key, value] of Object.entries(payload.patchesById)) {
+          if (!isNonEmptyString(key)) {
+            errors.push("payload.patchesById keys must be non-empty strings.");
+          }
+          pushDeckValidationError(errors, () =>
+            validateElementPatchPayload(value, `payload.patchesById.${key}`),
+          );
+        }
       }
       break;
     case "SET_PRESENTATION_THEME":
@@ -544,11 +603,19 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
     case "SET_CANVAS_FORMAT":
       if (!isNonEmptyString(payload.format)) {
         errors.push("payload.format must be a non-empty string.");
+      } else if (!isSlideFormat(payload.format)) {
+        errors.push(
+          `payload.format must be one of: ${SLIDE_FORMATS.join(", ")}.`,
+        );
       }
       break;
     case "CREATE_MASTER":
       if (!isPlainObject(payload.master)) {
         errors.push("payload.master must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateSlideMaster(payload.master, "payload.master"),
+        );
       }
       break;
     case "UPDATE_MASTER":
@@ -557,6 +624,10 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (!isPlainObject(payload.patch)) {
         errors.push("payload.patch must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateSlideMasterPatch(payload.patch, "payload.patch"),
+        );
       }
       break;
     case "DELETE_MASTER":
@@ -600,6 +671,14 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       ) {
         errors.push("payload.afterSlideId must be a non-empty string or null.");
       }
+      if (
+        payload.visualId !== undefined &&
+        !isNonEmptyString(payload.visualId)
+      ) {
+        errors.push(
+          "payload.visualId must be a non-empty string when provided.",
+        );
+      }
       break;
     case "APPLY_SLIDE_TEMPLATE":
       if (!isNonEmptyString(payload.slideId)) {
@@ -608,10 +687,28 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       if (!isNonEmptyString(payload.templateId)) {
         errors.push("payload.templateId must be a non-empty string.");
       }
+      if (
+        payload.visualId !== undefined &&
+        !isNonEmptyString(payload.visualId)
+      ) {
+        errors.push(
+          "payload.visualId must be a non-empty string when provided.",
+        );
+      }
+      if (
+        payload.mode !== undefined &&
+        !isOneOf(payload.mode, SLIDE_TEMPLATE_MODES)
+      ) {
+        errors.push('payload.mode must be "replace" or "preserve".');
+      }
       break;
     case "CREATE_CUSTOM_TEMPLATE":
       if (!isPlainObject(payload.template)) {
         errors.push("payload.template must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateCustomTemplate(payload.template, "payload.template"),
+        );
       }
       break;
     case "UPDATE_CUSTOM_TEMPLATE":
@@ -620,6 +717,10 @@ function validatePayloadDetails(payload: Payload, errors: string[]): void {
       }
       if (!isPlainObject(payload.patch)) {
         errors.push("payload.patch must be an object.");
+      } else {
+        pushDeckValidationError(errors, () =>
+          validateCustomTemplatePatch(payload.patch, "payload.patch"),
+        );
       }
       break;
     case "DELETE_CUSTOM_TEMPLATE":

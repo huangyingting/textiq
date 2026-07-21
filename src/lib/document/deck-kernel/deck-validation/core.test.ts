@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildDeck, buildSlide, buildTextElement } from "@/test/builders/deck";
-import { validateDeck } from "./core";
+import {
+  validateCustomTemplate,
+  validateCustomTemplatePatch,
+  validateDeck,
+  validateSlideMaster,
+  validateSlideMasterPatch,
+} from "./core";
 
 /**
  * Returns a plain, untyped deck payload built from a canonical valid deck plus
@@ -154,6 +160,42 @@ test("validateDeck rejects an unknown key on a slide master", () => {
   );
 });
 
+test("validateSlideMaster accepts a command master payload and rejects malformed fields", () => {
+  assert.deepEqual(
+    validateSlideMaster(
+      { id: "master-1", name: "Master", elements: [] },
+      "payload.master",
+    ),
+    {
+      id: "master-1",
+      name: "Master",
+      elements: [],
+    },
+  );
+  assert.throws(
+    () =>
+      validateSlideMaster(
+        { id: "master-1", name: "Master", elements: "bad" },
+        "payload.master",
+      ),
+    { message: /^payload\.master\.elements must be an array$/ },
+  );
+});
+
+test("validateSlideMasterPatch accepts partial master patches and rejects invalid fields", () => {
+  assert.deepEqual(
+    validateSlideMasterPatch({ name: "Updated" }, "payload.patch"),
+    { name: "Updated" },
+  );
+  assert.throws(
+    () => validateSlideMasterPatch({ id: "master-2" }, "payload.patch"),
+    { message: /^payload\.patch\.id is not part of the current schema$/ },
+  );
+  assert.throws(() => validateSlideMasterPatch({ name: "" }, "payload.patch"), {
+    message: /^payload\.patch\.name must be a non-empty string$/,
+  });
+});
+
 test("validateDeck rejects an empty defaultMasterId", () => {
   assert.throws(() => validateDeck(corruptDeck({ defaultMasterId: "" })), {
     message: /^Deck\.defaultMasterId must be a non-empty string$/,
@@ -190,6 +232,54 @@ test("validateDeck rejects a non-array customTemplates list", () => {
   assert.throws(
     () => validateDeck(corruptDeck({ customTemplates: "not-an-array" })),
     { message: /^Deck\.customTemplates must be an array$/ },
+  );
+});
+
+test("validateCustomTemplate accepts command template payloads and rejects malformed fields", () => {
+  assert.deepEqual(
+    validateCustomTemplate(
+      { id: "template-1", name: "Template", category: "blank", elements: [] },
+      "payload.template",
+    ),
+    {
+      id: "template-1",
+      name: "Template",
+      category: "blank",
+      elements: [],
+    },
+  );
+  assert.throws(
+    () =>
+      validateCustomTemplate(
+        {
+          id: "template-1",
+          name: "Template",
+          category: "hero",
+          elements: [],
+        },
+        "payload.template",
+      ),
+    {
+      message:
+        /^payload\.template\.category must be one of: title, section, content, media, comparison, blank$/,
+    },
+  );
+});
+
+test("validateCustomTemplatePatch accepts partial template patches and rejects invalid fields", () => {
+  assert.equal(
+    validateCustomTemplatePatch({ name: "Updated" }, "payload.patch").name,
+    "Updated",
+  );
+  assert.throws(
+    () => validateCustomTemplatePatch({ id: "template-2" }, "payload.patch"),
+    { message: /^payload\.patch\.id is not part of the current schema$/ },
+  );
+  assert.throws(
+    () => validateCustomTemplatePatch({ styleMode: "fluid" }, "payload.patch"),
+    {
+      message: /^payload\.patch\.styleMode must be one of: fixed, theme-aware$/,
+    },
   );
 });
 

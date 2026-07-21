@@ -28,6 +28,11 @@ const sourceRef = {
   linkedAt: "2026-07-02T20:42:41Z",
   blockKind: "text",
 };
+const validTextElementPayload = {
+  kind: "text",
+  box: { x: 1, y: 2, w: 30, h: 10 },
+  content: { kind: "text", text: "Body" },
+};
 
 const validPayloads: Record<string, Record<string, unknown>> = {
   ADD_SLIDE: { type: "ADD_SLIDE", afterSlideId: null },
@@ -42,26 +47,26 @@ const validPayloads: Record<string, Record<string, unknown>> = {
   ADD_ELEMENT: {
     type: "ADD_ELEMENT",
     slideId: "slide-1",
-    element: { kind: "text" },
+    element: validTextElementPayload,
   },
   UPDATE_ELEMENT: {
     type: "UPDATE_ELEMENT",
     slideId: "slide-1",
     elementId: "el-1",
-    patch: { box: { x: 1 } },
+    patch: { box: { x: 1, y: 2, w: 30, h: 10 } },
   },
   UPDATE_ELEMENT_CONTENT: {
     type: "UPDATE_ELEMENT_CONTENT",
     slideId: "slide-1",
     elementId: "el-1",
-    content: { text: "Body" },
+    content: { kind: "text", text: "Body" },
     role: "body",
   },
   UPDATE_ELEMENT_DESIGN_OVERRIDES: {
     type: "UPDATE_ELEMENT_DESIGN_OVERRIDES",
     slideId: "slide-1",
     elementId: "el-1",
-    designOverrides: { fill: "red" },
+    designOverrides: { fill: { value: "#ff0000" } },
   },
   REMOVE_ELEMENT: {
     type: "REMOVE_ELEMENT",
@@ -377,6 +382,15 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ],
   ],
   [
+    "ADD_ELEMENT",
+    {
+      type: "ADD_ELEMENT",
+      slideId: "slide-1",
+      element: { kind: "text", box: { x: 1, y: 2, w: 3, h: 4 } },
+    },
+    ["payload.element.content must be an object"],
+  ],
+  [
     "UPDATE_ELEMENT",
     { type: "UPDATE_ELEMENT", slideId: "", elementId: "", patch: null },
     [
@@ -384,6 +398,16 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
       "payload.elementId must be a non-empty string.",
       "payload.patch must be an object.",
     ],
+  ],
+  [
+    "UPDATE_ELEMENT",
+    {
+      type: "UPDATE_ELEMENT",
+      slideId: "slide-1",
+      elementId: "el-1",
+      patch: { box: { x: 1 } },
+    },
+    ["payload.patch.box.y must be a finite number"],
   ],
   [
     "UPDATE_ELEMENT_CONTENT",
@@ -403,6 +427,16 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
   ],
   [
     "UPDATE_ELEMENT_CONTENT",
+    {
+      type: "UPDATE_ELEMENT_CONTENT",
+      slideId: "slide-1",
+      elementId: "el-1",
+      content: { kind: "visual", visualId: "" },
+    },
+    ["payload.content.visualId must be a non-empty string"],
+  ],
+  [
+    "UPDATE_ELEMENT_CONTENT",
     { type: "UPDATE_ELEMENT_CONTENT", slideId: "slide-1", elementId: "el-1" },
     ["payload.content or payload.role must be provided."],
   ],
@@ -419,6 +453,16 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
       "payload.elementId must be a non-empty string.",
       "payload.designOverrides must be an object.",
     ],
+  ],
+  [
+    "UPDATE_ELEMENT_DESIGN_OVERRIDES",
+    {
+      type: "UPDATE_ELEMENT_DESIGN_OVERRIDES",
+      slideId: "slide-1",
+      elementId: "el-1",
+      designOverrides: { fill: "red" },
+    },
+    ["payload.designOverrides.fill must be an object"],
   ],
   [
     "REMOVE_ELEMENT",
@@ -619,6 +663,21 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ],
   ],
   [
+    "SET_ELEMENT_PATCHES",
+    {
+      type: "SET_ELEMENT_PATCHES",
+      slideId: "slide-1",
+      patchesById: {
+        "": { hidden: true },
+        "el-1": { hidden: "yes" },
+      },
+    },
+    [
+      "payload.patchesById keys must be non-empty strings.",
+      "payload.patchesById.el-1.hidden must be a boolean",
+    ],
+  ],
+  [
     "SET_PRESENTATION_THEME",
     { type: "SET_PRESENTATION_THEME", themeId: "" },
     ["payload.themeId must be a non-empty string."],
@@ -642,9 +701,22 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ["payload.format must be a non-empty string."],
   ],
   [
+    "SET_CANVAS_FORMAT",
+    { type: "SET_CANVAS_FORMAT", format: "1:1" },
+    ["payload.format must be one of: 16:9, 4:3."],
+  ],
+  [
     "CREATE_MASTER",
     { type: "CREATE_MASTER", master: null },
     ["payload.master must be an object."],
+  ],
+  [
+    "CREATE_MASTER",
+    {
+      type: "CREATE_MASTER",
+      master: { id: "master-1", name: "Master", elements: "bad" },
+    },
+    ["payload.master.elements must be an array"],
   ],
   [
     "UPDATE_MASTER",
@@ -653,6 +725,11 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
       "payload.masterId must be a non-empty string.",
       "payload.patch must be an object.",
     ],
+  ],
+  [
+    "UPDATE_MASTER",
+    { type: "UPDATE_MASTER", masterId: "master-1", patch: { name: "" } },
+    ["payload.patch.name must be a non-empty string"],
   ],
   [
     "DELETE_MASTER",
@@ -685,6 +762,15 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ],
   ],
   [
+    "ADD_SLIDE_FROM_TEMPLATE",
+    {
+      type: "ADD_SLIDE_FROM_TEMPLATE",
+      templateId: "title",
+      visualId: 42,
+    },
+    ["payload.visualId must be a non-empty string when provided."],
+  ],
+  [
     "APPLY_SLIDE_TEMPLATE",
     { type: "APPLY_SLIDE_TEMPLATE", slideId: "", templateId: "" },
     [
@@ -693,9 +779,38 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
     ],
   ],
   [
+    "APPLY_SLIDE_TEMPLATE",
+    {
+      type: "APPLY_SLIDE_TEMPLATE",
+      slideId: "slide-1",
+      templateId: "title",
+      visualId: "",
+      mode: "append",
+    },
+    [
+      "payload.visualId must be a non-empty string when provided.",
+      'payload.mode must be "replace" or "preserve".',
+    ],
+  ],
+  [
     "CREATE_CUSTOM_TEMPLATE",
     { type: "CREATE_CUSTOM_TEMPLATE", template: null },
     ["payload.template must be an object."],
+  ],
+  [
+    "CREATE_CUSTOM_TEMPLATE",
+    {
+      type: "CREATE_CUSTOM_TEMPLATE",
+      template: {
+        id: "template-1",
+        name: "Template",
+        category: "hero",
+        elements: [],
+      },
+    },
+    [
+      "payload.template.category must be one of: title, section, content, media, comparison, blank",
+    ],
   ],
   [
     "UPDATE_CUSTOM_TEMPLATE",
@@ -704,6 +819,15 @@ const invalidPayloads: Array<[string, Record<string, unknown>, string[]]> = [
       "payload.templateId must be a non-empty string.",
       "payload.patch must be an object.",
     ],
+  ],
+  [
+    "UPDATE_CUSTOM_TEMPLATE",
+    {
+      type: "UPDATE_CUSTOM_TEMPLATE",
+      templateId: "template-1",
+      patch: { styleMode: "fluid" },
+    },
+    ["payload.patch.styleMode must be one of: fixed, theme-aware"],
   ],
   [
     "DELETE_CUSTOM_TEMPLATE",
