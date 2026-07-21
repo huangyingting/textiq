@@ -237,9 +237,6 @@ function preferredDisabledReason(
       ) ?? "missing-selection"
     );
   }
-  if (descriptor.id === "connector.create") {
-    return "missing-handler";
-  }
   if (
     context.isDecorationSelected === true &&
     !descriptor.currentObjects.includes("decoration")

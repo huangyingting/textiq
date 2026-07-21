@@ -405,6 +405,13 @@ describe("SlideNodeRenderer content variants", () => {
                       fontFamily: "Mono",
                     },
                   },
+                  {
+                    text: " unsafe",
+                    link: "javascript:alert(1)",
+                    localStyle: {
+                      color: `#123456";background:url(javascript:alert(1))`,
+                    },
+                  },
                 ],
               },
               {
@@ -438,7 +445,9 @@ describe("SlideNodeRenderer content variants", () => {
     assert.match(html, /Text: One Two/);
     assert.match(html, /1\./);
     assert.match(html, /•/);
-    assert.match(html, /href="https:\/\/example.com"/);
+    assert.match(html, /href="https:\/\/example.com\/"/);
+    assert.doesNotMatch(html, /javascript:alert/);
+    assert.doesNotMatch(html, /background:url/);
     assert.match(html, /font-family:monospace/);
     assert.match(html, /letter-spacing:0.05em/);
     assert.match(html, /text-transform:uppercase/);

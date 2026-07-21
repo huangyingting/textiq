@@ -163,6 +163,44 @@ describe("SelectMenu keyboard interaction", () => {
     });
   });
 
+  test("ArrowUp skips disabled options while opening and navigating", () => {
+    withPortalDom(() => {
+      const { renderer, changes } = mountSelectMenu([
+        { value: "one", label: "One" },
+        { value: "two", label: "Two", disabled: true },
+        { value: "three", label: "Three" },
+        { value: "four", label: "Four", disabled: true },
+      ]);
+
+      pressTriggerKey(renderer, "ArrowDown");
+      assert.match(
+        getListbox(renderer).props["aria-activedescendant"] as string,
+        /-one$/,
+      );
+
+      pressTriggerKey(renderer, "ArrowUp");
+      assert.match(
+        getListbox(renderer).props["aria-activedescendant"] as string,
+        /-three$/,
+      );
+
+      pressListboxKey(renderer, "ArrowUp");
+      assert.match(
+        getListbox(renderer).props["aria-activedescendant"] as string,
+        /-one$/,
+      );
+
+      pressListboxKey(renderer, "ArrowUp");
+      assert.match(
+        getListbox(renderer).props["aria-activedescendant"] as string,
+        /-three$/,
+      );
+
+      pressListboxKey(renderer, "Enter");
+      assert.deepEqual(changes, ["three"]);
+    });
+  });
+
   test("Escape closes the listbox and restores focus to the trigger", () => {
     withPortalDom(() => {
       const { renderer, changes, focusCalls, openChanges } = mountSelectMenu();

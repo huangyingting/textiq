@@ -82,8 +82,8 @@ describe("resolveSlideCommandPaletteCommands", () => {
     assert.equal(command(ctx, "shape.update-fill").disabledReason, undefined);
     assert.equal(
       command(context({ selectedNode: buildTextNode() }), "connector.create")
-        .disabledReasonCode,
-      "missing-handler",
+        .disabledReason,
+      undefined,
     );
     assert.equal(
       command(ctx, "selection.group").disabledReasonCode,

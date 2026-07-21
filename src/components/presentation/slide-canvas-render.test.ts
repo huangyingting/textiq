@@ -2047,7 +2047,7 @@ describe("SlideNodeRenderer resolved node content branches", () => {
       )
       .join("\n");
 
-    assert.match(html, /href="https:\/\/example.com"/);
+    assert.match(html, /href="https:\/\/example.com\/"/);
     assert.doesNotMatch(html, /Shape label/);
     assert.match(html, /Revenue/);
     assert.match(html, /connector-start-arrow-presentation-render-connector/);
@@ -2411,7 +2411,7 @@ describe("SlideCanvas E01 rendering coverage", () => {
     ];
     const html = nodes.map(renderResolvedNodeMarkup).join("");
 
-    assert.match(html, /href="https:\/\/example.com"/);
+    assert.match(html, /href="https:\/\/example.com\/"/);
     assert.match(html, /line-through/);
     assert.match(html, /rotate\(12deg\) scaleX\(-1\) scaleY\(-1\)/);
     assert.match(html, /M 50 0 L 100 100 L 0 100 Z/);

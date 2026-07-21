@@ -220,7 +220,7 @@ test("inline text DOM adapter serializes list, style, and text-node DOM branches
       true,
     );
     assert.equal(
-      paragraphs[1]?.runs?.some((run) => run.link === "https://example.com"),
+      paragraphs[1]?.runs?.some((run) => run.link === "https://example.com/"),
       true,
     );
     assert.equal(
@@ -229,6 +229,103 @@ test("inline text DOM adapter serializes list, style, and text-node DOM branches
     );
     assert.doesNotMatch(paragraphs[1]?.text ?? "", /hidden|locked|\n/);
     assert.deepEqual(paragraphs[2]?.list, { kind: "number", indent: 1 });
+  });
+});
+
+test("inline text DOM adapter preserves all safe run fields across HTML round trip", () => {
+  withHappyDom((window) => {
+    const container = createContainer(window);
+    const paragraphs: Paragraph[] = [
+      {
+        id: "p-rich-roundtrip",
+        text: "Safe rich link",
+        runs: [
+          {
+            text: "Safe rich link",
+            bold: true,
+            italic: true,
+            underline: true,
+            strikethrough: true,
+            code: true,
+            link: "https://example.com/docs?x=1",
+            localStyle: {
+              color: "#123456",
+              fontSizePt: 13,
+              fontFamily: "Aptos, sans-serif",
+            },
+          },
+        ],
+      },
+    ];
+
+    container.innerHTML = paragraphsToHtml(paragraphs);
+    const [roundTripped] = domToParagraphs(container, "node", paragraphs);
+
+    assert.equal(roundTripped?.text, "Safe rich link");
+    assert.deepEqual(roundTripped?.runs, [
+      {
+        text: "Safe rich link",
+        bold: true,
+        italic: true,
+        underline: true,
+        strikethrough: true,
+        code: true,
+        link: "https://example.com/docs?x=1",
+        localStyle: {
+          color: "#123456",
+          fontSizePt: 13,
+          fontFamily: "Aptos, sans-serif",
+        },
+      },
+    ]);
+  });
+});
+
+test("inline text DOM adapter drops unsafe links and malformed color values", () => {
+  withHappyDom((window) => {
+    const html = paragraphsToHtml([
+      {
+        id: "p-unsafe",
+        text: "Unsafe",
+        runs: [
+          {
+            text: "Unsafe",
+            link: "javascript:alert(1)",
+            localStyle: {
+              color: `#123456";onclick="alert(1)`,
+              fontSizePt: 12,
+            },
+          },
+        ],
+      },
+    ]);
+    assert.doesNotMatch(html, /javascript:alert/);
+    assert.doesNotMatch(html, /onclick/);
+    assert.doesNotMatch(html, /#123456&quot;/);
+
+    const container = createContainer(window);
+    container.innerHTML = "<p>Click me</p>";
+    const adapter = createInlineTextDomAdapter({
+      nodeId: "unsafe-link",
+      initialParagraphs: [{ id: "p", text: "Click me" }],
+    });
+
+    selectNodeContents(window, container.firstElementChild ?? container);
+    adapter.applyCommand(container, {
+      command: "link",
+      value: "data:text/html,<script>alert(1)</script>",
+    });
+    assert.equal(container.querySelector("a"), null);
+
+    selectNodeContents(window, container.firstElementChild ?? container);
+    adapter.applyCommand(container, {
+      command: "link",
+      value: "https://example.com/safe",
+    });
+    assert.equal(
+      container.querySelector("a")?.getAttribute("href"),
+      "https://example.com/safe",
+    );
   });
 });
 
@@ -285,7 +382,7 @@ test("inline text DOM adapter applies and removes toolbar selection commands", (
       adapter.applyCommand(container, command);
     }
     assert.match(container.innerHTML, /font-weight/);
-    assert.match(container.innerHTML, /href="https:\/\/example.com"/);
+    assert.match(container.innerHTML, /href="https:\/\/example.com\/"/);
 
     selectNodeContents(window, container.querySelector("a") ?? container);
     adapter.applyCommand(container, { command: "unlink" });

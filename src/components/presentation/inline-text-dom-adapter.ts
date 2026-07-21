@@ -1,6 +1,13 @@
 import type { InlineTextCommandPayload } from "@/lib/presentation/inline-text-commands";
 import type { Paragraph, TextRun } from "@/lib/presentation/schema";
 import { mergeRuns, shouldStoreRuns } from "@/lib/presentation/rich-text";
+import {
+  normalizeInlineTextLink,
+  sanitizeInlineTextColor,
+  sanitizeInlineTextCssFontSize,
+  sanitizeInlineTextFontFamily,
+  sanitizeInlineTextFontSizePt,
+} from "@/lib/presentation/rich-text-safety";
 
 export type InlineTextAlign = "left" | "center" | "right";
 
@@ -40,6 +47,10 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replace(/'/g, "&#39;");
+}
+
 function styleFromElement(
   element: HTMLElement,
   inherited: InlineRunStyle,
@@ -52,21 +63,32 @@ function styleFromElement(
   if (tagName === "s" || tagName === "strike" || tagName === "del") {
     next.strikethrough = true;
   }
-  if (tagName === "a") next.link = element.getAttribute("href") ?? undefined;
+  if (tagName === "code") next.code = true;
+  if (tagName === "a") {
+    const href = normalizeInlineTextLink(element.getAttribute("href"));
+    if (href) next.link = href;
+  }
 
   const fontWeight = element.style.fontWeight;
   if (fontWeight === "bold" || Number(fontWeight) >= 600) next.bold = true;
   if (element.style.fontStyle === "italic") next.italic = true;
-  if (element.style.textDecorationLine.includes("underline")) {
+  const textDecoration = [
+    element.style.textDecorationLine,
+    element.style.textDecoration,
+  ].join(" ");
+  if (textDecoration.includes("underline")) {
     next.underline = true;
   }
-  if (element.style.textDecorationLine.includes("line-through")) {
+  if (textDecoration.includes("line-through")) {
     next.strikethrough = true;
   }
 
-  const color = element.style.color || element.getAttribute("color");
+  const color = sanitizeInlineTextColor(
+    element.style.color || element.getAttribute("color"),
+  );
   const fontSize = element.style.fontSize;
-  if (color || fontSize) {
+  const fontFamily = sanitizeInlineTextFontFamily(element.style.fontFamily);
+  if (color || fontSize || fontFamily) {
     next.localStyle = { ...next.localStyle };
     if (color) next.localStyle.color = color;
     if (fontSize.endsWith("pt")) {
@@ -74,6 +96,7 @@ function styleFromElement(
     } else if (fontSize.endsWith("px")) {
       next.localStyle.fontSizePt = Number.parseFloat(fontSize) * 0.75;
     }
+    if (fontFamily) next.localStyle.fontFamily = fontFamily;
   }
   return next;
 }
@@ -215,14 +238,26 @@ function runToHtml(run: TextRun): string {
         .join(" ")}`,
     );
   }
-  if (typeof run.localStyle?.color === "string") {
-    styles.push(`color:${run.localStyle.color}`);
+  const color = sanitizeInlineTextColor(run.localStyle?.color);
+  if (color) {
+    styles.push(`color:${color}`);
   }
-  if (typeof run.localStyle?.fontSizePt === "number") {
-    styles.push(`font-size:${run.localStyle.fontSizePt}pt`);
+  const fontSizePt = sanitizeInlineTextFontSizePt(run.localStyle?.fontSizePt);
+  if (fontSizePt !== null) {
+    styles.push(`font-size:${fontSizePt}pt`);
   }
-  const styleAttr = styles.length > 0 ? ` style="${styles.join(";")}"` : "";
-  return `<span${styleAttr}>${escapeHtml(run.text)}</span>`;
+  const fontFamily = sanitizeInlineTextFontFamily(run.localStyle?.fontFamily);
+  if (fontFamily) {
+    styles.push(`font-family:${fontFamily}`);
+  }
+  const styleAttr =
+    styles.length > 0 ? ` style="${escapeAttribute(styles.join(";"))}"` : "";
+  let html = escapeHtml(run.text);
+  if (run.code) html = `<code>${html}</code>`;
+  if (styleAttr) html = `<span${styleAttr}>${html}</span>`;
+  const link = normalizeInlineTextLink(run.link);
+  if (link) html = `<a href="${escapeAttribute(link)}">${html}</a>`;
+  return html;
 }
 
 type OrderedListNumberStyle = NonNullable<
@@ -593,11 +628,13 @@ export function createInlineTextDomAdapter({
           adjustListIndent(container, -1);
           break;
         case "link":
-          if (value) {
+          {
+            const href = normalizeInlineTextLink(value);
+            if (!href) return;
             wrapRange(
               container,
               (anchor) => {
-                anchor.setAttribute("href", value);
+                anchor.setAttribute("href", href);
               },
               "a",
             );
@@ -607,16 +644,20 @@ export function createInlineTextDomAdapter({
           unlinkRange(container);
           break;
         case "color":
-          if (value) {
+          {
+            const color = sanitizeInlineTextColor(value);
+            if (!color) return;
             wrapRange(container, (span) => {
-              span.style.color = value;
+              span.style.color = color;
             });
           }
           break;
         case "font-size":
-          if (value) {
+          {
+            const fontSize = sanitizeInlineTextCssFontSize(value);
+            if (!fontSize) return;
             wrapRange(container, (span) => {
-              span.style.fontSize = value;
+              span.style.fontSize = fontSize;
             });
           }
           break;

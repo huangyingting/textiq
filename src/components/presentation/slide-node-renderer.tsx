@@ -32,6 +32,12 @@ import type {
   ConnectorEndpoint,
   LayoutBox,
 } from "@/lib/presentation/schema";
+import {
+  normalizeInlineTextLink,
+  sanitizeInlineTextColor,
+  sanitizeInlineTextFontFamily,
+  sanitizeInlineTextFontSizePt,
+} from "@/lib/presentation/rich-text-safety";
 import { tableCellEditableText } from "@/lib/presentation/table-cell-editing";
 import { truncateNarrationText } from "@/lib/presentation/a11y/node-narration";
 import { colorValueToCss, fillStyleToCss } from "./fill-style-css";
@@ -240,6 +246,9 @@ export function interactiveNodeCursor({
 // ---------------------------------------------------------------------------
 
 function runStyle(run: TextRun): React.CSSProperties {
+  const color = sanitizeInlineTextColor(run.localStyle?.color);
+  const fontSizePt = sanitizeInlineTextFontSizePt(run.localStyle?.fontSizePt);
+  const fontFamily = sanitizeInlineTextFontFamily(run.localStyle?.fontFamily);
   return {
     ...(run.bold ? { fontWeight: "bold" } : {}),
     ...(run.italic ? { fontStyle: "italic" } : {}),
@@ -254,23 +263,20 @@ function runStyle(run: TextRun): React.CSSProperties {
         }
       : {}),
     ...(run.code ? { fontFamily: "monospace" } : {}),
-    ...(run.localStyle?.color ? { color: run.localStyle.color as string } : {}),
-    ...(run.localStyle?.fontSizePt
-      ? { fontSize: `${run.localStyle.fontSizePt}pt` }
-      : {}),
-    ...(run.localStyle?.fontFamily
-      ? { fontFamily: run.localStyle.fontFamily as string }
-      : {}),
+    ...(color ? { color } : {}),
+    ...(fontSizePt !== null ? { fontSize: `${fontSizePt}pt` } : {}),
+    ...(fontFamily ? { fontFamily } : {}),
   };
 }
 
 function renderTextRuns(runs: readonly TextRun[]): JSX.Element[] {
   return runs.map((run, i) => {
     const style = runStyle(run);
-    return run.link ? (
+    const link = normalizeInlineTextLink(run.link);
+    return link ? (
       <a
         key={i}
-        href={run.link}
+        href={link}
         style={style}
         target="_blank"
         rel="noopener noreferrer"
