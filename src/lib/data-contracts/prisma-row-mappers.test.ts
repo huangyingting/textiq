@@ -150,7 +150,7 @@ test("maps comment, tag, workspace, and literal rows", () => {
   assert.equal(comment.anchor.kind, "text");
   assert.equal(comment.updatedAt, "2026-06-25T15:15:00.000Z");
 
-  const tableComment = mapCommentRowToDto({
+  const tableRow: CommentDtoRow = {
     id: "comment-table",
     documentId: "doc-1",
     authorId: "user-1",
@@ -165,13 +165,35 @@ test("maps comment, tag, workspace, and literal rows", () => {
     anchorGeometry: null,
     createdAt: now,
     updatedAt: now,
-  } as CommentDtoRow);
+  } as CommentDtoRow;
+  const tableComment = mapCommentRowToDto(tableRow);
   assert.deepEqual(tableComment.anchor, {
     kind: "document-block",
     blockKind: "table",
     text: "Quarterly metrics",
     nodeId: "table-1",
   });
+  const tableCommentWithoutNodeId = mapCommentRowToDto({
+    ...tableRow,
+    id: "comment-table-floating",
+    anchorText: null,
+    anchorNodeId: null,
+  });
+  assert.deepEqual(tableCommentWithoutNodeId.anchor, {
+    kind: "document-block",
+    blockKind: "table",
+    text: null,
+    nodeId: null,
+  });
+  assert.throws(
+    () =>
+      mapCommentRowToDto({
+        ...tableRow,
+        id: "comment-table-slide-conflict",
+        slideId: "slide-1",
+      }),
+    /Slide comment anchors must not also carry anchorType/,
+  );
 
   const tag = mapTagRowToDto({
     id: "tag-1",

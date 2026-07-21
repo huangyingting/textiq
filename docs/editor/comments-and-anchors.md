@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-21"
 description: "This document describes comment threads and their document/slide anchors."
 ---
 
@@ -61,14 +61,25 @@ flow is re-thrown rather than adapted.
 
 Top-level comments may be anchored in three forms.
 
-| Anchor                             | Fields                                                                             | Meaning                                                                          |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Text anchor                        | `anchorType="text"`, `anchorText`                                                  | Anchors to a document text selection.                                            |
-| Visual/table document block anchor | `anchorType="visual"` or `"table"`, optional `anchorText`, optional `anchorNodeId` | Anchors to a visual or table block node; `anchorNodeId` is the durable block id. |
-| Slide anchor                       | `slideId`, optional `elementId`, optional `{x,y}` geometry                         | Anchors to a deck slide or slide element.                                        |
+| Anchor                       | Fields                                                                | Meaning                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Text anchor                  | `anchorType="text"`, `anchorText`                                     | Anchors to a document text selection.                                                                                           |
+| Visual document block anchor | `anchorType="visual"`, optional `anchorText`, optional `anchorNodeId` | Anchors to a visual block; `anchorNodeId` is the durable visual/block id.                                                       |
+| Table document block anchor  | `anchorType="table"`, optional `anchorText`, optional `anchorNodeId`  | Anchors to a table block; `anchorNodeId` is the durable table block id (`bid`) when present, never a transient Lexical NodeKey. |
+| Slide anchor                 | `slideId`, optional `elementId`, optional `{x,y}` geometry            | Anchors to a deck slide or slide element.                                                                                       |
 
 Slide anchors are mutually exclusive with document block anchor fields. If
 `slideId` is present, document block anchor fields are ignored.
+
+Persisted table anchors use the same document-block columns as visual anchors:
+`anchorType` must be the current literal `"table"`, optional `anchorText`
+stores the selected table label/snippet, and `anchorNodeId` stores the durable
+table block id when the caller can resolve one. The persisted-contract validator
+accepts `"table"` as a current anchor type, rejects unknown anchor types, rejects
+records that combine table/document-block fields with slide anchors, and keeps a
+missing `anchorNodeId` as `null` rather than inventing an id. If the table block
+is deleted later, the stored durable id remains the historical anchor target for
+orphan/restore UI instead of being rewritten to a runtime node key.
 
 ## Slide Anchor Geometry
 
