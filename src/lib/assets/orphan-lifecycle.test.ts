@@ -44,29 +44,44 @@ describe("purgeExpiredAssetRows", () => {
   it("deletes storage first and keeps failed deletes in the DB", async () => {
     const deletedKeys: string[] = [];
     const deletedIds: string[] = [];
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (line) => {
+      errors.push(String(line));
+    };
 
-    const count = await purgeExpiredAssetRows({
-      domain: "brand",
-      message: "brand assets physically purged",
-      logContext: {},
-      expiredAssets: [
-        { id: "ok", storageKey: "owner/ok.png" },
-        { id: "fail", storageKey: "owner/fail.png" },
-      ],
-      storage: {
-        async delete(key) {
-          if (key.includes("fail")) throw new Error("boom");
-          deletedKeys.push(key);
+    try {
+      const count = await purgeExpiredAssetRows({
+        domain: "brand",
+        message: "brand assets physically purged",
+        logContext: {},
+        expiredAssets: [
+          { id: "ok", storageKey: "owner/ok.png" },
+          { id: "fail", storageKey: "owner/fail.png" },
+        ],
+        storage: {
+          async delete(key) {
+            if (key.includes("fail")) throw new Error("boom");
+            deletedKeys.push(key);
+          },
         },
-      },
-      async deleteMany(args) {
-        deletedIds.push(...args.where.id.in);
-        return { count: args.where.id.in.length };
-      },
-    });
+        async deleteMany(args) {
+          deletedIds.push(...args.where.id.in);
+          return { count: args.where.id.in.length };
+        },
+      });
 
-    assert.equal(count, 1);
-    assert.deepEqual(deletedKeys, ["owner/ok.png"]);
-    assert.deepEqual(deletedIds, ["ok"]);
+      assert.equal(count, 1);
+      assert.deepEqual(deletedKeys, ["owner/ok.png"]);
+      assert.deepEqual(deletedIds, ["ok"]);
+      assert.equal(errors.length, 1);
+      const logged = JSON.parse(errors[0]);
+      assert.equal(logged.domain, "brand");
+      assert.equal(logged.assetId, "fail");
+      assert.equal("storageKey" in logged, false);
+      assert.ok(!errors[0].includes("owner/fail.png"));
+    } finally {
+      console.error = originalError;
+    }
   });
 });
