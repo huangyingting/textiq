@@ -33,7 +33,11 @@ import {
   normalizeSelectionFrame,
   selectNodesInFrame,
 } from "@/lib/presentation/selection-geometry";
-import { connectorEndpointFromSlidePoint } from "@/lib/presentation/connector-geometry";
+import {
+  connectorEndpointFromSlidePoint,
+  connectorEndpointSlidePoint,
+  connectorFrameFromSlidePoints,
+} from "@/lib/presentation/connector-geometry";
 import type { StageHitCandidate } from "@/lib/presentation/stage-hit-test";
 import type { ResolvedSlideRenderTree } from "@/lib/presentation/render-tree";
 /* node:coverage ignore next 6 */
@@ -93,12 +97,17 @@ import {
   resolveStageNodeTarget,
   type StageNodeInteractionTarget,
 } from "./stage-targeting";
-import { stageNodeMenuLabel } from "./stage-context-menu";
+import {
+  nextUnlockedContextLayerId,
+  overlapContextLayers,
+  stageNodeMenuLabel,
+} from "./stage-context-menu";
 import {
   adjacentNodeId,
   childIdsForGroup,
   findNodeById,
   layoutFramesExcluding,
+  parentGroupIdForNode,
 } from "./selection-traversal";
 import {
   clearSelection,
@@ -191,6 +200,21 @@ export function topLevelSelectedNodeIds(
   return result;
 }
 
+export function nextAltClickOverlapNodeId(
+  hits: readonly StageHitCandidate[],
+  selectedIds: readonly string[],
+): string | null {
+  const candidates = overlapContextLayers(hits.map((hit) => hit.node));
+  if (candidates.length === 0) return null;
+  const selected = candidates.find((candidate) =>
+    selectedIds.includes(candidate.id),
+  );
+  const currentNodeId = selected?.id ?? candidates[0]?.id;
+  return currentNodeId
+    ? nextUnlockedContextLayerId(candidates, currentNodeId)
+    : null;
+}
+
 function collectTransformEntriesForNodeTree(
   node: SlideChildNode,
 ): MultiSelectionTransformEntry[] {
@@ -224,6 +248,60 @@ export function collectMovePreviewFrames(
     }
   }
   return frames;
+}
+
+interface ConnectorEndpointDragValue {
+  from: ConnectorEndpoint;
+  to: ConnectorEndpoint;
+  frame: LayoutBox["frame"];
+}
+
+function connectorEndpointDragValuesEqual(
+  left: ConnectorEndpointDragValue,
+  right: ConnectorEndpointDragValue,
+): boolean {
+  return (
+    connectorEndpointsEqual(left.from, right.from) &&
+    connectorEndpointsEqual(left.to, right.to) &&
+    framesEqual(left.frame, right.frame)
+  );
+}
+
+export function normalizeConnectorEndpointDragValue({
+  nodes,
+  connectorFrame,
+  from,
+  to,
+  fromPoint: fromPointOverride,
+  toPoint: toPointOverride,
+}: {
+  nodes: readonly SlideChildNode[];
+  connectorFrame: LayoutBox["frame"];
+  from: ConnectorEndpoint;
+  to: ConnectorEndpoint;
+  fromPoint?: { x: number; y: number };
+  toPoint?: { x: number; y: number };
+}): ConnectorEndpointDragValue {
+  const resolveNodeFrame = (nodeId: string) =>
+    findNodeById(nodes, nodeId)?.layout?.frame;
+  const fromPoint =
+    fromPointOverride ??
+    connectorEndpointSlidePoint(from, connectorFrame, resolveNodeFrame);
+  const toPoint =
+    toPointOverride ??
+    connectorEndpointSlidePoint(to, connectorFrame, resolveNodeFrame);
+  const frame = connectorFrameFromSlidePoints(fromPoint, toPoint);
+  return {
+    frame,
+    from:
+      fromPointOverride || from.kind === "point"
+        ? connectorEndpointFromSlidePoint(fromPoint, frame)
+        : from,
+    to:
+      toPointOverride || to.kind === "point"
+        ? connectorEndpointFromSlidePoint(toPoint, frame)
+        : to,
+  };
 }
 
 /* node:coverage ignore next 1462 */
@@ -450,6 +528,29 @@ export function useStageGestureController(
       if (node) {
         setStageAnnouncement(`${stageNodeMenuLabel(node)} selected`);
       }
+    }
+  }
+
+  function selectNodeFromHits(
+    nodeId: string,
+    hits: readonly StageHitCandidate[],
+  ) {
+    const node = activeSlide
+      ? findNodeById(activeSlide.children, nodeId)
+      : null;
+    setSelection((s) => setSelectedNodeIds(s, [nodeId]));
+    setFocusedNodeId(nodeId);
+    focusSelectedNodeSoon(nodeId);
+    if (node && activeSlide) {
+      applyStageTargetContext({
+        node,
+        nodeId,
+        candidateIds: hits.map((hit) => hit.node.id),
+        parentGroupId: parentGroupIdForNode(activeSlide.children, nodeId),
+      });
+    }
+    if (node) {
+      setStageAnnouncement(`${stageNodeMenuLabel(node)} selected`);
     }
   }
 
@@ -896,7 +997,15 @@ export function useStageGestureController(
             }`,
           );
         } else {
-          selectTopFromHits(hits);
+          const nextOverlapNodeId = nextAltClickOverlapNodeId(
+            hits,
+            selectedIds,
+          );
+          if (nextOverlapNodeId) {
+            selectNodeFromHits(nextOverlapNodeId, hits);
+          } else {
+            selectTopFromHits(hits);
+          }
         }
       },
     });
@@ -1521,29 +1630,65 @@ export function useStageGestureController(
     setActiveConnectorEndpoint({ nodeId, endpoint });
     setSelection((s) => setSelectedNodeIds(s, [nodeId]));
     const connectorFrame = node.layout.frame;
-    const startEndpoint = node.content[endpoint];
-    const gesture = createSingleCommitGesture<ConnectorEndpoint>({
-      initialValue: startEndpoint,
-      equals: connectorEndpointsEqual,
+    const startValue: ConnectorEndpointDragValue = {
+      from: node.content.from,
+      to: node.content.to,
+      frame: connectorFrame,
+    };
+    const gesture = createSingleCommitGesture<ConnectorEndpointDragValue>({
+      initialValue: startValue,
+      equals: connectorEndpointDragValuesEqual,
       onPreview: (value) =>
-        setConnectorGestureDraft(value ? { nodeId, endpoint, value } : null),
-      onCommit: (value) =>
-        onDeckChange(
-          updateNodeContent(deck, activeSlide.id, nodeId, {
-            [endpoint]: value,
-          }),
+        setConnectorGestureDraft(
+          value
+            ? {
+                nodeId,
+                endpoint,
+                value: value[endpoint],
+                frame: value.frame,
+                endpoints: { from: value.from, to: value.to },
+              }
+            : null,
         ),
+      onCommit: (value) => {
+        const withContent = updateNodeContent(deck, activeSlide.id, nodeId, {
+          from: value.from,
+          to: value.to,
+        });
+        onDeckChange(
+          updateNodeLayout(withContent, activeSlide.id, nodeId, {
+            frame: value.frame,
+          }),
+        );
+      },
     });
 
     startPointerDragLifecycle(event, {
       onMove: (moveEvent) => {
         const slidePoint = pointPctFromEvent(moveEvent, rect);
-        const snapped =
-          nearestConnectorAnchor(activeSlide.children, slidePoint, nodeId) ??
-          connectorEndpointFromSlidePoint(slidePoint, connectorFrame);
-        gesture.update(snapped);
+        const snapped = nearestConnectorAnchor(
+          activeSlide.children,
+          slidePoint,
+          nodeId,
+        );
+        gesture.update(
+          normalizeConnectorEndpointDragValue({
+            nodes: activeSlide.children,
+            connectorFrame,
+            from:
+              endpoint === "from"
+                ? (snapped ?? node.content.from)
+                : node.content.from,
+            to:
+              endpoint === "to"
+                ? (snapped ?? node.content.to)
+                : node.content.to,
+            fromPoint: !snapped && endpoint === "from" ? slidePoint : undefined,
+            toPoint: !snapped && endpoint === "to" ? slidePoint : undefined,
+          }),
+        );
         setStageAnnouncement(
-          snapped.kind === "node"
+          snapped?.kind === "node"
             ? `Connector ${endpoint} bound to ${snapped.anchor} anchor`
             : `Connector ${endpoint} moved`,
         );

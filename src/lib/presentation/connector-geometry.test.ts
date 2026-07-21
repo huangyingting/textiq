@@ -5,6 +5,8 @@ import type { ConnectorEndpoint, LayoutBox } from "./schema";
 import {
   connectorAnchorPoint,
   connectorEndpointFromSlidePoint,
+  connectorEndpointSlidePoint,
+  connectorFrameFromSlidePoints,
   connectorEndpointToPointFallback,
 } from "./connector-geometry";
 
@@ -82,4 +84,43 @@ test("connectorEndpointToPointFallback preserves node endpoints for zero-size co
   );
 
   assert.strictEqual(converted, endpoint);
+});
+
+test("connectorFrameFromSlidePoints expands around free endpoint drags", () => {
+  const oldFrame: LayoutBox["frame"] = { x: 20, y: 20, w: 20, h: 20 };
+  const from: ConnectorEndpoint = { kind: "point", point: { x: 0, y: 50 } };
+  const toPoint = { x: 60, y: 30 };
+  const fromPoint = connectorEndpointSlidePoint(
+    from,
+    oldFrame,
+    () => undefined,
+  );
+  const nextFrame = connectorFrameFromSlidePoints(fromPoint, toPoint);
+
+  assert.deepEqual(nextFrame, { x: 20, y: 30, w: 40, h: 1 });
+  assert.deepEqual(connectorEndpointFromSlidePoint(fromPoint, nextFrame), {
+    kind: "point",
+    point: { x: 0, y: 0 },
+  });
+  assert.deepEqual(connectorEndpointFromSlidePoint(toPoint, nextFrame), {
+    kind: "point",
+    point: { x: 100, y: 0 },
+  });
+});
+
+test("connectorEndpointSlidePoint resolves bound endpoints without converting them", () => {
+  const endpoint: ConnectorEndpoint = {
+    kind: "node",
+    nodeId: "target-1",
+    anchor: "bottom",
+  };
+
+  assert.deepEqual(
+    connectorEndpointSlidePoint(
+      endpoint,
+      { x: 10, y: 10, w: 20, h: 20 },
+      () => ({ x: 40, y: 50, w: 20, h: 10 }),
+    ),
+    { x: 50, y: 60 },
+  );
 });

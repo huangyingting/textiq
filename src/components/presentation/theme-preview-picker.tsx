@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Search } from "lucide-react";
-import { useMemo, useState, type CSSProperties, type Ref } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type Ref } from "react";
 
 import { Popover } from "@/components/ui/popover";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
@@ -168,6 +168,7 @@ export function ThemePreviewPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ThemeFilter>("all");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const recentKeys = useMemo(
     () =>
       new Set(
@@ -214,6 +215,8 @@ export function ThemePreviewPicker({
       portal
       align="start"
       className="w-[min(460px,calc(100vw-1rem))] overflow-hidden p-0"
+      initialFocusRef={searchInputRef}
+      restoreFocusOnClose
       trigger={
         <button
           ref={triggerRef}
@@ -246,6 +249,7 @@ export function ThemePreviewPicker({
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ds-text-muted"
             />
             <input
+              ref={searchInputRef}
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
               placeholder={`Search ${themes.length} themes by name, style, color, or font`}

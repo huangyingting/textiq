@@ -601,6 +601,13 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
     width: 180,
     height: 72,
   });
+  const popoverFocusEvents: string[] = [];
+  const initialPopoverFocus = {
+    focus: () => popoverFocusEvents.push("initial"),
+  } as unknown as HTMLElement;
+  const restorePopoverFocus = {
+    focus: () => popoverFocusEvents.push("restore"),
+  } as unknown as HTMLElement;
 
   const tree = withFakeReact(
     {
@@ -652,6 +659,9 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
           portal: true,
           anchor: "toolbar",
           "aria-label": "Popover panel",
+          initialFocusRef: { current: initialPopoverFocus },
+          restoreFocusRef: { current: restorePopoverFocus },
+          restoreFocusOnClose: true,
           children: "Panel",
         }),
       ),
@@ -668,6 +678,25 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
   );
   dom.fireDocument("keydown", { key: "Escape" });
   dom.fireDocument("pointerdown", { target: fakeNode() });
+
+  withFakeReact(
+    {
+      states: [{ top: 0, left: 0 }],
+      refs: [triggerRef, panelRef, null, true],
+      runEffects: true,
+    },
+    () =>
+      resolveKnown(
+        Popover({
+          open: false,
+          onClose: () => closed.push("popover-closed"),
+          trigger: React.createElement("button", null, "Open"),
+          restoreFocusRef: { current: restorePopoverFocus },
+          restoreFocusOnClose: true,
+          children: "Panel",
+        }),
+      ),
+  );
 
   const tooltip = withFakeReact(
     {
@@ -755,6 +784,7 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
   assert.match(textContent(overlays), /ETA/);
   assert.ok(preventEvents.includes("mouse"));
   assert.ok(stopEvents.includes("pointer"));
+  assert.deepEqual(popoverFocusEvents, ["initial", "restore"]);
   assert.ok(closed.includes("floating"));
   assert.ok(closed.includes("popover"));
 });

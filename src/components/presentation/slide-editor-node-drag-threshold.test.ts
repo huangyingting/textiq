@@ -329,6 +329,11 @@ describe("createNodeMovePreview", () => {
         nodeId: "node-c",
         endpoint: "from",
         value: { kind: "point", point: { x: 10, y: 20 } },
+        frame: { x: 10, y: 20, w: 30, h: 40 },
+        endpoints: {
+          from: { kind: "point", point: { x: 10, y: 20 } },
+          to: { kind: "point", point: { x: 90, y: 80 } },
+        },
       },
     });
 
@@ -341,6 +346,16 @@ describe("createNodeMovePreview", () => {
     assert.deepEqual(drafts?.get("node-c")?.connectorEndpoints?.from, {
       kind: "point",
       point: { x: 10, y: 20 },
+    });
+    assert.deepEqual(drafts?.get("node-c")?.connectorEndpoints?.to, {
+      kind: "point",
+      point: { x: 90, y: 80 },
+    });
+    assert.deepEqual(drafts?.get("node-c")?.frame, {
+      x: 10,
+      y: 20,
+      w: 30,
+      h: 40,
     });
     assert.equal(
       buildStageNodeGestureDrafts({
