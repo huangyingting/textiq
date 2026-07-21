@@ -627,6 +627,38 @@ describe("resolveDeckRenderTree", () => {
     );
   });
 
+  test("resolves deck chrome logo assets from the active theme package", () => {
+    resetBuilderCounter();
+    const deck = buildDeck([buildCoverSlide()], {
+      assets: { images: {} },
+    });
+    const result = resolveDeckRenderTree(
+      deck,
+      buildMinimalThemePackage("test-package", {
+        chrome: {
+          logo: { enabled: true, assetId: "package-logo" },
+        },
+        assets: {
+          images: {
+            "package-logo": buildImageAsset("package-logo", {
+              src: "/api/brand-assets/owner/logo.png",
+            }),
+          },
+        },
+      }),
+    );
+
+    assert.equal(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "missing-asset" &&
+          diagnostic.nodeId === "deck-chrome-logo",
+      ),
+      false,
+    );
+    assert.equal(result.slides[0].chrome[0]?.content?.type, "image");
+  });
+
   test("diagnoses stale disabled decoration overrides with repair action", () => {
     resetBuilderCounter();
     const deck = buildDeck([buildCoverSlide()], {

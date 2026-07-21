@@ -30,6 +30,10 @@ export const BRAND_MIME_TO_EXT: Record<string, string> = {
 };
 
 const BRAND_EXTENSION_MIME_MAP = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
   ttf: "font/ttf",
   otf: "font/otf",
   woff: "font/woff",

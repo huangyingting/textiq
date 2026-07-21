@@ -69,6 +69,20 @@ export interface BrandOrphanDb {
       logoAssetId: string | null;
       fontAssetId: string | null;
     } | null>;
+    findMany(args: {
+      where: {
+        OR: [
+          { logoAssetId: { in: string[] } },
+          { fontAssetId: { in: string[] } },
+        ];
+      };
+      select: { logoAssetId: true; fontAssetId: true };
+    }): Promise<
+      {
+        logoAssetId: string | null;
+        fontAssetId: string | null;
+      }[]
+    >;
   };
   asset: {
     findMany(args: {
@@ -93,6 +107,27 @@ export interface BrandOrphanDb {
 
 export type BrandOrphanStorage = AssetOrphanStorage;
 
+async function referencedAssetIdsAcrossBrands(
+  db: BrandOrphanDb,
+  assetIds: readonly string[],
+): Promise<Set<string>> {
+  const ids = [...new Set(assetIds)].filter(Boolean);
+  const refs = new Set<string>();
+  if (ids.length === 0) return refs;
+
+  const brands = await db.brand.findMany({
+    where: {
+      OR: [{ logoAssetId: { in: ids } }, { fontAssetId: { in: ids } }],
+    },
+    select: { logoAssetId: true, fontAssetId: true },
+  });
+  for (const brand of brands) {
+    if (brand.logoAssetId) refs.add(brand.logoAssetId);
+    if (brand.fontAssetId) refs.add(brand.fontAssetId);
+  }
+  return refs;
+}
+
 // ---------------------------------------------------------------------------
 // Reconcile a single brand's assets
 // ---------------------------------------------------------------------------
@@ -113,14 +148,16 @@ export async function reconcileBrandAssets(
   });
   if (!brand) return 0;
 
-  const liveRefs = new Set<string>();
-  if (brand.logoAssetId) liveRefs.add(brand.logoAssetId);
-  if (brand.fontAssetId) liveRefs.add(brand.fontAssetId);
-
   const liveAssets = await db.asset.findMany({
     where: { brandId, deletedAt: null },
     select: { id: true },
   });
+  const liveRefs = await referencedAssetIdsAcrossBrands(
+    db,
+    liveAssets.map((asset) => asset.id),
+  );
+  if (brand.logoAssetId) liveRefs.add(brand.logoAssetId);
+  if (brand.fontAssetId) liveRefs.add(brand.fontAssetId);
 
   return markOrphanedAssetIds({
     domain: "brand",
@@ -160,12 +197,19 @@ export async function purgeExpiredBrandAssets(
     },
     select: { id: true, storageKey: true },
   });
+  const liveRefs = await referencedAssetIdsAcrossBrands(
+    db,
+    expiredAssets.map((asset) => asset.id),
+  );
+  const purgeableAssets = expiredAssets.filter(
+    (asset) => !liveRefs.has(asset.id),
+  );
 
   return purgeExpiredAssetRows({
     domain: "brand",
     message: "brand assets physically purged",
     logContext: {},
-    expiredAssets,
+    expiredAssets: purgeableAssets,
     storage,
     deleteMany: (args) => db.asset.deleteMany(args),
   });

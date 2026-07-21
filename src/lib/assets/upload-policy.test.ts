@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  canonicalizeAssetMime,
   buildAssetPolicyMeta,
   formatAssetUploadPolicyError,
   imageDimensionsFromBytes,
@@ -10,7 +11,10 @@ import {
   validateAssetMagicBytes,
   validateAssetUploadPolicy,
 } from "@/lib/assets/upload-policy";
-import { BRAND_LOGO_UPLOAD_POLICY } from "@/lib/brand/asset-policy";
+import {
+  BRAND_FONT_UPLOAD_POLICY,
+  BRAND_LOGO_UPLOAD_POLICY,
+} from "@/lib/brand/asset-policy";
 import { SLIDE_ASSET_UPLOAD_POLICY } from "@/lib/slides/asset-policy";
 
 function createGifBytes(width: number, height: number): Uint8Array {
@@ -212,21 +216,53 @@ describe("asset upload policy validation", () => {
     });
   });
 
-  it("sniffs WEBP content and rejects mismatched font MIME aliases", () => {
+  it("sniffs WEBP content and accepts canonical font MIME aliases", () => {
     const webp = Buffer.from("RIFF0000WEBP");
     assert.equal(sniffAssetMime(webp), "image/webp");
     assert.deepEqual(validateAssetMagicBytes("image/webp", webp), { ok: true });
 
-    for (const [declaredMime, bytes] of [
-      ["application/font-woff", Buffer.from("wOFF")],
-      ["application/font-woff2", Buffer.from("wOF2")],
-      ["application/x-font-ttf", new Uint8Array([0x00, 0x01, 0x00, 0x00])],
-      ["application/x-font-otf", Buffer.from("OTTO")],
+    for (const [declaredMime, canonicalMime, bytes] of [
+      ["application/font-woff", "font/woff", Buffer.from("wOFF")],
+      ["application/font-woff2", "font/woff2", Buffer.from("wOF2")],
+      [
+        "application/x-font-ttf",
+        "font/ttf",
+        new Uint8Array([0x00, 0x01, 0x00, 0x00]),
+      ],
+      ["application/x-font-otf", "font/otf", Buffer.from("OTTO")],
     ] as const) {
+      assert.equal(canonicalizeAssetMime(declaredMime), canonicalMime);
       assert.deepEqual(validateAssetMagicBytes(declaredMime, bytes), {
-        ok: false,
-        error: { code: "signature_mismatch" },
+        ok: true,
       });
+      const validation = validateAssetUploadPolicy(
+        BRAND_FONT_UPLOAD_POLICY,
+        declaredMime,
+        "font.bin",
+        bytes.byteLength,
+      );
+      assert.equal(validation.ok, true);
+      if (validation.ok) assert.equal(validation.mime, canonicalMime);
+    }
+  });
+
+  it("uses image filename extensions for brand logo octet-stream or missing MIME uploads", () => {
+    for (const [name, expectedMime] of [
+      ["logo.png", "image/png"],
+      ["logo.jpg", "image/jpeg"],
+      ["logo.jpeg", "image/jpeg"],
+      ["logo.webp", "image/webp"],
+    ] as const) {
+      for (const declaredType of ["application/octet-stream", ""]) {
+        const validation = validateAssetUploadPolicy(
+          BRAND_LOGO_UPLOAD_POLICY,
+          declaredType,
+          name,
+          1024,
+        );
+        assert.equal(validation.ok, true);
+        if (validation.ok) assert.equal(validation.mime, expectedMime);
+      }
     }
   });
 

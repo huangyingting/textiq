@@ -48,14 +48,16 @@ export interface PublicPresentationRecovery {
   fallback: "derived" | "none";
 }
 
-const PUBLIC_ASSET_ROUTE_PREFIX = "/api/slide-assets/";
+const PUBLIC_SLIDE_ASSET_ROUTE_PREFIX = "/api/slide-assets/";
+const PUBLIC_BRAND_ASSET_ROUTE_PREFIX = "/api/brand-assets/";
 const URL_PARSE_BASE = "https://textiq.local";
 const URL_PARSE_BASE_ORIGIN = new URL(URL_PARSE_BASE).origin;
 const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^[a-z][a-z\d+.-]*:|\/\//i;
 
-function bindSlideAssetUrlToShare(
+function bindProtectedAssetUrlToShare(
   src: string,
   binding: PublicPresentationAssetBinding,
+  routePrefixes: readonly string[],
 ): string {
   if (!binding.shareId) {
     return src;
@@ -74,7 +76,7 @@ function bindSlideAssetUrlToShare(
 
   if (
     !isRelativeAppUrl ||
-    !parsed.pathname.startsWith(PUBLIC_ASSET_ROUTE_PREFIX)
+    !routePrefixes.some((prefix) => parsed.pathname.startsWith(prefix))
   ) {
     return src;
   }
@@ -99,7 +101,12 @@ function bindDeckAssetUrlsToShare(
   const images = Object.fromEntries(
     Object.entries(deck.assets.images).map(([assetId, asset]) => [
       assetId,
-      { ...asset, src: bindSlideAssetUrlToShare(asset.src, binding) },
+      {
+        ...asset,
+        src: bindProtectedAssetUrlToShare(asset.src, binding, [
+          PUBLIC_SLIDE_ASSET_ROUTE_PREFIX,
+        ]),
+      },
     ]),
   );
 
@@ -107,7 +114,12 @@ function bindDeckAssetUrlsToShare(
     ? Object.fromEntries(
         Object.entries(deck.assets.files).map(([assetId, asset]) => [
           assetId,
-          { ...asset, src: bindSlideAssetUrlToShare(asset.src, binding) },
+          {
+            ...asset,
+            src: bindProtectedAssetUrlToShare(asset.src, binding, [
+              PUBLIC_SLIDE_ASSET_ROUTE_PREFIX,
+            ]),
+          },
         ]),
       )
     : undefined;
@@ -118,6 +130,52 @@ function bindDeckAssetUrlsToShare(
       ...deck.assets,
       images,
       ...(files ? { files } : {}),
+    },
+  };
+}
+
+function bindThemePackageAssetUrlsToShare(
+  pkg: ThemePackageV1 | undefined,
+  binding?: PublicPresentationAssetBinding,
+): ThemePackageV1 | undefined {
+  if (!pkg || !binding?.shareId || !pkg.assets) {
+    return pkg;
+  }
+
+  const images = pkg.assets.images
+    ? Object.fromEntries(
+        Object.entries(pkg.assets.images).map(([assetId, asset]) => [
+          assetId,
+          {
+            ...asset,
+            src: bindProtectedAssetUrlToShare(asset.src, binding, [
+              PUBLIC_BRAND_ASSET_ROUTE_PREFIX,
+            ]),
+          },
+        ]),
+      )
+    : undefined;
+
+  const fonts = pkg.assets.fonts
+    ? Object.fromEntries(
+        Object.entries(pkg.assets.fonts).map(([assetId, asset]) => [
+          assetId,
+          {
+            ...asset,
+            src: bindProtectedAssetUrlToShare(asset.src, binding, [
+              PUBLIC_BRAND_ASSET_ROUTE_PREFIX,
+            ]),
+          },
+        ]),
+      )
+    : undefined;
+
+  return {
+    ...pkg,
+    assets: {
+      ...pkg.assets,
+      ...(images ? { images } : {}),
+      ...(fonts ? { fonts } : {}),
     },
   };
 }
@@ -211,10 +269,12 @@ export function buildPublicPresentationModel(
   }
 
   const deck = bindDeckAssetUrlsToShare(rawDeck, assetBinding);
+  const activeCustomThemePackage = bindThemePackageAssetUrlsToShare(
+    document.activeCustomThemePackage,
+    assetBinding,
+  );
   const themeResolution = resolveThemePackageForDeck(deck, {
-    activePackages: document.activeCustomThemePackage
-      ? [document.activeCustomThemePackage]
-      : [],
+    activePackages: activeCustomThemePackage ? [activeCustomThemePackage] : [],
   });
 
   return {

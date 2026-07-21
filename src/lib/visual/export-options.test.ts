@@ -383,6 +383,16 @@ test("computeLetterboxedDimensions preserves an already matching padded aspect",
   );
 });
 
+test("applyAspectRatioToSvg uses background fill regardless of rect attribute order", () => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect x="0" y="0" width="800" height="600" fill="#123456"/><circle cx="400" cy="300" r="50" fill="#6366f1"/></svg>`;
+  const result = applyAspectRatioToSvg(svg, "9:16");
+
+  assert.ok(
+    result.includes('fill="#123456" data-letterbox="true"'),
+    "letterbox rect should reuse the visual background color",
+  );
+});
+
 test("applyAspectRatioToSvg returns unchanged SVG for auto, missing viewBox, and matching ratios", () => {
   assert.equal(applyAspectRatioToSvg(BASE_SVG, "auto"), BASE_SVG);
   const noViewBox = `<svg><circle cx="1" cy="1" r="1"/></svg>`;

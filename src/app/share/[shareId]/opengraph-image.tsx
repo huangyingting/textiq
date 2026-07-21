@@ -118,7 +118,7 @@ export default async function Image({
             fontWeight: 700,
           }}
         >
-          N
+          T
         </div>
         <div
           style={{

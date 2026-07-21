@@ -37,14 +37,27 @@ export interface AssetPolicyMeta<TMime extends string = string> {
   originalName?: string;
 }
 
+const MIME_ALIASES: Readonly<Record<string, string>> = {
+  "application/font-woff": "font/woff",
+  "application/font-woff2": "font/woff2",
+  "application/x-font-ttf": "font/ttf",
+  "application/x-font-otf": "font/otf",
+};
+
+export function canonicalizeAssetMime(mime: string): string {
+  return MIME_ALIASES[mime.toLowerCase()] ?? mime;
+}
+
 export function resolveUploadMime(
   policy: AssetUploadPolicy,
   type: string,
   name: string,
 ): string {
-  if (type && type !== "application/octet-stream") return type;
+  if (type && type !== "application/octet-stream") {
+    return canonicalizeAssetMime(type);
+  }
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return policy.extensionMimeMap?.[ext] ?? type;
+  return canonicalizeAssetMime(policy.extensionMimeMap?.[ext] ?? type);
 }
 
 export function isAcceptedAssetMime<TMime extends string>(
@@ -126,7 +139,7 @@ export function validateAssetMagicBytes(
   if (sniffed === null) {
     return { ok: false, error: { code: "signature_mismatch" } };
   }
-  if (declaredMime !== sniffed) {
+  if (canonicalizeAssetMime(declaredMime) !== canonicalizeAssetMime(sniffed)) {
     return { ok: false, error: { code: "signature_mismatch" } };
   }
   return { ok: true };

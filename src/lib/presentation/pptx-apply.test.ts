@@ -90,6 +90,57 @@ describe("resolveExportSpecAssetSources", () => {
         },
       },
     });
+
+    test("replaces image operation asset ids with theme-package image src values", () => {
+      const deck = buildDeck([], {
+        assets: { images: {} },
+      });
+      const pkg = buildMinimalThemePackage("test-package", {
+        assets: {
+          images: {
+            "package-logo": buildImageAsset("package-logo", {
+              src: "/api/brand-assets/owner/package-logo.png",
+            }),
+          },
+        },
+      });
+      const resolved = resolveExportSpecAssetSources(
+        deck,
+        {
+          canvas: {
+            format: "16:9",
+            width: 100,
+            height: 56.25,
+            unit: "percent",
+          },
+          diagnostics: [],
+          slides: [
+            {
+              id: "slide-1",
+              background: { type: "background" },
+              operations: [
+                {
+                  type: "image",
+                  id: "image-1",
+                  assetId: "package-logo",
+                  frame: { x: 0, y: 0, w: 100, h: 100 },
+                  style: {},
+                  zIndex: 1,
+                },
+              ],
+            },
+          ],
+        },
+        pkg,
+      );
+
+      const op = resolved.slides[0].operations[0];
+      assert.equal(op.type, "image");
+      if (op.type === "image") {
+        assert.equal(op.assetId, "/api/brand-assets/owner/package-logo.png");
+      }
+    });
+
     const resolved = resolveExportSpecAssetSources(deck, {
       canvas: { format: "16:9", width: 100, height: 56.25, unit: "percent" },
       diagnostics: [],

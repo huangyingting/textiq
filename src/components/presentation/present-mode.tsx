@@ -120,7 +120,7 @@ export function PresentMode({
   const nextSlideTree =
     currentIndex + 1 < total ? renderTree?.slides[currentIndex + 1] : undefined;
   function resolveDeckAsset(assetId: string): string | undefined {
-    return resolveDeckAssetSource(deck, assetId);
+    return resolveDeckAssetSource(deck, assetId, themePackage);
   }
   const resolveVisual = useCallback(
     (visualId: string): Visual | undefined => visuals?.[visualId],

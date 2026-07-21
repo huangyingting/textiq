@@ -127,4 +127,28 @@ describe("visual-backed asset rendering parity", () => {
     assert.match(html, /Start/);
     assert.doesNotMatch(html, /Visual placeholder/);
   });
+
+  test("PublicPresentViewer emits theme-package font-face CSS", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicPresentViewer, {
+        deck: buildDeck([buildSlide("content")]),
+        themePackage: buildMinimalThemePackage("brand-package", {
+          assets: {
+            fonts: {
+              "brand-font": {
+                id: "brand-font",
+                family: "Acme Sans",
+                src: "/api/brand-assets/owner/font.woff2?shareId=share123&shareMode=present",
+              },
+            },
+          },
+        }),
+        title: "Deck",
+      }),
+    );
+
+    assert.match(html, /@font-face/);
+    assert.match(html, /Acme Sans/);
+    assert.match(html, /shareId=share123/);
+  });
 });

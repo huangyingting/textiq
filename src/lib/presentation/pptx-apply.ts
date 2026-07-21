@@ -149,6 +149,7 @@ export async function exportDeckAsPPTX(
     const exportSpec = resolveExportSpecAssetSources(
       deck,
       buildExportSpec(renderTree),
+      resolvedThemePackage,
     );
     const pptxSpec = buildPptxSpec(exportSpec, options);
     return applyPptxSpec(pptxSpec);
