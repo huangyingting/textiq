@@ -91,6 +91,7 @@ export function canCopyImageToClipboard(): boolean {
     typeof navigator !== "undefined" &&
     typeof navigator.clipboard !== "undefined" &&
     navigator.clipboard !== null &&
+    typeof navigator.clipboard.write === "function" &&
     typeof ClipboardItem !== "undefined"
   );
 }
