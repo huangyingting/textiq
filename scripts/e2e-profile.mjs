@@ -33,6 +33,9 @@ import {
   spkiPinFromCertificate,
 } from "./e2e-credential-gate.mjs";
 
+// Re-export so callers that import profile helpers get the timeout resolver too.
+export { resolveE2EProfileGlobalTimeout } from "./e2e-origin.mjs";
+
 export function resolveE2EProfileDatabaseUrl(
   env = process.env,
   repoRoot = process.cwd(),
@@ -580,16 +583,21 @@ export async function runE2EProfile({
       }
     }
   } finally {
-    if (reservations.length > 0) {
-      await closeReservations(reservations);
-    }
-    await stopServer(serverProcess);
-    if (tlsIdentity && !keyDescriptorClosed) {
-      closeDescriptor(tlsIdentity.keyDescriptor);
-    }
-    cleanup(env.E2E_PROFILE_DIST_DIR, { force: true, recursive: true });
-    if (configSnapshot !== undefined) {
-      restoreConfig(configSnapshot, env.E2E_PROFILE_DIST_DIR);
+    // Cleanup and config restore must run even if server teardown throws, so
+    // they are placed in a nested inner-finally that is always reached.
+    try {
+      if (reservations.length > 0) {
+        await closeReservations(reservations);
+      }
+      await stopServer(serverProcess);
+      if (tlsIdentity && !keyDescriptorClosed) {
+        closeDescriptor(tlsIdentity.keyDescriptor);
+      }
+    } finally {
+      cleanup(env.E2E_PROFILE_DIST_DIR, { force: true, recursive: true });
+      if (configSnapshot !== undefined) {
+        restoreConfig(configSnapshot, env.E2E_PROFILE_DIST_DIR);
+      }
     }
   }
 

@@ -107,7 +107,7 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     const editor = page.locator('[data-slide-editor="true"]').first();
     await expect(editor).toBeVisible({ timeout: 30_000 });
 
-    const filmstrip = editor.getByRole("list", { name: "Slides" });
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     await expect(
       filmstrip.getByRole("button", { name: /^Slide \d+(: |$)/ }),
     ).toHaveCount(2);

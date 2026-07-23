@@ -281,9 +281,10 @@ test.describe("presentation editing controls", () => {
     });
     expectPercent(snapped.x + snapped.width / 2, 37);
 
-    await waitForSlideAutosaveAfter(page, () =>
-      editor.getByRole("button", { name: "Undo", exact: true }).click(),
-    );
+    // Undo reverts the drag to the already-saved position; no new save cycle
+    // fires when the resulting state matches the last saved state.
+    await editor.getByRole("button", { name: "Undo", exact: true }).click();
+    await waitForSlideAutosave(page);
     expectPercent((await framePercent(target, canvas)).x, initial.x);
 
     await editor.getByRole("button", { name: "Manage custom guides" }).click();

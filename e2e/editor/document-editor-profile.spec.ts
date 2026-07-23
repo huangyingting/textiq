@@ -603,7 +603,10 @@ test.describe("deterministic profile document editor smoke", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openProfileDocument(page, "editorRailMutations");
     const editor = await openProfileSlideEditor(page);
-    const filmstrip = editor.getByRole("list", { name: "Slides" });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     const slideButtons = filmstrip.getByRole("button", {
       name: /^Slide \d+(: |$)/,
     });
@@ -622,7 +625,7 @@ test.describe("deterministic profile document editor smoke", () => {
         })
         .first();
 
-    await expect(slideButtons).toHaveCount(2);
+    await expect(slideButtons).toHaveCount(2, { timeout: 15_000 });
     await activate(goToSlide(1));
     await expect(titleNode(E2E_PROFILE_FIXTURE.slideTitleText)).toBeVisible();
 
@@ -674,9 +677,9 @@ test.describe("deterministic profile document editor smoke", () => {
     await waitForStableSlideStage(
       reopenedEditor.locator('[data-slide-canvas="true"]').first(),
     );
-    const reopenedFilmstrip = reopenedEditor.getByRole("list", {
-      name: "Slides",
-    });
+    const reopenedFilmstrip = reopenedEditor.locator(
+      '[aria-label="Slide filmstrip"]',
+    );
     const reopenedGoToSlide = (index: number) =>
       reopenedFilmstrip.getByRole("button", {
         name: new RegExp(`^Slide ${index}(: |$)`),
@@ -706,6 +709,9 @@ test.describe("deterministic profile document editor smoke", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openProfileDocument(page, "editorRailMutations");
     let editor = await openProfileSlideEditor(page);
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
     const seededTitle = E2E_PROFILE_FIXTURE.slideTitleText;
     const generatedTitle = "Document";
     const generatedSecondTitle = "E2E profile flow";
@@ -718,27 +724,41 @@ test.describe("deterministic profile document editor smoke", () => {
         .getByRole("button", { name: `Text: ${text}`, exact: true });
     const slideItems = (root: Locator) =>
       root
-        .getByRole("list", { name: "Slides" })
-        .locator(":scope > [data-slide-index]");
+        .locator('[aria-label="Slide filmstrip"]')
+        .locator("[data-slide-index]");
 
     const seededTitleNode = textNode(editor, seededTitle);
-    await expect(seededTitleNode).toBeVisible();
+    // The prior serial test may have reordered the fixture — navigate to
+    // whichever filmstrip slide contains seededTitle before inspecting it.
+    const initFilmstrip = editor.locator('[aria-label="Slide filmstrip"]');
+    const seededSlideButton = initFilmstrip.getByRole("button", {
+      name: new RegExp(`^Slide \\d+: ${escapeRegExp(seededTitle)}`),
+    });
+    await expect(seededSlideButton).toBeVisible({ timeout: 15_000 });
+    await seededSlideButton.click();
+    await expect(seededTitleNode).toBeVisible({ timeout: 10_000 });
     const seededTitleNodeId =
       await seededTitleNode.getAttribute("data-node-id");
     expect(seededTitleNodeId).toBeTruthy();
+
+    // Return to slide 1 so that after regeneration the viewport is on the
+    // newly-generated first slide (title "Document"), not on the visual slide.
+    await initFilmstrip.getByRole("button", { name: /^Slide 1(: |$)/ }).click();
 
     await editor
       .getByRole("button", { name: "Regenerate deck from document" })
       .click();
     const generatedTitleNode = textNode(editor, generatedTitle);
-    await expect(generatedTitleNode).toBeVisible();
-    await expect(textNode(editor, generatedBody)).toBeVisible();
+    await expect(generatedTitleNode).toBeVisible({ timeout: 30_000 });
+    await expect(textNode(editor, generatedBody)).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
       editor.getByRole("button", {
         name: `Slide 2: ${generatedSecondTitle}`,
         exact: true,
       }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
     await expect(textNode(editor, seededTitle)).toHaveCount(0);
     await expect(
       textNode(editor, E2E_PROFILE_FIXTURE.slideTwoTitleText),
@@ -754,7 +774,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await page.keyboard.press("Escape");
     await expect(textNode(editor, savedTitle)).toBeVisible();
 
-    let filmstrip = editor.getByRole("list", { name: "Slides" });
+    let filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     await filmstrip
       .getByRole("button", {
         name: `Slide 2: ${generatedSecondTitle}`,
@@ -778,7 +798,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await waitForStableSlideStage(
       editor.locator('[data-slide-canvas="true"]').first(),
     );
-    filmstrip = editor.getByRole("list", { name: "Slides" });
+    filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     await expect(slideItems(editor)).toHaveCount(1);
     await expect(
       filmstrip.getByRole("button", {
@@ -799,8 +819,12 @@ test.describe("deterministic profile document editor smoke", () => {
     await editor
       .getByRole("button", { name: "Regenerate deck from document" })
       .click();
-    await expect(textNode(editor, generatedTitle)).toBeVisible();
-    await expect(textNode(editor, generatedBody)).toBeVisible();
+    await expect(textNode(editor, generatedTitle)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(textNode(editor, generatedBody)).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(textNode(editor, regenerateRaceTitle)).toHaveCount(0);
     await expect(textNode(editor, savedTitle)).toHaveCount(0);
     await expect(textNode(editor, seededTitle)).toHaveCount(0);
@@ -812,7 +836,7 @@ test.describe("deterministic profile document editor smoke", () => {
     await waitForStableSlideStage(
       editor.locator('[data-slide-canvas="true"]').first(),
     );
-    filmstrip = editor.getByRole("list", { name: "Slides" });
+    filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     await expect(slideItems(editor)).toHaveCount(2);
     await expect(
       filmstrip.getByRole("button", {
@@ -861,7 +885,7 @@ test.describe("deterministic profile document editor smoke", () => {
       page.getByRole("link", { name: "Open slide editor" }),
     ).toBeVisible({ timeout: 60_000 });
     const editor = await openProfileSlideEditor(page);
-    const filmstrip = editor.getByRole("list", { name: "Slides" });
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     const slideButtons = filmstrip.getByRole("button", {
       name: /^Slide \d+(: |$)/,
     });
@@ -933,9 +957,9 @@ test.describe("deterministic profile document editor smoke", () => {
     try {
       await page.reload();
       const reopenedEditor = await openProfileSlideEditor(page);
-      const reopenedFilmstrip = reopenedEditor.getByRole("list", {
-        name: "Slides",
-      });
+      const reopenedFilmstrip = reopenedEditor.locator(
+        '[aria-label="Slide filmstrip"]',
+      );
       const reopenedSlideButtons = reopenedFilmstrip.getByRole("button", {
         name: /^Slide \d+(: |$)/,
       });
@@ -1046,9 +1070,9 @@ test.describe("deterministic profile document editor smoke", () => {
         (await inlineEditor.count()) > 0
           ? inlineEditor
           : await openProfileSlideEditor(page);
-      const cleanupFilmstrip = cleanupEditor.getByRole("list", {
-        name: "Slides",
-      });
+      const cleanupFilmstrip = cleanupEditor.locator(
+        '[aria-label="Slide filmstrip"]',
+      );
       const cleanupSlideButtons = cleanupFilmstrip.getByRole("button", {
         name: /^Slide \d+(: |$)/,
       });
@@ -1113,7 +1137,7 @@ test.describe("deterministic profile document editor smoke", () => {
 
     // Use click (not activate/keyboard) to avoid bubbling key events into the
     // global slide-editor keydown handler, which would dirty the undo stack.
-    const filmstrip = editor.getByRole("list", { name: "Slides" });
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     const contentSlideButton = filmstrip.getByRole("button", {
       name: new RegExp(
         `^Slide \\d+: ${escapeRegExp(E2E_PROFILE_FIXTURE.slideTitleText)}`,

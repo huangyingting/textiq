@@ -8,6 +8,7 @@ import {
   parseAuthenticatedE2EReadinessUrl,
   resolveE2EOrigin,
   resolveE2EOriginConfig,
+  resolveE2EProfileGlobalTimeout,
 } from "./e2e-origin.mjs";
 
 function profileEnv() {
@@ -237,4 +238,39 @@ test("authenticated internal URLs enforce loopback, exact paths, and explicit po
     () => parseAuthenticatedE2EAppUrl("http://user@127.0.0.1:4000"),
     /must not contain credentials/,
   );
+});
+
+test("resolveE2EProfileGlobalTimeout uses profile-aware defaults and honours override", () => {
+  // Full local profile: 60-minute default.
+  assert.equal(resolveE2EProfileGlobalTimeout({}), 60 * 60_000);
+  // CI required-profile: bounded 18-minute default.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_PROFILE_GREP: "@required-profile" }),
+    18 * 60_000,
+  );
+  // Any other grep falls back to the full-profile budget.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_PROFILE_GREP: "@smoke" }),
+    60 * 60_000,
+  );
+  // Explicit positive override wins regardless of grep.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: "600000" }),
+    600_000,
+  );
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({
+      E2E_PROFILE_GREP: "@required-profile",
+      E2E_GLOBAL_TIMEOUT_MS: "720000",
+    }),
+    720_000,
+  );
+  // Non-positive or non-numeric override falls back to the profile default.
+  for (const bad of ["0", "-1", "nan", "", "  "]) {
+    assert.equal(
+      resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: bad }),
+      60 * 60_000,
+      `expected fallback for E2E_GLOBAL_TIMEOUT_MS=${JSON.stringify(bad)}`,
+    );
+  }
 });

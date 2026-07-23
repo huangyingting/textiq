@@ -367,3 +367,145 @@ test("connection ownership validates accepted sockets, owners, and retry paths",
     }),
   );
 });
+
+test("connection ownership: inspection errors during fd scan are E2E_CONNECTION_NOT_READY (transient retry)", async () => {
+  // --- prove: transient inconclusive state retries ---
+
+  // Child PID 2 is dying (ENOENT on fd read); connection inode 999 is not yet
+  // in any live fd (still in kernel accept backlog).  This must be retryable.
+  assert.throws(
+    () =>
+      assertE2EConnectionOwnedByProcess({
+        clientPort: 5000,
+        host: "127.0.0.1",
+        port: 4000,
+        pid: 1,
+        platform: "linux",
+        ownerPids: [1, 2],
+        readFile: () => connectionTable(4000, 5000, "999"),
+        readDirectory: (path) => {
+          if (path === "/proc/1/fd") return ["3"];
+          throw Object.assign(new Error("child gone"), { code: "ENOENT" });
+        },
+        readLink: () => "socket:[12345]",
+      }),
+    (err) => {
+      assert.equal(
+        err.code,
+        "E2E_CONNECTION_NOT_READY",
+        "inspection-error state must be E2E_CONNECTION_NOT_READY so waitForOwnedE2EConnection retries",
+      );
+      assert.match(err.message, /Unable to prove/);
+      return true;
+    },
+  );
+
+  // Non-ENOENT child inspection error is also inconclusive, not fatal.
+  assert.throws(
+    () =>
+      assertE2EConnectionOwnedByProcess({
+        clientPort: 5000,
+        host: "127.0.0.1",
+        port: 4000,
+        pid: 1,
+        platform: "linux",
+        ownerPids: [1, 2],
+        readFile: () => connectionTable(4000, 5000, "999"),
+        readDirectory: (path) => {
+          if (path === "/proc/1/fd") return ["3"];
+          throw new Error("transient read error");
+        },
+        readLink: () => "socket:[12345]",
+      }),
+    (err) => {
+      assert.equal(err.code, "E2E_CONNECTION_NOT_READY");
+      return true;
+    },
+  );
+
+  // --- prove: verified intended ownership succeeds ---
+
+  // On the next attempt after a transient gap, child 2 has accepted and
+  // the inode appears in its fd table.
+  const verified = assertE2EConnectionOwnedByProcess({
+    clientPort: 5000,
+    host: "127.0.0.1",
+    port: 4000,
+    pid: 1,
+    platform: "linux",
+    ownerPids: [1, 2],
+    readFile: () => connectionTable(4000, 5000, "999"),
+    readDirectory: (path) => {
+      if (path === "/proc/2/fd") return ["7"];
+      return [];
+    },
+    readLink: (path) => (path === "/proc/2/fd/7" ? "socket:[999]" : "pipe:[1]"),
+  });
+  assert.deepEqual(verified.ownerPids, [2]);
+  assert.deepEqual(verified.inodes, ["999"]);
+
+  // --- prove: waitForOwnedE2EConnection retries inspection-error case ---
+
+  let callCount = 0;
+  const retryResult = await waitForOwnedE2EConnection({
+    timeoutMs: 200,
+    delay: async () => {},
+    verify: () => {
+      callCount += 1;
+      if (callCount === 1) {
+        const err = new Error(
+          "Unable to prove accepted E2E connection ownership; refusing credentials.",
+        );
+        err.code = "E2E_CONNECTION_NOT_READY";
+        throw err;
+      }
+      return { attributed: true };
+    },
+  });
+  assert.deepEqual(retryResult, { attributed: true });
+  assert.ok(callCount >= 2, "must have retried at least once");
+
+  // --- prove: a foreign/mismatched owner still fails ---
+
+  // No inspection errors, confirmed foreign inode: the error uses
+  // E2E_CONNECTION_NOT_READY (backlog state) but repeated retries never
+  // resolve — bounded by timeout.
+  await assert.rejects(
+    waitForOwnedE2EConnection({
+      timeoutMs: 50,
+      delay: async () => {},
+      verify: () => {
+        // Inspection succeeds but inode is genuinely foreign — never resolves.
+        const err = new Error(
+          "The accepted E2E connection inodes 999 are not owned by checked PIDs 1; refusing credentials.",
+        );
+        err.code = "E2E_CONNECTION_NOT_READY";
+        throw err;
+      },
+    }),
+    /could not be attributed/,
+  );
+
+  // --- prove: retry remains bounded ---
+
+  let inspectionErrorCalls = 0;
+  await assert.rejects(
+    waitForOwnedE2EConnection({
+      timeoutMs: 50,
+      delay: async () => {},
+      verify: () => {
+        inspectionErrorCalls += 1;
+        const err = new Error(
+          "Unable to prove accepted E2E connection ownership; refusing credentials.",
+        );
+        err.code = "E2E_CONNECTION_NOT_READY";
+        throw err;
+      },
+    }),
+    /could not be attributed/,
+  );
+  assert.ok(
+    inspectionErrorCalls > 1,
+    "must have retried before timing out (not a one-shot failure)",
+  );
+});

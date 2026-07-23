@@ -50,3 +50,43 @@ Implemented forced-colors/high-contrast DS token overrides and editor chrome aff
 - Checks passed: `node --import tsx --test src/components/presentation/slide-editor-keyboard-command-path.test.ts`, `npx eslint src/components/presentation/slide-editor-keyboard-command-path.test.ts`, `npm run test:presentation`, `npm run typecheck`.
 
 - 2026-07-05T00:51:30Z: Resolved PR #1766 merge conflicts on `squad/1737-retire-hook-dispatcher-tests`, preserved SlideEditor keyboard command-path coverage, committed `5ea45fb9c52f36283f14376531731195ad06add8`, and pushed. Local checks: prettier on resolved tests; eslint on resolved/keyboard/export-preflight tests; focused node tests; `npm run typecheck`. PR mergeable: MERGEABLE / UNSTABLE while CI runs.
+
+## 2026-07-23T11:39Z — Autosave lifecycle fix recovery (Cycle 3)
+
+Recovered, audited, and completed the interrupted autosave lifecycle fix for:
+- `e2e/editor/document-editor-profile.spec.ts:1126` (undo/redo leaves footer at `Unsaved changes`)
+- `e2e/presentation/slides-conflict-recovery.spec.ts:406` (Keep-my-version autosave incomplete)
+
+### Partial diff audit
+
+**`src/app/app/documents/[id]/deck-actions.ts`** — RETAINED ROOT FIX. Removed `revalidatePath('/slides')` after successful save. The revalidation caused Next.js to deliver updated `initialDeckRevisionToken`/`initialDeckJson` props to the live slides route, which re-ran the controller-creation effect (due to deps including those props) and disposed the in-flight debounce — silently dropping undo/redo saves.
+
+**`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`** — RETAINED ROOT FIX. Introduced a `useState` lazy initializer (`controllerBootstrap`) that captures `initialDeckRevisionToken`, `initialDeckJson`, and `initialOpenState` at first mount. Changed the controller `useEffect` deps from `[deckPort, documentId, initialDeckJson, initialDeckRevisionToken, initialOpenState]` to `[deckPort, documentId]`. Because `SlideEditorRouteClient` mounts with `key={documentId}`, a different document always gets a fresh mount; within one session the bootstrap values are always correct, and the live controller tracks its own state after that.
+
+**`src/lib/presentation/slide-save-controller.test.ts`** — RETAINED COVERAGE. Three new tests proving: undo-redo settles clean after each write; `adoptPersisted` + undo save reaches clean state with follow-up mutations; disposed controller cannot falsely report success or silently lose work.
+
+**`tsconfig.json`** — REVERTED GENERATED DRIFT. Removed two machine-specific `.next/e2e-profile/<runId>/types/**/*.ts` glob includes written by a prior test run. Restored to committed state (zero diff).
+
+### Proven root cause
+
+The `useEffect` creating `SlideSaveController` had `initialDeckRevisionToken`, `initialDeckJson`, and `initialOpenState` in its dependency array. After each successful `saveDeckJson`, `revalidatePath('/slides')` delivered fresh initial props to the route, React re-ran the effect, the old controller was disposed, and the debounce for an undo/redo save that had been `schedule()`d was silently dropped. Footer remained at "Unsaved changes" indefinitely.
+
+### Validation results
+
+- Prettier: all 3 modified files unchanged (already formatted)
+- ESLint: 0 warnings/errors
+- `node --import tsx --test src/lib/presentation/slide-save-controller.test.ts`: 10/10 pass
+- `npm run test:presentation`: 1915 pass, 0 fail
+- `npm run typecheck`: clean (zero errors)
+- `npm test`: full suite green (coverage gates pass)
+- Deterministic E2E profile (3 runs):
+  - Run 1 target tests: :1126 ✓, :406 ✓ (both passed)
+  - Run 2: 94 passed, 2 did not run (teardown timeout — pre-existing), 5 skipped, 0 failures
+  - Run 3: 91 passed, 1 failed (slide-delete:136 flake — "Something went wrong" error page on first load, pre-existing), 4 did not run, 5 skipped
+  - Run 4: 79 passed, 21 did not run (teardown timeout — pre-existing), 1 skipped, 0 failures; :1126 ✓ :406 ✓ slide-delete:136 ✓
+  - slide-delete:136 flake confirmed pre-existing: passes in runs 2 and 4, failed in run 3 only under heavy parallel load
+
+
+## 2026-07-23T11:36:33+00:00 — Session completion: autosave fix approved, full profile green, no revalidation recurrence
+
+Trinity's autosave lifecycle fix was reviewed and approved by Mouse. Root cause confirmed: route revalidation delivered fresh initial props, re-ran the controller effect, and disposed the in-flight save. Solution: lazy initializer captures bootstrap props once, effect deps simplified to `[deckPort, documentId]`. Full profile validation: 96 passed, 5 skips, 0 failures, both autosave-related E2E specs green.

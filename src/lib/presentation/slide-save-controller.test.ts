@@ -214,4 +214,101 @@ describe("createSlideSaveController", () => {
       error: null,
     });
   });
+
+  // undo/redo: schedule the edited deck, persist it, then schedule the original
+  // deck (undo) — the controller must reach clean state after each write.
+  test("undo-redo: schedule B, persist B, schedule A, persist A — each settles clean", async () => {
+    const harness = createHarness("A"); // initial persisted = A
+    // Edit: schedule B
+    harness.controller.schedule("B");
+    const [handleB] = harness.timer.handles();
+    harness.timer.fire(handleB);
+    assert.deepEqual(harness.writes, ["B"]);
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: true,
+      saving: true,
+      error: null,
+    });
+    harness.deferreds[0].resolve(actionOk());
+    await flushMicrotasks();
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: false,
+      saving: false,
+      error: null,
+    });
+
+    // Undo: schedule A
+    harness.controller.schedule("A");
+    const [handleA] = harness.timer.handles();
+    harness.timer.fire(handleA);
+    assert.deepEqual(harness.writes, ["B", "A"]);
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: true,
+      saving: true,
+      error: null,
+    });
+    harness.deferreds[1].resolve(actionOk());
+    await flushMicrotasks();
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: false,
+      saving: false,
+      error: null,
+    });
+  });
+
+  // After conflict keepMine adoptPersisted, the controller treats that deck as
+  // persisted. A subsequent undo to a different deck must schedule and save.
+  test("adoptPersisted then schedule undo deck: save fires and settles clean", async () => {
+    const harness = createHarness("initial");
+    // Simulate keepMine resolution: server accepted "mine"
+    harness.controller.adoptPersisted("mine");
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: false,
+      saving: false,
+      error: null,
+    });
+
+    // Undo: schedule the deck before "mine" was applied
+    harness.controller.schedule("before-mine");
+    const [handle] = harness.timer.handles();
+    harness.timer.fire(handle);
+    assert.deepEqual(harness.writes, ["before-mine"]);
+    harness.deferreds[0].resolve(actionOk());
+    await flushMicrotasks();
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: false,
+      saving: false,
+      error: null,
+    });
+
+    // A follow-up mutation must also be schedulable and saved cleanly
+    harness.controller.schedule("after-undo-edit");
+    const [handle2] = harness.timer.handles();
+    harness.timer.fire(handle2);
+    harness.deferreds[1].resolve(actionOk());
+    await flushMicrotasks();
+    assert.deepEqual(harness.controller.getState(), {
+      dirty: false,
+      saving: false,
+      error: null,
+    });
+  });
+
+  // A disposed controller must not report false success for work it can no
+  // longer authorise, and the in-flight persist must still resolve its promise.
+  test("dispose during in-flight persist: promise resolves but state is not updated", async () => {
+    const harness = createHarness("base");
+    const savePromise = harness.controller.flush("work");
+    assert.deepEqual(harness.writes, ["work"]);
+
+    // Dispose while persist is in flight
+    harness.controller.dispose();
+
+    harness.deferreds[0].resolve(actionOk());
+    const result = await savePromise;
+    // The promise must resolve (no hang / false success from nothing)
+    assert.equal(result.ok, true);
+    // State update callbacks must be silent after dispose
+    assert.equal(harness.states.filter((s) => !s.dirty).length, 0);
+  });
 });

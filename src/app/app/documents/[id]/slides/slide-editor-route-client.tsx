@@ -341,6 +341,20 @@ function SlideEditorRouteClientDocument({
   const saveControllerRef = useRef<SlideSaveController<Deck> | null>(null);
   const persistenceContextRef = useRef<RoutePersistenceContext | null>(null);
   const deckPort = useMemo(() => ({ fetchDeckJson, saveDeckJson }), []);
+
+  // Stable bootstrap for controller initialisation — captured once via the
+  // lazy useState initialiser. Because SlideEditorRouteClient wraps this
+  // component with key={documentId}, a different document always produces a
+  // fresh mount, so these values are always correct for the current document.
+  // They must NOT update when server revalidation delivers new initial props
+  // during an active editing session: the live controller tracks revisionToken
+  // and lastSaved internally, so re-initialising it would dispose in-flight
+  // work (e.g. a debounced undo save scheduled just after the preceding write).
+  const [controllerBootstrap] = useState(() => ({
+    revisionToken: initialDeckRevisionToken,
+    deckJson: initialDeckJson,
+    openState: initialOpenState,
+  }));
   const documentBlocks = useMemo(
     () => collectDocumentBlocks(initialContentJson),
     [initialContentJson],
@@ -361,15 +375,16 @@ function SlideEditorRouteClientDocument({
   useEffect(() => {
     const context: RoutePersistenceContext = {
       active: true,
-      revisionTokenRef: { current: initialDeckRevisionToken },
-      lastSavedRef: { current: initialDeckJson },
+      revisionTokenRef: { current: controllerBootstrap.revisionToken },
+      lastSavedRef: { current: controllerBootstrap.deckJson },
       aiAppliedDeckRef: { current: null },
     };
     const controller: SlideSaveController<Deck> =
       createSlideSaveController<Deck>({
         initialPersisted:
-          initialDeckJson !== null && initialOpenState.ok
-            ? initialOpenState.deck
+          controllerBootstrap.deckJson !== null &&
+          controllerBootstrap.openState.ok
+            ? controllerBootstrap.openState.deck
             : null,
         equals: structuredJsonEqual,
         persist: (updatedDeck, isAuthoritative): Promise<ActionResult> =>
@@ -413,13 +428,11 @@ function SlideEditorRouteClientDocument({
         persistenceContextRef.current = null;
       }
     };
-  }, [
-    deckPort,
-    documentId,
-    initialDeckJson,
-    initialDeckRevisionToken,
-    initialOpenState,
-  ]);
+    // controllerBootstrap is stable for the component instance lifetime
+    // (useState lazy initialiser); only deckPort and documentId must
+    // re-initialise the controller (port swap or key-forced remount).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deckPort, documentId]);
 
   const themeResolution = deck
     ? resolveThemePackageForDeck(deck, {

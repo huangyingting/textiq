@@ -117,14 +117,12 @@ test.describe("presentation pointer interactions", () => {
       testInfo,
       POINTER_INTERACTION_FIXTURES.filmstripReorder,
     );
-    const filmstrip = editor
-      .locator('[aria-label="Slide filmstrip"]')
-      .getByRole("list", { name: "Slides" });
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
     const firstTitle = E2E_PROFILE_FIXTURE.slideTitleText;
     const secondTitle = E2E_PROFILE_FIXTURE.slideTwoTitleText;
-    await expect(filmstrip).toBeVisible();
+    await expect(filmstrip).toBeVisible({ timeout: 15_000 });
     await expect
-      .poll(() => slideLabels(filmstrip))
+      .poll(() => slideLabels(filmstrip), { timeout: 15_000 })
       .toEqual([`Slide 1: ${firstTitle}`, `Slide 2: ${secondTitle}`]);
 
     const firstSlide = filmstrip.getByRole("button", {

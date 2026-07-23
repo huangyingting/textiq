@@ -135,7 +135,12 @@ export async function saveDeckJson(
 
   if (result.ok === true) {
     revalidatePath(`/app/documents/${id}`);
-    revalidatePath(`/app/documents/${id}/slides`);
+    // Intentionally not revalidating /slides: the live editor manages its own
+    // state after each successful save. Revalidating the route would cause
+    // Next.js to refresh the slides page with updated initialDeckRevisionToken
+    // props, which re-runs the controller-creation effect and disposes the
+    // active controller — silently dropping any in-flight debounce work such
+    // as an undo or redo save scheduled immediately after the preceding write.
   }
   return result;
 }

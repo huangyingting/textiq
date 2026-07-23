@@ -307,3 +307,26 @@ function bracketIpv6(host) {
 function unbracket(host) {
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
+
+/**
+ * Resolves the Playwright `globalTimeout` for the deterministic profile.
+ *
+ * - `E2E_GLOBAL_TIMEOUT_MS` overrides everything when set to a positive integer.
+ * - The `@required-profile` CI subset uses a bounded 18-minute budget.
+ * - The full local profile (no grep or any other tag) gets 60 minutes so all
+ *   101+ specs can finish without being cut off by the hard global clock.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @returns {number} timeout in milliseconds
+ */
+export function resolveE2EProfileGlobalTimeout(env = process.env) {
+  const override = env.E2E_GLOBAL_TIMEOUT_MS?.trim();
+  if (override) {
+    const ms = Number.parseInt(override, 10);
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+  if (env.E2E_PROFILE_GREP?.trim() === "@required-profile") {
+    return 18 * 60_000;
+  }
+  return 60 * 60_000;
+}

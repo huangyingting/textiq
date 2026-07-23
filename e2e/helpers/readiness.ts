@@ -81,7 +81,10 @@ export async function waitForStableLocatorBoxes(
   throw new Error("Locator geometry did not stabilize within 60 frames.");
 }
 
-export async function waitForSlideAutosave(page: Page): Promise<void> {
+export async function waitForSlideAutosave(
+  page: Page,
+  { timeout = 20_000 }: { timeout?: number } = {},
+): Promise<void> {
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => {
@@ -97,7 +100,7 @@ export async function waitForSlideAutosave(page: Page): Promise<void> {
   await expect(footerStatus).toHaveAttribute(
     "aria-label",
     /^Footer status: All changes saved\./,
-    { timeout: 20_000 },
+    { timeout },
   );
 }
 

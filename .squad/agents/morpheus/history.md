@@ -41,3 +41,8 @@ The UI issues filed from the 500-case matrix were implemented and merged: #1727 
 ## 2026-07-04T20:55:51.252+00:00 — Code/doc review issue suggestions
 
 Morpheus reviewed architecture/code-doc opportunities and opened or tracked GitHub issues #1733, #1735, #1737, #1739, and #1740. Duplicate issue #1738 was closed. No repository files were modified by this review batch.
+
+
+## 2026-07-23T11:36:33+00:00 — Architectural decisions documented: Playwright config consolidation and connection ownership scope
+
+Morpheus documented two architectural decisions finalized during session: (1) Playwright config consolidation — `.ts` is authoritative, `.mts` remains as reference (single source of truth prevents future shadowing); (2) E2E connection ownership investigation deferred to Dozer (environment) or Tank (security) due to environment-specific, transient worker-restart race during accept backlog window. Decisions merged to decisions.md.

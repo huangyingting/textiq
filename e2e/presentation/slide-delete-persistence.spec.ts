@@ -59,10 +59,11 @@ async function deleteLastSlideAndAssertReload(
   editor: Locator,
   options: { proveSubsequentCasSave?: boolean } = {},
 ): Promise<void> {
-  const filmstrip = editor.getByRole("list", { name: "Slides" });
+  const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
   const slideButtons = filmstrip.getByRole("button", {
     name: /^Slide \d+(: |$)/,
   });
+  await expect(slideButtons.first()).toBeVisible({ timeout: 15_000 });
   const initialCount = await slideButtons.count();
   expect(initialCount).toBeGreaterThan(1);
 
@@ -83,7 +84,7 @@ async function deleteLastSlideAndAssertReload(
   );
   await expect(
     reopenedEditor
-      .getByRole("list", { name: "Slides" })
+      .locator('[aria-label="Slide filmstrip"]')
       .getByRole("button", { name: /^Slide \d+(: |$)/ }),
   ).toHaveCount(initialCount - 1);
 

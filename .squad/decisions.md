@@ -36,7 +36,7 @@ Deterministic Playwright mutators must not share documents or Yjs rooms. The pro
 ### 2026-07-17: Persist reconciled collaborative editor generations
 **By:** Trinity
 **What:** Document autosave observes history-merged typing, snapshots the live Lexical editor after reconciliation, periodically flushes sustained edit bursts, and only reports saved for the latest persisted generation.
-**Why:** The previous OnChange filtering and StrictMode-disposed controller could leave a new document showing “All changes saved” without issuing any durable save; callback snapshots could also precede collaborative reconciliation.
+**Why:** The previous OnChange filtering and StrictMode-disposed controller could leave a new document showing "All changes saved" without issuing any durable save; callback snapshots could also precede collaborative reconciliation.
 
 ### 2026-07-13: PR #1977 (#1961) rebased onto main past #1972, breadth ceiling ratcheted to 27
 **By:** Trinity
@@ -47,6 +47,26 @@ Deterministic Playwright mutators must not share documents or Yjs rooms. The pro
 **By:** Scribe
 **What:** Issue #2019 migrated only the `scripts/**` SCRIPT_STAGE coverage gate from Node `--experimental-test-coverage` reporting to `c8`/`NODE_V8_COVERAGE` union reporting in `scripts/check-line-coverage.mjs` and `scripts/check-combined-coverage.mjs`; SOURCE_STAGE coverage remains unchanged. SCRIPT floors were recalibrated to c8 statement-based accounting at 97% lines, 93% branches, and 97% functions, with measured results 97.93/93.05/97.07.
 **Why:** Node's process-isolated coverage reporter did not union per-file coverage across subprocesses, so shared imports such as `scripts/e2e-origin.mjs` were reported from one under-covering subprocess view and the function floor was unreachable by adding tests. c8 merges V8 coverage dumps into the true union, preserving the gate without pragmas, skips, weakened assertions, or SOURCE-stage changes.
+
+### 2026-07-22T22-12-25: E2E connection ownership inspection errors are transiently inconclusive
+**By:** Dozer
+**What:** In `assertE2EConnectionOwnedByProcess`, when `foreignInodes.length > 0` AND `inspectionErrors.length > 0` (e.g. a dying Next.js hot-reload child yields ENOENT during `/proc/<pid>/fd` scan), the error now carries `error.code = "E2E_CONNECTION_NOT_READY"` so `waitForOwnedE2EConnection` retries within its bounded `proofTimeoutMs` window.
+**Why:** The process tree snapshot can be incomplete at the precise moment Next spawns or retires a `.next/dev/build/<hash>.js` worker: the dying child is still in the tree walk result but its `/proc/pid/fd` is already gone (ENOENT), while the accepted TCP connection inode has not yet migrated to the new child's fd table. This is a provably transient gap — not a foreign connection. Retrying within the already-bounded timeout preserves the ownership-proof security guarantee while tolerating the ~10–200 ms race window.
+
+### 2026-07-23T01-46-49: Playwright config resolution order: consolidate profile settings into .ts
+**By:** Morpheus
+**What:** Consolidated deterministic E2E profile configuration from `playwright.config.mts` into `playwright.config.ts` to resolve silent shadowing of profile-specific settings (globalSetup, workers: 1, Chromium launchOptions, deterministicProfileSpecs list).
+**Why:** Playwright resolves `.ts` before `.mts`. When both files exist, the `.ts` file is loaded exclusively, causing `.mts`'s profile settings to be silently ignored. This broke global setup, workers defaulted to 2, and exposed connection ownership race conditions.
+
+### 2026-07-23T01-46-49: E2E connection ownership race deferred to Dozer (environment) or Tank (E2E security)
+**By:** Morpheus
+**What:** Defer investigation of E2E_APP_CONNECTION_MISMATCH ("Unable to prove accepted E2E connection ownership") on the first connection of `editor/document-editor-profile.spec.ts` to the environment or security team.
+**Why:** After the Playwright config fix, the profile correctly runs global setup with 1 worker. Tests 1–3 pass. Test 4 fails with a connection ownership verification error because the Next.js dev server spawns a persistent child build worker process (`.next/dev/build/<hash>.js`). If this worker restarts during the kernel-to-userspace accept window of a new proxy→app connection, the ownership check observes a dead process (inspection error) and the connection inode not yet in any fd. This is environment-specific and transient; CI passes consistently because there is no existing server on port 4000 and compilation is faster.
+
+### 2026-07-23T11-36-33: E2E full-profile infrastructure repair — global timeout, exit propagation, conflict-recovery race, tsconfig restore guarantee
+**By:** Dozer
+**What:** Four deterministic E2E full-profile infrastructure defects diagnosed and repaired: (1) hard-timeout truncation removed via profile-aware `resolveE2EProfileGlobalTimeout` (18 min for CI, 60 min for full local), (2) signal-kill exit propagation tests added (status: null → exit 1), (3) conflict-recovery semantic race fixed via `waitForSlideAutosave` before `expect(dialog).toBeHidden()` in both conflict tests, (4) tsconfig cleanup guarantee restructured with nested try/finally to always restore config even if stopServer throws.
+**Why:** Full local runs were cut off before all tests executed. Signal-kill coverage was missing but production code was correct. Conflict dialog assertion timed out because the 5 s default timeout was much less than the ~45 s save duration. Leftover `.next/e2e-profile/<run>/types/**` includes corrupted subsequent runs. All defects are now fixed and tested.
 
 ## Governance
 

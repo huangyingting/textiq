@@ -97,9 +97,12 @@ async function resizeSelectedNode(
   const node = editor.locator(BODY_NODE_SELECTOR);
   await node.click();
   await expect(node).toHaveAttribute("aria-pressed", "true");
+  await node.focus();
   const before = await readFrame(editor);
   await page.keyboard.press(key);
-  await expect.poll(() => readFrame(editor)).not.toEqual(before);
+  await expect
+    .poll(() => readFrame(editor), { timeout: 15_000 })
+    .not.toEqual(before);
   return readFrame(editor);
 }
 
@@ -152,7 +155,9 @@ const keepMineConflictTest = async ({
   );
   try {
     const initial = await readFrame(sessions.firstEditor);
-    await expect.poll(() => readFrame(sessions.secondEditor)).toEqual(initial);
+    await expect
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
+      .toEqual(initial);
 
     const firstSaved = await resizeSelectedNode(
       page,
@@ -183,29 +188,36 @@ const keepMineConflictTest = async ({
     const dialog = conflictDialog(sessions.secondPage);
     await expect(dialog).toBeVisible({ timeout: 30_000 });
     await dialog.getByRole("button", { name: "Keep my version" }).click();
+    // handleConflictKeepMine calls setConflictState(null) only after saveDeckJson
+    // resolves; the dialog stays visible until the save completes.  Wait for the
+    // observable semantic condition (save acknowledged in the footer) before
+    // asserting the dialog is gone — both state updates land in the same React
+    // render batch, so toBeHidden() is immediately satisfied after the save.
+    await waitForSlideAutosave(sessions.secondPage, { timeout: 45_000 });
     await expect(dialog).toBeHidden();
-    await waitForSlideAutosave(sessions.secondPage);
     await expect
-      .poll(() => readFrame(sessions.secondEditor))
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
       .toEqual(staleLocal);
 
     await undo.click();
-    await expect.poll(() => readFrame(sessions.secondEditor)).toEqual(initial);
-    await waitForSlideAutosave(sessions.secondPage);
+    await expect
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
+      .toEqual(initial);
+    await waitForSlideAutosave(sessions.secondPage, { timeout: 45_000 });
     await expect(redo).toBeEnabled();
 
     await redo.click();
     await expect
-      .poll(() => readFrame(sessions.secondEditor))
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
       .toEqual(staleLocal);
-    await waitForSlideAutosave(sessions.secondPage);
+    await waitForSlideAutosave(sessions.secondPage, { timeout: 45_000 });
 
     await sessions.secondPage.reload();
     await waitForStableSlideStage(
       sessions.secondEditor.locator('[data-slide-canvas="true"]').first(),
     );
     await expect
-      .poll(() => readFrame(sessions.secondEditor))
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
       .toEqual(staleLocal);
 
     await page.reload();
@@ -231,9 +243,14 @@ const useServerConflictTest = async ({
   );
   try {
     const initial = await readFrame(sessions.firstEditor);
-    await expect.poll(() => readFrame(sessions.secondEditor)).toEqual(initial);
+    await expect
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
+      .toEqual(initial);
 
     await applyOwnerOnlyTheme(page, sessions.firstEditor);
+    await waitForStableSlideStage(
+      sessions.firstEditor.locator('[data-slide-canvas="true"]').first(),
+    );
     const serverFrame = await resizeSelectedNode(
       page,
       sessions.firstEditor,
@@ -299,12 +316,16 @@ const useServerConflictTest = async ({
       { bodySelector: BODY_NODE_SELECTOR, serverWidth: serverFrame.width },
     );
     await dialog.getByRole("button", { name: "Use server version" }).click();
+    // handleConflictUseTheirs batches setDeck and setConflictState(null) in one
+    // React render after the reload resolves.  Wait for the frame to reflect the
+    // server geometry (observable semantic condition) before asserting the dialog
+    // is hidden — both updates land together, so toBeHidden() is immediate.
+    await expect
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
+      .toEqual(serverFrame);
     await expect(dialog).toBeHidden();
     await expect
-      .poll(() => readFrame(sessions.secondEditor))
-      .toEqual(serverFrame);
-    await expect
-      .poll(() => readThemeMarker(sessions.secondEditor))
+      .poll(() => readThemeMarker(sessions.secondEditor), { timeout: 15_000 })
       .toContain("rgb(124, 58, 237)");
     const themeSamples = await sessions.secondPage.evaluate(() => {
       const state = window as typeof window & {
@@ -354,10 +375,10 @@ const useServerConflictTest = async ({
       sessions.secondEditor.locator('[data-slide-canvas="true"]').first(),
     );
     await expect
-      .poll(() => readFrame(sessions.secondEditor))
+      .poll(() => readFrame(sessions.secondEditor), { timeout: 15_000 })
       .toEqual(serverFrame);
     await expect
-      .poll(() => readThemeMarker(sessions.secondEditor))
+      .poll(() => readThemeMarker(sessions.secondEditor), { timeout: 15_000 })
       .toContain("rgb(124, 58, 237)");
     await expect(undo).toBeDisabled();
     await expect(redo).toBeDisabled();

@@ -63,3 +63,20 @@ Mouse verified PR #2016's merged presentation/document-to-deck hardening with fo
 ## 2026-07-19T02:15:00+00:00 — SCRIPT c8 gate QA coverage
 
 Issue #2019 added real SCRIPT-stage behavioral gap tests alongside the c8 union coverage migration: e2e-profile IPv6/port validation, e2e-web-server redirect ambiguity, e2e-credential-gate listener mismatch/socket hangup, and check-ui-matrix-inventory README drift/ENOENT. Mouse should treat future SCRIPT coverage measurements as c8-based union results, not Node subprocess coverage views.
+
+## 2026-07-22T22:12:25+00:00 — Full repository test surface run and playwright.config.ts fix
+
+Mouse ran the complete test surface and found one test infrastructure/configuration bug in `playwright.config.ts`.
+
+**Root cause (test infrastructure/configuration problem):** Playwright resolves `.ts` before `.mts`. `playwright.config.mts` (added in PR #2016) contained all profile-specific configuration (`globalSetup`, `workers: 1`, Chromium `--host-resolver-rules` launchOptions, extended 17-spec `deterministicProfileSpecs`). `playwright.config.ts` predates it and was separately updated by PR #2036 to add `build: { external: ["scripts/**/*.mjs"] }`. With both files present, `.ts` always wins, so `.mts`'s profile features were silently ignored. This caused: (a) global setup (`e2e-global-setup.mjs`) never ran before tests, so credential gate assertion and route precompilation were skipped; (b) 2 workers used instead of 1, exposing connection ownership race.
+
+**Fix:** Updated `playwright.config.ts` to merge all features from `playwright.config.mts` while preserving the `build: { external: ["scripts/**/*.mjs"] }` transpiler fix. `playwright.config.mts` left untouched (scripts reference it by name). Fix validated: prettier ✓, eslint ✓, typecheck ✓, check-ui-matrix-inventory ✓, test:scripts ✓.
+
+**All non-E2E gates:** unit tests ✓, script tests (672 tests, 0 failures) ✓, npm test (combined-coverage + coverage-map) ✓, lint ✓, typecheck + typecheck:unused ✓, docs:check ✓, format:check ✓, production-install:smoke ✓, db:schema:check ✓.
+
+**Remaining E2E failure (environment-only blocker):** After the fix, the profile correctly runs global setup and uses 1 worker. Tests 1–3 (auth spec) pass. Test 4 (document-editor-profile.spec.ts) fails with `E2E_APP_CONNECTION_MISMATCH` → "Unable to prove accepted E2E connection ownership", cascading to all subsequent tests. Root cause: the Next.js dev server spawns a persistent child build worker process (`.next/dev/build/<hash>.js`). If this worker restarts during the kernel-to-userspace-accept window of a new proxy→app connection, the ownership check sees a dead process in the tree (inspection error) AND the connection inode not yet in any fd (not yet accepted) — both conditions for the "Unable to prove" error. This is environment-specific: CI has no existing server on port 4000 and faster compilation. Observed: dev server on this machine has persistent child PID (confirmed via `/proc/<pid>/task/<pid>/children`). CI passes the profile consistently (per history). Recommended owner: Dozer (environment) or Tank (E2E security system) to assess if the worker restart detection needs tolerance for the backlog-to-accept window.
+
+
+## 2026-07-23T11:36:33+00:00 — Session completion: full-test repair green, reviewer approvals finalized
+
+Mouse completed independent review of Trinity's autosave durability artifact (remove route revalidation, one-time controller initialization) and Dozer's E2E infrastructure artifact (four defects: global timeout, signal handling, conflict assertion ordering, tsconfig cleanup). Full deterministic profile: 96/96 passed, 5 governed skips, 0 failures, exit 0, 20m32s. All CI gates green.

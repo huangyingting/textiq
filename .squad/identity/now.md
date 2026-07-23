@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-07-03T05:57:20.402+00:00
-focus_area: Initial TextIQ team setup from docs/codebase
+updated_at: 2026-07-22T22:12:25.025+00:00
+focus_area: Full repository test run and failure remediation
 active_issues: []
 ---
 
 # What We're Focused On
 
-Initializing the TextIQ Squad roster, routing, casting state, and agent context from existing repository documentation and codebase evidence.
+Running the complete TextIQ test suite, correcting stale or invalid test expectations, and routing product-code regressions to the owning subsystem.

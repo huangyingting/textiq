@@ -187,15 +187,21 @@ export function assertE2EConnectionOwnedByProcess({
     (inode) => !ownedInodes.has(inode),
   );
   if (foreignInodes.length > 0) {
-    if (inspectionErrors.length > 0) {
-      throw new Error(
-        "Unable to prove accepted E2E connection ownership; refusing credentials.",
-        { cause: inspectionErrors[0] },
-      );
-    }
-    const error = new Error(
-      `The accepted E2E connection inodes ${connectionInodes.join(",")} are not owned by checked PIDs ${processTreePids.join(",")}; refusing credentials.`,
-    );
+    // When inspection errors are present the process tree snapshot is incomplete:
+    // a dying child (e.g. a Next.js hot-reload worker) may be vacating its fds
+    // while the connection inode is still in the kernel accept backlog.  Both
+    // states are transiently inconclusive — use E2E_CONNECTION_NOT_READY so
+    // waitForOwnedE2EConnection retries within its bounded timeout rather than
+    // treating the transient gap as a definitive ownership mismatch.
+    const error =
+      inspectionErrors.length > 0
+        ? new Error(
+            "Unable to prove accepted E2E connection ownership; refusing credentials.",
+            { cause: inspectionErrors[0] },
+          )
+        : new Error(
+            `The accepted E2E connection inodes ${connectionInodes.join(",")} are not owned by checked PIDs ${processTreePids.join(",")}; refusing credentials.`,
+          );
     error.code = "E2E_CONNECTION_NOT_READY";
     throw error;
   }

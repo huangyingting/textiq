@@ -19,6 +19,7 @@ import {
   removeGeneratedTypeIncludes,
   reserveE2EProfilePorts,
   resolveE2EProfileDatabaseUrl,
+  resolveE2EProfileGlobalTimeout,
   resolveE2EProfileProjects,
   resolveE2EProfileRepeatEach,
   resolveE2EProfileWorkers,
@@ -596,4 +597,127 @@ test("TLS provisioning, pid cleanup, and config restore preserve defensive behav
     console.error = originalConsoleError;
     process.exitCode = originalExitCode;
   }
+});
+
+test("global timeout is profile-selection-aware and overridable", () => {
+  // Full local profile: generous 60-minute default.
+  assert.equal(resolveE2EProfileGlobalTimeout({}), 60 * 60_000);
+  // Required profile (CI subset): bounded 18-minute budget.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_PROFILE_GREP: "@required-profile" }),
+    18 * 60_000,
+  );
+  // Any other grep tag uses the full-profile budget.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_PROFILE_GREP: "@smoke" }),
+    60 * 60_000,
+  );
+  // Explicit override wins for all profile types.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: "1200000" }),
+    1_200_000,
+  );
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({
+      E2E_PROFILE_GREP: "@required-profile",
+      E2E_GLOBAL_TIMEOUT_MS: "900000",
+    }),
+    900_000,
+  );
+  // Invalid or non-positive override falls back to the default.
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: "0" }),
+    60 * 60_000,
+  );
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: "-1" }),
+    60 * 60_000,
+  );
+  assert.equal(
+    resolveE2EProfileGlobalTimeout({ E2E_GLOBAL_TIMEOUT_MS: "nan" }),
+    60 * 60_000,
+  );
+});
+
+test("signal-terminated Playwright step exits with code 1", async () => {
+  const exits = [];
+  let runCount = 0;
+  await runE2EProfile({
+    argv: ["node", "scripts/e2e-profile.mjs"],
+    processEnv: {},
+    repoRoot: process.cwd(),
+    detectLiveServer: async () => false,
+    reservePorts: async () => [{ close: (cb) => cb() }],
+    closeReservations: async () => {},
+    captureConfig: () => ({}),
+    provisionTls: (env) => {
+      env.E2E_PROFILE_TLS_KEY_FD = "3";
+      env.E2E_PROFILE_TLS_SPKI_PIN = "A".repeat(43) + "=";
+      return { keyDescriptor: 88 };
+    },
+    closeDescriptor: () => {},
+    spawnServer: () => ({ pid: 5, exitCode: null, signalCode: null }),
+    waitForServer: async () => {},
+    // Steps 1–4 succeed; step 5 (Playwright) is killed by signal → status null.
+    runCommand: () => {
+      runCount += 1;
+      return runCount === 5
+        ? { status: null, signal: "SIGKILL" }
+        : { status: 0 };
+    },
+    stopServer: async () => {},
+    cleanup: () => {},
+    restoreConfig: () => {},
+    exit: (code) => exits.push(code),
+    stdout: () => {},
+  });
+  assert.deepEqual(exits, [1]);
+});
+
+test("cleanup and config restore run even when server stop throws", async () => {
+  const calls = [];
+  let threw = false;
+  try {
+    await runE2EProfile({
+      argv: ["node", "scripts/e2e-profile.mjs"],
+      processEnv: {},
+      repoRoot: process.cwd(),
+      detectLiveServer: async () => false,
+      reservePorts: async () => [],
+      closeReservations: async () => {},
+      captureConfig: () => ({ config: true }),
+      provisionTls: (env) => {
+        env.E2E_PROFILE_TLS_KEY_FD = "3";
+        env.E2E_PROFILE_TLS_SPKI_PIN = "A".repeat(43) + "=";
+        return { keyDescriptor: 11 };
+      },
+      closeDescriptor: () => {},
+      spawnServer: () => ({ pid: 6, exitCode: null, signalCode: null }),
+      waitForServer: async () => {},
+      runCommand: () => ({ status: 0 }),
+      stopServer: async () => {
+        throw new Error("server stop failed");
+      },
+      cleanup: (path) => calls.push(["cleanup", Boolean(path)]),
+      restoreConfig: (snapshot) =>
+        calls.push(["restore", Boolean(snapshot.config)]),
+      exit: (code) => calls.push(["exit", code]),
+      stdout: () => {},
+    });
+  } catch {
+    threw = true;
+  }
+  assert.equal(
+    threw,
+    true,
+    "expected runE2EProfile to throw when stopServer fails",
+  );
+  assert.ok(
+    calls.some(([k]) => k === "cleanup"),
+    "cleanup must run even when server stop throws",
+  );
+  assert.ok(
+    calls.some(([k]) => k === "restore"),
+    "config restore must run even when server stop throws",
+  );
 });
