@@ -68,6 +68,16 @@ Deterministic Playwright mutators must not share documents or Yjs rooms. The pro
 **What:** Four deterministic E2E full-profile infrastructure defects diagnosed and repaired: (1) hard-timeout truncation removed via profile-aware `resolveE2EProfileGlobalTimeout` (18 min for CI, 60 min for full local), (2) signal-kill exit propagation tests added (status: null → exit 1), (3) conflict-recovery semantic race fixed via `waitForSlideAutosave` before `expect(dialog).toBeHidden()` in both conflict tests, (4) tsconfig cleanup guarantee restructured with nested try/finally to always restore config even if stopServer throws.
 **Why:** Full local runs were cut off before all tests executed. Signal-kill coverage was missing but production code was correct. Conflict dialog assertion timed out because the 5 s default timeout was much less than the ~45 s save duration. Leftover `.next/e2e-profile/<run>/types/**` includes corrupted subsequent runs. All defects are now fixed and tested.
 
+### 2026-07-25: Dependency security remediation (non-breaking)
+**By:** Dozer
+**What:** Resolved the 2 critical auth advisories by bumping `next-auth` from `^5.0.0-beta.31` to `^5.0.0-beta.32`, which moved `@auth/core` from `0.41.2` to `0.41.3`. Applied latest-stable hygiene for `next` and `eslint-config-next`, bumping exact pins from `16.2.10` to `16.2.11`. Reverted the attempted `prisma`/`@prisma/client` `7.9.0` bump back to `^7.8.0` / locked `7.8.0` because it was a net-worse dev-tooling subtree and npm recommends `prisma@7.8.0` as the fix path from 7.9.0.
+**Why:** Auth criticals are resolved and verified with `npm run test:auth` plus the full verification suite. `next@16.2.11` is the latest stable, but `next`/`postcss`/`sharp` remain deferred as upstream-blocked runtime advisories because the patch exists only in `next@16.3.0-preview.9`; watch for `next@16.3.0` stable and do not move to preview/canary. Deferred dev-tooling-only, non-runtime groups: the eslint v10 major-migration group and the `@prisma/dev` subtree (`prisma`/`find-my-way`/`valibot`/`fast-uri`), which is Prisma local dev tooling and not used by TextIQ runtime. Left Dependabot-covered work in flight for `hono`/`@hono/node-server` (#2216), `dompurify` (#2215), `ws` (#2050), and dev-deps (#2051). Final audits have 0 critical vulnerabilities in both full and production-only modes.
+
+### 2026-07-25: Dependabot PR merges + hold on dev-dependencies #2051
+**By:** Squad (Coordinator) for huangyingting
+**What:** Merged #2216 (hono), #2215 (dompurify), #2050 (ws) to main via squash. Held #2051 OPEN — it bundles eslint ^9->^10 and typescript ^6->^7 (two majors) with failing Quality gate/Playwright.
+**Why:** The 3 merged PRs were clean/green patch bumps. #2051 must not be merged as-is: eslint 10 + TypeScript 7 are breaking and fail the lint/typecheck gates. It needs a dedicated migration (also clears the deferred dev-only eslint HIGH advisories). Do not re-attempt merging #2051 until that migration lands.
+
 ## Governance
 
 - All meaningful changes require team consensus

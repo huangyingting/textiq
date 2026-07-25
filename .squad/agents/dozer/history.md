@@ -100,3 +100,13 @@ Files changed: `scripts/e2e-listener-ownership.mjs`, `scripts/e2e-listener-owner
 ## 2026-07-23T11:36:33+00:00 — Final session orchestration: full deterministic profile + live acceptance evidence archived
 
 Session completed with full 101-test deterministic profile passing (96 pass, 5 governed skips, 0 failures, exit 0, 20m32s runtime). All CI gates green: npm test, governance, lint, format, typecheck, coverage, docs, DB schema, production smoke, E2E gates. No commit created; decisions merged to decisions.md; orchestration logs and session log archived.
+
+## 2026-07-25T09:41:05+00:00 — Dependency security remediation
+
+Resolved the two critical auth advisories by updating `next-auth` to `^5.0.0-beta.32`, which pulled `@auth/core` `0.41.3`. Also applied stable hygiene for `next`/`eslint-config-next` `16.2.11` and reverted the attempted Prisma 7.9.0 bump after it worsened the dev-tooling subtree. Verification was green: typecheck, lint, build, 7754 unit tests, `test:auth`; full and production-only audits now show 0 critical vulnerabilities.
+
+Deferred/watch items: wait for stable `next@16.3.0` before addressing the upstream-blocked `next`/`postcss`/`sharp` runtime advisories (do not move to preview/canary); keep eslint v10 and `@prisma/dev` subtree advisories as dev-tooling-only/non-runtime unless upstream changes; Dependabot work remains in flight for `hono`/`@hono/node-server` (#2216), `dompurify` (#2215), `ws` (#2050), and dev-deps (#2051).
+
+## 2026-07-25T12:57:06Z — Dependabot patch merges; dev-deps held
+
+Squad merged Dependabot patch PRs #2216 (`hono` 4.12.25 -> 4.12.32, squash `2fd93157`), #2215 (`dompurify` 3.4.11 -> 3.4.12, squash `18a31c24`), and #2050 (`ws` 8.21.0 -> 8.21.1, squash `15d5a380`) after they were `MERGEABLE` / `CLEAN` with green CI. Held #2051 open because it bundles eslint ^9 -> ^10 and TypeScript ^6 -> ^7 majors while Quality gate and Playwright fail; it needs a dedicated eslint-10 + TypeScript-7 migration before any merge retry.
