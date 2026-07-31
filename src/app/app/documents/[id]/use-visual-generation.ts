@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import {
   isCreditError,
   requestVisualCandidates,
   stampSourceText,
+  VISUAL_GENERATION_NETWORK_ERROR,
+  type GenerateResult,
 } from "@/lib/visual/generate";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
 import type { DetailLevel, Orientation } from "@/lib/ai/prompt";
@@ -103,6 +105,15 @@ interface OperationIdempotencyState {
   key: string;
 }
 
+type VisualGenerationOutcome = GenerateResult & {
+  section: VisualResultSectionId;
+};
+
+interface ActiveGenerationOperation {
+  token: object;
+  promise: Promise<VisualGenerationOutcome>;
+}
+
 function visualOperationFingerprint(input: {
   text: string;
   sourceKind: "block" | "selection";
@@ -138,8 +149,29 @@ export function useVisualGeneration(
   const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
     null,
   );
+  const activeGenerationRef = useRef<ActiveGenerationOperation | null>(null);
+  const activationLockRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // Close the same-render activation window. A later rendered interaction may
+  // deliberately supersede the active request (for example, choosing another
+  // visual type while generation is pending).
+  useEffect(() => {
+    activationLockRef.current = false;
+  });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activationLockRef.current = false;
+      activeGenerationRef.current = null;
+    };
+  }, []);
 
   const resetGeneration = useCallback((keepOptions = true) => {
+    activationLockRef.current = false;
+    activeGenerationRef.current = null;
     setGeneratedVisualsBySection({});
     setError(null);
     setErrorSection(null);
@@ -160,87 +192,136 @@ export function useVisualGeneration(
     ) => {
       const opts = generateOptions.options ?? genOptions;
       const section = visualResultSectionForType(opts.type);
+      if (activationLockRef.current) {
+        const activeOperation = activeGenerationRef.current;
+        if (activeOperation) return activeOperation.promise;
+      }
+      activationLockRef.current = true;
+
       const append = generateOptions.append ?? true;
       const limit = generateOptions.limit ?? MAX_GENERATED_VISUALS_PER_SECTION;
       const sourceKind = target.sourceKind ?? "block";
-      const inputSizeBucket = bucketCount(
-        target.text.trim() === "" ? 0 : target.text.trim().split(/\s+/).length,
+      const token = {};
+      let resolveShared!: (outcome: VisualGenerationOutcome) => void;
+      let rejectShared!: (error: unknown) => void;
+      const sharedPromise = new Promise<VisualGenerationOutcome>(
+        (resolve, reject) => {
+          resolveShared = resolve;
+          rejectShared = reject;
+        },
       );
-      const startedAt = performance.now();
-      const operationFingerprint = visualOperationFingerprint({
-        text: target.text,
-        sourceKind,
-        options: opts,
-      });
-      const operationIdempotency = operationIdempotencyRef.current;
-      const idempotencyKey =
-        operationIdempotency?.fingerprint === operationFingerprint
-          ? operationIdempotency.key
-          : createOperationIdempotencyKey("visual-generate");
-      operationIdempotencyRef.current = {
-        fingerprint: operationFingerprint,
-        key: idempotencyKey,
+      activeGenerationRef.current = { token, promise: sharedPromise };
+
+      const execute = async (): Promise<VisualGenerationOutcome> => {
+        const inputSizeBucket = bucketCount(
+          target.text.trim() === ""
+            ? 0
+            : target.text.trim().split(/\s+/).length,
+        );
+        const startedAt = performance.now();
+        const operationFingerprint = visualOperationFingerprint({
+          text: target.text,
+          sourceKind,
+          options: opts,
+        });
+        const operationIdempotency = operationIdempotencyRef.current;
+        const idempotencyKey =
+          operationIdempotency?.fingerprint === operationFingerprint
+            ? operationIdempotency.key
+            : createOperationIdempotencyKey("visual-generate");
+        operationIdempotencyRef.current = {
+          fingerprint: operationFingerprint,
+          key: idempotencyKey,
+        };
+
+        sourceTextRef.current = target.text.trim();
+        setStatus("loading");
+        setActiveGenerationSection(section);
+        setError(null);
+        setErrorSection(null);
+        setCreditError(false);
+        emitProductTelemetry("product.ai.visual.started", {
+          detailLevel: opts.detailLevel,
+          inputSizeBucket,
+          orientation: opts.orientation,
+          sourceKind,
+          visualKind: opts.type,
+        });
+
+        try {
+          let result: GenerateResult;
+          try {
+            result = await actions.requestVisualCandidates(
+              target.text,
+              {
+                type: opts.type,
+                orientation: opts.orientation,
+                detailLevel: opts.detailLevel,
+                stayCloserToText: opts.stayCloserToText,
+              },
+              { idempotencyKey },
+            );
+          } catch {
+            result = {
+              ok: false,
+              error: VISUAL_GENERATION_NETWORK_ERROR,
+              errorKind: "other",
+            };
+          }
+
+          const outcome = { ...result, section } as VisualGenerationOutcome;
+          if (
+            !mountedRef.current ||
+            activeGenerationRef.current?.token !== token
+          ) {
+            return outcome;
+          }
+
+          if (result.ok) {
+            emitProductTelemetry("product.ai.visual.candidates", {
+              candidateCount: result.candidates.length,
+              durationBucket: bucketDurationMs(performance.now() - startedAt),
+              inputSizeBucket,
+              sourceKind,
+              visualKind: opts.type,
+            });
+            setGeneratedVisualsBySection((current) => ({
+              ...current,
+              [section]: append
+                ? [...result.candidates, ...(current[section] ?? [])].slice(
+                    0,
+                    limit,
+                  )
+                : result.candidates.slice(0, limit),
+            }));
+          } else {
+            emitProductTelemetry("product.ai.visual.failed", {
+              durationBucket: bucketDurationMs(performance.now() - startedAt),
+              failureReason:
+                result.errorKind === "credit" ? "quota" : "unknown",
+              inputSizeBucket,
+              sourceKind,
+              visualKind: opts.type,
+            });
+            setError(result.error);
+            setErrorSection(section);
+            setCreditError(isCreditError(result));
+          }
+          return outcome;
+        } finally {
+          if (activeGenerationRef.current?.token === token) {
+            activationLockRef.current = false;
+            activeGenerationRef.current = null;
+            if (mountedRef.current) {
+              setStatus("idle");
+              setActiveGenerationSection(null);
+            }
+          }
+        }
       };
 
-      sourceTextRef.current = target.text.trim();
-      setStatus("loading");
-      setActiveGenerationSection(section);
-      setError(null);
-      setErrorSection(null);
-      setCreditError(false);
-      emitProductTelemetry("product.ai.visual.started", {
-        detailLevel: opts.detailLevel,
-        inputSizeBucket,
-        orientation: opts.orientation,
-        sourceKind,
-        visualKind: opts.type,
-      });
-
-      const result = await actions.requestVisualCandidates(
-        target.text,
-        {
-          type: opts.type,
-          orientation: opts.orientation,
-          detailLevel: opts.detailLevel,
-          stayCloserToText: opts.stayCloserToText,
-        },
-        {
-          idempotencyKey,
-        },
-      );
-
-      setStatus("idle");
-      setActiveGenerationSection(null);
-      if (result.ok) {
-        emitProductTelemetry("product.ai.visual.candidates", {
-          candidateCount: result.candidates.length,
-          durationBucket: bucketDurationMs(performance.now() - startedAt),
-          inputSizeBucket,
-          sourceKind,
-          visualKind: opts.type,
-        });
-        setGeneratedVisualsBySection((current) => ({
-          ...current,
-          [section]: append
-            ? [...result.candidates, ...(current[section] ?? [])].slice(
-                0,
-                limit,
-              )
-            : result.candidates.slice(0, limit),
-        }));
-      } else {
-        emitProductTelemetry("product.ai.visual.failed", {
-          durationBucket: bucketDurationMs(performance.now() - startedAt),
-          failureReason: result.errorKind === "credit" ? "quota" : "unknown",
-          inputSizeBucket,
-          sourceKind,
-          visualKind: opts.type,
-        });
-        setError(result.error);
-        setErrorSection(section);
-        setCreditError(isCreditError(result));
-      }
-      return { ...result, section };
+      void execute().then(resolveShared, rejectShared);
+      return sharedPromise;
     },
     [actions, genOptions],
   );

@@ -3,7 +3,7 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, $isElementNode } from "lexical";
 import { Sparkles } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { GeneratedCandidatesPanel } from "@/components/visual/generated-candidates-panel";
@@ -28,27 +28,46 @@ export function GenerateVisualSection() {
     stampGeneratedVisual,
   } = useVisualGeneration();
   const candidates = generatedVisualsBySection.ai ?? [];
+  const generatedTargetRef = useRef<typeof target>(null);
+  const [insertError, setInsertError] = useState<string | null>(null);
 
   const runGenerate = useCallback(async () => {
     if (!target) return;
-    await generate(target, { append: false });
+    const requestTarget = target;
+    generatedTargetRef.current = null;
+    setInsertError(null);
+    const result = await generate(requestTarget, { append: false });
+    if (result.ok) {
+      generatedTargetRef.current = requestTarget;
+    }
   }, [generate, target]);
 
   const insertVisual = useCallback(
     (visual: Visual) => {
-      if (!target) return;
+      const generatedTarget = generatedTargetRef.current;
+      if (!generatedTarget) return;
       const toInsert = stampGeneratedVisual(visual);
+      let inserted = false;
       editor.update(() => {
-        const top = $getNodeByKey(target.blockKey);
+        const top = $getNodeByKey(generatedTarget.blockKey);
         if (top === null || !$isElementNode(top)) {
           return;
         }
         top.insertAfter($createVisualNode(toInsert));
+        inserted = true;
       });
+      if (!inserted) {
+        setInsertError(
+          "The source block changed. Generate the visual again to insert it.",
+        );
+        return;
+      }
+      generatedTargetRef.current = null;
+      setInsertError(null);
       setGeneratedVisualsBySection({});
       editor.focus();
     },
-    [editor, target, setGeneratedVisualsBySection, stampGeneratedVisual],
+    [editor, setGeneratedVisualsBySection, stampGeneratedVisual],
   );
 
   if (!target) return null;
@@ -77,8 +96,8 @@ export function GenerateVisualSection() {
       <GeneratedCandidatesPanel
         candidates={candidates}
         status={status}
-        error={error}
-        creditError={creditError}
+        error={insertError ?? error}
+        creditError={insertError ? false : creditError}
         onRetry={() => void runGenerate()}
         onChooseCandidate={insertVisual}
       />

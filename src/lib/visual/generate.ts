@@ -62,7 +62,7 @@ export interface GenerateTarget {
 const FALLBACK_REQUEST_ERROR =
   "We couldn't generate a visual. Please try again.";
 const EMPTY_CANDIDATES_ERROR = "No usable visuals came back. Please try again.";
-const NETWORK_ERROR =
+export const VISUAL_GENERATION_NETWORK_ERROR =
   "Couldn't reach the generator. Check your connection and try again.";
 const INVALID_IDEMPOTENCY_KEY_ERROR =
   "Couldn't create a valid generation idempotency key. Please retry.";
@@ -218,6 +218,10 @@ export async function requestVisualCandidates(
 
     return { ok: true, candidates };
   } catch {
-    return { ok: false, error: NETWORK_ERROR, errorKind: "other" };
+    return {
+      ok: false,
+      error: VISUAL_GENERATION_NETWORK_ERROR,
+      errorKind: "other",
+    };
   }
 }

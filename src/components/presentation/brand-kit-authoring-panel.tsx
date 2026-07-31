@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, type JSX } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
@@ -67,17 +68,20 @@ function TextInput({
   value,
   onChange,
   diagnostics,
+  disabled = false,
 }: {
   label: string;
   value: string | number | undefined;
   onChange: (value: string) => void;
   diagnostics?: JSX.Element | null;
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <label className="block text-xs font-medium text-ds-text-secondary">
       {label}
       <input
         value={value ?? ""}
+        disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.value)}
         className={cx(
           "mt-1 h-8 w-full rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary",
@@ -94,11 +98,13 @@ function ColorInput({
   value,
   onChange,
   diagnostics,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   diagnostics?: JSX.Element | null;
+  disabled?: boolean;
 }): JSX.Element {
   const nativeColorValue = /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000";
   return (
@@ -108,6 +114,7 @@ function ColorInput({
         <input
           type="color"
           value={nativeColorValue}
+          disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value)}
           className={cx(
             "h-8 w-10 rounded-ds-sm border border-ds-border-subtle bg-ds-surface",
@@ -117,6 +124,7 @@ function ColorInput({
         />
         <input
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value)}
           className={cx(
             "h-8 min-w-0 flex-1 rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 font-mono text-xs text-ds-text-primary",
@@ -129,6 +137,20 @@ function ColorInput({
     </label>
   );
 }
+
+const BRAND_KIT_SAVE_ERROR = "Could not save the brand kit. Please try again.";
+const BRAND_KIT_SAVE_FAILURE: Extract<SaveBrandKitDraftResult, { ok: false }> =
+  {
+    ok: false,
+    diagnostics: [
+      {
+        severity: "error",
+        code: "brand-kit-save-failed",
+        message: BRAND_KIT_SAVE_ERROR,
+        path: "save",
+      },
+    ],
+  };
 
 export function BrandKitAuthoringPanel({
   ownerId,
@@ -144,6 +166,16 @@ export function BrandKitAuthoringPanel({
   const [state, setState] = useState(() =>
     createBrandKitAuthoringState(seedDraft),
   );
+  const saveOperationRef = useRef<object | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      saveOperationRef.current = null;
+    };
+  }, []);
   const blockingErrors = state.compileResult.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
   );
@@ -156,23 +188,61 @@ export function BrandKitAuthoringPanel({
       : undefined;
 
   async function handleSave() {
-    if (!saveBrandKitDraft || !state.compileResult.ok) return;
-    setState((current) => ({
-      ...current,
+    if (
+      saveOperationRef.current ||
+      !saveBrandKitDraft ||
+      !state.compileResult.ok
+    ) {
+      return;
+    }
+    const operation = {};
+    const saveState = state;
+    saveOperationRef.current = operation;
+    setState({
+      ...saveState,
       saving: true,
       saveResult: undefined,
-    }));
-    const nextState = await saveBrandKitAuthoringState(
-      state,
-      saveBrandKitDraft,
-    );
-    setState(nextState);
-    if (nextState.saveResult?.ok) onSaved?.(nextState.saveResult);
+    });
+    try {
+      let nextState: BrandKitAuthoringState;
+      try {
+        nextState = await saveBrandKitAuthoringState(
+          saveState,
+          saveBrandKitDraft,
+        );
+      } catch (error) {
+        unstable_rethrow(error);
+        nextState = {
+          ...saveState,
+          saving: false,
+          saveResult: BRAND_KIT_SAVE_FAILURE,
+        };
+      }
+      if (!mountedRef.current || saveOperationRef.current !== operation) {
+        return;
+      }
+      setState(nextState);
+      if (nextState.saveResult?.ok) onSaved?.(nextState.saveResult);
+    } finally {
+      if (saveOperationRef.current === operation) {
+        saveOperationRef.current = null;
+      }
+    }
+  }
+
+  function handleClose() {
+    if (saveOperationRef.current) return;
+    onClose();
+  }
+
+  function dismissSaveError() {
+    setState((current) => ({ ...current, saveResult: undefined }));
   }
 
   return (
     <section
       aria-labelledby="brand-kit-authoring-title"
+      aria-busy={state.saving}
       className="flex max-h-full min-h-0 flex-col"
     >
       <div className="flex shrink-0 items-start justify-between gap-4 border-b border-ds-border-subtle px-4 py-3">
@@ -188,7 +258,12 @@ export function BrandKitAuthoringPanel({
             immutable theme snapshot.
           </p>
         </div>
-        <Button variant="plain" size="sm" onClick={onClose}>
+        <Button
+          variant="plain"
+          size="sm"
+          disabled={state.saving}
+          onClick={handleClose}
+        >
           Close
         </Button>
       </div>
@@ -198,6 +273,7 @@ export function BrandKitAuthoringPanel({
           <TextInput
             label="Name"
             value={state.draft.name}
+            disabled={state.saving}
             onChange={(value) =>
               setState((current) =>
                 updateBrandKitIdentity(current, "name", value),
@@ -208,6 +284,7 @@ export function BrandKitAuthoringPanel({
           <TextInput
             label="Slug"
             value={state.draft.slug}
+            disabled={state.saving}
             onChange={(value) =>
               setState((current) =>
                 updateBrandKitIdentity(current, "slug", value),
@@ -218,6 +295,7 @@ export function BrandKitAuthoringPanel({
           <TextInput
             label="Version"
             value={state.draft.version}
+            disabled={state.saving}
             onChange={(value) =>
               setState((current) =>
                 updateBrandKitIdentity(current, "version", value),
@@ -237,6 +315,7 @@ export function BrandKitAuthoringPanel({
                 key={field.path}
                 label={field.label}
                 value={readPathValue(state.draft, field.path)}
+                disabled={state.saving}
                 onChange={(value) =>
                   setState((current) =>
                     updateBrandKitPaletteColor(current, field.path, value),
@@ -268,6 +347,7 @@ export function BrandKitAuthoringPanel({
                   <TextInput
                     label={`${label} family`}
                     value={typography.family}
+                    disabled={state.saving}
                     onChange={update("family")}
                     diagnostics={fieldDiagnostics(
                       state,
@@ -277,6 +357,7 @@ export function BrandKitAuthoringPanel({
                   <TextInput
                     label="Size pt"
                     value={typography.sizePt}
+                    disabled={state.saving}
                     onChange={update("sizePt")}
                     diagnostics={fieldDiagnostics(
                       state,
@@ -286,6 +367,7 @@ export function BrandKitAuthoringPanel({
                   <TextInput
                     label="Weight"
                     value={typography.weight}
+                    disabled={state.saving}
                     onChange={update("weight")}
                     diagnostics={fieldDiagnostics(
                       state,
@@ -295,6 +377,7 @@ export function BrandKitAuthoringPanel({
                   <TextInput
                     label="Line height"
                     value={typography.lineHeight}
+                    disabled={state.saving}
                     onChange={update("lineHeight")}
                     diagnostics={fieldDiagnostics(
                       state,
@@ -304,6 +387,7 @@ export function BrandKitAuthoringPanel({
                   <TextInput
                     label="Tracking em"
                     value={typography.letterSpacingEm}
+                    disabled={state.saving}
                     onChange={update("letterSpacingEm")}
                     diagnostics={fieldDiagnostics(
                       state,
@@ -334,6 +418,7 @@ export function BrandKitAuthoringPanel({
                 key={field}
                 label={`Logo ${field}`}
                 value={state.draft.assets?.logo?.[field]}
+                disabled={state.saving}
                 onChange={(value) =>
                   setState((current) =>
                     updateBrandKitLogo(current, field, value),
@@ -351,6 +436,7 @@ export function BrandKitAuthoringPanel({
               Background
               <select
                 value={state.draft.decorations?.background ?? "subtle"}
+                disabled={state.saving}
                 onChange={(event) =>
                   setState((current) =>
                     updateBrandKitDecoration(
@@ -376,6 +462,7 @@ export function BrandKitAuthoringPanel({
               Chrome
               <select
                 value={state.draft.decorations?.chrome ?? "default"}
+                disabled={state.saving}
                 onChange={(event) =>
                   setState((current) =>
                     updateBrandKitDecoration(
@@ -427,13 +514,27 @@ export function BrandKitAuthoringPanel({
             </p>
           )}
           {state.saveResult && !state.saveResult.ok ? (
-            <ul className="mt-3 space-y-1 text-xs text-ds-danger">
-              {state.saveResult.diagnostics.map((diagnostic) => (
-                <li key={`${diagnostic.path}:${diagnostic.code}`}>
-                  {diagnostic.message}
-                </li>
-              ))}
-            </ul>
+            <div
+              role="alert"
+              className="mt-3 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-xs text-ds-danger-text"
+            >
+              <ul className="space-y-1">
+                {state.saveResult.diagnostics.map((diagnostic) => (
+                  <li key={`${diagnostic.path}:${diagnostic.code}`}>
+                    {diagnostic.message}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                variant="plain"
+                size="sm"
+                disabled={state.saving}
+                onClick={dismissSaveError}
+                className="mt-2"
+              >
+                Dismiss error
+              </Button>
+            </div>
           ) : null}
           {compiledPackage ? (
             <div className="mt-3 rounded-ds-sm bg-ds-surface-muted p-2 text-xs text-ds-text-secondary">
@@ -471,7 +572,11 @@ export function BrandKitAuthoringPanel({
           }
           onClick={handleSave}
         >
-          {state.saving ? "Saving…" : "Save brand kit"}
+          {state.saving
+            ? "Saving…"
+            : state.saveResult && !state.saveResult.ok
+              ? "Try save again"
+              : "Save brand kit"}
         </Button>
       </div>
     </section>

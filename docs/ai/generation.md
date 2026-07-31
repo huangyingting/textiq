@@ -14,26 +14,28 @@ validate/normalize output, and charge only successful generations.
 
 ## Source Files
 
-| Area                   | Source                                                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Visual route           | [`src/app/api/generate/route.ts`](../../src/app/api/generate/route.ts)                                         |
-| Deck route             | [`src/app/api/generate-deck/route.ts`](../../src/app/api/generate-deck/route.ts)                               |
-| Azure client           | [`src/lib/ai/azure.ts`](../../src/lib/ai/azure.ts)                                                             |
-| Deadline wrapper       | [`src/lib/ai/deadline.ts`](../../src/lib/ai/deadline.ts)                                                       |
-| Visual generation core | [`src/lib/ai/generate.ts`](../../src/lib/ai/generate.ts)                                                       |
-| Deck source extraction | [`src/lib/ai/deck-source.ts`](../../src/lib/ai/deck-source.ts)                                                 |
-| Document source plan   | [`src/lib/presentation/document-source-plan.ts`](../../src/lib/presentation/document-source-plan.ts)           |
-| Deck route logic       | [`src/app/api/generate-deck/route-logic.ts`](../../src/app/api/generate-deck/route-logic.ts)                   |
-| Deck orchestration     | [`src/lib/ai/run-deck-generation.ts`](../../src/lib/ai/run-deck-generation.ts)                                 |
-| Deck prompt            | [`src/lib/ai/deck-prompt.ts`](../../src/lib/ai/deck-prompt.ts)                                                 |
-| Document plan repair   | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)             |
-| Semantic plan repair   | [`src/lib/presentation/semantic-deck-plan-repair.ts`](../../src/lib/presentation/semantic-deck-plan-repair.ts) |
-| Template compiler      | [`src/lib/presentation/template-compiler.ts`](../../src/lib/presentation/template-compiler.ts)                 |
-| Open-deck boundary     | [`src/lib/presentation/open-deck.ts`](../../src/lib/presentation/open-deck.ts)                                 |
-| Deck schema validation | [`src/lib/presentation/validation.ts`](../../src/lib/presentation/validation.ts)                               |
-| Quota                  | [`src/lib/ai/quota.ts`](../../src/lib/ai/quota.ts)                                                             |
-| Credits                | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                                               |
-| Usage ledger           | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)                                     |
+| Area                    | Source                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Visual route            | [`src/app/api/generate/route.ts`](../../src/app/api/generate/route.ts)                                                 |
+| Deck route              | [`src/app/api/generate-deck/route.ts`](../../src/app/api/generate-deck/route.ts)                                       |
+| Azure client            | [`src/lib/ai/azure.ts`](../../src/lib/ai/azure.ts)                                                                     |
+| Deadline wrapper        | [`src/lib/ai/deadline.ts`](../../src/lib/ai/deadline.ts)                                                               |
+| Visual generation core  | [`src/lib/ai/generate.ts`](../../src/lib/ai/generate.ts)                                                               |
+| Visual client request   | [`src/lib/visual/generate.ts`](../../src/lib/visual/generate.ts)                                                       |
+| Visual UI orchestration | [`src/app/app/documents/[id]/use-visual-generation.ts`](../../src/app/app/documents/%5Bid%5D/use-visual-generation.ts) |
+| Deck source extraction  | [`src/lib/ai/deck-source.ts`](../../src/lib/ai/deck-source.ts)                                                         |
+| Document source plan    | [`src/lib/presentation/document-source-plan.ts`](../../src/lib/presentation/document-source-plan.ts)                   |
+| Deck route logic        | [`src/app/api/generate-deck/route-logic.ts`](../../src/app/api/generate-deck/route-logic.ts)                           |
+| Deck orchestration      | [`src/lib/ai/run-deck-generation.ts`](../../src/lib/ai/run-deck-generation.ts)                                         |
+| Deck prompt             | [`src/lib/ai/deck-prompt.ts`](../../src/lib/ai/deck-prompt.ts)                                                         |
+| Document plan repair    | [`src/lib/presentation/document-slide-plan.ts`](../../src/lib/presentation/document-slide-plan.ts)                     |
+| Semantic plan repair    | [`src/lib/presentation/semantic-deck-plan-repair.ts`](../../src/lib/presentation/semantic-deck-plan-repair.ts)         |
+| Template compiler       | [`src/lib/presentation/template-compiler.ts`](../../src/lib/presentation/template-compiler.ts)                         |
+| Open-deck boundary      | [`src/lib/presentation/open-deck.ts`](../../src/lib/presentation/open-deck.ts)                                         |
+| Deck schema validation  | [`src/lib/presentation/validation.ts`](../../src/lib/presentation/validation.ts)                                       |
+| Quota                   | [`src/lib/ai/quota.ts`](../../src/lib/ai/quota.ts)                                                                     |
+| Credits                 | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                                                       |
+| Usage ledger            | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)                                             |
 
 ## Shared Route Flow
 
@@ -80,6 +82,22 @@ payloads and validates them against the current visual schema. The response is:
 The route never writes document state. The caller applies the chosen visual to a
 Lexical `VisualNode`; persistence happens later through the normal document
 autosave and visual mirror pipeline.
+
+Client generation surfaces put a synchronous operation boundary in front of
+their action port. Same-render duplicate activation shares or suppresses the
+active request before React can expose pending state. The block spark may
+deliberately supersede that request after rendering a new visual-type choice;
+only the current operation can update candidates, errors, telemetry completion,
+or source-sync output. Reset, selection changes, and unmount invalidate late
+results. Rejected ports become visible retryable network feedback and always
+release pending state. Source sync also treats a successful response with no
+candidate as a retryable sync failure instead of applying an undefined visual.
+The mobile text-to-visual surface binds each successful candidate set to the
+source block key captured when its request began, so a later selection move
+cannot re-anchor the visual under unrelated text. If that source block is
+deleted before insertion, the candidate is not silently discarded or inserted
+elsewhere; the surface keeps recoverable feedback and offers generation against
+the current selection.
 
 ## Deck Generation
 
@@ -193,6 +211,8 @@ entitlements/configuration.
 ## Primary Tests
 
 - [`src/lib/ai/generate.test.ts`](../../src/lib/ai/generate.test.ts)
+- [`src/lib/visual/generate.test.ts`](../../src/lib/visual/generate.test.ts)
+- [`src/app/app/documents/[id]/visual-generation-operation-boundaries.test.ts`](../../src/app/app/documents/%5Bid%5D/visual-generation-operation-boundaries.test.ts)
 - [`src/lib/ai/deck-source.test.ts`](../../src/lib/ai/deck-source.test.ts)
 - [`src/lib/ai/run-deck-generation.test.ts`](../../src/lib/ai/run-deck-generation.test.ts)
 - [`src/lib/presentation/document-slide-plan.test.ts`](../../src/lib/presentation/document-slide-plan.test.ts)

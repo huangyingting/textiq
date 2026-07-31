@@ -15,7 +15,12 @@ import type { VisualGenerationActionPort } from "@/lib/action-ports";
 import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
 import { loadBrandStyles } from "@/lib/brand/brand-list-client";
 import type { BrandStyle } from "@/lib/brand/schema";
-import { isCreditError, stampSourceText } from "@/lib/visual/generate";
+import {
+  isCreditError,
+  stampSourceText,
+  VISUAL_GENERATION_NETWORK_ERROR,
+  type GenerateResult,
+} from "@/lib/visual/generate";
 import { mergeVisualContent } from "@/lib/visual/transforms";
 import type { Visual } from "@/lib/visual/schema";
 
@@ -88,6 +93,21 @@ function resolveOperationIdempotencyKey(args: {
     fingerprint: args.fingerprint,
     key: createOperationIdempotencyKey(args.operation),
   };
+}
+
+function useOperationBoundary() {
+  const activeRef = useRef<object | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeRef.current = null;
+    };
+  }, []);
+
+  return { activeRef, mountedRef };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,21 +204,27 @@ export function usePopoverGeneration({
   const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
     null,
   );
+  const { activeRef, mountedRef } = useOperationBoundary();
 
   const reset = useCallback(() => {
+    activeRef.current = null;
+    setGenStatus("idle");
     setCandidates([]);
     setGenError(null);
     setGenCreditError(false);
     operationIdempotencyRef.current = null;
-  }, []);
+  }, [activeRef]);
 
   const runGenerate = useCallback(async () => {
+    if (activeRef.current) return;
     const promptText = visualPromptText(visualRef.current);
     if (promptText.trim().length === 0) {
       setGenError("Add some labels before generating variations.");
       onSectionChange("variations");
       return;
     }
+    const operation = {};
+    activeRef.current = operation;
     setGenStatus("loading");
     setGenError(null);
     setGenCreditError(false);
@@ -209,21 +235,37 @@ export function usePopoverGeneration({
       fingerprint: promptText.trim(),
     });
     operationIdempotencyRef.current = nextOperationIdempotency;
-    const result = await visualGenerationPort.requestVisualCandidates(
-      promptText,
-      undefined,
-      { idempotencyKey: nextOperationIdempotency.key },
-    );
-    if (result.ok) {
-      setCandidates(result.candidates);
+    try {
+      let result: GenerateResult;
+      try {
+        result = await visualGenerationPort.requestVisualCandidates(
+          promptText,
+          undefined,
+          { idempotencyKey: nextOperationIdempotency.key },
+        );
+      } catch {
+        result = {
+          ok: false,
+          error: VISUAL_GENERATION_NETWORK_ERROR,
+          errorKind: "other",
+        };
+      }
+      if (!mountedRef.current || activeRef.current !== operation) return;
+
+      if (result.ok) {
+        setCandidates(result.candidates);
+      } else {
+        setGenError(result.error);
+        setGenCreditError(isCreditError(result));
+      }
       onSectionChange("variations");
-    } else {
-      setGenError(result.error);
-      setGenCreditError(isCreditError(result));
-      onSectionChange("variations");
+    } finally {
+      if (activeRef.current === operation) {
+        activeRef.current = null;
+        if (mountedRef.current) setGenStatus("idle");
+      }
     }
-    setGenStatus("idle");
-  }, [visualGenerationPort, visualRef, onSectionChange]);
+  }, [activeRef, mountedRef, visualGenerationPort, visualRef, onSectionChange]);
 
   const chooseCandidate = useCallback(
     (candidate: Visual) => {
@@ -281,13 +323,17 @@ export function useVisualSync({
   const operationIdempotencyRef = useRef<OperationIdempotencyState | null>(
     null,
   );
+  const { activeRef, mountedRef } = useOperationBoundary();
 
   const reset = useCallback(() => {
+    activeRef.current = null;
+    setSyncStatus("idle");
     setSyncError(null);
     operationIdempotencyRef.current = null;
-  }, []);
+  }, [activeRef]);
 
   const runSync = useCallback(async () => {
+    if (activeRef.current) return;
     const syncText = (
       currentSourceText ??
       visualRef.current.sourceText ??
@@ -297,6 +343,8 @@ export function useVisualSync({
       setSyncError("No source text to sync from.");
       return;
     }
+    const operation = {};
+    activeRef.current = operation;
     setSyncStatus("loading");
     setSyncError(null);
     const nextOperationIdempotency = resolveOperationIdempotencyKey({
@@ -305,31 +353,53 @@ export function useVisualSync({
       fingerprint: syncText,
     });
     operationIdempotencyRef.current = nextOperationIdempotency;
-    const result = await visualGenerationPort.requestVisualCandidates(
-      syncText,
-      undefined,
-      { idempotencyKey: nextOperationIdempotency.key },
-    );
-    if (result.ok) {
-      const refreshed = stampSourceText(result.candidates[0], syncText);
-      if (onCommand) {
-        onCommand({ op: "visual.merge_content", newVisual: refreshed });
-      } else {
-        const merged = mergeVisualContent(visualRef.current, refreshed);
-        onChange(stampSourceText(merged, syncText));
+    try {
+      let result: GenerateResult;
+      try {
+        result = await visualGenerationPort.requestVisualCandidates(
+          syncText,
+          undefined,
+          { idempotencyKey: nextOperationIdempotency.key },
+        );
+      } catch {
+        result = {
+          ok: false,
+          error: "Sync failed. Please try again.",
+          errorKind: "other",
+        };
       }
-      onSectionChange(null);
-      setSyncStatus("idle");
-      return;
+      if (!mountedRef.current || activeRef.current !== operation) return;
+
+      const candidate = result.ok ? result.candidates[0] : undefined;
+      if (result.ok && candidate) {
+        const refreshed = stampSourceText(candidate, syncText);
+        if (onCommand) {
+          onCommand({ op: "visual.merge_content", newVisual: refreshed });
+        } else {
+          const merged = mergeVisualContent(visualRef.current, refreshed);
+          onChange(stampSourceText(merged, syncText));
+        }
+        onSectionChange(null);
+      } else {
+        const error = result.ok
+          ? "Sync failed. Please try again."
+          : result.error;
+        setSyncError(
+          error === "We couldn't generate a visual. Please try again."
+            ? "Sync failed. Please try again."
+            : error,
+        );
+      }
+    } finally {
+      if (activeRef.current === operation) {
+        activeRef.current = null;
+        if (mountedRef.current) setSyncStatus("idle");
+      }
     }
-    setSyncError(
-      result.error === "We couldn't generate a visual. Please try again."
-        ? "Sync failed. Please try again."
-        : result.error,
-    );
-    setSyncStatus("idle");
   }, [
+    activeRef,
     currentSourceText,
+    mountedRef,
     onChange,
     onCommand,
     visualGenerationPort,

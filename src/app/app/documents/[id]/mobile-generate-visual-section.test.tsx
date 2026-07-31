@@ -36,6 +36,7 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getRoot,
+  $isTextNode,
   type LexicalEditor,
 } from "lexical";
 
@@ -100,6 +101,31 @@ function selectParagraphText(editor: LexicalEditor, text: string): string {
     );
   });
   return paragraphKey;
+}
+
+function selectFirstOfTwoParagraphs(editor: LexicalEditor) {
+  let firstParagraphKey = "";
+  let secondParagraphKey = "";
+  let secondTextKey = "";
+  act(() => {
+    editor.update(
+      () => {
+        const first = $createParagraphNode();
+        const firstText = $createTextNode("First source block");
+        const second = $createParagraphNode();
+        const secondText = $createTextNode("Second source block");
+        first.append(firstText);
+        second.append(secondText);
+        $getRoot().clear().append(first, second);
+        firstText.select(0, firstText.getTextContentSize());
+        firstParagraphKey = first.getKey();
+        secondParagraphKey = second.getKey();
+        secondTextKey = secondText.getKey();
+      },
+      { discrete: true },
+    );
+  });
+  return { firstParagraphKey, secondParagraphKey, secondTextKey };
 }
 
 function mount(editor: LexicalEditor): {
@@ -371,6 +397,124 @@ test("choosing a candidate inserts a real VisualNode after the target block, sta
       0,
       "expected generatedVisualsBySection to reset after inserting",
     );
+  } finally {
+    unmount();
+  }
+});
+
+test("a selection move during generation keeps the candidate bound to its original source block", async () => {
+  const editor = makeEditor();
+  const { firstParagraphKey, secondParagraphKey, secondTextKey } =
+    selectFirstOfTwoParagraphs(editor);
+  const { renderer, unmount } = mount(editor);
+  const gate = deferred<{
+    ok: boolean;
+    status: number;
+    json(): Promise<unknown>;
+  }>();
+
+  try {
+    editor.focus = (() => undefined) as typeof editor.focus;
+    stubFetch(() => gate.promise);
+
+    act(() => {
+      findButton(renderer).props.onClick();
+    });
+    assert.equal(
+      (fetchCalls[0]?.body as { text?: string }).text,
+      "First source block",
+    );
+
+    act(() => {
+      editor.update(
+        () => {
+          const secondText = $getNodeByKey(secondTextKey);
+          assert.ok($isTextNode(secondText));
+          secondText.select(0, secondText.getTextContentSize());
+        },
+        { discrete: true },
+      );
+    });
+
+    await act(async () => {
+      gate.resolve(fakeResponse(200, { candidates: [FIXTURES.flowchart] }));
+      await flush();
+    });
+
+    const candidateButton = renderer.root.findByProps({
+      "aria-label": "Select variation 1 of 1",
+    });
+    await act(async () => {
+      candidateButton.props.onClick();
+      await flush();
+    });
+
+    editor.getEditorState().read(() => {
+      const first = $getNodeByKey(firstParagraphKey);
+      const second = $getNodeByKey(secondParagraphKey);
+      const inserted = first?.getNextSibling();
+      assert.ok(
+        inserted && $isVisualNode(inserted),
+        "expected the generated visual after its original source block",
+      );
+      assert.equal(second?.getNextSibling(), null);
+      if (inserted && $isVisualNode(inserted)) {
+        assert.equal(inserted.getVisual().sourceText, "First source block");
+      }
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("a deleted source block leaves recoverable feedback instead of discarding the candidate", async () => {
+  const editor = makeEditor();
+  const { firstParagraphKey, secondParagraphKey, secondTextKey } =
+    selectFirstOfTwoParagraphs(editor);
+  const { renderer, unmount } = mount(editor);
+
+  try {
+    let focusCalls = 0;
+    editor.focus = (() => {
+      focusCalls += 1;
+    }) as typeof editor.focus;
+    stubFetch(async () =>
+      fakeResponse(200, { candidates: [FIXTURES.flowchart] }),
+    );
+    await act(async () => {
+      findButton(renderer).props.onClick();
+      await flush();
+    });
+
+    act(() => {
+      editor.update(
+        () => {
+          $getNodeByKey(firstParagraphKey)?.remove();
+          const secondText = $getNodeByKey(secondTextKey);
+          assert.ok($isTextNode(secondText));
+          secondText.select(0, secondText.getTextContentSize());
+        },
+        { discrete: true },
+      );
+    });
+
+    const candidateButton = renderer.root.findByProps({
+      "aria-label": "Select variation 1 of 1",
+    });
+    await act(async () => {
+      candidateButton.props.onClick();
+      await flush();
+    });
+
+    const alert = renderer.root.findByProps({ role: "alert" });
+    assert.match(
+      String(alert.findByType("span").props.children),
+      /source block changed/i,
+    );
+    assert.equal(focusCalls, 0);
+    editor.getEditorState().read(() => {
+      assert.equal($getNodeByKey(secondParagraphKey)?.getNextSibling(), null);
+    });
   } finally {
     unmount();
   }

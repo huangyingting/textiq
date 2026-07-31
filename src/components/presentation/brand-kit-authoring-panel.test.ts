@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createDefaultBrandKitDraft } from "./brand-kit-authoring-controller";
 import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import type { SaveBrandKitDraftResult } from "@/lib/action-ports";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -61,6 +62,14 @@ function changeValue(element: ElementLike, value: string): void {
     ((event: { currentTarget: { value: string } }) => void) | undefined;
   assert.equal(typeof onChange, "function");
   onChange?.({ currentTarget: { value } });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 test("BrandKitAuthoringPanel renders authoring controls and compiler diagnostics", () => {
@@ -251,4 +260,185 @@ test("BrandKitAuthoringPanel surfaces immutable version conflicts", async () => 
 
   assert.match(renderToStaticMarkup(tree), /Increment Version before saving/);
   harness.cleanup();
+});
+
+test("BrandKitAuthoringPanel serializes duplicate saves and locks editing until settlement", async () => {
+  const harness = createHookRenderer();
+  const gate = deferred<SaveBrandKitDraftResult>();
+  let calls = 0;
+  let savedPackageId = "";
+  const render = () =>
+    harness.run(() =>
+      BrandKitAuthoringPanel({
+        ownerId: "user-1",
+        saveBrandKitDraft: async () => {
+          calls += 1;
+          return gate.promise;
+        },
+        onSaved: (result) => {
+          savedPackageId = result.packageId;
+        },
+        onClose: () => undefined,
+      }),
+    );
+
+  try {
+    let tree = render();
+    const save = firstElement(
+      tree,
+      (element) => element.props.children === "Save brand kit",
+    ).props.onClick as () => Promise<void>;
+    const first = save();
+    const duplicate = save();
+
+    assert.equal(calls, 1);
+    tree = render();
+    const savingButton = firstElement(
+      tree,
+      (element) => element.props.children === "Saving…",
+    );
+    assert.equal(savingButton.props.disabled, true);
+    assert.equal(
+      firstElement(tree, (element) => element.props.children === "Close").props
+        .disabled,
+      true,
+    );
+    assert.equal(
+      firstElement(tree, (element) => element.type === "input").props.disabled,
+      true,
+    );
+
+    const draft = createDefaultBrandKitDraft({ ownerId: "user-1" });
+    const packageId = "brand-kit:user-user-1:custom-brand-kit";
+    gate.resolve({
+      ok: true,
+      draftId: draft.id,
+      packageId,
+      packageVersion: draft.version,
+      package: {} as Extract<SaveBrandKitDraftResult, { ok: true }>["package"],
+      catalogEntry: {
+        package: {} as Extract<
+          SaveBrandKitDraftResult,
+          { ok: true }
+        >["package"],
+        source: "custom",
+        createdAt: "2026-02-03T04:05:06.000Z",
+      },
+      diagnostics: [],
+    });
+    await Promise.all([first, duplicate]);
+    assert.equal(savedPackageId, packageId);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("BrandKitAuthoringPanel turns a rejected save into visible retryable feedback", async () => {
+  const harness = createHookRenderer();
+  const draft = createDefaultBrandKitDraft({ ownerId: "user-1" });
+  const packageId = "brand-kit:user-user-1:custom-brand-kit";
+  let calls = 0;
+  let savedPackageId = "";
+  const render = () =>
+    harness.run(() =>
+      BrandKitAuthoringPanel({
+        ownerId: "user-1",
+        saveBrandKitDraft: async () => {
+          calls += 1;
+          if (calls === 1) throw new Error("connection reset");
+          return {
+            ok: true,
+            draftId: draft.id,
+            packageId,
+            packageVersion: draft.version,
+            package: {} as Extract<
+              SaveBrandKitDraftResult,
+              { ok: true }
+            >["package"],
+            catalogEntry: {
+              package: {} as Extract<
+                SaveBrandKitDraftResult,
+                { ok: true }
+              >["package"],
+              source: "custom",
+              createdAt: "2026-02-03T04:05:06.000Z",
+            },
+            diagnostics: [],
+          };
+        },
+        onSaved: (result) => {
+          savedPackageId = result.packageId;
+        },
+        onClose: () => undefined,
+      }),
+    );
+
+  try {
+    let tree = render();
+    const save = firstElement(
+      tree,
+      (element) => element.props.children === "Save brand kit",
+    ).props.onClick as () => Promise<void>;
+    await assert.doesNotReject(save());
+
+    tree = render();
+    const html = renderToStaticMarkup(tree);
+    assert.match(html, /Could not save the brand kit\. Please try again\./);
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Try save again/);
+    assert.doesNotMatch(html, /Saving…/);
+
+    const retry = firstElement(
+      tree,
+      (element) => element.props.children === "Try save again",
+    ).props.onClick as () => Promise<void>;
+    await retry();
+
+    tree = render();
+    assert.equal(calls, 2);
+    assert.equal(savedPackageId, packageId);
+    assert.match(renderToStaticMarkup(tree), /Saved .*custom-brand-kit/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("BrandKitAuthoringPanel ignores a successful save after unmount", async () => {
+  const harness = createHookRenderer();
+  const gate = deferred<SaveBrandKitDraftResult>();
+  let onSavedCalls = 0;
+  const tree = harness.run(() =>
+    BrandKitAuthoringPanel({
+      ownerId: "user-1",
+      saveBrandKitDraft: async () => gate.promise,
+      onSaved: () => {
+        onSavedCalls += 1;
+      },
+      onClose: () => undefined,
+    }),
+  );
+  const save = firstElement(
+    tree,
+    (element) => element.props.children === "Save brand kit",
+  ).props.onClick as () => Promise<void>;
+  const request = save();
+  harness.cleanup();
+
+  const draft = createDefaultBrandKitDraft({ ownerId: "user-1" });
+  gate.resolve({
+    ok: true,
+    draftId: draft.id,
+    packageId: "brand-kit:user-user-1:custom-brand-kit",
+    packageVersion: draft.version,
+    package: {} as Extract<SaveBrandKitDraftResult, { ok: true }>["package"],
+    catalogEntry: {
+      package: {} as Extract<SaveBrandKitDraftResult, { ok: true }>["package"],
+      source: "custom",
+      createdAt: "2026-02-03T04:05:06.000Z",
+    },
+    diagnostics: [],
+  });
+  await request;
+
+  assert.equal(onSavedCalls, 0);
 });

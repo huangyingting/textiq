@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-03"
+last_updated: "2026-07-31"
 description: "Theme packages are the presentation editor's bundled and custom visual-style units. A package owns theme tokens, named style refs, optional decorations, and package assets. Semantic templates are global presentation registry entries, not package-local templates."
 ---
 
@@ -94,6 +94,14 @@ assets, and decoration preferences. Publish validation maps diagnostics back to
 authoring fields, blocks critical WCAG text-contrast failures, keeps non-text
 contrast issues as warnings, and validates referenced style/font assets before
 the package can be applied.
+
+Saving a valid draft crosses a single synchronous operation boundary. While
+persistence is pending, the authoring fields and Close action remain locked so
+the saved snapshot cannot drift and duplicate activation cannot create a second
+request. Rejected persistence calls surface an accessible, retryable error;
+retry starts a fresh operation after the previous one settles. Results from an
+invalidated operation or an unmounted authoring panel are ignored and cannot
+publish stale state or invoke the saved callback.
 
 Custom font assets reuse the durable brand-font pipeline. Runtime rendering
 injects escaped `@font-face` CSS through `buildFontFaceCss`, while editable PPTX
