@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  resolveInternalAppOrigin,
   resolveInlineCollabConfig,
   resolveStandaloneCollabConfig,
 } from "./collab-config.mjs";
@@ -26,6 +27,21 @@ test("resolveInlineCollabConfig preserves explicit process values", () => {
       hostname: "127.0.0.1",
       inlineCollab: false,
     },
+  );
+});
+
+test("resolveInternalAppOrigin targets the HTTP listener behind a reverse proxy", () => {
+  assert.equal(
+    resolveInternalAppOrigin({ hostname: "0.0.0.0", port: 4000 }),
+    "http://127.0.0.1:4000",
+  );
+  assert.equal(
+    resolveInternalAppOrigin({ hostname: "::", port: 4100 }),
+    "http://[::1]:4100",
+  );
+  assert.equal(
+    resolveInternalAppOrigin({ hostname: "app.internal", port: 4200 }),
+    "http://app.internal:4200",
   );
 });
 

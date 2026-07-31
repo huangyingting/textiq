@@ -20,7 +20,10 @@ import { createServer } from "node:http";
 import "dotenv/config";
 import next from "next";
 
-import { resolveInlineCollabConfig } from "./scripts/collab-config.mjs";
+import {
+  resolveInlineCollabConfig,
+  resolveInternalAppOrigin,
+} from "./scripts/collab-config.mjs";
 import {
   createCollabWss,
   roomCount,
@@ -41,6 +44,16 @@ import {
 const dev = process.env.NODE_ENV !== "production";
 const { port, hostname, inlineCollab } = resolveInlineCollabConfig(process.env);
 const COLLAB_PATH = COLLAB_INLINE_PATH;
+
+// Next uses this private origin for server-action forwarding and redirect
+// rendering. The custom server always listens with plain HTTP, even when a
+// trusted reverse proxy exposes HTTPS publicly. Without the explicit internal
+// origin, `x-forwarded-proto=https` makes Next attempt TLS against this HTTP
+// listener after actions such as sign-in.
+process.env.__NEXT_PRIVATE_ORIGIN = resolveInternalAppOrigin({
+  hostname,
+  port,
+});
 
 // Resolve and validate the deployment configuration at startup.
 const deploymentConfig = resolveCollabDeployment(process.env);

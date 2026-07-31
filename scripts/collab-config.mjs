@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 /**
  * Plain-Node runtime config helpers for collaboration entry points.
  *
@@ -11,6 +13,19 @@ export function resolveInlineCollabConfig(env = {}) {
     hostname: env.HOST || "0.0.0.0",
     inlineCollab: env.COLLAB_INLINE !== "0",
   };
+}
+
+export function resolveInternalAppOrigin({ hostname, port }) {
+  const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
+  const internalHostname =
+    unwrappedHostname === "0.0.0.0"
+      ? "127.0.0.1"
+      : unwrappedHostname === "::"
+        ? "::1"
+        : unwrappedHostname;
+  const formattedHostname =
+    isIP(internalHostname) === 6 ? `[${internalHostname}]` : internalHostname;
+  return `http://${formattedHostname}:${port}`;
 }
 
 export function resolveStandaloneCollabConfig(env = {}) {

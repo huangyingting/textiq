@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
   // Keep the PDF parser and its pdfjs-dist dependency out of the bundle so
   // pdfjs can resolve its worker (`pdf.worker.mjs`) from node_modules at
   // runtime instead of a rewritten bundle path that does not exist.
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  // The custom server imports Yjs for the inline collaboration socket before
+  // Next renders the editor. Keep the server-side editor import external so
+  // both paths share one Yjs module instance instead of loading a bundled copy.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "yjs"],
 };
 
 export default nextConfig;
