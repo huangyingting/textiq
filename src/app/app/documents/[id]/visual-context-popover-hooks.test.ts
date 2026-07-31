@@ -3,15 +3,8 @@
  * `visualPromptText`, `useBrandContext`, `usePopoverGeneration`,
  * `useVisualSync`, and `usePopoverPosition`.
  *
- * The stateful hooks are exercised through the shared
- * `createReactRenderHarness` (`run()`/`cleanup()`), matching the convention
- * already used across this codebase's hook tests (e.g.
- * `src/lib/lexical/use-lexical-collaboration.test.ts`,
- * `src/components/editor/use-precision-guides.test.ts`): `run()` mounts a
- * probe component with `react-test-renderer` inside `act()` without ever
- * rendering its return value to a tree (so no Context ancestry is required),
- * and repeated calls re-render the same fiber via `renderer.update()`, which
- * is exactly what's needed to observe post-effect state.
+ * Stateful hooks use the shared `createReactRenderHarness`; repeated `run()`
+ * calls update the same fiber so tests can observe post-effect state.
  *
  * `usePopoverPosition` additionally needs real, working
  * `window`/`document` event listener registration/removal (its dismiss and
@@ -168,7 +161,44 @@ describe("useBrandContext", () => {
     }
   });
 
-  test("ends in done with empty brands when the fetch response is not ok", async () => {
+  test("keeps a slow request alive across the loading-state rerender", async () => {
+    const pendingFetch: {
+      resolve: ((value: unknown) => void) | null;
+    } = { resolve: null };
+    globalThis.fetch = (() =>
+      new Promise((resolve) => {
+        pendingFetch.resolve = resolve;
+      })) as unknown as typeof fetch;
+
+    const harness = createReactRenderHarness();
+    try {
+      harness.run(() => useBrandContext("branding"));
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        harness.run(() => useBrandContext("branding")).status,
+        "loading",
+      );
+
+      pendingFetch.resolve?.({
+        ok: true,
+        json: () => Promise.resolve({ brands: [buildBrand("slow", "Slow")] }),
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      const settled = harness.run(() => useBrandContext("branding"));
+      assert.equal(settled.status, "done");
+      assert.equal(settled.brands[0]?.name, "Slow");
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test("ends in error with a retry callback when the fetch response is not ok", async () => {
     globalThis.fetch = (() =>
       Promise.resolve({
         ok: false,
@@ -183,16 +213,24 @@ describe("useBrandContext", () => {
         await waitForAsyncDrain();
       });
       const settled = harness.run(() => useBrandContext("branding"));
-      assert.equal(settled.status, "done");
+      assert.equal(settled.status, "error");
       assert.deepEqual(settled.brands, []);
+      assert.equal(typeof settled.retry, "function");
     } finally {
       harness.cleanup();
     }
   });
 
-  test("ends in done with empty brands when the fetch throws", async () => {
+  test("a failed request can retry successfully without duplicate activation", async () => {
+    let fetchCalls = 0;
     globalThis.fetch = (() =>
-      Promise.reject(new Error("network down"))) as typeof fetch;
+      ++fetchCalls === 1
+        ? Promise.reject(new Error("network down"))
+        : Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ brands: [buildBrand("retry", "Retry")] }),
+          })) as typeof fetch;
 
     const harness = createReactRenderHarness();
     try {
@@ -201,9 +239,20 @@ describe("useBrandContext", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
+      const failed = harness.run(() => useBrandContext("branding"));
+      assert.equal(failed.status, "error");
+
+      await act(async () => {
+        const first = failed.retry();
+        const duplicate = failed.retry();
+        await Promise.all([first, duplicate]);
+        await waitForAsyncDrain();
+      });
+
       const settled = harness.run(() => useBrandContext("branding"));
+      assert.equal(fetchCalls, 2);
       assert.equal(settled.status, "done");
-      assert.deepEqual(settled.brands, []);
+      assert.equal(settled.brands[0]?.name, "Retry");
     } finally {
       harness.cleanup();
     }
@@ -215,21 +264,30 @@ describe("useBrandContext", () => {
     // merges DOM's and @types/node's global `Response`/`fetch` typings,
     // which makes TS narrow the closed-over variable to `null` at the read
     // site below). A mutable holder object sidesteps it cleanly.
-    const pendingFetch: { resolve: ((value: unknown) => void) | null } = {
+    const pendingFetch: {
+      resolve: ((value: unknown) => void) | null;
+      signal: AbortSignal | null;
+    } = {
       resolve: null,
+      signal: null,
     };
-    globalThis.fetch = (() =>
-      new Promise((resolve) => {
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      pendingFetch.signal = init?.signal ?? null;
+      return new Promise((resolve) => {
         pendingFetch.resolve = resolve;
-      })) as unknown as typeof fetch;
+      });
+    }) as unknown as typeof fetch;
 
     const harness = createReactRenderHarness();
     harness.run(() => useBrandContext("branding"));
     await act(async () => {
       await waitForAsyncDrain();
     });
-    // Effect cleanup (aborted = true) runs synchronously on unmount.
+    const requestSignal = pendingFetch.signal;
+    assert.ok(requestSignal);
+    assert.equal(requestSignal.aborted, false);
     harness.cleanup();
+    assert.equal(requestSignal.aborted, true);
 
     pendingFetch.resolve?.({
       ok: true,

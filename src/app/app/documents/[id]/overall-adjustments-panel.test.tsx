@@ -9,8 +9,8 @@
  *    `applyVisualCommand`(`visual.apply_theme`) + `applyElasticLayout`
  *    pipeline against every `VisualNode` in the document via `$nodesOfType`.
  *  - `BrandSection` lazily fetches `/api/brand` (stubbed `global.fetch`,
- *    restored after the suite), rendering nothing once loaded with zero
- *    brands (or on a fetch failure — the component swallows errors), and
+ *    restored after the suite), distinguishes an empty list from a retryable
+ *    loading failure, suppresses duplicate retries, aborts on unmount, and
  *    otherwise renders one button per brand whose click runs the real
  *    `applyBrand` + `applyElasticLayout` pipeline plus the real Google-Font
  *    `<link>` / `injectBrandFontFace` `<style>` DOM injection paths (same
@@ -101,7 +101,10 @@ before(async () => {
   ({ OverallAdjustmentsPanel } = await import("./overall-adjustments-panel"));
 });
 
-type FetchStub = (url: string) => Promise<{
+type FetchStub = (
+  url: string,
+  init?: RequestInit,
+) => Promise<{
   ok: boolean;
   json: () => Promise<unknown>;
 }>;
@@ -109,8 +112,8 @@ type FetchStub = (url: string) => Promise<{
 let fetchImpl: FetchStub = () =>
   Promise.resolve({ ok: true, json: () => Promise.resolve({ brands: [] }) });
 const originalFetch = globalThis.fetch;
-globalThis.fetch = ((url: string) =>
-  fetchImpl(url)) as unknown as typeof globalThis.fetch;
+globalThis.fetch = ((url: string, init?: RequestInit) =>
+  fetchImpl(url, init)) as unknown as typeof globalThis.fetch;
 
 afterEach(() => {
   fetchImpl = () =>
@@ -318,8 +321,16 @@ test("BrandSection renders nothing once loaded with zero brands (successful, emp
   unmount();
 });
 
-test("BrandSection swallows a fetch rejection and ends up rendering nothing (no unhandled error)", async () => {
-  fetchImpl = () => Promise.reject(new Error("network down"));
+test("BrandSection surfaces a retryable fetch failure and suppresses duplicate retry activation", async () => {
+  let fetchCalls = 0;
+  fetchImpl = () => {
+    fetchCalls += 1;
+    if (fetchCalls === 1) return Promise.reject(new Error("network down"));
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ brands: [brandFixture] }),
+    });
+  };
   const editor = makeEditor();
   const { renderer, unmount } = mount(editor);
 
@@ -327,15 +338,37 @@ test("BrandSection swallows a fetch rejection and ends up rendering nothing (no 
     await flush();
   });
 
-  const brandHeader = renderer.root.findAll(
-    (node) => node.props.children === "Brand — all visuals",
+  assert.equal(fetchCalls, 1);
+  assert.equal(
+    renderer.root.findByProps({ role: "alert" }).findByType("span").children[0],
+    "Saved brands could not be loaded.",
   );
-  assert.equal(brandHeader.length, 0);
+  const retry = findButtons(renderer).find(
+    (button) => button.props.children === "Try again",
+  );
+  assert.ok(retry);
+
+  act(() => {
+    retry.props.onClick();
+    retry.props.onClick();
+  });
+  assert.equal(fetchCalls, 2);
+  assert.equal(
+    renderer.root.findByProps({ "aria-busy": true }).props["aria-busy"],
+    true,
+  );
+
+  await act(async () => {
+    await flush();
+  });
+
+  assert.ok(findByAriaLabel(renderer, "Apply brand Acme to all visuals"));
+  assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
 
   unmount();
 });
 
-test("BrandSection swallows a non-ok response and ends up rendering nothing", async () => {
+test("BrandSection reports a non-ok response instead of misreporting an empty brand list", async () => {
   fetchImpl = () =>
     Promise.resolve({
       ok: false,
@@ -348,12 +381,44 @@ test("BrandSection swallows a non-ok response and ends up rendering nothing", as
     await flush();
   });
 
-  const brandHeader = renderer.root.findAll(
-    (node) => node.props.children === "Brand — all visuals",
+  assert.equal(
+    renderer.root.findByProps({ role: "alert" }).findByType("span").children[0],
+    "Saved brands could not be loaded.",
   );
-  assert.equal(brandHeader.length, 0);
 
   unmount();
+});
+
+test("BrandSection aborts an in-flight request when the panel unmounts", async () => {
+  const pendingRequest: {
+    signal: AbortSignal | null;
+    resolve:
+      ((value: { ok: boolean; json: () => Promise<unknown> }) => void) | null;
+  } = { signal: null, resolve: null };
+  fetchImpl = (_url, init) => {
+    pendingRequest.signal = init?.signal ?? null;
+    return new Promise((resolve) => {
+      pendingRequest.resolve = resolve;
+    });
+  };
+
+  const editor = makeEditor();
+  const { unmount } = mount(editor);
+  await act(async () => {
+    await flush();
+  });
+
+  const requestSignal = pendingRequest.signal;
+  assert.ok(requestSignal);
+  assert.equal(requestSignal.aborted, false);
+  unmount();
+  assert.equal(requestSignal.aborted, true);
+
+  pendingRequest.resolve?.({
+    ok: true,
+    json: () => Promise.resolve({ brands: [brandFixture] }),
+  });
+  await flush();
 });
 
 test("clicking a brand button (Google Font path) loads the font <link> once and rebrands every VisualNode", async () => {

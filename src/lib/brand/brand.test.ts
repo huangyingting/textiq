@@ -8,7 +8,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { validateBrandInput, parsePalette } from "@/lib/brand/schema";
+import {
+  parseBrandListResponse,
+  parsePalette,
+  validateBrandInput,
+} from "@/lib/brand/schema";
 import {
   applyBrand,
   brandToStylePatch,
@@ -60,6 +64,48 @@ const PARTIAL_BRAND = {
   nodeFill: null,
   fontFamily: null,
 };
+
+// ---------------------------------------------------------------------------
+// Brand list response parsing
+// ---------------------------------------------------------------------------
+
+describe("parseBrandListResponse", () => {
+  it("accepts the complete serialized API contract", () => {
+    const result = parseBrandListResponse({ brands: [FULL_BRAND] });
+
+    assert.ok(result);
+    assert.equal(result[0]?.id, "b1");
+    assert.equal(result[0]?.fontAssetUrl, null);
+    assert.deepEqual(result[0]?.palette, FULL_BRAND.palette);
+  });
+
+  it("accepts optional asset ids when they are null or strings", () => {
+    const result = parseBrandListResponse({
+      brands: [
+        {
+          ...FULL_BRAND,
+          logoAssetId: "logo-1",
+          fontAssetId: null,
+        },
+      ],
+    });
+
+    assert.equal(result?.[0]?.logoAssetId, "logo-1");
+    assert.equal(result?.[0]?.fontAssetId, null);
+  });
+
+  it("rejects missing lists, malformed rows, and invalid persisted colors", () => {
+    assert.equal(parseBrandListResponse({}), null);
+    assert.equal(parseBrandListResponse({ brands: "bad" }), null);
+    assert.equal(parseBrandListResponse({ brands: [null] }), null);
+    assert.equal(
+      parseBrandListResponse({
+        brands: [{ ...FULL_BRAND, nodeFill: "url(javascript:bad)" }],
+      }),
+      null,
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // brandToStylePatch

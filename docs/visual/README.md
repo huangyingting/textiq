@@ -15,20 +15,21 @@ lifecycle is documented in [../editor/document-editor.md](../editor/document-edi
 
 ## Source Anchors
 
-| Area                  | Source                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| Schema facade         | [`src/lib/visual/schema.ts`](../../src/lib/visual/schema.ts)                                     |
-| Schema types          | [`src/lib/visual/schema-types.ts`](../../src/lib/visual/schema-types.ts)                         |
-| Schema validation     | [`src/lib/visual/schema-validation/`](../../src/lib/visual/schema-validation/)                   |
-| Kind registry facade  | [`src/lib/visual/registry.ts`](../../src/lib/visual/registry.ts)                                 |
-| Runtime descriptors   | [`src/lib/visual/registry-runtime.ts`](../../src/lib/visual/registry-runtime.ts)                 |
-| Registry completeness | [`src/lib/visual/registry-validation.ts`](../../src/lib/visual/registry-validation.ts)           |
-| Display renderer      | [`src/components/visual/visual-renderer.tsx`](../../src/components/visual/visual-renderer.tsx)   |
-| Export dialog         | [`src/components/visual/export-dialog.tsx`](../../src/components/visual/export-dialog.tsx)       |
-| Social image actions  | [`src/components/share/social-share-menu.tsx`](../../src/components/share/social-share-menu.tsx) |
-| Transform helpers     | [`src/lib/visual/transforms.ts`](../../src/lib/visual/transforms.ts)                             |
-| Export support        | [`src/lib/visual/registry-export.ts`](../../src/lib/visual/registry-export.ts)                   |
-| PPTX native specs     | [`src/lib/visual/pptx-shapes.ts`](../../src/lib/visual/pptx-shapes.ts)                           |
+| Area                  | Source                                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| Schema facade         | [`src/lib/visual/schema.ts`](../../src/lib/visual/schema.ts)                                         |
+| Schema types          | [`src/lib/visual/schema-types.ts`](../../src/lib/visual/schema-types.ts)                             |
+| Schema validation     | [`src/lib/visual/schema-validation/`](../../src/lib/visual/schema-validation/)                       |
+| Kind registry facade  | [`src/lib/visual/registry.ts`](../../src/lib/visual/registry.ts)                                     |
+| Runtime descriptors   | [`src/lib/visual/registry-runtime.ts`](../../src/lib/visual/registry-runtime.ts)                     |
+| Registry completeness | [`src/lib/visual/registry-validation.ts`](../../src/lib/visual/registry-validation.ts)               |
+| Display renderer      | [`src/components/visual/visual-renderer.tsx`](../../src/components/visual/visual-renderer.tsx)       |
+| Inline visual card    | [`src/app/app/documents/[id]/visual-card.tsx`](../../src/app/app/documents/%5Bid%5D/visual-card.tsx) |
+| Export dialog         | [`src/components/visual/export-dialog.tsx`](../../src/components/visual/export-dialog.tsx)           |
+| Social image actions  | [`src/components/share/social-share-menu.tsx`](../../src/components/share/social-share-menu.tsx)     |
+| Transform helpers     | [`src/lib/visual/transforms.ts`](../../src/lib/visual/transforms.ts)                                 |
+| Export support        | [`src/lib/visual/registry-export.ts`](../../src/lib/visual/registry-export.ts)                       |
+| PPTX native specs     | [`src/lib/visual/pptx-shapes.ts`](../../src/lib/visual/pptx-shapes.ts)                               |
 
 ## Schema Contract
 
@@ -93,6 +94,13 @@ Social copy-image and native-share actions likewise share one image-operation
 boundary. Copy and share cannot race the same SVG rasterization; both buttons
 are disabled and the menu is marked busy until the active clipboard or Web
 Share operation settles. User-cancelled native share remains a normal outcome.
+
+The inline `VisualCard` applies that boundary across its complete shortcut
+strip: PNG download, copy-image, and native share. The card keeps renderer
+failures visible and dismissible, allows retry after settlement, sanitizes
+download and shared-file names, exposes operation progress to assistive
+technology, and makes the strip visible with shared touch-sized controls on
+coarse pointers.
 
 ## Invariants
 

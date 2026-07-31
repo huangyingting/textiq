@@ -147,6 +147,82 @@ export function parsePalette(raw: unknown): string[] | null {
   return raw as string[];
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function parseBrandStyle(raw: unknown): BrandStyle | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+
+  for (const key of ["id", "name", "ownerId", "createdAt", "updatedAt"]) {
+    if (typeof record[key] !== "string" || record[key].trim().length === 0) {
+      return null;
+    }
+  }
+
+  const palette = record.palette === null ? null : parsePalette(record.palette);
+  if (record.palette !== null && palette === null) return null;
+
+  for (const key of [
+    "background",
+    "nodeFill",
+    "nodeStroke",
+    "nodeText",
+    "edgeColor",
+  ]) {
+    const value = record[key];
+    if (value !== null && !isHexColor(value)) return null;
+  }
+
+  for (const key of ["fontFamily", "fontAssetUrl", "logoAssetUrl"]) {
+    if (!isNullableString(record[key])) return null;
+  }
+
+  for (const key of ["fontAssetId", "logoAssetId"]) {
+    const value = record[key];
+    if (value !== undefined && !isNullableString(value)) return null;
+  }
+
+  return {
+    id: record.id as string,
+    name: record.name as string,
+    ownerId: record.ownerId as string,
+    palette: palette ? [...palette] : null,
+    background: record.background as string | null,
+    nodeFill: record.nodeFill as string | null,
+    nodeStroke: record.nodeStroke as string | null,
+    nodeText: record.nodeText as string | null,
+    edgeColor: record.edgeColor as string | null,
+    fontFamily: record.fontFamily as string | null,
+    ...(record.fontAssetId !== undefined
+      ? { fontAssetId: record.fontAssetId as AssetReference | null }
+      : {}),
+    ...(record.logoAssetId !== undefined
+      ? { logoAssetId: record.logoAssetId as AssetReference | null }
+      : {}),
+    fontAssetUrl: record.fontAssetUrl as ResolvedAssetUrl | null,
+    logoAssetUrl: record.logoAssetUrl as ResolvedAssetUrl | null,
+    createdAt: record.createdAt as string,
+    updatedAt: record.updatedAt as string,
+  };
+}
+
+/** Parses the complete `GET /api/brand` response before client UI consumes it. */
+export function parseBrandListResponse(raw: unknown): BrandStyle[] | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const brands = (raw as Record<string, unknown>).brands;
+  if (!Array.isArray(brands)) return null;
+
+  const parsed: BrandStyle[] = [];
+  for (const brand of brands) {
+    const item = parseBrandStyle(brand);
+    if (!item) return null;
+    parsed.push(item);
+  }
+  return parsed;
+}
+
 /** Clamps a brand name to reasonable bounds. */
 function validateBrandName(name: unknown): string | null {
   if (typeof name !== "string") return null;

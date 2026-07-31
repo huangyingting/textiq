@@ -16,6 +16,7 @@ live in [billing.md](billing.md).
 | Area                        | Source                                                                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Brand schema and validation | [`src/lib/brand/schema.ts`](../../src/lib/brand/schema.ts)                                                                     |
+| Saved-brand client loader   | [`src/lib/brand/brand-list-client.ts`](../../src/lib/brand/brand-list-client.ts)                                               |
 | Brand persistence service   | [`src/lib/brand/persistence-service.ts`](../../src/lib/brand/persistence-service.ts)                                           |
 | Brand serialization         | [`src/lib/brand/serialize.ts`](../../src/lib/brand/serialize.ts)                                                               |
 | Brand transforms            | [`src/lib/brand/transforms.ts`](../../src/lib/brand/transforms.ts)                                                             |
@@ -65,6 +66,13 @@ delete confirmation cannot close while deletion is unresolved. Typed action
 failures stay visible and retryable; rejected transports use safe generic
 feedback while preserving the draft or confirmation. Framework redirect and
 not-found control flow is rethrown rather than rendered as an ordinary error.
+
+Document-editor brand pickers load `/api/brand` through the shared saved-brand
+client boundary. The complete response is parsed as `BrandStyle[]` before any
+preview, font, or transform consumes it. Slow responses survive loading-state
+rerenders, duplicate retries share one request, and unmount aborts outstanding
+work. Network, non-OK, and malformed responses remain distinguishable from a
+valid empty brand list through visible retryable feedback.
 
 ## Persistence And Asset Ownership
 
@@ -125,6 +133,7 @@ changed by applying a brand.
 ## Primary Tests
 
 - [`src/lib/brand/brand.test.ts`](../../src/lib/brand/brand.test.ts)
+- [`src/lib/brand/brand-list-client.test.ts`](../../src/lib/brand/brand-list-client.test.ts)
 - [`src/lib/brand/asset-lifecycle.test.ts`](../../src/lib/brand/asset-lifecycle.test.ts)
 - [`src/lib/assets/upload-policy.test.ts`](../../src/lib/assets/upload-policy.test.ts)
 - [`src/lib/brand/font-face.test.ts`](../../src/lib/brand/font-face.test.ts)

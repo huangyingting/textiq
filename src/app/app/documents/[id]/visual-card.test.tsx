@@ -30,8 +30,8 @@
  * `VisualContextPopover` only rendering in `float` mode with no edge
  * selected; the real mutation wiring behind `onChange`/`onCommand`/
  * `onRemove`/`onRemoveSelectedNode`/`onDuplicate`/`onApplyBrandToAll`; and
- * the `quickDownload`/`copyImage` status machine (idle → copying → copied /
- * error) plus `nativeShare`'s Web Share gating.
+ * the shared quick-action operation boundary, download/copy/share recovery,
+ * clipboard status feedback, and native Web Share gating.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -411,7 +411,7 @@ describe("VisualCard", () => {
     assert.equal(findVisualEditor(renderer), null);
   });
 
-  test("editable + closed: renders the preview button and download button; clicking the preview opens the editing controls", () => {
+  test("editable + closed: renders responsive, touch-sized quick actions; clicking the preview opens the editing controls", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     const key = insertVisualNode(editor, FIXTURES.list);
@@ -419,7 +419,12 @@ describe("VisualCard", () => {
 
     const preview = findByAriaLabel(renderer, "Edit visual")!;
     assert.ok(preview);
-    assert.ok(findByAriaLabel(renderer, "Download visual as PNG"));
+    const downloadButton = findByAriaLabel(renderer, "Download visual as PNG")!;
+    assert.match(String(downloadButton.props.className), /tiq-touch-target/);
+    assert.match(
+      String(downloadButton.parent?.props.className),
+      /tiq-coarse-actions/,
+    );
     assert.equal(findVisualEditor(renderer), null);
 
     act(() => {
@@ -790,7 +795,92 @@ describe("VisualCard", () => {
     );
   });
 
-  test("quickDownload does not call downloadBlob when exportPNG resolves null", async () => {
+  test("quick actions share one synchronous boundary and disable every competing action until settlement", async () => {
+    restoreDom = installFakeDom({
+      navigator: {
+        clipboard: { write: async () => {} },
+        share: async () => {},
+        canShare: () => true,
+      },
+    });
+    const originalClipboardItem = (globalThis as { ClipboardItem?: unknown })
+      .ClipboardItem;
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(public items: unknown) {}
+    };
+
+    let resolveExport: ((blob: Blob | null) => void) | null = null;
+    globalThis.__visualCardExport = {
+      calls: [],
+      downloads: [],
+      impl: () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    };
+
+    const editor = makeEditor();
+    const key = insertVisualNode(editor, FIXTURES.list);
+    renderer = mountCard(
+      editor,
+      { nodeKey: key, visual: FIXTURES.list },
+      svgRefMock().createNodeMock,
+    );
+
+    try {
+      const downloadButton = findByAriaLabel(
+        renderer,
+        "Download visual as PNG",
+      )!;
+      const copyButton = findByAriaLabel(renderer, "Copy image to clipboard")!;
+      const shareButton = findByAriaLabel(renderer, "Share visual")!;
+
+      act(() => {
+        downloadButton.props.onClick({ stopPropagation: () => {} });
+        downloadButton.props.onClick({ stopPropagation: () => {} });
+        copyButton.props.onClick({ stopPropagation: () => {} });
+        shareButton.props.onClick({ stopPropagation: () => {} });
+      });
+
+      assert.equal(globalThis.__visualCardExport.calls.length, 1);
+      assert.equal(
+        renderer.root.findByProps({ "aria-busy": true }).props["aria-busy"],
+        true,
+      );
+      assert.equal(
+        findByAriaLabel(renderer, "Downloading visual as PNG")!.props.disabled,
+        true,
+      );
+      assert.equal(
+        findByAriaLabel(renderer, "Copy image to clipboard")!.props.disabled,
+        true,
+      );
+      assert.equal(
+        findByAriaLabel(renderer, "Share visual")!.props.disabled,
+        true,
+      );
+
+      assert.ok(resolveExport);
+      await act(async () => {
+        resolveExport!(new Blob(["png"], { type: "image/png" }));
+      });
+
+      assert.equal(globalThis.__visualCardExport.downloads.length, 1);
+      assert.equal(
+        findByAriaLabel(renderer, "Download visual as PNG")!.props.disabled,
+        false,
+      );
+      assert.equal(
+        renderer.root.findAllByProps({ "aria-busy": true }).length,
+        0,
+      );
+    } finally {
+      (globalThis as { ClipboardItem?: unknown }).ClipboardItem =
+        originalClipboardItem;
+    }
+  });
+
+  test("quickDownload surfaces a dismissible failure and permits a successful retry", async () => {
     restoreDom = installFakeDom();
     globalThis.__visualCardExport = {
       calls: [],
@@ -812,6 +902,36 @@ describe("VisualCard", () => {
 
     assert.equal(globalThis.__visualCardExport!.calls.length, 1);
     assert.equal(globalThis.__visualCardExport!.downloads.length, 0);
+    assert.equal(
+      renderer.root.findByProps({ role: "alert" }).findByType("span")
+        .children[0],
+      "Visual download failed. Try again.",
+    );
+
+    act(() => {
+      findByAriaLabel(renderer!, "Dismiss visual action error")!.props.onClick({
+        stopPropagation: () => {},
+      });
+    });
+    assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
+
+    globalThis.__visualCardExport.impl = async () =>
+      new Blob(["png"], { type: "image/png" });
+    await act(async () => {
+      await findByAriaLabel(renderer!, "Download visual as PNG")!.props.onClick(
+        {
+          stopPropagation: () => {},
+        },
+      );
+    });
+
+    assert.equal(globalThis.__visualCardExport.calls.length, 2);
+    assert.deepEqual(
+      globalThis.__visualCardExport.downloads.map(
+        (download) => download.filename,
+      ),
+      ["How it works.png"],
+    );
   });
 
   test("copyImage: idle -> copying -> copied on a successful export, using the real clipboard write", async () => {
@@ -952,6 +1072,100 @@ describe("VisualCard", () => {
     const payload = shareCalls[0] as { title?: string; files?: File[] };
     assert.equal(payload.title, "How it works");
     assert.equal(payload.files?.length, 1);
+  });
+
+  test("nativeShare exposes non-cancellation failures, dismisses them, and sanitizes retry filenames", async () => {
+    const shareCalls: Array<{ files?: File[]; title?: string }> = [];
+    let rejectShare = true;
+    restoreDom = installFakeDom({
+      navigator: {
+        share: async (payload: { files?: File[]; title?: string }) => {
+          shareCalls.push(payload);
+          if (rejectShare) throw new Error("share transport failed");
+        },
+        canShare: () => true,
+      },
+    });
+    globalThis.__visualCardExport = {
+      calls: [],
+      downloads: [],
+      impl: async () => new Blob(["png"], { type: "image/png" }),
+    };
+
+    const visual = { ...FIXTURES.list, title: "Revenue / Costs" };
+    const editor = makeEditor();
+    const key = insertVisualNode(editor, visual);
+    renderer = mountCard(
+      editor,
+      { nodeKey: key, visual },
+      svgRefMock().createNodeMock,
+    );
+
+    await act(async () => {
+      await findByAriaLabel(renderer!, "Share visual")!.props.onClick({
+        stopPropagation: () => {},
+      });
+    });
+
+    assert.equal(shareCalls.length, 1);
+    assert.ok(findByAriaLabel(renderer, "Share failed"));
+    assert.equal(
+      renderer.root.findByProps({ role: "alert" }).findByType("span")
+        .children[0],
+      "Visual sharing failed. Try again.",
+    );
+
+    act(() => {
+      findByAriaLabel(renderer!, "Dismiss visual action error")!.props.onClick({
+        stopPropagation: () => {},
+      });
+    });
+    rejectShare = false;
+
+    await act(async () => {
+      await findByAriaLabel(renderer!, "Share visual")!.props.onClick({
+        stopPropagation: () => {},
+      });
+    });
+
+    assert.equal(shareCalls.length, 2);
+    assert.equal(shareCalls[1]?.files?.[0]?.name, "Revenue _ Costs.png");
+    assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
+  });
+
+  test("nativeShare treats AbortError as a normal user cancellation", async () => {
+    restoreDom = installFakeDom({
+      navigator: {
+        share: async () => {
+          const error = new Error("cancelled");
+          error.name = "AbortError";
+          throw error;
+        },
+        canShare: () => true,
+      },
+    });
+    globalThis.__visualCardExport = {
+      calls: [],
+      downloads: [],
+      impl: async () => new Blob(["png"], { type: "image/png" }),
+    };
+
+    const editor = makeEditor();
+    const key = insertVisualNode(editor, FIXTURES.list);
+    renderer = mountCard(
+      editor,
+      { nodeKey: key, visual: FIXTURES.list },
+      svgRefMock().createNodeMock,
+    );
+
+    await act(async () => {
+      await findByAriaLabel(renderer!, "Share visual")!.props.onClick({
+        stopPropagation: () => {},
+      });
+    });
+
+    assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
+    assert.ok(findByAriaLabel(renderer, "Share visual"));
   });
 });
 

@@ -13,6 +13,7 @@ import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import { computeAnchoredPosition } from "@/lib/anchored-position";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
 import type { VisualCommandPayload } from "@/lib/commands/visual-command-contracts";
+import { loadBrandStyles } from "@/lib/brand/brand-list-client";
 import type { BrandStyle } from "@/lib/brand/schema";
 import { isCreditError, stampSourceText } from "@/lib/visual/generate";
 import { mergeVisualContent } from "@/lib/visual/transforms";
@@ -99,36 +100,56 @@ function resolveOperationIdempotencyKey(args: {
  */
 export function useBrandContext(activeSection: MenuSection | null) {
   const [brands, setBrands] = useState<BrandStyle[]>([]);
-  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
+    "idle",
+  );
+  const requestRef = useRef<AbortController | null>(null);
+
+  const load = useCallback(async () => {
+    if (requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+
+    try {
+      // Keep effect-triggered loading updates outside the synchronous effect
+      // boundary while the ref still closes the duplicate-activation window.
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
+      setStatus("loading");
+      const nextBrands = await loadBrandStyles(controller.signal);
+      if (controller.signal.aborted) return;
+      setBrands(nextBrands);
+      setStatus("done");
+    } catch {
+      if (!controller.signal.aborted) {
+        setStatus("error");
+      }
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (activeSection !== "branding" || status !== "idle") return;
-    let aborted = false;
-    (async () => {
-      // Defer the first setState past the synchronous effect boundary so the
-      // `react-hooks/set-state-in-effect` rule is satisfied.
-      await Promise.resolve();
-      if (aborted) return;
-      setStatus("loading");
-      try {
-        const res = await fetch("/api/brand");
-        if (aborted || !res.ok) return;
-        const json = (await res.json()) as { brands?: unknown };
-        if (!aborted && Array.isArray(json.brands)) {
-          setBrands(json.brands as BrandStyle[]);
-        }
-      } catch {
-        // Best-effort; ignore errors
-      } finally {
-        if (!aborted) setStatus("done");
-      }
-    })();
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) return load();
+    });
     return () => {
-      aborted = true;
+      cancelled = true;
     };
-  }, [activeSection, status]);
+  }, [activeSection, load, status]);
 
-  return { brands, status };
+  useEffect(() => {
+    return () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, []);
+
+  return { brands, status, retry: load };
 }
 
 // ---------------------------------------------------------------------------

@@ -82,6 +82,7 @@ import {
   type EffectKind,
 } from "@/lib/visual/schema";
 import { applyBrand, brandPreviewStyle } from "@/lib/brand/transforms";
+import { BRAND_LIST_LOAD_ERROR } from "@/lib/brand/brand-list-client";
 import type { BrandStyle } from "@/lib/brand/schema";
 import { BRAND_WEB_FONTS } from "@/lib/brand/schema";
 import {
@@ -801,7 +802,11 @@ export function VisualContextPopover({
   const popoverExpanded = effectiveActiveSection !== null;
 
   // Brands — lazy-loaded when the branding section opens
-  const { brands, status: brandsStatus } = useBrandContext(activeSection);
+  const {
+    brands,
+    status: brandsStatus,
+    retry: retryBrands,
+  } = useBrandContext(activeSection);
 
   // AI variations generation
   const {
@@ -1651,9 +1656,26 @@ export function VisualContextPopover({
 
   function renderBrandingSection() {
     return (
-      <div className="py-1">
+      <div className="py-1" aria-busy={brandsStatus === "loading"}>
         {brandsStatus === "loading" ? (
           <p className="text-[11px] text-[var(--ds-text-muted)]">Loading…</p>
+        ) : brandsStatus === "error" ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-2 rounded-ds-sm border border-ds-danger-border bg-ds-danger-surface px-2 py-1.5 text-[11px] text-ds-danger-text"
+          >
+            <span>{BRAND_LIST_LOAD_ERROR}</span>
+            <button
+              type="button"
+              onClick={() => void retryBrands()}
+              className={cx(
+                "tiq-touch-target rounded-ds-sm px-1.5 py-0.5 font-semibold hover:bg-ds-state-hover",
+                FOCUS_RING,
+              )}
+            >
+              Try again
+            </button>
+          </div>
         ) : brands.length === 0 ? (
           <p className="text-[11px] text-[var(--ds-text-muted)]">
             No brands yet.{" "}

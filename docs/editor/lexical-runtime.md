@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-31"
 description: "Lexical runtime implementation contract for durable block ids, visual nodes, core plugin registration, editor actions, and visual editing write paths."
 ---
 
@@ -109,6 +109,14 @@ persisted Lexical selection. This is deliberate: collaborative Yjs updates do
 not preserve decorator `NodeSelection` state reliably, so card-open state is a
 client UI concern only.
 
+When an editable card is closed, its PNG download, copy-image, and native-share
+shortcuts use one synchronous browser-operation boundary. Duplicate or
+competing activation cannot start a second rasterization; the strip reports
+busy state and disables all three actions until settlement. Failures stay
+visible with an explicit dismiss/retry path, while native-share cancellation is
+a normal outcome. The strip is hover/focus revealed for fine pointers and uses
+the shared coarse-pointer visibility and touch-target contracts on touch input.
+
 ## Server Action Boundary
 
 `saveDocumentLexical` is the server write boundary for serialized editor state.
@@ -138,4 +146,5 @@ does not snapshot or modify `contentJson`.
 - [`src/lib/lexical/visual-node.test.ts`](../../src/lib/lexical/visual-node.test.ts)
 - [`src/lib/lexical/visual-nodes.test.ts`](../../src/lib/lexical/visual-nodes.test.ts)
 - [`src/lib/lexical/insert-visual.test.ts`](../../src/lib/lexical/insert-visual.test.ts)
+- [`src/app/app/documents/[id]/visual-card.test.tsx`](../../src/app/app/documents/%5Bid%5D/visual-card.test.tsx)
 - [`src/lib/lexical/visual-edit-roundtrip.test.ts`](../../src/lib/lexical/visual-edit-roundtrip.test.ts)

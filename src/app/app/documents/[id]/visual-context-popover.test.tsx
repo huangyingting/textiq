@@ -363,6 +363,62 @@ describe("VisualContextPopover — brand section wiring", () => {
     });
   });
 
+  test("shows a retryable brand-load error and suppresses duplicate retry activation", async () => {
+    await withPortalDom(async () => {
+      let brandFetchCalls = 0;
+      globalThis.fetch = (async (url: string) => {
+        if (url === "/api/brand") {
+          brandFetchCalls += 1;
+          if (brandFetchCalls === 1) throw new Error("network down");
+          return {
+            ok: true,
+            json: async () => ({ brands: [buildBrand("retry", "Retry")] }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      }) as typeof fetch;
+
+      const { renderer } = renderPopover();
+      try {
+        await act(async () => {
+          (
+            findToolbarButton(renderer.root, "Swap Branding").props
+              .onClick as () => void
+          )();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.equal(brandFetchCalls, 1);
+        assert.match(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          /Saved brands could not be loaded\./,
+        );
+        const retry = renderer.root.find(
+          (node) => node.type === "button" && textOf(node) === "Try again",
+        );
+
+        act(() => {
+          retry.props.onClick();
+          retry.props.onClick();
+        });
+        assert.equal(brandFetchCalls, 1);
+
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.equal(brandFetchCalls, 2);
+        assert.ok(findByAria(renderer.root, "Apply brand Retry"));
+        assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("renders a brand chip per loaded brand; applying it calls onChange, applying to all calls onApplyBrandToAll", async () => {
     await withPortalDom(async () => {
       stubFetch([buildBrand("b1", "Acme"), buildBrand("b2", "Globex")]);

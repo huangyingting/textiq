@@ -14,7 +14,7 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $nodesOfType } from "lexical";
 import { LayoutTemplate, Palette } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Divider, Surface, Tooltip } from "@/components/ui";
 import { cx } from "@/components/ui/tokens";
@@ -27,6 +27,10 @@ import { STYLE_THEMES } from "@/lib/visual/themes";
 import { applyTheme } from "@/lib/visual/transforms";
 import { applyElasticLayout } from "@/lib/visual/transforms";
 import { applyVisualCommand } from "@/lib/commands/visual-command-adapter";
+import {
+  BRAND_LIST_LOAD_ERROR,
+  loadBrandStyles,
+} from "@/lib/brand/brand-list-client";
 
 import { VisualNode } from "@/lib/lexical/visual-node";
 
@@ -36,24 +40,38 @@ import { VisualNode } from "@/lib/lexical/visual-node";
 
 function useBrands() {
   const [brands, setBrands] = useState<BrandStyle[]>([]);
-  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
+    "idle",
+  );
+  const requestRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
-    if (status !== "idle") return;
+    if (requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
     setStatus("loading");
     try {
-      const res = await fetch("/api/brand");
-      if (!res.ok) return;
-      const json = (await res.json()) as { brands?: unknown };
-      if (Array.isArray(json.brands)) {
-        setBrands(json.brands as BrandStyle[]);
-      }
-    } catch {
-      // Best-effort; ignore errors
-    } finally {
+      const nextBrands = await loadBrandStyles(controller.signal);
+      if (controller.signal.aborted) return;
+      setBrands(nextBrands);
       setStatus("done");
+    } catch {
+      if (!controller.signal.aborted) {
+        setStatus("error");
+      }
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+      }
     }
-  }, [status]);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, []);
 
   return { brands, status, load };
 }
@@ -162,7 +180,7 @@ function BrandSection() {
   // Lazy-load brands when section is first rendered.
   useEffect(() => {
     void load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load]);
 
   const applyBrandToAll = useCallback(
     (brand: BrandStyle) => {
@@ -200,12 +218,29 @@ function BrandSection() {
   if (status === "done" && brands.length === 0) return null;
 
   return (
-    <div className="p-3">
+    <div className="p-3" aria-busy={status === "loading"}>
       <SectionLabel icon={<LayoutTemplate />}>Brand — all visuals</SectionLabel>
-      {status !== "done" ? (
+      {status === "idle" || status === "loading" ? (
         <p className="text-[11px] text-[var(--ds-text-muted,#6f7d83)]">
           Loading brands…
         </p>
+      ) : status === "error" ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 rounded-ds-sm border border-ds-danger-border bg-ds-danger-surface px-2 py-1.5 text-[11px] text-ds-danger-text"
+        >
+          <span>{BRAND_LIST_LOAD_ERROR}</span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className={cx(
+              "tiq-touch-target rounded-ds-sm px-1.5 py-0.5 font-semibold hover:bg-ds-state-hover",
+              FOCUS_RING,
+            )}
+          >
+            Try again
+          </button>
+        </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {brands.map((brand) => {

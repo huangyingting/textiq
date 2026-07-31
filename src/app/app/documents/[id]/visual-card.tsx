@@ -50,6 +50,13 @@ const SOURCE_TEXT_BLOCK_TYPES = new Set([
   "list",
 ]);
 
+type VisualQuickAction = "download" | "copy" | "share";
+
+type VisualActionError = {
+  action: VisualQuickAction;
+  message: string;
+};
+
 /**
  * Interactive card for a {@link Visual} embedded in the Lexical editor (US-012).
  * Read-only by default; clicking it (when the editor is editable) opens the
@@ -401,63 +408,144 @@ export function VisualCard({
   // own setState calls.
   const parsed = useMemo(() => safeParseVisual(visual), [visual]);
 
+  const quickActionRef = useRef<VisualQuickAction | null>(null);
+  const mountedRef = useRef(true);
+  const [activeQuickAction, setActiveQuickAction] =
+    useState<VisualQuickAction | null>(null);
+  const [actionError, setActionError] = useState<VisualActionError | null>(
+    null,
+  );
+  const [actionStatus, setActionStatus] = useState("");
+  const [copyImageState, setCopyImageState] = useState<
+    "idle" | "copying" | "copied" | "error"
+  >("idle");
+  const [nativeShareState, setNativeShareState] = useState<
+    "idle" | "sharing" | "error"
+  >("idle");
+  const copyImageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyImageTimerRef.current !== null) {
+        clearTimeout(copyImageTimerRef.current);
+        copyImageTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const beginQuickAction = useCallback((action: VisualQuickAction) => {
+    if (quickActionRef.current !== null) {
+      return false;
+    }
+
+    quickActionRef.current = action;
+    if (copyImageTimerRef.current !== null) {
+      clearTimeout(copyImageTimerRef.current);
+      copyImageTimerRef.current = null;
+    }
+    setActiveQuickAction(action);
+    setActionError(null);
+    setActionStatus("");
+    setCopyImageState(action === "copy" ? "copying" : "idle");
+    setNativeShareState(action === "share" ? "sharing" : "idle");
+    return true;
+  }, []);
+
+  const finishQuickAction = useCallback((action: VisualQuickAction) => {
+    if (quickActionRef.current !== action) {
+      return;
+    }
+    quickActionRef.current = null;
+    if (mountedRef.current) {
+      setActiveQuickAction(null);
+    }
+  }, []);
+
+  const dismissActionError = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    setActionError(null);
+    setCopyImageState("idle");
+    setNativeShareState("idle");
+  }, []);
+
   // Quick-download: export the visual as PNG on the download icon click.
   const quickDownload = useCallback(
     async (event: React.MouseEvent) => {
       event.stopPropagation();
       const svg = rendererRef.current;
       if (!svg || !parsed.success) return;
+      if (!beginQuickAction("download")) return;
       const visualData = parsed.data;
-      const opts = {
-        ...DEFAULT_EXPORT_OPTIONS,
-        aspectRatio: visualData.aspectRatio,
-      };
-      const blob = await exportPNG(svg, opts);
-      if (blob) {
+      try {
+        const opts = {
+          ...DEFAULT_EXPORT_OPTIONS,
+          aspectRatio: visualData.aspectRatio,
+        };
+        const blob = await exportPNG(svg, opts);
+        if (!blob) {
+          throw new Error("exportPNG returned null");
+        }
         const filename = sanitizeFilename(visualData.title ?? "") + ".png";
         downloadBlob(blob, filename);
+        if (mountedRef.current) {
+          setActionStatus("Visual download started.");
+        }
+      } catch {
+        if (mountedRef.current) {
+          setActionError({
+            action: "download",
+            message: "Visual download failed. Try again.",
+          });
+        }
+      } finally {
+        finishQuickAction("download");
       }
     },
-    [parsed],
+    [beginQuickAction, finishQuickAction, parsed],
   );
 
   // Copy image to clipboard.
-  const [copyImageState, setCopyImageState] = useState<
-    "idle" | "copying" | "copied" | "error"
-  >("idle");
-  const copyImageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (copyImageTimerRef.current !== null)
-        clearTimeout(copyImageTimerRef.current);
-    };
-  }, []);
-
-  const copyImage = useCallback(async (event: React.MouseEvent) => {
-    event.stopPropagation();
-    const svg = rendererRef.current;
-    if (!svg) return;
-    setCopyImageState("copying");
-    try {
-      const opts = applySocialPresetToOptions("square", DEFAULT_EXPORT_OPTIONS);
-      const blob = await exportPNG(svg, opts);
-      if (!blob) throw new Error("exportPNG returned null");
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
-      setCopyImageState("copied");
-      copyImageTimerRef.current = setTimeout(
-        () => setCopyImageState("idle"),
-        2500,
-      );
-    } catch {
-      setCopyImageState("error");
-      copyImageTimerRef.current = setTimeout(
-        () => setCopyImageState("idle"),
-        2500,
-      );
-    }
-  }, []);
+  const copyImage = useCallback(
+    async (event: React.MouseEvent) => {
+      event.stopPropagation();
+      const svg = rendererRef.current;
+      if (!svg || !beginQuickAction("copy")) return;
+      try {
+        const opts = applySocialPresetToOptions(
+          "square",
+          DEFAULT_EXPORT_OPTIONS,
+        );
+        const blob = await exportPNG(svg, opts);
+        if (!blob) throw new Error("exportPNG returned null");
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        if (mountedRef.current) {
+          setCopyImageState("copied");
+          setActionStatus("Visual image copied to the clipboard.");
+          copyImageTimerRef.current = setTimeout(() => {
+            if (mountedRef.current) {
+              setCopyImageState("idle");
+            }
+            copyImageTimerRef.current = null;
+          }, 2500);
+        }
+      } catch {
+        if (mountedRef.current) {
+          setCopyImageState("error");
+          setActionError({
+            action: "copy",
+            message: "Visual copy failed. Try again.",
+          });
+        }
+      } finally {
+        finishQuickAction("copy");
+      }
+    },
+    [beginQuickAction, finishQuickAction],
+  );
 
   // Native share: share visual image via Web Share API when available.
   const nativeShare = useCallback(
@@ -465,6 +553,7 @@ export function VisualCard({
       event.stopPropagation();
       const svg = rendererRef.current;
       if (!svg || !parsed.success) return;
+      if (!beginQuickAction("share")) return;
       const visualData = parsed.data;
       const name = visualData.title?.trim() || "visual";
       try {
@@ -474,23 +563,45 @@ export function VisualCard({
         );
         const blob = await exportPNG(svg, opts);
         if (blob) {
-          const file = new File([blob], `${name}.png`, { type: "image/png" });
+          const file = new File([blob], `${sanitizeFilename(name)}.png`, {
+            type: "image/png",
+          });
           if (canWebShare(file)) {
             await navigator.share({ files: [file], title: name });
+            if (mountedRef.current) {
+              setNativeShareState("idle");
+              setActionStatus("Visual shared.");
+            }
             return;
           }
         }
         if (canWebShare()) {
           await navigator.share({ title: name });
+          if (mountedRef.current) {
+            setNativeShareState("idle");
+            setActionStatus("Visual shared.");
+          }
+          return;
         }
+        throw new Error("Web Share API became unavailable");
       } catch (err) {
-        // Ignore user-initiated cancellations
-        if (!(err instanceof Error && err.name === "AbortError")) {
-          console.error("[SocialShare] native share failed:", err);
+        if (!mountedRef.current) return;
+        // User-initiated cancellation is a normal outcome, not an error.
+        if (err instanceof Error && err.name === "AbortError") {
+          setNativeShareState("idle");
+          setActionStatus("Sharing cancelled.");
+        } else {
+          setNativeShareState("error");
+          setActionError({
+            action: "share",
+            message: "Visual sharing failed. Try again.",
+          });
         }
+      } finally {
+        finishQuickAction("share");
       }
     },
-    [parsed],
+    [beginQuickAction, finishQuickAction, parsed],
   );
 
   if (!parsed.success) {
@@ -516,6 +627,10 @@ export function VisualCard({
       ? "border-[var(--ds-accent,#6366f1)] ring-2 ring-[var(--ds-accent,#6366f1)]/20"
       : "border-[var(--ds-border-subtle,rgba(0,0,0,0.06))]",
   ].join(" ");
+  const quickActionVisibility =
+    activeQuickAction !== null
+      ? "opacity-100"
+      : "opacity-0 group-hover:opacity-100 focus-within:opacity-100";
 
   return (
     <motion.div
@@ -541,7 +656,7 @@ export function VisualCard({
           />
         </div>
       ) : editable ? (
-        <div className="group relative">
+        <div className="group relative" aria-busy={activeQuickAction !== null}>
           <div
             role="button"
             tabIndex={0}
@@ -621,61 +736,106 @@ export function VisualCard({
               })}
             </svg>
           </div>
-          {/* Quick-download button — visible on hover */}
-          <button
-            type="button"
-            aria-label="Download visual as PNG"
-            onClick={(e) => void quickDownload(e)}
+          {actionError ? (
+            <div
+              role="alert"
+              className="absolute left-3 right-3 top-3 flex items-center justify-between gap-3 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text shadow-sm"
+            >
+              <span>{actionError.message}</span>
+              <button
+                type="button"
+                aria-label="Dismiss visual action error"
+                onClick={dismissActionError}
+                className={`shrink-0 rounded-ds-sm px-1.5 py-0.5 font-semibold hover:bg-ds-state-hover ${FOCUS_RING}`}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          <p role="status" aria-live="polite" className="sr-only">
+            {activeQuickAction === "download"
+              ? "Downloading visual as PNG."
+              : activeQuickAction === "copy"
+                ? "Copying visual image to the clipboard."
+                : activeQuickAction === "share"
+                  ? "Preparing visual to share."
+                  : actionStatus}
+          </p>
+          <div
             className={[
-              "absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted opacity-0 shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary group-hover:opacity-100",
-              FOCUS_RING,
+              "tiq-coarse-actions absolute bottom-3 right-3 flex items-center gap-1 transition-opacity motion-reduce:transition-none",
+              quickActionVisibility,
             ].join(" ")}
           >
-            <Download aria-hidden="true" className="h-3.5 w-3.5" />
-          </button>
-          {/* Copy image to clipboard — only when Clipboard API is available */}
-          {canCopyImageToClipboard() && (
+            {/* Quick-download button — visible on hover, focus, and coarse pointers. */}
             <button
               type="button"
               aria-label={
-                copyImageState === "copied"
-                  ? "Image copied!"
-                  : copyImageState === "error"
-                    ? "Copy failed"
-                    : "Copy image to clipboard"
+                activeQuickAction === "download"
+                  ? "Downloading visual as PNG"
+                  : "Download visual as PNG"
               }
-              onClick={(e) => void copyImage(e)}
-              disabled={copyImageState === "copying"}
+              onClick={quickDownload}
+              disabled={activeQuickAction !== null}
               className={[
-                "absolute bottom-3 right-12 flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted opacity-0 shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary group-hover:opacity-100",
-                "disabled:cursor-wait",
+                "tiq-touch-target flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary disabled:cursor-wait disabled:text-ds-text-muted",
                 FOCUS_RING,
               ].join(" ")}
             >
-              {copyImageState === "copied" ? (
-                <Check
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 text-ds-success-text"
-                />
-              ) : (
-                <Copy aria-hidden="true" className="h-3.5 w-3.5" />
-              )}
+              <Download aria-hidden="true" className="h-3.5 w-3.5" />
             </button>
-          )}
-          {/* Native share — only on devices that support Web Share API */}
-          {canWebShare() && (
-            <button
-              type="button"
-              aria-label="Share visual"
-              onClick={(e) => void nativeShare(e)}
-              className={[
-                "absolute bottom-3 right-[5.25rem] flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted opacity-0 shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary group-hover:opacity-100",
-                FOCUS_RING,
-              ].join(" ")}
-            >
-              <Share2 aria-hidden="true" className="h-3.5 w-3.5" />
-            </button>
-          )}
+            {/* Copy image to clipboard — only when Clipboard API is available. */}
+            {canCopyImageToClipboard() && (
+              <button
+                type="button"
+                aria-label={
+                  copyImageState === "copied"
+                    ? "Image copied!"
+                    : copyImageState === "error"
+                      ? "Copy failed"
+                      : activeQuickAction === "copy"
+                        ? "Copying image to clipboard"
+                        : "Copy image to clipboard"
+                }
+                onClick={copyImage}
+                disabled={activeQuickAction !== null}
+                className={[
+                  "tiq-touch-target flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary disabled:cursor-wait disabled:text-ds-text-muted",
+                  FOCUS_RING,
+                ].join(" ")}
+              >
+                {copyImageState === "copied" ? (
+                  <Check
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 text-ds-success-text"
+                  />
+                ) : (
+                  <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+            {/* Native share — only on devices that support Web Share API. */}
+            {canWebShare() && (
+              <button
+                type="button"
+                aria-label={
+                  nativeShareState === "error"
+                    ? "Share failed"
+                    : activeQuickAction === "share"
+                      ? "Sharing visual"
+                      : "Share visual"
+                }
+                onClick={nativeShare}
+                disabled={activeQuickAction !== null}
+                className={[
+                  "tiq-touch-target flex h-7 w-7 items-center justify-center rounded-full border border-ds-border-subtle bg-ds-surface-glass text-ds-text-muted shadow-sm backdrop-blur-sm transition hover:text-ds-text-primary disabled:cursor-wait disabled:text-ds-text-muted",
+                  FOCUS_RING,
+                ].join(" ")}
+              >
+                <Share2 aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className={cardClass}>
