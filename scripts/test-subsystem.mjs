@@ -72,7 +72,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/verify-email\//,
       /^src\/app\/app\/loading\.test\.tsx$/,
       /^e2e\/auth\/authenticated-nested-routes\.spec\.ts$/,
-      /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:account-lifecycle-ui|auth-public-ui)\.spec\.ts$/,
     ],
   },
   billing: {
@@ -174,7 +174,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/templates\//,
       /^src\/lib\/trash\.test\.ts$/,
       /^src\/lib\/workspace\//,
-      /^e2e\/workspace\/workspace\.spec\.ts$/,
+      /^e2e\/ui-matrix\/dashboard-document-lifecycle-ui\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
   },
@@ -296,7 +296,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/components\/share\//,
       /^e2e\/public-render\/share-fallback\.spec\.ts$/,
       /^e2e\/presentation\/slide-asset-upload\.spec\.ts$/,
-      /^e2e\/ui-matrix\/(?:auth-public-ui|public-render-ui)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:account-lifecycle-ui|auth-public-ui|public-render-ui)\.spec\.ts$/,
     ],
   },
   system: {

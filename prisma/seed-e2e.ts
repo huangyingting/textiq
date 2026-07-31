@@ -9,6 +9,7 @@ import clarityPackageJson from "../prototypes/slide-themes/packages/clarity.pack
 import { Prisma } from "../src/generated/prisma/client";
 import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
 import {
+  deleteDocuments,
   updateDocumentMetadata,
   upsertDocumentWithCanonicalContent,
 } from "../src/lib/document/document-write-port";
@@ -213,6 +214,20 @@ async function main() {
     },
   });
 
+  const dashboardLifecycle = F.dashboardDocuments.lifecycle;
+  await deleteDocuments(prisma, {
+    where: {
+      ownerId: owner.id,
+      id: { not: dashboardLifecycle.id },
+      title: {
+        in: [
+          `${dashboardLifecycle.title} (copy)`,
+          dashboardLifecycle.renamedTitle,
+        ],
+      },
+    },
+  });
+
   await upsertDocumentWithCanonicalContent(prisma, {
     where: { id: F.dashboardDocuments.alphaFavorite.id },
     contentSnapshot: markdownToLexicalStateObject(
@@ -232,6 +247,26 @@ async function main() {
       ownerId: owner.id,
       workspaceId: F.workspaceId,
       favorite: true,
+    },
+  });
+
+  await upsertDocumentWithCanonicalContent(prisma, {
+    where: { id: dashboardLifecycle.id },
+    contentSnapshot: markdownToLexicalStateObject(dashboardLifecycle.content),
+    update: {
+      title: dashboardLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: null,
+      favorite: false,
+      deletedAt: null,
+      tags: { set: [] },
+    },
+    create: {
+      id: dashboardLifecycle.id,
+      title: dashboardLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: null,
+      favorite: false,
     },
   });
 

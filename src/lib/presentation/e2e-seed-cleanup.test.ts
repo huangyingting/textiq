@@ -406,6 +406,7 @@ test(
     const staleOrphanStorageKey = `${staleOrphanDocumentId}/${"c".repeat(64)}.png`;
     const hostileStorageKey = `${hostileDocumentId}/${"e".repeat(64)}.png`;
     const unrelatedStorageKey = `unrelated/${"d".repeat(64)}.png`;
+    const staleDashboardLifecycleCopyId = "e2edashboardlifecyclestalecopy01";
     const outsideSentinelPath = path.join(
       harnessRoot,
       "storage",
@@ -485,6 +486,24 @@ test(
       await fs.writeFile(filePath, "retain");
     }
 
+    await client.document.create({
+      data: {
+        id: staleDashboardLifecycleCopyId,
+        title: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.renamedTitle,
+        ownerId: owner.id,
+      },
+    });
+    await client.document.update({
+      where: {
+        id: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.id,
+      },
+      data: {
+        title: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.renamedTitle,
+        favorite: true,
+        deletedAt: new Date(),
+      },
+    });
+
     await runFullSeed();
 
     const currentDocuments = await client.document.findMany({
@@ -513,6 +532,33 @@ test(
         where: { id: { in: [staleDocumentId, hostileDocumentId] } },
       }),
       0,
+    );
+    assert.equal(
+      await client.document.count({
+        where: { id: staleDashboardLifecycleCopyId },
+      }),
+      0,
+    );
+    assert.deepEqual(
+      await client.document.findUniqueOrThrow({
+        where: {
+          id: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.id,
+        },
+        select: {
+          title: true,
+          content: true,
+          favorite: true,
+          deletedAt: true,
+          workspaceId: true,
+        },
+      }),
+      {
+        title: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.title,
+        content: E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle.content,
+        favorite: false,
+        deletedAt: null,
+        workspaceId: null,
+      },
     );
     assert.equal(
       await client.asset.count({

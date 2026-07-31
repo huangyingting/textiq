@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-20"
+last_updated: "2026-07-31"
 description: "This subsystem covers sign-in, account creation, provider linking, account settings, self-serve recovery, email verification, export, and deletion. Route authorization and document/workspace capabilities live in ../security/; this document covers how a user becomes and remains an authenticated account."
 ---
 
@@ -126,3 +126,4 @@ that no personal-data findings remain. Operational DSAR steps live in
 - [`src/lib/settings/view-model.test.ts`](../../src/lib/settings/view-model.test.ts)
 - [`src/lib/account/export.test.ts`](../../src/lib/account/export.test.ts)
 - [`src/lib/account/deletion-service.test.ts`](../../src/lib/account/deletion-service.test.ts)
+- [`e2e/ui-matrix/account-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/account-lifecycle-ui.spec.ts)

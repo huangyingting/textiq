@@ -8,21 +8,21 @@ app.
 
 ## What's covered
 
-| Spec                                                    | Coverage                                                                                                                                              |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                                                |
-| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                                       |
-| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                                         |
-| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                                       |
-| `e2e/presentation/present-export.spec.ts`               | Authenticated + public present render; real PDF export download (profile-gated, #520)                                                                 |
-| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                                                   |
-| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                                                     |
-| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                                           |
-| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                                                |
-| `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                                                   |
-| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                                         |
-| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                                               |
-| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/editor/workspace checks; auth, editor, presentation, public render, and workspace/brand run deterministically |
+| Spec                                                    | Coverage                                                                                                                      |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                        |
+| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                               |
+| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                 |
+| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)               |
+| `e2e/presentation/present-export.spec.ts`               | Authenticated + public present render; real PDF export download (profile-gated, #520)                                         |
+| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                           |
+| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                             |
+| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                   |
+| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                        |
+| `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                           |
+| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                 |
+| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                       |
+| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically |
 
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
 `e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
@@ -128,12 +128,14 @@ that ambiguity for the critical-flow specs
 `e2e/presentation/slides-layout-screenshots.spec.ts`,
 `e2e/presentation/slides-smoke.spec.ts`,
 `e2e/presentation/touch-controls.spec.ts`,
+`e2e/ui-matrix/account-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/auth-public-ui.spec.ts`,
+`e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/document-editor-ui.spec.ts`,
 `e2e/ui-matrix/presentation-ui.spec.ts`,
 `e2e/ui-matrix/public-render-ui.spec.ts`, and
-`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known users
-and isolated documents, and the specs run for real against them.
+`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known
+users and isolated documents, and the specs run for real against them.
 
 ### What the profile seeds
 
@@ -145,6 +147,8 @@ and isolated documents, and the specs run for real against them.
 - an empty, owner-partitioned Brand Studio state for the Pro editor so the
   deterministic browser workflow can create, upload a font, reload, edit,
   cancel deletion, delete, and verify protected-asset retirement;
+- resettable dashboard documents for search/filter coverage and an isolated
+  duplicate/rename/trash/restore/permanent-delete lifecycle;
 - one **shared** document with intro text + an embedded visual, a persisted
   `deckJson` in `schemaVersion: 7` (`Deck`) whose first slide carries known
   text and an `ImageNode` backed by a slide `Asset` (bytes written under

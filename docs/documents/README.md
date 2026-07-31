@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-16"
+last_updated: "2026-07-31"
 description: "This subsystem covers document creation, duplication, dashboard listing, search, tags, favorites, trash, and dashboard-load maintenance. Editor content state is documented in ../editor/; persisted document and deck shapes are documented in ../data-model/."
 ---
 
@@ -153,4 +153,5 @@ revoked, or exhausted invite links under the same lock policy.
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)
 - [`src/lib/document/tags.test.ts`](../../src/lib/document/tags.test.ts)
 - [`src/lib/dashboard/view-model.test.ts`](../../src/lib/dashboard/view-model.test.ts)
+- [`e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts)
 - [`src/lib/onboarding/checklist.test.ts`](../../src/lib/onboarding/checklist.test.ts)

@@ -83,6 +83,12 @@ export const E2E_PROFILE_FIXTURE = {
       title: "Beta tagged deterministic dashboard",
       content: "Beta tagged deterministic dashboard content.",
     },
+    lifecycle: {
+      id: "e2efixturedashboardlifecycle1",
+      title: "E2E dashboard lifecycle source",
+      renamedTitle: "E2E dashboard lifecycle copy renamed",
+      content: "E2E dashboard lifecycle duplicated content.",
+    },
   },
 } as const;
 

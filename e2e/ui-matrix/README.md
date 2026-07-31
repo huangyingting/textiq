@@ -43,11 +43,11 @@ The 500-case catalog is generated from `e2e/ui-matrix/cases.ts`; this README sec
 
 ## Playwright spec inventory
 
-The repository currently has 23 Playwright specs under `e2e/`. Every `e2e/**/*.spec.ts` file must appear here, and stale rows fail the inventory check.
+The repository currently has 25 Playwright specs under `e2e/`. Every `e2e/**/*.spec.ts` file must appear here, and stale rows fail the inventory check.
 
 | Run mode    | Specs |
 | ----------- | ----- |
-| advisory-ci | 22    |
+| advisory-ci | 24    |
 | required-ci | 1     |
 
 | Spec                                                            | Owners                              | Run mode    | Prerequisites / gates                                                                               | Roles                                          | Devices / viewports                            | CI status                                  |
@@ -69,8 +69,10 @@ The repository currently has 23 Playwright specs under `e2e/`. Every `e2e/**/*.s
 | `e2e/presentation/slides-smoke.spec.ts`                         | presentation                        | advisory-ci | `E2E_PROFILE=1 for mutating coverage`, `optional E2E_USER_EMAIL/PASSWORD and E2E_SLIDES_DOC_URL`    | seeded owner, owner, anonymous fallback routes | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/presentation/slides-conflict-recovery.spec.ts`             | presentation, collaboration         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner in two isolated sessions          | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/presentation/touch-controls.spec.ts`                       | presentation, accessibility         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Chromium touch 390x844                         | advisory deterministic E2E workflow        |
+| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`                    | auth, security, settings            | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | anonymous, seeded owner                        | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/auth-public-ui.spec.ts`                          | auth, public-render, system         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional GOOGLE_CLIENT_ID/SECRET`                          | anonymous, seeded owner                        | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/catalog.spec.ts`                                 | operations, presentation, ui        | advisory-ci | `none beyond Playwright test runner`                                                                | not browser-flow-specific                      | Playwright runner only                         | advisory deterministic E2E workflow        |
+| `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`         | documents                           | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/document-editor-ui.spec.ts`                      | editor, documents                   | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded viewer                    | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/presentation-ui.spec.ts`                         | presentation, public-render         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, anonymous public                 | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/public-render-ui.spec.ts`                        | public-render, security             | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | anonymous public, request API                  | Desktop Chrome                                 | advisory deterministic E2E workflow        |

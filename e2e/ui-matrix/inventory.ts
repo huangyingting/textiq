@@ -293,6 +293,18 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
   },
   {
+    spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+    owners: ["auth", "security", "settings"],
+    coverage:
+      "Deterministic password-recovery and email-verification failure states plus authenticated settings, account export, password-error recovery, and non-destructive deletion safeguards.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["anonymous", "seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/ui-matrix/README.md", "docs/auth/README.md"],
+  },
+  {
     spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
     owners: ["auth", "public-render", "system"],
     coverage:
@@ -322,6 +334,18 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Playwright runner only"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/cases.ts", "e2e/ui-matrix/README.md"],
+  },
+  {
+    spec: "e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts",
+    owners: ["documents"],
+    coverage:
+      "Deterministic dashboard favorite persistence, duplicate and rename durability, immediate delete/undo recovery, trash restore, and cancellable permanent deletion with fixture cleanup.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/ui-matrix/README.md", "docs/documents/README.md"],
   },
   {
     spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
