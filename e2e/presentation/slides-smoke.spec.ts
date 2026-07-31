@@ -114,6 +114,29 @@ async function isVisible(locator: Locator, timeout = 2_000): Promise<boolean> {
   }
 }
 
+async function openSlideEditorFromDocument(page: Page): Promise<Locator> {
+  const trigger = page
+    .getByRole("tab", { name: /open slide editor|slides/i })
+    .or(page.getByRole("button", { name: /open slide editor|slides/i }))
+    .or(page.getByRole("link", { name: /open slide editor|slides/i }))
+    .first();
+
+  if ((await trigger.count()) === 0 && !e2eProfileEnabled()) {
+    skipOptionalSlidesFixture(
+      "Slides panel was not available for this document",
+    );
+  }
+  await expect(trigger).toBeVisible({ timeout: 10_000 });
+  await trigger.click();
+  await expect(page).toHaveURL(/\/app\/documents\/[^/]+\/slides(?:[/?#]|$)/, {
+    timeout: 30_000,
+  });
+
+  const editor = page.locator('[data-slide-editor="true"]').first();
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  return editor;
+}
+
 async function waitForPresentTarget(page: Page): Promise<Page | null> {
   try {
     const target = await Promise.race([
@@ -207,36 +230,7 @@ test.describe("slides editor smoke", () => {
       await page.waitForURL(/\/app\/documents\//);
     }
 
-    // Try to open the Slides tab / panel.
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .or(page.getByRole("link", { name: /slides/i }))
-      .first();
-
-    const tabCount = await slidesTab.count();
-    if (tabCount === 0) {
-      skipOptionalSlidesFixture(
-        "Slides panel was not available for this document",
-      );
-    }
-    await slidesTab.click();
-
-    // The slide canvas or editor surface should become visible.
-    const editorSurface = page
-      .locator(
-        '[data-testid="slide-canvas"], [data-testid="deck-editor"], .slide-stage',
-      )
-      .or(page.getByRole("region", { name: /slides/i }))
-      .first();
-
-    const surfaceCount = await editorSurface.count();
-    if (surfaceCount > 0) {
-      await expect(editorSurface).toBeVisible({ timeout: 10_000 });
-    }
-    // If the surface doesn't match any known locator we still assert the URL
-    // changed into a slides sub-path.
-    await expect(page).toHaveURL(/slides|deck|present/i, { timeout: 10_000 });
+    await openSlideEditorFromDocument(page);
   });
 });
 
@@ -307,8 +301,8 @@ test.describe("slides present mode", () => {
 
     // Navigate to slides.
     const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
+      .getByRole("tab", { name: /open slide editor|slides/i })
+      .or(page.getByRole("button", { name: /open slide editor|slides/i }))
       .first();
 
     await clickIfPresent(slidesTab);
@@ -364,61 +358,20 @@ test.describe("slides export smoke", () => {
     await login(page, creds!);
     await page.goto(docUrl!);
 
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .first();
+    const editor = await openSlideEditorFromDocument(page);
 
-    await clickIfPresent(slidesTab);
+    const exportTrigger = editor.getByRole("button", {
+      name: "Export slides",
+    });
+    await expect(exportTrigger).toBeVisible({ timeout: 10_000 });
+    await exportTrigger.click();
 
-    // Look for the export button / menu.
-    const exportTrigger = page
-      .getByRole("button", { name: /export/i })
-      .or(page.getByRole("menuitem", { name: /export/i }))
-      .first();
-
-    const triggerCount = await exportTrigger.count();
-    if (triggerCount === 0) {
-      // No export button found at this location — also check toolbar/overflow
-      const overflowBtn = page
-        .getByRole("button", { name: /more|overflow|⋯|options/i })
-        .first();
-      const overflowCount = await overflowBtn.count();
-      if (overflowCount > 0) {
-        await overflowBtn.click();
-        const exportMenuitem = page
-          .getByRole("menuitem", { name: /export/i })
-          .first();
-        if (!(await isVisible(exportMenuitem))) {
-          skipOptionalSlidesFixture("Export menu item was not available");
-        }
-        await exportMenuitem.click();
-      } else {
-        skipOptionalSlidesFixture("Export trigger was not available");
-      }
-    } else {
-      await exportTrigger.click();
-    }
-
-    // The export dialog, dropdown, or format picker should be visible.
-    const exportDialog = page
-      .getByRole("dialog", { name: /export/i })
-      .or(page.getByRole("menu").filter({ hasText: /pptx|export|download/i }))
-      .or(
-        page.locator(
-          '[data-testid="export-dialog"], [data-testid="export-menu"]',
-        ),
-      )
-      .first();
-
-    // We assert the export entry point is reachable without triggering an actual
-    // file download (which would be flaky and slow in CI).
-    const dialogCount = await exportDialog.count();
-    if (dialogCount > 0) {
-      await expect(exportDialog).toBeVisible({ timeout: 5_000 });
-    }
-    // If the dialog isn't matched by the above locators we still pass: the
-    // click on the export trigger didn't throw, proving the path is reachable.
+    // Assert the current slide-export menu itself, without starting a download.
+    const exportMenu = page.getByRole("menu", { name: "Export slides" });
+    await expect(exportMenu).toBeVisible({ timeout: 5_000 });
+    await expect(
+      exportMenu.getByRole("menuitem", { name: /^Export (PPTX|PDF|PNGs)$/ }),
+    ).not.toHaveCount(0);
   });
 });
 
@@ -638,21 +591,15 @@ test.describe("slides editor accessible toolbar controls", () => {
     await page.goto(docUrl!);
 
     // Navigate to the slides editor.
-    const slidesTab = page
-      .getByRole("tab", { name: /slides/i })
-      .or(page.getByRole("button", { name: /slides/i }))
-      .or(page.getByRole("link", { name: /slides/i }))
-      .first();
-
-    await clickIfPresent(slidesTab);
+    const editor = await openSlideEditorFromDocument(page);
 
     // Verify at least one slides-specific toolbar control (Present, Export, or
     // Add slide) is visible and reachable by accessible role.  We do NOT click
     // any control that could trigger a download or destructive edit.
     const candidateControls = [
-      page.getByRole("button", { name: /present/i }).first(),
-      page.getByRole("button", { name: /export/i }).first(),
-      page.getByRole("button", { name: /add slide/i }).first(),
+      editor.getByRole("button", { name: /present/i }).first(),
+      editor.getByRole("button", { name: /export/i }).first(),
+      editor.getByRole("button", { name: /add slide/i }).first(),
     ];
 
     let foundAccessibleControl = false;

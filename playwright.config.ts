@@ -70,6 +70,12 @@ const deterministicProfileSpecs = [
   "ui-matrix/catalog.spec.ts",
   "ui-matrix/presentation-ui.spec.ts",
 ];
+const explicitProfileSpecs = parseExplicitProfileSpecs(
+  process.env.E2E_PROFILE_EXPLICIT_SPECS,
+);
+const profileSpecs = [
+  ...new Set([...deterministicProfileSpecs, ...explicitProfileSpecs]),
+];
 
 export default defineConfig({
   // scripts/**/*.mjs files are native ESM and must not go through Playwright's
@@ -81,7 +87,7 @@ export default defineConfig({
     external: ["scripts/**/*.mjs"],
   },
   testDir: "e2e",
-  testMatch: deterministicProfile ? deterministicProfileSpecs : /.*\.spec\.ts/,
+  testMatch: deterministicProfile ? profileSpecs : /.*\.spec\.ts/,
   grep: deterministicProfile ? profileGrep : undefined,
   timeout: deterministicProfile ? 180_000 : undefined,
   fullyParallel: true,
@@ -148,6 +154,35 @@ function positiveIntegerEnv(value: string | undefined, fallback: number) {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseExplicitProfileSpecs(value: string | undefined): string[] {
+  if (!value) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("E2E_PROFILE_EXPLICIT_SPECS must be valid JSON.");
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(
+      (entry) =>
+        typeof entry !== "string" ||
+        entry.startsWith("/") ||
+        entry.includes("\\") ||
+        entry
+          .split("/")
+          .some((segment) => segment === "." || segment === "..") ||
+        !entry.endsWith(".spec.ts"),
+    )
+  ) {
+    throw new Error(
+      "E2E_PROFILE_EXPLICIT_SPECS must contain relative E2E spec paths.",
+    );
+  }
+  return parsed;
 }
 
 function requiredProfileHostname() {

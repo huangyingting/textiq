@@ -14,7 +14,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { cpus } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -144,6 +144,10 @@ export function buildE2EProfileEnv(
     }
   }
   const fixturePlan = resolveE2EProfileFixturePlan(playwrightArgs, env);
+  const explicitSpecs = resolveE2EProfileExplicitSpecs(
+    playwrightArgs,
+    repoRoot,
+  );
   const runtimeDir = resolve(repoRoot, ".next", "e2e-profile", runId);
   const childEnv = { ...env };
   delete childEnv.HOST;
@@ -155,6 +159,8 @@ export function buildE2EProfileEnv(
     DATABASE_URL: resolveE2EProfileDatabaseUrl(env, repoRoot),
     AUTH_SECRET: env.AUTH_SECRET ?? "ci-placeholder",
     AUTH_LOGIN_RATE_LIMIT: env.AUTH_LOGIN_RATE_LIMIT ?? "100",
+    GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID ?? "",
+    GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET ?? "",
     BASE_URL: origin.origin,
     E2E_BASE_URL: origin.origin,
     AUTH_URL: origin.origin,
@@ -211,6 +217,7 @@ export function buildE2EProfileEnv(
     E2E_PROFILE_GATE_DIAGNOSTICS: "1",
     E2E_PROFILE_WORKERS: String(fixturePlan.workers),
     E2E_PROFILE_FIXTURE_SLOTS: JSON.stringify(fixturePlan.slots),
+    E2E_PROFILE_EXPLICIT_SPECS: JSON.stringify(explicitSpecs),
     E2E_WEB_SERVER: "0",
     E2E_PROFILE_EXTERNAL_SERVER: "1",
     E2E_PROFILE_SERVER: env.E2E_PROFILE_SERVER ?? "dev",
@@ -218,6 +225,37 @@ export function buildE2EProfileEnv(
     E2E_WEB_SERVER_TIMEOUT_MS: env.E2E_WEB_SERVER_TIMEOUT_MS ?? "480000",
     E2E_REUSE_EXISTING_SERVER: "1",
   };
+}
+
+export function resolveE2EProfileExplicitSpecs(
+  playwrightArgs = [],
+  repoRoot = process.cwd(),
+) {
+  const e2eRoot = resolve(repoRoot, "e2e");
+  const specs = [];
+
+  for (const arg of playwrightArgs) {
+    if (
+      typeof arg !== "string" ||
+      arg.startsWith("-") ||
+      !arg.endsWith(".spec.ts")
+    ) {
+      continue;
+    }
+
+    const relativeSpec = relative(e2eRoot, resolve(repoRoot, arg));
+    if (
+      !relativeSpec ||
+      relativeSpec === ".." ||
+      relativeSpec.startsWith(`..${sep}`) ||
+      isAbsolute(relativeSpec)
+    ) {
+      continue;
+    }
+    specs.push(relativeSpec.split(sep).join("/"));
+  }
+
+  return [...new Set(specs)];
 }
 
 export function resolveE2EProfileRepeatEach(playwrightArgs = []) {

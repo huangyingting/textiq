@@ -30,7 +30,9 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   }) => {
     await openProfileDocument(page);
     await page.getByRole("link", { name: "Open slide editor" }).click();
-    await expect(page).toHaveURL(new RegExp(`${profileDocPath()}/slides`));
+    await expect(page).toHaveURL(new RegExp(`${profileDocPath()}/slides`), {
+      timeout: 30_000,
+    });
     const editor = page.locator('[data-slide-editor="true"]').first();
     await expect(editor).toBeVisible({ timeout: 30_000 });
     await expect(

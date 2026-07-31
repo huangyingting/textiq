@@ -31,6 +31,7 @@ import {
   reserveE2EProfilePorts,
   resolveE2EProfileDatabaseUrl,
   resolveE2EProfileFixturePlan,
+  resolveE2EProfileExplicitSpecs,
   resolveE2EProfileProjects,
   resolveE2EProfileRepeatEach,
   resolveE2EProfileWorkers,
@@ -81,7 +82,26 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(env.E2E_REUSE_EXISTING_SERVER, "1");
   assert.equal(env.E2E_PROFILE_EXTERNAL_SERVER, "1");
   assert.equal(env.NODE_EXTRA_CA_CERTS, env.E2E_PROFILE_TLS_CA_CERT_FILE);
+  assert.equal(env.GOOGLE_CLIENT_ID, "");
+  assert.equal(env.GOOGLE_CLIENT_SECRET, "");
   assert.equal(JSON.parse(env.E2E_PROFILE_FIXTURE_SLOTS).length, 4);
+});
+
+test("self-contained profile preserves explicit Google OAuth configuration", () => {
+  const env = buildE2EProfileEnv(
+    {
+      GOOGLE_CLIENT_ID: "e2e-google-client",
+      GOOGLE_CLIENT_SECRET: "e2e-google-secret",
+    },
+    {
+      repoRoot: process.cwd(),
+      runId: "oauth-contract",
+      runNonce: "f".repeat(64),
+    },
+  );
+
+  assert.equal(env.GOOGLE_CLIENT_ID, "e2e-google-client");
+  assert.equal(env.GOOGLE_CLIENT_SECRET, "e2e-google-secret");
 });
 
 test("authenticated profile URL parsers reject normalization and wrong schemes", () => {
@@ -690,6 +710,22 @@ test("command plan keeps database generation, push, seed, browser install, then 
   );
 });
 
+test("explicit profile specs are normalized under the E2E root", () => {
+  assert.deepEqual(
+    resolveE2EProfileExplicitSpecs(
+      [
+        "e2e/ui-matrix/document-editor-ui.spec.ts",
+        "./e2e/ui-matrix/document-editor-ui.spec.ts",
+        "e2e/ui-matrix/document-editor-ui.spec.ts",
+        "src/not-e2e.spec.ts",
+        "--grep=editor",
+      ],
+      process.cwd(),
+    ),
+    ["ui-matrix/document-editor-ui.spec.ts"],
+  );
+});
+
 test("unrestricted, deterministic, and required lists preserve command provenance", () => {
   const unrestrictedEnv = {
     ...process.env,
@@ -715,9 +751,26 @@ test("unrestricted, deterministic, and required lists preserve command provenanc
     ...process.env,
     E2E_PROFILE_GREP: "@required-profile",
   });
+  const explicitProfile = listPlaywrightTests(
+    [
+      "scripts/e2e-profile.mjs",
+      "--list",
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+    ],
+    {
+      ...process.env,
+      E2E_PROFILE_GREP: "",
+    },
+  );
 
   assert.match(deterministic.output, /List deterministic E2E profile/);
   assert.match(required.output, /List required E2E profile/);
+  assert.ok(
+    explicitProfile.tests.some(
+      ({ spec }) => spec === "ui-matrix/document-editor-ui.spec.ts",
+    ),
+    "an explicit profile spec must extend the configured profile match set",
+  );
   assert.ok(
     unrestricted.tests.some(
       ({ spec }) => spec === "auth/auth-redirect.spec.ts",
