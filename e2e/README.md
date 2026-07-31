@@ -2,19 +2,15 @@
 
 These Playwright specs cover critical product flows (issue #107). They live
 **only** in `e2e/` so the unit gate (`npm test`) maps them to subsystem buckets
-but never executes them. The deterministic profile subset runs as a required
-dedicated CI job; the unrestricted E2E suite remains local/opt-in.
+but never executes them. The deterministic profile runs as a dedicated CI job;
+the same maintained specs can also run unrestricted against a developer-managed
+app.
 
 ## What's covered
 
 | Spec                                                    | Coverage                                                                                                                                              |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/public-render/public-pages.spec.ts`                | Home / login / signup render (smoke)                                                                                                                  |
-| `e2e/auth/auth-redirect.spec.ts`                        | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                                                                         |
-| `e2e/auth/oauth-disabled.spec.ts`                       | Google CTA hidden when the provider is unconfigured                                                                                                   |
-| `e2e/workspace/workspace.spec.ts`                       | Create / import, empty state, viewer restriction (auth-gated)                                                                                         |
 | `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                                                |
-| `e2e/product/billing-brand.spec.ts`                     | Billing unlimited-credit UI + Brand Studio font persistence                                                                                           |
 | `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                                       |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                                         |
 | `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                                       |
@@ -87,9 +83,9 @@ E2E_WEB_SERVER=1 npm run test:e2e
 
 ## Environment variables
 
-Public-page, auth-redirect, OAuth-disabled, and share-fallback specs run with no
-extra configuration. Authenticated flows skip cleanly unless you provide seeded
-credentials:
+The share-fallback spec can run against an unrestricted app without extra
+configuration. The maintained browser suite also runs in the deterministic
+profile, which supplies its own seeded credentials:
 
 | Variable                        | Used by                            | Purpose                                                                                                      |
 | ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -104,12 +100,10 @@ credentials:
 | `E2E_PROFILE_PRECOMPILE_ROUTES` | self-contained profile             | JSON route contracts compiled and body-validated before Playwright dispatches tests                          |
 | `E2E_INSTALL_BROWSER_DEPS`      | self-contained profile             | `1` to install Playwright OS dependencies with Chromium                                                      |
 | `E2E_PROFILE_GREP`              | deterministic profile              | Optional grep for a bounded required-profile slice such as `@required-profile`                               |
-| `E2E_USER_EMAIL/PASSWORD`       | workspace, billing, brand, slides  | A seeded owner/editor login                                                                                  |
-| `E2E_VIEWER_EMAIL/PASSWORD`     | workspace                          | A seeded viewer-only login                                                                                   |
-| `E2E_VIEWER_DOC_URL`            | workspace                          | A document URL the viewer can open read-only                                                                 |
-| `E2E_BRAND_FONT_URL`            | brand                              | Path to a `.woff2`/`.ttf` font to upload                                                                     |
+| `E2E_USER_EMAIL/PASSWORD`       | profile seed, slides               | Override the seeded owner login                                                                              |
+| `E2E_VIEWER_EMAIL/PASSWORD`     | profile seed                       | Override the seeded viewer login                                                                             |
 | `BILLING_UNLIMITED_CREDITS`     | billing                            | Match the server's unlimited-credit gate                                                                     |
-| `GOOGLE_CLIENT_ID/SECRET`       | oauth-disabled                     | Match the server's Google provider configuration                                                             |
+| `GOOGLE_CLIENT_ID/SECRET`       | auth/public UI matrix              | Match the server's Google provider configuration                                                             |
 | `E2E_SLIDES_DOC_URL`            | slides-smoke                       | Full URL to a seeded document with a Slides presentation                                                     |
 | `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to run layout screenshots outside the deterministic profile                                       |
 | `E2E_SLIDES_EDITOR_PATH`        | slides-layout-screenshots          | Override the seeded editor document path used by layout screenshots                                          |

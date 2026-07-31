@@ -818,31 +818,16 @@ test("unrestricted, deterministic, and required lists preserve command provenanc
     ),
     "an explicit profile spec must extend the configured profile match set",
   );
-  assert.ok(
-    unrestricted.tests.some(
-      ({ spec }) => spec === "auth/auth-redirect.spec.ts",
-    ),
-    "unrestricted list must contain an intentionally out-of-profile spec",
-  );
-  assert.equal(
-    deterministic.tests.some(
-      ({ spec }) => spec === "auth/auth-redirect.spec.ts",
-    ),
-    false,
-    "deterministic list must use the configured profile spec set",
-  );
-
   const unrestrictedIdentities = new Set(unrestricted.tests.map(testIdentity));
   const deterministicIdentities = new Set(
     deterministic.tests.map(testIdentity),
   );
   const requiredIdentities = new Set(required.tests.map(testIdentity));
-  for (const identity of deterministicIdentities) {
-    assert.ok(
-      unrestrictedIdentities.has(identity),
-      `deterministic test is absent from unrestricted list: ${identity}`,
-    );
-  }
+  assert.deepEqual(
+    deterministicIdentities,
+    unrestrictedIdentities,
+    "every maintained browser test must run in the deterministic profile",
+  );
 
   const annotatedUnrestricted = new Set(
     unrestricted.tests

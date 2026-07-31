@@ -129,7 +129,7 @@ in `check-e2e-governance.mjs`), so the exception and its justification live
 in the same file and the same diff:
 
 ```ts
-// coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts
+// coverage-breadth: mapped-e2e ref=e2e/ui-matrix/workspace-billing-brand-ui.spec.ts
 // coverage-breadth: approved-exception reason=manual QA runbook only
 ```
 
@@ -177,13 +177,13 @@ catch this error, print its message, and exit 1 — a dangling or malformed
 `gap`.
 
 As of #1932, five login/signup runtime files carry verified `mapped-e2e`
-markers because real, always-run Playwright specs concretely exercise them:
-`src/app/login/page.tsx` (→ `e2e/auth/auth-redirect.spec.ts`, which asserts
-the page's unique "Welcome back" heading) and
+markers because a real deterministic Playwright spec concretely exercises them:
+`src/app/login/page.tsx` (→ `e2e/ui-matrix/auth-public-ui.spec.ts`, which asserts
+the page's unique "Welcome back" heading and protected-route callback) and
 `src/app/login/login-form.tsx`, `src/app/signup/page.tsx`,
 `src/app/signup/signup-form.tsx`, and
 `src/components/google-sign-in-button.tsx` (→
-`e2e/auth/oauth-disabled.spec.ts`, which drives both pages' email/password
+`e2e/ui-matrix/auth-public-ui.spec.ts`, which drives both pages' email/password
 inputs and the Google sign-in CTA's visibility toggle). Forgot-password,
 reset-password, and account-settings files were deliberately left unmarked:
 no real e2e spec demonstrably reaches them today, and marking a file
@@ -709,8 +709,8 @@ nine files (`src/app/layout.tsx`, `error.tsx`, `not-found.tsx`,
 `visuals/page.tsx`, `src/components/site-header.tsx`,
 `src/app/app/trash/page.tsx`) gained direct module-hook/server-component
 render tests, and the tenth (`src/app/page.tsx`) gained a
-`coverage-breadth: mapped-e2e` marker referencing the always-running
-`e2e/public-render/public-pages.spec.ts` (which already asserts the landing
+`coverage-breadth: mapped-e2e` marker referencing the deterministic
+`e2e/ui-matrix/auth-public-ui.spec.ts` (which already asserts the landing
 page's unique "Turn text into visuals" heading), rather than a new or
 duplicated E2E flow. Re-measured directly against the rebased branch: 848
 eligible runtime source files, 24 type-only, 30 barrel, 794 runtime-eligible,

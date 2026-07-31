@@ -122,5 +122,4 @@ changed by applying a brand.
 - [`src/lib/brand/font-face.test.ts`](../../src/lib/brand/font-face.test.ts)
 - [`src/lib/brand-studio/view-model.test.ts`](../../src/lib/brand-studio/view-model.test.ts)
 - [`src/lib/billing/brand-entitlements.test.ts`](../../src/lib/billing/brand-entitlements.test.ts)
-- [`e2e/product/billing-brand.spec.ts`](../../e2e/product/billing-brand.spec.ts)
 - [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document describes how authored decks render in the editor, present mode, public viewers, and export pipeline. For the deck JSON shape, see ../data-model/deck.md. For theme/layout resolution, see theme-packages.md."
 ---
 
@@ -283,4 +283,4 @@ diagnostics, and focused tests together.
 - [`src/lib/presentation/render-export-parity.test.ts`](../../src/lib/presentation/render-export-parity.test.ts)
 - [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
 - [`e2e/presentation/slides-smoke.spec.ts`](../../e2e/presentation/slides-smoke.spec.ts)
-- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)
+- [`e2e/ui-matrix/public-render-ui.spec.ts`](../../e2e/ui-matrix/public-render-ui.spec.ts)

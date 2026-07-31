@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document defines document-level access control and public share behavior. It covers authenticated app permissions, public share/embed/present routes, and collaboration upgrade authorization."
 ---
 
@@ -188,5 +188,6 @@ from viewer connections.
 - [`src/lib/access-policy/adapters.test.ts`](../../src/lib/access-policy/adapters.test.ts)
 - [`src/lib/share-access.test.ts`](../../src/lib/share-access.test.ts)
 - [`src/lib/collab/room-access.test.ts`](../../src/lib/collab/room-access.test.ts)
-- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)
+- [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
+- [`e2e/ui-matrix/public-render-ui.spec.ts`](../../e2e/ui-matrix/public-render-ui.spec.ts)
 - [`e2e/public-render/share-fallback.spec.ts`](../../e2e/public-render/share-fallback.spec.ts)

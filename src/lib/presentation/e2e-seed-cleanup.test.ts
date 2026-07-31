@@ -21,6 +21,7 @@ import {
   resolveE2EPresentationAssetDirectory,
   type E2ESeedCleanupInput,
 } from "../../../prisma/seed-e2e-cleanup";
+import { configuredPresentationTestFixtures } from "../../../e2e/helpers/presentation-fixtures";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(
@@ -360,6 +361,8 @@ test(
       E2E_PROFILE_FIXTURE_SLOTS: fixtureSlots,
       TSX_TSCONFIG_PATH: path.join(REPO_ROOT, "tsconfig.json"),
     };
+    const expectedPresentationFixtures =
+      configuredPresentationTestFixtures(seedEnvironment);
 
     await execFileAsync(
       "npx",
@@ -492,7 +495,10 @@ test(
       },
       select: { id: true },
     });
-    assert.equal(currentDocuments.length, 52);
+    assert.deepEqual(
+      currentDocuments.map(({ id }) => id).sort(),
+      expectedPresentationFixtures.map(({ documentId }) => documentId).sort(),
+    );
     assert.equal(
       await client.asset.count({
         where: {
@@ -500,7 +506,7 @@ test(
           originalName: E2E_PRESENTATION_ASSET_ORIGINAL_NAME,
         },
       }),
-      52,
+      expectedPresentationFixtures.length,
     );
     assert.equal(
       await client.document.count({

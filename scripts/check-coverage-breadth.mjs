@@ -373,7 +373,7 @@
  * `src/components/site-header.tsx`, `src/app/app/trash/page.tsx`) gained
  * direct module-hook/server-component render tests, and the tenth
  * (`src/app/page.tsx`) gained a `coverage-breadth: mapped-e2e` marker
- * referencing the always-running `e2e/public-render/public-pages.spec.ts`.
+ * referencing the deterministic `e2e/ui-matrix/auth-public-ui.spec.ts`.
  * Re-measured directly against the rebased branch: 848 eligible runtime
  * source files under `src/**`, 24 type-only, 30 barrel, 794 runtime-eligible,
  * 718 loaded by the source unit suite (695 #1954 baseline + 23 from #1948 —

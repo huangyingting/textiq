@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   E2E_PROFILE_FIXTURE,
@@ -16,6 +16,18 @@ function googleConfigured(): boolean {
 test.describe("UI matrix: auth and public pages", () => {
   test.setTimeout(90_000);
 
+  async function expectProtectedRedirect(
+    page: Page,
+    protectedPath: string,
+  ): Promise<void> {
+    await page.goto(protectedPath);
+
+    await expect(page).toHaveURL(/\/login\?/);
+    const callbackUrl = new URL(page.url()).searchParams.get("callbackUrl");
+    expect(callbackUrl).toBeTruthy();
+    expect(decodeURIComponent(callbackUrl ?? "")).toContain(protectedPath);
+  }
+
   test("public home, login, and signup expose primary unauthenticated controls", async ({
     page,
   }) => {
@@ -31,45 +43,49 @@ test.describe("UI matrix: auth and public pages", () => {
     ).toBeVisible();
 
     await page.goto("/login");
+    await expect(
+      page.getByRole("heading", { name: /welcome back/i }),
+    ).toBeVisible();
     await expect(page.locator('input[name="email"]')).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
     await expect(page.getByRole("button", { name: /log in/i })).toBeVisible();
 
     await page.goto("/signup");
+    await expect(
+      page.getByRole("heading", { name: /create your account/i }),
+    ).toBeVisible();
     await expect(page.locator('input[name="email"]')).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
   });
 
-  test("deep protected slide route redirects with callbackUrl intact", async ({
+  test("root and deep protected routes redirect with callbackUrl intact", async ({
     page,
   }) => {
-    await page.goto("/app/documents/ui-matrix-doc/slides");
-
-    await expect(page).toHaveURL(/\/login\?/);
-    const callbackUrl = new URL(page.url()).searchParams.get("callbackUrl");
-    expect(callbackUrl).toBeTruthy();
-    expect(decodeURIComponent(callbackUrl ?? "")).toContain(
-      "/app/documents/ui-matrix-doc/slides",
-    );
+    await expectProtectedRedirect(page, "/app");
+    await expectProtectedRedirect(page, "/app/documents/ui-matrix-doc/slides");
   });
 
-  test("Google OAuth CTA matches provider configuration", async ({ page }) => {
-    await page.goto("/login");
-    const googleCta = page.getByRole("button", {
-      name: /continue with google/i,
-    });
-    const orDivider = page.getByText(/^or$/i);
+  test("Google OAuth CTA matches provider configuration on login and signup", async ({
+    page,
+  }) => {
+    for (const path of ["/login", "/signup"] as const) {
+      await page.goto(path);
+      const googleCta = page.getByRole("button", {
+        name: /continue with google/i,
+      });
+      const orDivider = page.getByText(/^or$/i);
 
-    if (googleConfigured()) {
-      await expect(googleCta).toBeVisible();
-      await expect(orDivider).toBeVisible();
-    } else {
-      await expect(googleCta).toHaveCount(0);
-      await expect(orDivider).toHaveCount(0);
+      if (googleConfigured()) {
+        await expect(googleCta).toBeVisible();
+        await expect(orDivider).toBeVisible();
+      } else {
+        await expect(googleCta).toHaveCount(0);
+        await expect(orDivider).toHaveCount(0);
+      }
+
+      await expect(page.locator('input[name="email"]')).toBeVisible();
+      await expect(page.locator('input[name="password"]')).toBeVisible();
     }
-
-    await expect(page.locator('input[name="email"]')).toBeVisible();
-    await expect(page.locator('input[name="password"]')).toBeVisible();
   });
 
   test("invalid credentials stay generic and a successful retry preserves the deep callback", async ({

@@ -40,18 +40,6 @@ export type UiMatrixManualGap = {
 
 export const UI_MATRIX_SPEC_INVENTORY = [
   {
-    spec: "e2e/auth/auth-redirect.spec.ts",
-    owners: ["auth", "security"],
-    coverage:
-      "Unauthenticated /app and deep /app redirects preserve callbackUrl.",
-    runMode: "opt-in-local",
-    prerequisites: ["running app"],
-    roles: ["anonymous"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/unrestricted Playwright suite",
-    sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
-  },
-  {
     spec: "e2e/auth/authenticated-nested-routes.spec.ts",
     owners: ["auth", "editor", "presentation", "billing"],
     coverage:
@@ -62,26 +50,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", ".github/workflows/e2e-deterministic.yml"],
-  },
-  {
-    spec: "e2e/product/billing-brand.spec.ts",
-    owners: ["billing", "brand", "product"],
-    coverage:
-      "Billing unlimited-credit display and Brand Studio font upload persistence.",
-    runMode: "opt-in-local",
-    prerequisites: [
-      "E2E_USER_EMAIL/PASSWORD",
-      "optional E2E_BRAND_FONT_URL",
-      "optional BILLING_UNLIMITED_CREDITS",
-    ],
-    roles: ["owner"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/staging only",
-    sourceRefs: [
-      "e2e/README.md",
-      "docs/product/billing.md",
-      "docs/product/brand-studio.md",
-    ],
   },
   {
     spec: "e2e/editor/block-id-preservation.spec.ts",
@@ -175,18 +143,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     ],
   },
   {
-    spec: "e2e/auth/oauth-disabled.spec.ts",
-    owners: ["auth", "security"],
-    coverage:
-      "Login/signup Google CTA matches provider configuration while credentials remain usable.",
-    runMode: "opt-in-local",
-    prerequisites: ["running app", "optional GOOGLE_CLIENT_ID/SECRET"],
-    roles: ["anonymous"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/unrestricted Playwright suite",
-    sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
-  },
-  {
     spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
     owners: ["presentation", "accessibility"],
     coverage:
@@ -245,18 +201,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
-  },
-  {
-    spec: "e2e/public-render/public-pages.spec.ts",
-    owners: ["system", "public-render"],
-    coverage:
-      "Marketing home, login, and signup primary unauthenticated surfaces render.",
-    runMode: "opt-in-local",
-    prerequisites: ["running app"],
-    roles: ["anonymous"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/unrestricted Playwright suite",
-    sourceRefs: ["e2e/README.md"],
   },
   {
     spec: "e2e/public-render/share-fallback.spec.ts",
@@ -437,22 +381,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
     ],
-  },
-  {
-    spec: "e2e/workspace/workspace.spec.ts",
-    owners: ["workspace", "documents"],
-    coverage:
-      "Credential-gated dashboard create/import, empty state, and read-only viewer restrictions.",
-    runMode: "opt-in-local",
-    prerequisites: [
-      "E2E_USER_EMAIL/PASSWORD",
-      "optional E2E_VIEWER_*",
-      "optional E2E_VIEWER_DOC_URL",
-    ],
-    roles: ["owner", "viewer"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "opt-in local/staging only",
-    sourceRefs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
   },
 ] as const satisfies readonly UiMatrixSpecInventoryEntry[];
 

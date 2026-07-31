@@ -10,10 +10,6 @@ import { assertProfileCredentialGate } from "./credential-gate";
  *
  *   E2E_USER_EMAIL    — email of a seeded user that owns/edits a workspace
  *   E2E_USER_PASSWORD — that user's password
- *   E2E_VIEWER_EMAIL  — (optional) a user with VIEWER-only access to a doc
- *   E2E_VIEWER_PASSWORD
- *   E2E_VIEWER_DOC_URL — (optional) a document URL the viewer can open read-only
- *
  * When the required credentials are absent the calling spec should skip, so the
  * suite stays green in environments without seeded users.
  */
@@ -24,13 +20,6 @@ const credentialGatedContexts = new WeakSet<BrowserContext>();
 export function ownerCredentials(): Credentials | null {
   const email = process.env.E2E_USER_EMAIL;
   const password = process.env.E2E_USER_PASSWORD;
-  if (!email || !password) return null;
-  return { email, password };
-}
-
-export function viewerCredentials(): Credentials | null {
-  const email = process.env.E2E_VIEWER_EMAIL;
-  const password = process.env.E2E_VIEWER_PASSWORD;
   if (!email || !password) return null;
   return { email, password };
 }

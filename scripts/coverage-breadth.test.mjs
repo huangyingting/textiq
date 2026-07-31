@@ -780,12 +780,12 @@ test("classifySourceFile treats a destructured export as runtime (no false suppr
 
 test("parseBreadthMarker recognizes a mapped-e2e marker with a ref", () => {
   const text = `
-    // coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts
+    // coverage-breadth: mapped-e2e ref=e2e/ui-matrix/workspace-billing-brand-ui.spec.ts
     export function renderBrandStudio() {}
   `;
   assert.deepEqual(parseBreadthMarker(text), {
     mode: MODE.MAPPED_E2E,
-    detail: "e2e/product/billing-brand.spec.ts",
+    detail: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
   });
 });
 
@@ -807,7 +807,7 @@ test("parseBreadthMarker returns null when no marker is present", () => {
 test("parseBreadthMarker ignores a marker-shaped string literal (AST comment scan, not text regex)", () => {
   const text = `
     export const NOTE =
-      "coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts";
+      "coverage-breadth: mapped-e2e ref=e2e/ui-matrix/workspace-billing-brand-ui.spec.ts";
   `;
   assert.equal(
     parseBreadthMarker(text),
@@ -820,20 +820,20 @@ test("parseBreadthMarker ignores a marker-shaped string literal (AST comment sca
 
 test("parseBreadthMarkers returns every marker in file order with 1-based line numbers", () => {
   const text = [
-    "// coverage-breadth: mapped-e2e ref=e2e/auth/auth-redirect.spec.ts",
-    "// coverage-breadth: mapped-e2e ref=e2e/auth/oauth-disabled.spec.ts",
+    "// coverage-breadth: mapped-e2e ref=e2e/ui-matrix/auth-public-ui.spec.ts",
+    "// coverage-breadth: mapped-e2e ref=e2e/ui-matrix/public-render-ui.spec.ts",
     "export function LoginPage() {}",
   ].join("\n");
   const markers = parseBreadthMarkers(text, "login-page.ts");
   assert.deepEqual(markers, [
     {
       mode: MODE.MAPPED_E2E,
-      detail: "e2e/auth/auth-redirect.spec.ts",
+      detail: "e2e/ui-matrix/auth-public-ui.spec.ts",
       line: 1,
     },
     {
       mode: MODE.MAPPED_E2E,
-      detail: "e2e/auth/oauth-disabled.spec.ts",
+      detail: "e2e/ui-matrix/public-render-ui.spec.ts",
       line: 2,
     },
   ]);
@@ -952,14 +952,16 @@ test("validateBreadthMarkerRef rejects a ref with an unsupported extension", () 
 
 test("validateBreadthMarkerRef rejects a dangling (well-formed but nonexistent) ref", () => {
   const result = validateBreadthMarkerRef("e2e/auth/does-not-exist.spec.ts", {
-    existingE2eSpecFiles: new Set(["e2e/auth/auth-redirect.spec.ts"]),
+    existingE2eSpecFiles: new Set(["e2e/ui-matrix/auth-public-ui.spec.ts"]),
   });
   assert.equal(result.ok, false);
   assert.equal(result.problem, REF_PROBLEM.DANGLING);
 });
 
 test("validateBreadthMarkerRef defaults to an empty existing-file set (every ref dangles without one)", () => {
-  const result = validateBreadthMarkerRef("e2e/auth/auth-redirect.spec.ts");
+  const result = validateBreadthMarkerRef(
+    "e2e/ui-matrix/auth-public-ui.spec.ts",
+  );
   assert.equal(result.ok, false);
   assert.equal(result.problem, REF_PROBLEM.DANGLING);
 });
@@ -978,17 +980,20 @@ test("validateBreadthMarkerRef normalizes repeated slashes and './' segments bef
 
 test("listExistingE2eSpecFiles lists real .spec.ts files under e2e/ and excludes helpers/non-spec files", (t) => {
   const root = createTestFixtureRoot("coverage-breadth-e2e-specs", t);
-  const authDir = path.join(root, "e2e", "auth");
+  const uiMatrixDir = path.join(root, "e2e", "ui-matrix");
   const helpersDir = path.join(root, "e2e", "helpers");
-  mkdirSync(authDir, { recursive: true });
+  mkdirSync(uiMatrixDir, { recursive: true });
   mkdirSync(helpersDir, { recursive: true });
-  writeFileSync(path.join(authDir, "auth-redirect.spec.ts"), "export {};\n");
+  writeFileSync(
+    path.join(uiMatrixDir, "auth-public-ui.spec.ts"),
+    "export {};\n",
+  );
   writeFileSync(path.join(helpersDir, "auth.ts"), "export {};\n");
   writeFileSync(path.join(root, "e2e", "README.md"), "# e2e\n");
 
   const files = listExistingE2eSpecFiles(root);
 
-  assert.ok(files.has("e2e/auth/auth-redirect.spec.ts"));
+  assert.ok(files.has("e2e/ui-matrix/auth-public-ui.spec.ts"));
   assert.ok(!files.has("e2e/helpers/auth.ts"));
   assert.ok(!files.has("e2e/README.md"));
   assert.equal(files.size, 1);

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "Sign up — TextIQ",
 };
 
-// coverage-breadth: mapped-e2e ref=e2e/auth/oauth-disabled.spec.ts
+// coverage-breadth: mapped-e2e ref=e2e/ui-matrix/auth-public-ui.spec.ts
 export default async function SignupPage({
   searchParams,
 }: {

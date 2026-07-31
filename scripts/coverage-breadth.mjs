@@ -49,7 +49,7 @@
  * comment near the top of the file, mirroring the `e2e-governance-allow`
  * marker convention in `check-e2e-governance.mjs`:
  *
- *   // coverage-breadth: mapped-e2e ref=e2e/product/billing-brand.spec.ts
+ *   // coverage-breadth: mapped-e2e ref=e2e/ui-matrix/workspace-billing-brand-ui.spec.ts
  *   // coverage-breadth: approved-exception reason=manual QA runbook only
  *
  * The marker lives next to the code it excuses so the reason is reviewable

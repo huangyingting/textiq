@@ -243,9 +243,10 @@ export const E2E_CONFLICT_OWNER_THEME_FIXTURE = {
 export function presentationTestFixture(
   name: PresentationTestFixtureName,
   slotOrTestInfo: PresentationFixtureSlotInput = DEFAULT_PRESENTATION_FIXTURE_SLOT,
+  env: Record<string, string | undefined> = process.env,
 ): PresentationTestFixture {
   const fixture = PRESENTATION_TEST_FIXTURES[name];
-  const slot = assertPresentationFixtureSlotSeeded(slotOrTestInfo);
+  const slot = assertPresentationFixtureSlotSeeded(slotOrTestInfo, env);
   if (slot === DEFAULT_PRESENTATION_FIXTURE_SLOT_KEY) {
     return fixture;
   }
@@ -341,6 +342,18 @@ export function configuredPresentationFixtureSlots(
     );
   }
   return parsed;
+}
+
+export function configuredPresentationTestFixtures(
+  env: Record<string, string | undefined> = process.env,
+): PresentationTestFixture[] {
+  const slots = configuredPresentationFixtureSlots(env);
+  const fixtureNames = Object.keys(
+    PRESENTATION_TEST_FIXTURES,
+  ) as PresentationTestFixtureName[];
+  return fixtureNames.flatMap((fixtureName) =>
+    slots.map((slot) => presentationTestFixture(fixtureName, slot, env)),
+  );
 }
 
 export function assertPresentationFixtureSlotSeeded(

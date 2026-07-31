@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-14"
+last_updated: "2026-07-31"
 description: "This document describes canonical workspace role/capability policy, ownership, membership, invite links, and how workspace roles feed document permissions."
 ---
 
@@ -164,4 +164,6 @@ semantics.
 - [`src/lib/workspace/invite-service.test.ts`](../../src/lib/workspace/invite-service.test.ts)
 - [`src/lib/auth/workspace-capabilities.test.ts`](../../src/lib/auth/workspace-capabilities.test.ts)
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
-- [`e2e/workspace/workspace.spec.ts`](../../e2e/workspace/workspace.spec.ts)
+- [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)
+- [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
+- [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)

@@ -403,7 +403,7 @@ const MAJOR_SURFACE_DESCRIPTORS: A11ySurfaceDescriptor[] = [
     },
     coverage: [
       "e2e/public-render/share-fallback.spec.ts",
-      "e2e/public-render/public-pages.spec.ts",
+      "e2e/ui-matrix/public-render-ui.spec.ts",
     ],
   }),
   slideCanvasKeyboardDescriptor({

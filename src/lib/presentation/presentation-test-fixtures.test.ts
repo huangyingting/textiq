@@ -17,6 +17,7 @@ import {
   SLIDES_SMOKE_MUTATION_FIXTURES,
   assertPresentationFixtureSlotSeeded,
   configuredPresentationFixtureSlots,
+  configuredPresentationTestFixtures,
   presentationFixtureSlotKey,
   presentationTestFixture,
   type PresentationTestFixtureName,
@@ -125,6 +126,38 @@ test("fixture slot contract defaults direct specs deterministically and rejects 
         parallelIndex: 0,
       }),
     /was not seeded/,
+  );
+});
+
+test("configured fixture matrix derives every fixture for every seeded slot", () => {
+  const env = {
+    E2E_PROFILE_FIXTURE_SLOTS: JSON.stringify([
+      {
+        projectName: "chromium",
+        repeatEachIndex: 0,
+        parallelIndex: 0,
+      },
+      {
+        projectName: "webkit",
+        repeatEachIndex: 2,
+        parallelIndex: 3,
+      },
+    ]),
+  };
+  const fixtures = configuredPresentationTestFixtures(env);
+  const fixtureCount = Object.keys(PRESENTATION_TEST_FIXTURES).length;
+
+  assert.equal(fixtures.length, fixtureCount * 2);
+  assert.equal(
+    new Set(fixtures.map(({ documentId }) => documentId)).size,
+    fixtures.length,
+  );
+  assert.deepEqual(
+    fixtures.slice(0, 2).map(({ documentId }) => documentId),
+    [
+      PRESENTATION_TEST_FIXTURES.editorRailMutations.documentId,
+      `${PRESENTATION_TEST_FIXTURES.editorRailMutations.documentId}p7765626b6974r2x3`,
+    ],
   );
 });
 

@@ -38,13 +38,10 @@ import {
   fixturePngBuffer,
 } from "../src/test/builders/e2e-profile";
 import {
-  configuredPresentationFixtureSlots,
+  configuredPresentationTestFixtures,
   E2E_CONFLICT_OWNER_THEME_FIXTURE,
   E2E_CUSTOM_THEME_FIXTURE,
   E2E_VERSIONED_THEME_FIXTURE,
-  PRESENTATION_TEST_FIXTURES,
-  presentationTestFixture,
-  type PresentationTestFixtureName,
 } from "../e2e/helpers/presentation-fixtures";
 import { createScriptPrismaClient } from "./script-prisma-client";
 import {
@@ -488,15 +485,7 @@ async function main() {
     },
   });
 
-  const presentationFixtureSlots = configuredPresentationFixtureSlots();
-  const presentationFixtureNames = Object.keys(
-    PRESENTATION_TEST_FIXTURES,
-  ) as PresentationTestFixtureName[];
-  const presentationFixtures = presentationFixtureNames.flatMap((fixtureName) =>
-    presentationFixtureSlots.map((slot) =>
-      presentationTestFixture(fixtureName, slot),
-    ),
-  );
+  const presentationFixtures = configuredPresentationTestFixtures();
   const activePresentationDocumentIds = presentationFixtures.map(
     (fixture) => fixture.documentId,
   );

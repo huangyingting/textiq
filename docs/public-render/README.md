@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "The public-render subsystem resolves share/embed/present/OG requests into read-only models and shares one public-asset policy for slide asset serving."
 ---
 
@@ -113,4 +113,4 @@ decision.
 - [`src/lib/public-render/resolver-core.test.ts`](../../src/lib/public-render/resolver-core.test.ts)
 - [`src/lib/public-render/presentation.test.ts`](../../src/lib/public-render/presentation.test.ts)
 - [`src/lib/public-render/metadata.test.ts`](../../src/lib/public-render/metadata.test.ts)
-- [`e2e/public-render/public-pages.spec.ts`](../../e2e/public-render/public-pages.spec.ts)
+- [`e2e/ui-matrix/public-render-ui.spec.ts`](../../e2e/ui-matrix/public-render-ui.spec.ts)
