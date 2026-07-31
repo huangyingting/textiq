@@ -1,7 +1,7 @@
 ---
 Type: "architecture"
 Status: "current"
-Last updated: "2026-07-21"
+Last updated: "2026-07-31"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -54,10 +54,17 @@ The client rejects files above the global import ceiling before upload and emits
 product telemetry for start/success/failure. The server repeats validation and
 is authoritative.
 
-Editor drop-zone imports remain focusable while an upload is in flight, expose
-`aria-disabled="true"`, and keep the hidden file input mounted. Click, drop, and
-keyboard activation are guarded during that pending state so a second file cannot
-start a concurrent parse.
+Dashboard, workspace, and editor import controls keep the hidden file input
+mounted while work is pending and synchronously guard the workflow so a second
+input change cannot start a concurrent create or parse. Client-side oversized
+file rejection and malformed/transport response failures remain retryable.
+Failed editor parses offer direct retry and dismiss actions.
+
+Replacing a non-empty editor document requires a modal confirmation. The shared
+dialog primitive provides initial focus, Tab containment, Escape and backdrop
+cancellation, background-scroll lock, and explicit focus restoration to the
+import trigger after asynchronous parsing. Confirmed replacements participate in
+the normal document autosave lifecycle and persist across reload.
 
 ## Accepted Formats
 
@@ -124,8 +131,10 @@ blank imported document accidentally.
    through `/api/import`.
 7. Import telemetry uses file type, size/duration buckets, surface, and stable
    failure reasons; it does not include document content.
-8. Drop-zone upload affordances stay keyboard-reachable while pending, but
-   duplicate activations are ignored until the current upload settles.
+8. Every import surface suppresses duplicate selections until its current
+   upload or parse settles.
+9. Non-empty editor replacement is modal, cancellable without mutation, and
+   restores focus to the initiating import control.
 
 ## Primary Tests
 

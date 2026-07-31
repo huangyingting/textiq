@@ -70,7 +70,9 @@ function findImportButton(renderer: ReactTestRenderer) {
 }
 
 function findDialog(renderer: ReactTestRenderer) {
-  return renderer.root.findAll((instance) => instance.props.role === "dialog");
+  return renderer.root.findAll(
+    (instance) => instance.type === "div" && instance.props.role === "dialog",
+  );
 }
 
 function triggerImport(renderer: ReactTestRenderer, markdown: string) {
@@ -94,7 +96,7 @@ describe("ImportPlugin", () => {
     }
   });
 
-  test("renders ImportButton in compact mode with the expected label and iconOnly wired through", () => {
+  test("renders the toolbar ImportButton with the expected label and iconOnly wired through", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     renderer = mountWithComposer(
@@ -108,7 +110,6 @@ describe("ImportPlugin", () => {
 
     const button = findImportButton(renderer);
     assert.equal(button.props.label, "Import");
-    assert.equal(button.props.compact, true);
     assert.equal(button.props.iconOnly, true);
     assert.equal(findDialog(renderer).length, 0);
   });
@@ -214,10 +215,20 @@ describe("ImportPlugin", () => {
     const fakeDocument = globalThis.document as unknown as {
       addEventListener: (
         type: string,
-        listener: (event: { key: string }) => void,
+        listener: (event: {
+          key: string;
+          preventDefault: () => void;
+          stopPropagation: () => void;
+        }) => void,
       ) => void;
     };
-    let escapeListener: ((event: { key: string }) => void) | undefined;
+    let escapeListener:
+      | ((event: {
+          key: string;
+          preventDefault: () => void;
+          stopPropagation: () => void;
+        }) => void)
+      | undefined;
     fakeDocument.addEventListener = (type, listener) => {
       if (type === "keydown") escapeListener = listener;
     };
@@ -237,7 +248,11 @@ describe("ImportPlugin", () => {
     );
 
     act(() => {
-      escapeListener?.({ key: "Escape" });
+      escapeListener?.({
+        key: "Escape",
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+      });
     });
 
     assert.equal(rootText(editor), "Existing content");

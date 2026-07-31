@@ -78,6 +78,11 @@ test("test subsystem map classifies files by owning subsystem", () => {
     ["system", "ui"],
     "UI primitives must retain their existing cross-cutting ownership",
   );
+  assert.deepEqual(
+    classifyTestFile("e2e/ui-matrix/app-shell-ui.spec.ts"),
+    ["system", "ui"],
+    "app-shell browser coverage must run with both cross-cutting UI buckets",
+  );
   assert.ok(
     classifyTestFile("src/lib/validation-primitives.test.ts").includes(
       "data-model",

@@ -283,3 +283,71 @@ test("route response: flat create success payload is accepted", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("creation workflow ignores a second file while durable import is pending", async () => {
+  const importedNames: string[] = [];
+  let resolveImport!: (
+    value: Awaited<ReturnType<DocumentImportCreateActionPort["importFile"]>>,
+  ) => void;
+  const port: DocumentImportCreateActionPort = {
+    importFile(file) {
+      importedNames.push(file.name);
+      return new Promise((resolve) => {
+        resolveImport = resolve;
+      });
+    },
+  };
+  const created: ImportedDocumentCreationPayload[] = [];
+  const { ref, unmount } = renderWorkflow({
+    port,
+    onCreated: (payload) => created.push(payload),
+  });
+
+  let firstImport!: Promise<void>;
+  let duplicateImport!: Promise<void>;
+  await act(async () => {
+    firstImport = ref.current!.processFile(
+      fakeFile(1024, "first.md", "text/markdown"),
+    );
+    duplicateImport = ref.current!.processFile(
+      fakeFile(1024, "duplicate.md", "text/markdown"),
+    );
+    await Promise.resolve();
+  });
+
+  assert.deepEqual(importedNames, ["first.md"]);
+  assert.equal(ref.current!.state.status, "uploading");
+
+  await act(async () => {
+    resolveImport({
+      ok: true,
+      data: { documentId: "doc-1", documentPath: "/app/documents/doc-1" },
+    });
+    await Promise.all([firstImport, duplicateImport]);
+  });
+
+  assert.deepEqual(created, [
+    { documentId: "doc-1", documentPath: "/app/documents/doc-1" },
+  ]);
+  assert.equal(ref.current!.state.status, "idle");
+  unmount();
+});
+
+test("creation workflow contains a thrown port error and becomes retryable", async () => {
+  const port: DocumentImportCreateActionPort = {
+    async importFile() {
+      throw new Error("transport failed");
+    },
+  };
+  const { ref, unmount } = renderWorkflow({ port });
+
+  await act(async () => {
+    await ref.current!.processFile(fakeFile(1024, "notes.md", "text/markdown"));
+  });
+
+  assert.equal(ref.current!.state.status, "error");
+  if (ref.current!.state.status === "error") {
+    assert.match(ref.current!.state.message, /Could not reach the server/);
+  }
+  unmount();
+});

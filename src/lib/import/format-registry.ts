@@ -123,7 +123,6 @@ const IMPORT_PICKER_EXTENSIONS = collectUniqueValues(
 );
 
 export const IMPORT_ACCEPT = IMPORT_PICKER_EXTENSIONS.join(",");
-export const IMPORT_ACCEPT_LABEL = IMPORT_PICKER_EXTENSIONS.join(", ");
 export const IMPORT_MAX_SIZE_LABEL = `${Math.floor(IMPORT_MAX_UPLOAD_BYTES / (1024 * 1024))} MB`;
 
 const RESOURCE_BY_MIME = new Map<string, ImportResource>();

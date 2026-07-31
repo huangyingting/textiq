@@ -15,7 +15,6 @@ import {
 } from "@/lib/import/contract";
 import {
   IMPORT_ACCEPT,
-  IMPORT_ACCEPT_LABEL,
   IMPORT_MAX_SIZE_LABEL,
   IMPORT_MAX_UPLOAD_BYTES,
 } from "@/lib/import/format-registry";
@@ -27,10 +26,9 @@ import {
 } from "@/lib/telemetry/product";
 
 export const DOCUMENT_IMPORT_ACCEPT = IMPORT_ACCEPT;
-export const DOCUMENT_IMPORT_ACCEPT_LABEL = IMPORT_ACCEPT_LABEL;
 export const DOCUMENT_IMPORT_MAX_SIZE_LABEL = IMPORT_MAX_SIZE_LABEL;
 
-type ImportSurface = "dashboard" | "workspace" | "toolbar" | "dropzone";
+type ImportSurface = "dashboard" | "workspace";
 
 export type DocumentImportState =
   | { status: "idle" }
@@ -51,6 +49,14 @@ function malformedResponseError(status: number): ImportActionError {
     code: "malformed_response",
     status,
     message: "The server returned an invalid import response.",
+  };
+}
+
+function networkError(): ImportActionError {
+  return {
+    code: "network",
+    status: 0,
+    message: "Could not reach the server. Please try again.",
   };
 }
 
@@ -92,14 +98,7 @@ async function callImportRoute(
     }
     return { ok: true, data: parsed };
   } catch {
-    return {
-      ok: false,
-      error: {
-        code: "network",
-        status: 0,
-        message: "Could not reach the server. Please try again.",
-      },
-    };
+    return { ok: false, error: networkError() };
   }
 }
 
@@ -143,9 +142,14 @@ function useImportWorkflow<TPayload>(input: {
 }) {
   const [state, setState] = useState<DocumentImportState>({ status: "idle" });
   const inputRef = useRef<HTMLInputElement>(null);
+  const isUploadingRef = useRef(false);
 
   const processFile = useCallback(
     async (file: File) => {
+      if (isUploadingRef.current) {
+        return;
+      }
+
       const fileType = classifyFileType(file);
       const fileSizeBucket = bucketBytes(file.size);
       if (file.size > IMPORT_MAX_UPLOAD_BYTES) {
@@ -162,6 +166,7 @@ function useImportWorkflow<TPayload>(input: {
         return;
       }
 
+      isUploadingRef.current = true;
       setState({ status: "uploading" });
       const startedAt = performance.now();
       emitProductTelemetry("product.import.started", {
@@ -170,7 +175,13 @@ function useImportWorkflow<TPayload>(input: {
         surface: input.surface,
       });
 
-      const result = await input.importFile(file);
+      let result: ImportActionResult<TPayload>;
+      try {
+        result = await input.importFile(file);
+      } catch {
+        result = { ok: false, error: networkError() };
+      }
+      isUploadingRef.current = false;
       if (result.ok) {
         emitProductTelemetry("product.import.succeeded", {
           durationBucket: bucketDurationMs(performance.now() - startedAt),
@@ -201,11 +212,9 @@ function useImportWorkflow<TPayload>(input: {
     state,
     isUploading: state.status === "uploading",
     processFile,
-    dismissError: () => setState({ status: "idle" }),
     clearError: () => {
       if (state.status === "error") setState({ status: "idle" });
     },
-    openFilePicker: () => inputRef.current?.click(),
   };
 }
 

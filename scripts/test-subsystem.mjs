@@ -343,6 +343,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/view-models\//,
       /^src\/app\/app\/loading\.test\.tsx$/,
       /^e2e\/ui-matrix\/auth-public-ui\.spec\.ts$/,
+      /^e2e\/ui-matrix\/app-shell-ui\.spec\.ts$/,
     ],
   },
   ui: {
@@ -359,6 +360,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^scripts\/check-design-system\.test\.mjs$/,
       /^src\/app\/app\/loading\.test\.tsx$/,
       /^e2e\/ui-matrix\/catalog\.spec\.ts$/,
+      /^e2e\/ui-matrix\/app-shell-ui\.spec\.ts$/,
     ],
   },
   visual: {

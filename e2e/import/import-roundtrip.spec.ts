@@ -13,6 +13,11 @@ import {
   profileOwnerCredentials,
   profileViewerCredentials,
 } from "../helpers/profile";
+import {
+  waitForDocumentAutosaveAfter,
+  waitForDocumentEditorReady,
+} from "../helpers/readiness";
+import { IMPORT_MAX_UPLOAD_BYTES } from "../../src/lib/import/format-registry";
 
 /**
  * Document import round-trip E2E coverage (Epic #517, issue #519).
@@ -221,18 +226,104 @@ test.describe("document import round-trip", () => {
   test("imports Markdown, renders blocks, and persists content across reload @required-profile", async ({
     page,
   }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
     await login(page, profileOwnerCredentials());
 
     // --- Navigate (fail message distinguishes navigation) -----------------
     await page.goto("/app");
     await expect(page, "navigate: workspace did not load").toHaveURL(/\/app/);
 
-    // --- Import (parse + create) ------------------------------------------
+    // --- Failure + retry --------------------------------------------------
+    let importRequestCount = 0;
+    let releaseSuccessfulImport!: () => void;
+    const successfulImportGate = new Promise<void>((resolve) => {
+      releaseSuccessfulImport = resolve;
+    });
+    await page.route("**/api/import", async (route) => {
+      importRequestCount += 1;
+      if (importRequestCount === 1) {
+        await route.fulfill({
+          status: 502,
+          contentType: "text/plain",
+          body: "not-json",
+        });
+        return;
+      }
+      if (importRequestCount === 2) {
+        await route.abort("failed");
+        return;
+      }
+      if (importRequestCount === 3) {
+        await successfulImportGate;
+        await route.continue();
+        return;
+      }
+      await route.abort("failed");
+    });
+
     await chooseDashboardImportFile(page, {
+      name: "oversized-import.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.alloc(IMPORT_MAX_UPLOAD_BYTES + 1),
+    });
+    const oversizedError = page.getByRole("alert").filter({
+      hasText: "File is too large",
+    });
+    await expect(oversizedError).toContainText("20 MB");
+    expect(importRequestCount).toBe(0);
+
+    let retryChooserPromise = page.waitForEvent("filechooser");
+    await oversizedError.getByRole("button", { name: "retry" }).click();
+    let retryChooser = await retryChooserPromise;
+    await retryChooser.setFiles({
       name: "import-roundtrip.md",
       mimeType: "text/markdown",
       buffer: Buffer.from(SAMPLE_MARKDOWN, "utf8"),
     });
+    const malformedError = page.getByRole("alert").filter({
+      hasText: "invalid import response",
+    });
+    await expect(malformedError).toBeVisible();
+
+    retryChooserPromise = page.waitForEvent("filechooser");
+    await malformedError.getByRole("button", { name: "retry" }).click();
+    retryChooser = await retryChooserPromise;
+    await retryChooser.setFiles({
+      name: "import-roundtrip.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from(SAMPLE_MARKDOWN, "utf8"),
+    });
+    const importError = page.getByRole("alert").filter({
+      hasText: "Could not reach the server",
+    });
+    await expect(importError).toContainText("Could not reach the server");
+
+    retryChooserPromise = page.waitForEvent("filechooser");
+    await importError.getByRole("button", { name: "retry" }).click();
+    retryChooser = await retryChooserPromise;
+    await retryChooser.setFiles({
+      name: "import-roundtrip.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from(SAMPLE_MARKDOWN, "utf8"),
+    });
+
+    const dashboardImportButton = page.getByRole("button", {
+      name: "Import document",
+    });
+    await expect(dashboardImportButton).toBeDisabled();
+    await expect(dashboardImportButton).toContainText("Importing…");
+
+    // A second input change while the durable create is pending must not
+    // dispatch another request, even though the hidden input remains mounted.
+    await page.getByLabel("Import a document file").setInputFiles({
+      name: "duplicate-import.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# Duplicate import must be ignored\n", "utf8"),
+    });
+    const requestCountBeforeRelease = importRequestCount;
+    releaseSuccessfulImport();
+    expect(requestCountBeforeRelease).toBe(3);
 
     // --- Create + navigate to the new editor ------------------------------
     await page.waitForURL(/\/app\/documents\/[^/]+/, {
@@ -266,6 +357,112 @@ test.describe("document import round-trip", () => {
       paragraph: "An imported paragraph of body text.",
       firstBullet: "First imported bullet",
     });
+
+    // --- In-editor replace confirmation ----------------------------------
+    const editorBody = await waitForDocumentEditorReady(page);
+    const editorImportButton = page
+      .getByRole("group", { name: "Edit document" })
+      .getByRole("button", { name: "Import", exact: true });
+    const previousBodyOverflow = await page.evaluate(
+      () => document.body.style.overflow,
+    );
+    const replacementFile = {
+      name: "replacement.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from(
+        "# Replacement Import Heading\n\nReplacement body text.\n",
+        "utf8",
+      ),
+    };
+
+    const openReplacementDialog = async () => {
+      const chooserPromise = page.waitForEvent("filechooser", {
+        timeout: 10_000,
+      });
+      await editorImportButton.focus();
+      await page.keyboard.press("Enter");
+      const chooser = await chooserPromise;
+      await chooser.setFiles(replacementFile);
+      const dialog = page.getByRole("dialog", {
+        name: "Replace document content?",
+      });
+      await expect(dialog).toBeVisible({ timeout: 30_000 });
+      return dialog;
+    };
+
+    let replaceDialog = await openReplacementDialog();
+    const cancelImport = replaceDialog.getByRole("button", { name: "Cancel" });
+    const confirmImport = replaceDialog.getByRole("button", {
+      name: "Replace",
+    });
+    await expect(cancelImport).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+
+    await page.keyboard.press("Tab");
+    await expect(confirmImport).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(cancelImport).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(confirmImport).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(replaceDialog).toBeHidden();
+    await expect(editorImportButton).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(previousBodyOverflow);
+    await expect(
+      editorBody.getByText("Import Roundtrip Heading"),
+    ).toBeVisible();
+
+    await page.setViewportSize({ width: 375, height: 667 });
+    replaceDialog = await openReplacementDialog();
+    const mobileDialogBox = await replaceDialog.boundingBox();
+    expect(mobileDialogBox).not.toBeNull();
+    expect(mobileDialogBox!.x).toBeGreaterThanOrEqual(8);
+    expect(mobileDialogBox!.y).toBeGreaterThanOrEqual(8);
+    expect(mobileDialogBox!.x + mobileDialogBox!.width).toBeLessThanOrEqual(
+      367,
+    );
+    expect(mobileDialogBox!.y + mobileDialogBox!.height).toBeLessThanOrEqual(
+      659,
+    );
+    await page
+      .locator('[data-floating-panel="true"] > [aria-hidden="true"]')
+      .click({ position: { x: 4, y: 4 } });
+    await expect(replaceDialog).toBeHidden();
+    await expect(editorImportButton).toBeFocused();
+    await expect(
+      editorBody.getByText("Import Roundtrip Heading"),
+    ).toBeVisible();
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    replaceDialog = await openReplacementDialog();
+    await waitForDocumentAutosaveAfter(page, () =>
+      replaceDialog.getByRole("button", { name: "Replace" }).click(),
+    );
+    await expect(
+      editorBody.getByText("Replacement Import Heading"),
+    ).toBeVisible();
+    await expect(editorBody.getByText("Replacement body text.")).toBeVisible();
+    await expect(editorBody.getByText("Import Roundtrip Heading")).toHaveCount(
+      0,
+    );
+
+    await page.reload();
+    const reloadedEditorBody = await waitForDocumentEditorReady(page);
+    await expect(
+      reloadedEditorBody.getByText("Replacement Import Heading"),
+    ).toBeVisible();
+    await expect(
+      reloadedEditorBody.getByText("Replacement body text."),
+    ).toBeVisible();
+    await expect(
+      reloadedEditorBody.getByText("Import Roundtrip Heading"),
+    ).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
   });
 
   test("imports DOCX, renders blocks, and persists content across reload @required-profile", async ({
@@ -334,15 +531,65 @@ test.describe("document import round-trip", () => {
   test("workspace import by owner persists across reload @required-profile", async ({
     page,
   }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
     await login(page, profileOwnerCredentials());
     const fixture = workspaceImportFixture("Owner");
-    const imported = await importWorkspaceMarkdown({
-      page,
-      fileName: fixture.fileName,
-      markdown: fixture.markdown,
+    await page.goto(`/app/workspaces/${E2E_PROFILE_FIXTURE.workspaceId}`);
+    await expect(page.getByText("Loading documents...")).toHaveCount(0);
+
+    let importRequestCount = 0;
+    let releaseImport!: () => void;
+    const importGate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    await page.route("**/api/import", async (route) => {
+      importRequestCount += 1;
+      if (importRequestCount === 1) {
+        await importGate;
+        await route.continue();
+        return;
+      }
+      await route.abort("failed");
     });
 
-    await page.goto(imported.documentPath);
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/import",
+    );
+    const importButton = page.getByRole("button", {
+      name: "Import document",
+    });
+    const chooserPromise = page.waitForEvent("filechooser");
+    await importButton.click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({
+      name: fixture.fileName,
+      mimeType: "text/markdown",
+      buffer: Buffer.from(fixture.markdown, "utf8"),
+    });
+    await expect(importButton).toBeDisabled();
+    await expect(importButton).toContainText("Importing…");
+
+    await page
+      .getByLabel("Import a document file into workspace")
+      .setInputFiles({
+        name: "duplicate-workspace-import.md",
+        mimeType: "text/markdown",
+        buffer: Buffer.from("# Duplicate workspace import\n", "utf8"),
+      });
+    const requestCountBeforeRelease = importRequestCount;
+    releaseImport();
+    expect(requestCountBeforeRelease).toBe(1);
+
+    const response = await responsePromise;
+    expect(response.status(), "workspace UI import should succeed").toBe(200);
+    const imported = parseImportSuccessPayload(await response.json());
+    await page.waitForURL(imported.documentPath, {
+      timeout: IMPORT_NAVIGATION_TIMEOUT_MS,
+    });
+
     const editor = page.getByLabel("Document body");
     await expect(editor).toBeVisible({ timeout: EDITOR_READY_TIMEOUT_MS });
     await expect(editor.getByText(fixture.heading)).toBeVisible({
@@ -360,6 +607,7 @@ test.describe("document import round-trip", () => {
       paragraph: fixture.paragraph,
       firstBullet: fixture.firstBullet,
     });
+    expect(pageErrors).toEqual([]);
   });
 
   test("workspace import by editor persists across reload @required-profile", async ({

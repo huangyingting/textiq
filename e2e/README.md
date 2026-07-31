@@ -316,12 +316,16 @@ validating the representative browser UI matrix.
 
 ### DOCX fixture policy
 
-`e2e/import/import-roundtrip.spec.ts` covers Markdown and DOCX imports fully
-through the UI, plus the unsupported-type path through the route. DOCX coverage uses
-`e2e/helpers/docx-fixture.ts` to generate a minimal deterministic OOXML package
-from stable XML parts at test time, avoiding opaque binary fixture churn while
-still exercising upload/form wiring, `POST /api/import`, editor rendering, and
-save/reload behavior.
+`e2e/import/import-roundtrip.spec.ts` covers Markdown and DOCX dashboard imports
+through the UI, the workspace-owner file-picker path, and the unsupported-type
+route contract. The Markdown lifecycle also proves oversized-file preflight,
+malformed-response and transport failure recovery, pending-state duplicate
+suppression, and non-empty editor replacement across Escape/backdrop
+cancellation, focus trapping/restoration, mobile containment, autosave, and
+reload. DOCX coverage uses `e2e/helpers/docx-fixture.ts` to
+generate a minimal deterministic OOXML package from stable XML parts at test
+time, avoiding opaque binary fixture churn while still exercising upload/form
+wiring, `POST /api/import`, editor rendering, and save/reload behavior.
 
 ## Slides smoke (`e2e/presentation/slides-smoke.spec.ts`)
 

@@ -91,11 +91,11 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/import/import-roundtrip.spec.ts",
     owners: ["import", "editor"],
     coverage:
-      "Markdown and DOCX imports create editable documents that persist across reload; workspace roles are enforced and unsupported uploads fail gracefully.",
+      "Dashboard Markdown preflight/malformed/transport recovery and DOCX imports, workspace UI import, duplicate suppression, editor replacement modal/accessibility/persistence, role enforcement, and graceful unsupported-upload failure.",
     runMode: "required-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded editor", "seeded viewer"],
-    devices: ["Desktop Chrome"],
+    devices: ["Desktop Chrome", "Mobile Chrome viewport"],
     ciStatus: "required normal deterministic E2E workflow",
     sourceRefs: [
       "e2e/README.md",
@@ -132,8 +132,27 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     ],
     tests: [
       {
+        test: "imports Markdown, renders blocks, and persists content across reload @required-profile",
+        surface:
+          "dashboard import failure/retry → document editor replacement modal → autosave/reload",
+        viewport: "Desktop + mobile Chrome viewport",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
         test: "imports DOCX, renders blocks, and persists content across reload @required-profile",
         surface: "dashboard import → document editor render/reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "workspace import by owner persists across reload @required-profile",
+        surface: "workspace import UI → document editor render/reload",
         viewport: "Desktop Chrome",
         auth: "seeded owner",
         profile: "normal deterministic profile (E2E_PROFILE=1)",

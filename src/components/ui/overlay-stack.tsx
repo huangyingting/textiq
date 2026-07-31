@@ -12,6 +12,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -111,7 +112,10 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
   }, [open, topId]);
 }
 
-function useFocusTrap(open: boolean) {
+function useFocusTrap(
+  open: boolean,
+  explicitRestoreFocusRef?: RefObject<HTMLElement | null>,
+) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
@@ -119,7 +123,9 @@ function useFocusTrap(open: boolean) {
     if (!open) {
       return;
     }
-    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    restoreFocusRef.current =
+      explicitRestoreFocusRef?.current ??
+      (document.activeElement as HTMLElement | null);
     const panel = panelRef.current;
     if (panel) {
       const focusable = getTabbableElements(panel);
@@ -129,7 +135,7 @@ function useFocusTrap(open: boolean) {
       restoreFocusRef.current?.focus();
       restoreFocusRef.current = null;
     };
-  }, [open]);
+  }, [explicitRestoreFocusRef, open]);
 
   const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Tab") {
@@ -162,6 +168,10 @@ export type OverlaySurfaceProps = {
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  /** Extra classes applied to the full-viewport modal positioning container. */
+  containerClassName?: string;
+  /** Explicit focus target used when an asynchronously opened modal closes. */
+  restoreFocusRef?: RefObject<HTMLElement | null>;
   "aria-label"?: string;
   "aria-labelledby"?: string;
   "aria-busy"?: boolean;
@@ -172,12 +182,14 @@ export function ModalSurface({
   onClose,
   children,
   className,
+  containerClassName,
+  restoreFocusRef,
   "aria-label": ariaLabel,
   "aria-labelledby": labelledBy,
   "aria-busy": busy,
 }: OverlaySurfaceProps) {
   const motionPreset = resolveOverlayMotion(Boolean(useReducedMotion())).modal;
-  const { panelRef, onKeyDown } = useFocusTrap(open);
+  const { panelRef, onKeyDown } = useFocusTrap(open, restoreFocusRef);
   useOverlayStack(open, onClose);
 
   if (typeof document === "undefined") return null;
@@ -187,7 +199,10 @@ export function ModalSurface({
       {open ? (
         <div
           data-floating-panel="true"
-          className="fixed inset-0 z-modal flex items-center justify-center p-4"
+          className={cx(
+            "fixed inset-0 z-modal flex justify-center p-4",
+            containerClassName ?? "items-center",
+          )}
         >
           <div
             aria-hidden="true"

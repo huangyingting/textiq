@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { ModalSurface } from "./overlay-stack";
 
@@ -22,6 +22,10 @@ export type DialogProps = {
   children: ReactNode;
   /** Extra classes applied to the dialog panel (e.g. `max-w-sm`). */
   className?: string;
+  /** Extra classes applied to the full-viewport positioning container. */
+  containerClassName?: string;
+  /** Explicit focus target used when an asynchronously opened dialog closes. */
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 /**
@@ -36,6 +40,8 @@ export function Dialog({
   "aria-busy": busy,
   children,
   className,
+  containerClassName,
+  restoreFocusRef,
 }: DialogProps) {
   return (
     <ModalSurface
@@ -44,6 +50,8 @@ export function Dialog({
       aria-labelledby={labelledBy}
       aria-busy={busy}
       className={className}
+      containerClassName={containerClassName}
+      restoreFocusRef={restoreFocusRef}
     >
       {children}
     </ModalSurface>
