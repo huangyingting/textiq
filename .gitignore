@@ -65,9 +65,6 @@ progress.txt
 # OS files
 .DS_Store
 
-# Claude
-.claude/
-
 /src/generated/prisma
 
 # Repo-local test scratch files
