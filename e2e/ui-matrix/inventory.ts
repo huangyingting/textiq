@@ -132,7 +132,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: [
       "e2e/README.md",
       "docs/import/README.md",
-      "playwright.config.mts",
+      "playwright.config.ts",
       ".github/workflows/e2e-deterministic.yml",
     ],
     expectedTestCount: 6,

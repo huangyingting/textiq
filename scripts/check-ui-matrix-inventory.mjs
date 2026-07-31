@@ -1403,7 +1403,7 @@ export function validateDocxDeterministicProfileMapping({
   const findings = [];
   const profileSpecs = stringArrayVariable(
     playwrightConfigText,
-    "playwright.config.mts",
+    "playwright.config.ts",
     "deterministicProfileSpecs",
   );
   const inventoryEntry = specInventory.find(
@@ -1647,14 +1647,14 @@ async function main() {
     ...data,
   });
   if (
-    existsSync(join(repoRoot, "playwright.config.mts")) &&
+    existsSync(join(repoRoot, "playwright.config.ts")) &&
     existsSync(join(repoRoot, DOCX_SPEC)) &&
     data.specInventory.some((entry) => entry.spec === DOCX_SPEC)
   ) {
     result.findings.push(
       ...validateDocxDeterministicProfileMapping({
         playwrightConfigText: readFileSync(
-          join(repoRoot, "playwright.config.mts"),
+          join(repoRoot, "playwright.config.ts"),
           "utf8",
         ),
         importSpecText: readFileSync(join(repoRoot, DOCX_SPEC), "utf8"),

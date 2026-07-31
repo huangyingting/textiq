@@ -86,7 +86,7 @@ export const ELIGIBLE_ROOTS = ["src"];
 export const ELIGIBLE_SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 
 // The e2e evidence root and spec naming convention `mapped-e2e ref=` values
-// must satisfy — matches `testMatch: /.*\.spec\.ts/` in playwright.config.mts
+// must satisfy — matches `testMatch: /.*\.spec\.ts/` in playwright.config.ts
 // and the `E2E_SPEC_FILE_PATTERN` naming rule in `test-subsystem.mjs`.
 export const E2E_ROOT = "e2e";
 export const E2E_SPEC_EXTENSION = ".spec.ts";

@@ -6,11 +6,8 @@
   "license": "OFL-1.1",
   "homepage": "https://fontsource.org/fonts/noto-sans-sc",
   "repository": "https://github.com/fontsource/font-files/tree/main/fonts/google/noto-sans-sc",
-  "subsetSource": "Prebuilt Fontsource latin and chinese-simplified subset files; no local subset command was run.",
+  "subsetSource": "Prebuilt Fontsource chinese-simplified subset files; no local subset command was run.",
   "files": [
-    "noto-sans-sc-latin-400-normal.woff2",
-    "noto-sans-sc-latin-600-normal.woff2",
-    "noto-sans-sc-latin-700-normal.woff2",
     "noto-sans-sc-chinese-simplified-400-normal.woff2",
     "noto-sans-sc-chinese-simplified-600-normal.woff2",
     "noto-sans-sc-chinese-simplified-700-normal.woff2"

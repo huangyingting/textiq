@@ -6,7 +6,7 @@ import process from "node:process";
 import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_ROOTS = ["src", "scripts", "prisma", "e2e"];
-const SOURCE_FILES = ["server.mjs", "playwright.config.mts"];
+const SOURCE_FILES = ["server.mjs", "playwright.config.ts"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".mjs", ".js"]);
 const IGNORED_DIRS = new Set([
   ".git",
