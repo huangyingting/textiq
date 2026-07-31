@@ -25,9 +25,9 @@ app.
 | `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup, onboarding failure recovery/deletion, profile persistence, export, password rotation, recovery failures, and safeguards |
 | `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts` | Search/favorite failure recovery, persistence, duplicate/rename, delete/undo, trash restore, and permanent deletion             |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
-| `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Owner/viewer comment lifecycle, anchored-paragraph edits, permissions, resolve/reopen, guarded deletion, and reload persistence |
+| `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Comment failure recovery/duplicate suppression, owner/viewer lifecycle, permissions, guarded deletion, and reload persistence   |
 | `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling |
-| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag create/remove/reuse persistence and reversible version-history restore across reloads                                       |
+| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag/restore failure recovery and duplicate suppression, tag persistence, and reversible history restore across reloads          |
 | `e2e/ui-matrix/public-render-ui.spec.ts`                | Public share/embed/present rendering, asset policy, safe 404s, read-only UI, and accessible visual-lightbox behavior            |
 | `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite failure recovery/copy/revoke, membership, transfer, leave, and delete lifecycle      |
 | `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically   |

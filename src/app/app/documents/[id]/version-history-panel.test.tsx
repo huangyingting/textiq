@@ -86,6 +86,23 @@ stubModule(
 };`,
 );
 
+stubModule(
+  "next/navigation",
+  `module.exports = {
+  unstable_rethrow(error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      typeof error.digest === "string" &&
+      (error.digest.startsWith("NEXT_REDIRECT") ||
+        error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+    ) {
+      throw error;
+    }
+  },
+};`,
+);
+
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const [message] = args;
@@ -329,6 +346,32 @@ describe("VersionHistoryPanel", () => {
     });
   });
 
+  test("framework redirect control flow escapes load failure recovery", async () => {
+    await withPortalDom(async () => {
+      const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+        digest: "NEXT_REDIRECT;push;/login;307;",
+      });
+      globalForActions.__versionHistoryActionsTestState.listImpl = async () => {
+        throw redirectError;
+      };
+      const renderer = mount(makeEditor());
+      try {
+        await assert.rejects(
+          async () => {
+            await act(async () => {
+              findByAria(renderer.root, "Version history").props.onClick();
+              await waitForAsyncDrain();
+              await waitForAsyncDrain();
+            });
+          },
+          (error: unknown) => error === redirectError,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("canEdit=false hides restore controls for every row", async () => {
     await withPortalDom(async () => {
       globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
@@ -486,7 +529,80 @@ describe("VersionHistoryPanel", () => {
     });
   });
 
-  test("a server-declined restore surfaces the error, resets confirmId, and leaves the panel open", async () => {
+  test("repeated restore confirmation issues one mutation and locks panel dismissal while pending", async () => {
+    await withPortalDom(async () => {
+      globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
+        version({ id: "v1" }),
+      ];
+      let rejectRestore!: (error: Error) => void;
+      globalForActions.__versionHistoryActionsTestState.restoreImpl = () =>
+        new Promise((_resolve, reject) => {
+          rejectRestore = reject;
+        });
+
+      const renderer = mount(makeEditor());
+      try {
+        act(() => {
+          findByAria(renderer.root, "Version history").props.onClick();
+        });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Restore this version" })
+            .props.onClick();
+          await waitForAsyncDrain();
+        });
+        const confirm = renderer.root.findByProps({
+          "aria-label": "Confirm restore",
+        });
+        await act(async () => {
+          confirm.props.onClick();
+          confirm.props.onClick();
+          await waitForAsyncDrain();
+        });
+
+        assert.deepEqual(
+          globalForActions.__versionHistoryActionsTestState.restoreCalls,
+          ["v1"],
+        );
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Confirm restore" }).props
+            .disabled,
+          true,
+        );
+        assert.equal(
+          renderer.root.findByProps({ role: "dialog" }).props["aria-busy"],
+          true,
+        );
+        assert.equal(
+          findByAria(renderer.root, "Close version history").props.disabled,
+          true,
+        );
+        findByAria(renderer.root, "Close version history").props.onClick();
+        assert.ok(renderer.root.findByProps({ role: "dialog" }));
+
+        await act(async () => {
+          rejectRestore(new Error("temporary outage"));
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.match(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          /Couldn't restore this version\. Please try again\./,
+        );
+        assert.ok(
+          renderer.root.findByProps({ "aria-label": "Try restore again" }),
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a server-declined restore surfaces the error, keeps retry confirmation, and leaves the panel open", async () => {
     await withPortalDom(async () => {
       globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
         version({ id: "v1" }),
@@ -529,9 +645,8 @@ describe("VersionHistoryPanel", () => {
           textOf(renderer.root.findByProps({ role: "alert" })),
           /This version was already superseded\./,
         );
-        // confirmId reset: the row shows "Restore" again, not Confirm/Cancel.
         assert.ok(
-          renderer.root.findByProps({ "aria-label": "Restore this version" }),
+          renderer.root.findByProps({ "aria-label": "Try restore again" }),
         );
         assert.ok(renderer.root.findByProps({ role: "dialog" }));
       } finally {
@@ -540,7 +655,7 @@ describe("VersionHistoryPanel", () => {
     });
   });
 
-  test("a thrown restore error is caught, shown as an alert, and resets confirmId", async () => {
+  test("a thrown restore error is caught, shown as an alert, and keeps retry confirmation", async () => {
     await withPortalDom(async () => {
       globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
         version({ id: "v1" }),
@@ -583,7 +698,53 @@ describe("VersionHistoryPanel", () => {
           /Couldn't restore this version\. Please try again\./,
         );
         assert.ok(
-          renderer.root.findByProps({ "aria-label": "Restore this version" }),
+          renderer.root.findByProps({ "aria-label": "Try restore again" }),
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("framework redirect control flow escapes restore failure recovery", async () => {
+    await withPortalDom(async () => {
+      const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+        digest: "NEXT_REDIRECT;push;/login;307;",
+      });
+      globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
+        version({ id: "v1" }),
+      ];
+      globalForActions.__versionHistoryActionsTestState.restoreImpl =
+        async () => {
+          throw redirectError;
+        };
+      const renderer = mount(makeEditor());
+      try {
+        act(() => {
+          findByAria(renderer.root, "Version history").props.onClick();
+        });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Restore this version" })
+            .props.onClick();
+          await waitForAsyncDrain();
+        });
+
+        await assert.rejects(
+          async () => {
+            await act(async () => {
+              renderer.root
+                .findByProps({ "aria-label": "Confirm restore" })
+                .props.onClick();
+              await waitForAsyncDrain();
+              await waitForAsyncDrain();
+            });
+          },
+          (error: unknown) => error === redirectError,
         );
       } finally {
         act(() => renderer.unmount());

@@ -8,11 +8,13 @@ export function EditorSidePanel({
   title,
   actions,
   children,
+  busy = false,
 }: {
   label: string;
   title: string;
   actions?: ReactNode;
   children: ReactNode;
+  busy?: boolean;
 }) {
   if (typeof document === "undefined") return null;
 
@@ -20,6 +22,7 @@ export function EditorSidePanel({
     <aside
       role="dialog"
       aria-label={label}
+      aria-busy={busy}
       className="fixed inset-y-0 right-0 z-panel flex w-full max-w-md flex-col border-l border-ds-border-subtle bg-ds-surface-overlay shadow-ds-popover"
     >
       <div className="flex items-center justify-between border-b border-ds-border-subtle px-4 py-3">

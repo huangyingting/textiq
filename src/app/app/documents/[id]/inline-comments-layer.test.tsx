@@ -162,11 +162,15 @@ const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
 ) as ModuleHooks;
 const actionsStubUrl = "inline-comments-layer-comments-actions:test";
+const navigationStubUrl = "inline-comments-layer-next-navigation:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "./comments-actions") {
       return { url: actionsStubUrl, shortCircuit: true };
+    }
+    if (specifier === "next/navigation") {
+      return { url: navigationStubUrl, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
@@ -190,6 +194,25 @@ registerHooks({
   setCommentResolved: async (documentId, commentId, resolved) => {
     globalThis.__inlineCommentsActionsTestState.resolveCalls.push({ documentId, commentId, resolved });
     return globalThis.__inlineCommentsActionsTestState.resolveImpl(documentId, commentId, resolved);
+  },
+};`,
+        shortCircuit: true,
+      };
+    }
+    if (url === navigationStubUrl) {
+      return {
+        format: "commonjs",
+        source: `module.exports = {
+  unstable_rethrow(error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      typeof error.digest === "string" &&
+      (error.digest.startsWith("NEXT_REDIRECT") ||
+        error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+    ) {
+      throw error;
+    }
   },
 };`,
         shortCircuit: true,
@@ -1205,7 +1228,7 @@ describe("card expansion/selection — thread listing", () => {
 
 describe("submit", () => {
   test("the Comment button is disabled until the draft is non-blank, and while the submission is pending", async () => {
-    await withCommentsDom(async () => {
+    await withCommentsDom(async (registry) => {
       const { editor } = makeFakeEditor(buildRoot());
       const renderer = mount(editor);
       try {
@@ -1239,11 +1262,46 @@ describe("submit", () => {
             resolveCreate = resolve;
           });
 
-        act(() => commentButton().props.onClick());
+        act(() => {
+          const button = commentButton();
+          button.props.onClick();
+          button.props.onClick();
+        });
+        const pendingButton = renderer.root.find(
+          (element) =>
+            element.type === "button" && textOf(element) === "Posting…",
+        );
         assert.equal(
-          commentButton().props.disabled,
+          pendingButton.props.disabled,
           true,
           "pending while the transition is in flight",
+        );
+        assert.equal(
+          globalForActions.__inlineCommentsActionsTestState.calls.length,
+          1,
+          "same-event activation issues one create mutation",
+        );
+        assert.equal(
+          renderer.root.findByProps({ role: "dialog" }).props["aria-busy"],
+          true,
+        );
+        assert.equal(findDialogCard(renderer.root)!.props.disabled, true);
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Close inline comment",
+          }).props.disabled,
+          true,
+        );
+        act(() => {
+          registry.fire("keydown", {
+            key: "Escape",
+            preventDefault() {},
+            stopPropagation() {},
+          });
+        });
+        assert.ok(
+          findDialogCard(renderer.root),
+          "Escape cannot dismiss a pending comment",
         );
 
         await act(async () => {
@@ -1444,9 +1502,9 @@ describe("submit", () => {
           "Private reply",
         );
         assert.match(textOf(renderer.root), /Reply to Alice/);
-        assert.equal(
-          renderer.root.findByProps({ role: "alert" }).children.join(""),
-          "Comment is unavailable.",
+        assert.match(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          /^Comment is unavailable\./,
         );
         assert.equal(
           renderer.root.findAllByProps({
@@ -1486,12 +1544,54 @@ describe("submit", () => {
         });
 
         const alert = renderer.root.findByProps({ role: "alert" });
-        assert.equal(
+        assert.match(
           textOf(alert),
-          "Couldn't post your comment. Please try again.",
+          /^Couldn't post your comment\. Please try again\./,
         );
         assert.ok(findDialogCard(renderer.root), "the card should stay open");
         assert.equal(findDialogCard(renderer.root)!.props.value, "A reply");
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("framework redirect control flow escapes comment failure recovery", async () => {
+    await withCommentsDom(async () => {
+      const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+        digest: "NEXT_REDIRECT;push;/login;307;",
+      });
+      globalForActions.__inlineCommentsActionsTestState.impl = async () => {
+        throw redirectError;
+      };
+      const { editor } = makeFakeEditor(buildRoot());
+      const renderer = mount(editor);
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        act(() => {
+          findDialogCard(renderer.root)!.props.onChange({
+            target: { value: "A reply" },
+          });
+        });
+
+        await assert.rejects(
+          async () => {
+            await act(async () => {
+              renderer.root
+                .find(
+                  (element) =>
+                    element.type === "button" && textOf(element) === "Comment",
+                )
+                .props.onClick();
+              await flushMicrotasks();
+              await flushMicrotasks();
+            });
+          },
+          (error: unknown) => error === redirectError,
+        );
       } finally {
         act(() => renderer.unmount());
       }
@@ -1526,9 +1626,9 @@ describe("submit", () => {
           await flushMicrotasks();
         });
 
-        assert.equal(
+        assert.match(
           textOf(renderer.root.findByProps({ role: "alert" })),
-          "Parent comment not found.",
+          /^Parent comment not found\./,
         );
         assert.ok(findDialogCard(renderer.root));
         assert.equal(findDialogCard(renderer.root)!.props.value, "A reply");
@@ -1676,9 +1776,9 @@ describe("comment lifecycle controls", () => {
           }).props.value,
           "  Updated body  ",
         );
-        assert.equal(
+        assert.match(
           textOf(renderer.root.findByProps({ role: "alert" })),
-          "Comment is unavailable.",
+          /^Comment is unavailable\./,
         );
 
         const updatedThreads = threads.map((thread) =>
@@ -1840,6 +1940,82 @@ describe("comment lifecycle controls", () => {
           globalForActions.__inlineCommentsActionsTestState.deleteCalls,
           [{ documentId: "doc-1", commentId: "thread-first-a" }],
         );
+        assert.doesNotMatch(
+          textOf(renderer.root),
+          /First comment on paragraph one/,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("repeated delete confirmation issues one mutation and locks dismissal while pending", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      let resolveDelete!: (
+        result: CommentActionResult<CommentThread[]>,
+      ) => void;
+      globalForActions.__inlineCommentsActionsTestState.deleteImpl = () =>
+        new Promise((resolve) => {
+          resolveDelete = resolve;
+        });
+      const renderer = mount(editor, threads, "user-a");
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Delete comment by Alice" })
+            .props.onClick();
+        });
+        const confirm = renderer.root.findByProps({
+          "aria-label": "Confirm delete comment by Alice",
+        });
+        act(() => {
+          confirm.props.onClick();
+          confirm.props.onClick();
+        });
+
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.deleteCalls,
+          [{ documentId: "doc-1", commentId: "thread-first-a" }],
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Confirm delete comment by Alice",
+          }).props.disabled,
+          true,
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Cancel deleting comment by Alice",
+          }).props.disabled,
+          true,
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Close inline comment",
+          }).props.disabled,
+          true,
+        );
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Close inline comment" })
+            .props.onClick();
+        });
+        assert.ok(findDialogCard(renderer.root));
+
+        await act(async () => {
+          resolveDelete({
+            ok: true,
+            data: threads.filter((thread) => thread.id !== "thread-first-a"),
+          });
+          await flushMicrotasks();
+        });
         assert.doesNotMatch(
           textOf(renderer.root),
           /First comment on paragraph one/,

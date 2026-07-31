@@ -57,6 +57,23 @@ stubModule(
 };`,
 );
 
+stubModule(
+  "next/navigation",
+  `module.exports = {
+  unstable_rethrow(error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      typeof error.digest === "string" &&
+      (error.digest.startsWith("NEXT_REDIRECT") ||
+        error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+    ) {
+      throw error;
+    }
+  },
+};`,
+);
+
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const [message] = args;
@@ -165,7 +182,7 @@ describe("TagControl", () => {
     }
   });
 
-  test("pressing Enter with text commits addTag, clears the input immediately, and applies the returned tags", async () => {
+  test("pressing Enter commits addTag, keeps the input until success, then applies the returned tags", async () => {
     await (async () => {
       globalForActions.__tagControlActionsTestState.addImpl = async (
         _id,
@@ -189,7 +206,7 @@ describe("TagControl", () => {
         const inputAfter = renderer.root.findByProps({
           "aria-label": "Add a tag",
         });
-        assert.equal(inputAfter.props.value, "");
+        assert.equal(inputAfter.props.value, "  Launch  ");
 
         await act(async () => {
           await waitForAsyncDrain();
@@ -200,11 +217,60 @@ describe("TagControl", () => {
           globalForActions.__tagControlActionsTestState.addCalls,
           [{ documentId: "doc-7", name: "Launch" }],
         );
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Add a tag" }).props.value,
+          "",
+        );
         assert.match(textOf(renderer.root), /Launch/);
       } finally {
         act(() => renderer.unmount());
       }
     })();
+  });
+
+  test("same-event repeated add activation issues one mutation and locks tag controls", async () => {
+    let resolveAdd!: (tags: DocumentTag[]) => void;
+    globalForActions.__tagControlActionsTestState.addImpl = () =>
+      new Promise((resolve) => {
+        resolveAdd = resolve;
+      });
+    const renderer = mount({ documentId: "doc-7" });
+    try {
+      const input = renderer.root.findByProps({ "aria-label": "Add a tag" });
+      act(() => {
+        input.props.onChange({ target: { value: "Launch" } });
+      });
+      const changedInput = renderer.root.findByProps({
+        "aria-label": "Add a tag",
+      });
+      await act(async () => {
+        const event = { key: "Enter", preventDefault() {} };
+        changedInput.props.onKeyDown(event);
+        changedInput.props.onKeyDown(event);
+        await waitForAsyncDrain();
+      });
+
+      assert.deepEqual(globalForActions.__tagControlActionsTestState.addCalls, [
+        { documentId: "doc-7", name: "Launch" },
+      ]);
+      assert.equal(
+        renderer.root.findByProps({ role: "group" }).props["aria-busy"],
+        true,
+      );
+      assert.equal(
+        renderer.root.findByProps({ "aria-label": "Add a tag" }).props.disabled,
+        true,
+      );
+
+      await act(async () => {
+        resolveAdd([tag("new", "Launch")]);
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(textOf(renderer.root), /Launch/);
+    } finally {
+      act(() => renderer.unmount());
+    }
   });
 
   test("blurring the input with text also commits addTag", async () => {
@@ -272,9 +338,15 @@ describe("TagControl", () => {
     }
   });
 
-  test("a rejected addTag shows an alert and leaves the chip list unchanged", async () => {
-    globalForActions.__tagControlActionsTestState.addImpl = async () => {
-      throw new Error("boom");
+  test("a rejected addTag preserves the input and retries once under repeated activation", async () => {
+    let attempt = 0;
+    globalForActions.__tagControlActionsTestState.addImpl = async (
+      _documentId,
+      name,
+    ) => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("private provider detail");
+      return [tag("new", name)];
     };
     const renderer = mount({ initialTags: [tag("t1", "Roadmap")] });
     try {
@@ -295,11 +367,31 @@ describe("TagControl", () => {
 
       assert.match(
         textOf(renderer.root.findByProps({ role: "alert" })),
-        /Couldn't add tag/,
+        /Couldn't add the tag\. Please try again\./,
+      );
+      assert.doesNotMatch(textOf(renderer.root), /private provider detail/);
+      assert.equal(
+        renderer.root.findByProps({ "aria-label": "Add a tag" }).props.value,
+        "Oops",
       );
       // The pre-existing chip is untouched; the failed tag never appears.
       assert.match(textOf(renderer.root), /Roadmap/);
       assert.doesNotMatch(textOf(renderer.root), /Oops/);
+
+      const retryButton = renderer.root.findByProps({
+        children: "Try add again",
+      });
+      await act(async () => {
+        retryButton.props.onClick();
+        retryButton.props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        globalForActions.__tagControlActionsTestState.addCalls.length,
+        2,
+      );
+      assert.match(textOf(renderer.root), /Oops/);
     } finally {
       act(() => renderer.unmount());
     }
@@ -337,6 +429,76 @@ describe("TagControl", () => {
     }
   });
 
+  test("same-event repeated remove activation issues one mutation and locks competing controls", async () => {
+    let resolveRemove!: (tags: DocumentTag[]) => void;
+    globalForActions.__tagControlActionsTestState.removeImpl = () =>
+      new Promise((resolve) => {
+        resolveRemove = resolve;
+      });
+    const renderer = mount({
+      initialTags: [tag("t1", "Roadmap"), tag("t2", "Notes")],
+    });
+    try {
+      const removeButton = renderer.root.findByProps({
+        "aria-label": "Remove tag Roadmap",
+      });
+      await act(async () => {
+        removeButton.props.onClick();
+        removeButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.deepEqual(
+        globalForActions.__tagControlActionsTestState.removeCalls,
+        [{ documentId: "doc-1", tagId: "t1" }],
+      );
+      assert.equal(
+        renderer.root.findByProps({ "aria-label": "Remove tag Notes" }).props
+          .disabled,
+        true,
+      );
+
+      await act(async () => {
+        resolveRemove([tag("t2", "Notes")]);
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.doesNotMatch(textOf(renderer.root), /Roadmap/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("framework redirect control flow escapes add failure recovery", async () => {
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;push;/login;307;",
+    });
+    globalForActions.__tagControlActionsTestState.addImpl = async () => {
+      throw redirectError;
+    };
+    const renderer = mount({});
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Add a tag" })
+          .props.onChange({ target: { value: "Launch" } });
+      });
+      await assert.rejects(
+        async () => {
+          await act(async () => {
+            renderer.root
+              .findByProps({ "aria-label": "Add a tag" })
+              .props.onKeyDown({ key: "Enter", preventDefault() {} });
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+        },
+        (error: unknown) => error === redirectError,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("a rejected removeTag shows an alert and leaves the chip in place", async () => {
     globalForActions.__tagControlActionsTestState.removeImpl = async () => {
       throw new Error("boom");
@@ -354,7 +516,7 @@ describe("TagControl", () => {
 
       assert.match(
         textOf(renderer.root.findByProps({ role: "alert" })),
-        /Couldn't remove tag/,
+        /Couldn't remove the tag\. Please try again\./,
       );
       assert.match(textOf(renderer.root), /Roadmap/);
     } finally {

@@ -472,7 +472,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts",
     owners: ["documents", "editor", "security"],
     coverage:
-      "Deterministic owner/viewer comment create, edit, anchored-paragraph mutation, reply, author-only action visibility, resolve/reopen, guarded deletion, and reload persistence lifecycle.",
+      "Deterministic owner/viewer comment create transport-failure recovery with duplicate suppression, edit, anchored-paragraph mutation, reply, author-only action visibility, resolve/reopen, guarded deletion, and reload persistence lifecycle.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded viewer"],
@@ -502,7 +502,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
     owners: ["documents", "editor", "security"],
     coverage:
-      "Deterministic tag create/remove/reuse persistence plus cancellable version restore, pre-restore checkpoint recovery, metadata retention, and reload durability.",
+      "Deterministic tag and version-restore transport-failure recovery with duplicate suppression, tag create/remove/reuse persistence, cancellable restore, pre-restore checkpoint recovery, metadata retention, and reload durability.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],

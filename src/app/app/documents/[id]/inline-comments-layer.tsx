@@ -9,6 +9,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -59,6 +60,11 @@ const commentsActions: Pick<
 
 const COMMENT_ACTION_CLASS =
   "text-[11px] font-semibold text-ds-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50";
+
+type CommentMutationAction = {
+  kind: "create" | "edit" | "delete" | "resolve";
+  commentId?: string;
+};
 
 function subscribeToHydrationStore(): () => void {
   return () => {};
@@ -166,11 +172,16 @@ export function InlineCommentsLayer({
     null,
   );
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const mutationInFlightRef = useRef(false);
+  const [pendingAction, setPendingAction] =
+    useState<CommentMutationAction | null>(null);
   const [isPending, startTransition] = useTransition();
+  const mutationBusy = isPending || pendingAction !== null;
 
   const byAnchor = useMemo(() => threadsByTextAnchor(threads), [threads]);
 
   const closeDialog = useCallback(() => {
+    if (mutationInFlightRef.current) return;
     setActiveAnchor(null);
     setBody("");
     setReplyingToId(null);
@@ -182,11 +193,16 @@ export function InlineCommentsLayer({
 
   const runMutation = useCallback(
     (
+      action: CommentMutationAction,
       mutate: () => Promise<CommentActionResult<CommentThread[]>>,
       fallbackMessage: string,
       onSuccess?: () => void,
     ) => {
+      if (mutationInFlightRef.current) return;
+
+      mutationInFlightRef.current = true;
       setError(null);
+      setPendingAction(action);
       startTransition(async () => {
         try {
           const result = await mutate();
@@ -196,8 +212,12 @@ export function InlineCommentsLayer({
           }
           setThreads(result.data);
           onSuccess?.();
-        } catch {
+        } catch (error) {
+          unstable_rethrow(error);
           setError(fallbackMessage);
+        } finally {
+          mutationInFlightRef.current = false;
+          setPendingAction(null);
         }
       });
     },
@@ -346,10 +366,10 @@ export function InlineCommentsLayer({
     const trimmed = body.trim();
     if (!anchor || !trimmed) return;
     const parentId = replyingToId;
-    setError(null);
-    startTransition(async () => {
-      try {
-        const result = await commentsActions.createComment(
+    runMutation(
+      { kind: "create" },
+      () =>
+        commentsActions.createComment(
           documentId,
           parentId
             ? { body: trimmed, parentId }
@@ -359,23 +379,18 @@ export function InlineCommentsLayer({
                 anchorText: anchor.text,
                 anchorNodeId: anchor.nodeId,
               },
-        );
-        if (!result.ok) {
-          setError(result.error.message);
-          return;
-        }
-        setThreads(result.data);
+        ),
+      "Couldn't post your comment. Please try again.",
+      () => {
         setBody("");
         setReplyingToId(null);
         if (!parentId) {
           setActiveAnchor(null);
           setHoverAnchor(null);
         }
-      } catch {
-        setError("Couldn't post your comment. Please try again.");
-      }
-    });
-  }, [activeAnchor, body, documentId, replyingToId]);
+      },
+    );
+  }, [activeAnchor, body, documentId, replyingToId, runMutation]);
 
   const activeThreads = activeAnchor
     ? threadsForAnchor(byAnchor, activeAnchor)
@@ -449,6 +464,7 @@ export function InlineCommentsLayer({
           type="button"
           aria-label={`${dot.count} comment${dot.count === 1 ? "" : "s"}`}
           onClick={() => setActiveAnchor(dot)}
+          disabled={mutationBusy}
           className={cx(
             "pointer-events-auto absolute -translate-y-1/2",
             GUTTER_BUTTON,
@@ -470,6 +486,7 @@ export function InlineCommentsLayer({
           type="button"
           aria-label="Add comment to this paragraph"
           onClick={() => setActiveAnchor(iconAnchor)}
+          disabled={mutationBusy}
           className={cx(
             "pointer-events-auto absolute -translate-y-1/2",
             GUTTER_BUTTON,
@@ -488,6 +505,7 @@ export function InlineCommentsLayer({
           ref={cardRef}
           role="dialog"
           aria-label="Inline comments"
+          aria-busy={mutationBusy}
           className={cx(
             "pointer-events-auto absolute flex w-[15rem] max-w-[calc(100vw-4.5rem)] flex-col overflow-hidden border border-ds-border-subtle bg-ds-surface-overlay text-ds-text-primary",
             RADIUS.lg,
@@ -528,6 +546,7 @@ export function InlineCommentsLayer({
                 aria-label="Close inline comment"
                 size="sm"
                 onClick={closeDialog}
+                disabled={mutationBusy}
                 className="shrink-0"
               >
                 <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -563,9 +582,11 @@ export function InlineCommentsLayer({
                             <textarea
                               aria-label={`Edit comment by ${thread.author.name}`}
                               value={editBody}
-                              onChange={(event) =>
-                                setEditBody(event.target.value)
-                              }
+                              disabled={mutationBusy}
+                              onChange={(event) => {
+                                setEditBody(event.target.value);
+                                setError(null);
+                              }}
                               rows={2}
                               maxLength={COMMENT_BODY_MAX_LENGTH}
                               className={cx(
@@ -584,7 +605,7 @@ export function InlineCommentsLayer({
                                   setEditBody("");
                                   setError(null);
                                 }}
-                                disabled={isPending}
+                                disabled={mutationBusy}
                               >
                                 Cancel
                               </button>
@@ -596,6 +617,10 @@ export function InlineCommentsLayer({
                                   const nextBody = editBody.trim();
                                   if (!nextBody) return;
                                   runMutation(
+                                    {
+                                      kind: "edit",
+                                      commentId: thread.id,
+                                    },
                                     () =>
                                       commentsActions.editComment(
                                         documentId,
@@ -610,10 +635,13 @@ export function InlineCommentsLayer({
                                   );
                                 }}
                                 disabled={
-                                  isPending || editBody.trim().length === 0
+                                  mutationBusy || editBody.trim().length === 0
                                 }
                               >
-                                Save
+                                {pendingAction?.kind === "edit" &&
+                                pendingAction.commentId === thread.id
+                                  ? "Saving…"
+                                  : "Save"}
                               </button>
                             </div>
                           </div>
@@ -636,7 +664,7 @@ export function InlineCommentsLayer({
                                       setDeletingCommentId(null);
                                       setError(null);
                                     }}
-                                    disabled={isPending}
+                                    disabled={mutationBusy}
                                   >
                                     Cancel
                                   </button>
@@ -646,6 +674,10 @@ export function InlineCommentsLayer({
                                     aria-label={`Confirm delete comment by ${thread.author.name}`}
                                     onClick={() =>
                                       runMutation(
+                                        {
+                                          kind: "delete",
+                                          commentId: thread.id,
+                                        },
                                         () =>
                                           commentsActions.deleteComment(
                                             documentId,
@@ -655,9 +687,12 @@ export function InlineCommentsLayer({
                                         () => setDeletingCommentId(null),
                                       )
                                     }
-                                    disabled={isPending}
+                                    disabled={mutationBusy}
                                   >
-                                    Delete
+                                    {pendingAction?.kind === "delete" &&
+                                    pendingAction.commentId === thread.id
+                                      ? "Deleting…"
+                                      : "Delete"}
                                   </button>
                                 </div>
                               </div>
@@ -675,7 +710,7 @@ export function InlineCommentsLayer({
                                     setBody("");
                                     setError(null);
                                   }}
-                                  disabled={isPending}
+                                  disabled={mutationBusy}
                                 >
                                   Reply
                                 </button>
@@ -685,6 +720,10 @@ export function InlineCommentsLayer({
                                   aria-label={`${thread.resolved ? "Reopen" : "Resolve"} comment by ${thread.author.name}`}
                                   onClick={() =>
                                     runMutation(
+                                      {
+                                        kind: "resolve",
+                                        commentId: thread.id,
+                                      },
                                       () =>
                                         commentsActions.setCommentResolved(
                                           documentId,
@@ -694,9 +733,16 @@ export function InlineCommentsLayer({
                                       "Couldn't update this thread. Please try again.",
                                     )
                                   }
-                                  disabled={isPending}
+                                  disabled={mutationBusy}
                                 >
-                                  {thread.resolved ? "Reopen" : "Resolve"}
+                                  {pendingAction?.kind === "resolve" &&
+                                  pendingAction.commentId === thread.id
+                                    ? thread.resolved
+                                      ? "Reopening…"
+                                      : "Resolving…"
+                                    : thread.resolved
+                                      ? "Reopen"
+                                      : "Resolve"}
                                 </button>
                                 {thread.author.id === currentUserId ? (
                                   <>
@@ -712,7 +758,7 @@ export function InlineCommentsLayer({
                                         setDeletingCommentId(null);
                                         setError(null);
                                       }}
-                                      disabled={isPending}
+                                      disabled={mutationBusy}
                                     >
                                       Edit
                                     </button>
@@ -728,7 +774,7 @@ export function InlineCommentsLayer({
                                         setBody("");
                                         setError(null);
                                       }}
-                                      disabled={isPending}
+                                      disabled={mutationBusy}
                                     >
                                       Delete
                                     </button>
@@ -755,9 +801,11 @@ export function InlineCommentsLayer({
                                 <textarea
                                   aria-label={`Edit reply by ${reply.author.name}`}
                                   value={editBody}
-                                  onChange={(event) =>
-                                    setEditBody(event.target.value)
-                                  }
+                                  disabled={mutationBusy}
+                                  onChange={(event) => {
+                                    setEditBody(event.target.value);
+                                    setError(null);
+                                  }}
                                   rows={2}
                                   maxLength={COMMENT_BODY_MAX_LENGTH}
                                   className={cx(
@@ -776,7 +824,7 @@ export function InlineCommentsLayer({
                                       setEditBody("");
                                       setError(null);
                                     }}
-                                    disabled={isPending}
+                                    disabled={mutationBusy}
                                   >
                                     Cancel
                                   </button>
@@ -788,6 +836,10 @@ export function InlineCommentsLayer({
                                       const nextBody = editBody.trim();
                                       if (!nextBody) return;
                                       runMutation(
+                                        {
+                                          kind: "edit",
+                                          commentId: reply.id,
+                                        },
                                         () =>
                                           commentsActions.editComment(
                                             documentId,
@@ -802,10 +854,14 @@ export function InlineCommentsLayer({
                                       );
                                     }}
                                     disabled={
-                                      isPending || editBody.trim().length === 0
+                                      mutationBusy ||
+                                      editBody.trim().length === 0
                                     }
                                   >
-                                    Save
+                                    {pendingAction?.kind === "edit" &&
+                                    pendingAction.commentId === reply.id
+                                      ? "Saving…"
+                                      : "Save"}
                                   </button>
                                 </div>
                               </div>
@@ -828,7 +884,7 @@ export function InlineCommentsLayer({
                                           setDeletingCommentId(null);
                                           setError(null);
                                         }}
-                                        disabled={isPending}
+                                        disabled={mutationBusy}
                                       >
                                         Cancel
                                       </button>
@@ -838,6 +894,10 @@ export function InlineCommentsLayer({
                                         aria-label={`Confirm delete reply by ${reply.author.name}`}
                                         onClick={() =>
                                           runMutation(
+                                            {
+                                              kind: "delete",
+                                              commentId: reply.id,
+                                            },
                                             () =>
                                               commentsActions.deleteComment(
                                                 documentId,
@@ -847,9 +907,12 @@ export function InlineCommentsLayer({
                                             () => setDeletingCommentId(null),
                                           )
                                         }
-                                        disabled={isPending}
+                                        disabled={mutationBusy}
                                       >
-                                        Delete
+                                        {pendingAction?.kind === "delete" &&
+                                        pendingAction.commentId === reply.id
+                                          ? "Deleting…"
+                                          : "Delete"}
                                       </button>
                                     </div>
                                   </div>
@@ -867,7 +930,7 @@ export function InlineCommentsLayer({
                                         setDeletingCommentId(null);
                                         setError(null);
                                       }}
-                                      disabled={isPending}
+                                      disabled={mutationBusy}
                                     >
                                       Edit
                                     </button>
@@ -883,7 +946,7 @@ export function InlineCommentsLayer({
                                         setBody("");
                                         setError(null);
                                       }}
-                                      disabled={isPending}
+                                      disabled={mutationBusy}
                                     >
                                       Delete
                                     </button>
@@ -915,6 +978,7 @@ export function InlineCommentsLayer({
                       setBody("");
                       setError(null);
                     }}
+                    disabled={mutationBusy}
                   >
                     Cancel reply
                   </button>
@@ -923,7 +987,11 @@ export function InlineCommentsLayer({
               <textarea
                 aria-label="Inline comment"
                 value={body}
-                onChange={(event) => setBody(event.target.value)}
+                disabled={mutationBusy}
+                onChange={(event) => {
+                  setBody(event.target.value);
+                  setError(null);
+                }}
                 rows={2}
                 maxLength={COMMENT_BODY_MAX_LENGTH}
                 placeholder="Add a few words here"
@@ -935,14 +1003,30 @@ export function InlineCommentsLayer({
               />
             </div>
             {error ? (
-              <p role="alert" className="mt-2 text-xs text-ds-danger-text">
-                {error}
-              </p>
+              <div
+                role="alert"
+                className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ds-danger-text"
+              >
+                <span>{error}</span>
+                <button
+                  type="button"
+                  disabled={mutationBusy}
+                  onClick={() => setError(null)}
+                  className="rounded-full px-2 py-0.5 font-semibold transition hover:bg-ds-danger-surface disabled:opacity-50"
+                >
+                  Dismiss error
+                </button>
+              </div>
             ) : null}
           </div>
 
           <div className="flex shrink-0 justify-end gap-1.5 border-t border-ds-border-subtle bg-ds-surface-raised/60 px-2 py-1.5">
-            <Button size="sm" variant="plain" onClick={closeDialog}>
+            <Button
+              size="sm"
+              variant="plain"
+              onClick={closeDialog}
+              disabled={mutationBusy}
+            >
               Cancel
             </Button>
             <Button
@@ -950,9 +1034,15 @@ export function InlineCommentsLayer({
               variant="solid"
               leadingIcon={<Send aria-hidden="true" className="h-3.5 w-3.5" />}
               onClick={submit}
-              disabled={isPending || body.trim().length === 0}
+              disabled={mutationBusy || body.trim().length === 0}
             >
-              {replyingToThread ? "Reply" : "Comment"}
+              {pendingAction?.kind === "create"
+                ? replyingToThread
+                  ? "Replying…"
+                  : "Posting…"
+                : replyingToThread
+                  ? "Reply"
+                  : "Comment"}
             </Button>
           </div>
         </div>

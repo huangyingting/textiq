@@ -148,6 +148,14 @@ The deterministic browser lifecycle creates, removes, reloads, and reuses a tag
 through the rendered editor control. It also proves tags remain attached across
 a content-version restore and are absent after final removal and reload.
 
+Tag mutations share a synchronous in-flight boundary so Enter/blur and repeated
+remove activation cannot issue duplicate or competing writes before React
+commits disabled state. Pending controls expose busy status and remain locked.
+Failed adds retain the typed tag for generic retry/dismiss recovery, removal
+failures preserve the chip, and Next redirect/not-found control flow is rethrown
+to the framework. The deterministic browser lifecycle forces an add transport
+failure and proves a double-activated retry produces exactly one durable write.
+
 Favorite toggles ignore soft-deleted documents. Trash is a soft delete that
 sets `deletedAt`; restore clears `deletedAt`. Dashboard-load maintenance purges
 documents older than the soft-delete retention window and also removes expired,

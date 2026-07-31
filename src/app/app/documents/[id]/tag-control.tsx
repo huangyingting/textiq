@@ -1,10 +1,17 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useId, useRef, useState, useTransition } from "react";
 
 import type { DocumentTag } from "@/lib/document/tags";
 
 import { addTag, removeTag } from "./tags-actions";
+
+type TagMutationKind = "add" | "remove";
+type TagMutationError = { kind: "add" } | { kind: "remove"; tagId: string };
+
+const ADD_ERROR = "Couldn't add the tag. Please try again.";
+const REMOVE_ERROR = "Couldn't remove the tag. Please try again.";
 
 /**
  * Tag editor shown in the document header. Lists the document's tags as chips,
@@ -26,40 +33,52 @@ export function TagControl({
 }) {
   const [tags, setTags] = useState<DocumentTag[]>(initialTags);
   const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<TagMutationError | null>(null);
+  const [pendingKind, setPendingKind] = useState<TagMutationKind | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const mutationInFlightRef = useRef(false);
   const listId = useId();
+  const mutationBusy = isPending || pendingKind !== null;
 
   // Suggest the user's tags that aren't already on this document.
   const suggestions = allTags.filter(
     (tag) => !tags.some((current) => current.id === tag.id),
   );
 
-  const handleAdd = () => {
-    const name = input.trim();
-    if (!name) {
-      return;
-    }
-    setInput("");
-    setError(null);
+  const runMutation = (
+    kind: TagMutationKind,
+    failure: TagMutationError,
+    mutation: () => Promise<DocumentTag[]>,
+  ) => {
+    if (mutationInFlightRef.current) return;
+
+    mutationInFlightRef.current = true;
+    setActionError(null);
+    setPendingKind(kind);
     startTransition(async () => {
       try {
-        setTags(await addTag(documentId, name));
-      } catch {
-        setError("Couldn't add tag");
+        setTags(await mutation());
+        if (kind === "add") setInput("");
+      } catch (error) {
+        unstable_rethrow(error);
+        setActionError(failure);
+      } finally {
+        mutationInFlightRef.current = false;
+        setPendingKind(null);
       }
     });
   };
 
+  const handleAdd = () => {
+    const name = input.trim();
+    if (!name) return;
+    runMutation("add", { kind: "add" }, () => addTag(documentId, name));
+  };
+
   const handleRemove = (tagId: string) => {
-    setError(null);
-    startTransition(async () => {
-      try {
-        setTags(await removeTag(documentId, tagId));
-      } catch {
-        setError("Couldn't remove tag");
-      }
-    });
+    runMutation("remove", { kind: "remove", tagId }, () =>
+      removeTag(documentId, tagId),
+    );
   };
 
   const chipClass =
@@ -69,6 +88,7 @@ export function TagControl({
     <div
       role="group"
       aria-label="Tags"
+      aria-busy={mutationBusy}
       className="flex flex-wrap items-center gap-1.5 text-ds-text-primary"
     >
       {tags.map((tag) => (
@@ -79,6 +99,7 @@ export function TagControl({
               type="button"
               aria-label={`Remove tag ${tag.name}`}
               onClick={() => handleRemove(tag.id)}
+              disabled={mutationBusy}
               className="-mr-0.5 rounded-full px-0.5 text-ds-text-secondary transition hover:bg-ds-state-hover hover:text-ds-text-primary"
             >
               ×
@@ -93,7 +114,12 @@ export function TagControl({
             aria-label="Add a tag"
             list={listId}
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            disabled={mutationBusy}
+            aria-invalid={actionError?.kind === "add"}
+            onChange={(event) => {
+              setInput(event.target.value);
+              if (actionError?.kind === "add") setActionError(null);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -112,11 +138,39 @@ export function TagControl({
         </>
       )}
 
-      {error && (
-        <span role="alert" className="text-xs text-ds-danger">
-          {error}
+      {mutationBusy ? (
+        <span role="status" className="text-xs text-ds-text-muted">
+          {pendingKind === "add" ? "Adding tag…" : "Removing tag…"}
         </span>
-      )}
+      ) : null}
+
+      {actionError ? (
+        <span
+          role="alert"
+          className="inline-flex flex-wrap items-center gap-1.5 text-xs text-ds-danger-text"
+        >
+          <span>{actionError.kind === "add" ? ADD_ERROR : REMOVE_ERROR}</span>
+          <button
+            type="button"
+            disabled={mutationBusy}
+            onClick={() => {
+              if (actionError.kind === "add") handleAdd();
+              else handleRemove(actionError.tagId);
+            }}
+            className="rounded-full border border-ds-danger-border px-2 py-0.5 font-medium transition hover:bg-ds-danger-surface disabled:opacity-50"
+          >
+            {actionError.kind === "add" ? "Try add again" : "Try remove again"}
+          </button>
+          <button
+            type="button"
+            disabled={mutationBusy}
+            onClick={() => setActionError(null)}
+            className="rounded-full px-2 py-0.5 font-medium transition hover:bg-ds-state-hover disabled:opacity-50"
+          >
+            Dismiss error
+          </button>
+        </span>
+      ) : null}
     </div>
   );
 }

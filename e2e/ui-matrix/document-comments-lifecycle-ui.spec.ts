@@ -108,7 +108,7 @@ test.describe("UI matrix: document comments lifecycle", () => {
   );
   test.setTimeout(180_000);
 
-  test("owner and viewer complete the persisted comment lifecycle", async ({
+  test("owner and viewer recover comment failure and complete the persisted lifecycle", async ({
     browser,
     page,
   }) => {
@@ -129,8 +129,43 @@ test.describe("UI matrix: document comments lifecycle", () => {
       name: "Inline comment",
     });
     await expect(newComment).toHaveAttribute("maxlength", "5000");
+    const documentRoute = `**${documentPath}`;
+    let createActionCount = 0;
+    await page.route(documentRoute, async (route) => {
+      const request = route.request();
+      const isDocumentAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === documentPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isDocumentAction) {
+        await route.continue();
+        return;
+      }
+      createActionCount += 1;
+      if (createActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
     await newComment.fill(`  ${fixture.ownerComment}  `);
     await dialog.getByRole("button", { name: "Comment", exact: true }).click();
+    const createAlert = dialog.getByRole("alert").filter({
+      hasText: "Couldn't post your comment. Please try again.",
+    });
+    await expect(createAlert).toBeVisible();
+    await expect(newComment).toHaveValue(`  ${fixture.ownerComment}  `);
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === documentPath,
+    );
+    await dialog
+      .getByRole("button", { name: "Comment", exact: true })
+      .dblclick();
+    expect((await createResponse).ok()).toBe(true);
+    await expect.poll(() => createActionCount).toBe(2);
+    await page.unroute(documentRoute);
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("button", { name: "1 comment" })).toBeVisible({
       timeout: 20_000,

@@ -45,7 +45,7 @@ test.describe("UI matrix: document metadata and history", () => {
   );
   test.setTimeout(150_000);
 
-  test("tags persist and version restore remains reversible after reload", async ({
+  test("tag and restore failures recover once before persistence and reversible reload", async ({
     page,
   }) => {
     const fixture = E2E_PROFILE_FIXTURE.documentMetadataLifecycle;
@@ -56,7 +56,47 @@ test.describe("UI matrix: document metadata and history", () => {
     await expect(editor.getByText(fixture.currentContent)).toBeVisible();
     await expect(editor.getByText(fixture.restoredContent)).toHaveCount(0);
 
-    await addTag(page, fixture.tagName);
+    const documentRoute = `**${documentPath}`;
+    let addActionCount = 0;
+    await page.route(documentRoute, async (route) => {
+      const request = route.request();
+      const isDocumentAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === documentPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isDocumentAction) {
+        await route.continue();
+        return;
+      }
+      addActionCount += 1;
+      if (addActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    const tags = tagsGroup(page);
+    const tagInput = tags.getByLabel("Add a tag");
+    await tagInput.fill(`  ${fixture.tagName}  `);
+    await tagInput.press("Enter");
+    const addAlert = tags.getByRole("alert").filter({
+      hasText: "Couldn't add the tag. Please try again.",
+    });
+    await expect(addAlert).toBeVisible();
+    await expect(tagInput).toHaveValue(`  ${fixture.tagName}  `);
+    const addResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === documentPath,
+    );
+    await addAlert.getByRole("button", { name: "Try add again" }).dblclick();
+    expect((await addResponse).ok()).toBe(true);
+    await expect.poll(() => addActionCount).toBe(2);
+    await page.unroute(documentRoute);
+    await expect(removeTagButton(page, fixture.tagName)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(tagInput).toHaveValue("");
     await page.reload();
     editor = await waitForDocumentEditorReady(page);
     await expect(removeTagButton(page, fixture.tagName)).toBeVisible();
@@ -86,7 +126,40 @@ test.describe("UI matrix: document metadata and history", () => {
     await baseline
       .getByRole("button", { name: "Restore this version" })
       .click();
+    let restoreActionCount = 0;
+    await page.route(documentRoute, async (route) => {
+      const request = route.request();
+      const isDocumentAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === documentPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isDocumentAction) {
+        await route.continue();
+        return;
+      }
+      restoreActionCount += 1;
+      if (restoreActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
     await baseline.getByRole("button", { name: "Confirm restore" }).click();
+    const restoreAlert = history.getByRole("alert").filter({
+      hasText: "Couldn't restore this version. Please try again.",
+    });
+    await expect(restoreAlert).toBeVisible();
+    const restoreResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === documentPath,
+    );
+    await baseline
+      .getByRole("button", { name: "Try restore again" })
+      .dblclick();
+    expect((await restoreResponse).ok()).toBe(true);
+    await expect.poll(() => restoreActionCount).toBe(2);
+    await page.unroute(documentRoute);
     await expect(history).toHaveCount(0);
     await expect(editor.getByText(fixture.restoredContent)).toBeVisible({
       timeout: 20_000,

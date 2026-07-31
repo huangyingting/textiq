@@ -133,11 +133,20 @@ and report resolved counts separately from open counts. Marker geometry is
 recomputed when collaborative editor updates arrive, and durable block IDs keep
 threads attached when their paragraph text changes.
 
-The deterministic owner/viewer browser lifecycle creates and edits a root,
-edits and reloads the anchored paragraph without losing the thread, creates and
-edits a reply, verifies author-only controls, resolves and reopens across reload,
-cancels and confirms reply/root deletion, and proves final durability after
-reload.
+Create, reply, edit, resolve/reopen, and delete share one synchronous in-flight
+boundary. Repeated activation cannot issue duplicate or competing mutations
+before React commits disabled state. While persistence is pending, the card is
+marked busy and cannot be dismissed through Close, Cancel, Escape, scroll, or
+resize. Typed action failures keep their safe server message; transport failures
+use generic redacted copy; both preserve the active draft or confirmation for
+retry. Next redirect/not-found control flow is rethrown to the framework.
+
+The deterministic owner/viewer browser lifecycle forces an initial create
+transport failure, double-activates retry to prove one durable mutation, creates
+and edits a root, edits and reloads the anchored paragraph without losing the
+thread, creates and edits a reply, verifies author-only controls, resolves and
+reopens across reload, cancels and confirms reply/root deletion, and proves
+final durability after reload.
 
 Slide-aware comment behavior is exposed through the comment service filters,
 anchor helpers, lifecycle helpers, and the presentation slide-anchor facade so

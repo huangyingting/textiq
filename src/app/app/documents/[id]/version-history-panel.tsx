@@ -2,7 +2,8 @@
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { History as HistoryIcon } from "lucide-react";
-import { useCallback, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useCallback, useRef, useState, useTransition } from "react";
 
 import {
   EditorSidePanel,
@@ -13,6 +14,8 @@ import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { listDocumentVersions, restoreDocumentVersion } from "./actions";
 import type { DocumentVersionSummary } from "@/lib/document/persistence-types";
 import { RESTORE_TAG } from "@/lib/content";
+
+type HistoryActionKind = "load" | "restore";
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
@@ -49,36 +52,61 @@ export function VersionHistoryPanel({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [pendingKind, setPendingKind] = useState<HistoryActionKind | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
+  const actionInFlightRef = useRef(false);
+  const actionKindRef = useRef<HistoryActionKind | null>(null);
+  const mutationBusy = isPending || pendingKind !== null;
+  const restoreBusy = pendingKind === "restore";
 
   const refresh = useCallback(() => {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
+    actionKindRef.current = "load";
     setError(null);
+    setPendingKind("load");
     startTransition(async () => {
       try {
         setVersions(await listDocumentVersions(documentId));
         setLoaded(true);
-      } catch {
+      } catch (error) {
+        unstable_rethrow(error);
         setError("Couldn't load version history. Please try again.");
+      } finally {
+        actionInFlightRef.current = false;
+        actionKindRef.current = null;
+        setPendingKind(null);
       }
     });
   }, [documentId]);
 
   const toggleOpen = useCallback(() => {
-    if (!open && !loaded) {
-      refresh();
+    if (open) {
+      if (actionKindRef.current === "restore") return;
+      setOpen(false);
+      return;
     }
-    setOpen((prev) => !prev);
+
+    if (!loaded) refresh();
+    setOpen(true);
   }, [loaded, open, refresh]);
 
   const restore = useCallback(
     (versionId: string) => {
+      if (actionInFlightRef.current) return;
+
+      actionInFlightRef.current = true;
+      actionKindRef.current = "restore";
       setError(null);
+      setPendingKind("restore");
       startTransition(async () => {
         try {
           const res = await restoreDocumentVersion(versionId);
           if (!res.ok) {
             setError(res.error);
-            setConfirmId(null);
             return;
           }
           const restoredState = editor.parseEditorState(
@@ -87,9 +115,13 @@ export function VersionHistoryPanel({
           editor.setEditorState(restoredState, { tag: RESTORE_TAG });
           setConfirmId(null);
           setOpen(false);
-        } catch {
+        } catch (error) {
+          unstable_rethrow(error);
           setError("Couldn't restore this version. Please try again.");
-          setConfirmId(null);
+        } finally {
+          actionInFlightRef.current = false;
+          actionKindRef.current = null;
+          setPendingKind(null);
         }
       });
     },
@@ -104,6 +136,7 @@ export function VersionHistoryPanel({
         icon={<HistoryIcon aria-hidden="true" className="h-3.5 w-3.5" />}
         iconOnly={iconOnly}
         onClick={toggleOpen}
+        disabled={restoreBusy}
         aria-label="Version history"
         aria-expanded={open}
       />
@@ -112,17 +145,19 @@ export function VersionHistoryPanel({
         <EditorSidePanel
           label="Version history"
           title="Version history"
+          busy={mutationBusy}
           actions={
             <>
               <EditorSidePanelHeaderButton
                 onClick={refresh}
-                disabled={isPending}
+                disabled={mutationBusy}
                 aria-label="Refresh version history"
               >
                 Refresh
               </EditorSidePanelHeaderButton>
               <EditorSidePanelHeaderButton
-                onClick={() => setOpen(false)}
+                onClick={toggleOpen}
+                disabled={restoreBusy}
                 aria-label="Close version history"
                 className="text-sm"
               >
@@ -133,19 +168,30 @@ export function VersionHistoryPanel({
         >
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {error ? (
-              <p role="alert" className="mb-3 text-xs text-ds-danger-text">
-                {error}
-              </p>
+              <div
+                role="alert"
+                className="mb-3 flex flex-wrap items-center gap-2 text-xs text-ds-danger-text"
+              >
+                <span>{error}</span>
+                <button
+                  type="button"
+                  disabled={mutationBusy}
+                  onClick={() => setError(null)}
+                  className="rounded-full px-2 py-0.5 font-medium transition hover:bg-ds-danger-surface disabled:opacity-50"
+                >
+                  Dismiss error
+                </button>
+              </div>
             ) : null}
 
-            {loaded && versions.length === 0 && !isPending ? (
+            {loaded && versions.length === 0 && !mutationBusy ? (
               <p className="text-sm text-ds-text-muted">
                 No saved versions yet. Snapshots are captured periodically as
                 you edit.
               </p>
             ) : null}
 
-            {!loaded && isPending ? (
+            {!loaded && mutationBusy ? (
               <p className="text-sm text-ds-text-muted">Loading…</p>
             ) : null}
 
@@ -172,16 +218,22 @@ export function VersionHistoryPanel({
                           <button
                             type="button"
                             onClick={() => restore(version.id)}
-                            disabled={isPending}
-                            aria-label="Confirm restore"
+                            disabled={mutationBusy}
+                            aria-label={
+                              error ? "Try restore again" : "Confirm restore"
+                            }
                             className="rounded-full bg-ds-control px-2.5 py-1 text-xs font-medium text-ds-control-text transition hover:bg-ds-control-hover disabled:opacity-50"
                           >
-                            Confirm
+                            {restoreBusy
+                              ? "Restoring…"
+                              : error
+                                ? "Try again"
+                                : "Confirm"}
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmId(null)}
-                            disabled={isPending}
+                            disabled={mutationBusy}
                             aria-label="Cancel restore"
                             className="rounded-full border border-ds-border-subtle px-2.5 py-1 text-xs font-medium text-ds-text-secondary transition hover:text-ds-text-primary disabled:opacity-50"
                           >
@@ -191,8 +243,11 @@ export function VersionHistoryPanel({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setConfirmId(version.id)}
-                          disabled={isPending}
+                          onClick={() => {
+                            setError(null);
+                            setConfirmId(version.id);
+                          }}
+                          disabled={mutationBusy}
                           aria-label="Restore this version"
                           className="shrink-0 rounded-full border border-ds-border-subtle px-2.5 py-1 text-xs font-medium text-ds-text-secondary transition hover:border-ds-border-strong hover:text-ds-text-primary disabled:opacity-50"
                         >

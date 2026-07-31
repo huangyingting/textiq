@@ -53,12 +53,13 @@ describe("EditorSidePanel", () => {
     assert.equal(result, null);
   });
 
-  test("returns a portal targeting document.body with the dialog role/label/title/children composed", () => {
+  test("returns a busy-aware portal targeting document.body with the dialog role/label/title/children composed", () => {
     const { body, restore } = installFakeDocumentBody();
     try {
       const result = EditorSidePanel({
         label: "Comments panel",
         title: "Comments",
+        busy: true,
         children: "panel body",
       }) as unknown as PortalLike;
       assert.equal(result.$$typeof, Symbol.for("react.portal"));
@@ -67,6 +68,7 @@ describe("EditorSidePanel", () => {
       assert.equal(aside.type, "aside");
       assert.equal(aside.props.role, "dialog");
       assert.equal(aside.props["aria-label"], "Comments panel");
+      assert.equal(aside.props["aria-busy"], true);
       const html = renderToStaticMarkup(aside);
       assert.match(html, /role="dialog"/);
       assert.match(html, /Comments/);

@@ -498,6 +498,14 @@ the forced `Before restore` checkpoint and reloads again. This verifies that
 history recovery remains reversible and that unrelated tag metadata survives
 content restoration.
 
+History refresh and restore actions share a synchronous in-flight guard.
+Repeated confirmation cannot issue duplicate restores; pending restore state
+marks the panel busy and locks refresh, cancel, close, and the toolbar trigger.
+Ordinary transport failures stay in the confirmation row for retry/dismiss,
+while Next redirect/not-found signals escape to the framework. The browser
+lifecycle forces a restore transport failure, double-activates retry, and proves
+one successful restore before the existing reversible reload checks.
+
 ### Conflict recovery UX
 
 When a conflict is detected:
