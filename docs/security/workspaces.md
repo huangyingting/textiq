@@ -28,6 +28,8 @@ workspace UI helpers, and join/detail integrity-safe states.
 | Document permissions              | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)                                   |
 | Invite UI                         | [`src/app/app/workspaces/[id]/invite-link-manager.tsx`](../../src/app/app/workspaces/%5Bid%5D/invite-link-manager.tsx) |
 | Members UI                        | [`src/app/app/workspaces/[id]/members-list.tsx`](../../src/app/app/workspaces/%5Bid%5D/members-list.tsx)               |
+| Workspace document UI             | [`src/app/app/workspaces/[id]/workspace-documents.tsx`](../../src/app/app/workspaces/%5Bid%5D/workspace-documents.tsx) |
+| Shared template picker            | [`src/components/template-picker-dialog.tsx`](../../src/components/template-picker-dialog.tsx)                         |
 
 ## Role Model
 
@@ -62,6 +64,14 @@ helpers use the same pure policy from `src/lib/workspace/capabilities.ts`
 
 Owner-only operations include invite creation/revocation, member removal,
 workspace rename, and workspace deletion.
+
+Workspace document creation and import require `mutate`: owners and editors see
+the actions, while viewers see neither. Template creation uses the shared
+dashboard/workspace picker, which suppresses same-event duplicate creates,
+keeps pending actions and dismissal locked, contains ordinary failures in an
+inline retry/dismiss alert, and preserves Next redirect control flow. The
+server-side `createWorkspaceDocumentForUser` capability check remains
+authoritative even when the client action is hidden.
 
 The workspace detail action module remains the adapter layer: it resolves the
 session, performs the capability check, and revalidates or redirects. Invite
@@ -170,6 +180,7 @@ semantics.
 - [`src/lib/auth/workspace-capabilities.test.ts`](../../src/lib/auth/workspace-capabilities.test.ts)
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)
+- [`e2e/documents/template-creation.spec.ts`](../../e2e/documents/template-creation.spec.ts)
 - [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
 - [`e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/workspace-lifecycle-ui.spec.ts)
 - [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)

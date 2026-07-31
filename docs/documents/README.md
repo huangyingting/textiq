@@ -16,6 +16,7 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 
 | Area                        | Source                                                                                           |
 | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| Template picker UI          | [`src/components/template-picker-dialog.tsx`](../../src/components/template-picker-dialog.tsx)   |
 | Create from template/import | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                 |
 | Search-text projection      | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)         |
 | Document write port         | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts)       |
@@ -26,6 +27,7 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 | Tags                        | [`src/lib/document/tags.ts`](../../src/lib/document/tags.ts)                                     |
 | Favorites and title changes | [`src/lib/document/mutations.ts`](../../src/lib/document/mutations.ts)                           |
 | Trash and maintenance       | [`src/lib/document/trash.ts`](../../src/lib/document/trash.ts)                                   |
+| Trash lifecycle UI          | [`src/app/app/trash/trash-list.tsx`](../../src/app/app/trash/trash-list.tsx)                     |
 | Dashboard view model        | [`src/lib/dashboard/view-model.ts`](../../src/lib/dashboard/view-model.ts)                       |
 | Onboarding sample document  | [`src/lib/onboarding/seed-sample-document.ts`](../../src/lib/onboarding/seed-sample-document.ts) |
 
@@ -35,6 +37,16 @@ Template creation resolves a requested template id through the template catalog.
 The blank template creates an empty personal document; non-blank templates seed
 canonical Lexical content from the catalog.
 
+Dashboard and workspace creation use one shared template-picker dialog. A
+synchronous in-flight guard prevents rapid or scripted activation from issuing
+duplicate durable creates before React commits the disabled state. While a
+create is pending, template and dismissal controls remain disabled. Ordinary
+Server Action or transport failures stay in a generic inline alert with retry
+and dismiss actions; Next redirect/not-found control flow is rethrown. Escape,
+backdrop, and explicit cancellation restore focus to the opening trigger, and
+the shared dialog owns focus trapping, body scroll lock, and mobile viewport
+containment.
+
 Import creation receives normalized Markdown-compatible text from the
 [import subsystem](../import/README.md), clamps title/content to configured
 limits, converts content through `markdownToLexicalState`, and stores canonical
@@ -42,6 +54,12 @@ limits, converts content through `markdownToLexicalState`, and stores canonical
 
 New credentials and OAuth users receive onboarding content through the sample
 document seed path.
+
+The deterministic browser contract in
+[`e2e/documents/template-creation.spec.ts`](../../e2e/documents/template-creation.spec.ts)
+proves dashboard failure/retry and duplicate suppression, accessible modal
+behavior, mobile containment, redirect and reload persistence, workspace
+owner/editor creation, and viewer action gating.
 
 ## Duplication
 
@@ -128,6 +146,13 @@ Favorite toggles ignore soft-deleted documents. Trash is a soft delete that
 sets `deletedAt`; restore clears `deletedAt`. Dashboard-load maintenance purges
 documents older than the soft-delete retention window and also removes expired,
 revoked, or exhausted invite links under the same lock policy.
+
+Restore and permanent-delete confirmations share one dialog implementation.
+Pending actions suppress duplicate activation and lock dismissal. Ordinary
+Server Action failures remain inline with generic retry/dismiss controls, while
+Next redirect/not-found control flow is rethrown. Successful removal focuses
+the stable trash region and immediately renders the empty state when the final
+visible row is removed.
 
 ## Invariants
 

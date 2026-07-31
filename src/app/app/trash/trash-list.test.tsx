@@ -12,25 +12,20 @@
  * `TrashRow` calls, with what id, and how it renders the pending/settled
  * result.
  *
- * `RestoreConfirmDialog`/`PermanentDeleteConfirmDialog` are both built on
+ * The shared trash confirmation dialog is built on
  * `Dialog` → `ModalSurface`, which unconditionally `createPortal`s to
  * `document.body` once `document` exists — same rationale as
  * `document-card.test.tsx`, so this uses `@/test/portal-dom`'s
  * `withPortalDom`/`mountWithPortalDom`. Both dialogs are only ever rendered
- * via `{restoreOpen && <RestoreConfirmDialog .../>}` /
- * `{deleteOpen && <PermanentDeleteConfirmDialog .../>}` — the parent fully
+ * via the row's conditional restore/delete branches — the parent fully
  * mounts/unmounts the dialog element on cancel (never just toggles `open`
  * while staying mounted), so cancelling synchronously removes it from the
  * tree; no framer-motion exit-animation linger to work around here (see
  * `portal-dom.ts`'s module docstring for the case where that *does* matter).
  *
- * `handleRestore`/`handlePermanentDelete` call their action with no local
- * `try`/`catch`, so a rejected action is never swallowed: it propagates out
- * of the `startTransition` async callback as a genuine thrown error (verified
- * against a real `restoreDocument`/`permanentDeleteDocument` rejection, not
- * inferred) — the "error" tests below assert that propagation directly via
- * `assert.rejects`, rather than asserting on a local error message that the
- * component never renders.
+ * Ordinary Server Action failures stay in the dialog as generic retryable
+ * errors. The `next/navigation` stub mirrors `unstable_rethrow` closely enough
+ * to prove that framework control-flow errors still escape that local handler.
  */
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
@@ -44,6 +39,7 @@ import type { TrashDocumentData } from "./trash-list";
 type TrashActionsTestState = {
   restoreCalls: string[];
   permanentDeleteCalls: string[];
+  rethrowCalls: unknown[];
   restoreImpl: (id: string) => Promise<void>;
   permanentDeleteImpl: (id: string) => Promise<void>;
 };
@@ -56,11 +52,22 @@ function resetActionsState(): void {
   globalForActions.__trashListActionsTestState = {
     restoreCalls: [],
     permanentDeleteCalls: [],
+    rethrowCalls: [],
     restoreImpl: async () => undefined,
     permanentDeleteImpl: async () => undefined,
   };
 }
 resetActionsState();
+
+stubModule(
+  "next/navigation",
+  `module.exports = {
+  unstable_rethrow: (error) => {
+    globalThis.__trashListActionsTestState.rethrowCalls.push(error);
+    if (error && error.__nextControlFlow === true) throw error;
+  },
+};`,
+);
 
 stubModule(
   "../actions",
@@ -158,6 +165,22 @@ function restoreButtonFor(renderer: ReactTestRenderer, title: string) {
 function deleteButtonFor(renderer: ReactTestRenderer, title: string) {
   return rowFor(renderer, title).find(
     (el) => el.type === "button" && el.props.children === "Delete permanently",
+  );
+}
+
+function dialogButton(renderer: ReactTestRenderer, label: string) {
+  return renderer.root
+    .findByProps({ role: "dialog" })
+    .find((el) => el.type === "button" && textOf(el) === label);
+}
+
+function backdropFor(renderer: ReactTestRenderer) {
+  return renderer.root.find(
+    (el) =>
+      el.type === "div" &&
+      el.props["aria-hidden"] === "true" &&
+      typeof el.props.className === "string" &&
+      el.props.className.includes("bg-ds-backdrop"),
   );
 }
 
@@ -344,11 +367,15 @@ describe("TrashList", () => {
 
         let pendingCall!: unknown;
         act(() => {
-          const confirmBtn = renderer.root
-            .findByProps({ role: "dialog" })
-            .find((el) => el.type === "button" && textOf(el) === "Restore");
+          const confirmBtn = dialogButton(renderer, "Restore");
           pendingCall = confirmBtn.props.onClick();
+          confirmBtn.props.onClick();
         });
+
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.restoreCalls,
+          ["doc-1"],
+        );
 
         const dialogWhilePending = renderer.root.findByProps({
           role: "dialog",
@@ -361,6 +388,10 @@ describe("TrashList", () => {
           (el) => el.type === "button" && textOf(el) === "Cancel",
         );
         assert.equal(cancelWhilePending.props.disabled, true);
+        act(() => {
+          backdropFor(renderer).props.onClick();
+        });
+        assert.ok(renderer.root.findByProps({ role: "dialog" }));
 
         deferred.resolve();
         await act(async () => {
@@ -383,10 +414,13 @@ describe("TrashList", () => {
     });
   });
 
-  test("a rejected restoreDocument propagates uncaught — TrashRow has no local try/catch to swallow it", async () => {
+  test("a rejected restore stays inline with generic copy, can be dismissed, and retries successfully", async () => {
     await withPortalDom(async () => {
+      const privateFailure = new Error("private restore detail");
+      let attempt = 0;
       globalForActions.__trashListActionsTestState.restoreImpl = async () => {
-        throw new Error("restore failed");
+        attempt += 1;
+        if (attempt < 3) throw privateFailure;
       };
       const renderer = mount([doc()]);
       try {
@@ -396,30 +430,52 @@ describe("TrashList", () => {
               .onClick as () => void
           )();
         });
-        const confirmBtn = renderer.root
-          .findByProps({ role: "dialog" })
-          .find((el) => el.type === "button" && textOf(el) === "Restore");
+        await act(async () => {
+          dialogButton(renderer, "Restore").props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
 
-        await assert.rejects(
-          () =>
-            Promise.resolve(
-              act(async () => {
-                (confirmBtn.props.onClick as () => void)();
-                await waitForAsyncDrain();
-                await waitForAsyncDrain();
-              }),
-            ),
-          /restore failed/,
+        const firstAlert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(firstAlert),
+          /Could not restore the document\. Please try again\./,
         );
-
+        assert.doesNotMatch(textOf(firstAlert), /private restore detail/);
         assert.deepEqual(
           globalForActions.__trashListActionsTestState.restoreCalls,
           ["doc-1"],
         );
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.rethrowCalls,
+          [privateFailure],
+        );
+
+        await act(async () => {
+          dialogButton(renderer, "Dismiss error").props.onClick();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+        assert.ok(dialogButton(renderer, "Restore"));
+
+        await act(async () => {
+          dialogButton(renderer, "Restore").props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.ok(dialogButton(renderer, "Try restore again"));
+
+        await act(async () => {
+          dialogButton(renderer, "Try restore again").props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.restoreCalls,
+          ["doc-1", "doc-1", "doc-1"],
+        );
+        assert.throws(() => renderer.root.findByProps({ role: "dialog" }));
+        assert.match(textOf(renderer.root), /Trash is empty/);
       } finally {
-        // The uncaught error already tore down the renderer's committed
-        // tree (no local error boundary here); unmount is still safe to
-        // call and is required for `mountWithPortalDom`'s cleanup ordering.
         act(() => renderer.unmount());
       }
     });
@@ -476,14 +532,15 @@ describe("TrashList", () => {
 
         let pendingCall!: unknown;
         act(() => {
-          const confirmBtn = renderer.root
-            .findByProps({ role: "dialog" })
-            .find(
-              (el) =>
-                el.type === "button" && textOf(el) === "Delete permanently",
-            );
+          const confirmBtn = dialogButton(renderer, "Delete permanently");
           pendingCall = confirmBtn.props.onClick();
+          confirmBtn.props.onClick();
         });
+
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.permanentDeleteCalls,
+          ["doc-1"],
+        );
 
         const dialogWhilePending = renderer.root.findByProps({
           role: "dialog",
@@ -492,6 +549,14 @@ describe("TrashList", () => {
           (el) => el.type === "button" && textOf(el) === "Deleting…",
         );
         assert.equal(confirmWhilePending.props.disabled, true);
+        const cancelWhilePending = dialogWhilePending.find(
+          (el) => el.type === "button" && textOf(el) === "Cancel",
+        );
+        assert.equal(cancelWhilePending.props.disabled, true);
+        act(() => {
+          backdropFor(renderer).props.onClick();
+        });
+        assert.ok(renderer.root.findByProps({ role: "dialog" }));
 
         deferred.resolve();
         await act(async () => {
@@ -513,11 +578,14 @@ describe("TrashList", () => {
     });
   });
 
-  test("a rejected permanentDeleteDocument propagates uncaught — TrashRow has no local try/catch to swallow it", async () => {
+  test("a rejected permanent delete stays inline with generic copy and retries successfully", async () => {
     await withPortalDom(async () => {
+      const privateFailure = new Error("private delete detail");
+      let attempt = 0;
       globalForActions.__trashListActionsTestState.permanentDeleteImpl =
         async () => {
-          throw new Error("delete failed");
+          attempt += 1;
+          if (attempt === 1) throw privateFailure;
         };
       const renderer = mount([doc()]);
       try {
@@ -527,27 +595,72 @@ describe("TrashList", () => {
               .onClick as () => void
           )();
         });
-        const confirmBtn = renderer.root
-          .findByProps({ role: "dialog" })
-          .find(
-            (el) => el.type === "button" && textOf(el) === "Delete permanently",
-          );
+        await act(async () => {
+          dialogButton(renderer, "Delete permanently").props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        const alert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(alert),
+          /Could not permanently delete the document\. Please try again\./,
+        );
+        assert.doesNotMatch(textOf(alert), /private delete detail/);
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.permanentDeleteCalls,
+          ["doc-1"],
+        );
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.rethrowCalls,
+          [privateFailure],
+        );
+
+        await act(async () => {
+          dialogButton(renderer, "Try delete again").props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.permanentDeleteCalls,
+          ["doc-1", "doc-1"],
+        );
+        assert.throws(() => renderer.root.findByProps({ role: "dialog" }));
+        assert.match(textOf(renderer.root), /Trash is empty/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("framework navigation control-flow errors still escape the local action handler", async () => {
+    await withPortalDom(async () => {
+      const controlFlowError = Object.assign(new Error("NEXT_REDIRECT"), {
+        __nextControlFlow: true,
+      });
+      globalForActions.__trashListActionsTestState.restoreImpl = async () => {
+        throw controlFlowError;
+      };
+      const renderer = mount([doc()]);
+      try {
+        act(() => {
+          restoreButtonFor(renderer, "Quarterly Plan").props.onClick();
+        });
 
         await assert.rejects(
           () =>
             Promise.resolve(
               act(async () => {
-                (confirmBtn.props.onClick as () => void)();
+                dialogButton(renderer, "Restore").props.onClick();
                 await waitForAsyncDrain();
                 await waitForAsyncDrain();
               }),
             ),
-          /delete failed/,
+          controlFlowError,
         );
-
         assert.deepEqual(
-          globalForActions.__trashListActionsTestState.permanentDeleteCalls,
-          ["doc-1"],
+          globalForActions.__trashListActionsTestState.rethrowCalls,
+          [controlFlowError],
         );
       } finally {
         act(() => renderer.unmount());

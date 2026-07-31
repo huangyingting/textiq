@@ -88,6 +88,82 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
   },
   {
+    spec: "e2e/documents/template-creation.spec.ts",
+    owners: ["documents", "editor", "workspace", "security", "accessibility"],
+    coverage:
+      "Dashboard template-picker focus, scroll lock, Escape/backdrop restoration, mobile containment, transport failure/retry, duplicate suppression, redirect and reload persistence; workspace owner/editor creation plus viewer action gating.",
+    runMode: "required-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner", "seeded editor", "seeded viewer"],
+    devices: ["Desktop Chrome", "390x844 mobile"],
+    ciStatus: "required normal deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/README.md",
+      "docs/documents/README.md",
+      "docs/security/workspaces.md",
+      "playwright.config.ts",
+      ".github/workflows/e2e-deterministic.yml",
+    ],
+    expectedTestCount: 4,
+    expectedTests: [
+      {
+        test: "dashboard picker contains failures, retries once, suppresses duplicate creation, and persists the selected template",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace owner creates a template document that survives reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace editor creates a template document that survives reload",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "workspace viewer cannot reach create or import actions",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "dashboard picker contains failures, retries once, suppresses duplicate creation, and persists the selected template @required-profile",
+        surface:
+          "dashboard template picker failure/retry → document editor → reload",
+        viewport: "Desktop + 390x844 mobile",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "workspace owner creates a template document that survives reload @required-profile",
+        surface: "workspace template picker → document editor → reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "workspace editor creates a template document that survives reload @required-profile",
+        surface: "workspace template picker → document editor → reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded editor",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "workspace viewer cannot reach create or import actions @required-profile",
+        surface: "workspace document action permissions",
+        viewport: "Desktop Chrome",
+        auth: "seeded viewer",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+    ],
+  },
+  {
     spec: "e2e/import/import-roundtrip.spec.ts",
     owners: ["import", "editor"],
     coverage:

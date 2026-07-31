@@ -56,6 +56,7 @@ const deterministicProfileSpecs = [
   "editor/block-id-preservation.spec.ts",
   "editor/document-editor-profile.spec.ts",
   "editor/document-table-autosave.spec.ts",
+  "documents/template-creation.spec.ts",
   "import/import-roundtrip.spec.ts",
   "public-render/share-fallback.spec.ts",
   "presentation/focus-and-mobile-controls-regression.spec.ts",

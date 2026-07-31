@@ -7,16 +7,12 @@
  * `./actions` is loaded for real; only its deep dependencies (session,
  * `next/cache`, `next/navigation`, `@/lib/workspace/service`) are stubbed —
  * their authorization/persistence behavior is already covered by
- * `actions.test.ts` and is not re-asserted here. `createWorkspaceDocument`/
- * `importWorkspaceDocument` always end with a real `redirect()` call on
- * success (the standard, intentional Next.js Server Action pattern — see
- * `actions.test.ts`'s own `/NEXT_REDIRECT:.../` assertions for the same
- * action), which the calling components never try/catch (matching upstream
- * convention: `redirect()`'s throw is meant to propagate). Each such wiring
- * assertion here uses `assert.rejects` around an `act()` call to safely
- * observe that throw without it becoming a stray unhandled rejection (see
- * `invite-link-manager.test.tsx` for the same technique, empirically
- * confirmed against this React/react-test-renderer version).
+ * `actions.test.ts` and is not re-asserted here. `createWorkspaceDocument`
+ * ends with a real `redirect()` on success. The shared picker calls Next's
+ * `unstable_rethrow` before handling ordinary failures, so redirect control
+ * flow still propagates while durable-create and transport failures stay in a
+ * retryable inline alert. Redirect wiring tests use `assert.rejects` around
+ * `act()` to safely observe that control flow.
  *
  * `@/components/ui`'s `Dialog` is stubbed to a no-op (see
  * `members-list.test.tsx` for the full rationale): `Dialog`/`ModalSurface`
@@ -196,6 +192,11 @@ const stubbedModules = new Map<string, string>([
       }
       export function redirect(url) {
         return globalThis.__workspaceDocumentsTestState.redirect(url);
+      }
+      export function unstable_rethrow(error) {
+        if (error instanceof Error && error.message.startsWith("NEXT_REDIRECT:")) {
+          throw error;
+        }
       }
     `,
   ],
@@ -479,7 +480,23 @@ describe("WorkspaceDocuments", () => {
     }
   });
 
-  test("choosing a template calls createWorkspaceDocument and shows the pending 'Creating…' label", async () => {
+  test("choosing a template suppresses duplicate activation, locks the picker pending, and redirects after one durable create", async () => {
+    let resolveCreation!: (value: { id: string }) => void;
+    state().createWorkspaceDocumentForUser = async (
+      userId,
+      workspaceId,
+      templateId,
+    ) => {
+      state().calls.push([
+        "createWorkspaceDocumentForUser",
+        userId,
+        workspaceId,
+        templateId,
+      ]);
+      return new Promise<{ id: string }>((resolve) => {
+        resolveCreation = resolve;
+      });
+    };
     const renderer = mountWorkspaceDocuments({
       workspaceId: "workspace-1",
       userRole: "owner",
@@ -498,14 +515,117 @@ describe("WorkspaceDocuments", () => {
       const templateButton = renderer.root.findByProps({
         "aria-label": `${template.name} template`,
       });
+      act(() => {
+        templateButton.props.onClick();
+        templateButton.props.onClick();
+      });
+      assert.equal(
+        renderer.root.findByProps({ children: "Creating…" }).props.children,
+        "Creating…",
+      );
+      for (const entry of TEMPLATE_CATALOG) {
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": `${entry.name} template`,
+          }).props.disabled,
+          true,
+        );
+      }
+      assert.equal(
+        renderer.root.findByProps({ children: "Cancel" }).props.disabled,
+        true,
+      );
+      await waitForAsyncDrain();
+      assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [
+        [
+          "createWorkspaceDocumentForUser",
+          "user-1",
+          "workspace-1",
+          template.id,
+        ],
+      ]);
+
       await assert.rejects(async () => {
         await act(async () => {
-          templateButton.props.onClick();
+          resolveCreation({ id: "doc-1" });
           await waitForAsyncDrain();
           await waitForAsyncDrain();
         });
       }, /NEXT_REDIRECT:\/app\/documents\/doc-1$/);
       assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [
+        [
+          "createWorkspaceDocumentForUser",
+          "user-1",
+          "workspace-1",
+          template.id,
+        ],
+      ]);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a failed workspace create stays inline; retry repeats the failed template and preserves redirect control flow", async () => {
+    let attempt = 0;
+    state().createWorkspaceDocumentForUser = async (
+      userId,
+      workspaceId,
+      templateId,
+    ) => {
+      state().calls.push([
+        "createWorkspaceDocumentForUser",
+        userId,
+        workspaceId,
+        templateId,
+      ]);
+      attempt += 1;
+      if (attempt === 1) throw new Error("private persistence detail");
+      return { id: "doc-recovered" };
+    };
+    const renderer = mountWorkspaceDocuments({
+      workspaceId: "workspace-1",
+      userRole: "editor",
+    });
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      act(() => {
+        renderer.root.findByProps({ children: "New document" }).props.onClick();
+      });
+      const template = TEMPLATE_CATALOG[1]!;
+      await act(async () => {
+        renderer.root
+          .findByProps({ "aria-label": `${template.name} template` })
+          .props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      const alert = renderer.root.findByProps({ role: "alert" });
+      const rendered = JSON.stringify(renderer.toJSON());
+      assert.equal(alert.props.role, "alert");
+      assert.match(
+        rendered,
+        /Could not create the document\. Please try again\./,
+      );
+      assert.doesNotMatch(rendered, /private persistence detail/);
+
+      const retry = renderer.root.findByProps({ children: "Try again" });
+      await assert.rejects(async () => {
+        await act(async () => {
+          retry.props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+      }, /NEXT_REDIRECT:\/app\/documents\/doc-recovered$/);
+      assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [
+        [
+          "createWorkspaceDocumentForUser",
+          "user-1",
+          "workspace-1",
+          template.id,
+        ],
         [
           "createWorkspaceDocumentForUser",
           "user-1",

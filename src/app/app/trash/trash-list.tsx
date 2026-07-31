@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useRef, useState, useTransition, type RefObject } from "react";
 
-import { Dialog } from "@/components/ui/dialog";
+import { Button, Dialog } from "@/components/ui";
 
 import { restoreDocument } from "../actions";
 import { permanentDeleteDocument } from "./actions";
@@ -31,133 +32,156 @@ function formatRemaining(ms: number): string {
   return `${minutes}m remaining`;
 }
 
-function RestoreConfirmDialog({
+type TrashActionKind = "restore" | "permanent-delete";
+
+const ACTION_COPY = {
+  restore: {
+    title: "Restore document?",
+    description: "will be moved back to your dashboard.",
+    confirm: "Restore",
+    pending: "Restoring…",
+    retry: "Try restore again",
+    error: "Could not restore the document. Please try again.",
+    variant: "solid",
+  },
+  "permanent-delete": {
+    title: "Permanently delete?",
+    description: "will be permanently removed and cannot be recovered.",
+    confirm: "Delete permanently",
+    pending: "Deleting…",
+    retry: "Try delete again",
+    error: "Could not permanently delete the document. Please try again.",
+    variant: "danger",
+  },
+} as const;
+
+function TrashConfirmDialog({
+  kind,
   title,
   onCancel,
   onConfirm,
+  onDismissError,
   isPending,
+  error,
+  restoreFocusRef,
 }: {
+  kind: TrashActionKind;
   title: string;
   onCancel: () => void;
   onConfirm: () => void;
+  onDismissError: () => void;
   isPending: boolean;
+  error: string | null;
+  restoreFocusRef: RefObject<HTMLElement | null>;
 }) {
+  const copy = ACTION_COPY[kind];
+  const titleId = `trash-${kind}-title`;
+
   return (
     <Dialog
       open
       onClose={onCancel}
-      aria-labelledby="restore-document-title"
+      restoreFocusRef={restoreFocusRef}
+      aria-labelledby={titleId}
+      aria-busy={isPending}
       className="max-w-sm"
     >
-      <h2
-        id="restore-document-title"
-        className="text-base font-semibold text-ds-text-primary"
-      >
-        Restore document?
+      <h2 id={titleId} className="text-base font-semibold text-ds-text-primary">
+        {copy.title}
       </h2>
       <p className="mt-2 text-sm text-ds-text-secondary">
         <span className="font-medium text-ds-text-primary">
           &ldquo;{title}&rdquo;
         </span>{" "}
-        will be moved back to your dashboard.
+        {copy.description}
       </p>
+      {error ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+        >
+          <p>{error}</p>
+          <Button
+            variant="plain"
+            size="sm"
+            onClick={onDismissError}
+            className="mt-2"
+          >
+            Dismiss error
+          </Button>
+        </div>
+      ) : null}
       <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
+        <Button
+          variant="subtle"
+          size="lg"
           onClick={onCancel}
           disabled={isPending}
-          className="flex h-9 items-center justify-center rounded-full border border-ds-border-strong px-4 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary disabled:opacity-60"
         >
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant={copy.variant}
+          size="lg"
           onClick={onConfirm}
           disabled={isPending}
-          className="flex h-9 items-center justify-center rounded-full bg-ds-accent px-4 text-sm font-medium text-ds-text-on-accent transition hover:opacity-90 disabled:opacity-60"
         >
-          {isPending ? "Restoring…" : "Restore"}
-        </button>
+          {isPending ? copy.pending : error ? copy.retry : copy.confirm}
+        </Button>
       </div>
     </Dialog>
   );
 }
 
-function PermanentDeleteConfirmDialog({
-  title,
-  onCancel,
-  onConfirm,
-  isPending,
+function TrashRow({
+  doc,
+  onRemoved,
 }: {
-  title: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
+  doc: TrashDocumentData;
+  onRemoved: (id: string) => void;
 }) {
-  return (
-    <Dialog
-      open
-      onClose={onCancel}
-      aria-labelledby="perm-delete-document-title"
-      className="max-w-sm"
-    >
-      <h2
-        id="perm-delete-document-title"
-        className="text-base font-semibold text-ds-text-primary"
-      >
-        Permanently delete?
-      </h2>
-      <p className="mt-2 text-sm text-ds-text-secondary">
-        <span className="font-medium text-ds-text-primary">
-          &ldquo;{title}&rdquo;
-        </span>{" "}
-        will be permanently removed and cannot be recovered.
-      </p>
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isPending}
-          className="flex h-9 items-center justify-center rounded-full border border-ds-border-strong px-4 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={isPending}
-          className="flex h-9 items-center justify-center rounded-full bg-ds-danger px-4 text-sm font-medium text-ds-text-on-accent transition hover:opacity-90 disabled:opacity-60"
-        >
-          {isPending ? "Deleting…" : "Delete permanently"}
-        </button>
-      </div>
-    </Dialog>
-  );
-}
-
-function TrashRow({ doc }: { doc: TrashDocumentData }) {
-  const [visible, setVisible] = useState(true);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [actionError, setActionError] = useState<{
+    kind: TrashActionKind;
+    message: string;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const actionInFlightRef = useRef(false);
+  const restoreTriggerRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
 
-  if (!visible) return null;
+  const closeDialog = (kind: TrashActionKind) => {
+    if (actionInFlightRef.current) return;
+    setActionError(null);
+    if (kind === "restore") setRestoreOpen(false);
+    else setDeleteOpen(false);
+  };
 
-  const handleRestore = () => {
+  const runAction = (kind: TrashActionKind, action: () => Promise<void>) => {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
+    setActionError(null);
     startTransition(async () => {
-      await restoreDocument(doc.id);
-      setRestoreOpen(false);
-      setVisible(false);
+      try {
+        await action();
+        if (kind === "restore") setRestoreOpen(false);
+        else setDeleteOpen(false);
+        onRemoved(doc.id);
+      } catch (error) {
+        unstable_rethrow(error);
+        setActionError({ kind, message: ACTION_COPY[kind].error });
+      } finally {
+        actionInFlightRef.current = false;
+      }
     });
   };
 
-  const handlePermanentDelete = () => {
-    startTransition(async () => {
-      await permanentDeleteDocument(doc.id);
-      setDeleteOpen(false);
-      setVisible(false);
-    });
-  };
+  const handleRestore = () =>
+    runAction("restore", () => restoreDocument(doc.id));
+  const handlePermanentDelete = () =>
+    runAction("permanent-delete", () => permanentDeleteDocument(doc.id));
 
   return (
     <li className="flex items-center justify-between gap-4 rounded-xl border border-ds-border-strong bg-ds-surface-base px-4 py-3">
@@ -182,18 +206,26 @@ function TrashRow({ doc }: { doc: TrashDocumentData }) {
 
       <div className="flex shrink-0 items-center gap-2">
         <button
+          ref={restoreTriggerRef}
           type="button"
           aria-label={`Restore ${doc.title}`}
-          onClick={() => setRestoreOpen(true)}
+          onClick={() => {
+            setActionError(null);
+            setRestoreOpen(true);
+          }}
           disabled={isPending}
           className="flex h-8 items-center justify-center rounded-full border border-ds-border-strong px-3 text-xs font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary disabled:opacity-60"
         >
           Restore
         </button>
         <button
+          ref={deleteTriggerRef}
           type="button"
           aria-label={`Permanently delete ${doc.title}`}
-          onClick={() => setDeleteOpen(true)}
+          onClick={() => {
+            setActionError(null);
+            setDeleteOpen(true);
+          }}
           disabled={isPending}
           className="flex h-8 items-center justify-center rounded-full border border-ds-danger/30 px-3 text-xs font-medium text-ds-danger transition hover:bg-ds-danger/10 disabled:opacity-60"
         >
@@ -202,19 +234,31 @@ function TrashRow({ doc }: { doc: TrashDocumentData }) {
       </div>
 
       {restoreOpen && (
-        <RestoreConfirmDialog
+        <TrashConfirmDialog
+          kind="restore"
           title={doc.title}
-          onCancel={() => setRestoreOpen(false)}
+          onCancel={() => closeDialog("restore")}
           onConfirm={handleRestore}
+          onDismissError={() => setActionError(null)}
           isPending={isPending}
+          error={actionError?.kind === "restore" ? actionError.message : null}
+          restoreFocusRef={restoreTriggerRef}
         />
       )}
       {deleteOpen && (
-        <PermanentDeleteConfirmDialog
+        <TrashConfirmDialog
+          kind="permanent-delete"
           title={doc.title}
-          onCancel={() => setDeleteOpen(false)}
+          onCancel={() => closeDialog("permanent-delete")}
           onConfirm={handlePermanentDelete}
+          onDismissError={() => setActionError(null)}
           isPending={isPending}
+          error={
+            actionError?.kind === "permanent-delete"
+              ? actionError.message
+              : null
+          }
+          restoreFocusRef={deleteTriggerRef}
         />
       )}
     </li>
@@ -222,40 +266,57 @@ function TrashRow({ doc }: { doc: TrashDocumentData }) {
 }
 
 export function TrashList({ documents }: { documents: TrashDocumentData[] }) {
-  if (documents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-ds-border-strong bg-ds-surface-base py-16 text-center">
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="mb-3 h-10 w-10 text-ds-text-secondary/40"
-        >
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
-        <p className="text-sm font-medium text-ds-text-secondary">
-          Trash is empty
-        </p>
-        <p className="mt-1 text-xs text-ds-text-muted">
-          Deleted documents appear here for 30 days.
-        </p>
-      </div>
-    );
-  }
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const regionRef = useRef<HTMLDivElement>(null);
+  const visibleDocuments = documents.filter((doc) => !removedIds.has(doc.id));
+
+  const handleRemoved = (id: string) => {
+    setRemovedIds((current) => new Set(current).add(id));
+    window.requestAnimationFrame(() => regionRef.current?.focus());
+  };
 
   return (
-    <ul className="flex flex-col gap-2">
-      {documents.map((doc) => (
-        <TrashRow key={doc.id} doc={doc} />
-      ))}
-    </ul>
+    <div
+      ref={regionRef}
+      tabIndex={-1}
+      aria-label="Trash documents"
+      aria-live="polite"
+      className="outline-none"
+    >
+      {visibleDocuments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-ds-border-strong bg-ds-surface-base py-16 text-center">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mb-3 h-10 w-10 text-ds-text-secondary/40"
+          >
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          </svg>
+          <p className="text-sm font-medium text-ds-text-secondary">
+            Trash is empty
+          </p>
+          <p className="mt-1 text-xs text-ds-text-muted">
+            Deleted documents appear here for 30 days.
+          </p>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {visibleDocuments.map((doc) => (
+            <TrashRow key={doc.id} doc={doc} onRemoved={handleRemoved} />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -213,6 +213,18 @@ async function main() {
     where: { userId: F.billingLifecycle.id },
   });
 
+  // Template-creation browser coverage follows production redirects, so its
+  // generated ids are intentionally not fixed fixture ids. Remove only the
+  // default-titled documents owned by the dedicated profile actors before the
+  // next run; otherwise repeated local profile runs eventually contaminate
+  // dashboard/workspace list caps with disposable template documents.
+  await deleteDocuments(prisma, {
+    where: {
+      ownerId: { in: [owner.id, editor.id] },
+      title: "Untitled",
+    },
+  });
+
   await prisma.brand.deleteMany({ where: { ownerId: editor.id } });
   await prisma.asset.deleteMany({
     where: {

@@ -13,6 +13,7 @@ app.
 | `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                          |
 | `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                 |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                   |
+| `e2e/documents/template-creation.spec.ts`               | Dashboard/workspace template failure/retry, duplicate suppression, modal accessibility, permissions, and reload persistence     |
 | `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                 |
 | `e2e/presentation/present-export.spec.ts`               | Present rendering; real PDF/PNG/PPTX downloads; browser raster-failure containment and successful retry                         |
 | `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                             |
@@ -121,6 +122,7 @@ The fast unit gate is intentionally credential-less, so the authenticated specs
 above skip without env credentials. The **deterministic E2E profile** removes
 that ambiguity for the critical-flow specs
 (`e2e/editor/document-editor-profile.spec.ts`,
+`e2e/documents/template-creation.spec.ts`,
 `e2e/import/import-roundtrip.spec.ts`,
 `e2e/public-render/share-fallback.spec.ts`,
 `e2e/presentation/focus-and-mobile-controls-regression.spec.ts`,
@@ -142,9 +144,9 @@ that ambiguity for the critical-flow specs
 `e2e/ui-matrix/document-metadata-history-ui.spec.ts`,
 `e2e/ui-matrix/document-editor-ui.spec.ts`,
 `e2e/ui-matrix/presentation-ui.spec.ts`,
-`e2e/ui-matrix/public-render-ui.spec.ts`, and
+`e2e/ui-matrix/public-render-ui.spec.ts`,
 `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`,
-`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known
+and `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known
 users and isolated documents, and the specs run for real against them.
 
 ### What the profile seeds
@@ -159,6 +161,8 @@ users and isolated documents, and the specs run for real against them.
   subscription reset before upgrade/cancel/downgrade lifecycle coverage;
 - exact-email cleanup for the signup lifecycle account so an interrupted
   signup/onboarding/deletion run is self-healing on the next seed;
+- cleanup of default-titled template documents owned by the dedicated profile
+  owner/editor so repeated creation specs do not contaminate list caps;
 - a workspace granting the viewer read-only access;
 - an empty, owner-partitioned Brand Studio state for the Pro editor so the
   deterministic browser workflow can create, upload a font, reload, edit,
@@ -326,6 +330,16 @@ reload. DOCX coverage uses `e2e/helpers/docx-fixture.ts` to
 generate a minimal deterministic OOXML package from stable XML parts at test
 time, avoiding opaque binary fixture churn while still exercising upload/form
 wiring, `POST /api/import`, editor rendering, and save/reload behavior.
+
+### Template creation
+
+`e2e/documents/template-creation.spec.ts` covers the real dashboard and
+workspace template pickers. The dashboard case proves initial focus, Tab
+wrapping, Escape/backdrop focus restoration, body scroll lock, mobile viewport
+containment, a forced Server Action transport failure, inline retry, duplicate
+activation suppression, redirect, and template-content persistence after
+reload. Workspace cases prove durable owner/editor creation and that viewers
+cannot reach create/import actions. All four cases carry `@required-profile`.
 
 ## Slides smoke (`e2e/presentation/slides-smoke.spec.ts`)
 

@@ -1,19 +1,12 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Upload, X } from "lucide-react";
+import { FileText, Plus, Upload } from "lucide-react";
 
-import {
-  Button,
-  Dialog,
-  EMPTY_STATE_CHROME,
-  IconButton,
-  PANEL_CHROME,
-  cx,
-} from "@/components/ui";
-import { TEMPLATE_CATALOG } from "@/lib/templates/catalog";
+import { Button, EMPTY_STATE_CHROME, PANEL_CHROME, cx } from "@/components/ui";
+import { TemplatePickerDialog } from "@/components/template-picker-dialog";
 import { capabilitiesForWorkspaceAccessRole } from "@/lib/workspace/capabilities";
 import type { EffectiveWorkspaceRole } from "@/lib/workspace/roles";
 import {
@@ -38,86 +31,6 @@ function DocumentThumbnail() {
   );
 }
 
-/** Template picker dialog for creating workspace documents. */
-function WorkspaceTemplatePicker({
-  workspaceId,
-  onClose,
-}: {
-  workspaceId: string;
-  onClose: () => void;
-}) {
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const choose = (id: string) => {
-    setPendingId(id);
-    startTransition(async () => {
-      await createWorkspaceDocument(workspaceId, id);
-    });
-  };
-
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      aria-labelledby="ws-template-picker-title"
-      className="flex max-h-[85vh] flex-col overflow-hidden"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2
-            id="ws-template-picker-title"
-            className="text-base font-semibold text-ds-text-primary"
-          >
-            New document
-          </h2>
-          <p className="mt-1 text-sm text-ds-text-secondary">
-            Choose a template to get started.
-          </p>
-        </div>
-        <IconButton
-          aria-label="Close"
-          onClick={onClose}
-          size="md"
-          className="shrink-0"
-        >
-          <X aria-hidden="true" className="h-4 w-4" />
-        </IconButton>
-      </div>
-
-      <ul className="mt-4 grid grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-        {TEMPLATE_CATALOG.map((template) => (
-          <li key={template.id}>
-            <button
-              type="button"
-              aria-label={`${template.name} template`}
-              disabled={isPending}
-              onClick={() => choose(template.id)}
-              className={cx(
-                "flex h-full w-full flex-col gap-1 p-4 text-left transition hover:border-ds-accent-border hover:bg-ds-surface-sunken disabled:cursor-not-allowed disabled:opacity-60",
-                PANEL_CHROME,
-              )}
-            >
-              <span className="text-sm font-medium text-ds-text-primary">
-                {pendingId === template.id ? "Creating…" : template.name}
-              </span>
-              <span className="text-xs text-ds-text-secondary">
-                {template.description}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <div className="mt-6 flex justify-end">
-        <Button variant="subtle" size="lg" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </Dialog>
-  );
-}
-
 /** Toolbar with New and Import buttons for owners and editors. */
 function WorkspaceDocumentActions({
   workspaceId,
@@ -130,6 +43,7 @@ function WorkspaceDocumentActions({
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
   const { inputRef, state, isUploading, processFile, clearError } =
     useDocumentImportCreationWorkflow({
       surface: "workspace",
@@ -145,6 +59,7 @@ function WorkspaceDocumentActions({
     <div className="flex flex-wrap items-center gap-2">
       {canCreate && (
         <Button
+          ref={createTriggerRef}
           variant="solid"
           size="lg"
           leadingIcon={<Plus aria-hidden="true" className="h-4 w-4" />}
@@ -200,9 +115,12 @@ function WorkspaceDocumentActions({
       )}
 
       {createOpen && (
-        <WorkspaceTemplatePicker
-          workspaceId={workspaceId}
+        <TemplatePickerDialog
+          onChoose={(templateId) =>
+            createWorkspaceDocument(workspaceId, templateId)
+          }
           onClose={() => setCreateOpen(false)}
+          restoreFocusRef={createTriggerRef}
         />
       )}
     </div>

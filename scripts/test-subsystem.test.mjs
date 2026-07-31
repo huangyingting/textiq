@@ -128,6 +128,11 @@ test("test subsystem map classifies files by owning subsystem", () => {
     "dashboard lifecycle browser coverage must run with the documents subsystem",
   );
   assert.deepEqual(
+    classifyTestFile("e2e/documents/template-creation.spec.ts"),
+    ["documents", "editor", "security", "ui", "workspace"],
+    "template creation browser coverage must run with every owning subsystem",
+  );
+  assert.deepEqual(
     classifyTestFile("e2e/ui-matrix/workspace-lifecycle-ui.spec.ts"),
     ["security", "workspace"],
     "workspace lifecycle browser coverage must run with both owning subsystems",

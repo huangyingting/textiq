@@ -25,6 +25,9 @@ export type TemplatePickerMessages = {
   "templatePicker.cancel": string;
   "templatePicker.creating": string;
   "templatePicker.close": string;
+  "templatePicker.creationError": string;
+  "templatePicker.tryAgain": string;
+  "templatePicker.dismissError": string;
 };
 
 export type LanguageSwitcherMessages = {
@@ -76,6 +79,10 @@ const templatePickerMessages: Record<Locale, TemplatePickerMessages> = {
     "templatePicker.cancel": "Cancel",
     "templatePicker.creating": "Creating…",
     "templatePicker.close": "Close",
+    "templatePicker.creationError":
+      "Could not create the document. Please try again.",
+    "templatePicker.tryAgain": "Try again",
+    "templatePicker.dismissError": "Dismiss error",
   },
   es: {
     "templatePicker.title": "Crear nuevo documento",
@@ -83,6 +90,10 @@ const templatePickerMessages: Record<Locale, TemplatePickerMessages> = {
     "templatePicker.cancel": "Cancelar",
     "templatePicker.creating": "Creando…",
     "templatePicker.close": "Cerrar",
+    "templatePicker.creationError":
+      "No se pudo crear el documento. Inténtalo de nuevo.",
+    "templatePicker.tryAgain": "Intentar de nuevo",
+    "templatePicker.dismissError": "Descartar error",
   },
 };
 
