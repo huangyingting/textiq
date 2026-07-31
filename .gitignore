@@ -69,15 +69,6 @@ progress.txt
 .claude/
 
 /src/generated/prisma
-# Squad: ignore runtime state (logs, inbox, sessions)
-.squad/orchestration-log/
-.squad/log/
-.squad/decisions/inbox/
-.squad/sessions/
-.squad/.scratch/
-.squad/.cache/
-.squad/*.log
-.squad/scratch/
 
 # Repo-local test scratch files
 .tmp/
@@ -86,10 +77,3 @@ test-results/
 
 # Local worktrees
 .worktrees/
-
-# Squad: SubSquad activation file (local to this machine)
-.squad-workstream
-
-# Squad/Ralph runtime working files (machine-local, not for VCS)
-watch.log
-.squad/ralph-circuit-breaker.json

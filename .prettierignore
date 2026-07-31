@@ -15,24 +15,3 @@ prototypes/presentation-ui/
 # Prisma Client (generated) and migration SQL
 src/generated
 prisma/migrations
-
-# Squad orchestration tooling — not part of the app
-.squad/
-.copilot/
-.github/skills/
-.github/agents/
-.github/workflows/*squad*.yml
-.github/workflows/*squad*.yaml
-.mcp.json
-
-# Ralph tooling & working files (not part of the app)
-scripts/ralph.sh
-scripts/prompt.md
-AGENTS.md
-scripts/prd.json
-scripts/progress.txt
-scripts/.last-branch
-skills-lock.json
-archive/
-tasks/
-.agents/
