@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 
 import {
   Button,
@@ -12,14 +13,19 @@ import {
 
 import { deleteWorkspace, leaveWorkspace, renameWorkspace } from "./actions";
 
+type WorkspaceActionKind = "rename" | "destructive";
+
+const RENAME_ERROR = "Could not rename the workspace. Please try again.";
+const DELETE_ERROR = "Could not delete the workspace. Please try again.";
+const LEAVE_ERROR = "Could not leave the workspace. Please try again.";
+
 /**
  * Per-role workspace lifecycle controls.
  *
- * - Owners see a rename field and a delete button (confirmed via Dialog).
- * - Non-owner members see a leave button (confirmed via Dialog).
- *
- * Every control calls a server action that re-enforces authorization
- * server-side; the role-gated rendering here is purely a UX affordance.
+ * Owners can rename/delete and non-owner members can leave. One synchronous
+ * in-flight guard serializes every mutation before React commits disabled
+ * state. Ordinary failures remain local with generic retry/dismiss recovery;
+ * Next navigation control flow is always rethrown.
  */
 export function WorkspaceSettings({
   workspaceId,
@@ -31,56 +37,73 @@ export function WorkspaceSettings({
   isOwner: boolean;
 }) {
   const [nameValue, setNameValue] = useState(name);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<WorkspaceActionKind | null>(
+    null,
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingKind, setPendingKind] = useState<WorkspaceActionKind | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
+  const actionInFlightRef = useRef(false);
+  const destructiveTriggerRef = useRef<HTMLButtonElement>(null);
+  const mutationBusy = isPending || pendingKind !== null;
 
   const trimmed = nameValue.trim();
-  const renameDisabled = isPending || trimmed === "" || trimmed === name;
+  const renameDisabled = mutationBusy || trimmed === "" || trimmed === name;
 
-  const handleRename = () => {
-    setError(null);
+  const runAction = (
+    kind: WorkspaceActionKind,
+    action: () => Promise<void>,
+    onSuccess?: () => void,
+  ) => {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
+    setActionError(null);
+    setPendingKind(kind);
     startTransition(async () => {
       try {
-        await renameWorkspace(workspaceId, trimmed);
-        window.location.reload();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not rename.");
+        await action();
+        onSuccess?.();
+      } catch (error) {
+        unstable_rethrow(error);
+        setActionError(kind);
+      } finally {
+        actionInFlightRef.current = false;
+        setPendingKind(null);
       }
     });
+  };
+
+  const handleRename = () => {
+    if (!trimmed || trimmed === name) return;
+    runAction(
+      "rename",
+      () => renameWorkspace(workspaceId, trimmed),
+      () => window.location.reload(),
+    );
   };
 
   const handleDestructive = () => {
-    setError(null);
-    startTransition(async () => {
-      try {
-        if (isOwner) {
-          await deleteWorkspace(workspaceId);
-        } else {
-          await leaveWorkspace(workspaceId);
-        }
-      } catch (err) {
-        // `deleteWorkspace`/`leaveWorkspace` redirect to /app/workspaces on
-        // success, and Next.js implements `redirect()` by throwing a
-        // NEXT_REDIRECT control-flow signal that must propagate uncaught so
-        // the router can navigate (same pattern as google-sign-in-button.tsx).
-        // Swallowing it here would both block the redirect and misreport a
-        // successful action as a failure, so only genuine mutation failures
-        // are turned into an error message below.
-        if (
-          err instanceof Error &&
-          (err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")
-        ) {
-          throw err;
-        }
-        setConfirmOpen(false);
-        setError(err instanceof Error ? err.message : "Action failed.");
-      }
-    });
+    runAction("destructive", () =>
+      isOwner ? deleteWorkspace(workspaceId) : leaveWorkspace(workspaceId),
+    );
   };
 
+  const closeConfirm = () => {
+    if (actionInFlightRef.current) return;
+    setActionError(null);
+    setConfirmOpen(false);
+  };
+
+  const destructiveError = isOwner ? DELETE_ERROR : LEAVE_ERROR;
+
   return (
-    <div className={cx("flex flex-col gap-4 p-6", PANEL_CHROME)}>
+    <div
+      aria-busy={mutationBusy}
+      className={cx("flex flex-col gap-4 p-6", PANEL_CHROME)}
+    >
       {isOwner && (
         <div className="flex flex-col gap-2">
           <label
@@ -94,7 +117,11 @@ export function WorkspaceSettings({
               id="workspace-name"
               value={nameValue}
               maxLength={100}
-              onChange={(e) => setNameValue(e.target.value)}
+              disabled={mutationBusy}
+              onChange={(event) => {
+                setNameValue(event.target.value);
+                if (actionError === "rename") setActionError(null);
+              }}
               className={cx("h-10 min-w-0 flex-1 px-3", FIELD_CONTROL)}
             />
             <Button
@@ -103,16 +130,36 @@ export function WorkspaceSettings({
               onClick={handleRename}
               disabled={renameDisabled}
             >
-              Save
+              {pendingKind === "rename" ? "Saving…" : "Save"}
             </Button>
           </div>
+          {actionError === "rename" ? (
+            <div
+              role="alert"
+              className="rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+            >
+              <p>{RENAME_ERROR}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  disabled={mutationBusy}
+                  onClick={handleRename}
+                >
+                  Try rename again
+                </Button>
+                <Button
+                  variant="plain"
+                  size="sm"
+                  disabled={mutationBusy}
+                  onClick={() => setActionError(null)}
+                >
+                  Dismiss error
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
-      )}
-
-      {error && (
-        <p role="alert" className="text-xs text-ds-danger-text">
-          {error}
-        </p>
       )}
 
       <div className="flex items-center justify-between gap-3 border-t border-ds-border-subtle pt-4">
@@ -127,10 +174,13 @@ export function WorkspaceSettings({
           </span>
         </div>
         <Button
+          ref={destructiveTriggerRef}
           variant="danger"
           size="lg"
+          disabled={mutationBusy}
           onClick={() => {
-            setError(null);
+            if (actionInFlightRef.current) return;
+            setActionError(null);
             setConfirmOpen(true);
           }}
           className="shrink-0"
@@ -141,8 +191,10 @@ export function WorkspaceSettings({
 
       <Dialog
         open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
+        onClose={closeConfirm}
+        restoreFocusRef={destructiveTriggerRef}
         aria-labelledby="workspace-destructive-title"
+        aria-busy={pendingKind === "destructive"}
         className="max-w-md"
       >
         <h2
@@ -156,11 +208,29 @@ export function WorkspaceSettings({
             ? "All members and invite links will be removed. Documents are moved to their owners' personal spaces — nothing is deleted."
             : "You'll be removed from this workspace and lose access to its shared documents. Documents you authored remain yours."}
         </p>
+        {actionError === "destructive" ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+          >
+            <p>{destructiveError}</p>
+            <Button
+              variant="plain"
+              size="sm"
+              disabled={mutationBusy}
+              onClick={() => setActionError(null)}
+              className="mt-2"
+            >
+              Dismiss error
+            </Button>
+          </div>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <Button
             variant="plain"
             size="lg"
-            onClick={() => setConfirmOpen(false)}
+            onClick={closeConfirm}
+            disabled={mutationBusy}
           >
             Cancel
           </Button>
@@ -168,9 +238,19 @@ export function WorkspaceSettings({
             variant="danger"
             size="lg"
             onClick={handleDestructive}
-            disabled={isPending}
+            disabled={mutationBusy}
           >
-            {isOwner ? "Delete workspace" : "Leave workspace"}
+            {pendingKind === "destructive"
+              ? isOwner
+                ? "Deleting…"
+                : "Leaving…"
+              : actionError === "destructive"
+                ? isOwner
+                  ? "Try delete again"
+                  : "Try leave again"
+                : isOwner
+                  ? "Delete workspace"
+                  : "Leave workspace"}
           </Button>
         </div>
       </Dialog>

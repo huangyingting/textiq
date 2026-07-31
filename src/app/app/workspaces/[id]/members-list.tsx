@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 
 import { Button, Dialog, PANEL_CHROME, cx } from "@/components/ui";
 import type {
@@ -32,11 +33,16 @@ type Workspace = {
   members: Member[];
 };
 
+type MemberActionKind = "remove" | "transfer";
+
 const roleLabels: Record<EffectiveWorkspaceRole, string> = {
   owner: "Owner",
   editor: "Editor",
   viewer: "Viewer",
 };
+
+const REMOVE_ERROR = "Could not remove the member. Please try again.";
+const TRANSFER_ERROR = "Could not transfer ownership. Please try again.";
 
 export function MembersList({
   workspace,
@@ -47,11 +53,17 @@ export function MembersList({
   isOwner: boolean;
   currentUserId: string;
 }) {
+  const [removeTarget, setRemoveTarget] = useState<DisplayMember | null>(null);
   const [transferTarget, setTransferTarget] = useState<DisplayMember | null>(
     null,
   );
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<MemberActionKind | null>(null);
+  const [pendingKind, setPendingKind] = useState<MemberActionKind | null>(null);
   const [isPending, startTransition] = useTransition();
+  const actionInFlightRef = useRef(false);
+  const removeRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const transferRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const mutationBusy = isPending || pendingKind !== null;
 
   const allMembers: DisplayMember[] = [
     {
@@ -66,40 +78,57 @@ export function MembersList({
     })),
   ];
 
-  const handleRemove = (memberId: string) => {
-    setError(null);
+  const runAction = (kind: MemberActionKind, action: () => Promise<void>) => {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
+    setActionError(null);
+    setPendingKind(kind);
     startTransition(async () => {
       try {
-        await removeMember(memberId);
+        await action();
+        if (kind === "remove") setRemoveTarget(null);
+        else setTransferTarget(null);
         window.location.reload();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not remove.");
+      } catch (error) {
+        unstable_rethrow(error);
+        setActionError(kind);
+      } finally {
+        actionInFlightRef.current = false;
+        setPendingKind(null);
       }
     });
+  };
+
+  const handleRemove = () => {
+    if (!removeTarget) return;
+    runAction("remove", () => removeMember(removeTarget.id));
   };
 
   const handleTransfer = () => {
     if (!transferTarget) return;
-    const target = transferTarget;
-    setError(null);
-    startTransition(async () => {
-      try {
-        await transferOwnership(workspace.id, target.userId);
-        window.location.reload();
-      } catch (err) {
-        setTransferTarget(null);
-        setError(err instanceof Error ? err.message : "Could not transfer.");
-      }
-    });
+    runAction("transfer", () =>
+      transferOwnership(workspace.id, transferTarget.userId),
+    );
+  };
+
+  const closeRemove = () => {
+    if (actionInFlightRef.current) return;
+    setActionError(null);
+    setRemoveTarget(null);
+  };
+
+  const closeTransfer = () => {
+    if (actionInFlightRef.current) return;
+    setActionError(null);
+    setTransferTarget(null);
   };
 
   return (
-    <ul className={cx("flex flex-col gap-2 p-4", PANEL_CHROME)}>
-      {error && (
-        <li role="alert" className="text-xs text-ds-danger-text">
-          {error}
-        </li>
-      )}
+    <ul
+      aria-busy={mutationBusy}
+      className={cx("flex flex-col gap-2 p-4", PANEL_CHROME)}
+    >
       {allMembers.map((member) => (
         <li
           key={member.id}
@@ -124,19 +153,30 @@ export function MembersList({
               member.userId !== currentUserId && (
                 <>
                   <button
-                    onClick={() => {
-                      setError(null);
+                    type="button"
+                    onClick={(event) => {
+                      if (actionInFlightRef.current) return;
+                      transferRestoreFocusRef.current = event.currentTarget;
+                      setActionError(null);
+                      setRemoveTarget(null);
                       setTransferTarget(member);
                     }}
-                    disabled={isPending}
+                    disabled={mutationBusy}
                     className="text-xs text-ds-text-secondary transition hover:text-ds-text-primary disabled:opacity-60"
                     aria-label={`Make ${member.user.email} the owner`}
                   >
                     Make owner
                   </button>
                   <button
-                    onClick={() => handleRemove(member.id)}
-                    disabled={isPending}
+                    type="button"
+                    onClick={(event) => {
+                      if (actionInFlightRef.current) return;
+                      removeRestoreFocusRef.current = event.currentTarget;
+                      setActionError(null);
+                      setTransferTarget(null);
+                      setRemoveTarget(member);
+                    }}
+                    disabled={mutationBusy}
                     className="text-xs text-ds-text-secondary transition hover:text-ds-danger-text disabled:opacity-60"
                     aria-label={`Remove ${member.user.email}`}
                   >
@@ -149,9 +189,71 @@ export function MembersList({
       ))}
 
       <Dialog
+        open={removeTarget !== null}
+        onClose={closeRemove}
+        restoreFocusRef={removeRestoreFocusRef}
+        aria-labelledby="remove-member-title"
+        aria-busy={pendingKind === "remove"}
+        className="max-w-md"
+      >
+        <h2
+          id="remove-member-title"
+          className="text-base font-semibold text-ds-text-primary"
+        >
+          Remove member?
+        </h2>
+        <p className="mt-2 text-sm text-ds-text-secondary">
+          {removeTarget?.user.name || removeTarget?.user.email} will lose access
+          to this workspace. Documents they authored will move to their personal
+          space.
+        </p>
+        {actionError === "remove" ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+          >
+            <p>{REMOVE_ERROR}</p>
+            <Button
+              variant="plain"
+              size="sm"
+              disabled={mutationBusy}
+              onClick={() => setActionError(null)}
+              className="mt-2"
+            >
+              Dismiss error
+            </Button>
+          </div>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            variant="plain"
+            size="lg"
+            onClick={closeRemove}
+            disabled={mutationBusy}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="lg"
+            onClick={handleRemove}
+            disabled={mutationBusy}
+          >
+            {pendingKind === "remove"
+              ? "Removing…"
+              : actionError === "remove"
+                ? "Try remove again"
+                : "Remove member"}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
         open={transferTarget !== null}
-        onClose={() => setTransferTarget(null)}
+        onClose={closeTransfer}
+        restoreFocusRef={transferRestoreFocusRef}
         aria-labelledby="transfer-ownership-title"
+        aria-busy={pendingKind === "transfer"}
         className="max-w-md"
       >
         <h2
@@ -165,11 +267,29 @@ export function MembersList({
           the workspace owner. You will be demoted to an editor and can no
           longer rename, delete, or manage members.
         </p>
+        {actionError === "transfer" ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+          >
+            <p>{TRANSFER_ERROR}</p>
+            <Button
+              variant="plain"
+              size="sm"
+              disabled={mutationBusy}
+              onClick={() => setActionError(null)}
+              className="mt-2"
+            >
+              Dismiss error
+            </Button>
+          </div>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <Button
             variant="plain"
             size="lg"
-            onClick={() => setTransferTarget(null)}
+            onClick={closeTransfer}
+            disabled={mutationBusy}
           >
             Cancel
           </Button>
@@ -177,9 +297,13 @@ export function MembersList({
             variant="solid"
             size="lg"
             onClick={handleTransfer}
-            disabled={isPending}
+            disabled={mutationBusy}
           >
-            Transfer ownership
+            {pendingKind === "transfer"
+              ? "Transferring…"
+              : actionError === "transfer"
+                ? "Try transfer again"
+                : "Transfer ownership"}
           </Button>
         </div>
       </Dialog>

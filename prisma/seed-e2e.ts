@@ -577,7 +577,8 @@ async function main() {
     where: { storageKey },
     update: {
       documentId: F.documentId,
-      workspaceId: F.workspaceId,
+      workspaceId: null,
+      brandId: null,
       mimeType: "image/png",
       byteSize: pngBytes.byteLength,
       checksum,
@@ -586,7 +587,6 @@ async function main() {
     },
     create: {
       documentId: F.documentId,
-      workspaceId: F.workspaceId,
       mimeType: "image/png",
       byteSize: pngBytes.byteLength,
       checksum,
@@ -799,7 +799,8 @@ async function main() {
       where: { storageKey: isolatedStorageKey },
       update: {
         documentId: fixture.documentId,
-        workspaceId: F.workspaceId,
+        workspaceId: null,
+        brandId: null,
         mimeType: "image/png",
         byteSize: pngBytes.byteLength,
         checksum,
@@ -808,7 +809,6 @@ async function main() {
       },
       create: {
         documentId: fixture.documentId,
-        workspaceId: F.workspaceId,
         mimeType: "image/png",
         byteSize: pngBytes.byteLength,
         checksum,
@@ -948,6 +948,7 @@ async function main() {
     update: {
       documentId: F.privateDocumentId,
       workspaceId: null,
+      brandId: null,
       mimeType: "image/png",
       byteSize: pngBytes.byteLength,
       checksum,

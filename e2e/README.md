@@ -29,7 +29,7 @@ app.
 | `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling |
 | `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag create/remove/reuse persistence and reversible version-history restore across reloads                                       |
 | `e2e/ui-matrix/public-render-ui.spec.ts`                | Public share/embed/present rendering, asset policy, safe 404s, read-only UI, and accessible visual-lightbox behavior            |
-| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite, membership, ownership-transfer, leave, and delete lifecycle                         |
+| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite failure recovery/copy/revoke, membership, transfer, leave, and delete lifecycle      |
 | `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically   |
 
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
@@ -182,7 +182,9 @@ users and isolated documents, and the specs run for real against them.
 - one **shared** document with intro text + an embedded visual, a persisted
   `deckJson` in `schemaVersion: 7` (`Deck`) whose first slide carries known
   text and an `ImageNode` backed by a slide `Asset` (bytes written under
-  `storage/slide-assets/…`), and an enabled
+  `storage/slide-assets/…`). Seeded slide assets use the canonical exclusive
+  document scope (`documentId` only, never a redundant workspace/brand scope),
+  and the shared document has an enabled
   public present/embed share policy;
 - a second **private** (never-shared) document + asset used to assert
   protected-asset denial.

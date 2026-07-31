@@ -184,6 +184,17 @@ const stubbedModules = new Map<string, string>([
       export function redirect(url) {
         return globalThis.__workspaceSettingsTestState.redirect(url);
       }
+      export function unstable_rethrow(error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          typeof error.digest === "string" &&
+          (error.digest.startsWith("NEXT_REDIRECT") ||
+            error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+        ) {
+          throw error;
+        }
+      }
     `,
   ],
   [
@@ -345,6 +356,15 @@ function firstElement(
   return element;
 }
 
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) return node.map(textContent).join(" ");
+  if (!isValidElement(node)) return "";
+  return textContent((node.props as { children?: ReactNode }).children);
+}
+
 function findDialog(renderer: ReactTestRenderer) {
   return renderer.root.findByProps({
     "aria-labelledby": "workspace-destructive-title",
@@ -417,7 +437,7 @@ describe("WorkspaceSettings (owner)", () => {
     }
   });
 
-  test("a failed rename shows the error message and does not reload", async () => {
+  test("a failed rename shows generic redacted recovery and does not reload", async () => {
     state().renameWorkspaceRecord = async () => {
       throw new Error("That name is already in use.");
     };
@@ -438,14 +458,15 @@ describe("WorkspaceSettings (owner)", () => {
         await waitForAsyncDrain();
       });
       const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /That name is already in use\./);
+      assert.match(text, /Could not rename the workspace\. Please try again\./);
+      assert.doesNotMatch(text, /That name is already in use\./);
       assert.equal(callsOf("reload").length, 0);
     } finally {
       act(() => renderer.unmount());
     }
   });
 
-  test("a non-Error rename rejection falls back to 'Could not rename.'", async () => {
+  test("a non-Error rename rejection uses the same generic recovery", async () => {
     state().renameWorkspaceRecord = async () => {
       throw "nope";
     };
@@ -465,7 +486,113 @@ describe("WorkspaceSettings (owner)", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      assert.match(JSON.stringify(renderer.toJSON()), /Could not rename\./);
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Could not rename the workspace\. Please try again\./,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("rename recovery retries once under repeated activation", async () => {
+    let attempts = 0;
+    state().renameWorkspaceRecord = async (workspaceId, rawName) => {
+      state().calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
+      attempts += 1;
+      if (attempts === 1) throw new Error("temporary outage");
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ id: "workspace-name" })
+          .props.onChange({ target: { value: "Growth Team" } });
+      });
+      await act(async () => {
+        renderer.root.findByProps({ children: "Save" }).props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      const retryButton = renderer.root.findByProps({
+        children: "Try rename again",
+      });
+      await act(async () => {
+        retryButton.props.onClick();
+        retryButton.props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("renameWorkspaceRecord").length, 2);
+      assert.equal(callsOf("reload").length, 1);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("same-event repeated rename activation issues one durable mutation", async () => {
+    let resolveRename!: () => void;
+    state().renameWorkspaceRecord = (workspaceId, rawName) => {
+      state().calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
+      return new Promise((resolve) => {
+        resolveRename = resolve;
+      });
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ id: "workspace-name" })
+          .props.onChange({ target: { value: "Growth Team" } });
+      });
+      const saveButton = renderer.root.findByProps({ children: "Save" });
+      await act(async () => {
+        saveButton.props.onClick();
+        saveButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("renameWorkspaceRecord").length, 1);
+
+      await act(async () => {
+        resolveRename();
+        await waitForAsyncDrain();
+      });
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("framework redirect control flow escapes rename failure recovery", async () => {
+    state().requireUser = async () => state().redirect("/login");
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ id: "workspace-name" })
+          .props.onChange({ target: { value: "Growth Team" } });
+      });
+      const saveButton = renderer.root.findByProps({ children: "Save" });
+      await assert.rejects(
+        async () =>
+          act(async () => {
+            saveButton.props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          }),
+        (error: unknown) => isRedirectSignal(error, "/login"),
+      );
     } finally {
       act(() => renderer.unmount());
     }
@@ -554,7 +681,7 @@ describe("WorkspaceSettings (owner)", () => {
     }
   });
 
-  test("a genuine delete failure (unrelated to redirect) shows its message, closes the dialog, and does not navigate", async () => {
+  test("a genuine delete failure stays in the dialog with generic redacted recovery", async () => {
     state().deleteWorkspaceAndDetachDocuments = async () => {
       throw new Error("Workspace has active billing obligations.");
     };
@@ -576,16 +703,25 @@ describe("WorkspaceSettings (owner)", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /Workspace has active billing obligations\./);
-      assert.equal(findDialog(renderer).props.open, false);
+      const dialogText = textContent(
+        findDialog(renderer).props.children as ReactNode,
+      );
+      assert.match(
+        dialogText,
+        /Could not delete the workspace\. Please try again\./,
+      );
+      assert.doesNotMatch(
+        dialogText,
+        /Workspace has active billing obligations\./,
+      );
+      assert.equal(findDialog(renderer).props.open, true);
       assert.equal(callsOf("redirect").length, 0);
     } finally {
       act(() => renderer.unmount());
     }
   });
 
-  test("a non-Error delete rejection falls back to 'Action failed.'", async () => {
+  test("a non-Error delete rejection uses the same generic recovery", async () => {
     state().deleteWorkspaceAndDetachDocuments = async () => {
       throw "nope";
     };
@@ -607,13 +743,16 @@ describe("WorkspaceSettings (owner)", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      assert.match(JSON.stringify(renderer.toJSON()), /Action failed\./);
+      assert.match(
+        textContent(findDialog(renderer).props.children as ReactNode),
+        /Could not delete the workspace\. Please try again\./,
+      );
     } finally {
       act(() => renderer.unmount());
     }
   });
 
-  test("reopening the confirm dialog after a failed delete clears the stale error banner", async () => {
+  test("a failed delete error can be dismissed before cancelling the dialog", async () => {
     state().deleteWorkspaceAndDetachDocuments = async () => {
       throw new Error("Workspace has active billing obligations.");
     };
@@ -636,21 +775,33 @@ describe("WorkspaceSettings (owner)", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
+      let dialogChildren = findDialog(renderer).props.children as ReactNode;
       assert.match(
-        JSON.stringify(renderer.toJSON()),
-        /Workspace has active billing obligations\./,
+        textContent(dialogChildren),
+        /Could not delete the workspace\. Please try again\./,
       );
-
-      // Retrying (reopening the confirmation dialog) clears the stale error
-      // immediately, before any new attempt is made.
+      const dismissButton = firstElement(
+        dialogChildren,
+        (element) => element.props.children === "Dismiss error",
+      );
       await act(async () => {
-        renderer.root.findByProps({ children: "Delete" }).props.onClick();
+        (dismissButton.props.onClick as () => void)();
         await waitForAsyncDrain();
       });
+      dialogChildren = findDialog(renderer).props.children as ReactNode;
       assert.doesNotMatch(
-        JSON.stringify(renderer.toJSON()),
-        /Workspace has active billing obligations\./,
+        textContent(dialogChildren),
+        /Could not delete the workspace/,
       );
+      const cancelButton = firstElement(
+        dialogChildren,
+        (element) => element.props.children === "Cancel",
+      );
+      await act(async () => {
+        (cancelButton.props.onClick as () => void)();
+        await waitForAsyncDrain();
+      });
+      assert.equal(findDialog(renderer).props.open, false);
     } finally {
       act(() => renderer.unmount());
     }
@@ -712,7 +863,7 @@ describe("WorkspaceSettings (non-owner member)", () => {
     }
   });
 
-  test("a genuine leave failure (unrelated to redirect) shows its message, closes the dialog, and does not navigate", async () => {
+  test("a genuine leave failure stays in the dialog with generic redacted recovery", async () => {
     state().leaveWorkspaceForUser = async () => {
       throw new Error("Transfer ownership before leaving.");
     };
@@ -734,9 +885,15 @@ describe("WorkspaceSettings (non-owner member)", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /Transfer ownership before leaving\./);
-      assert.equal(findDialog(renderer).props.open, false);
+      const dialogText = textContent(
+        findDialog(renderer).props.children as ReactNode,
+      );
+      assert.match(
+        dialogText,
+        /Could not leave the workspace\. Please try again\./,
+      );
+      assert.doesNotMatch(dialogText, /Transfer ownership before leaving\./);
+      assert.equal(findDialog(renderer).props.open, true);
       assert.equal(callsOf("redirect").length, 0);
     } finally {
       act(() => renderer.unmount());

@@ -18,6 +18,8 @@ import { createRequire } from "node:module";
 import { before, beforeEach, describe, test } from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+import { Button } from "@/components/ui/button";
+import { FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui/tokens";
 import "@/test/react-render-harness";
 
 import type { InviteLink } from "@/lib/workspace/invite-types";
@@ -62,6 +64,12 @@ type TestState = {
 
 const globalForTest = globalThis as typeof globalThis & {
   __inviteLinkManagerTestState: TestState;
+  __inviteLinkManagerUiBridge: {
+    Button: unknown;
+    FIELD_CONTROL: string;
+    PANEL_CHROME: string;
+    cx: typeof cx;
+  };
 };
 
 function createDefaultState(): TestState {
@@ -70,7 +78,11 @@ function createDefaultState(): TestState {
     calls,
     redirect(url: string): never {
       calls.push(["redirect", url]);
-      throw new Error(`NEXT_REDIRECT:${url}`);
+      const error = new Error(`NEXT_REDIRECT:${url}`) as Error & {
+        digest: string;
+      };
+      error.digest = `NEXT_REDIRECT;replace;${url};307;`;
+      throw error;
     },
     revalidatePath(path: string) {
       calls.push(["revalidatePath", path]);
@@ -114,6 +126,12 @@ function createDefaultState(): TestState {
 }
 
 globalForTest.__inviteLinkManagerTestState = createDefaultState();
+globalForTest.__inviteLinkManagerUiBridge = {
+  Button,
+  FIELD_CONTROL,
+  PANEL_CHROME,
+  cx,
+};
 // `getInviteUrl` early-returns "" when `window` is undefined (a real,
 // unmocked concern in this Node test environment) — a fixed origin lets
 // the copy-link assertions below verify the actual URL construction.
@@ -138,10 +156,31 @@ const stubPrefix = "textiq-invite-link-manager-test:";
 const stubbedModules = new Map<string, string>([
   ["server-only", ""],
   [
+    "@/components/ui",
+    `
+      export const Button = globalThis.__inviteLinkManagerUiBridge.Button;
+      export const FIELD_CONTROL = globalThis.__inviteLinkManagerUiBridge.FIELD_CONTROL;
+      export const PANEL_CHROME = globalThis.__inviteLinkManagerUiBridge.PANEL_CHROME;
+      export const cx = globalThis.__inviteLinkManagerUiBridge.cx;
+      export function Dialog({ children }) { return children; }
+    `,
+  ],
+  [
     "next/navigation",
     `
       export function redirect(url) {
         return globalThis.__inviteLinkManagerTestState.redirect(url);
+      }
+      export function unstable_rethrow(error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          typeof error.digest === "string" &&
+          (error.digest.startsWith("NEXT_REDIRECT") ||
+            error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+        ) {
+          throw error;
+        }
       }
     `,
   ],
@@ -277,6 +316,43 @@ function mountManager(inviteLinks: InviteLink[]): ReactTestRenderer {
   return renderer;
 }
 
+function revokeButtons(renderer: ReactTestRenderer) {
+  return renderer.root
+    .findAll(
+      (instance) =>
+        (instance.props as { "aria-label"?: string })["aria-label"] ===
+        "Revoke invite link",
+    )
+    .filter((instance) => typeof instance.type !== "string");
+}
+
+async function openRevokeDialog(renderer: ReactTestRenderer, index = 0) {
+  const button = revokeButtons(renderer)[index];
+  assert.ok(button, "expected a revoke button");
+  await act(async () => {
+    button.props.onClick({
+      currentTarget: { focus() {} } as unknown as HTMLButtonElement,
+    });
+    await waitForAsyncDrain();
+  });
+  return renderer.root.findByProps({
+    "aria-labelledby": "revoke-invite-title",
+  });
+}
+
+function findCompositeButton(renderer: ReactTestRenderer, label: string) {
+  const button = renderer.root
+    .findAll(
+      (instance) =>
+        typeof instance.type !== "string" &&
+        instance.props.children === label &&
+        typeof instance.props.onClick === "function",
+    )
+    .at(-1);
+  assert.ok(button, `expected composite button ${label}`);
+  return button;
+}
+
 describe("InviteLinkManager", () => {
   test("renders the create controls with no list when there are no invite links yet", () => {
     const renderer = mountManager([]);
@@ -349,7 +425,7 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("clicking the invite URL field selects the text and copies it to the clipboard", () => {
+  test("clicking the invite URL field selects the text, copies it, and announces success", async () => {
     const written: string[] = [];
     (
       navigator as unknown as { clipboard: { writeText: (s: string) => void } }
@@ -360,7 +436,7 @@ describe("InviteLinkManager", () => {
         (instance) => instance.type === "input" && instance.props.readOnly,
       );
       let selected = false;
-      act(() => {
+      await act(async () => {
         input.props.onClick({
           currentTarget: {
             select: () => {
@@ -369,9 +445,61 @@ describe("InviteLinkManager", () => {
             value: input.props.value,
           },
         });
+        await waitForAsyncDrain();
       });
       assert.equal(selected, true);
       assert.deepEqual(written, ["https://workspace.test/app/join/tok-copy"]);
+      assert.match(JSON.stringify(renderer.toJSON()), /Invite link copied\./);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("clipboard rejection stays inline with generic retry and dismiss recovery", async () => {
+    let shouldFail = true;
+    (
+      navigator as unknown as {
+        clipboard: { writeText: (value: string) => Promise<void> };
+      }
+    ).clipboard.writeText = async () => {
+      if (shouldFail) throw new Error("private clipboard detail");
+    };
+    const renderer = mountManager([makeLink({ token: "tok-copy-failure" })]);
+    try {
+      const copyButton = renderer.root
+        .findAllByProps({ "aria-label": "Copy Editor invite link" })
+        .filter((instance) => typeof instance.type !== "string")[0];
+      await act(async () => {
+        copyButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      let tree = JSON.stringify(renderer.toJSON());
+      assert.match(tree, /Could not copy the invite link\. Please try again\./);
+      assert.doesNotMatch(tree, /private clipboard detail/);
+
+      const dismissButton = findCompositeButton(renderer, "Dismiss error");
+      act(() => {
+        dismissButton.props.onClick();
+      });
+      assert.doesNotMatch(
+        JSON.stringify(renderer.toJSON()),
+        /Could not copy the invite link/,
+      );
+
+      await act(async () => {
+        copyButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+
+      shouldFail = false;
+      const retryButton = findCompositeButton(renderer, "Try copy again");
+      await act(async () => {
+        retryButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      tree = JSON.stringify(renderer.toJSON());
+      assert.match(tree, /Invite link copied\./);
+      assert.doesNotMatch(tree, /Could not copy/);
     } finally {
       act(() => renderer.unmount());
     }
@@ -456,6 +584,32 @@ describe("InviteLinkManager", () => {
     }
   });
 
+  test("invalid maximum uses is rejected locally with actionable feedback", async () => {
+    const renderer = mountManager([]);
+    try {
+      const maxUsesInput = renderer.root.findByProps({
+        "aria-label": "Maximum uses (leave blank for unlimited)",
+      });
+      act(() => {
+        maxUsesInput.props.onChange({ target: { value: "1.5" } });
+      });
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("requireUser").length, 0);
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Maximum uses must be a whole number of at least 1\./,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("the created link is not yet in the list until the create promise resolves (in-flight state)", async () => {
     let resolveCreate!: () => void;
     state().createWorkspaceInviteLink = (args) => {
@@ -495,27 +649,46 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("revoking a link removes it from the list", async () => {
+  test("same-event repeated create activation issues one durable invite mutation", async () => {
+    let resolveCreate!: (link: InviteLink) => void;
+    state().createWorkspaceInviteLink = () =>
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      });
+    const renderer = mountManager([]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("requireUser").length, 1);
+
+      await act(async () => {
+        resolveCreate(makeLink({ id: "link-new", token: "tok-new" }));
+        await waitForAsyncDrain();
+      });
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("revoking requires confirmation and removes the link only after confirmation succeeds", async () => {
     const renderer = mountManager([
       makeLink({ id: "link-1", token: "tok-1" }),
       makeLink({ id: "link-2", token: "tok-2" }),
     ]);
     try {
-      // `aria-label` is forwarded through `Button`'s `...rest` spread onto
-      // the underlying host <button>, so `findAllByProps` matches both the
-      // composite `Button` instance and its host element per link; keep
-      // only the composite instances (non-string `type`) to get one match
-      // per rendered link.
-      const revokeButtons = renderer.root
-        .findAll(
-          (instance) =>
-            (instance.props as { "aria-label"?: string })["aria-label"] ===
-            "Revoke invite link",
-        )
-        .filter((instance) => typeof instance.type !== "string");
-      assert.equal(revokeButtons.length, 2);
+      assert.equal(revokeButtons(renderer).length, 2);
+      const dialog = await openRevokeDialog(renderer);
+      assert.equal(callsOf("revokeWorkspaceInviteLink").length, 0);
+      assert.equal(dialog.props.open, true);
+      const confirmButton = findCompositeButton(renderer, "Revoke invite link");
       await act(async () => {
-        revokeButtons[0].props.onClick();
+        confirmButton.props.onClick();
         await waitForAsyncDrain();
       });
       assert.deepEqual(callsOf("revokeWorkspaceInviteLink"), [
@@ -529,7 +702,53 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("a rejected create is caught and renders an alert with the thrown message, without adding a link", async () => {
+  test("revoke confirmation locks dismissal and suppresses repeated confirmation while pending", async () => {
+    let resolveRevoke!: () => void;
+    state().revokeWorkspaceInviteLink = (linkId) => {
+      state().calls.push(["revokeWorkspaceInviteLink", linkId]);
+      return new Promise((resolve) => {
+        resolveRevoke = resolve;
+      });
+    };
+    const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
+    try {
+      await openRevokeDialog(renderer);
+      const confirmButton = findCompositeButton(renderer, "Revoke invite link");
+      await act(async () => {
+        confirmButton.props.onClick();
+        confirmButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("revokeWorkspaceInviteLink").length, 1);
+      const dialog = renderer.root.findByProps({
+        "aria-labelledby": "revoke-invite-title",
+      });
+      assert.equal(dialog.props["aria-busy"], true);
+      assert.equal(
+        findCompositeButton(renderer, "Cancel").props.disabled,
+        true,
+      );
+      act(() => {
+        dialog.props.onClose();
+      });
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-labelledby": "revoke-invite-title",
+        }).props.open,
+        true,
+      );
+
+      await act(async () => {
+        resolveRevoke();
+        await waitForAsyncDrain();
+      });
+      assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /tok-1/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a rejected create is contained with generic redacted feedback, without adding a link", async () => {
     state().createWorkspaceInviteLink = async () => {
       throw new Error("boom");
     };
@@ -542,9 +761,11 @@ describe("InviteLinkManager", () => {
         createButton.props.onClick();
         await waitForAsyncDrain();
       });
-      const alert = renderer.root.findByProps({ role: "alert" });
-      assert.match(JSON.stringify(alert.props.children), /boom/);
-      assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /tok-new/);
+      renderer.root.findByProps({ role: "alert" });
+      const tree = JSON.stringify(renderer.toJSON());
+      assert.match(tree, /Could not create invite link\. Please try again\./);
+      assert.doesNotMatch(tree, /boom/);
+      assert.doesNotMatch(tree, /tok-new/);
     } finally {
       act(() => renderer.unmount());
     }
@@ -563,9 +784,8 @@ describe("InviteLinkManager", () => {
         createButton.props.onClick();
         await waitForAsyncDrain();
       });
-      const alert = renderer.root.findByProps({ role: "alert" });
       assert.match(
-        JSON.stringify(alert.props.children),
+        JSON.stringify(renderer.toJSON()),
         /Could not create invite link\./,
       );
     } finally {
@@ -573,29 +793,41 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("a rejected revoke is caught and renders an alert with the thrown message, keeping the link in the list", async () => {
-    state().revokeWorkspaceInviteLink = async () => {
-      throw new Error("Cannot revoke this link.");
+  test("a rejected revoke stays in the locked dialog with generic redacted retry feedback", async () => {
+    let shouldFail = true;
+    state().revokeWorkspaceInviteLink = async (linkId) => {
+      state().calls.push(["revokeWorkspaceInviteLink", linkId]);
+      if (shouldFail) throw new Error("Cannot revoke this link.");
     };
     const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
     try {
-      const revokeButton = renderer.root
-        .findAll(
-          (instance) =>
-            (instance.props as { "aria-label"?: string })["aria-label"] ===
-            "Revoke invite link",
-        )
-        .filter((instance) => typeof instance.type !== "string")[0];
+      await openRevokeDialog(renderer);
+      const confirmButton = findCompositeButton(renderer, "Revoke invite link");
       await act(async () => {
-        revokeButton.props.onClick();
+        confirmButton.props.onClick();
         await waitForAsyncDrain();
       });
-      const alert = renderer.root.findByProps({ role: "alert" });
-      assert.match(
-        JSON.stringify(alert.props.children),
-        /Cannot revoke this link\./,
+      renderer.root.findByProps({ role: "alert" });
+      const tree = JSON.stringify(renderer.toJSON());
+      assert.match(tree, /Could not revoke invite link\. Please try again\./);
+      assert.doesNotMatch(tree, /Cannot revoke this link\./);
+      assert.match(tree, /tok-1/);
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-labelledby": "revoke-invite-title",
+        }).props.open,
+        true,
       );
-      assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
+
+      shouldFail = false;
+      const retryButton = findCompositeButton(renderer, "Try revoke again");
+      await act(async () => {
+        retryButton.props.onClick();
+        retryButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("revokeWorkspaceInviteLink").length, 2);
+      assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /tok-1/);
     } finally {
       act(() => renderer.unmount());
     }
@@ -607,20 +839,14 @@ describe("InviteLinkManager", () => {
     };
     const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
     try {
-      const revokeButton = renderer.root
-        .findAll(
-          (instance) =>
-            (instance.props as { "aria-label"?: string })["aria-label"] ===
-            "Revoke invite link",
-        )
-        .filter((instance) => typeof instance.type !== "string")[0];
+      await openRevokeDialog(renderer);
+      const confirmButton = findCompositeButton(renderer, "Revoke invite link");
       await act(async () => {
-        revokeButton.props.onClick();
+        confirmButton.props.onClick();
         await waitForAsyncDrain();
       });
-      const alert = renderer.root.findByProps({ role: "alert" });
       assert.match(
-        JSON.stringify(alert.props.children),
+        JSON.stringify(renderer.toJSON()),
         /Could not revoke invite link\./,
       );
     } finally {
@@ -628,7 +854,7 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("an error thrown deeper in the create action (authorization) is still caught and surfaced as an alert", async () => {
+  test("an error thrown deeper in the create action is redacted from the alert", async () => {
     // `createInviteLink`/`revokeInviteLink` only ever throw — there is no
     // `{ ok: false, error }` return shape on these actions today, unlike the
     // `ActionResult` convention used elsewhere (e.g.
@@ -649,12 +875,40 @@ describe("InviteLinkManager", () => {
         createButton.props.onClick();
         await waitForAsyncDrain();
       });
-      const alert = renderer.root.findByProps({ role: "alert" });
       assert.match(
-        JSON.stringify(alert.props.children),
+        JSON.stringify(renderer.toJSON()),
+        /Could not create invite link\. Please try again\./,
+      );
+      assert.doesNotMatch(
+        JSON.stringify(renderer.toJSON()),
         /Not authorized to manage this workspace\./,
       );
       assert.equal(callsOf("createWorkspaceInviteLink").length, 0);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("framework redirect control flow escapes invite failure recovery", async () => {
+    state().requireUser = async () => state().redirect("/login");
+    const renderer = mountManager([]);
+    try {
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await assert.rejects(
+        async () =>
+          act(async () => {
+            createButton.props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          }),
+        (error: unknown) =>
+          error instanceof Error &&
+          (error as Error & { digest?: string }).digest?.startsWith(
+            "NEXT_REDIRECT",
+          ) === true,
+      );
     } finally {
       act(() => renderer.unmount());
     }
@@ -686,10 +940,13 @@ describe("InviteLinkManager", () => {
       assert.ok(renderer.root.findByProps({ role: "alert" }));
 
       shouldFail = false;
+      const retryButton = findCompositeButton(renderer, "Try create again");
       await act(async () => {
-        createButton.props.onClick();
+        retryButton.props.onClick();
+        retryButton.props.onClick();
         await waitForAsyncDrain();
       });
+      assert.equal(callsOf("requireUser").length, 2);
       assert.throws(() => renderer.root.findByProps({ role: "alert" }));
       assert.match(JSON.stringify(renderer.toJSON()), /tok-retry/);
     } finally {
@@ -712,15 +969,11 @@ describe("InviteLinkManager", () => {
       });
       assert.ok(renderer.root.findByProps({ role: "alert" }));
 
-      const revokeButton = renderer.root
-        .findAll(
-          (instance) =>
-            (instance.props as { "aria-label"?: string })["aria-label"] ===
-            "Revoke invite link",
-        )
-        .filter((instance) => typeof instance.type !== "string")[0];
+      await openRevokeDialog(renderer);
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      const confirmButton = findCompositeButton(renderer, "Revoke invite link");
       await act(async () => {
-        revokeButton.props.onClick();
+        confirmButton.props.onClick();
         await waitForAsyncDrain();
       });
       assert.throws(() => renderer.root.findByProps({ role: "alert" }));
@@ -730,49 +983,34 @@ describe("InviteLinkManager", () => {
     }
   });
 
-  test("concurrent create and revoke resolve deterministically: both errors surface in order and only the failed revoke's link remains", async () => {
+  test("an in-flight create synchronously blocks a competing revoke and locks mutation controls", async () => {
     let resolveCreate!: (link: InviteLink) => void;
     state().createWorkspaceInviteLink = () =>
       new Promise((resolve) => {
         resolveCreate = resolve;
-      });
-    let rejectRevoke!: (err: Error) => void;
-    state().revokeWorkspaceInviteLink = () =>
-      new Promise((_resolve, reject) => {
-        rejectRevoke = reject;
       });
     const renderer = mountManager([makeLink({ id: "link-1", token: "tok-1" })]);
     try {
       const createButton = renderer.root.findByProps({
         children: "Create invite link",
       });
-      const revokeButton = renderer.root
-        .findAll(
-          (instance) =>
-            (instance.props as { "aria-label"?: string })["aria-label"] ===
-            "Revoke invite link",
-        )
-        .filter((instance) => typeof instance.type !== "string")[0];
+      const revokeButton = revokeButtons(renderer)[0];
 
       await act(async () => {
         createButton.props.onClick();
-        revokeButton.props.onClick();
+        revokeButton.props.onClick({
+          currentTarget: { focus() {} } as unknown as HTMLButtonElement,
+        });
         await waitForAsyncDrain();
       });
-      // Both are still in-flight: no alert yet, and the original link is
-      // still present (revoke hasn't resolved).
-      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
-      assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
-
-      await act(async () => {
-        rejectRevoke(new Error("revoke failed"));
-        await waitForAsyncDrain();
-      });
-      const alertAfterRevoke = renderer.root.findByProps({ role: "alert" });
-      assert.match(
-        JSON.stringify(alertAfterRevoke.props.children),
-        /revoke failed/,
+      assert.equal(callsOf("revokeWorkspaceInviteLink").length, 0);
+      assert.throws(() =>
+        renderer.root.findByProps({
+          "aria-labelledby": "revoke-invite-title",
+        }),
       );
+      assert.equal(revokeButtons(renderer)[0].props.disabled, true);
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
       assert.match(JSON.stringify(renderer.toJSON()), /tok-1/);
 
       await act(async () => {
@@ -787,12 +1025,10 @@ describe("InviteLinkManager", () => {
         });
         await waitForAsyncDrain();
       });
-      // The successful create clears its own stale error state and the new
-      // link is present alongside the never-revoked original.
-      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
       const html = JSON.stringify(renderer.toJSON());
       assert.match(html, /tok-1/);
       assert.match(html, /tok-new/);
+      assert.equal(revokeButtons(renderer)[0].props.disabled, false);
     } finally {
       act(() => renderer.unmount());
     }

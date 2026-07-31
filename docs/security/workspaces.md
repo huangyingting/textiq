@@ -89,6 +89,22 @@ Invite links are created with:
 - optional maximum use count;
 - server-generated token.
 
+The invite manager serializes create and revoke mutations behind a synchronous
+in-flight guard, so repeated activation cannot create duplicate links or issue
+duplicate revocations. Controls expose pending state and remain locked until the
+active mutation settles. Ordinary action failures are redacted into generic
+retry/dismiss feedback, while Next redirect/not-found control flow remains
+authoritative. Revocation requires a focus-restoring confirmation dialog; a
+failed revoke remains in the dialog for retry and pending confirmation cannot
+be dismissed.
+
+Invite URLs have an explicit copy control while retaining click-to-select/copy
+on the read-only field. Clipboard success is announced through a polite status;
+clipboard rejection stays inline with generic retry/dismiss recovery instead of
+escaping as an unhandled promise. Maximum-use input is validated locally as a
+positive integer before the server action, and the service remains the
+authoritative validator.
+
 Expiry and max-use values are validated server-side. Links can be revoked.
 Expiry windows and max-use caps are normalized by service helpers so creation and
 tests use the same bounds.
@@ -115,15 +131,24 @@ second accept, downstream rollback, and composite-unique classification). We do
 not claim Postgres concurrency execution in this suite.
 
 The deterministic browser lifecycle exercises the rendered invite controls with
-accessible role/link labels, verifies revoked-link denial before accepting
-active viewer and editor invites, and confirms the persisted use count after a
-limited invite is consumed.
+accessible role/link labels, forces create/revoke transport failures, verifies
+retry duplicate suppression and copy feedback, verifies revoked-link denial
+before accepting active viewer and editor invites, and confirms the persisted
+use count after a limited invite is consumed.
 
 ## Member Removal And Workspace Deletion
 
 Removing a member does not transfer their authored documents to the workspace
 owner. Documents authored by the removed member inside the workspace are moved
 back to that user's personal space (`workspaceId = null`).
+
+Workspace mutation controls use a synchronous in-flight guard so rename,
+remove, transfer, leave, and delete activations cannot issue duplicate durable
+mutations before React commits pending state. Member removal, ownership
+transfer, leave, and delete require focus-restoring confirmation dialogs. While
+a destructive mutation is pending, its dialog cannot be cancelled or dismissed.
+Ordinary failures stay in context with generic redacted retry/dismiss feedback;
+Next redirect/not-found control flow is rethrown to the framework.
 
 Deleting a workspace also preserves documents by moving every attached document
 back to its author's personal space before deleting the workspace.
@@ -171,6 +196,8 @@ semantics.
 12. Remediation of malformed role rows follows
     [workspace-role-remediation-plan.md](workspace-role-remediation-plan.md)
     with explicit operator choice and no destructive default mapping.
+13. Client mutation guards and disabled state improve interaction durability;
+    server actions remain authoritative for authorization and persistence.
 
 ## Primary Tests
 

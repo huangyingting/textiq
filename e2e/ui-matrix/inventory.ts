@@ -557,7 +557,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/workspace-lifecycle-ui.spec.ts",
     owners: ["workspace", "security"],
     coverage:
-      "Deterministic owner/editor/viewer workspace creation, validation, rename, invite revocation/acceptance, member removal, ownership transfer, leave, and deletion lifecycle.",
+      "Deterministic owner/editor/viewer workspace creation, validation, rename, invite create/revoke transport-failure recovery with duplicate suppression, clipboard feedback, revocation confirmation, invite acceptance, member-removal confirmation, ownership transfer, leave, and deletion lifecycle.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded editor", "seeded viewer"],

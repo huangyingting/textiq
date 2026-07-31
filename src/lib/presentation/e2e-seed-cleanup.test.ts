@@ -500,7 +500,7 @@ test(
         {
           id: staleAssetId,
           documentId: staleDocumentId,
-          workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
+          workspaceId: null,
           mimeType: "image/png",
           byteSize: 5,
           checksum: "b".repeat(64),
@@ -520,7 +520,7 @@ test(
         {
           id: hostileAssetId,
           documentId: hostileDocumentId,
-          workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
+          workspaceId: null,
           mimeType: "image/png",
           byteSize: 7,
           checksum: "e".repeat(64),
@@ -691,6 +691,16 @@ test(
         },
       }),
       expectedPresentationFixtures.length,
+    );
+    assert.equal(
+      await client.asset.count({
+        where: {
+          documentId: { in: currentDocuments.map(({ id }) => id) },
+          OR: [{ workspaceId: { not: null } }, { brandId: { not: null } }],
+        },
+      }),
+      0,
+      "seeded presentation assets use document scope exclusively",
     );
     assert.equal(
       await client.document.count({

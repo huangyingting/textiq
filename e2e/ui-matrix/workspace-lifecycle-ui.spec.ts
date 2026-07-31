@@ -75,7 +75,7 @@ test.describe("UI matrix: workspace lifecycle", () => {
   );
   test.setTimeout(180_000);
 
-  test("owner, editor, and viewer complete the workspace lifecycle", async ({
+  test("owner, editor, and viewer recover invite failures and complete the workspace lifecycle", async ({
     browser,
     page,
   }) => {
@@ -84,6 +84,9 @@ test.describe("UI matrix: workspace lifecycle", () => {
     const editor = profileEditorCredentials();
     const viewer = profileViewerCredentials();
 
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await login(page, owner, "/app/workspaces");
     await page.getByRole("button", { name: "New workspace" }).click();
     let dialog = page.getByRole("dialog", { name: "Create workspace" });
@@ -121,12 +124,113 @@ test.describe("UI matrix: workspace lifecycle", () => {
     await expect(page.getByLabel("Workspace name")).toHaveValue(
       fixture.renamedName,
     );
+    await expect(
+      page.getByText("No documents in this workspace yet."),
+    ).toBeVisible({ timeout: 20_000 });
 
-    const revokedInvite = await createInvite(page, "VIEWER", { expiry: "1" });
-    await page
-      .getByRole("button", { name: "Revoke invite link" })
-      .first()
+    const workspaceRoute = `**${workspacePath}`;
+    let createActionCount = 0;
+    await page.route(workspaceRoute, async (route) => {
+      const request = route.request();
+      const isWorkspaceAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === workspacePath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isWorkspaceAction) {
+        await route.continue();
+        return;
+      }
+      createActionCount += 1;
+      if (createActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    await page.getByLabel("Invite member role").selectOption("VIEWER");
+    await page.getByLabel("Invite link expiry").selectOption("1");
+    await page.getByRole("button", { name: "Create invite link" }).click();
+    const createAlert = page.getByRole("alert").filter({
+      hasText: "Could not create invite link. Please try again.",
+    });
+    await expect(createAlert).toBeVisible();
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === workspacePath,
+    );
+    await createAlert
+      .getByRole("button", { name: "Try create again" })
+      .dblclick();
+    expect((await createResponse).ok()).toBe(true);
+    await expect.poll(() => createActionCount).toBe(2);
+    await page.unroute(workspaceRoute);
+
+    const revokedInviteInput = page
+      .getByLabel("Invite link for Viewer")
+      .first();
+    await expect(revokedInviteInput).toHaveValue(/\/app\/join\//, {
+      timeout: 20_000,
+    });
+    const revokedInvite = await revokedInviteInput.inputValue();
+    const revokedInviteRow = revokedInviteInput.locator("xpath=ancestor::li");
+    await revokedInviteRow
+      .getByRole("button", { name: "Copy Viewer invite link" })
       .click();
+    await expect(revokedInviteRow.getByRole("status")).toHaveText(
+      "Invite link copied.",
+    );
+
+    const revokeButton = revokedInviteRow.getByRole("button", {
+      name: "Revoke invite link",
+    });
+    await revokeButton.click();
+    let revokeDialog = page.getByRole("dialog", {
+      name: "Revoke invite link?",
+    });
+    await revokeDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(revokeDialog).toHaveCount(0);
+    await expect(revokedInviteInput).toBeVisible();
+
+    await revokeButton.click();
+    revokeDialog = page.getByRole("dialog", { name: "Revoke invite link?" });
+    let revokeActionCount = 0;
+    await page.route(workspaceRoute, async (route) => {
+      const request = route.request();
+      const isWorkspaceAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === workspacePath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isWorkspaceAction) {
+        await route.continue();
+        return;
+      }
+      revokeActionCount += 1;
+      if (revokeActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    await revokeDialog
+      .getByRole("button", { name: "Revoke invite link" })
+      .click();
+    const revokeAlert = revokeDialog.getByRole("alert").filter({
+      hasText: "Could not revoke invite link. Please try again.",
+    });
+    await expect(revokeAlert).toBeVisible();
+    const revokeResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === workspacePath,
+    );
+    await revokeDialog
+      .getByRole("button", { name: "Try revoke again" })
+      .dblclick();
+    expect((await revokeResponse).ok()).toBe(true);
+    await expect.poll(() => revokeActionCount).toBe(2);
+    await page.unroute(workspaceRoute);
+    await expect(revokeDialog).toHaveCount(0);
     await expect(page.getByLabel("Invite link for Viewer")).toHaveCount(0);
 
     const viewerSession = await openAuthenticatedSession(browser, viewer);
@@ -171,6 +275,18 @@ test.describe("UI matrix: workspace lifecycle", () => {
       await page
         .getByRole("button", { name: `Remove ${viewer.email}` })
         .click();
+      let removeDialog = page.getByRole("dialog", { name: "Remove member?" });
+      await expect(removeDialog).toContainText(
+        "will lose access to this workspace",
+      );
+      await removeDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(removeDialog).toHaveCount(0);
+      await expect(memberRow(page, viewer.email)).toContainText("Viewer");
+      await page
+        .getByRole("button", { name: `Remove ${viewer.email}` })
+        .click();
+      removeDialog = page.getByRole("dialog", { name: "Remove member?" });
+      await removeDialog.getByRole("button", { name: "Remove member" }).click();
       await expect(memberRow(page, viewer.email)).toHaveCount(0);
       await viewerSession.page.goto(workspacePath);
       await expect(

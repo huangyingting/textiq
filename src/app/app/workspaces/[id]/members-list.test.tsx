@@ -38,7 +38,12 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import {
+  act,
+  create,
+  type ReactTestInstance,
+  type ReactTestRenderer,
+} from "react-test-renderer";
 
 import { Button } from "@/components/ui/button";
 import { PANEL_CHROME, cx } from "@/components/ui/tokens";
@@ -95,7 +100,9 @@ function createDefaultState(): TestState {
     calls,
     redirect(url: string): never {
       calls.push(["redirect", url]);
-      throw new Error(`NEXT_REDIRECT:${url}`);
+      const error = new Error("NEXT_REDIRECT") as Error & { digest: string };
+      error.digest = `NEXT_REDIRECT;push;${url};307;`;
+      throw error;
     },
     revalidatePath(path: string) {
       calls.push(["revalidatePath", path]);
@@ -187,6 +194,17 @@ const stubbedModules = new Map<string, string>([
     `
       export function redirect(url) {
         return globalThis.__membersListTestState.redirect(url);
+      }
+      export function unstable_rethrow(error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          typeof error.digest === "string" &&
+          (error.digest.startsWith("NEXT_REDIRECT") ||
+            error.digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"))
+        ) {
+          throw error;
+        }
       }
     `,
   ],
@@ -377,6 +395,21 @@ function firstElement(
   return element;
 }
 
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) return node.map(textContent).join(" ");
+  if (!isValidElement(node)) return "";
+  return textContent((node.props as { children?: ReactNode }).children);
+}
+
+function clickMemberTrigger(button: ReactTestInstance) {
+  button.props.onClick({
+    currentTarget: { focus() {} } as unknown as HTMLButtonElement,
+  });
+}
+
 /**
  * Locates the `<Dialog aria-labelledby="transfer-ownership-title" ...>`
  * call site by its own props, rather than by type identity — the tree
@@ -388,6 +421,12 @@ function firstElement(
 function findDialog(renderer: ReactTestRenderer) {
   return renderer.root.findByProps({
     "aria-labelledby": "transfer-ownership-title",
+  });
+}
+
+function findRemoveDialog(renderer: ReactTestRenderer) {
+  return renderer.root.findByProps({
+    "aria-labelledby": "remove-member-title",
   });
 }
 
@@ -470,6 +509,28 @@ describe("MembersList", () => {
     }
   });
 
+  test("member removal requires confirmation before issuing the mutation", () => {
+    const renderer = mountMembersList({
+      workspace: makeWorkspace(),
+      isOwner: true,
+      currentUserId: "owner-1",
+    });
+    try {
+      const removeButton = renderer.root.findByProps({
+        "aria-label": "Remove viewer@example.com",
+      });
+      act(() => {
+        removeButton.props.onClick({
+          currentTarget: { focus() {} } as unknown as HTMLButtonElement,
+        });
+      });
+      assert.equal(callsOf("getWorkspaceMemberRemovalTarget").length, 0);
+      assert.equal(findRemoveDialog(renderer).props.open, true);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("removing a member calls removeMember and reloads the page on success", async () => {
     const renderer = mountMembersList({
       workspace: makeWorkspace(),
@@ -480,8 +541,13 @@ describe("MembersList", () => {
       const removeButton = renderer.root.findByProps({
         "aria-label": "Remove viewer@example.com",
       });
+      act(() => clickMemberTrigger(removeButton));
+      const confirmButton = firstElement(
+        findRemoveDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Remove member",
+      );
       await act(async () => {
-        removeButton.props.onClick();
+        (confirmButton.props.onClick as () => void)();
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
@@ -511,10 +577,17 @@ describe("MembersList", () => {
       const removeButton = renderer.root.findByProps({
         "aria-label": "Remove viewer@example.com",
       });
+      act(() => clickMemberTrigger(removeButton));
+      const confirmButton = firstElement(
+        findRemoveDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Remove member",
+      );
       await act(async () => {
-        removeButton.props.onClick();
+        (confirmButton.props.onClick as () => void)();
+        (confirmButton.props.onClick as () => void)();
         await waitForAsyncDrain();
       });
+      assert.equal(callsOf("getWorkspaceMemberRemovalTarget").length, 1);
       const pendingRemove = renderer.root.findByProps({
         "aria-label": "Remove viewer@example.com",
       });
@@ -523,6 +596,14 @@ describe("MembersList", () => {
         "aria-label": "Make viewer@example.com the owner",
       });
       assert.equal(pendingMakeOwner.props.disabled, true);
+      assert.equal(findRemoveDialog(renderer).props["aria-busy"], true);
+      const cancelButton = firstElement(
+        findRemoveDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Cancel",
+      );
+      assert.equal(cancelButton.props.disabled, true);
+      act(() => findRemoveDialog(renderer).props.onClose());
+      assert.equal(findRemoveDialog(renderer).props.open, true);
       await act(async () => {
         resolveRemoval();
         await waitForAsyncDrain();
@@ -533,7 +614,7 @@ describe("MembersList", () => {
     }
   });
 
-  test("a failed removal shows an inline error and does not reload", async () => {
+  test("a failed removal stays in the dialog with generic redacted recovery", async () => {
     state().removeWorkspaceMemberAndDetachDocuments = async () => {
       throw new Error("You cannot remove this member.");
     };
@@ -546,20 +627,32 @@ describe("MembersList", () => {
       const removeButton = renderer.root.findByProps({
         "aria-label": "Remove viewer@example.com",
       });
+      act(() => clickMemberTrigger(removeButton));
+      const confirmButton = firstElement(
+        findRemoveDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Remove member",
+      );
       await act(async () => {
-        removeButton.props.onClick();
+        (confirmButton.props.onClick as () => void)();
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /You cannot remove this member\./);
+      const dialogText = textContent(
+        findRemoveDialog(renderer).props.children as ReactNode,
+      );
+      assert.match(
+        dialogText,
+        /Could not remove the member\. Please try again\./,
+      );
+      assert.doesNotMatch(dialogText, /You cannot remove this member\./);
+      assert.equal(findRemoveDialog(renderer).props.open, true);
       assert.equal(callsOf("reload").length, 0);
     } finally {
       act(() => renderer.unmount());
     }
   });
 
-  test("a non-Error rejection falls back to a generic 'Could not remove.' message", async () => {
+  test("a non-Error removal rejection uses the same generic recovery", async () => {
     state().removeWorkspaceMemberAndDetachDocuments = async () => {
       throw "not an Error instance";
     };
@@ -572,13 +665,20 @@ describe("MembersList", () => {
       const removeButton = renderer.root.findByProps({
         "aria-label": "Remove viewer@example.com",
       });
+      act(() => clickMemberTrigger(removeButton));
+      const confirmButton = firstElement(
+        findRemoveDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Remove member",
+      );
       await act(async () => {
-        removeButton.props.onClick();
+        (confirmButton.props.onClick as () => void)();
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /Could not remove\./);
+      assert.match(
+        textContent(findRemoveDialog(renderer).props.children as ReactNode),
+        /Could not remove the member\. Please try again\./,
+      );
     } finally {
       act(() => renderer.unmount());
     }
@@ -597,7 +697,7 @@ describe("MembersList", () => {
       const dialogBefore = findDialog(renderer);
       assert.equal(dialogBefore.props.open, false);
       act(() => {
-        makeOwnerButton.props.onClick();
+        clickMemberTrigger(makeOwnerButton);
       });
       const dialogAfter = findDialog(renderer);
       assert.equal(dialogAfter.props.open, true);
@@ -617,7 +717,7 @@ describe("MembersList", () => {
         "aria-label": "Make viewer@example.com the owner",
       });
       act(() => {
-        makeOwnerButton.props.onClick();
+        clickMemberTrigger(makeOwnerButton);
       });
       const openDialog = findDialog(renderer);
       const cancelButton = firstElement(
@@ -646,7 +746,7 @@ describe("MembersList", () => {
         "aria-label": "Make viewer@example.com the owner",
       });
       act(() => {
-        makeOwnerButton.props.onClick();
+        clickMemberTrigger(makeOwnerButton);
       });
       const openDialog = findDialog(renderer);
       const confirmButton = firstElement(
@@ -678,7 +778,55 @@ describe("MembersList", () => {
     }
   });
 
-  test("a failed transfer closes the dialog and shows an inline error, without reloading", async () => {
+  test("repeated transfer activation issues one mutation and locks dismissal while pending", async () => {
+    let resolveTransfer!: () => void;
+    state().transferWorkspaceOwnership = (input) => {
+      state().calls.push(["transferWorkspaceOwnership", input]);
+      return new Promise((resolve) => {
+        resolveTransfer = resolve;
+      });
+    };
+    const renderer = mountMembersList({
+      workspace: makeWorkspace(),
+      isOwner: true,
+      currentUserId: "owner-1",
+    });
+    try {
+      const makeOwnerButton = renderer.root.findByProps({
+        "aria-label": "Make viewer@example.com the owner",
+      });
+      act(() => clickMemberTrigger(makeOwnerButton));
+      const confirmButton = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Transfer ownership",
+      );
+      await act(async () => {
+        (confirmButton.props.onClick as () => void)();
+        (confirmButton.props.onClick as () => void)();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("transferWorkspaceOwnership").length, 1);
+      assert.equal(findDialog(renderer).props["aria-busy"], true);
+      const cancelButton = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Cancel",
+      );
+      assert.equal(cancelButton.props.disabled, true);
+      act(() => findDialog(renderer).props.onClose());
+      assert.equal(findDialog(renderer).props.open, true);
+
+      await act(async () => {
+        resolveTransfer();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(callsOf("reload").length, 1);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a failed transfer stays in the dialog with generic redacted recovery", async () => {
     state().transferWorkspaceOwnership = async () => {
       throw new Error("Target is no longer a member.");
     };
@@ -692,7 +840,7 @@ describe("MembersList", () => {
         "aria-label": "Make viewer@example.com the owner",
       });
       act(() => {
-        makeOwnerButton.props.onClick();
+        clickMemberTrigger(makeOwnerButton);
       });
       const openDialog = findDialog(renderer);
       const confirmButton = firstElement(
@@ -704,10 +852,14 @@ describe("MembersList", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
-      const closedDialog = findDialog(renderer);
-      assert.equal(closedDialog.props.open, false);
-      const text = JSON.stringify(renderer.toJSON());
-      assert.match(text, /Target is no longer a member\./);
+      const failedDialog = findDialog(renderer);
+      assert.equal(failedDialog.props.open, true);
+      const dialogText = textContent(failedDialog.props.children as ReactNode);
+      assert.match(
+        dialogText,
+        /Could not transfer ownership\. Please try again\./,
+      );
+      assert.doesNotMatch(dialogText, /Target is no longer a member\./);
       assert.equal(callsOf("reload").length, 0);
     } finally {
       act(() => renderer.unmount());
