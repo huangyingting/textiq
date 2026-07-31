@@ -57,6 +57,9 @@ function installBrowserStubs(
     svg?: string;
     context?: CanvasRenderingContext2D | null;
     imageError?: boolean;
+    drawImageError?: boolean;
+    toBlobError?: boolean;
+    downloadClickError?: boolean;
   } = {},
 ) {
   const calls = {
@@ -79,7 +82,12 @@ function installBrowserStubs(
             y: number,
             w: number,
             h: number,
-          ) => calls.drawn.push([x, y, w, h]),
+          ) => {
+            if (options.drawImageError) {
+              throw new DOMException("Canvas is tainted", "SecurityError");
+            }
+            calls.drawn.push([x, y, w, h]);
+          },
         })
       : options.context;
 
@@ -128,6 +136,9 @@ function installBrowserStubs(
           height: 0,
           getContext: () => context,
           toBlob(callback: BlobCallback, type?: string) {
+            if (options.toBlobError) {
+              throw new DOMException("Canvas is tainted", "SecurityError");
+            }
             calls.blobType = type ?? "";
             callback(new Blob(["png"], { type }));
           },
@@ -136,7 +147,12 @@ function installBrowserStubs(
       return {
         href: "",
         download: "",
-        click: () => calls.clicked++,
+        click: () => {
+          calls.clicked++;
+          if (options.downloadClickError) {
+            throw new Error("download blocked");
+          }
+        },
       };
     },
     body: {
@@ -212,12 +228,35 @@ test("exportPNG returns null for zero-sized or unrasterizable inputs", async () 
   assert.equal(await exportPNG(svgElement()), null);
 });
 
+test("exportPNG contains asynchronous canvas exceptions and revokes its object URL", async () => {
+  const drawFailure = installBrowserStubs({ drawImageError: true });
+  assert.equal(await exportPNG(svgElement()), null);
+  assert.deepEqual(drawFailure.revoked, ["blob:visual-export"]);
+
+  const blobFailure = installBrowserStubs({ toBlobError: true });
+  assert.equal(await exportPNG(svgElement()), null);
+  assert.deepEqual(blobFailure.revoked, ["blob:visual-export"]);
+});
+
 test("downloadBlob appends, clicks, removes, and revokes the temporary anchor", () => {
   const calls = installBrowserStubs();
   downloadBlob(new Blob(["svg"], { type: "image/svg+xml" }), "diagram.svg");
 
   assert.equal(calls.appended, 1);
   assert.equal(calls.clicked, 1);
+  assert.equal(calls.removed, 1);
+  assert.deepEqual(calls.revoked, ["blob:visual-export"]);
+});
+
+test("downloadBlob removes its anchor and revokes its URL when the browser blocks the click", () => {
+  const calls = installBrowserStubs({ downloadClickError: true });
+
+  assert.throws(
+    () =>
+      downloadBlob(new Blob(["svg"], { type: "image/svg+xml" }), "diagram.svg"),
+    /download blocked/,
+  );
+  assert.equal(calls.appended, 1);
   assert.equal(calls.removed, 1);
   assert.deepEqual(calls.revoked, ["blob:visual-export"]);
 });

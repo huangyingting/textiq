@@ -113,4 +113,64 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
       page.getByRole("button", { name: "Export document" }),
     ).toHaveCount(0);
   });
+
+  test("public share visuals expose an accessible lightbox lifecycle", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    const response = await page.goto(`/share/${profileShareSegment()}`);
+    expect(response?.status()).toBe(200);
+
+    const visual = page.getByRole("button", {
+      name: "E2E profile flow — enlarge visual",
+    });
+    await expect(visual).toBeVisible({ timeout: 20_000 });
+    await expect(visual).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(visual).toHaveAttribute("aria-expanded", "false");
+
+    await visual.focus();
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", {
+      name: "E2E profile flow — enlarged",
+    });
+    const closeButton = dialog.getByRole("button", {
+      name: "Close enlarged visual",
+    });
+    await expect(dialog).toBeVisible();
+    await expect(closeButton).toBeFocused();
+    await expect(visual).toHaveAttribute("aria-expanded", "true");
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(visual).toBeFocused();
+    await expect(visual).toHaveAttribute("aria-expanded", "false");
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await visual.click();
+    await expect(dialog).toBeVisible();
+    await expect(closeButton).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Math.max(
+            document.body.scrollWidth - document.body.clientWidth,
+            document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+          ),
+        ),
+      )
+      .toBe(0);
+    await closeButton.click();
+    await expect(dialog).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  });
 });

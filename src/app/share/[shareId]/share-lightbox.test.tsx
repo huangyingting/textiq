@@ -212,12 +212,19 @@ function keyDownOn(el: Element, key: string, shiftKey = false) {
 }
 
 describe("ShareLightbox", () => {
-  it("enhances every rendered svg[role=img] into a zoomable, keyboard-focusable trigger", () => {
+  it("enhances every rendered visual into a semantic dialog trigger", () => {
     mount(buildVisuals());
 
     const chartA = svgByTestId("chart-a");
     assert.equal(chartA.dataset.zoomable, "true");
     assert.equal(chartA.getAttribute("tabindex"), "0");
+    assert.equal(chartA.getAttribute("role"), "button");
+    assert.equal(chartA.getAttribute("aria-haspopup"), "dialog");
+    assert.equal(chartA.getAttribute("aria-expanded"), "false");
+    assert.equal(
+      chartA.getAttribute("aria-label"),
+      "Revenue chart — enlarge visual",
+    );
     assert.equal((chartA as unknown as HTMLElement).style.cursor, "zoom-in");
   });
 
@@ -229,6 +236,7 @@ describe("ShareLightbox", () => {
 
     const dialog = dialogElement();
     assert.ok(dialog);
+    assert.equal(chartA.getAttribute("aria-expanded"), "true");
     assert.equal(dialog?.getAttribute("aria-modal"), "true");
     assert.equal(
       dialog?.getAttribute("aria-label"),
@@ -258,8 +266,11 @@ describe("ShareLightbox", () => {
     const clonedSvg = dialog?.querySelector('div[aria-hidden="true"] svg');
     assert.ok(clonedSvg, "expected a cloned svg inside the image host");
     assert.notEqual(clonedSvg, chartB);
+    assert.equal(clonedSvg?.getAttribute("role"), "img");
     assert.equal(clonedSvg?.hasAttribute("data-zoomable"), false);
     assert.equal(clonedSvg?.hasAttribute("tabindex"), false);
+    assert.equal(clonedSvg?.hasAttribute("aria-haspopup"), false);
+    assert.equal(clonedSvg?.hasAttribute("aria-expanded"), false);
   });
 
   it("opens via Enter and Space keyboard activation, not just click", () => {
@@ -299,6 +310,7 @@ describe("ShareLightbox", () => {
     clickOn(closeButton());
     assert.equal(dialogElement(), null);
     assert.equal(doc().activeElement, chartA);
+    assert.equal(chartA.getAttribute("aria-expanded"), "false");
   });
 
   it("closes on Escape", () => {

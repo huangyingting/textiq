@@ -8,6 +8,15 @@ import {
 } from "../helpers/profile";
 import { waitForDocumentEditorReady } from "../helpers/readiness";
 
+interface ShareBrowserCapture {
+  clipboardWrites: string[];
+  popupCalls: Array<{
+    url: string;
+    target: string;
+    features: string;
+  }>;
+}
+
 function shareDialog(page: Page): Locator {
   return page.getByRole("dialog", { name: "Share this document" });
 }
@@ -31,6 +40,64 @@ async function expectPublicDocument(
   await expect(page.getByText("Read-only", { exact: true })).toBeVisible();
 }
 
+async function installShareBrowserCapture(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const browserWindow = window as typeof window & {
+      __e2eShareCapture?: ShareBrowserCapture;
+      __e2eResolveClipboardWrite?: (() => void) | null;
+    };
+    browserWindow.__e2eShareCapture = {
+      clipboardWrites: [],
+      popupCalls: [],
+    };
+    browserWindow.__e2eResolveClipboardWrite = null;
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText(value: string) {
+          browserWindow.__e2eShareCapture?.clipboardWrites.push(value);
+          return new Promise<void>((resolve) => {
+            browserWindow.__e2eResolveClipboardWrite = resolve;
+          });
+        },
+      },
+    });
+
+    window.open = ((url?: string | URL, target?: string, features?: string) => {
+      browserWindow.__e2eShareCapture?.popupCalls.push({
+        url: String(url ?? ""),
+        target: target ?? "",
+        features: features ?? "",
+      });
+      return null;
+    }) as typeof window.open;
+  });
+}
+
+async function resolveClipboardWrite(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const browserWindow = window as typeof window & {
+      __e2eResolveClipboardWrite?: (() => void) | null;
+    };
+    const resolve = browserWindow.__e2eResolveClipboardWrite;
+    browserWindow.__e2eResolveClipboardWrite = null;
+    resolve?.();
+  });
+}
+
+async function shareBrowserCapture(page: Page): Promise<ShareBrowserCapture> {
+  return page.evaluate(() => {
+    const browserWindow = window as typeof window & {
+      __e2eShareCapture?: ShareBrowserCapture;
+    };
+    if (!browserWindow.__e2eShareCapture) {
+      throw new Error("Share browser capture is not installed.");
+    }
+    return browserWindow.__e2eShareCapture;
+  });
+}
+
 test.describe("UI matrix: document sharing lifecycle", () => {
   test.skip(
     !e2eProfileEnabled(),
@@ -42,6 +109,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
     browser,
     page,
   }) => {
+    const mutationExpect = expect.configure({ timeout: 20_000 });
     const fixture = E2E_PROFILE_FIXTURE.documentShareLifecycle;
     const documentPath = `/app/documents/${fixture.id}`;
     const expiryValue = `${new Date().getUTCFullYear() + 2}-12-31T23:59`;
@@ -58,7 +126,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
     ).toBeVisible();
 
     await dialog.getByRole("switch", { name: "Private" }).click();
-    await expect(
+    await mutationExpect(
       dialog.getByText("Public link enabled", { exact: true }),
     ).toBeVisible();
 
@@ -66,6 +134,82 @@ test.describe("UI matrix: document sharing lifecycle", () => {
     await expect(shareLink).toBeVisible();
     const initialShareUrl = await shareLink.inputValue();
     expect(initialShareUrl).toMatch(/\/share\/.+/);
+
+    await installShareBrowserCapture(page);
+    const shareCopyButton = shareLink.locator("..").getByRole("button");
+    await shareCopyButton.click();
+    await expect(shareCopyButton).toHaveText("Copying…");
+    await expect(
+      dialog.getByRole("status").filter({
+        hasText: "Copying public share link.",
+      }),
+    ).toBeVisible();
+    expect((await shareBrowserCapture(page)).clipboardWrites).toEqual([
+      initialShareUrl,
+    ]);
+    await resolveClipboardWrite(page);
+    await expect(shareCopyButton).toHaveText("Copied!");
+    await expect(
+      dialog.getByRole("status").filter({
+        hasText: "Public share link copied.",
+      }),
+    ).toBeVisible();
+
+    const embedCode = dialog.getByLabel("Embed code");
+    const embedSnippet = await embedCode.inputValue();
+    await embedCode
+      .locator("..")
+      .getByRole("button", { name: "Copy", exact: true })
+      .click();
+    await resolveClipboardWrite(page);
+    await expect(
+      dialog.getByRole("status").filter({
+        hasText: "Embed code copied to clipboard.",
+      }),
+    ).toBeVisible();
+
+    const presentationLink = dialog.getByLabel("Presentation link");
+    const presentationUrl = await presentationLink.inputValue();
+    await presentationLink
+      .locator("..")
+      .getByRole("button", { name: "Copy", exact: true })
+      .click();
+    await resolveClipboardWrite(page);
+    await expect(
+      dialog.getByRole("status").filter({
+        hasText: "Presentation link copied.",
+      }),
+    ).toBeVisible();
+
+    const socialButtons = [
+      "Share on X / Twitter",
+      "Share on LinkedIn",
+      "Share on Facebook",
+    ];
+    for (const name of socialButtons) {
+      await dialog.getByRole("button", { name }).click();
+    }
+
+    const capture = await shareBrowserCapture(page);
+    expect(capture.clipboardWrites).toEqual([
+      initialShareUrl,
+      embedSnippet,
+      presentationUrl,
+    ]);
+    expect(capture.popupCalls).toHaveLength(3);
+    expect(capture.popupCalls.map((call) => call.target)).toEqual([
+      "share-twitter",
+      "share-linkedin",
+      "share-facebook",
+    ]);
+    expect(
+      capture.popupCalls.map((call) => new URL(call.url).hostname),
+    ).toEqual(["twitter.com", "www.linkedin.com", "www.facebook.com"]);
+    for (const popup of capture.popupCalls) {
+      expect(popup.features).toContain("noopener");
+      expect(popup.features).toContain("noreferrer");
+      expect(popup.url).toContain(encodeURIComponent(initialShareUrl));
+    }
 
     const panelMetrics = await dialog.evaluate((element) => {
       const style = getComputedStyle(element);
@@ -96,28 +240,30 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await dialog
         .getByLabel("Social preview metadata")
         .selectOption("title-excerpt");
-      await expect(dialog.getByLabel("Social preview metadata")).toHaveValue(
-        "title-excerpt",
-      );
+      await mutationExpect(
+        dialog.getByLabel("Social preview metadata"),
+      ).toHaveValue("title-excerpt");
       await dialog
         .getByRole("switch", { name: "Allow search indexing" })
         .click();
-      await expect(
+      await mutationExpect(
         dialog.getByRole("switch", { name: "Allow search indexing" }),
       ).toHaveAttribute("aria-checked", "true");
 
       await dialog.getByRole("switch", { name: "Allow embedding" }).click();
       await dialog.getByRole("switch", { name: "Allow presentation" }).click();
-      await expect(
+      await mutationExpect(
         dialog.getByRole("switch", { name: "Allow embedding" }),
       ).toHaveAttribute("aria-checked", "false");
-      await expect(
+      await mutationExpect(
         dialog.getByRole("switch", { name: "Allow presentation" }),
       ).toHaveAttribute("aria-checked", "false");
 
       const expiry = dialog.getByLabel("Link expiry date and time");
       await expiry.fill(expiryValue);
-      await expect(dialog.getByRole("button", { name: "Clear" })).toBeVisible();
+      await mutationExpect(
+        dialog.getByRole("button", { name: "Clear" }),
+      ).toBeVisible();
 
       const passcode = dialog.getByLabel("Share passcode");
       const setPasscode = dialog.getByRole("button", { name: "Set" });
@@ -130,7 +276,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await expect(passcode).toHaveValue("123");
       await passcode.fill(fixture.passcode);
       await setPasscode.click();
-      await expect(
+      await mutationExpect(
         dialog.getByText(
           "A passcode is required before visitors can view this link.",
         ),
@@ -191,7 +337,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       expect(presentResponse?.status()).toBe(404);
 
       await dialog.getByRole("button", { name: "Clear" }).click();
-      await expect(
+      await mutationExpect(
         dialog.getByText(
           "No expiry — the link works until disabled or regenerated.",
         ),
@@ -211,7 +357,9 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toBeVisible();
 
       await dialog.getByRole("switch", { name: "Public link enabled" }).click();
-      await expect(dialog.getByText("Private", { exact: true })).toBeVisible();
+      await mutationExpect(
+        dialog.getByText("Private", { exact: true }),
+      ).toBeVisible();
       const disabledLinkResponse = await publicPage.goto(rotatedShareUrl);
       expect(disabledLinkResponse?.status()).toBe(404);
 

@@ -14,7 +14,7 @@ app.
 | `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                 |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                   |
 | `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                 |
-| `e2e/presentation/present-export.spec.ts`               | Authenticated/public present render; real document PDF, infographic PNG/PDF, and paid document-deck PPTX downloads              |
+| `e2e/presentation/present-export.spec.ts`               | Present rendering; real PDF/PNG/PPTX downloads; browser raster-failure containment and successful retry                         |
 | `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                             |
 | `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                               |
 | `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                     |
@@ -24,8 +24,9 @@ app.
 | `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup/onboarding/deletion, profile persistence, scoped export, password rotation/re-login, recovery failures, and safeguards   |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
 | `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Owner/viewer comment lifecycle, anchored-paragraph edits, permissions, resolve/reopen, guarded deletion, and reload persistence |
-| `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, passcode unlock, public mode gates, link rotation/revocation, and viewport-reachable controls         |
+| `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling |
 | `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag create/remove/reuse persistence and reversible version-history restore across reloads                                       |
+| `e2e/ui-matrix/public-render-ui.spec.ts`                | Public share/embed/present rendering, asset policy, safe 404s, read-only UI, and accessible visual-lightbox behavior            |
 | `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite, membership, ownership-transfer, leave, and delete lifecycle                         |
 | `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically   |
 

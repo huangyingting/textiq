@@ -247,16 +247,16 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Document flows
 
-| #   | Flow                              | Owner           | Notes                                                                                                                                 |
-| --- | --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                                  |
-| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                     |
-| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                             |
-| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                     |
-| D-5 | Document import (markdown, .docx) | **A** + **E2E** | Markdown and generated-fixture DOCX round-trips gate required deterministic CI in `e2e/import/import-roundtrip.spec.ts` (#519/#1734)  |
-| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                      |
-| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                       |
-| D-8 | Document PDF / infographic export | **A** + **E2E** | Real document PDF plus selected-width infographic PNG/PDF downloads are format-validated in `e2e/presentation/present-export.spec.ts` |
+| #   | Flow                              | Owner           | Notes                                                                                                                                                      |
+| --- | --------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                                                       |
+| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                                          |
+| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                                                  |
+| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                                          |
+| D-5 | Document import (markdown, .docx) | **A** + **E2E** | Markdown and generated-fixture DOCX round-trips gate required deterministic CI in `e2e/import/import-roundtrip.spec.ts` (#519/#1734)                       |
+| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                                           |
+| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                                            |
+| D-8 | Document PDF / infographic export | **A** + **E2E** | Real PDF/PNG downloads are format-validated; forced browser raster failure is contained and succeeds on retry in `e2e/presentation/present-export.spec.ts` |
 
 ### Slide / deck flows
 

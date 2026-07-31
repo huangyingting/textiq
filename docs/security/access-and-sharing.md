@@ -13,20 +13,22 @@ collaboration upgrade authorization.
 
 ## Source Files
 
-| Area                   | Source                                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| Access taxonomy        | [`src/lib/access-policy/taxonomy.ts`](../../src/lib/access-policy/taxonomy.ts)                   |
-| Access adapters        | [`src/lib/access-policy/adapters.ts`](../../src/lib/access-policy/adapters.ts)                   |
-| Document capabilities  | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)             |
-| Workspace role policy  | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                 |
-| Share access policy    | [`src/lib/share-access.ts`](../../src/lib/share-access.ts)                                       |
-| Share route            | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                 |
-| Embed route            | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                 |
-| Present route          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)             |
-| Present embed route    | [`src/app/present/[shareId]/embed/page.tsx`](../../src/app/present/%5BshareId%5D/embed/page.tsx) |
-| Passcode unlock route  | [`src/app/api/share-passcode/unlock/route.ts`](../../src/app/api/share-passcode/unlock/route.ts) |
-| Collab authorize route | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)           |
-| Share actions          | [`src/app/app/documents/[id]/actions.ts`](../../src/app/app/documents/%5Bid%5D/actions.ts)       |
+| Area                   | Source                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| Access taxonomy        | [`src/lib/access-policy/taxonomy.ts`](../../src/lib/access-policy/taxonomy.ts)                         |
+| Access adapters        | [`src/lib/access-policy/adapters.ts`](../../src/lib/access-policy/adapters.ts)                         |
+| Document capabilities  | [`src/lib/auth/document-permissions.ts`](../../src/lib/auth/document-permissions.ts)                   |
+| Workspace role policy  | [`src/lib/workspace/roles.ts`](../../src/lib/workspace/roles.ts)                                       |
+| Share access policy    | [`src/lib/share-access.ts`](../../src/lib/share-access.ts)                                             |
+| Share route            | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                       |
+| Embed route            | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                       |
+| Present route          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)                   |
+| Present embed route    | [`src/app/present/[shareId]/embed/page.tsx`](../../src/app/present/%5BshareId%5D/embed/page.tsx)       |
+| Passcode unlock route  | [`src/app/api/share-passcode/unlock/route.ts`](../../src/app/api/share-passcode/unlock/route.ts)       |
+| Collab authorize route | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)                 |
+| Share actions          | [`src/app/app/documents/[id]/actions.ts`](../../src/app/app/documents/%5Bid%5D/actions.ts)             |
+| Share dialog           | [`src/app/app/documents/[id]/share-button.tsx`](../../src/app/app/documents/%5Bid%5D/share-button.tsx) |
+| Social intents         | [`src/lib/share/social-intents.ts`](../../src/lib/share/social-intents.ts)                             |
 
 ## Authenticated Document Roles
 
@@ -160,11 +162,17 @@ replacement require a non-empty value; clearing protection remains an explicit
 separate action. Typed action failures and transport failures remain in the
 dialog as accessible alerts.
 
+Clipboard actions report pending work before announcing success, and failures
+remain inline instead of claiming that content was copied. Social-platform
+actions open only the public share URL in sized, opener-isolated popups using
+`noopener,noreferrer`; they do not transmit document content directly.
+
 The deterministic owner/public browser lifecycle starts from an isolated
 private document, enables its link, persists metadata, discovery, expiry, and
-mode policy, verifies passcode failure and success, proves disabled public modes
-return privacy-preserving 404s, rotates the URL, revokes the old URL, disables
-sharing, and verifies the final state after reload.
+mode policy, verifies public/embed/presentation clipboard payloads and isolated
+social intents, verifies passcode failure and success, proves disabled public
+modes return privacy-preserving 404s, rotates the URL, revokes the old URL,
+disables sharing, and verifies the final state after reload.
 
 ## Collaboration Authorization
 

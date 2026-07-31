@@ -1,7 +1,7 @@
 "use client";
 
 import { Share2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { Popover } from "@/components/ui/popover";
@@ -124,7 +124,10 @@ export function ShareButton({
     discoverable: initialDiscoverable,
     passcodeEnabled: initialPasscodeEnabled,
   });
-  const [copying, setCopying] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copying" | "copied">(
+    "idle",
+  );
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [presentCopied, setPresentCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -132,6 +135,14 @@ export function ShareButton({
   const mutationInFlightRef = useRef(false);
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   // The embed URL points at the chrome-free /embed/[shareId] route. Derive it
   // from shareUrl so it shares the same origin as the displayed share link.
@@ -268,13 +279,21 @@ export function ShareButton({
     if (!shareState.shareUrl) {
       return;
     }
-    setCopying(true);
+    if (copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+    setCopyState("copying");
     setError(null);
     try {
       await navigator.clipboard.writeText(shareState.shareUrl);
-      setTimeout(() => setCopying(false), 2000);
+      setCopyState("copied");
+      copyTimerRef.current = setTimeout(() => {
+        setCopyState("idle");
+        copyTimerRef.current = null;
+      }, 2000);
     } catch {
-      setCopying(false);
+      setCopyState("idle");
       setError("Couldn't copy the share link. Please copy it manually.");
     }
   };
@@ -365,12 +384,23 @@ export function ShareButton({
             <button
               type="button"
               onClick={copyLink}
-              disabled={copying}
+              disabled={copyState !== "idle"}
               className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {copying ? "Copied!" : "Copy"}
+              {copyState === "copying"
+                ? "Copying…"
+                : copyState === "copied"
+                  ? "Copied!"
+                  : "Copy"}
             </button>
           </div>
+          <p role="status" aria-live="polite" className="sr-only">
+            {copyState === "copying"
+              ? "Copying public share link."
+              : copyState === "copied"
+                ? "Public share link copied."
+                : ""}
+          </p>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs text-ds-text-muted">
               Anyone with this link can view your document (read-only).

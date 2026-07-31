@@ -25,6 +25,7 @@ sharing one public-asset policy module with the slide-assets route.
 | Metadata contract            | [`src/lib/public-render/metadata-contract.ts`](../../src/lib/public-render/metadata-contract.ts)                                     |
 | Attribution                  | [`src/lib/public-render/attribution.ts`](../../src/lib/public-render/attribution.ts)                                                 |
 | Share page                   | [`src/app/share/[shareId]/page.tsx`](../../src/app/share/%5BshareId%5D/page.tsx)                                                     |
+| Share visual lightbox        | [`src/app/share/[shareId]/share-lightbox.tsx`](../../src/app/share/%5BshareId%5D/share-lightbox.tsx)                                 |
 | Embed page                   | [`src/app/embed/[shareId]/page.tsx`](../../src/app/embed/%5BshareId%5D/page.tsx)                                                     |
 | Public present page          | [`src/app/present/[shareId]/page.tsx`](../../src/app/present/%5BshareId%5D/page.tsx)                                                 |
 | Shared public-asset policy   | [`src/lib/share/public-asset-policy.ts`](../../src/lib/share/public-asset-policy.ts)                                                 |
@@ -80,6 +81,13 @@ references missing visual ids silently.
 Public viewers then render through the same presentation primitives documented
 in [../presentation/rendering-and-export.md](../presentation/rendering-and-export.md).
 
+The read-only share page enhances each rendered visual into a semantic dialog
+trigger. Pointer click, Enter, and Space open an enlarged clone; Escape,
+backdrop click, and the close button dismiss it. While open, the trigger exposes
+its expanded state, focus stays in the modal and returns to the originating
+visual on close, and body scrolling is locked. The deterministic browser profile
+checks this lifecycle on desktop and a 390-pixel mobile viewport.
+
 ## Metadata And Attribution
 
 Public metadata is privacy-preserving by default. Unless the owner opts into a
@@ -106,6 +114,8 @@ decision.
 5. Public metadata defaults to generic, non-discoverable output, including
    denied rows and shared rows without usable slugs.
 6. Public presentation output reconciles deck refs with available visuals.
+7. Share-page visuals expose keyboard-operable dialog semantics and restore
+   focus and scrolling after dismissal.
 
 ## Primary Tests
 
@@ -113,4 +123,5 @@ decision.
 - [`src/lib/public-render/resolver-core.test.ts`](../../src/lib/public-render/resolver-core.test.ts)
 - [`src/lib/public-render/presentation.test.ts`](../../src/lib/public-render/presentation.test.ts)
 - [`src/lib/public-render/metadata.test.ts`](../../src/lib/public-render/metadata.test.ts)
+- [`src/app/share/[shareId]/share-lightbox.test.tsx`](../../src/app/share/%5BshareId%5D/share-lightbox.test.tsx)
 - [`e2e/ui-matrix/public-render-ui.spec.ts`](../../e2e/ui-matrix/public-render-ui.spec.ts)

@@ -702,7 +702,8 @@ describe("SocialShareMenu — platform intents", () => {
       {
         url: buildTwitterIntent(SHARE_URL, TITLE),
         label: "share-twitter",
-        features: "width=600,height=480,left=300,top=160,toolbar=0,menubar=0",
+        features:
+          "width=600,height=480,left=300,top=160,toolbar=0,menubar=0,noopener,noreferrer",
       },
     ]);
   });
@@ -723,7 +724,8 @@ describe("SocialShareMenu — platform intents", () => {
       {
         url: buildLinkedInIntent(SHARE_URL),
         label: "share-linkedin",
-        features: "width=600,height=480,left=300,top=160,toolbar=0,menubar=0",
+        features:
+          "width=600,height=480,left=300,top=160,toolbar=0,menubar=0,noopener,noreferrer",
       },
     ]);
   });
@@ -744,7 +746,8 @@ describe("SocialShareMenu — platform intents", () => {
       {
         url: buildFacebookIntent(SHARE_URL),
         label: "share-facebook",
-        features: "width=600,height=480,left=300,top=160,toolbar=0,menubar=0",
+        features:
+          "width=600,height=480,left=300,top=160,toolbar=0,menubar=0,noopener,noreferrer",
       },
     ]);
   });

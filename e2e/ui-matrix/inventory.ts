@@ -158,7 +158,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/present-export.spec.ts",
     owners: ["presentation", "public-render"],
     coverage:
-      "Authenticated/public present render, mobile safe areas, embed mode, real document PDF export, selected-width infographic PNG/PDF files, and paid workspace-editor document-deck PPTX export.",
+      "Authenticated/public present render, mobile safe areas, embed mode, real document PDF export, selected-width infographic PNG/PDF files, paid workspace-editor document-deck PPTX export, and contained browser raster failure with successful retry.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: [
@@ -392,7 +392,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
     owners: ["documents", "public-render", "security"],
     coverage:
-      "Deterministic owner share enablement, viewport-reachable policy controls, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
+      "Deterministic owner share enablement, viewport-reachable policy controls, clipboard payloads, opener-isolated social intents, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "anonymous public"],
@@ -450,11 +450,11 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/public-render-ui.spec.ts",
     owners: ["public-render", "security"],
     coverage:
-      "Deterministic public present/embed/share rendering, read-only affordances, safe fallbacks, and positive/negative share-bound asset access.",
+      "Deterministic public present/embed/share rendering, read-only affordances, accessible visual-lightbox focus/scroll/mobile behavior, safe fallbacks, and positive/negative share-bound asset access.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["anonymous public", "request API"],
-    devices: ["Desktop Chrome"],
+    devices: ["Desktop Chrome", "390x844 mobile"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/public-render/README.md"],
   },

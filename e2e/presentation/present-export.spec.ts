@@ -696,6 +696,71 @@ test.describe("present + export", () => {
     await assertNoPageErrors();
   });
 
+  test("contains a browser rasterization failure and succeeds on retry", async ({
+    page,
+  }) => {
+    const assertNoPageErrors = await expectNoPageErrors(page);
+    await login(page, profileOwnerCredentials());
+    await page.goto(profileDocPath());
+
+    await page.evaluate(() => {
+      const browserWindow = window as typeof window & {
+        __e2eOriginalCanvasToBlob?: typeof HTMLCanvasElement.prototype.toBlob;
+      };
+      browserWindow.__e2eOriginalCanvasToBlob =
+        HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function () {
+        throw new DOMException("Deterministic raster failure", "SecurityError");
+      };
+    });
+
+    let exportMenu = await openDocumentExportMenu(page);
+    await exportMenu
+      .getByRole("menuitem", { name: /^Infographic PNG\b/ })
+      .click();
+    await expect(
+      page.getByRole("alert").filter({
+        hasText: "Infographic export failed",
+      }),
+    ).toBeVisible({ timeout: 20_000 });
+
+    const exportButton = page.getByRole("button", {
+      name: "Export document",
+    });
+    await expect(exportButton).toBeEnabled();
+
+    await page.evaluate(() => {
+      const browserWindow = window as typeof window & {
+        __e2eOriginalCanvasToBlob?: typeof HTMLCanvasElement.prototype.toBlob;
+      };
+      const original = browserWindow.__e2eOriginalCanvasToBlob;
+      if (!original) {
+        throw new Error("Original canvas.toBlob was not captured.");
+      }
+      HTMLCanvasElement.prototype.toBlob = original;
+      delete browserWindow.__e2eOriginalCanvasToBlob;
+    });
+
+    exportMenu = await openDocumentExportMenu(page);
+    const downloadPromise = page.waitForEvent("download", { timeout: 45_000 });
+    await exportMenu
+      .getByRole("menuitem", { name: /^Infographic PNG\b/ })
+      .click();
+    const download = await downloadPromise;
+    const filePath = await download.path();
+    expect(filePath, "retry download produced no file path").toBeTruthy();
+    const bytes = await fs.readFile(filePath!);
+    expect(bytes.subarray(0, 8)).toEqual(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    await expect(
+      page.getByRole("alert").filter({
+        hasText: "Infographic export failed",
+      }),
+    ).toHaveCount(0);
+    await assertNoPageErrors();
+  });
+
   test("a paid workspace editor exports the current document deck as PPTX", async ({
     page,
   }) => {

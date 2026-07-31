@@ -392,6 +392,64 @@ describe("ShareButton", () => {
     });
   });
 
+  test("copying the link reports pending work before announcing success", async () => {
+    await withShareDom(async () => {
+      const calls: string[] = [];
+      let resolveWrite!: () => void;
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+          clipboard: {
+            writeText(text: string) {
+              calls.push(text);
+              return new Promise<void>((resolve) => {
+                resolveWrite = resolve;
+              });
+            },
+          },
+        },
+      });
+      const renderer = mountWithPortalDom(
+        <ShareButton
+          id="doc-1"
+          initialIsShared
+          initialShareId="share123"
+          initialSlug="quarterly-plan"
+        />,
+      );
+      try {
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+
+        const copyButton = renderer.root
+          .findAllByType("button")
+          .find((node) => textOf(node) === "Copy")!;
+        let pendingCopy!: Promise<void>;
+        act(() => {
+          pendingCopy = copyButton.props.onClick() as Promise<void>;
+        });
+
+        assert.deepEqual(calls, [
+          "https://textiq.test/share/quarterly-plan-share123",
+        ]);
+        assert.match(textOf(renderer.root), /Copying…/);
+        assert.match(textOf(renderer.root), /Copying public share link\./);
+        assert.doesNotMatch(textOf(renderer.root), /Copied!/);
+
+        resolveWrite();
+        await act(async () => {
+          await pendingCopy;
+        });
+
+        assert.match(textOf(renderer.root), /Copied!/);
+        assert.match(textOf(renderer.root), /Public share link copied\./);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("regenerating the link shows a pending label, disables the button, and applies the new link on success", async () => {
     await withShareDom(async () => {
       let resolveRegenerate!: (value: ActionResult<ShareSettings>) => void;

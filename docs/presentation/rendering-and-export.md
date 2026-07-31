@@ -130,6 +130,15 @@ coverage validates real files rather than menu reachability alone: PNG
 signature and selected pixel width, PDF signature, and PPTX ZIP signature are
 checked after the downloads complete.
 
+Raster export contains failures from asynchronous browser canvas callbacks as
+well as synchronous setup. A failed `drawImage` or `canvas.toBlob` operation
+resolves to the export failure contract, revokes its temporary object URL,
+returns the toolbar to an enabled state, and surfaces an inline alert. Browser
+coverage forces this failure, proves that no page error escapes, then restores
+the browser primitive and validates a successful retry download. Download-link
+cleanup also removes its temporary anchor and revokes the Blob URL when the
+browser rejects the synthetic click.
+
 Custom and square export sizing is centralized in
 [`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts).
 `CUSTOM_EXPORT_MAX_AXIS_IN` is `13.333`, matching the wide-slide maximum axis.

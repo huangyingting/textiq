@@ -61,6 +61,24 @@ export async function exportPNG(
   const opts = options ?? DEFAULT_EXPORT_OPTIONS;
 
   return new Promise((resolve) => {
+    let objectUrl: string | null = null;
+    let settled = false;
+    const finish = (blob: Blob | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(blob);
+    };
+    const revokeObjectUrl = () => {
+      const url = objectUrl;
+      objectUrl = null;
+      if (!url) return;
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // URL cleanup failures must not strand the export promise.
+      }
+    };
+
     try {
       // Get the SVG's viewBox to determine dimensions
       const viewBox = svgElement.viewBox.baseVal;
@@ -75,7 +93,7 @@ export async function exportPNG(
       );
 
       if (width === 0 || height === 0) {
-        resolve(null);
+        finish(null);
         return;
       }
 
@@ -86,7 +104,7 @@ export async function exportPNG(
 
       const ctx = canvas.getContext("2d");
       if (!ctx) {
-        resolve(null);
+        finish(null);
         return;
       }
 
@@ -103,28 +121,34 @@ export async function exportPNG(
       const svgBlob = new Blob([transformedSvg], {
         type: "image/svg+xml;charset=utf-8",
       });
-      const url = URL.createObjectURL(svgBlob);
+      objectUrl = URL.createObjectURL(svgBlob);
 
       // Load into an image and draw to canvas
       const img = new Image();
       img.onload = () => {
-        ctx.scale(opts.scale, opts.scale);
-        ctx.drawImage(img, 0, 0, canvasW, canvasH);
-        URL.revokeObjectURL(url); /* node:coverage disable */
+        try {
+          ctx.scale(opts.scale, opts.scale);
+          ctx.drawImage(img, 0, 0, canvasW, canvasH);
+          revokeObjectUrl(); /* node:coverage disable */
 
-        canvas.toBlob((blob) => {
-          resolve(blob);
-        }, "image/png"); /* node:coverage enable */
+          canvas.toBlob((blob) => {
+            finish(blob);
+          }, "image/png"); /* node:coverage enable */
+        } catch {
+          revokeObjectUrl();
+          finish(null);
+        }
       };
 
       img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(null);
+        revokeObjectUrl();
+        finish(null);
       };
 
-      img.src = url;
+      img.src = objectUrl;
     } catch {
-      resolve(null);
+      revokeObjectUrl();
+      finish(null);
     }
   });
 }
@@ -137,10 +161,17 @@ export function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  let appended = false;
+  try {
+    document.body.appendChild(a);
+    appended = true;
+    a.click();
+  } finally {
+    if (appended) {
+      document.body.removeChild(a);
+    }
+    URL.revokeObjectURL(url);
+  }
 } /* node:coverage disable */
 
 /**

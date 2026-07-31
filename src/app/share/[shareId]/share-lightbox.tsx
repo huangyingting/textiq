@@ -50,17 +50,26 @@ export function ShareLightbox({ children }: { children: ReactNode }) {
     if (!wrapper) {
       return;
     }
-    const svgs = wrapper.querySelectorAll<SVGSVGElement>('svg[role="img"]');
+    const svgs = wrapper.querySelectorAll<SVGSVGElement>(
+      'svg[role="img"], svg[data-zoomable="true"]',
+    );
     svgs.forEach((svg) => {
+      const label =
+        svg.dataset.zoomLabel ?? svg.getAttribute("aria-label") ?? "Visual";
+      svg.dataset.zoomLabel = label;
       svg.dataset.zoomable = "true";
+      svg.setAttribute("role", "button");
       svg.setAttribute("tabindex", "0");
+      svg.setAttribute("aria-label", `${label} — enlarge visual`);
+      svg.setAttribute("aria-haspopup", "dialog");
+      svg.setAttribute("aria-expanded", "false");
       svg.style.cursor = "zoom-in";
     });
   }, [children]);
 
   const openFor = useCallback((svg: SVGSVGElement) => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
-    const label = svg.getAttribute("aria-label") ?? "Visual";
+    const label = svg.dataset.zoomLabel ?? "Visual";
     setActive({ svg, label });
   }, []);
 
@@ -72,9 +81,7 @@ export function ShareLightbox({ children }: { children: ReactNode }) {
     if (!(target instanceof Element)) {
       return null;
     }
-    return target.closest<SVGSVGElement>(
-      'svg[role="img"][data-zoomable="true"]',
-    );
+    return target.closest<SVGSVGElement>('svg[data-zoomable="true"]');
   }, []);
 
   const handleClick = useCallback(
@@ -107,11 +114,17 @@ export function ShareLightbox({ children }: { children: ReactNode }) {
     if (!active) {
       return;
     }
+    active.svg.setAttribute("aria-expanded", "true");
     const host = cloneHostRef.current;
     if (host) {
       const clone = active.svg.cloneNode(true) as SVGSVGElement;
       clone.removeAttribute("tabindex");
       clone.removeAttribute("data-zoomable");
+      clone.removeAttribute("data-zoom-label");
+      clone.removeAttribute("aria-haspopup");
+      clone.removeAttribute("aria-expanded");
+      clone.setAttribute("role", "img");
+      clone.setAttribute("aria-label", active.label);
       clone.style.cursor = "";
       clone.style.width = "100%";
       clone.style.height = "100%";
@@ -124,6 +137,7 @@ export function ShareLightbox({ children }: { children: ReactNode }) {
     closeButtonRef.current?.focus();
 
     return () => {
+      active.svg.setAttribute("aria-expanded", "false");
       document.body.style.overflow = previousOverflow;
       if (host) {
         host.replaceChildren();

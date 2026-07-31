@@ -62,7 +62,7 @@ function openSharePopup(url: string, label: string): void {
   window.open(
     url,
     label,
-    `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0`,
+    `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,noopener,noreferrer`,
   );
 }
 
