@@ -35,13 +35,24 @@ export function SiteHeaderView({
       <ShellLanguageSwitcherSlot enabled={enabledUtilities.languageSwitcher} />
     ),
   };
-  const shortcutAction: ShellAction = {
+  const desktopShortcutAction: ShellAction = {
     id: "keyboard-shortcuts",
     auth: "authenticated",
     closeDrawerOnClick: false,
     slot: (
       <ShellKeyboardShortcutsSlot
         enabled={enabledUtilities.keyboardShortcuts}
+      />
+    ),
+  };
+  const mobileShortcutAction: ShellAction = {
+    id: "keyboard-shortcuts",
+    auth: "authenticated",
+    closeDrawerOnClick: false,
+    slot: (
+      <ShellKeyboardShortcutsSlot
+        enabled={enabledUtilities.keyboardShortcuts}
+        listenForGlobalShortcut={false}
       />
     ),
   };
@@ -74,7 +85,7 @@ export function SiteHeaderView({
               summary={planCreditSummary}
               variant="desktop"
             />
-            {shortcutAction.slot}
+            {desktopShortcutAction.slot}
             <ThemeModeButton variant="desktop" />
             {languageAction.slot}
             {userAction.slot}
@@ -106,7 +117,7 @@ export function SiteHeaderView({
               <MobileNavNonClosing className="flex flex-col gap-0.5">
                 <ThemeModeButton variant="mobileDrawer" />
                 {languageAction.slot}
-                {shortcutAction.slot}
+                {mobileShortcutAction.slot}
               </MobileNavNonClosing>
             </MobileNavMenu>
           </>

@@ -21,7 +21,7 @@ app.
 | `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                          |
 | `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                             |
 | `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                   |
-| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Profile persistence, scoped export, password rotation/re-login, recovery failures, and deletion safeguards                      |
+| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup/onboarding/deletion, profile persistence, scoped export, password rotation/re-login, recovery failures, and safeguards   |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
 | `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Owner/viewer comment lifecycle, anchored-paragraph edits, permissions, resolve/reopen, guarded deletion, and reload persistence |
 | `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, passcode unlock, public mode gates, link rotation/revocation, and viewport-reachable controls         |
@@ -154,6 +154,8 @@ users and isolated documents, and the specs run for real against them.
   **editor** user (passwords hashed with the same bcrypt path the app uses);
 - an isolated account-mutation user whose display name, password hash, and
   session-revocation stamp reset before profile/password lifecycle coverage;
+- exact-email cleanup for the signup lifecycle account so an interrupted
+  signup/onboarding/deletion run is self-healing on the next seed;
 - a workspace granting the viewer read-only access;
 - an empty, owner-partitioned Brand Studio state for the Pro editor so the
   deterministic browser workflow can create, upload a font, reload, edit,

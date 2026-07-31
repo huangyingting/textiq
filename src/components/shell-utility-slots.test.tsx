@@ -42,8 +42,11 @@ stubModule(
   "@/components/keyboard-shortcuts",
   `const { createElement } = require("react");
 module.exports = {
-  KeyboardShortcuts: () =>
-    createElement("span", { "data-stub": "keyboard-shortcuts" }),
+  KeyboardShortcuts: (props) =>
+    createElement("span", {
+      "data-stub": "keyboard-shortcuts",
+      "data-listens-global": String(props.listenForGlobalShortcut),
+    }),
 };`,
 );
 
@@ -135,6 +138,25 @@ test("ShellKeyboardShortcutsSlot renders KeyboardShortcuts when enabled, and not
     assert.equal(
       shown.root.findAllByProps({ "data-stub": "keyboard-shortcuts" }).length,
       1,
+    );
+    assert.equal(
+      shown.root.findByProps({ "data-stub": "keyboard-shortcuts" }).props[
+        "data-listens-global"
+      ],
+      "true",
+    );
+
+    const triggerOnly = mountWithPortalDom(
+      createElement(ShellKeyboardShortcutsSlot, {
+        enabled: true,
+        listenForGlobalShortcut: false,
+      }),
+    );
+    assert.equal(
+      triggerOnly.root.findByProps({ "data-stub": "keyboard-shortcuts" }).props[
+        "data-listens-global"
+      ],
+      "false",
     );
 
     const hidden = mountWithPortalDom(

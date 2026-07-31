@@ -11,6 +11,7 @@ import bcrypt from "bcryptjs";
 import { Prisma, PrismaClient } from "../../generated/prisma/client";
 import { markdownToLexicalStateObject } from "../content/from-markdown";
 import {
+  createDocumentWithCanonicalContent,
   updateDocumentMetadata,
   updateDocumentWithCanonicalContent,
 } from "../document/document-write-port";
@@ -413,6 +414,25 @@ test(
       where: { id: E2E_PROFILE_FIXTURE.accountLifecycle.id },
       select: { id: true },
     });
+    const signupLifecycle = E2E_PROFILE_FIXTURE.signupLifecycle;
+    await client.user.create({
+      data: {
+        id: signupLifecycle.id,
+        email: signupLifecycle.email,
+        name: signupLifecycle.name,
+        passwordHash: await bcrypt.hash(signupLifecycle.password, 4),
+      },
+    });
+    await createDocumentWithCanonicalContent(client, {
+      contentSnapshot: markdownToLexicalStateObject(
+        "Interrupted signup lifecycle content.",
+      ),
+      data: {
+        id: signupLifecycle.cleanupDocumentId,
+        title: "Interrupted signup lifecycle document",
+        ownerId: signupLifecycle.id,
+      },
+    });
     const staleDocumentId = "e2eisolatedstalefixture0001";
     const staleOrphanDocumentId = "e2eisolatedstaleorphan0001";
     const hostileDocumentId = "e2eisolated/../../slide-assets-prefix-collision";
@@ -715,6 +735,16 @@ test(
         resetAccountLifecycle.passwordHash ?? "",
       ),
       true,
+    );
+    assert.equal(
+      await client.user.count({ where: { email: signupLifecycle.email } }),
+      0,
+    );
+    assert.equal(
+      await client.document.count({
+        where: { id: signupLifecycle.cleanupDocumentId },
+      }),
+      0,
     );
     assert.deepEqual(
       await client.documentVersion.findMany({

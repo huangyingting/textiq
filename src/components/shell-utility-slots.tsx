@@ -18,8 +18,16 @@ export function ShellLanguageSwitcherSlot({ enabled }: { enabled: boolean }) {
   return enabled ? <LanguageSwitcher /> : null;
 }
 
-export function ShellKeyboardShortcutsSlot({ enabled }: { enabled: boolean }) {
-  return enabled ? <KeyboardShortcuts /> : null;
+export function ShellKeyboardShortcutsSlot({
+  enabled,
+  listenForGlobalShortcut = true,
+}: {
+  enabled: boolean;
+  listenForGlobalShortcut?: boolean;
+}) {
+  return enabled ? (
+    <KeyboardShortcuts listenForGlobalShortcut={listenForGlobalShortcut} />
+  ) : null;
 }
 
 export function ShellCreditsSlot({

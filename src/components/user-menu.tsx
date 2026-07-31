@@ -44,6 +44,7 @@ export function UserMenu({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const trimmedName = name?.trim() ?? "";
   const displayName = trimmedName || email;
@@ -62,8 +63,19 @@ export function UserMenu({
   }, [open]);
 
   return (
-    <div ref={menuRef} className="relative">
+    <div
+      ref={menuRef}
+      className="relative"
+      onKeyDown={(event) => {
+        if (!open || event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         aria-label="User menu"
         aria-haspopup="menu"

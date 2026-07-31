@@ -95,11 +95,13 @@ afterEach(() => {
 function mount(
   dom: ReturnType<typeof setupDocument>,
   props: { name: string | null; email: string },
+  focusCalls: string[] = [],
 ): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
-  const createNodeMock: TestRendererOptions["createNodeMock"] = () => ({
-    contains: (target: unknown) => target === INSIDE_TARGET,
-  });
+  const createNodeMock: TestRendererOptions["createNodeMock"] = (element) =>
+    element.type === "button"
+      ? { focus: () => focusCalls.push("trigger") }
+      : { contains: (target: unknown) => target === INSIDE_TARGET };
   act(() => {
     renderer = create(
       <UserMenu {...props}>
@@ -180,6 +182,44 @@ describe("UserMenu — open/close", () => {
     assert.equal(toggleButton(renderer).props["aria-expanded"], false);
     assert.throws(() => renderer.root.findByProps({ role: "menu" }));
     assert.equal(dom.docTarget.listenerCount("click"), 0);
+  });
+
+  test("Escape closes the menu, stops the key event, and restores focus to the trigger", () => {
+    const dom = setupDocument();
+    const focusCalls: string[] = [];
+    const renderer = mount(
+      dom,
+      { name: "Jane", email: "jane@x.com" },
+      focusCalls,
+    );
+    act(() => {
+      (toggleButton(renderer).props.onClick as () => void)();
+    });
+
+    const container = renderer.root.find(
+      (element) =>
+        element.type === "div" && element.props.className === "relative",
+    );
+    let prevented = false;
+    let stopped = false;
+    act(() => {
+      container.props.onKeyDown({
+        key: "Escape",
+        preventDefault: () => {
+          prevented = true;
+        },
+        stopPropagation: () => {
+          stopped = true;
+        },
+      });
+    });
+
+    assert.equal(toggleButton(renderer).props["aria-expanded"], false);
+    assert.throws(() => renderer.root.findByProps({ role: "menu" }));
+    assert.equal(dom.docTarget.listenerCount("click"), 0);
+    assert.equal(prevented, true);
+    assert.equal(stopped, true);
+    assert.deepEqual(focusCalls, ["trigger"]);
   });
 
   test("a document click outside the menu closes it", () => {

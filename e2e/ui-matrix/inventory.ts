@@ -296,13 +296,34 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
     owners: ["auth", "security", "settings"],
     coverage:
-      "Deterministic password-recovery and email-verification failure states plus authenticated settings, profile persistence, scoped export, password failure and successful rotation/re-login, and non-destructive deletion safeguards.",
+      "Deterministic signup with automatic sign-in, first-run content, persistent onboarding dismissal, and complete account deletion; password-recovery and email-verification failure states; plus authenticated settings, profile persistence, scoped export, password failure and successful rotation/re-login, and non-destructive deletion safeguards.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
-    roles: ["anonymous", "seeded owner", "isolated account-mutation user"],
+    roles: [
+      "anonymous",
+      "new signup account",
+      "seeded owner",
+      "isolated account-mutation user",
+    ],
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/auth/README.md"],
+  },
+  {
+    spec: "e2e/ui-matrix/app-shell-ui.spec.ts",
+    owners: ["system", "accessibility", "auth"],
+    coverage:
+      "Deterministic app-shell theme selection and persistence across every mode, accessible user/shortcut menu closure and focus restoration, text-input shortcut suppression, and nested mobile drawer/theme/help behavior without duplicate overlays or horizontal overflow.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome", "390x844 mobile"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/ui-matrix/README.md",
+      "docs/system/design-system.md",
+      "docs/commands/actions-and-shortcuts.md",
+    ],
   },
   {
     spec: "e2e/ui-matrix/auth-public-ui.spec.ts",

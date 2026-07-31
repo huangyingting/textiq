@@ -46,8 +46,11 @@ stubModule(
   "@/components/keyboard-shortcuts",
   `const { createElement } = require("react");
 module.exports = {
-  KeyboardShortcuts: () =>
-    createElement("span", { "data-stub": "keyboard-shortcuts" }),
+  KeyboardShortcuts: (props) =>
+    createElement("span", {
+      "data-stub": "keyboard-shortcuts",
+      "data-listens-global": String(props.listenForGlobalShortcut),
+    }),
 };`,
 );
 
@@ -210,6 +213,12 @@ test("authenticated: desktop nav renders nav links, credits, keyboard shortcuts,
       "theme-mode-button",
       "language-switcher",
     ]);
+    assert.equal(
+      nav.findByProps({ "data-stub": "keyboard-shortcuts" }).props[
+        "data-listens-global"
+      ],
+      "true",
+    );
     // The user menu toggle (real UserMenu) follows the language slot.
     const userMenuToggle = nav.findByProps({ "aria-label": "User menu" });
     assert.ok(userMenuToggle);
@@ -246,6 +255,12 @@ test("authenticated: mobile top bar shows the user menu first, then a MobileNavM
     assert.deepEqual(
       nonClosingStubs.map((node) => node.props["data-stub"]),
       ["theme-mode-button", "language-switcher", "keyboard-shortcuts"],
+    );
+    assert.equal(
+      nonClosing.findByProps({ "data-stub": "keyboard-shortcuts" }).props[
+        "data-listens-global"
+      ],
+      "false",
     );
   });
 });

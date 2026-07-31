@@ -100,15 +100,22 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
  * A discoverable "?" button (in the site header) plus the global `?` shortcut,
  * both of which open a dialog listing the available keyboard shortcuts.
  */
-export function KeyboardShortcuts() {
+export function KeyboardShortcuts({
+  listenForGlobalShortcut = true,
+}: {
+  listenForGlobalShortcut?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
-  useKeyboardShortcut((event) => {
-    if (isHelpShortcut(event)) {
-      event.preventDefault();
-      setOpen((value) => !value);
-    }
-  });
+  useKeyboardShortcut(
+    (event) => {
+      if (isHelpShortcut(event)) {
+        event.preventDefault();
+        setOpen((value) => !value);
+      }
+    },
+    { enabled: listenForGlobalShortcut },
+  );
 
   return (
     <>

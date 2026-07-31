@@ -52,6 +52,13 @@ duplicate emails, stores a bcrypt password hash, creates the user, and seeds the
 sample onboarding document. Credentials sign-in returns a minimal user record
 only when the submitted password matches the stored hash.
 
+The deterministic browser profile exercises this lifecycle end to end: it
+creates a new account through the public form, verifies automatic sign-in and
+first-run content, persists onboarding dismissal, deletes the account through
+settings, and confirms that the deleted credentials no longer authenticate.
+The seed removes that exact fixture email before each run so an interrupted
+browser session cannot contaminate later runs.
+
 Google sign-in is enabled only when both Google client env vars are present.
 OAuth sign-ins must include an email. The JWT callback links the OAuth profile
 to a local user by normalized email, updating name/image on existing accounts or

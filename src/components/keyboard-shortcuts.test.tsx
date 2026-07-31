@@ -90,6 +90,7 @@ function fakeEvent(overrides: Partial<KeyEventLike> = {}): FakeKeyboardEvent {
 
 type ShortcutHookTestState = {
   handler: ((event: FakeKeyboardEvent) => void) | undefined;
+  enabled: boolean | undefined;
   registrations: number;
 };
 
@@ -100,6 +101,7 @@ const globalForHook = globalThis as typeof globalThis & {
 function resetHookState(): void {
   globalForHook.__keyboardShortcutsHookTestState = {
     handler: undefined,
+    enabled: undefined,
     registrations: 0,
   };
 }
@@ -122,8 +124,9 @@ registerHooks({
       return {
         format: "commonjs",
         source: `module.exports = {
-  useKeyboardShortcut: (handler) => {
+  useKeyboardShortcut: (handler, options) => {
     globalThis.__keyboardShortcutsHookTestState.handler = handler;
+    globalThis.__keyboardShortcutsHookTestState.enabled = options?.enabled;
     globalThis.__keyboardShortcutsHookTestState.registrations += 1;
   },
 };`,
@@ -174,6 +177,29 @@ describe("KeyboardShortcuts", () => {
         assert.equal(
           typeof globalForHook.__keyboardShortcutsHookTestState.handler,
           "function",
+        );
+        assert.equal(
+          globalForHook.__keyboardShortcutsHookTestState.enabled,
+          true,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a trigger-only instance disables its global shortcut listener", () => {
+    withPortalDom(() => {
+      const renderer = mountWithPortalDom(
+        <KeyboardShortcuts listenForGlobalShortcut={false} />,
+      );
+      try {
+        assert.equal(
+          globalForHook.__keyboardShortcutsHookTestState.enabled,
+          false,
+        );
+        assert.ok(
+          renderer.root.findByProps({ "aria-label": "Keyboard shortcuts" }),
         );
       } finally {
         act(() => renderer.unmount());

@@ -86,6 +86,13 @@ async function writeAssetBytes(
 }
 
 async function main() {
+  // A successful-signup browser fixture must not exist before its lifecycle
+  // starts. Exact-email cleanup also makes the profile self-healing when a
+  // prior browser run stopped before deleting the account through settings.
+  await prisma.user.deleteMany({
+    where: { email: F.signupLifecycle.email },
+  });
+
   // -------------------------------------------------------------------------
   // 1. Users — owner + editor + viewer + an isolated account-mutation user,
   //    with passwords hashed via the production bcrypt cost.

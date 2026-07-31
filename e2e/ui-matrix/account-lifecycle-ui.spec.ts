@@ -9,6 +9,7 @@ import {
   profileAccountLifecycleCredentials,
   profileOwnerCredentials,
 } from "../helpers/profile";
+import { expectNoPageErrors } from "./helpers";
 
 const GENERIC_RESET_MESSAGE =
   "If an account exists for that email, we've sent a link to reset your password.";
@@ -123,6 +124,84 @@ test.describe("UI matrix: account lifecycle", () => {
         ]),
       }),
     );
+  });
+
+  test("new account signs up, sees first-run content, persists onboarding dismissal, and deletes cleanly", async ({
+    page,
+  }) => {
+    test.skip(
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run signup lifecycle coverage",
+    );
+
+    const assertNoPageErrors = await expectNoPageErrors(page);
+    const fixture = E2E_PROFILE_FIXTURE.signupLifecycle;
+    await page.goto("/signup");
+    await page.getByLabel(/^Name/).fill(fixture.name);
+    await page.getByLabel("Email").fill(fixture.email);
+    await page.getByLabel("Password").fill(fixture.password);
+    await Promise.all([
+      page.waitForURL(/\/app(\/|$|\?)/, { waitUntil: "commit" }),
+      page.getByRole("button", { name: "Create account" }).click(),
+    ]);
+
+    await expect(
+      page.getByRole("heading", { name: "Your documents" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "User menu" })).toContainText(
+      fixture.name,
+    );
+    await expect(
+      page.getByRole("link", { name: "Welcome to TextIQ" }),
+    ).toBeVisible();
+
+    const onboarding = page.getByRole("region", {
+      name: "Getting started checklist",
+    });
+    await expect(onboarding).toBeVisible();
+    await expect(
+      onboarding.getByRole("progressbar", {
+        name: "2 of 2 onboarding steps complete",
+      }),
+    ).toHaveAttribute("aria-valuenow", "2");
+    await expect(
+      onboarding.getByText("Create or import a document"),
+    ).toBeVisible();
+    await expect(
+      onboarding.getByText("Select text → generate a visual"),
+    ).toBeVisible();
+
+    await onboarding
+      .getByRole("button", { name: "Mark as complete and dismiss" })
+      .click();
+    await expect(onboarding).toHaveCount(0, { timeout: 20_000 });
+    await page.reload();
+    await expect(onboarding).toHaveCount(0);
+
+    await page.goto("/app/settings");
+    await expect(page.getByLabel("Email")).toHaveValue(fixture.email);
+    await expect(page.getByLabel("Display name")).toHaveValue(fixture.name);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete account?" });
+    await dialog.getByLabel("Confirm account deletion").fill(fixture.email);
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === "/", {
+        waitUntil: "commit",
+      }),
+      dialog.getByRole("button", { name: "Delete account" }).click(),
+    ]);
+    await expect(
+      page.getByRole("heading", { name: /turn text into visuals/i }),
+    ).toBeVisible();
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(fixture.email);
+    await page.getByLabel("Password").fill(fixture.password);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(
+      page.getByText("Invalid email or password.", { exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
+    await assertNoPageErrors();
   });
 
   test("isolated account persists profile edits and rotates credentials with explicit re-login", async ({

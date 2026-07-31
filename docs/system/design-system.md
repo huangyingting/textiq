@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-31"
 description: "TextIQ app chrome uses the --ds-* tokens in src/app/globals.css as the source of truth. Visual-content palettes and themes remain separate in src/lib/visual/themes.ts."
 ---
 
@@ -43,6 +43,12 @@ The app shell owns navigation, header visibility, account/workspace chrome, and
 global utility slots such as keyboard shortcuts. Shell view models are derived
 in `src/lib/app-shell/` so pages and components receive UI-ready state instead
 of duplicating navigation or account logic.
+
+The desktop shortcut-help instance owns the single global `?` listener. The
+mobile drawer renders a trigger-only instance, so opening the drawer never
+duplicates the help dialog or Escape handling. App-shell menus close on Escape
+and restore focus to their opener; nested drawer, theme-listbox, and help-dialog
+surfaces unwind one layer at a time.
 
 Right-side editor surfaces are mutually exclusive. The pure
 `rightSurfaceReducer` records when the slide editor is open, and
@@ -120,6 +126,9 @@ smooth scrolling while preserving visible state changes and status content.
 - `src/lib/app-shell/navigation.test.ts`
 - `src/lib/app-shell/header-gate.test.ts`
 - `src/lib/app-shell/theme.test.ts`
+- `src/components/keyboard-shortcuts.test.tsx`
+- `src/components/user-menu.test.tsx`
+- `e2e/ui-matrix/app-shell-ui.spec.ts`
 - `src/lib/right-surface-coordinator.test.ts`
 - `src/lib/anchored-position.test.ts`
 - `src/lib/pointer.test.ts`

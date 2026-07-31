@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-07-31"
 description: "This document defines the UI action and keyboard shortcut contract. It sits between visible controls and domain-specific command execution: actions describe labels, tooltips, shortcut ids, and disabled states; shortcuts define discoverable key mappings; action ports keep client components from importing route actions directly."
 ---
 
@@ -63,6 +63,11 @@ Each shortcut entry has a stable id, scope, display tokens, canonical string,
 and matcher metadata. `shortcutsForScope` powers the global help dialog, while
 `shortcutById` and `matchesShortcut` keep action labels and event handling tied
 to the same registry.
+
+The authenticated app shell mounts shortcut-help triggers in both its desktop
+rail and mobile drawer, but only the persistent desktop instance registers the
+global `?` listener. The mobile instance is trigger-only. This keeps one global
+handler and one help dialog active even while the drawer is open.
 
 Shortcut matching must not hijack typing. `isEditableTagName` marks inputs,
 textareas, selects, and contenteditable targets as text-entry surfaces. The
