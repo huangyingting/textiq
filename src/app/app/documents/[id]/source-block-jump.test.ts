@@ -3,7 +3,7 @@
  *
  * The plugin reads a `?sourceBlock=` URL param on mount, looks up the
  * matching block by its `VisualNode` visual id (via `instanceof VisualNode`)
- * or its plain `__bid` field (recursing into nested element nodes such as
+ * or its durable block-id NodeState (recursing into nested element nodes such as
  * lists), and — only when a match is found — scrolls/focuses the
  * corresponding DOM element via `requestAnimationFrame`.
  *
@@ -38,7 +38,6 @@ import {
   $createTextNode,
   $getRoot,
   type LexicalEditor,
-  type LexicalNode,
 } from "lexical";
 
 // Imported for its module-level side effect only: it flips
@@ -47,6 +46,7 @@ import {
 import { renderWithTestRenderer } from "@/test/react-render-harness";
 
 import { $createVisualNode, VisualNode } from "@/lib/lexical/visual-node";
+import { $setNodeBlockId } from "@/lib/lexical/block-id-runtime";
 import { buildVisual } from "@/test/builders/visual";
 
 import { SourceBlockJumpPlugin } from "./source-block-jump";
@@ -114,10 +114,6 @@ function mountPlugin(editor: LexicalEditor): void {
       createElement(SourceBlockJumpPlugin),
     ),
   );
-}
-
-function bidOf(node: LexicalNode): { __bid?: string } {
-  return node.getWritable() as unknown as { __bid?: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,10 +201,10 @@ test("SourceBlockJumpPlugin scrolls and focuses the element for a matching Visua
 });
 
 // ---------------------------------------------------------------------------
-// Match via plain __bid field
+// Match via durable block-id NodeState
 // ---------------------------------------------------------------------------
 
-test("SourceBlockJumpPlugin scrolls and focuses the element for a matching __bid", () => {
+test("SourceBlockJumpPlugin scrolls and focuses the element for a matching bid", () => {
   const editor = makeEditor();
   const target = fakeElement();
   editor.getElementByKey = (() =>
@@ -219,7 +215,7 @@ test("SourceBlockJumpPlugin scrolls and focuses the element for a matching __bid
       const paragraph = $createParagraphNode().append(
         $createTextNode("Tagged paragraph"),
       );
-      bidOf(paragraph).__bid = "block-77";
+      $setNodeBlockId(paragraph, "block-77");
       $getRoot().append(paragraph);
     },
     { discrete: true },
@@ -239,7 +235,7 @@ test("SourceBlockJumpPlugin scrolls and focuses the element for a matching __bid
 // Recursion into nested element nodes (list -> listitem)
 // ---------------------------------------------------------------------------
 
-test("SourceBlockJumpPlugin finds a __bid match nested inside a list", () => {
+test("SourceBlockJumpPlugin finds a bid match nested inside a list", () => {
   const editor = makeEditor();
   const target = fakeElement();
   editor.getElementByKey = (() =>
@@ -249,7 +245,7 @@ test("SourceBlockJumpPlugin finds a __bid match nested inside a list", () => {
     () => {
       const list = $createListNode("bullet");
       const item = $createListItemNode().append($createTextNode("Item one"));
-      bidOf(item).__bid = "block-list-item";
+      $setNodeBlockId(item, "block-list-item");
       list.append(item);
       $getRoot().append(list);
     },

@@ -87,12 +87,12 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/editor/block-id-preservation.spec.ts",
     owners: ["editor", "presentation"],
     coverage:
-      "Block id preservation catalog hooks for save/reload, visual insertion, and duplication.",
-    runMode: "opt-in-local",
-    prerequisites: ["E2E_USER_EMAIL/PASSWORD", "E2E_BLOCK_ID_DOC_URL"],
-    roles: ["owner"],
+      "Persisted block ids survive edit/reload, source insertion retains the originating bid, and duplication remaps block ids plus deck source refs.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
     devices: ["Desktop Chrome"],
-    ciStatus: "manual fixture-backed local run",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/editor/document-editor.md"],
   },
   {
@@ -469,16 +469,6 @@ export const UI_MATRIX_SPEC_INVENTORY = [
 ] as const satisfies readonly UiMatrixSpecInventoryEntry[];
 
 export const UI_MATRIX_MANUAL_GAPS = [
-  {
-    id: "BLOCK-ID-DEEP-ASSERTIONS",
-    owner: "editor/presentation",
-    gap: "Block-id preservation spec currently exercises fixture reachability; persisted bid/sourceRef assertions need stable diagnostics hooks.",
-    status: "blocked",
-    sourceRefs: [
-      "e2e/editor/block-id-preservation.spec.ts",
-      "docs/editor/document-editor.md",
-    ],
-  },
   {
     id: "FULL-500-BROWSER-MATRIX",
     owner: "ui matrix",

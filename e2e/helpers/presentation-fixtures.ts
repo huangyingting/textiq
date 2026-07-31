@@ -10,6 +10,7 @@ function presentationFixture<
     | "overlap"
     | "group"
     | "generated"
+    | "sourceLinked"
     | "themeVersions",
 >(
   documentId: DocumentId,
@@ -41,6 +42,12 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedundoredo000001",
     "e2eisolatedshr03",
     "e2e-isolated-undo-redo",
+  ),
+  blockIdPreservation: presentationFixture(
+    "e2eisolatedblockids000001",
+    "e2eisolatedshr27",
+    "e2e-isolated-block-ids",
+    "sourceLinked",
   ),
   slideDeleteCanonical: presentationFixture(
     "e2eisolateddeletecanon001",

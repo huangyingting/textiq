@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createHeadlessEditor } from "@lexical/headless";
-import { ListItemNode, ListNode } from "@lexical/list";
-import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
-import { HeadingNode, QuoteNode } from "@lexical/rich-text";
-import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
+import { $createListItemNode, ListItemNode, ListNode } from "@lexical/list";
+import {
+  $createHorizontalRuleNode,
+  HorizontalRuleNode,
+} from "@lexical/react/LexicalHorizontalRuleNode";
+import { $createQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
+import {
+  $createTableNodeWithDimensions,
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+} from "@lexical/table";
+import {
+  createBinding,
+  syncLexicalUpdateToYjs,
+  syncYjsChangesToLexical,
+  type Provider,
+} from "@lexical/yjs";
 import {
   $createParagraphNode,
   $createTextNode,
@@ -14,6 +28,7 @@ import {
   $isTextNode,
   type LexicalEditor,
 } from "lexical";
+import * as Y from "yjs";
 
 import { collectDocumentBlocks } from "@/lib/content";
 
@@ -25,6 +40,8 @@ import {
 } from "./block-id";
 import {
   $ensureBlockIdsInDocument,
+  $getNodeBlockId,
+  $setNodeBlockId,
   ensureLexicalBlockIdSupport,
   registerBlockIdTransforms,
   serializeEditorStateWithBlockIds,
@@ -168,6 +185,23 @@ function makeHeadlessEditor() {
   });
   const unregister = registerBlockIdTransforms(editor);
   return { editor, unregister };
+}
+
+function collaborationProvider(): Provider {
+  return {
+    awareness: {
+      getLocalState: () => null,
+      getStates: () => new Map(),
+      off: () => undefined,
+      on: () => undefined,
+      setLocalState: () => undefined,
+      setLocalStateField: () => undefined,
+    },
+    connect: () => undefined,
+    disconnect: () => undefined,
+    off: () => undefined,
+    on: () => undefined,
+  };
 }
 
 test("generateBlockId produces non-empty distinct strings", () => {
@@ -450,45 +484,43 @@ test("block id runtime transform stamps bidless horizontal rules", () => {
   assert.ok(horizontalRuleTransform, "expected HorizontalRuleNode transform");
   assert.ok(tableTransform, "expected TableNode transform");
 
-  const bidlessNode = {
-    getWritable() {
-      return this;
+  ensureLexicalBlockIdSupport();
+  const editor = createHeadlessEditor({
+    namespace: "block-id-transform-callback-test",
+    nodes: [
+      QuoteNode,
+      ListItemNode,
+      HorizontalRuleNode,
+      TableNode,
+      TableRowNode,
+      TableCellNode,
+    ],
+    onError(error) {
+      throw error;
     },
-  } as { __bid?: string; getWritable(): unknown };
-  quoteTransform(bidlessNode);
-  delete bidlessNode.__bid;
-  listItemTransform(bidlessNode);
-  delete bidlessNode.__bid;
-  horizontalRuleTransform(bidlessNode);
-  delete bidlessNode.__bid;
-  tableTransform(bidlessNode);
-  assert.match(String(bidlessNode.__bid), /^[A-Za-z0-9]{12}$/);
-
-  const stampedNode = {
-    __bid: "existing-block-id",
-    getWritable() {
-      throw new Error("already-stamped nodes should not be rewritten");
-    },
-  };
-  horizontalRuleTransform(stampedNode);
-  tableTransform(stampedNode);
-  assert.equal(stampedNode.__bid, "existing-block-id");
-
-  unregister();
-});
-
-test("block id runtime exports a fresh bid for manually cleared bidless nodes", () => {
-  const { editor, unregister } = makeHeadlessEditor();
-  seedPlainParagraph(editor, "bidless export");
-
-  const exportedBid = editor.getEditorState().read(() => {
-    const paragraph = $getRoot().getFirstChild();
-    assert.ok(paragraph, "expected paragraph");
-    delete (paragraph as typeof paragraph & { __bid?: string }).__bid;
-    return (paragraph.exportJSON() as { bid?: string }).bid;
   });
+  editor.update(
+    () => {
+      const quote = $createQuoteNode();
+      const listItem = $createListItemNode();
+      const horizontalRule = $createHorizontalRuleNode();
+      const table = $createTableNodeWithDimensions(1, 1);
 
-  assert.match(String(exportedBid), /^[A-Za-z0-9]{12}$/);
+      quoteTransform(quote);
+      listItemTransform(listItem);
+      horizontalRuleTransform(horizontalRule);
+      tableTransform(table);
+      for (const node of [quote, listItem, horizontalRule, table]) {
+        assert.match(String($getNodeBlockId(node)), /^[A-Za-z0-9]{12}$/);
+      }
+
+      $setNodeBlockId(horizontalRule, "existing-block-id");
+      horizontalRuleTransform(horizontalRule);
+      assert.equal($getNodeBlockId(horizontalRule), "existing-block-id");
+    },
+    { discrete: true },
+  );
+
   unregister();
 });
 
@@ -502,11 +534,96 @@ test("block id runtime hydrates bid values from imported JSON", () => {
   const importedBid = editor.getEditorState().read(() => {
     const paragraph = $getRoot().getFirstChild();
     assert.ok(paragraph, "expected imported paragraph");
-    return (paragraph.exportJSON() as { bid?: string }).bid;
+    const serialized = paragraph.exportJSON() as {
+      $?: { bid?: string };
+      bid?: string;
+    };
+    assert.equal(serialized.$?.bid, undefined);
+    return serialized.bid;
   });
 
   assert.equal(importedBid, "stored-block-id");
   unregister();
+});
+
+test("block id runtime preserves imported bids through a Lexical Yjs round trip", async () => {
+  const provider = collaborationProvider();
+  const doc = new Y.Doc();
+  const docMap = new Map([["block-id-round-trip", doc]]);
+  const source = makeHeadlessEditor();
+  const target = makeHeadlessEditor();
+  const sourceBinding = createBinding(
+    source.editor,
+    provider,
+    "block-id-round-trip",
+    doc,
+    docMap,
+  );
+  const targetBinding = createBinding(
+    target.editor,
+    provider,
+    "block-id-round-trip",
+    doc,
+    docMap,
+  );
+  const unregisterSourceSync = source.editor.registerUpdateListener(
+    ({
+      prevEditorState,
+      editorState,
+      dirtyLeaves,
+      dirtyElements,
+      normalizedNodes,
+      tags,
+    }) => {
+      syncLexicalUpdateToYjs(
+        sourceBinding,
+        provider,
+        prevEditorState,
+        editorState,
+        dirtyElements,
+        dirtyLeaves,
+        normalizedNodes,
+        tags,
+      );
+    },
+  );
+  const onYjsTreeChanges = (
+    events: Y.YEvent<Y.AbstractType<unknown>>[],
+  ): void => {
+    if (events[0]?.transaction.origin !== targetBinding) {
+      syncYjsChangesToLexical(
+        targetBinding,
+        provider,
+        events as Y.YEvent<Y.Text>[],
+        false,
+        () => undefined,
+      );
+    }
+  };
+  targetBinding.root.getSharedType().observeDeep(onYjsTreeChanges);
+
+  try {
+    const state = bidlessState();
+    state.root.children = [state.root.children[0]];
+    (state.root.children[0] as { bid?: string }).bid = "stored-block-id";
+    source.editor.setEditorState(
+      source.editor.parseEditorState(JSON.stringify(state)),
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const targetBid = target.editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChild();
+      assert.ok(paragraph, "expected synchronized paragraph");
+      return (paragraph.exportJSON() as { bid?: string }).bid;
+    });
+    assert.equal(targetBid, "stored-block-id");
+  } finally {
+    targetBinding.root.getSharedType().unobserveDeep(onYjsTreeChanges);
+    unregisterSourceSync();
+    source.unregister();
+    target.unregister();
+    doc.destroy();
+  }
 });
 
 test("block id runtime exposes the durable bid on rendered block DOM", () => {

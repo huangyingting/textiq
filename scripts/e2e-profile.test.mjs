@@ -84,6 +84,7 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(env.NODE_EXTRA_CA_CERTS, env.E2E_PROFILE_TLS_CA_CERT_FILE);
   assert.equal(env.GOOGLE_CLIENT_ID, "");
   assert.equal(env.GOOGLE_CLIENT_SECRET, "");
+  assert.equal(env.ACCOUNT_EXPORT_RATE_LIMIT, "100");
   assert.equal(JSON.parse(env.E2E_PROFILE_FIXTURE_SLOTS).length, 4);
 });
 
@@ -102,6 +103,19 @@ test("self-contained profile preserves explicit Google OAuth configuration", () 
 
   assert.equal(env.GOOGLE_CLIENT_ID, "e2e-google-client");
   assert.equal(env.GOOGLE_CLIENT_SECRET, "e2e-google-secret");
+});
+
+test("self-contained profile preserves an explicit account export budget", () => {
+  const env = buildE2EProfileEnv(
+    { ACCOUNT_EXPORT_RATE_LIMIT: "7" },
+    {
+      repoRoot: process.cwd(),
+      runId: "account-export-budget",
+      runNonce: "7".repeat(64),
+    },
+  );
+
+  assert.equal(env.ACCOUNT_EXPORT_RATE_LIMIT, "7");
 });
 
 test("authenticated profile URL parsers reject normalization and wrong schemes", () => {

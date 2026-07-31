@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-07-31"
 description: "The document editor pairs a Lexical rich-text surface with visual blocks and document table editing, plus context-aware surfaces such as floating toolbars, a mobile bottom sheet, insert menus, and per-visual editing popovers. This document explains how those pieces fit together and how to extend them safely."
 ---
 
@@ -325,6 +325,15 @@ collaboration.
    A visual's own colors live in its `VisualStyle` (baked into the `Visual`
    payload) and must not be wired to `--ds-*` — a visual looks the same
    regardless of the app's light/dark chrome.
+
+The durable identity contract is also covered through the deterministic browser
+profile in
+[`block-id-preservation.spec.ts`](../../e2e/editor/block-id-preservation.spec.ts).
+That workflow compares the live `data-lexical-block-id` DOM value with the
+owner-scoped persisted `contentJson` account export before and after an edit and
+reload, verifies a real slide-editor “From document” insertion persists the same
+`source.blockId`, and verifies document duplication produces independent `bid`
+values while remapping every duplicated deck source reference.
 
 ## How-to: extending the editor
 

@@ -12,6 +12,7 @@ import {
 } from "lexical";
 
 import { $getSelectedDocumentTableKey } from "@/lib/lexical/table-controls";
+import { $getNodeBlockId } from "@/lib/lexical/block-id-runtime";
 
 export type EditorContextKind =
   "range" | "collapsed" | "empty-block" | "visual" | "table" | "none";
@@ -138,12 +139,6 @@ function getBlockType(node: LexicalNode): EditorBlockType {
   return "paragraph";
 }
 
-function readNodeBid(node: LexicalNode | null | undefined): string | undefined {
-  const bid = (node as (LexicalNode & { __bid?: unknown }) | null | undefined)
-    ?.__bid;
-  return typeof bid === "string" && bid.length > 0 ? bid : undefined;
-}
-
 /**
  * Pure selection-derivation: reads the current Lexical selection and returns the
  * rect-free subset of {@link EditorContextSnapshot}. Must be invoked inside an
@@ -203,14 +198,14 @@ export function readSelectionDescriptor(): SelectionDescriptor {
 
   const blockType = getBlockType(anchorNode);
   const blockKey = topLevel?.getKey();
-  const blockBid = readNodeBid(topLevel);
+  const blockBid = $getNodeBlockId(topLevel);
   const blockText = topLevel?.getTextContent() ?? "";
   const selectionText = selection.getTextContent();
   const selectedNodes = selection.getNodes();
   const selectionEndBlock =
     selectedNodes[selectedNodes.length - 1]?.getTopLevelElement() ?? topLevel;
   const selectionEndBlockKey = selectionEndBlock?.getKey();
-  const selectionEndBlockBid = readNodeBid(selectionEndBlock);
+  const selectionEndBlockBid = $getNodeBlockId(selectionEndBlock);
   const isCollapsed = selection.isCollapsed();
   const isEmptyBlock =
     isCollapsed && blockType === "paragraph" && blockText.trim() === "";

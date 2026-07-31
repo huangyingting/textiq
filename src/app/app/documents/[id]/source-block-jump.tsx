@@ -10,11 +10,11 @@ import {
 import { useEffect } from "react";
 
 import { VisualNode } from "@/lib/lexical/visual-node";
+import { $getNodeBlockId } from "@/lib/lexical/block-id-runtime";
 
 function nodeBlockId(node: LexicalNode): string | undefined {
   if (node instanceof VisualNode) return node.getVisualId();
-  const bid = (node as LexicalNode & { __bid?: unknown }).__bid;
-  return typeof bid === "string" && bid.length > 0 ? bid : undefined;
+  return $getNodeBlockId(node);
 }
 
 function findNodeKeyByBlockId(

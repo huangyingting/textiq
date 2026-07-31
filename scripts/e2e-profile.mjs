@@ -159,6 +159,7 @@ export function buildE2EProfileEnv(
     DATABASE_URL: resolveE2EProfileDatabaseUrl(env, repoRoot),
     AUTH_SECRET: env.AUTH_SECRET ?? "ci-placeholder",
     AUTH_LOGIN_RATE_LIMIT: env.AUTH_LOGIN_RATE_LIMIT ?? "100",
+    ACCOUNT_EXPORT_RATE_LIMIT: env.ACCOUNT_EXPORT_RATE_LIMIT ?? "100",
     GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID ?? "",
     GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET ?? "",
     BASE_URL: origin.origin,

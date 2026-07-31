@@ -3,8 +3,11 @@ import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableNode } from "@lexical/table";
 import {
+  $getState,
   $getRoot,
   $isElementNode,
+  $setState,
+  createState,
   type EditorState,
   type LexicalEditor,
   type LexicalNode,
@@ -15,8 +18,6 @@ import {
 import { generateBlockId } from "./block-id";
 
 type NodeWithBid = LexicalNode & {
-  __bid?: string;
-  afterCloneFrom(prevNode: NodeWithBid): void;
   createDOM(...args: unknown[]): HTMLElement;
   exportJSON(): SerializedLexicalNode;
   updateFromJSON(serializedNode: SerializedLexicalNode): NodeWithBid;
@@ -28,6 +29,11 @@ type PatchableNodeClass = {
 };
 
 const PATCH_FLAG = Symbol.for("textiq.block-id.patch");
+const blockIdState = createState("bid", {
+  parse(value) {
+    return typeof value === "string" && value.length > 0 ? value : "";
+  },
+});
 let supportInstalled = false;
 
 function readSerializedBid(
@@ -37,19 +43,27 @@ function readSerializedBid(
   return typeof bid === "string" && bid.length > 0 ? bid : undefined;
 }
 
-function hasNodeBid(
-  node: LexicalNode,
-): node is NodeWithBid & { __bid: string } {
-  return (
-    typeof (node as NodeWithBid).__bid === "string" &&
-    (node as NodeWithBid).__bid!.length > 0
-  );
+export function $getNodeBlockId(
+  node: LexicalNode | null | undefined,
+): string | undefined {
+  if (!node) return undefined;
+  const bid = $getState(node, blockIdState);
+  return bid.length > 0 ? bid : undefined;
+}
+
+export function $setNodeBlockId<T extends LexicalNode>(
+  node: T,
+  bid: string,
+): T {
+  return $setState(node, blockIdState, bid);
 }
 
 function ensureNodeBid(node: LexicalNode): string {
-  const writable = node.getWritable() as NodeWithBid;
-  writable.__bid ??= generateBlockId();
-  return writable.__bid;
+  const existing = $getNodeBlockId(node);
+  if (existing) return existing;
+  const bid = generateBlockId();
+  $setNodeBlockId(node, bid);
+  return bid;
 }
 
 function isDurableBlockNode(node: LexicalNode): boolean {
@@ -69,28 +83,21 @@ function patchNodeClass(klass: PatchableNodeClass): void {
     return;
   }
 
-  const originalAfterCloneFrom = proto.afterCloneFrom;
   const originalCreateDOM = proto.createDOM;
   const originalExportJSON = proto.exportJSON;
   const originalUpdateFromJSON = proto.updateFromJSON;
-
-  proto.afterCloneFrom = function afterCloneFromWithBid(
-    this: NodeWithBid,
-    prevNode: NodeWithBid,
-  ): void {
-    originalAfterCloneFrom.call(this, prevNode);
-    if (hasNodeBid(prevNode)) {
-      this.__bid = prevNode.__bid;
-    }
-  };
 
   proto.updateFromJSON = function updateFromJSONWithBid(
     this: NodeWithBid,
     serializedNode: SerializedLexicalNode,
   ): NodeWithBid {
     const self = originalUpdateFromJSON.call(this, serializedNode);
-    self.__bid =
-      readSerializedBid(serializedNode) ?? self.__bid ?? generateBlockId();
+    $setNodeBlockId(
+      self,
+      readSerializedBid(serializedNode) ??
+        $getNodeBlockId(self) ??
+        generateBlockId(),
+    );
     /* node:coverage ignore next 2 */ /* updateFromJSON bid hydration is asserted; tsx maps the return/closure as uncovered. */
     return self;
   };
@@ -100,8 +107,9 @@ function patchNodeClass(klass: PatchableNodeClass): void {
     ...args: unknown[]
   ): HTMLElement {
     const element = originalCreateDOM.apply(this, args);
-    if (hasNodeBid(this)) {
-      element.setAttribute("data-lexical-block-id", this.__bid);
+    const bid = $getNodeBlockId(this);
+    if (bid) {
+      element.setAttribute("data-lexical-block-id", bid);
     }
     return element;
   };
@@ -111,9 +119,18 @@ function patchNodeClass(klass: PatchableNodeClass): void {
   ): SerializedLexicalNode {
     /* node:coverage ignore next 3 */ /* exportJSONWithBid branches are asserted; tsx maps the serialized type rows as uncovered. */
     const json = originalExportJSON.call(this) as SerializedLexicalNode & {
+      $?: Record<string, unknown>;
       bid?: string;
     };
-    json.bid = hasNodeBid(this) ? this.__bid : generateBlockId();
+    json.bid = $getNodeBlockId(this) ?? generateBlockId();
+    if (json.$ && "bid" in json.$) {
+      const { bid: _nestedBid, ...remainingState } = json.$;
+      if (Object.keys(remainingState).length > 0) {
+        json.$ = remainingState;
+      } else {
+        delete json.$;
+      }
+    }
     return json;
   };
 
@@ -122,7 +139,7 @@ function patchNodeClass(klass: PatchableNodeClass): void {
 
 function visit(node: LexicalNode): void {
   /* node:coverage ignore next 3 */ /* Document stamping is asserted; tsx maps the branch close as uncovered. */
-  if (isDurableBlockNode(node) && !hasNodeBid(node)) {
+  if (isDurableBlockNode(node) && !$getNodeBlockId(node)) {
     ensureNodeBid(node);
   }
   if ($isElementNode(node)) {
@@ -170,24 +187,24 @@ export function registerBlockIdTransforms(editor: LexicalEditor): () => void {
   ensureLexicalBlockIdSupport();
   const unregisters = [
     editor.registerNodeTransform(ParagraphNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
     editor.registerNodeTransform(HeadingNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
     /* node:coverage ignore next 3 */ /* QuoteNode transform is asserted via registerBlockIdTransforms; tsx maps the callback tail as uncovered. */
     editor.registerNodeTransform(QuoteNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
     editor.registerNodeTransform(ListItemNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
     /* node:coverage ignore next 3 */ /* HorizontalRuleNode transform is asserted via registerBlockIdTransforms; tsx maps the callback tail as uncovered. */
     editor.registerNodeTransform(HorizontalRuleNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
     editor.registerNodeTransform(TableNode, (node) => {
-      if (!hasNodeBid(node)) ensureNodeBid(node);
+      if (!$getNodeBlockId(node)) ensureNodeBid(node);
     }),
   ];
   return () => {

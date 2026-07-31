@@ -36,6 +36,8 @@ import {
   type LexicalEditor,
 } from "lexical";
 
+import { $setNodeBlockId } from "./block-id-runtime";
+
 import { FIXTURES } from "@/lib/visual/fixtures";
 
 import { $createVisualNode, VisualNode } from "@/lib/lexical/visual-node";
@@ -384,10 +386,7 @@ test("stable selection snapshot keeps bid but strips live NodeKeys", () => {
   const editor = makeEditor();
   let blockKey = "";
   const descriptor = derive(editor, () => {
-    const paragraph = $createParagraphNode() as ReturnType<
-      typeof $createParagraphNode
-    > & { __bid?: string };
-    paragraph.__bid = "bid-stable-1";
+    const paragraph = $setNodeBlockId($createParagraphNode(), "bid-stable-1");
     const text = $createTextNode("stable block");
     paragraph.append(text);
     $getRoot().clear().append(paragraph);
@@ -408,18 +407,12 @@ test("stable selection snapshot keeps bid but strips live NodeKeys", () => {
 test("range descriptor records element format, style values, and stable end block bid", () => {
   const editor = makeEditor();
   const descriptor = derive(editor, () => {
-    const first = $createParagraphNode() as ReturnType<
-      typeof $createParagraphNode
-    > & { __bid?: string };
-    first.__bid = "bid-start";
+    const first = $setNodeBlockId($createParagraphNode(), "bid-start");
     first.setFormat("center");
     const firstText = $createTextNode("Styled first");
     first.append(firstText);
 
-    const second = $createParagraphNode() as ReturnType<
-      typeof $createParagraphNode
-    > & { __bid?: string };
-    second.__bid = "bid-end";
+    const second = $setNodeBlockId($createParagraphNode(), "bid-end");
     const secondText = $createTextNode("Styled second");
     second.append(secondText);
     $getRoot().clear().append(first, second);

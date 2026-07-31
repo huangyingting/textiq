@@ -32,6 +32,7 @@ import {
   buildE2EProfileContentJson,
   buildE2EProfileDeck,
   buildE2EProfileVisual,
+  buildE2ESourceLinkedDeck,
   e2eProfileAssetChecksum,
 } from "@/test/builders/e2e-profile";
 import type { TextNode } from "@/lib/presentation/schema";
@@ -471,6 +472,14 @@ test("E2E profile builders are the seed/spec single source of truth", () => {
 
   const contentJson = buildE2EProfileContentJson(visual);
   assert.equal(contentJson.root.children.length, 2);
+  const profileBody = contentJson.root.children[0];
+  assert.equal(profileBody?.type, "paragraph");
+  if (profileBody?.type === "paragraph") {
+    assert.equal(
+      profileBody.bid,
+      e2eProfile.E2E_PROFILE_FIXTURE.documentBodyBlockId,
+    );
+  }
 
   const storageKey = deriveStorageKey(
     "e2efixturedocument0000001",
@@ -485,6 +494,24 @@ test("E2E profile builders are the seed/spec single source of truth", () => {
   const opened = openDeckFromJson(deck);
   assert.equal(opened.ok, true);
   assert.equal(deck.slides.length, 2);
+
+  const sourceLinkedDeck = buildE2ESourceLinkedDeck(
+    `/api/slide-assets/${storageKey}`,
+    "asset-1",
+    "document-source-1",
+  );
+  assert.equal(safeParsePresentationDeck(sourceLinkedDeck).success, true);
+  assert.deepEqual(sourceLinkedDeck.slides[0]?.children[0]?.source, {
+    documentId: "document-source-1",
+    blockId: e2eProfile.E2E_PROFILE_FIXTURE.documentBodyBlockId,
+    blockKind: "text",
+    linkedAt: "2026-01-01T00:00:00.000Z",
+    display: {
+      documentTitle: e2eProfile.E2E_PROFILE_FIXTURE.documentTitle,
+      blockLabel: e2eProfile.E2E_PROFILE_FIXTURE.documentBodyText,
+      blockKindLabel: "Text",
+    },
+  });
 
   const slideTwoTitleNode = deck.slides[1].children.find(
     (child): child is TextNode =>

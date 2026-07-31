@@ -574,8 +574,8 @@ test.describe("deterministic profile document editor smoke", () => {
     ).toBeVisible();
 
     // Open the "From document" menu and verify the seeded visual block is present.
-    // (The seeded text block has no blockId so it is not indexed; only the visual
-    // block "E2E profile flow" appears in the menu.)
+    // The deterministic fixture also carries a text block id; the dedicated
+    // block-id preservation spec exercises that text insertion deeply.
     await activate(
       contextToolbar.getByRole("button", { name: "From document" }),
     );

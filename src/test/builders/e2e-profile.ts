@@ -55,6 +55,7 @@ export const E2E_PROFILE_FIXTURE = {
   slideTwoTitleText: "Release Gate Fixture Details",
   slideBodyText: "Deterministic deck for the E2E release gate.",
   documentBodyText: "E2E fixture document body for the release gate profile.",
+  documentBodyBlockId: "e2eBodyBid01",
   documentTitle: "E2E Fixture Deck",
   layoutDocumentTitle: "E2E Fixture Layout Deck",
   dashboardTag: {
@@ -124,7 +125,7 @@ export function buildE2EProfileContentJson(
   visual: Visual = buildE2EProfileVisual(),
 ): SerializedFixtureEditorState {
   return buildEditorState([
-    buildParagraphNode(F.documentBodyText),
+    buildParagraphNode(F.documentBodyText, { bid: F.documentBodyBlockId }),
     buildVisualLexicalNode(F.visualId, visual),
   ]);
 }
@@ -257,6 +258,30 @@ export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
       },
     ],
   };
+}
+
+export function buildE2ESourceLinkedDeck(
+  assetUrl: string,
+  assetId: string,
+  documentId: string,
+): Deck {
+  const deck = buildE2EProfileDeck(assetUrl, assetId);
+  const sourceNode = deck.slides[0]?.children[0];
+  if (!sourceNode) {
+    throw new Error("E2E source-linked deck requires a first slide node.");
+  }
+  sourceNode.source = {
+    documentId,
+    blockId: F.documentBodyBlockId,
+    blockKind: "text",
+    linkedAt: "2026-01-01T00:00:00.000Z",
+    display: {
+      documentTitle: F.documentTitle,
+      blockLabel: F.documentBodyText,
+      blockKindLabel: "Text",
+    },
+  };
+  return deck;
 }
 
 export function buildE2EMultiSelectArrangeDeck(): Deck {

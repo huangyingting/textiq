@@ -47,8 +47,8 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 
 | Run mode     | Specs |
 | ------------ | ----- |
-| advisory-ci  | 16    |
-| opt-in-local | 12    |
+| advisory-ci  | 17    |
+| opt-in-local | 11    |
 | required-ci  | 1     |
 
 | Spec                                                            | Owners                              | Run mode     | Prerequisites / gates                                                                               | Roles                                          | Devices / viewports                            | CI status                                  |
@@ -56,7 +56,7 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 | `e2e/auth/auth-redirect.spec.ts`                                | auth, security                      | opt-in-local | `running app`                                                                                       | anonymous                                      | Desktop Chrome                                 | opt-in local/unrestricted Playwright suite |
 | `e2e/auth/authenticated-nested-routes.spec.ts`                  | auth, editor, presentation, billing | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/product/billing-brand.spec.ts`                             | billing, brand, product             | opt-in-local | `E2E_USER_EMAIL/PASSWORD`, `optional E2E_BRAND_FONT_URL`, `optional BILLING_UNLIMITED_CREDITS`      | owner                                          | Desktop Chrome                                 | opt-in local/staging only                  |
-| `e2e/editor/block-id-preservation.spec.ts`                      | editor, presentation                | opt-in-local | `E2E_USER_EMAIL/PASSWORD`, `E2E_BLOCK_ID_DOC_URL`                                                   | owner                                          | Desktop Chrome                                 | manual fixture-backed local run            |
+| `e2e/editor/block-id-preservation.spec.ts`                      | editor, presentation                | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/editor/document-editor-profile.spec.ts`                    | editor, documents                   | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/editor/document-table-autosave.spec.ts`                    | editor, documents, collaboration    | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/import/import-roundtrip.spec.ts`                           | import, editor                      | required-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded editor, seeded viewer     | Desktop Chrome                                 | required normal deterministic E2E workflow |
@@ -106,10 +106,9 @@ Mapped specs with an exact contract must contain only the proven Playwright regi
 
 ## Known manual, blocked, and catalog gaps
 
-| ID                       | Owner               | Status  | Gap                                                                                                                                                                  | Sources                                                                      |
-| ------------------------ | ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| BLOCK-ID-DEEP-ASSERTIONS | editor/presentation | blocked | Block-id preservation spec currently exercises fixture reachability; persisted bid/sourceRef assertions need stable diagnostics hooks.                               | `e2e/editor/block-id-preservation.spec.ts`, `docs/editor/document-editor.md` |
-| FULL-500-BROWSER-MATRIX  | ui matrix           | catalog | The 500-case catalog is intentionally not expanded into 500 browser tests; representative automated slices are promoted only when fixtures and selectors are stable. | `e2e/ui-matrix/cases.ts`, `e2e/ui-matrix/README.md`                          |
+| ID                      | Owner     | Status  | Gap                                                                                                                                                                  | Sources                                             |
+| ----------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| FULL-500-BROWSER-MATRIX | ui matrix | catalog | The 500-case catalog is intentionally not expanded into 500 browser tests; representative automated slices are promoted only when fixtures and selectors are stable. | `e2e/ui-matrix/cases.ts`, `e2e/ui-matrix/README.md` |
 
 ## Drift guard
 
