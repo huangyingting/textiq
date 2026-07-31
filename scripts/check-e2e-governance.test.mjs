@@ -244,7 +244,7 @@ test("e2e governance: accepts explicitly allowed skips", () => {
 
 test("e2e governance: flags local deck fixture factories in high-risk files", () => {
   const findings = scanText(
-    "e2e/visual/screenshot-regression.spec.ts",
+    "e2e/presentation/slides-layout-screenshots.spec.ts",
     "function makeDeck() { return {}; }",
   );
 

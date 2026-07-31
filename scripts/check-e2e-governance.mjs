@@ -14,8 +14,7 @@ const OVERSIZED_TEST_ALLOWLIST = new Set([
   // deck-schema.test.ts was split into focused per-concern files (#1147)
 ]);
 const FIXTURE_FACTORY_FILES = new Set([
-  "e2e/visual/screenshot-regression.spec.ts",
-  "e2e/helpers/screenshot-fixtures.ts",
+  "e2e/presentation/slides-layout-screenshots.spec.ts",
 ]);
 const RULES = [
   { rule: "test-only", pattern: /\btest\.only\s*\(/g },
@@ -134,7 +133,7 @@ function isApprovedFinding(filePath, lines, item) {
     const callWindow = lines
       .slice(item.lineNumber - 1, Math.min(lines.length, item.lineNumber + 4))
       .join("\n");
-    if (/Set E2E_|E2E_PROFILE|E2E_SCREENSHOT_REGRESSION/.test(callWindow)) {
+    if (/Set E2E_|E2E_PROFILE/.test(callWindow)) {
       return true;
     }
   }

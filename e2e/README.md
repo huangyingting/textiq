@@ -7,27 +7,26 @@ dedicated CI job; the unrestricted E2E suite remains local/opt-in.
 
 ## What's covered
 
-| Spec                                                    | Coverage                                                                                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `e2e/public-render/public-pages.spec.ts`                | Home / login / signup render (smoke)                                                                                           |
-| `e2e/auth/auth-redirect.spec.ts`                        | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                                                  |
-| `e2e/auth/oauth-disabled.spec.ts`                       | Google CTA hidden when the provider is unconfigured                                                                            |
-| `e2e/workspace/workspace.spec.ts`                       | Create / import, empty state, viewer restriction (auth-gated)                                                                  |
-| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                         |
-| `e2e/product/billing-brand.spec.ts`                     | Billing unlimited-credit UI + Brand Studio font persistence                                                                    |
-| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                |
-| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                  |
-| `e2e/visual/screenshot-regression.spec.ts`              | Slide screenshot regression with deterministic fixtures (opt-in via env var)                                                   |
-| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                |
-| `e2e/presentation/present-export.spec.ts`               | Authenticated + public present render; real PDF export download (profile-gated, #520)                                          |
-| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                            |
-| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                              |
-| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                    |
-| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                         |
-| `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                            |
-| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                  |
-| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                        |
-| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/editor/workspace checks; auth, presentation, and workspace/brand run deterministically |
+| Spec                                                    | Coverage                                                                                                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/public-render/public-pages.spec.ts`                | Home / login / signup render (smoke)                                                                                                                  |
+| `e2e/auth/auth-redirect.spec.ts`                        | Protected `/app*` → `/login?callbackUrl=...` (preserves path)                                                                                         |
+| `e2e/auth/oauth-disabled.spec.ts`                       | Google CTA hidden when the provider is unconfigured                                                                                                   |
+| `e2e/workspace/workspace.spec.ts`                       | Create / import, empty state, viewer restriction (auth-gated)                                                                                         |
+| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                                                |
+| `e2e/product/billing-brand.spec.ts`                     | Billing unlimited-credit UI + Brand Studio font persistence                                                                                           |
+| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                                       |
+| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                                         |
+| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                                       |
+| `e2e/presentation/present-export.spec.ts`               | Authenticated + public present render; real PDF export download (profile-gated, #520)                                                                 |
+| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                                                   |
+| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                                                     |
+| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                                           |
+| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                                                |
+| `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                                                   |
+| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                                         |
+| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                                               |
+| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/editor/workspace checks; auth, editor, presentation, public render, and workspace/brand run deterministically |
 
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
 `e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
@@ -114,8 +113,6 @@ credentials:
 | `E2E_SLIDES_DOC_URL`            | slides-smoke                       | Full URL to a seeded document with a Slides presentation                                                     |
 | `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to run layout screenshots outside the deterministic profile                                       |
 | `E2E_SLIDES_EDITOR_PATH`        | slides-layout-screenshots          | Override the seeded editor document path used by layout screenshots                                          |
-| `E2E_SCREENSHOT_REGRESSION`     | screenshot-regression              | Set to `1` to enable screenshot comparison tests                                                             |
-| `E2E_REGRESSION_SHARE_ID`       | screenshot-regression              | A share id for the public present/embed regression slides                                                    |
 | `E2E_PROFILE`                   | profile specs + layout screenshots | Set to `1` to run deterministic profile specs (including layout screenshots)                                 |
 
 ## Deterministic E2E profile (Epic #517)
@@ -125,6 +122,7 @@ above skip without env credentials. The **deterministic E2E profile** removes
 that ambiguity for the critical-flow specs
 (`e2e/editor/document-editor-profile.spec.ts`,
 `e2e/import/import-roundtrip.spec.ts`,
+`e2e/public-render/share-fallback.spec.ts`,
 `e2e/presentation/focus-and-mobile-controls-regression.spec.ts`,
 `e2e/presentation/overlap-selection-regression.spec.ts`,
 `e2e/presentation/present-export.spec.ts`,
@@ -135,9 +133,11 @@ that ambiguity for the critical-flow specs
 `e2e/presentation/slides-conflict-recovery.spec.ts`,
 `e2e/presentation/slides-layout-screenshots.spec.ts`,
 `e2e/presentation/slides-smoke.spec.ts`,
-`e2e/presentation/touch-controls.spec.ts`, and
+`e2e/presentation/touch-controls.spec.ts`,
 `e2e/ui-matrix/auth-public-ui.spec.ts`,
-`e2e/ui-matrix/presentation-ui.spec.ts`, and
+`e2e/ui-matrix/document-editor-ui.spec.ts`,
+`e2e/ui-matrix/presentation-ui.spec.ts`,
+`e2e/ui-matrix/public-render-ui.spec.ts`, and
 `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known users
 and isolated documents, and the specs run for real against them.
 
@@ -318,49 +318,23 @@ E2E_SLIDES_DOC_URL=http://localhost:3000/app/documents/YOUR_DOC_ID \
 npx playwright test e2e/presentation/slides-smoke.spec.ts
 ```
 
-## Screenshot regression (`e2e/visual/screenshot-regression.spec.ts`)
-
-Screenshot regression tests are **opt-in** via `E2E_SCREENSHOT_REGRESSION=1`.
-They use a deterministic deck fixture (no server required for fixture-integrity
-tests) and compare rendered slides against stored baselines.
-
-### Snapshot policy
-
-Screenshot baselines are opt-in release artifacts, not part of the fast unit
-gate. Update them only when rendered slide-stage output intentionally changes;
-reviewers should compare the rendered diff with the corresponding schema/source
-change. Snapshot specs must use shared builders for deck fixtures and stable
-readiness helpers instead of raw sleeps.
-
-### Generate baselines
-
-```bash
-E2E_SCREENSHOT_REGRESSION=1 npx playwright test e2e/visual/screenshot-regression.spec.ts --update-snapshots
-```
-
-### Run comparison
-
-```bash
-E2E_SCREENSHOT_REGRESSION=1 npx playwright test e2e/visual/screenshot-regression.spec.ts
-```
-
-### Tolerances
-
-Screenshot comparisons use a 2% max-diff pixel ratio and a 0.2 per-pixel
-threshold to absorb minor sub-pixel rendering differences across OS/GPU. These
-values are defined in the spec and can be tightened once a stable baseline is
-established.
-
 ## Layout screenshots (`e2e/presentation/slides-layout-screenshots.spec.ts`)
 
-This suite snapshots the presentation slide-editor shell (desktop/tablet/mobile) for
-base, rail-hidden, notes-expanded, and panel-open states using the
-deterministic profile fixture.
+This is the canonical pixel-regression suite. It snapshots the presentation
+slide-editor shell on desktop, tablet, and mobile for base, rail-hidden,
+notes-expanded, and panel-open states using the deterministic profile fixture
+and 12 committed Linux baselines.
 
 - Under `E2E_PROFILE=1`, the suite is part of the deterministic profile run and
   fails loudly if fixtures are unavailable.
 - Outside the profile, set `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` for explicit
   screenshot runs.
+
+Snapshot baselines are opt-in release artifacts, not part of the fast unit
+gate. Update them only when rendered slide-stage output intentionally changes;
+reviewers should compare the rendered diff with the corresponding schema/source
+change. Snapshot specs must use stable seeded fixtures and readiness helpers
+instead of raw sleeps.
 
 ### Generate baselines
 

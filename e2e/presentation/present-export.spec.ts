@@ -24,7 +24,9 @@ import {
  *   3. A real export download is triggered (PDF) and asserted to produce a file
  *      with a `.pdf` extension and nonzero bytes (via `waitForEvent('download')`).
  *
- * Pixel-level regression stays in `e2e/visual/screenshot-regression.spec.ts`.
+ * Pixel-level editor regression stays in
+ * `e2e/presentation/slides-layout-screenshots.spec.ts`; this suite owns the
+ * present/export interaction contract.
  *
  * Runs ONLY under the deterministic E2E profile (`E2E_PROFILE=1` +
  * `npm run db:seed:e2e`); skips cleanly otherwise so the fast gate stays green.

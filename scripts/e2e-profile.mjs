@@ -209,6 +209,12 @@ export function buildE2EProfileEnv(
           path: "/app/documents/e2efixturedocument0000001",
           status: 200,
         },
+        {
+          kind: "collaboration-authorize",
+          method: "GET",
+          path: "/api/collab/authorize?room=e2efixturedocument0000001",
+          status: 200,
+        },
       ]),
     E2E_PROFILE_READINESS_URL: configuredReadinessUrl.toString(),
     E2E_PROFILE_READINESS_TIMEOUT_MS:

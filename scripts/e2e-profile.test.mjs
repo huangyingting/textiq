@@ -88,6 +88,27 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(JSON.parse(env.E2E_PROFILE_FIXTURE_SLOTS).length, 4);
 });
 
+test("self-contained profile warms collaboration authorization before browser connections", () => {
+  const env = buildE2EProfileEnv(
+    {},
+    {
+      repoRoot: process.cwd(),
+      runId: "collab-authorize-readiness",
+      runNonce: "9".repeat(64),
+    },
+  );
+
+  assert.ok(
+    JSON.parse(env.E2E_PROFILE_PRECOMPILE_ROUTES).some(
+      (route) =>
+        route.method === "GET" &&
+        route.path === "/api/collab/authorize?room=e2efixturedocument0000001" &&
+        route.status === 200,
+    ),
+    "the seeded collaboration room must be authorized during readiness so cold compilation cannot consume the 5-second WebSocket authorization deadline",
+  );
+});
+
 test("self-contained profile preserves explicit Google OAuth configuration", () => {
   const env = buildE2EProfileEnv(
     {

@@ -259,31 +259,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md"],
   },
   {
-    spec: "e2e/visual/screenshot-regression.spec.ts",
-    owners: ["presentation", "visual", "operations"],
-    coverage:
-      "Opt-in visual snapshots for editor stage, in-app present, and public present fixtures.",
-    runMode: "opt-in-local",
-    prerequisites: [
-      "E2E_SCREENSHOT_REGRESSION=1",
-      "running app",
-      "snapshot baselines",
-    ],
-    roles: ["anonymous", "fixture routes"],
-    devices: ["Desktop Chrome", "fixed slide viewport"],
-    ciStatus: "opt-in local visual comparison",
-    sourceRefs: ["e2e/README.md", "docs/presentation/rendering-and-export.md"],
-  },
-  {
     spec: "e2e/public-render/share-fallback.spec.ts",
     owners: ["public-render", "security"],
     coverage:
       "Unknown, malformed, and slug-prefixed share/present/embed routes return safe 404s.",
-    runMode: "opt-in-local",
-    prerequisites: ["running app"],
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["anonymous"],
     devices: ["Desktop Chrome", "request API"],
-    ciStatus: "opt-in local/unrestricted Playwright suite",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/public-render/README.md"],
   },
   {
@@ -399,12 +383,12 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
     owners: ["editor", "documents"],
     coverage:
-      "Representative UI matrix checks for document body, slide-entry link, and viewer read path.",
-    runMode: "opt-in-local",
+      "Deterministic document body editability, slide-entry navigation, and viewer read-only affordance removal.",
+    runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded viewer"],
     devices: ["Desktop Chrome"],
-    ciStatus: "explicit UI matrix browser run only",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/editor/document-editor.md"],
   },
   {
@@ -426,12 +410,12 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/public-render-ui.spec.ts",
     owners: ["public-render", "security"],
     coverage:
-      "Representative UI matrix checks for public present/embed/share and share-bound asset access.",
-    runMode: "opt-in-local",
+      "Deterministic public present/embed/share rendering, read-only affordances, safe fallbacks, and positive/negative share-bound asset access.",
+    runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["anonymous public", "request API"],
     devices: ["Desktop Chrome"],
-    ciStatus: "explicit UI matrix browser run only",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/public-render/README.md"],
   },
   {

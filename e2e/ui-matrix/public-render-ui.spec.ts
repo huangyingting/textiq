@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
+  profileAssetPath,
   profileAssetSharePath,
   profilePresentEmbedPath,
   profilePresentPath,
@@ -70,7 +71,7 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     }
   });
 
-  test("share-bound slide assets serve only with present or embed binding", async () => {
+  test("share-bound slide assets require an active present or embed binding", async () => {
     const publicRequest = unauthenticatedRequest();
     const presentAsset = await publicRequest.get(
       profileAssetSharePath("present"),
@@ -81,6 +82,16 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     const embedAsset = await publicRequest.get(profileAssetSharePath("embed"));
     expect(embedAsset.status()).toBe(200);
     expect((await embedAsset.body()).byteLength).toBeGreaterThan(0);
+
+    for (const deniedPath of [
+      profileAssetPath(),
+      `${profileAssetPath()}?shareId=${E2E_PROFILE_FIXTURE.shareId}&shareMode=view`,
+      `${profileAssetPath()}?shareId=rotated-share-id&shareMode=present`,
+    ]) {
+      const denied = await publicRequest.get(deniedPath);
+      expect(denied.status(), deniedPath).toBe(403);
+      expect(await denied.text(), deniedPath).toMatch(/forbidden/i);
+    }
   });
 
   test("valid public share route renders a read-only document surface", async ({
@@ -94,5 +105,12 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
         .first(),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByLabel(/document title/i)).toHaveCount(0);
+    await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Open slide editor" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Export document" }),
+    ).toHaveCount(0);
   });
 });

@@ -57,6 +57,7 @@ const deterministicProfileSpecs = [
   "editor/document-editor-profile.spec.ts",
   "editor/document-table-autosave.spec.ts",
   "import/import-roundtrip.spec.ts",
+  "public-render/share-fallback.spec.ts",
   "presentation/focus-and-mobile-controls-regression.spec.ts",
   "presentation/overlap-selection-regression.spec.ts",
   "presentation/present-export.spec.ts",
@@ -70,7 +71,9 @@ const deterministicProfileSpecs = [
   "presentation/touch-controls.spec.ts",
   "ui-matrix/auth-public-ui.spec.ts",
   "ui-matrix/catalog.spec.ts",
+  "ui-matrix/document-editor-ui.spec.ts",
   "ui-matrix/presentation-ui.spec.ts",
+  "ui-matrix/public-render-ui.spec.ts",
   "ui-matrix/workspace-billing-brand-ui.spec.ts",
 ];
 const explicitProfileSpecs = parseExplicitProfileSpecs(

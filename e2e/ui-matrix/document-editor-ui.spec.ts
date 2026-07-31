@@ -20,6 +20,9 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   }) => {
     await openProfileDocument(page);
     await expect(
+      page.getByRole("textbox", { name: "Document body" }),
+    ).toHaveAttribute("contenteditable", "true", { timeout: 20_000 });
+    await expect(
       page.getByRole("link", { name: "Open slide editor" }),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Release Gate").first()).toBeVisible();
@@ -40,13 +43,18 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
     ).toBeVisible();
   });
 
-  test("viewer can read the fixture document through workspace access", async ({
+  test("viewer sees a read-only document with edit-only controls removed", async ({
     page,
   }) => {
     await login(page, profileViewerCredentials(), profileDocPath());
+    const documentBody = page.getByRole("textbox", { name: "Document body" });
+    await expect(documentBody).toBeVisible({ timeout: 60_000 });
+    await expect(documentBody).toHaveAttribute("contenteditable", "false");
+    await expect(page.getByText("Read-only", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("textbox", { name: "Document body" }),
-    ).toBeVisible({ timeout: 60_000 });
+      page.getByRole("link", { name: "Open slide editor" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Style" })).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(profileDocPath()));
   });
 });
