@@ -15,7 +15,7 @@
  * cancellation so the caller can fall back only for genuine failures.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createOperationIdempotencyKey } from "@/lib/ai/idempotency-key";
 import {
@@ -55,6 +55,11 @@ interface OperationIdempotencyState {
   key: string;
 }
 
+interface ActiveGenerationOperation {
+  token: object;
+  promise: Promise<DeckGenerateResult>;
+}
+
 export interface UseDeckGenerationResult {
   /** Kick off a generation for the given document content + options. */
   generate: (
@@ -92,6 +97,9 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<DeckGenerateError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeGenerationRef = useRef<ActiveGenerationOperation | null>(null);
+  const activationLockRef = useRef(false);
+  const mountedRef = useRef(true);
   const cancelReasonRef = useRef<
     WeakMap<AbortController, DeckGenerateCancelKind>
   >(new WeakMap());
@@ -103,13 +111,39 @@ export function useDeckGeneration(): UseDeckGenerationResult {
     status === "loading",
   );
 
+  // Same-render duplicate activation shares the active request. A later
+  // rendered interaction can still intentionally supersede it with new input.
+  useEffect(() => {
+    activationLockRef.current = false;
+  });
+
+  useEffect(() => {
+    const cancelReasons = cancelReasonRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activationLockRef.current = false;
+      activeGenerationRef.current = null;
+      operationIdempotencyRef.current = null;
+      const controller = abortRef.current;
+      if (controller) {
+        cancelReasons.set(controller, "canceled");
+        controller.abort();
+      }
+      abortRef.current = null;
+    };
+  }, []);
+
   const reset = useCallback(() => {
     if (abortRef.current) {
       cancelReasonRef.current.set(abortRef.current, "canceled");
       abortRef.current.abort();
     }
     abortRef.current = null;
+    activeGenerationRef.current = null;
+    activationLockRef.current = false;
     operationIdempotencyRef.current = null;
+    if (!mountedRef.current) return;
     setStatus("idle");
     setDeck(null);
     setTruncated(false);
@@ -117,112 +151,130 @@ export function useDeckGeneration(): UseDeckGenerationResult {
   }, []);
 
   const generate = useCallback(
-    async (
+    (
       contentJson: unknown,
       options: DeckGenerationOptions = {},
       request?: DeckGenerationRequest,
     ): Promise<DeckGenerateResult> => {
-      if (abortRef.current) {
-        cancelReasonRef.current.set(abortRef.current, "superseded");
-        abortRef.current.abort();
+      if (activationLockRef.current) {
+        const activeOperation = activeGenerationRef.current;
+        if (activeOperation) return activeOperation.promise;
       }
-      const controller = new AbortController();
-      abortRef.current = controller;
+      activationLockRef.current = true;
+      const token = {};
 
-      setStatus("loading");
-      setDeck(null);
-      setTruncated(false);
-      setError(null);
-      const serializedLength =
-        typeof contentJson === "string"
-          ? contentJson.length
-          : (JSON.stringify(contentJson)?.length ?? 0);
-      const operationFingerprint = JSON.stringify({
-        contentJson:
+      const execute = async (): Promise<DeckGenerateResult> => {
+        if (abortRef.current) {
+          cancelReasonRef.current.set(abortRef.current, "superseded");
+          abortRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        setStatus("loading");
+        setDeck(null);
+        setTruncated(false);
+        setError(null);
+        const serializedLength =
           typeof contentJson === "string"
-            ? contentJson
-            : (JSON.stringify(contentJson) ?? "null"),
-        options: {
-          length: options.length ?? null,
-          tone: options.tone?.trim() ?? "",
-          audience: options.audience?.trim() ?? "",
-          mode: options.mode ?? null,
-        },
-        themePackageId: request?.themePackageId ?? null,
-      });
-      const nextOperationIdempotency =
-        request?.idempotencyKey?.trim() &&
-        request.idempotencyKey.trim().length > 0
-          ? {
-              fingerprint: operationFingerprint,
-              key: request.idempotencyKey.trim(),
-            }
-          : operationIdempotencyRef.current?.fingerprint ===
-              operationFingerprint
-            ? operationIdempotencyRef.current
-            : {
+            ? contentJson.length
+            : (JSON.stringify(contentJson)?.length ?? 0);
+        const operationFingerprint = JSON.stringify({
+          contentJson:
+            typeof contentJson === "string"
+              ? contentJson
+              : (JSON.stringify(contentJson) ?? "null"),
+          options: {
+            length: options.length ?? null,
+            tone: options.tone?.trim() ?? "",
+            audience: options.audience?.trim() ?? "",
+            mode: options.mode ?? null,
+          },
+          themePackageId: request?.themePackageId ?? null,
+        });
+        const nextOperationIdempotency =
+          request?.idempotencyKey?.trim() &&
+          request.idempotencyKey.trim().length > 0
+            ? {
                 fingerprint: operationFingerprint,
-                key: createOperationIdempotencyKey("deck-generate"),
-              };
-      operationIdempotencyRef.current = nextOperationIdempotency;
-      const inputSizeBucket = bucketBytes(serializedLength);
-      const startedAt = performance.now();
-      emitProductTelemetry("product.ai.deck.started", {
-        inputSizeBucket,
-        optionLength: options.length ?? "default",
-        sourceKind: "document",
+                key: request.idempotencyKey.trim(),
+              }
+            : operationIdempotencyRef.current?.fingerprint ===
+                operationFingerprint
+              ? operationIdempotencyRef.current
+              : {
+                  fingerprint: operationFingerprint,
+                  key: createOperationIdempotencyKey("deck-generate"),
+                };
+        operationIdempotencyRef.current = nextOperationIdempotency;
+        const inputSizeBucket = bucketBytes(serializedLength);
+        const startedAt = performance.now();
+        emitProductTelemetry("product.ai.deck.started", {
+          inputSizeBucket,
+          optionLength: options.length ?? "default",
+          sourceKind: "document",
+        });
+
+        const result = await requestDeckGeneration(
+          contentJson,
+          options,
+          fetch,
+          controller.signal,
+          {
+            themePackageId: request?.themePackageId,
+            idempotencyKey: nextOperationIdempotency.key,
+          },
+        );
+
+        // A newer request, reset, or unmount made this result stale.
+        const cancelKind = cancelReasonRef.current.get(controller);
+        if (cancelKind) {
+          cancelReasonRef.current.delete(controller);
+          return { ok: false, canceled: true, cancelKind };
+        }
+        if (!mountedRef.current || abortRef.current !== controller) {
+          return {
+            ok: false,
+            canceled: true,
+            cancelKind: abortRef.current ? "superseded" : "canceled",
+          };
+        }
+        abortRef.current = null;
+
+        if (result.ok) {
+          emitProductTelemetry("product.ai.deck.candidate", {
+            durationBucket: bucketDurationMs(performance.now() - startedAt),
+            inputSizeBucket,
+            optionLength: options.length ?? "default",
+            slideCount: result.deck.slides.length,
+            truncated: result.truncated,
+          });
+          setDeck(result.deck);
+          setTruncated(result.truncated);
+          setStatus("success");
+        } else if (result.canceled) {
+          setStatus("idle");
+        } else {
+          emitProductTelemetry("product.ai.deck.failed", {
+            durationBucket: bucketDurationMs(performance.now() - startedAt),
+            failureReason: result.errorKind,
+            inputSizeBucket,
+            optionLength: options.length ?? "default",
+          });
+          setError({ message: result.error, kind: result.errorKind });
+          setStatus("error");
+        }
+        return result;
+      };
+
+      const promise = execute().finally(() => {
+        if (activeGenerationRef.current?.token === token) {
+          activeGenerationRef.current = null;
+          activationLockRef.current = false;
+        }
       });
-
-      const result = await requestDeckGeneration(
-        contentJson,
-        options,
-        fetch,
-        controller.signal,
-        {
-          themePackageId: request?.themePackageId,
-          idempotencyKey: nextOperationIdempotency.key,
-        },
-      );
-
-      // A newer request (or reset) made this result stale — ignore it.
-      const cancelKind = cancelReasonRef.current.get(controller);
-      if (cancelKind) {
-        cancelReasonRef.current.delete(controller);
-        return { ok: false, canceled: true, cancelKind };
-      }
-      if (abortRef.current !== controller) {
-        return {
-          ok: false,
-          canceled: true,
-          cancelKind: abortRef.current ? "superseded" : "canceled",
-        };
-      }
-      abortRef.current = null;
-
-      if (result.ok) {
-        emitProductTelemetry("product.ai.deck.candidate", {
-          durationBucket: bucketDurationMs(performance.now() - startedAt),
-          inputSizeBucket,
-          optionLength: options.length ?? "default",
-          slideCount: result.deck.slides.length,
-          truncated: result.truncated,
-        });
-        setDeck(result.deck);
-        setTruncated(result.truncated);
-        setStatus("success");
-      } else if (result.canceled) {
-        setStatus("idle");
-      } else {
-        emitProductTelemetry("product.ai.deck.failed", {
-          durationBucket: bucketDurationMs(performance.now() - startedAt),
-          failureReason: result.errorKind,
-          inputSizeBucket,
-          optionLength: options.length ?? "default",
-        });
-        setError({ message: result.error, kind: result.errorKind });
-        setStatus("error");
-      }
-      return result;
+      activeGenerationRef.current = { token, promise };
+      return promise;
     },
     [],
   );

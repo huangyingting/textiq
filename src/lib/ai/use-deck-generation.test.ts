@@ -108,6 +108,47 @@ test("useDeckGeneration reuses idempotency keys for the same operation and rotat
   }
 });
 
+test("useDeckGeneration shares same-render duplicate activation with one request", async () => {
+  const originalFetch = globalThis.fetch;
+  const renderer = createReactRenderHarness();
+  const pendingFetch = createDeferred<Response>();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return pendingFetch.promise;
+  }) as typeof fetch;
+
+  try {
+    const generation = renderer.run(() => useDeckGeneration()).generate;
+    const input = {
+      root: { children: [{ type: "paragraph", text: "one request" }] },
+    };
+    const first = generation(
+      input,
+      { length: "medium" },
+      { themePackageId: "noir" },
+    );
+    const duplicate = generation(
+      input,
+      { length: "medium" },
+      { themePackageId: "noir" },
+    );
+
+    assert.equal(callCount, 1);
+    pendingFetch.resolve(successfulDeckResponse());
+    const [firstResult, duplicateResult] = await Promise.all([
+      first,
+      duplicate,
+    ]);
+    assert.equal(firstResult.ok, true);
+    assert.equal(duplicateResult.ok, true);
+  } finally {
+    renderer.cleanup();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("useDeckGeneration reset starts a new idempotency lifecycle", async () => {
   const seenKeys: string[] = [];
   const originalFetch = globalThis.fetch;
@@ -227,6 +268,36 @@ test("useDeckGeneration reset ignores a late success from an aborted request", a
     assert.equal(state.status, "idle");
     assert.equal(state.deck, null);
     assert.equal(state.error, null);
+  } finally {
+    renderer.cleanup();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("useDeckGeneration unmount invalidates a late success", async () => {
+  const originalFetch = globalThis.fetch;
+  const renderer = createReactRenderHarness();
+  const pendingFetch = createDeferred<Response>();
+
+  globalThis.fetch = (async () => pendingFetch.promise) as typeof fetch;
+
+  try {
+    const generation = renderer
+      .run(() => useDeckGeneration())
+      .generate(
+        { root: { children: [{ type: "paragraph", text: "late" }] } },
+        { length: "medium" },
+        { themePackageId: "noir" },
+      );
+    renderer.cleanup();
+    pendingFetch.resolve(successfulDeckResponse());
+
+    const result = await generation;
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.canceled, true);
+      if (result.canceled) assert.equal(result.cancelKind, "canceled");
+    }
   } finally {
     renderer.cleanup();
     globalThis.fetch = originalFetch;

@@ -61,6 +61,60 @@ export interface PresentModeProps {
   onClose: () => void;
 }
 
+export async function runPresentModeAutoFullscreen({
+  isActive,
+  requestFullscreen,
+  exitFullscreen,
+  setHintVisible,
+}: {
+  isActive: () => boolean;
+  requestFullscreen: () => Promise<boolean>;
+  exitFullscreen: () => Promise<boolean>;
+  setHintVisible: (visible: boolean) => void;
+}): Promise<void> {
+  const succeeded = await requestFullscreen();
+  if (!isActive()) {
+    if (succeeded) {
+      await exitFullscreen();
+    }
+    return;
+  }
+  setHintVisible(!succeeded);
+}
+
+export function usePresentModeClose(onClose: () => void): () => Promise<void> {
+  const closeOperationRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      closeOperationRef.current = null;
+    };
+  }, []);
+
+  return useCallback(() => {
+    const activeOperation = closeOperationRef.current;
+    if (activeOperation) return activeOperation;
+
+    const promise = (async () => {
+      if (getFullscreenElement(document)) {
+        await exitBrowserFullscreen();
+      }
+      if (mountedRef.current) {
+        onClose();
+      }
+    })().finally(() => {
+      if (closeOperationRef.current === promise) {
+        closeOperationRef.current = null;
+      }
+    });
+    closeOperationRef.current = promise;
+    return promise;
+  }, [onClose]);
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -135,20 +189,24 @@ export function PresentMode({
     fullscreenHintVisible;
   const bottomHudVisible = hudVisible || keyboardHelpOpen || overviewOpen;
 
-  const handleClose = useCallback(async () => {
-    if (getFullscreenElement(document)) {
-      await exitBrowserFullscreen();
-    }
-    onClose();
-  }, [onClose]);
+  const handleClose = usePresentModeClose(onClose);
 
   useEffect(() => {
-    void (async () => {
-      startedAtRef.current = Date.now();
-      containerRef.current?.focus();
-      const succeeded = await requestBrowserFullscreen();
-      setFullscreenHintVisible(!succeeded);
-    })();
+    let active = true;
+    startedAtRef.current = Date.now();
+    containerRef.current?.focus();
+    void runPresentModeAutoFullscreen({
+      isActive: () => active,
+      requestFullscreen: requestBrowserFullscreen,
+      exitFullscreen: exitBrowserFullscreen,
+      setHintVisible: setFullscreenHintVisible,
+    });
+    return () => {
+      active = false;
+      if (getFullscreenElement(document)) {
+        void exitBrowserFullscreen();
+      }
+    };
   }, [setFullscreenHintVisible, startedAtRef]);
 
   useEffect(() => {

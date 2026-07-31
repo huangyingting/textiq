@@ -18,7 +18,7 @@
  */
 
 import { RefreshCw, Sparkles } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { Dialog } from "@/components/ui";
@@ -212,9 +212,21 @@ export function DeckGenerationPreview({
   const [diagnosticsReviewOpen, setDiagnosticsReviewOpen] = useState(false);
 
   const { generate, status, reset } = useDeckGeneration();
+  const regenerationOperationRef = useRef<{
+    token: object;
+    promise: Promise<void>;
+  } | null>(null);
+  const mountedRef = useRef(true);
   const isRegenerating = status === "loading";
 
-  useEffect(() => reset, [reset]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      regenerationOperationRef.current = null;
+      reset();
+    };
+  }, [reset]);
 
   const diff = useMemo(
     () => diffDecks(baselineDeck, proposal),
@@ -223,16 +235,54 @@ export function DeckGenerationPreview({
 
   const renderTree = useDeckRenderTree(proposal, pkg);
 
-  const handleRegenerate = async () => {
-    setRegenError(false);
-    const result = await generate(contentJson, options, { themePackageId });
-    if (result.ok) {
-      setProposal(result.deck);
-      setDiagnostics(dedupePresentationDiagnostics(result.diagnostics));
-      setDiagnosticsReviewOpen(false);
-    } else {
-      setRegenError(true);
-    }
+  const handleRegenerate = (): Promise<void> => {
+    const activeOperation = regenerationOperationRef.current;
+    if (activeOperation) return activeOperation.promise;
+
+    const token = {};
+    const promise = (async () => {
+      setRegenError(false);
+      const result = await generate(contentJson, options, { themePackageId });
+      if (
+        !mountedRef.current ||
+        regenerationOperationRef.current?.token !== token
+      ) {
+        return;
+      }
+      if (result.ok) {
+        setProposal(result.deck);
+        setDiagnostics(dedupePresentationDiagnostics(result.diagnostics));
+        setDiagnosticsReviewOpen(false);
+      } else if (!result.canceled) {
+        setRegenError(true);
+      }
+    })().finally(() => {
+      if (regenerationOperationRef.current?.token === token) {
+        regenerationOperationRef.current = null;
+      }
+    });
+    regenerationOperationRef.current = { token, promise };
+    return promise;
+  };
+
+  const handleCancel = () => {
+    if (regenerationOperationRef.current) return;
+    onCancel();
+  };
+
+  const handleDerive = () => {
+    if (regenerationOperationRef.current) return;
+    onDerive();
+  };
+
+  const handleApply = () => {
+    if (regenerationOperationRef.current) return;
+    onApply(proposal, diagnostics);
+  };
+
+  const handleReviewDiagnostics = () => {
+    if (regenerationOperationRef.current) return;
+    setDiagnosticsReviewOpen(true);
   };
 
   const canvasAspectRatio =
@@ -243,7 +293,7 @@ export function DeckGenerationPreview({
   return (
     <Dialog
       open
-      onClose={onCancel}
+      onClose={handleCancel}
       aria-labelledby={titleId}
       aria-busy={isRegenerating}
       className="flex max-h-[calc(100vh-2rem)] w-[44rem] max-w-[calc(100vw-2rem)] flex-col gap-4 border-ds-border-subtle bg-ds-surface-overlay p-5 shadow-ds-popover"
@@ -290,7 +340,7 @@ export function DeckGenerationPreview({
       <DeckGenerationDiagnosticsNotice
         diagnosticsCount={diagnostics.length}
         isRegenerating={isRegenerating}
-        onReview={() => setDiagnosticsReviewOpen(true)}
+        onReview={handleReviewDiagnostics}
       />
 
       <div className="relative min-h-0 flex-1 overflow-y-auto rounded-ds-md border border-ds-border-subtle bg-ds-surface-raised p-3">
@@ -344,7 +394,7 @@ export function DeckGenerationPreview({
         <Button
           variant="plain"
           size="md"
-          onClick={onCancel}
+          onClick={handleCancel}
           disabled={isRegenerating}
         >
           Cancel
@@ -352,7 +402,7 @@ export function DeckGenerationPreview({
         <Button
           variant="subtle"
           size="md"
-          onClick={onDerive}
+          onClick={handleDerive}
           disabled={isRegenerating}
         >
           Use derived deck instead
@@ -369,7 +419,7 @@ export function DeckGenerationPreview({
         <Button
           variant="solid"
           size="md"
-          onClick={() => onApply(proposal, diagnostics)}
+          onClick={handleApply}
           disabled={isRegenerating}
         >
           <Sparkles size={15} aria-hidden="true" />

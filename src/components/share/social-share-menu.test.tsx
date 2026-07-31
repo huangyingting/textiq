@@ -604,6 +604,40 @@ describe("SocialShareMenu — copy image to clipboard", () => {
 
     assert.match(textOf(renderer.root), /Copy failed/);
   });
+
+  test("an export settling after unmount cannot write to the clipboard", async () => {
+    const browser = setupBrowser();
+    let resolveExport!: (blob: Blob | null) => void;
+    resetExportState(
+      () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    const renderer = mount(
+      {
+        title: "My doc",
+        shareUrl: "https://x.test/s/doc",
+        inline: true,
+        getSvgElement: fakeSvg,
+      },
+      browser,
+    );
+
+    act(() => {
+      (findActionButton(renderer, "Copy image").props.onClick as () => void)();
+    });
+    act(() => renderer.unmount());
+    cleanup = () => browser.restore();
+
+    await act(async () => {
+      resolveExport(new Blob(["png"], { type: "image/png" }));
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+    });
+
+    assert.equal(browser.state.clipboardWriteCalls.length, 0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -727,6 +761,40 @@ describe("SocialShareMenu — native share", () => {
       t.mock.timers.tick(2500);
     });
     assert.match(textOf(findActionButton(renderer, "Share via")), /Share via…/);
+  });
+
+  test("an export settling after unmount cannot open the native share sheet", async () => {
+    const browser = setupBrowser();
+    let resolveExport!: (blob: Blob | null) => void;
+    resetExportState(
+      () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    const renderer = mount(
+      {
+        title: "My doc",
+        shareUrl: "https://x.test/s/doc",
+        inline: true,
+        getSvgElement: fakeSvg,
+      },
+      browser,
+    );
+
+    act(() => {
+      (findActionButton(renderer, "Share via").props.onClick as () => void)();
+    });
+    act(() => renderer.unmount());
+    cleanup = () => browser.restore();
+
+    await act(async () => {
+      resolveExport(new Blob(["png"], { type: "image/png" }));
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+    });
+
+    assert.equal(browser.state.shareCalls.length, 0);
   });
 });
 

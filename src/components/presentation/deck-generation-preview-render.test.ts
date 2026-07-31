@@ -37,6 +37,27 @@ function textContent(node: ReactNode): string {
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
+function findAction(tree: ReactNode, label: string): ReactElement {
+  const action = collectElements(tree).find(
+    (element) =>
+      textContent((element.props as { children?: ReactNode }).children) ===
+      label,
+  );
+  assert.ok(action, `Missing ${label} action`);
+  return action;
+}
+
 function previewDecks() {
   const baseline = buildDeck([
     buildSlide("content", [buildTextNode({ id: "text-a" })], {
@@ -270,6 +291,94 @@ test("DeckGenerationPreview sends the original theme package on regenerate", asy
       themePackageId: "noir",
     });
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("DeckGenerationPreview serializes regeneration against duplicate and competing actions", async () => {
+  const { baseline, proposal } = previewDecks();
+  const hookRenderer = createHookRenderer();
+  const originalFetch = globalThis.fetch;
+  const pendingFetch = createDeferred<Response>();
+  const regenerated = buildDeck(
+    [
+      buildSlide("content", [buildTextNode({ id: "text-regenerated" })], {
+        id: "slide-regenerated",
+      }),
+    ],
+    { theme: { packageId: "noir" } },
+  );
+  let fetchCalls = 0;
+  let applyCalls = 0;
+  let appliedDeck: unknown;
+  let deriveCalls = 0;
+  let cancelCalls = 0;
+
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return pendingFetch.promise;
+  }) as typeof fetch;
+
+  const render = () =>
+    hookRenderer.run(() =>
+      DeckGenerationPreview({
+        proposedDeck: proposal,
+        baselineDeck: baseline,
+        truncated: false,
+        generationDiagnostics: [],
+        contentJson: '{"root":{"children":[]}}',
+        options: { length: "medium" },
+        themePackageId: "noir",
+        onApply: (deck) => {
+          applyCalls += 1;
+          appliedDeck = deck;
+        },
+        onDerive: () => {
+          deriveCalls += 1;
+        },
+        onCancel: () => {
+          cancelCalls += 1;
+        },
+      }),
+    );
+
+  try {
+    const tree = render();
+    const regenerate = findAction(tree, "Regenerate").props as {
+      onClick: () => Promise<void>;
+    };
+    const first = regenerate.onClick();
+    const duplicate = regenerate.onClick();
+    (findAction(tree, "Apply").props as { onClick: () => void }).onClick();
+    (
+      findAction(tree, "Use derived deck instead").props as {
+        onClick: () => void;
+      }
+    ).onClick();
+    (findAction(tree, "Cancel").props as { onClick: () => void }).onClick();
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(applyCalls, 0);
+    assert.equal(deriveCalls, 0);
+    assert.equal(cancelCalls, 0);
+
+    pendingFetch.resolve(
+      new Response(
+        JSON.stringify({
+          deck: regenerated,
+          truncated: false,
+          diagnostics: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await Promise.all([first, duplicate]);
+
+    (findAction(render(), "Apply").props as { onClick: () => void }).onClick();
+    assert.equal(applyCalls, 1);
+    assert.deepEqual(appliedDeck, regenerated);
+  } finally {
+    hookRenderer.cleanup();
     globalThis.fetch = originalFetch;
   }
 });

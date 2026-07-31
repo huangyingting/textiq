@@ -168,6 +168,12 @@ Clipboard actions report pending work before announcing success, and failures
 remain inline instead of claiming that content was copied. Social-platform
 actions open only the public share URL in sized, opener-isolated popups using
 `noopener,noreferrer`; they do not transmit document content directly.
+Image copy and native-share actions share one synchronous operation boundary,
+so duplicate or competing activation cannot start a second raster export.
+Closing or unmounting the owning menu invalidates that export before it can
+write to the clipboard, open a native share sheet, update stale UI, or schedule
+a feedback timer. A native share sheet that has already opened remains under
+the browser's control; its later settlement cannot update an unmounted menu.
 
 The deterministic owner/public browser lifecycle starts from an isolated
 private document, enables its link, persists metadata, discovery, expiry, and

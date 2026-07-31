@@ -197,28 +197,24 @@ test("SlideEditorOpenDialog canceling an in-flight generation does not derive or
   }
 });
 
-test("SlideEditorOpenDialog ignores a superseded generation result", async () => {
+test("SlideEditorOpenDialog shares duplicate activation and applies once", async () => {
   const hookRenderer = createReactRenderHarness({
     idPrefix: "open-dialog-superseded-test-id",
   });
   const originalFetch = globalThis.fetch;
-  const firstFetch = createDeferred<Response>();
-  const secondFetch = createDeferred<Response>();
+  const pendingFetch = createDeferred<Response>();
   let callCount = 0;
   let deriveCount = 0;
   let applyCount = 0;
 
   globalThis.fetch = (async (_url, init) => {
     callCount += 1;
-    if (callCount === 1) {
-      init?.signal?.addEventListener(
-        "abort",
-        () => firstFetch.reject(abortError()),
-        { once: true },
-      );
-      return firstFetch.promise;
-    }
-    return secondFetch.promise;
+    init?.signal?.addEventListener(
+      "abort",
+      () => pendingFetch.reject(abortError()),
+      { once: true },
+    );
+    return pendingFetch.promise;
   }) as typeof fetch;
 
   const renderDialog = () =>
@@ -241,16 +237,55 @@ test("SlideEditorOpenDialog ignores a superseded generation result", async () =>
     const clickGenerate = generate.props as { onClick: () => Promise<void> };
 
     const first = clickGenerate.onClick();
-    const second = clickGenerate.onClick();
-    await first;
-    assert.equal(deriveCount, 0);
-    assert.equal(applyCount, 0);
+    const duplicate = clickGenerate.onClick();
 
-    secondFetch.resolve(successfulDeckResponse());
-    await second;
+    assert.equal(callCount, 1);
+    pendingFetch.resolve(successfulDeckResponse());
+    await Promise.all([first, duplicate]);
 
     assert.equal(deriveCount, 0);
     assert.equal(applyCount, 1);
+  } finally {
+    hookRenderer.cleanup();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("SlideEditorOpenDialog ignores a late generation after unmount", async () => {
+  const hookRenderer = createReactRenderHarness({
+    idPrefix: "open-dialog-unmount-test-id",
+  });
+  const originalFetch = globalThis.fetch;
+  const pendingFetch = createDeferred<Response>();
+  let deriveCount = 0;
+  let applyCount = 0;
+
+  globalThis.fetch = (async () => pendingFetch.promise) as typeof fetch;
+
+  try {
+    const tree = hookRenderer.run(() =>
+      SlideEditorOpenDialog({
+        contentJson: '{"root":{"children":[]}}',
+        themePackageId: "noir",
+        onApply: () => {
+          applyCount += 1;
+        },
+        onDerive: () => {
+          deriveCount += 1;
+        },
+        onClose: () => undefined,
+      }),
+    );
+    const generate = findElementByText(tree, "Generate with AI");
+    const generation = (
+      generate.props as { onClick: () => Promise<void> }
+    ).onClick();
+    hookRenderer.cleanup();
+    pendingFetch.resolve(successfulDeckResponse());
+    await generation;
+
+    assert.equal(deriveCount, 0);
+    assert.equal(applyCount, 0);
   } finally {
     hookRenderer.cleanup();
     globalThis.fetch = originalFetch;

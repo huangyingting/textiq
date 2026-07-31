@@ -761,6 +761,60 @@ describe("usePresenterFullscreen", () => {
       }
     });
   });
+
+  test("same-render duplicate fullscreen activation shares one browser request", async () => {
+    const fakeDoc = createFakeDocument();
+    let requestCalls = 0;
+    let resolveRequest!: () => void;
+    const pendingRequest = new Promise<void>((resolve) => {
+      resolveRequest = resolve;
+    });
+    fakeDoc.document.documentElement.requestFullscreen = async () => {
+      requestCalls += 1;
+      return pendingRequest;
+    };
+
+    await withGlobal("document", fakeDoc.document, async () => {
+      const harness = createReactRenderHarness();
+      try {
+        const state = harness.run(() => usePresenterFullscreen());
+        const first = state.toggleFullscreen();
+        const duplicate = state.toggleFullscreen();
+
+        assert.equal(requestCalls, 1);
+        resolveRequest();
+        await Promise.all([first, duplicate]);
+      } finally {
+        harness.cleanup();
+      }
+    });
+  });
+
+  test("a late fullscreen entry after unmount is exited immediately", async () => {
+    const fakeDoc = createFakeDocument();
+    let resolveRequest!: () => void;
+    const pendingRequest = new Promise<void>((resolve) => {
+      resolveRequest = resolve;
+    });
+    let exitCalls = 0;
+    fakeDoc.document.documentElement.requestFullscreen = async () =>
+      pendingRequest;
+    fakeDoc.document.exitFullscreen = async () => {
+      exitCalls += 1;
+    };
+
+    await withGlobal("document", fakeDoc.document, async () => {
+      const harness = createReactRenderHarness();
+      const request = harness
+        .run(() => usePresenterFullscreen())
+        .enterFullscreen();
+      harness.cleanup();
+      resolveRequest();
+      await request;
+
+      assert.equal(exitCalls, 1);
+    });
+  });
 });
 
 describe("computePresentElapsedSeconds", () => {

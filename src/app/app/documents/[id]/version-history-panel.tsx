@@ -3,7 +3,7 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { History as HistoryIcon } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
-import { useCallback, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 
 import {
   EditorSidePanel,
@@ -37,15 +37,23 @@ function formatTime(iso: string): string {
  * checkpointing the pre-restore state server-side) and reloads so the
  * collaborative editor re-seeds from the restored content.
  */
-export function VersionHistoryPanel({
-  documentId,
-  canEdit,
-  iconOnly = false,
-}: {
+interface VersionHistoryPanelProps {
   documentId: string;
   canEdit: boolean;
   iconOnly?: boolean;
-}) {
+}
+
+export function VersionHistoryPanel(
+  props: VersionHistoryPanelProps,
+): JSX.Element {
+  return <VersionHistoryPanelForDocument key={props.documentId} {...props} />;
+}
+
+function VersionHistoryPanelForDocument({
+  documentId,
+  canEdit,
+  iconOnly = false,
+}: VersionHistoryPanelProps) {
   const [editor] = useLexicalComposerContext();
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<DocumentVersionSummary[]>([]);
@@ -55,75 +63,107 @@ export function VersionHistoryPanel({
   const [pendingKind, setPendingKind] = useState<HistoryActionKind | null>(
     null,
   );
-  const [isPending, startTransition] = useTransition();
   const actionInFlightRef = useRef(false);
   const actionKindRef = useRef<HistoryActionKind | null>(null);
-  const mutationBusy = isPending || pendingKind !== null;
+  const activeOperationRef = useRef<object | null>(null);
+  const mountedRef = useRef(true);
+  const mutationBusy = pendingKind !== null;
   const restoreBusy = pendingKind === "restore";
 
-  const refresh = useCallback(() => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeOperationRef.current = null;
+      actionInFlightRef.current = false;
+      actionKindRef.current = null;
+    };
+  }, []);
+
+  const refresh = useCallback(async () => {
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
     actionKindRef.current = "load";
+    const operation = {};
+    activeOperationRef.current = operation;
     setError(null);
     setPendingKind("load");
-    startTransition(async () => {
-      try {
-        setVersions(await listDocumentVersions(documentId));
-        setLoaded(true);
-      } catch (error) {
-        unstable_rethrow(error);
+    try {
+      const nextVersions = await listDocumentVersions(documentId);
+      if (!mountedRef.current || activeOperationRef.current !== operation) {
+        return;
+      }
+      setVersions(nextVersions);
+      setLoaded(true);
+    } catch (error) {
+      unstable_rethrow(error);
+      if (mountedRef.current && activeOperationRef.current === operation) {
         setError("Couldn't load version history. Please try again.");
-      } finally {
+      }
+    } finally {
+      if (activeOperationRef.current === operation) {
+        activeOperationRef.current = null;
         actionInFlightRef.current = false;
         actionKindRef.current = null;
-        setPendingKind(null);
+        if (mountedRef.current) {
+          setPendingKind(null);
+        }
       }
-    });
+    }
   }, [documentId]);
 
-  const toggleOpen = useCallback(() => {
+  const toggleOpen = useCallback(async () => {
     if (open) {
       if (actionKindRef.current === "restore") return;
       setOpen(false);
       return;
     }
 
-    if (!loaded) refresh();
     setOpen(true);
+    if (!loaded) await refresh();
   }, [loaded, open, refresh]);
 
   const restore = useCallback(
-    (versionId: string) => {
+    async (versionId: string) => {
       if (actionInFlightRef.current) return;
 
       actionInFlightRef.current = true;
       actionKindRef.current = "restore";
+      const operation = {};
+      activeOperationRef.current = operation;
       setError(null);
       setPendingKind("restore");
-      startTransition(async () => {
-        try {
-          const res = await restoreDocumentVersion(versionId);
-          if (!res.ok) {
-            setError(res.error);
-            return;
-          }
-          const restoredState = editor.parseEditorState(
-            JSON.stringify(res.data.contentJson),
-          );
-          editor.setEditorState(restoredState, { tag: RESTORE_TAG });
-          setConfirmId(null);
-          setOpen(false);
-        } catch (error) {
-          unstable_rethrow(error);
+      try {
+        const res = await restoreDocumentVersion(versionId);
+        if (!mountedRef.current || activeOperationRef.current !== operation) {
+          return;
+        }
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        const restoredState = editor.parseEditorState(
+          JSON.stringify(res.data.contentJson),
+        );
+        editor.setEditorState(restoredState, { tag: RESTORE_TAG });
+        setConfirmId(null);
+        setOpen(false);
+      } catch (error) {
+        unstable_rethrow(error);
+        if (mountedRef.current && activeOperationRef.current === operation) {
           setError("Couldn't restore this version. Please try again.");
-        } finally {
+        }
+      } finally {
+        if (activeOperationRef.current === operation) {
+          activeOperationRef.current = null;
           actionInFlightRef.current = false;
           actionKindRef.current = null;
-          setPendingKind(null);
+          if (mountedRef.current) {
+            setPendingKind(null);
+          }
         }
-      });
+      }
     },
     [editor],
   );

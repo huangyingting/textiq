@@ -23,7 +23,7 @@
  */
 
 import { Sparkles } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { FOCUS_RING } from "@/components/ui/tokens";
 import { GeneratingIndicator } from "@/components/motion/generation-status";
@@ -93,48 +93,81 @@ export function SlideEditorOpenDialog({
   const [noContent, setNoContent] = useState(isEmptyDocument);
   const { generate, status, stage, showEta, etaHint, reset } =
     useDeckGeneration();
+  const generationOperationRef = useRef<{
+    token: object;
+    promise: Promise<void>;
+  } | null>(null);
+  const mountedRef = useRef(true);
 
   const isLoading = status === "loading";
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generationOperationRef.current = null;
+    };
+  }, []);
+
   const handleDerive = () => {
+    if (generationOperationRef.current) return;
     reset();
     onDerive();
   };
 
-  const handleGenerate = async () => {
-    const opts: DeckGenerationOptions = { length, tone, audience };
-    const result = await generate(contentJson, opts, {
-      themePackageId,
-    });
-    // On success hand the proposal (plus truncation + options) to the parent,
-    // which presents the preview/diff (issue #269).
-    if (result.ok) {
-      onApply({
-        deck: result.deck,
-        truncated: result.truncated,
-        diagnostics: result.diagnostics,
-        options: opts,
+  const handleGenerate = (): Promise<void> => {
+    const activeOperation = generationOperationRef.current;
+    if (activeOperation) return activeOperation.promise;
+
+    const token = {};
+    const promise = (async () => {
+      const opts: DeckGenerationOptions = { length, tone, audience };
+      const result = await generate(contentJson, opts, {
+        themePackageId,
       });
-      return;
-    }
-    // Canceled or superseded requests are deliberate no-ops: the user either
-    // backed out or a newer request owns the eventual open/derive decision.
-    if (result.canceled) return;
-    // An empty-outline 400 (the editor was still seeding at request time) is
-    // shown as a friendly "add content first" notice rather than silently
-    // deriving (issue #280). Any other failure
-    // (error/timeout/credit/flag-off/404) drops straight to the deterministic
-    // derive so the user is never blocked.
-    if (result.errorKind === "empty") {
-      setNoContent(true);
-    } else {
-      onDerive();
-    }
+      if (
+        !mountedRef.current ||
+        generationOperationRef.current?.token !== token
+      ) {
+        return;
+      }
+      // On success hand the proposal (plus truncation + options) to the parent,
+      // which presents the preview/diff (issue #269).
+      if (result.ok) {
+        onApply({
+          deck: result.deck,
+          truncated: result.truncated,
+          diagnostics: result.diagnostics,
+          options: opts,
+        });
+        return;
+      }
+      // Canceled or superseded requests are deliberate no-ops: the user either
+      // backed out or a newer request owns the eventual open/derive decision.
+      if (result.canceled) return;
+      // An empty-outline 400 (the editor was still seeding at request time) is
+      // shown as a friendly "add content first" notice rather than silently
+      // deriving (issue #280). Any other failure
+      // (error/timeout/credit/flag-off/404) drops straight to the deterministic
+      // derive so the user is never blocked.
+      if (result.errorKind === "empty") {
+        setNoContent(true);
+      } else {
+        onDerive();
+      }
+    })().finally(() => {
+      if (generationOperationRef.current?.token === token) {
+        generationOperationRef.current = null;
+      }
+    });
+    generationOperationRef.current = { token, promise };
+    return promise;
   };
 
   const handleCancel = () => {
     // Cancel the in-flight request and return to the chooser (do NOT auto-open
     // — cancelling is a deliberate "not now", not a fallback).
+    generationOperationRef.current = null;
     reset();
   };
 

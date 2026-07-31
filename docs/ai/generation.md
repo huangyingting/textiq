@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "Describes AI visual and deck generation routes, shared validation and billing flow, deck source extraction, presentation deck orchestration, template materialization, output validation, UI flow, quota, credits, and invariants."
 ---
 
@@ -186,6 +186,16 @@ The slide editor open button controls deck generation UI:
    content for those results. Genuine timeouts and other failures still follow
    the failure fallback behavior.
 
+Deck generation uses a synchronous client operation boundary before the
+request starts. Duplicate activation from one rendered chooser or preview
+shares the active request, preventing duplicate model work and duplicate apply
+callbacks before React commits pending state. A later rendered request with new
+input may still supersede the old request. While preview regeneration owns the
+boundary, Apply, Derive, Cancel, and diagnostics-review actions cannot compete
+with it. Reset, cancellation, and unmount invalidate the owner token and abort
+the request; a transport that resolves despite abort still cannot update the
+hook, replace the preview, or invoke parent callbacks.
+
 ## Quota And Credits
 
 Anonymous callers receive a signed trial cookie plus a server-side hashed-IP
@@ -217,6 +227,9 @@ entitlements/configuration.
 - [`src/lib/ai/run-deck-generation.test.ts`](../../src/lib/ai/run-deck-generation.test.ts)
 - [`src/lib/presentation/document-slide-plan.test.ts`](../../src/lib/presentation/document-slide-plan.test.ts)
 - [`src/lib/ai/deck-generation-request.test.ts`](../../src/lib/ai/deck-generation-request.test.ts)
+- [`src/lib/ai/use-deck-generation.test.ts`](../../src/lib/ai/use-deck-generation.test.ts)
+- [`src/components/editor/slide-editor-open-dialog-render.test.ts`](../../src/components/editor/slide-editor-open-dialog-render.test.ts)
+- [`src/components/presentation/deck-generation-preview-render.test.ts`](../../src/components/presentation/deck-generation-preview-render.test.ts)
 - [`src/lib/ai/quota.test.ts`](../../src/lib/ai/quota.test.ts)
 - [`src/lib/billing/credits.test.ts`](../../src/lib/billing/credits.test.ts)
 - [`src/lib/billing/usage-ledger.test.ts`](../../src/lib/billing/usage-ledger.test.ts)

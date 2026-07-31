@@ -88,17 +88,25 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
   const nativeShareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const imageOperationRef = useRef<ImageOperation | null>(null);
+  const imageOperationRef = useRef<object | null>(null);
+  const mountedRef = useRef(true);
   const [imageOperation, setImageOperation] = useState<ImageOperation | null>(
     null,
   );
 
-  // Cleanup timer on unmount
+  // Cleanup timers and invalidate any export that settles after unmount.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      mountedRef.current = false;
+      imageOperationRef.current = null;
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
       if (nativeShareTimerRef.current !== null) {
         clearTimeout(nativeShareTimerRef.current);
+        nativeShareTimerRef.current = null;
       }
     };
   }, []);
@@ -111,7 +119,8 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
     const svg = getSvgElement();
     if (!svg) return;
 
-    imageOperationRef.current = "copy";
+    const operation = {};
+    imageOperationRef.current = operation;
     setImageOperation("copy");
     if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
     setCopyState("copying");
@@ -121,19 +130,32 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
       const opts = applySocialPresetToOptions("square", DEFAULT_EXPORT_OPTIONS);
       const blob = await exportPNG(svg, opts);
       if (!blob) throw new Error("exportPNG returned null");
+      if (!mountedRef.current || imageOperationRef.current !== operation) {
+        return;
+      }
 
       await navigator.clipboard.write([
         new ClipboardItem({ "image/png": blob }),
       ]);
+      if (!mountedRef.current || imageOperationRef.current !== operation) {
+        return;
+      }
 
       setCopyState("copied");
       copyTimerRef.current = setTimeout(() => setCopyState("idle"), 2500);
     } catch {
+      if (!mountedRef.current || imageOperationRef.current !== operation) {
+        return;
+      }
       setCopyState("error");
       copyTimerRef.current = setTimeout(() => setCopyState("idle"), 2500);
     } finally {
-      imageOperationRef.current = null;
-      setImageOperation(null);
+      if (imageOperationRef.current === operation) {
+        imageOperationRef.current = null;
+        if (mountedRef.current) {
+          setImageOperation(null);
+        }
+      }
     }
   }, [getSvgElement]);
 
@@ -145,7 +167,8 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
     const svg = getSvgElement();
     if (!svg) return;
 
-    imageOperationRef.current = "share";
+    const operation = {};
+    imageOperationRef.current = operation;
     setImageOperation("share");
     if (nativeShareTimerRef.current !== null) {
       clearTimeout(nativeShareTimerRef.current);
@@ -155,6 +178,9 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
     try {
       const opts = applySocialPresetToOptions("square", DEFAULT_EXPORT_OPTIONS);
       const blob = await exportPNG(svg, opts);
+      if (!mountedRef.current || imageOperationRef.current !== operation) {
+        return;
+      }
       const shareData: ShareData = { title, url: shareUrl ?? undefined };
 
       if (blob) {
@@ -163,7 +189,9 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
         });
         if (canWebShare(file)) {
           await navigator.share({ files: [file], ...shareData });
-          setNativeShareState("idle");
+          if (mountedRef.current && imageOperationRef.current === operation) {
+            setNativeShareState("idle");
+          }
           return;
         }
       }
@@ -172,8 +200,13 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
       if (canWebShare()) {
         await navigator.share(shareData);
       }
-      setNativeShareState("idle");
+      if (mountedRef.current && imageOperationRef.current === operation) {
+        setNativeShareState("idle");
+      }
     } catch (err) {
+      if (!mountedRef.current || imageOperationRef.current !== operation) {
+        return;
+      }
       // AbortError is expected when the user dismisses the native share sheet
       if (err instanceof Error && err.name === "AbortError") {
         setNativeShareState("idle");
@@ -185,8 +218,12 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
         );
       }
     } finally {
-      imageOperationRef.current = null;
-      setImageOperation(null);
+      if (imageOperationRef.current === operation) {
+        imageOperationRef.current = null;
+        if (mountedRef.current) {
+          setImageOperation(null);
+        }
+      }
     }
   }, [getSvgElement, title, shareUrl]);
 

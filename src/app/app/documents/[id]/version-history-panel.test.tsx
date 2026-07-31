@@ -163,14 +163,21 @@ function mount(
   editor: LexicalEditor,
   props: { documentId?: string; canEdit?: boolean; iconOnly?: boolean } = {},
 ) {
-  return mountWithPortalDom(
+  return mountWithPortalDom(versionHistoryElement(editor, props));
+}
+
+function versionHistoryElement(
+  editor: LexicalEditor,
+  props: { documentId?: string; canEdit?: boolean; iconOnly?: boolean } = {},
+) {
+  return (
     <LexicalComposerContext.Provider value={composerContextFor(editor)}>
       <VersionHistoryPanel
         documentId={props.documentId ?? "doc-1"}
         canEdit={props.canEdit ?? true}
         iconOnly={props.iconOnly}
       />
-    </LexicalComposerContext.Provider>,
+    </LexicalComposerContext.Provider>
   );
 }
 
@@ -298,6 +305,63 @@ describe("VersionHistoryPanel", () => {
     });
   });
 
+  test("changing documents invalidates an older load and fetches the new history", async () => {
+    await withPortalDom(async () => {
+      let resolveFirst!: (value: DocumentVersionSummary[]) => void;
+      const firstLoad = new Promise<DocumentVersionSummary[]>((resolve) => {
+        resolveFirst = resolve;
+      });
+      globalForActions.__versionHistoryActionsTestState.listImpl = async (
+        documentId,
+      ) =>
+        documentId === "doc-1"
+          ? firstLoad
+          : [version({ id: "v2", label: "Document two" })];
+
+      const editor = makeEditor();
+      const renderer = mount(editor, { documentId: "doc-1" });
+      try {
+        act(() => {
+          findByAria(renderer.root, "Version history").props.onClick();
+        });
+        assert.match(textOf(renderer.root), /Loading…/);
+
+        act(() => {
+          findByAria(renderer.root, "Close version history").props.onClick();
+        });
+        act(() => {
+          renderer.update(
+            versionHistoryElement(editor, { documentId: "doc-2" }),
+          );
+        });
+        act(() => {
+          findByAria(renderer.root, "Version history").props.onClick();
+        });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.match(textOf(renderer.root), /Document two/);
+
+        await act(async () => {
+          resolveFirst([version({ id: "v1", label: "Stale document one" })]);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.deepEqual(
+          globalForActions.__versionHistoryActionsTestState.listCalls,
+          ["doc-1", "doc-2"],
+        );
+        assert.match(textOf(renderer.root), /Document two/);
+        assert.doesNotMatch(textOf(renderer.root), /Stale document one/);
+      } finally {
+        resolveFirst([]);
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("an empty version list shows the no-versions-yet copy", async () => {
     await withPortalDom(async () => {
       const renderer = mount(makeEditor());
@@ -359,7 +423,10 @@ describe("VersionHistoryPanel", () => {
         await assert.rejects(
           async () => {
             await act(async () => {
-              findByAria(renderer.root, "Version history").props.onClick();
+              await findByAria(
+                renderer.root,
+                "Version history",
+              ).props.onClick();
               await waitForAsyncDrain();
               await waitForAsyncDrain();
             });
@@ -526,6 +593,89 @@ describe("VersionHistoryPanel", () => {
       } finally {
         act(() => renderer.unmount());
       }
+    });
+  });
+
+  test("a restore settling after unmount cannot parse or apply editor state", async () => {
+    await withPortalDom(async () => {
+      const editor = makeEditor();
+      let parseCalls = 0;
+      let setEditorStateCalls = 0;
+      const originalParseEditorState = editor.parseEditorState.bind(editor);
+      const originalSetEditorState = editor.setEditorState.bind(editor);
+      editor.parseEditorState = ((serialized) => {
+        parseCalls += 1;
+        return originalParseEditorState(serialized);
+      }) as typeof editor.parseEditorState;
+      editor.setEditorState = ((state, options) => {
+        setEditorStateCalls += 1;
+        return originalSetEditorState(state, options);
+      }) as typeof editor.setEditorState;
+
+      editor.update(
+        () => {
+          $getRoot().append(
+            $createParagraphNode().append($createTextNode("Restored content")),
+          );
+        },
+        { discrete: true },
+      );
+      const restoredJson = editor.getEditorState().toJSON();
+      globalForActions.__versionHistoryActionsTestState.listImpl = async () => [
+        version({ id: "v1" }),
+      ];
+      let resolveRestore!: (
+        result: ActionResult<{
+          documentId: string;
+          contentJson: unknown;
+        }>,
+      ) => void;
+      globalForActions.__versionHistoryActionsTestState.restoreImpl = () =>
+        new Promise((resolve) => {
+          resolveRestore = resolve;
+        });
+
+      const renderer = mount(editor);
+      act(() => {
+        findByAria(renderer.root, "Version history").props.onClick();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Restore this version" })
+          .props.onClick();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      parseCalls = 0;
+      setEditorStateCalls = 0;
+      await act(async () => {
+        renderer.root
+          .findByProps({ "aria-label": "Confirm restore" })
+          .props.onClick();
+        await waitForAsyncDrain();
+      });
+      await act(async () => {
+        renderer.unmount();
+        await waitForAsyncDrain();
+      });
+      parseCalls = 0;
+      setEditorStateCalls = 0;
+
+      await act(async () => {
+        resolveRestore({
+          ok: true,
+          data: { documentId: "doc-1", contentJson: restoredJson },
+        });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(parseCalls, 0);
+      assert.equal(setEditorStateCalls, 0);
     });
   });
 
@@ -737,7 +887,7 @@ describe("VersionHistoryPanel", () => {
         await assert.rejects(
           async () => {
             await act(async () => {
-              renderer.root
+              await renderer.root
                 .findByProps({ "aria-label": "Confirm restore" })
                 .props.onClick();
               await waitForAsyncDrain();

@@ -393,24 +393,70 @@ export function usePresenterFullscreen(): {
 } {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenHintVisible, setFullscreenHintVisible] = useState(false);
+  const fullscreenOperationRef = useRef<Promise<boolean> | null>(null);
+  const mountedRef = useRef(true);
 
-  const enterFullscreen = useCallback(async () => {
-    const succeeded = await requestBrowserFullscreen();
-    setFullscreenHintVisible(!succeeded);
-    return succeeded;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      fullscreenOperationRef.current = null;
+    };
   }, []);
 
+  const runFullscreenOperation = useCallback(
+    (operation: () => Promise<boolean>): Promise<boolean> => {
+      const activeOperation = fullscreenOperationRef.current;
+      if (activeOperation) return activeOperation;
+
+      const promise = operation().finally(() => {
+        if (fullscreenOperationRef.current === promise) {
+          fullscreenOperationRef.current = null;
+        }
+      });
+      fullscreenOperationRef.current = promise;
+      return promise;
+    },
+    [],
+  );
+
+  const enterFullscreen = useCallback(
+    () =>
+      runFullscreenOperation(async () => {
+        const succeeded = await requestBrowserFullscreen();
+        if (!mountedRef.current) {
+          if (succeeded) {
+            await exitBrowserFullscreen();
+          }
+          return succeeded;
+        }
+        setFullscreenHintVisible(!succeeded);
+        return succeeded;
+      }),
+    [runFullscreenOperation],
+  );
+
   const toggleFullscreen = useCallback(async () => {
-    if (getFullscreenElement(document)) {
-      await exitBrowserFullscreen();
-      setFullscreenHintVisible(false);
+    if (fullscreenOperationRef.current) {
+      await fullscreenOperationRef.current;
       return;
     }
-    await enterFullscreen();
-  }, [enterFullscreen]);
+    if (!getFullscreenElement(document)) {
+      await enterFullscreen();
+      return;
+    }
+    await runFullscreenOperation(async () => {
+      const succeeded = await exitBrowserFullscreen();
+      if (mountedRef.current) {
+        setFullscreenHintVisible(false);
+      }
+      return succeeded;
+    });
+  }, [enterFullscreen, runFullscreenOperation]);
 
   useEffect(() => {
     const updateFullscreenState = () => {
+      if (!mountedRef.current) return;
       const active = !!getFullscreenElement(document);
       setIsFullscreen(active);
       if (active) {

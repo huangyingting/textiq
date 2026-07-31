@@ -527,6 +527,13 @@ Ordinary transport failures stay in the confirmation row for retry/dismiss,
 while Next redirect/not-found signals escape to the framework. The browser
 lifecycle forces a restore transport failure, double-activates retry, and proves
 one successful restore before the existing reversible reload checks.
+Each load or restore also owns an operation identity tied to the current
+`documentId`. Switching documents remounts the history state and invalidates
+the prior request, so a slower response cannot repopulate the panel with another
+document's versions. Unmount invalidates late restore results before they can
+parse or apply state to a stale Lexical editor. The async handlers return their
+operation promises directly so framework control flow and teardown ordering
+remain deterministic.
 
 ### Conflict recovery UX
 

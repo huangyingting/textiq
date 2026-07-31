@@ -98,6 +98,13 @@ presentation chrome:
 The present surface fits the active slide format into the available viewport via
 `fitAspectRatio` and `slideAspectRatio`. It does not mutate the deck.
 
+Fullscreen entry, exit, and presentation dismissal use synchronous operation
+boundaries. Duplicate activation shares the active browser request, so one
+gesture cannot request fullscreen or invoke the close callback twice before
+React commits updated UI. Unmount invalidates pending callbacks and exits a
+fullscreen request that the browser resolves late; leaving Present Mode also
+releases any fullscreen state owned by the presenter.
+
 Public present/share viewers use the same presentation rendering primitive so public
 output tracks in-app rendering.
 
