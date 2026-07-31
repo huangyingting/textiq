@@ -382,6 +382,39 @@ async function main() {
     },
   });
 
+  const shareLifecycle = F.documentShareLifecycle;
+  await upsertDocumentWithCanonicalContent(prisma, {
+    where: { id: shareLifecycle.id },
+    contentSnapshot: markdownToLexicalStateObject(shareLifecycle.content),
+    update: {
+      title: shareLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: null,
+      deckJson: Prisma.DbNull,
+      deckRevisionToken: null,
+      isShared: false,
+      shareId: null,
+      slug: null,
+      shareExpiresAt: null,
+      shareEmbedEnabled: true,
+      sharePresentEnabled: true,
+      sharePasscodeHash: null,
+      shareMetadataMode: "generic",
+      shareDiscoverable: false,
+      deletedAt: null,
+      tags: { set: [] },
+    },
+    create: {
+      id: shareLifecycle.id,
+      title: shareLifecycle.title,
+      ownerId: owner.id,
+      shareEmbedEnabled: true,
+      sharePresentEnabled: true,
+      shareMetadataMode: "generic",
+      shareDiscoverable: false,
+    },
+  });
+
   // -------------------------------------------------------------------------
   // 3. Visual — embedded into the document's contentJson as a VisualNode.
   // -------------------------------------------------------------------------
@@ -423,6 +456,9 @@ async function main() {
       shareEmbedEnabled: true,
       sharePresentEnabled: true,
       shareExpiresAt: null,
+      sharePasscodeHash: null,
+      shareMetadataMode: "generic",
+      shareDiscoverable: false,
       deletedAt: null,
       tags: { set: [{ id: dashboardTag.id }] },
     },

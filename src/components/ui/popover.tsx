@@ -58,6 +58,8 @@ export type PopoverProps = {
   restoreFocusRef?: FocusRef;
   /** Restores focus to the opener (or restoreFocusRef) after an interactive popover closes. */
   restoreFocusOnClose?: boolean;
+  /** Limit panel height to the measured viewport space beside its trigger. */
+  constrainHeight?: boolean;
   "aria-label"?: string;
 };
 
@@ -97,6 +99,7 @@ export function Popover({
   initialFocusRef,
   restoreFocusRef,
   restoreFocusOnClose = false,
+  constrainHeight = false,
   "aria-label": ariaLabel,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,7 @@ export function Popover({
     top?: number;
     bottom?: number;
     left: number;
+    maxHeight?: number;
   }>({
     top: -1000,
     left: -1000,
@@ -154,21 +158,31 @@ export function Popover({
       window.innerWidth - measuredWidth - VIEWPORT_INSET,
     );
     const left = Math.min(Math.max(preferredLeft, VIEWPORT_INSET), maxLeft);
+    const availableHeight =
+      placement === "top"
+        ? rect.top - PANEL_GAP - VIEWPORT_INSET
+        : window.innerHeight - rect.bottom - PANEL_GAP - VIEWPORT_INSET;
+    const maxHeight =
+      constrainHeight && Number.isFinite(availableHeight)
+        ? Math.max(0, availableHeight)
+        : undefined;
     const nextCoords =
       placement === "top"
         ? {
             bottom: Math.max(0, window.innerHeight - rect.top + PANEL_GAP),
             left,
+            maxHeight,
           }
-        : { top: rect.bottom + PANEL_GAP, left };
+        : { top: rect.bottom + PANEL_GAP, left, maxHeight };
     setCoords((prev) =>
       prev.top === nextCoords.top &&
       prev.bottom === nextCoords.bottom &&
-      prev.left === nextCoords.left
+      prev.left === nextCoords.left &&
+      prev.maxHeight === nextCoords.maxHeight
         ? prev
         : nextCoords,
     );
-  }, [align, anchor, placement]);
+  }, [align, anchor, constrainHeight, placement]);
 
   // Measure the trigger on open and keep the panel pinned while the user
   // scrolls or resizes.
@@ -264,6 +278,7 @@ export function Popover({
             top: coords.top,
             bottom: coords.bottom,
             left: coords.left,
+            maxHeight: coords.maxHeight,
           }}
           className={cx(
             "fixed max-w-[calc(100vw-1rem)]",

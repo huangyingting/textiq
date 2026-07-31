@@ -153,6 +153,19 @@ Share actions live in the document server actions module.
 Public URLs may include a decorative slug, but the stable authorization key is
 the `shareId` extracted from the segment.
 
+The document share dialog keeps the complete policy reachable inside a
+viewport-bounded scrolling panel. Only one policy mutation runs at a time so a
+slower response cannot overwrite a newer local state. Passcode creation and
+replacement require a non-empty value; clearing protection remains an explicit
+separate action. Typed action failures and transport failures remain in the
+dialog as accessible alerts.
+
+The deterministic owner/public browser lifecycle starts from an isolated
+private document, enables its link, persists metadata, discovery, expiry, and
+mode policy, verifies passcode failure and success, proves disabled public modes
+return privacy-preserving 404s, rotates the URL, revokes the old URL, disables
+sharing, and verifies the final state after reload.
+
 ## Collaboration Authorization
 
 Collaboration websocket upgrades are authorized before the WebSocket handshake.
@@ -189,5 +202,6 @@ from viewer connections.
 - [`src/lib/share-access.test.ts`](../../src/lib/share-access.test.ts)
 - [`src/lib/collab/room-access.test.ts`](../../src/lib/collab/room-access.test.ts)
 - [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
+- [`e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts)
 - [`e2e/ui-matrix/public-render-ui.spec.ts`](../../e2e/ui-matrix/public-render-ui.spec.ts)
 - [`e2e/public-render/share-fallback.spec.ts`](../../e2e/public-render/share-fallback.spec.ts)

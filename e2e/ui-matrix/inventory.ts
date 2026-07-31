@@ -363,6 +363,21 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     ],
   },
   {
+    spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+    owners: ["documents", "public-render", "security"],
+    coverage:
+      "Deterministic owner share enablement, viewport-reachable policy controls, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner", "anonymous public"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/ui-matrix/README.md",
+      "docs/security/access-and-sharing.md",
+    ],
+  },
+  {
     spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
     owners: ["documents", "editor", "security"],
     coverage:

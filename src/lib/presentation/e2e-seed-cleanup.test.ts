@@ -594,6 +594,23 @@ test(
         userId: viewer.id,
       },
     });
+    const shareLifecycle = E2E_PROFILE_FIXTURE.documentShareLifecycle;
+    await updateDocumentWithCanonicalContent(client, {
+      where: { id: shareLifecycle.id },
+      contentSnapshot: markdownToLexicalStateObject("Stale shared content."),
+      data: {
+        title: "Stale shared lifecycle title",
+        isShared: true,
+        shareId: "stale-share-lifecycle-id",
+        slug: "stale-share-lifecycle",
+        shareExpiresAt: new Date("2027-12-31T23:59:00.000Z"),
+        shareEmbedEnabled: false,
+        sharePresentEnabled: false,
+        sharePasscodeHash: "stale-passcode-hash",
+        shareMetadataMode: "title-excerpt",
+        shareDiscoverable: true,
+      },
+    });
 
     await runFullSeed();
 
@@ -694,6 +711,41 @@ test(
         where: { documentId: commentLifecycle.id },
       }),
       0,
+    );
+    assert.deepEqual(
+      await client.document.findUniqueOrThrow({
+        where: { id: shareLifecycle.id },
+        select: {
+          title: true,
+          content: true,
+          ownerId: true,
+          workspaceId: true,
+          isShared: true,
+          shareId: true,
+          slug: true,
+          shareExpiresAt: true,
+          shareEmbedEnabled: true,
+          sharePresentEnabled: true,
+          sharePasscodeHash: true,
+          shareMetadataMode: true,
+          shareDiscoverable: true,
+        },
+      }),
+      {
+        title: shareLifecycle.title,
+        content: shareLifecycle.content,
+        ownerId: owner.id,
+        workspaceId: null,
+        isShared: false,
+        shareId: null,
+        slug: null,
+        shareExpiresAt: null,
+        shareEmbedEnabled: true,
+        sharePresentEnabled: true,
+        sharePasscodeHash: null,
+        shareMetadataMode: "generic",
+        shareDiscoverable: false,
+      },
     );
     assert.deepEqual(
       await client.document.findUniqueOrThrow({

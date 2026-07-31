@@ -113,6 +113,12 @@ export const E2E_PROFILE_FIXTURE = {
     viewerReply: "Viewer reply before lifecycle edit.",
     editedViewerReply: "Viewer reply after lifecycle edit.",
   },
+  documentShareLifecycle: {
+    id: "e2efixturedocsharelife0001",
+    title: "E2E document share lifecycle",
+    content: "E2E share lifecycle public document content.",
+    passcode: "share-safe-2026",
+  },
 } as const;
 
 const F = E2E_PROFILE_FIXTURE;

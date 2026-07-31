@@ -176,6 +176,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/workspace\//,
       /^e2e\/ui-matrix\/dashboard-document-lifecycle-ui\.spec\.ts$/,
       /^e2e\/ui-matrix\/document-comments-lifecycle-ui\.spec\.ts$/,
+      /^e2e\/ui-matrix\/document-sharing-lifecycle-ui\.spec\.ts$/,
       /^e2e\/ui-matrix\/document-metadata-history-ui\.spec\.ts$/,
       /^e2e\/ui-matrix\/workspace-billing-brand-ui\.spec\.ts$/,
     ],
@@ -271,7 +272,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/components\/share\//,
       /^e2e\/presentation\/present-export\.spec\.ts$/,
       /^e2e\/public-render\/share-fallback\.spec\.ts$/,
-      /^e2e\/ui-matrix\/(?:auth-public-ui|catalog|presentation-ui|public-render-ui)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:auth-public-ui|catalog|document-sharing-lifecycle-ui|presentation-ui|public-render-ui)\.spec\.ts$/,
     ],
   },
   security: {
@@ -300,7 +301,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/components\/share\//,
       /^e2e\/public-render\/share-fallback\.spec\.ts$/,
       /^e2e\/presentation\/slide-asset-upload\.spec\.ts$/,
-      /^e2e\/ui-matrix\/(?:account-lifecycle-ui|auth-public-ui|document-comments-lifecycle-ui|document-metadata-history-ui|public-render-ui|workspace-lifecycle-ui)\.spec\.ts$/,
+      /^e2e\/ui-matrix\/(?:account-lifecycle-ui|auth-public-ui|document-comments-lifecycle-ui|document-metadata-history-ui|document-sharing-lifecycle-ui|public-render-ui|workspace-lifecycle-ui)\.spec\.ts$/,
     ],
   },
   system: {

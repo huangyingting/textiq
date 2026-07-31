@@ -197,6 +197,7 @@ function findByAria(
 describe("ShareButton", () => {
   test("renders only the trigger button when closed; opening shows Private + the disabled social prompt", async () => {
     await withShareDom(async () => {
+      (window as unknown as { innerHeight: number }).innerHeight = 720;
       const renderer = mountWithPortalDom(
         <ShareButton
           id="doc-1"
@@ -214,6 +215,9 @@ describe("ShareButton", () => {
 
         assert.match(textOf(renderer.root), /Share this document/);
         assert.match(textOf(renderer.root), /Private/);
+        const dialog = renderer.root.findByProps({ role: "dialog" });
+        assert.match(dialog.props.className, /overflow-y-auto/);
+        assert.equal(dialog.props.style.maxHeight, 704);
         assert.match(
           textOf(renderer.root),
           /Enable sharing to create a public read-only link/,
@@ -255,9 +259,9 @@ describe("ShareButton", () => {
           globalForActions.__shareButtonActionsTestState.toggleCalls,
           [{ id: "doc-1", isShared: true }],
         );
-        const shareUrlInput = renderer.root
-          .findAllByType("input")
-          .find((node) => node.props.readOnly && !node.props["aria-label"])!;
+        const shareUrlInput = renderer.root.findByProps({
+          "aria-label": "Public share link",
+        });
         assert.equal(
           shareUrlInput.props.value,
           "https://textiq.test/share/quarterly-plan-share123",
@@ -302,6 +306,47 @@ describe("ShareButton", () => {
           /Only the owner can enable sharing\./,
         );
         assert.match(textOf(renderer.root), /Private/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a rejected sharing transport surfaces a retryable alert and unlocks the switch", async () => {
+    await withShareDom(async () => {
+      globalForActions.__shareButtonActionsTestState.toggleImpl = async () => {
+        throw new Error("connection reset");
+      };
+      const renderer = mountWithPortalDom(
+        <ShareButton
+          id="doc-1"
+          initialIsShared={false}
+          initialShareId={null}
+        />,
+      );
+      try {
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        const toggle = renderer.root.findByProps({
+          "aria-labelledby": "share-toggle-label",
+        });
+        await act(async () => {
+          await (toggle.props.onCheckedChange as (v: boolean) => Promise<void>)(
+            true,
+          );
+        });
+
+        assert.equal(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          "Couldn't update document sharing. Please try again.",
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-labelledby": "share-toggle-label",
+          }).props.disabled,
+          false,
+        );
       } finally {
         act(() => renderer.unmount());
       }
@@ -397,9 +442,9 @@ describe("ShareButton", () => {
           globalForActions.__shareButtonActionsTestState.regenerateCalls,
           ["doc-1"],
         );
-        const shareUrlInput = renderer.root
-          .findAllByType("input")
-          .find((node) => node.props.readOnly && !node.props["aria-label"])!;
+        const shareUrlInput = renderer.root.findByProps({
+          "aria-label": "Public share link",
+        });
         assert.equal(
           shareUrlInput.props.value,
           "https://textiq.test/share/quarterly-plan-share456",
@@ -559,6 +604,14 @@ describe("ShareButton", () => {
         const passcodeInput = renderer.root.findByProps({
           "aria-label": "Share passcode",
         });
+        assert.equal(passcodeInput.props.minLength, 4);
+        assert.equal(passcodeInput.props.maxLength, 128);
+        assert.equal(
+          renderer.root
+            .findAllByType("button")
+            .find((node) => textOf(node) === "Set")!.props.disabled,
+          true,
+        );
         act(() => {
           (passcodeInput.props.onChange as (e: unknown) => void)({
             target: { value: "hunter2" },
@@ -581,6 +634,12 @@ describe("ShareButton", () => {
           renderer.root.findByProps({ "aria-label": "Share passcode" }).props
             .value,
           "",
+        );
+        assert.equal(
+          renderer.root
+            .findAllByType("button")
+            .find((node) => textOf(node) === "Update")!.props.disabled,
+          true,
         );
 
         const removeButton = renderer.root

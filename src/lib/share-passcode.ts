@@ -1,35 +1,21 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { comparePassword, hashPassword } from "@/lib/auth/password";
+import {
+  normalizeSharePasscode,
+  validateSharePasscode,
+} from "@/lib/share-passcode-policy";
 
-export const MIN_SHARE_PASSCODE_LENGTH = 4;
-export const MAX_SHARE_PASSCODE_LENGTH = 128;
+export {
+  MAX_SHARE_PASSCODE_LENGTH,
+  MIN_SHARE_PASSCODE_LENGTH,
+  normalizeSharePasscode,
+  validateSharePasscode,
+} from "@/lib/share-passcode-policy";
 export const SHARE_PASSCODE_UNLOCK_MAX_AGE_SECONDS = 12 * 60 * 60;
 
 const COOKIE_PREFIX = "textiq_share_unlock_";
 const TOKEN_VERSION = "v1";
-
-export function normalizeSharePasscode(value: unknown): string {
-  return String(value ?? "").trim();
-}
-
-export function validateSharePasscode(
-  passcode: string,
-): { ok: true } | { ok: false; message: string } {
-  if (passcode.length < MIN_SHARE_PASSCODE_LENGTH) {
-    return {
-      ok: false,
-      message: `Passcode must be at least ${MIN_SHARE_PASSCODE_LENGTH} characters.`,
-    };
-  }
-  if (passcode.length > MAX_SHARE_PASSCODE_LENGTH) {
-    return {
-      ok: false,
-      message: `Passcode must be at most ${MAX_SHARE_PASSCODE_LENGTH} characters.`,
-    };
-  }
-  return { ok: true };
-}
 
 export async function hashSharePasscode(passcode: string): Promise<string> {
   const normalized = normalizeSharePasscode(passcode);

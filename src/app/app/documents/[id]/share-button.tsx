@@ -1,7 +1,7 @@
 "use client";
 
 import { Share2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { Popover } from "@/components/ui/popover";
@@ -12,6 +12,10 @@ import {
   toEmbedShareUrl,
   toPresentShareUrl,
 } from "@/lib/document/share-routes";
+import {
+  MAX_SHARE_PASSCODE_LENGTH,
+  MIN_SHARE_PASSCODE_LENGTH,
+} from "@/lib/share-passcode-policy";
 
 import {
   regenerateShareLink,
@@ -32,6 +36,9 @@ type ShareState = {
   discoverable: boolean;
   passcodeEnabled: boolean;
 };
+
+type ShareMutationResult =
+  { ok: true; data: ShareSettings } | { ok: false; error: string };
 
 /** Builds the displayed share URL from the current origin + shareId/slug. */
 function shareUrlFor(
@@ -121,6 +128,8 @@ export function ShareButton({
   const [embedCopied, setEmbedCopied] = useState(false);
   const [presentCopied, setPresentCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
+  const mutationInFlightRef = useRef(false);
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -138,26 +147,47 @@ export function ShareButton({
     ? toPresentShareUrl(shareState.shareUrl)
     : null;
 
-  const handleToggle = async (enable: boolean) => {
-    const result = await toggleDocumentSharing(id, enable);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+  const runMutation = async (
+    mutate: () => Promise<ShareMutationResult>,
+    fallbackMessage: string,
+  ): Promise<ShareSettings | null> => {
+    if (mutationInFlightRef.current) {
+      return null;
     }
+    mutationInFlightRef.current = true;
+    setIsMutating(true);
     setError(null);
-    setShareState(toShareState(result.data));
+    try {
+      const result = await mutate();
+      if (!result.ok) {
+        setError(result.error);
+        return null;
+      }
+      setShareState(toShareState(result.data));
+      return result.data;
+    } catch {
+      setError(fallbackMessage);
+      return null;
+    } finally {
+      mutationInFlightRef.current = false;
+      setIsMutating(false);
+    }
+  };
+
+  const handleToggle = async (enable: boolean) => {
+    await runMutation(
+      () => toggleDocumentSharing(id, enable),
+      "Couldn't update document sharing. Please try again.",
+    );
   };
 
   const handleRegenerate = async () => {
     setRegenerating(true);
     try {
-      const result = await regenerateShareLink(id);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      setShareState(toShareState(result.data));
+      await runMutation(
+        () => regenerateShareLink(id),
+        "Couldn't regenerate the share link. Please try again.",
+      );
     } finally {
       setRegenerating(false);
     }
@@ -166,78 +196,72 @@ export function ShareButton({
   const handleExpiryChange = async (value: string) => {
     // datetime-local gives a local wall-clock string; convert to an ISO instant
     // (or null when cleared) for the server policy.
-    const expiresAt = value ? new Date(value).toISOString() : null;
-    const result = await updateSharePolicy(id, { expiresAt });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    let expiresAt: string | null = null;
+    if (value) {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        setError("Invalid expiry date.");
+        return;
+      }
+      expiresAt = parsed.toISOString();
     }
-    setError(null);
-    setShareState(toShareState(result.data));
+    await runMutation(
+      () => updateSharePolicy(id, { expiresAt }),
+      "Couldn't update the link expiry. Please try again.",
+    );
   };
 
   const handleEmbedEnabledChange = async (enabled: boolean) => {
-    const result = await updateSharePolicy(id, { embedEnabled: enabled });
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setError(null);
-    setShareState(toShareState(result.data));
+    await runMutation(
+      () => updateSharePolicy(id, { embedEnabled: enabled }),
+      "Couldn't update embedding access. Please try again.",
+    );
   };
 
   const handlePresentEnabledChange = async (enabled: boolean) => {
-    const result = await updateSharePolicy(id, { presentEnabled: enabled });
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setError(null);
-    setShareState(toShareState(result.data));
+    await runMutation(
+      () => updateSharePolicy(id, { presentEnabled: enabled }),
+      "Couldn't update presentation access. Please try again.",
+    );
   };
 
   const handleMetadataModeChange = async (
     mode: "generic" | "title" | "title-excerpt",
   ) => {
-    const result = await updateSharePolicy(id, { metadataMode: mode });
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setError(null);
-    setShareState(toShareState(result.data));
+    await runMutation(
+      () => updateSharePolicy(id, { metadataMode: mode }),
+      "Couldn't update public preview metadata. Please try again.",
+    );
   };
 
   const handleDiscoverableChange = async (discoverable: boolean) => {
-    const result = await updateSharePolicy(id, { discoverable });
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setError(null);
-    setShareState(toShareState(result.data));
+    await runMutation(
+      () => updateSharePolicy(id, { discoverable }),
+      "Couldn't update search indexing. Please try again.",
+    );
   };
 
   const handlePasscodeSave = async () => {
-    const result = await updateSharePolicy(id, { passcode });
-    if (!result.ok) {
-      setError(result.error);
+    if (!passcode.trim()) {
       return;
     }
-    setPasscode("");
-    setError(null);
-    setShareState(toShareState(result.data));
+    const settings = await runMutation(
+      () => updateSharePolicy(id, { passcode }),
+      "Couldn't update the share passcode. Please try again.",
+    );
+    if (settings) {
+      setPasscode("");
+    }
   };
 
   const handlePasscodeClear = async () => {
-    const result = await updateSharePolicy(id, { passcode: null });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    const settings = await runMutation(
+      () => updateSharePolicy(id, { passcode: null }),
+      "Couldn't remove the share passcode. Please try again.",
+    );
+    if (settings) {
+      setPasscode("");
     }
-    setPasscode("");
-    setError(null);
-    setShareState(toShareState(result.data));
   };
 
   const copyLink = async () => {
@@ -245,26 +269,44 @@ export function ShareButton({
       return;
     }
     setCopying(true);
-    await navigator.clipboard.writeText(shareState.shareUrl);
-    setTimeout(() => setCopying(false), 2000);
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(shareState.shareUrl);
+      setTimeout(() => setCopying(false), 2000);
+    } catch {
+      setCopying(false);
+      setError("Couldn't copy the share link. Please copy it manually.");
+    }
   };
 
   const copyEmbed = async () => {
     if (!embedSnippet) {
       return;
     }
-    await navigator.clipboard.writeText(embedSnippet);
-    setEmbedCopied(true);
-    setTimeout(() => setEmbedCopied(false), 2000);
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(embedSnippet);
+      setEmbedCopied(true);
+      setTimeout(() => setEmbedCopied(false), 2000);
+    } catch {
+      setEmbedCopied(false);
+      setError("Couldn't copy the embed code. Please copy it manually.");
+    }
   };
 
   const copyPresentLink = async () => {
     if (!presentUrl) {
       return;
     }
-    await navigator.clipboard.writeText(presentUrl);
-    setPresentCopied(true);
-    setTimeout(() => setPresentCopied(false), 2000);
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(presentUrl);
+      setPresentCopied(true);
+      setTimeout(() => setPresentCopied(false), 2000);
+    } catch {
+      setPresentCopied(false);
+      setError("Couldn't copy the presentation link. Please copy it manually.");
+    }
   };
 
   return (
@@ -272,6 +314,9 @@ export function ShareButton({
       open={showMenu}
       onClose={() => setShowMenu(false)}
       aria-label="Share this document"
+      constrainHeight
+      portal
+      className="w-80 overflow-y-auto p-4"
       trigger={
         <EditorToolbarButton
           label="Share"
@@ -297,6 +342,7 @@ export function ShareButton({
         <Switch
           checked={shareState.isShared}
           onCheckedChange={handleToggle}
+          disabled={isMutating}
           aria-labelledby="share-toggle-label"
         />
       </div>
@@ -313,12 +359,14 @@ export function ShareButton({
             <input
               readOnly
               value={shareState.shareUrl}
+              aria-label="Public share link"
               className="flex-1 bg-transparent text-xs text-ds-text-secondary outline-none"
             />
             <button
               type="button"
               onClick={copyLink}
-              className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+              disabled={copying}
+              className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {copying ? "Copied!" : "Copy"}
             </button>
@@ -330,7 +378,7 @@ export function ShareButton({
             <button
               type="button"
               onClick={handleRegenerate}
-              disabled={regenerating}
+              disabled={isMutating || regenerating}
               className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:opacity-50"
             >
               {regenerating ? "Regenerating…" : "Regenerate link"}
@@ -354,13 +402,15 @@ export function ShareButton({
               aria-label="Link expiry date and time"
               value={isoToLocalInput(shareState.expiresAt)}
               onChange={(event) => handleExpiryChange(event.target.value)}
+              disabled={isMutating}
               className="flex-1 rounded-md border border-ds-border-subtle bg-ds-surface-sunken px-2 py-1 text-xs text-ds-text-secondary outline-none"
             />
             {shareState.expiresAt && (
               <button
                 type="button"
                 onClick={() => handleExpiryChange("")}
-                className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+                disabled={isMutating}
+                className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Clear
               </button>
@@ -389,6 +439,9 @@ export function ShareButton({
               type="password"
               value={passcode}
               onChange={(event) => setPasscode(event.target.value)}
+              minLength={MIN_SHARE_PASSCODE_LENGTH}
+              maxLength={MAX_SHARE_PASSCODE_LENGTH}
+              disabled={isMutating}
               placeholder={
                 shareState.passcodeEnabled ? "New passcode" : "Set passcode"
               }
@@ -398,7 +451,8 @@ export function ShareButton({
             <button
               type="button"
               onClick={handlePasscodeSave}
-              className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+              disabled={isMutating || passcode.trim().length === 0}
+              className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {shareState.passcodeEnabled ? "Update" : "Set"}
             </button>
@@ -407,7 +461,8 @@ export function ShareButton({
             <button
               type="button"
               onClick={handlePasscodeClear}
-              className="mt-2 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
+              disabled={isMutating}
+              className="mt-2 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               Remove passcode
             </button>
@@ -429,6 +484,7 @@ export function ShareButton({
                   event.target.value as "generic" | "title" | "title-excerpt",
                 )
               }
+              disabled={isMutating}
               className="rounded-md border border-ds-border-subtle bg-ds-surface-sunken px-2 py-1 text-xs outline-none"
             >
               <option value="generic">Generic TextIQ preview</option>
@@ -446,6 +502,7 @@ export function ShareButton({
             <Switch
               checked={shareState.discoverable}
               onCheckedChange={handleDiscoverableChange}
+              disabled={isMutating}
               aria-labelledby="share-discoverable-label"
             />
           </div>
@@ -470,6 +527,7 @@ export function ShareButton({
             <Switch
               checked={shareState.embedEnabled}
               onCheckedChange={handleEmbedEnabledChange}
+              disabled={isMutating}
               aria-labelledby="share-embed-allow-label"
             />
           </div>
@@ -483,6 +541,7 @@ export function ShareButton({
             <Switch
               checked={shareState.presentEnabled}
               onCheckedChange={handlePresentEnabledChange}
+              disabled={isMutating}
               aria-labelledby="share-present-allow-label"
             />
           </div>

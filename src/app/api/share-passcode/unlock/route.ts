@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { publicSharePasscodeBudgetExceeded } from "@/app/public-abuse";
 import { readFormData } from "@/lib/api/route-adapters";
-import { auth } from "@/lib/env";
+import { app, auth } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import {
   SHARE_ACCESS_SELECT,
@@ -30,9 +30,13 @@ function redirectWithStatus(
   returnTo: string,
   status: "invalid" | "limited",
 ): NextResponse {
-  const url = new URL(returnTo, request.url);
+  const url = returnUrl(request, returnTo);
   url.searchParams.set("passcode", status);
   return NextResponse.redirect(url, 303);
+}
+
+function returnUrl(request: NextRequest, returnTo: string): URL {
+  return new URL(returnTo, app.url(request.nextUrl.origin));
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -66,7 +70,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
 
   if (!document?.sharePasscodeHash) {
-    return NextResponse.redirect(new URL(returnTo, request.url), 303);
+    return NextResponse.redirect(returnUrl(request, returnTo), 303);
   }
 
   const decision = evaluateShareAccess(
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return redirectWithStatus(request, returnTo, "invalid");
   }
 
-  const response = NextResponse.redirect(new URL(returnTo, request.url), 303);
+  const response = NextResponse.redirect(returnUrl(request, returnTo), 303);
   response.cookies.set({
     name: sharePasscodeCookieName(shareId),
     value: createSharePasscodeUnlockToken({

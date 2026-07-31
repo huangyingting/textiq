@@ -19,7 +19,7 @@
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { before, beforeEach, test } from "node:test";
+import { after, before, beforeEach, test } from "node:test";
 
 import { NextRequest } from "next/server";
 
@@ -106,6 +106,8 @@ let PASSCODE_HASH: string;
 const TEST_PASSCODE = "correctpasscode";
 const SHARE_ID = "test-share-abc123";
 const RETURN_TO = "/share/abc123";
+const CANONICAL_APP_URL = "https://textiq.test";
+const previousAppUrl = process.env.NEXT_PUBLIC_APP_URL;
 
 before(async () => {
   const mod = await import("./route");
@@ -119,6 +121,15 @@ beforeEach(() => {
     budgetChecks: 0,
   };
   process.env.AUTH_SECRET = "ci-placeholder";
+  process.env.NEXT_PUBLIC_APP_URL = CANONICAL_APP_URL;
+});
+
+after(() => {
+  if (previousAppUrl === undefined) {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+  } else {
+    process.env.NEXT_PUBLIC_APP_URL = previousAppUrl;
+  }
 });
 
 /** A document row that passes all share-access checks and has a passcode. */
@@ -326,7 +337,10 @@ test("#1852: wrong passcode redirects with ?passcode=invalid", async (t) => {
     }),
   );
   assert.strictEqual(response.status, 303);
-  assert.ok(redirectLocation(response).includes("passcode=invalid"));
+  assert.strictEqual(
+    redirectLocation(response),
+    `${CANONICAL_APP_URL}${RETURN_TO}?passcode=invalid`,
+  );
 });
 
 test("#2097: missing FormData passcode redirects invalid without setting an unlock cookie", async (t) => {

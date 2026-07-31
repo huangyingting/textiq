@@ -23,6 +23,7 @@ app.
 | `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                   |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
 | `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Owner/viewer comment lifecycle, anchored-paragraph edits, permissions, resolve/reopen, guarded deletion, and reload persistence |
+| `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, passcode unlock, public mode gates, link rotation/revocation, and viewport-reachable controls         |
 | `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag create/remove/reuse persistence and reversible version-history restore across reloads                                       |
 | `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite, membership, ownership-transfer, leave, and delete lifecycle                         |
 | `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically   |
@@ -135,6 +136,7 @@ that ambiguity for the critical-flow specs
 `e2e/ui-matrix/auth-public-ui.spec.ts`,
 `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`,
+`e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/document-metadata-history-ui.spec.ts`,
 `e2e/ui-matrix/document-editor-ui.spec.ts`,
 `e2e/ui-matrix/presentation-ui.spec.ts`,
@@ -159,6 +161,8 @@ users and isolated documents, and the specs run for real against them.
   persistence and reversible restore coverage;
 - an isolated workspace document whose comments and read state reset before
   owner/viewer comment lifecycle coverage;
+- an isolated private document whose complete share policy resets before
+  owner/public link lifecycle coverage;
 - stale disposable workspace-lifecycle records are removed before each seed so
   interrupted create/invite/transfer/delete browser runs cannot contaminate a
   later profile run;
