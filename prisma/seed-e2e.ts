@@ -87,12 +87,16 @@ async function writeAssetBytes(
 
 async function main() {
   // -------------------------------------------------------------------------
-  // 1. Users — owner + editor + viewer, passwords hashed with bcrypt (cost 12, matching
-  //    src/app/signup/actions.ts) so the Credentials provider authenticates.
+  // 1. Users — owner + editor + viewer + an isolated account-mutation user,
+  //    with passwords hashed via the production bcrypt cost.
   // -------------------------------------------------------------------------
   const ownerHash = await bcrypt.hash(F.owner.password, 12);
   const editorHash = await bcrypt.hash(F.editor.password, 12);
   const viewerHash = await bcrypt.hash(F.viewer.password, 12);
+  const accountLifecycleHash = await bcrypt.hash(
+    F.accountLifecycle.password,
+    12,
+  );
   const now = new Date();
 
   const owner = await prisma.user.upsert({
@@ -143,6 +147,26 @@ async function main() {
       passwordHash: editorHash,
       emailVerified: now,
       plan: F.editor.plan,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { id: F.accountLifecycle.id },
+    update: {
+      email: F.accountLifecycle.email,
+      passwordHash: accountLifecycleHash,
+      sessionInvalidatedAt: null,
+      name: F.accountLifecycle.name,
+      emailVerified: now,
+      plan: F.accountLifecycle.plan,
+    },
+    create: {
+      id: F.accountLifecycle.id,
+      email: F.accountLifecycle.email,
+      passwordHash: accountLifecycleHash,
+      name: F.accountLifecycle.name,
+      emailVerified: now,
+      plan: F.accountLifecycle.plan,
     },
   });
 

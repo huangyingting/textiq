@@ -6,6 +6,7 @@ import { login } from "../helpers/auth";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
+  profileAccountLifecycleCredentials,
   profileOwnerCredentials,
 } from "../helpers/profile";
 
@@ -13,7 +14,7 @@ const GENERIC_RESET_MESSAGE =
   "If an account exists for that email, we've sent a link to reset your password.";
 
 test.describe("UI matrix: account lifecycle", () => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
 
   test("recovery and verification pages expose safe public failure states", async ({
     page,
@@ -122,6 +123,91 @@ test.describe("UI matrix: account lifecycle", () => {
         ]),
       }),
     );
+  });
+
+  test("isolated account persists profile edits and rotates credentials with explicit re-login", async ({
+    page,
+  }) => {
+    test.skip(
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run account mutation coverage",
+    );
+
+    const fixture = E2E_PROFILE_FIXTURE.accountLifecycle;
+    const credentials = profileAccountLifecycleCredentials();
+    await login(page, credentials, "/app/settings");
+
+    const displayName = page.getByLabel("Display name");
+    await displayName.fill(fixture.updatedName);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("status")).toHaveText("Profile updated.");
+    await expect(page.getByRole("button", { name: "User menu" })).toContainText(
+      fixture.updatedName,
+    );
+
+    await page.reload();
+    await expect(page.getByLabel("Display name")).toHaveValue(
+      fixture.updatedName,
+    );
+    await page.getByLabel("Display name").fill(fixture.name);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("status")).toHaveText("Profile updated.");
+    await expect(page.getByRole("button", { name: "User menu" })).toContainText(
+      fixture.name,
+    );
+
+    await page.getByLabel("Current password").fill(fixture.password);
+    await page
+      .getByLabel("New password", { exact: true })
+      .fill(fixture.replacementPassword);
+    await page
+      .getByLabel("Confirm new password")
+      .fill(fixture.replacementPassword);
+    await Promise.all([
+      page.waitForURL(/\/login\?passwordChanged=1$/),
+      page.getByRole("button", { name: "Update password" }).click(),
+    ]);
+    await expect(page.getByRole("status")).toHaveText(
+      "Password updated. Log in with your new password.",
+    );
+
+    await page.getByLabel("Email").fill(fixture.email);
+    await page.getByLabel("Password").fill(fixture.password);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(
+      page.getByText("Invalid email or password.", { exact: true }),
+    ).toBeVisible();
+
+    await page.getByLabel("Password").fill(fixture.replacementPassword);
+    await Promise.all([
+      page.waitForURL(/\/app(\/|$|\?)/, { waitUntil: "commit" }),
+      page.getByRole("button", { name: "Log in" }).click(),
+    ]);
+    await page.goto("/app/settings");
+
+    await page.getByLabel("Current password").fill(fixture.replacementPassword);
+    await page
+      .getByLabel("New password", { exact: true })
+      .fill(fixture.password);
+    await page.getByLabel("Confirm new password").fill(fixture.password);
+    await Promise.all([
+      page.waitForURL(/\/login\?passwordChanged=1$/),
+      page.getByRole("button", { name: "Update password" }).click(),
+    ]);
+
+    await page.getByLabel("Email").fill(fixture.email);
+    await page.getByLabel("Password").fill(fixture.replacementPassword);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(
+      page.getByText("Invalid email or password.", { exact: true }),
+    ).toBeVisible();
+
+    await page.getByLabel("Password").fill(fixture.password);
+    await Promise.all([
+      page.waitForURL(/\/app(\/|$|\?)/, { waitUntil: "commit" }),
+      page.getByRole("button", { name: "Log in" }).click(),
+    ]);
+    await expect(page).toHaveURL(/\/app/);
   });
 
   test("password failures preserve the session and deletion stays confirmation-gated", async ({

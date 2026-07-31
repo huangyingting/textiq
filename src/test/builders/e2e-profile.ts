@@ -45,6 +45,15 @@ export const E2E_PROFILE_FIXTURE = {
     name: "E2E Viewer",
     plan: "free",
   },
+  accountLifecycle: {
+    id: "e2efixtureaccountlife00001",
+    email: "e2e-account-lifecycle@textiq.test",
+    password: "e2e-account-pw-2026",
+    replacementPassword: "e2e-account-pw-updated-2026",
+    name: "E2E Account Lifecycle",
+    updatedName: "E2E Account Lifecycle Updated",
+    plan: "free",
+  },
   brandWorkflow: {
     initialName: "E2E Pro Brand Workflow",
     updatedName: "E2E Pro Brand Workflow Updated",

@@ -64,14 +64,17 @@ export async function updateProfile(
  * account (no `passwordHash`) can *set* a password without a current one. The
  * new password and its confirmation are validated by the pure
  * `validatePasswordChange` helper, and an incorrect current password yields a
- * generic message so nothing about the account is leaked.
+ * generic message so nothing about the account is leaked. A successful
+ * credential rotation invalidates every existing JWT, including this one, so
+ * the action signs the browser out immediately instead of leaving a visibly
+ * authenticated page backed by a stale session.
  */
 export async function changePassword(
   _prevState: PasswordResult | null,
   formData: FormData,
 ): Promise<PasswordResult> {
   const user = await requireUser(redirect);
-  return withAbuseBudget(
+  const result = await withAbuseBudget(
     "account.change-password.user",
     user.id,
     async () =>
@@ -83,6 +86,15 @@ export async function changePassword(
       }),
     (retryAfterSecs) => actionError(retryMessage(retryAfterSecs)),
   );
+  if (!result.ok) {
+    return result;
+  }
+
+  await signOut({ redirectTo: "/login?passwordChanged=1" });
+  // Unreachable in production because signOut redirects by throwing. The
+  // return keeps the action total for adapters and tests whose signOut seam
+  // resolves normally.
+  return result;
 }
 
 /**

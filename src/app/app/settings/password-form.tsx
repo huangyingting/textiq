@@ -77,6 +77,10 @@ export function renderPasswordFormView({
         aria-label="Confirm new password"
       />
 
+      <p className="text-xs text-ds-text-secondary">
+        For security, you&apos;ll be signed out after this change.
+      </p>
+
       {state?.ok ? (
         <AuthMessage kind="success">
           {hasPassword ? "Password updated." : "Password set."}

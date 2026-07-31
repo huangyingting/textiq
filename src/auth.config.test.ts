@@ -184,6 +184,26 @@ test("auth logger suppresses recoverable JWT session decode errors", () => {
   }
 });
 
+test("auth logger suppresses expected invalid-credential errors", () => {
+  const calls: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    calls.push(args);
+  };
+  try {
+    const error = Object.assign(new Error("credentials rejected"), {
+      name: "CredentialsSignin",
+      type: "CredentialsSignin",
+    });
+
+    authConfig.logger?.error?.(error);
+
+    assert.deepEqual(calls, []);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("auth logger forwards non-JWT auth errors", () => {
   const calls: unknown[][] = [];
   const originalConsoleError = console.error;

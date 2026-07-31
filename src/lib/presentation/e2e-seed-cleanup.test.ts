@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import bcrypt from "bcryptjs";
 import { Prisma, PrismaClient } from "../../generated/prisma/client";
 import { markdownToLexicalStateObject } from "../content/from-markdown";
 import {
@@ -408,6 +409,10 @@ test(
       where: { email: E2E_PROFILE_FIXTURE.viewer.email },
       select: { id: true },
     });
+    const accountLifecycle = await client.user.findUniqueOrThrow({
+      where: { id: E2E_PROFILE_FIXTURE.accountLifecycle.id },
+      select: { id: true },
+    });
     const staleDocumentId = "e2eisolatedstalefixture0001";
     const staleOrphanDocumentId = "e2eisolatedstaleorphan0001";
     const hostileDocumentId = "e2eisolated/../../slide-assets-prefix-collision";
@@ -611,6 +616,17 @@ test(
         shareDiscoverable: true,
       },
     });
+    await client.user.update({
+      where: { id: accountLifecycle.id },
+      data: {
+        name: E2E_PROFILE_FIXTURE.accountLifecycle.updatedName,
+        passwordHash: await bcrypt.hash(
+          E2E_PROFILE_FIXTURE.accountLifecycle.replacementPassword,
+          4,
+        ),
+        sessionInvalidatedAt: new Date("2027-01-01T00:00:00.000Z"),
+      },
+    });
 
     await runFullSeed();
 
@@ -665,6 +681,40 @@ test(
         content: metadataLifecycle.currentContent,
         tags: [],
       },
+    );
+    const resetAccountLifecycle = await client.user.findUniqueOrThrow({
+      where: { id: accountLifecycle.id },
+      select: {
+        email: true,
+        name: true,
+        passwordHash: true,
+        sessionInvalidatedAt: true,
+        emailVerified: true,
+        plan: true,
+      },
+    });
+    assert.deepEqual(
+      {
+        email: resetAccountLifecycle.email,
+        name: resetAccountLifecycle.name,
+        sessionInvalidatedAt: resetAccountLifecycle.sessionInvalidatedAt,
+        emailVerified: resetAccountLifecycle.emailVerified instanceof Date,
+        plan: resetAccountLifecycle.plan,
+      },
+      {
+        email: E2E_PROFILE_FIXTURE.accountLifecycle.email,
+        name: E2E_PROFILE_FIXTURE.accountLifecycle.name,
+        sessionInvalidatedAt: null,
+        emailVerified: true,
+        plan: E2E_PROFILE_FIXTURE.accountLifecycle.plan,
+      },
+    );
+    assert.equal(
+      await bcrypt.compare(
+        E2E_PROFILE_FIXTURE.accountLifecycle.password,
+        resetAccountLifecycle.passwordHash ?? "",
+      ),
+      true,
     );
     assert.deepEqual(
       await client.documentVersion.findMany({

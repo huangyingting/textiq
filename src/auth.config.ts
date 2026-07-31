@@ -5,10 +5,13 @@ import {
   routeProtectionPolicy,
 } from "@/lib/auth/route-protection-policy";
 
-function isJwtSessionError(error: Error): boolean {
+function isRecoverableAuthError(error: Error): boolean {
+  const type = (error as Error & { type?: unknown }).type;
   return (
     error.name === "JWTSessionError" ||
-    (error as Error & { type?: unknown }).type === "JWTSessionError"
+    type === "JWTSessionError" ||
+    error.name === "CredentialsSignin" ||
+    type === "CredentialsSignin"
   );
 }
 
@@ -29,7 +32,7 @@ export const authConfig = {
   },
   logger: {
     error(error) {
-      if (isJwtSessionError(error)) return;
+      if (isRecoverableAuthError(error)) return;
       console.error(error);
     },
   },

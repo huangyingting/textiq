@@ -57,6 +57,14 @@ export function profileEditorCredentials(): Credentials {
   };
 }
 
+/** Isolated credentials for profile and password mutation coverage. */
+export function profileAccountLifecycleCredentials(): Credentials {
+  return {
+    email: E2E_PROFILE_FIXTURE.accountLifecycle.email,
+    password: E2E_PROFILE_FIXTURE.accountLifecycle.password,
+  };
+}
+
 /** App editor URL for the seeded document. */
 export function profileDocPath(
   fixtureName?: PresentationTestFixtureName,

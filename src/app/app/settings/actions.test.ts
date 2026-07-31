@@ -312,7 +312,7 @@ describe("changePassword", () => {
     assert.equal(callsOf("changePasswordForUser").length, 0);
   });
 
-  it("passes form fields to changePasswordForUser and returns the service result", async () => {
+  it("passes form fields to the service and signs out after a successful rotation", async () => {
     const result = await settingsActions.changePassword(
       null,
       makeFormData({
@@ -335,6 +335,9 @@ describe("changePassword", () => {
       newPassword: "new-pass123",
       confirmPassword: "new-pass123",
     });
+    assert.deepEqual(callsOf("signOut"), [
+      ["signOut", { redirectTo: "/login?passwordChanged=1" }],
+    ]);
   });
 
   it("propagates a service validation error to the caller", async () => {
@@ -356,6 +359,7 @@ describe("changePassword", () => {
       ok: false,
       error: "New passwords don't match.",
     });
+    assert.equal(callsOf("signOut").length, 0);
   });
 
   it("returns a rate-limit error when the abuse budget is exceeded", async () => {
@@ -377,6 +381,7 @@ describe("changePassword", () => {
       /Too many attempts/,
     );
     assert.equal(callsOf("changePasswordForUser").length, 0);
+    assert.equal(callsOf("signOut").length, 0);
   });
 });
 

@@ -296,10 +296,10 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
     owners: ["auth", "security", "settings"],
     coverage:
-      "Deterministic password-recovery and email-verification failure states plus authenticated settings, account export, password-error recovery, and non-destructive deletion safeguards.",
+      "Deterministic password-recovery and email-verification failure states plus authenticated settings, profile persistence, scoped export, password failure and successful rotation/re-login, and non-destructive deletion safeguards.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
-    roles: ["anonymous", "seeded owner"],
+    roles: ["anonymous", "seeded owner", "isolated account-mutation user"],
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/auth/README.md"],

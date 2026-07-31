@@ -110,6 +110,7 @@ describe("renderPasswordFormView", () => {
     assert.equal(confirmPassword.props.autoComplete, "new-password");
     const html = renderToStaticMarkup(tree);
     assert.match(html, /Use at least 8 characters\./);
+    assert.match(html, /you&#x27;ll be signed out after this change/i);
   });
 
   test("success while hasPassword: shows the 'Password updated.' message", () => {

@@ -89,13 +89,21 @@ treated as invalid sessions; page/server-action gates redirect stale sessions to
 Credential rotations bump the stamp for password changes and successful
 password resets. Account deletion stamps the user after confirmation and before
 erasure/sign-out, so other active JWTs stop passing Node-runtime validation even
-before the user row is removed.
+before the user row is removed. A successful settings password change also
+signs out the current browser immediately and returns it to login with an
+explicit confirmation; this avoids leaving stale authenticated chrome visible
+after the current JWT has been revoked.
 
 ## Settings, Export, And Deletion
 
 The settings account view model exposes profile defaults, email verification
 state, password state, connected account labels, and stable links to account
 export, billing, and documents.
+
+The deterministic account browser lifecycle uses an isolated resettable user to
+prove display-name persistence in both the form and app shell, password
+rotation, old-password rejection, explicit re-login, and restoration of the
+original credential without contaminating the shared owner fixture.
 
 Account deletion requires confirmation by email or the `DELETE` keyword. Before
 erasure, the deletion service attempts immediate subscription cancellation when

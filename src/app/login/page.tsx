@@ -16,17 +16,26 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string | string[]; error?: string }>;
+  searchParams: Promise<{
+    callbackUrl?: string | string[];
+    error?: string;
+    passwordChanged?: string | string[];
+  }>;
 }) {
   if (await getCurrentUser()) {
     redirect(routeProtectionPolicy.authenticatedHome);
   }
 
-  const { callbackUrl: rawCallbackUrl, error } = await searchParams;
+  const {
+    callbackUrl: rawCallbackUrl,
+    error,
+    passwordChanged,
+  } = await searchParams;
   const callbackUrl = safeCallbackUrl(
     Array.isArray(rawCallbackUrl) ? rawCallbackUrl[0] : rawCallbackUrl,
   );
   const hasAuthError = typeof error === "string" && error.length > 0;
+  const didChangePassword = passwordChanged === "1";
 
   return (
     <main className="flex flex-1 items-center justify-center bg-ds-surface-sunken px-6 py-16">
@@ -40,6 +49,11 @@ export default async function LoginPage({
           </p>
         </div>
         <div className="flex flex-col gap-6">
+          {didChangePassword ? (
+            <p role="status" className="text-sm text-ds-success">
+              Password updated. Log in with your new password.
+            </p>
+          ) : null}
           {hasAuthError ? (
             <p role="alert" className="text-sm text-ds-danger">
               Google sign-in failed. Please try again or use email and password.
