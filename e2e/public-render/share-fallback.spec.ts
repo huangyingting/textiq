@@ -71,11 +71,18 @@ test.describe("share/present fallback", () => {
   test("unknown /share link renders the not-found fallback", async ({
     page,
   }) => {
+    const scriptRenderWarnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.text().includes("Encountered a script tag while rendering")) {
+        scriptRenderWarnings.push(message.text());
+      }
+    });
     const response = await page.goto(`/share/${UNKNOWN_SHARE_ID}`);
 
     // Next.js notFound() serves the 404 page.
     expect(response?.status()).toBe(404);
     await expectVisibleNotFoundWithoutFixtureContent(page);
+    expect(scriptRenderWarnings).toEqual([]);
   });
 
   test("unknown /present link renders the not-found fallback", async ({

@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Provider } from "@lexical/yjs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { act } from "react-test-renderer";
 import type { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
-import { createReactRenderHarness } from "@/test/react-render-harness";
+import {
+  createReactRenderHarness,
+  withDefaultDom,
+} from "@/test/react-render-harness";
 
 import { isLexicalWebsocketProviderAdapter } from "./lexical-provider-adapter";
 import { colorFromId } from "./y-text";
@@ -48,9 +53,15 @@ function mountCollaboration(opts: { room: string; userName: string }): {
 } {
   let latest: LexicalCollaboration | undefined;
   const harness = createReactRenderHarness();
-  harness.run(() => {
-    latest = useLexicalCollaboration(opts);
-    return latest;
+  withDefaultDom(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { host: "textiq.test", protocol: "https:" },
+    });
+    harness.run(() => {
+      latest = useLexicalCollaboration(opts);
+      return latest;
+    });
   });
   return {
     harness,
@@ -71,6 +82,20 @@ function websocketFromProvider(provider: Provider): WebsocketProvider {
 // ---------------------------------------------------------------------------
 // useLexicalCollaboration — initial state
 // ---------------------------------------------------------------------------
+
+test("useLexicalCollaboration: SSR does not allocate Node websocket exit listeners", () => {
+  function ServerProbe() {
+    useLexicalCollaboration({ room: "room-ssr", userName: "Alice" });
+    return null;
+  }
+
+  const before = process.listenerCount("exit");
+  for (let index = 0; index < 12; index += 1) {
+    renderToStaticMarkup(createElement(ServerProbe));
+  }
+
+  assert.equal(process.listenerCount("exit"), before);
+});
 
 test("useLexicalCollaboration: starts connecting, unready, unsynced, un-degraded, with no peers", () => {
   withFakeTimers(() => {
@@ -384,6 +409,7 @@ test("useLexicalCollaboration: awareness states without a name are excluded from
 
 test("useLexicalCollaboration: destroys the provider and Y.Doc on unmount", () => {
   withFakeTimers(() => {
+    const exitListenersBeforeMount = process.listenerCount("exit");
     const { harness, get } = mountCollaboration({
       room: "room-teardown",
       userName: "Alice",
@@ -393,11 +419,13 @@ test("useLexicalCollaboration: destroys the provider and Y.Doc on unmount", () =
     const doc = map.get("doc-1")!;
 
     assert.equal(doc.isDestroyed, false);
+    assert.equal(process.listenerCount("exit"), exitListenersBeforeMount + 1);
 
     harness.cleanup();
 
     assert.equal(doc.isDestroyed, true);
     assert.equal(provider._observers.size, 0);
+    assert.equal(process.listenerCount("exit"), exitListenersBeforeMount);
   });
 });
 

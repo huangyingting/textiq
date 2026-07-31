@@ -5,9 +5,9 @@
  * `RootLayout` pulls in `next/font/google` (which only works under the Next
  * SWC compiler — the plain npm package has no callable `Inter` export, see
  * `next/font/google`'s own module), two CSS side-effect imports Node's ESM
- * loader can't parse, and `@/lib/i18n/server`'s `getLocale()` (which calls
- * `next/headers`'s `cookies()` and throws outside a real request scope).
- * Those three are stubbed via the `node:module` `registerHooks` pattern
+ * loader can't parse, and request-scoped cookie reads for locale/theme (which
+ * throw outside a real Next request scope). Those dependencies are stubbed
+ * via the `node:module` `registerHooks` pattern
  * already used by `src/app/app/trash/actions.test.ts` and
  * `src/app/app/settings/page.test.tsx`. `@/components/site-header` is also
  * stubbed: it transitively imports `@/lib/app-shell/loader`, which carries
@@ -52,13 +52,18 @@ type ModuleHooks = {
 type LayoutTestState = {
   locale: string;
   fontCalls: unknown[];
+  themeCookie: string | undefined;
 };
 
 const globalForLayout = globalThis as typeof globalThis & {
   __layoutTestState: LayoutTestState;
 };
 
-globalForLayout.__layoutTestState = { locale: "en", fontCalls: [] };
+globalForLayout.__layoutTestState = {
+  locale: "en",
+  fontCalls: [],
+  themeCookie: undefined,
+};
 
 const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
@@ -79,6 +84,19 @@ const stubbedModules = new Map<string, string>([
   ],
   ["./globals.css", ""],
   ["./slide-fonts.css", ""],
+  [
+    "next/headers",
+    `
+      export async function cookies() {
+        return {
+          get() {
+            const value = globalThis.__layoutTestState.themeCookie;
+            return value === undefined ? undefined : { value };
+          }
+        };
+      }
+    `,
+  ],
   [
     "@/lib/i18n/server",
     `
@@ -216,6 +234,7 @@ describe("RootLayout", () => {
 
   test("renders the default theme mode on <html>", async () => {
     globalForLayout.__layoutTestState.locale = "en";
+    globalForLayout.__layoutTestState.themeCookie = undefined;
     const tree = (await RootLayout({
       children: null,
     })) as ElementLike;
@@ -227,6 +246,18 @@ describe("RootLayout", () => {
     assert.match(String(tree.props.className), /motion-reduce:scroll-auto/);
   });
 
+  test("renders a valid persisted theme on <html> and passes it to ThemeProvider", async () => {
+    globalForLayout.__layoutTestState.themeCookie = "dark";
+    const tree = (await RootLayout({ children: null })) as ElementLike;
+
+    assert.equal(tree.props["data-theme"], "dark");
+    const themeProvider = flatten(tree).find(
+      (element) => element.type === ThemeProvider,
+    );
+    assert.ok(themeProvider, "expected ThemeProvider in <body>");
+    assert.equal(themeProvider!.props.initialMode, "dark");
+  });
+
   test("calls Inter exactly once at module scope with the expected subset config", () => {
     // `const inter = Inter(...)` runs once at module evaluation (in
     // `before()`), not per-render, so this asserts against the call
@@ -234,21 +265,6 @@ describe("RootLayout", () => {
     assert.deepEqual(globalForLayout.__layoutTestState.fontCalls, [
       { variable: "--font-inter", subsets: ["latin"] },
     ]);
-  });
-
-  test("embeds the theme-mode storage key/default in the inline init script", async () => {
-    const tree = (await RootLayout({ children: null })) as ElementLike;
-    const head = flatten(tree).find((element) => element.type === "head");
-    assert.ok(head, "expected a <head> element");
-    const script = flatten(childrenOf(head!)).find(
-      (element) => element.type === "script",
-    );
-    assert.ok(script, "expected the theme-init <script>");
-    const html = (script!.props.dangerouslySetInnerHTML as { __html: string })
-      .__html;
-    assert.match(html, /textiq\.app-theme/);
-    assert.match(html, /"system"/);
-    assert.match(html, /"light","dark","ocean","mint","rose","amber"/);
   });
 
   test("composes providers in order: ThemeProvider > LocaleProvider > OverlayProvider > HeaderGate > SiteHeader, alongside children", async () => {

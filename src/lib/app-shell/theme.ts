@@ -1,4 +1,5 @@
 export const APP_THEME_STORAGE_KEY = "textiq.app-theme";
+export const APP_THEME_COOKIE_KEY = "textiq.app-theme";
 
 export const APP_THEME_MODES = [
   "system",

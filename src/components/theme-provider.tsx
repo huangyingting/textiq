@@ -4,12 +4,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 
 import {
+  APP_THEME_COOKIE_KEY,
   APP_THEME_STORAGE_KEY,
   DEFAULT_APP_THEME_MODE,
   nextAppThemeMode,
@@ -43,19 +45,19 @@ function applyThemeMode(mode: AppThemeMode): ResolvedAppThemeMode {
 
 // The selected mode is kept authoritative in memory (per `window`, so
 // separate windows/test fixtures never leak state into one another) rather
-// than being re-derived from `localStorage` on every read. Storage is only a
-// best-effort persistence/cross-tab sync target: a throwing/unavailable
-// store must never be able to overrule a mode already chosen in memory.
+// than being re-derived from persistence on every read. localStorage remains
+// the cross-tab channel; a same-site cookie lets the server render the chosen
+// mode before hydration. Either persistence target may be unavailable without
+// overruling a mode already chosen in memory.
 type ThemeStoreState = { mode: AppThemeMode };
 const themeStores = new WeakMap<typeof window, ThemeStoreState>();
 
-function readStoredThemeMode(): AppThemeMode {
+function readStoredThemeMode(fallback: AppThemeMode): AppThemeMode {
   try {
-    return normalizeAppThemeMode(
-      window.localStorage.getItem(APP_THEME_STORAGE_KEY),
-    );
+    const stored = window.localStorage.getItem(APP_THEME_STORAGE_KEY);
+    return stored === null ? fallback : normalizeAppThemeMode(stored);
   } catch {
-    return DEFAULT_APP_THEME_MODE;
+    return fallback;
   }
 }
 
@@ -68,37 +70,53 @@ function writeStoredThemeMode(mode: AppThemeMode): void {
   }
 }
 
-function themeStore(): ThemeStoreState {
+function writeThemeCookie(mode: AppThemeMode): void {
+  try {
+    const secure = window.location?.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${APP_THEME_COOKIE_KEY}=${mode}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  } catch {
+    // Cookie persistence is best-effort. The in-memory mode, DOM state, and
+    // localStorage cross-tab channel remain usable in restricted contexts.
+  }
+}
+
+function themeStore(fallback = DEFAULT_APP_THEME_MODE): ThemeStoreState {
   let store = themeStores.get(window);
   if (!store) {
-    store = { mode: readStoredThemeMode() };
+    store = { mode: readStoredThemeMode(fallback) };
     themeStores.set(window, store);
   }
   return store;
 }
 
-function currentThemeMode(): AppThemeMode {
-  return themeStore().mode;
+function currentThemeMode(fallback = DEFAULT_APP_THEME_MODE): AppThemeMode {
+  return themeStore(fallback).mode;
 }
 
-function currentResolvedThemeMode(): ResolvedAppThemeMode {
-  return resolveAppThemeMode(currentThemeMode(), systemPrefersDark());
+function currentResolvedThemeMode(
+  fallback = DEFAULT_APP_THEME_MODE,
+): ResolvedAppThemeMode {
+  return resolveAppThemeMode(currentThemeMode(fallback), systemPrefersDark());
 }
 
-function subscribeThemeMode(onStoreChange: () => void) {
+function subscribeThemeMode(
+  onStoreChange: () => void,
+  fallback = DEFAULT_APP_THEME_MODE,
+) {
   const applyCurrentAndNotify = () => {
-    applyThemeMode(currentThemeMode());
+    applyThemeMode(currentThemeMode(fallback));
     onStoreChange();
   };
   const onStorage = (event: StorageEvent) => {
     if (event.key !== APP_THEME_STORAGE_KEY) return;
     // Another tab persisted successfully, so storage is the source of
     // truth for this cross-tab sync (unlike our own change event below).
-    themeStore().mode = readStoredThemeMode();
+    themeStore(fallback).mode = readStoredThemeMode(fallback);
+    writeThemeCookie(themeStore(fallback).mode);
     applyCurrentAndNotify();
   };
   const onSystemThemeChange = () => {
-    if (currentThemeMode() === "system") applyCurrentAndNotify();
+    if (currentThemeMode(fallback) === "system") applyCurrentAndNotify();
   };
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
 
@@ -113,36 +131,61 @@ function subscribeThemeMode(onStoreChange: () => void) {
   };
 }
 
-function serverThemeModeSnapshot(): AppThemeMode {
-  return DEFAULT_APP_THEME_MODE;
-}
-
-function serverResolvedThemeModeSnapshot(): ResolvedAppThemeMode {
-  return "light";
-}
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({
+  children,
+  initialMode = DEFAULT_APP_THEME_MODE,
+}: {
+  children: ReactNode;
+  initialMode?: AppThemeMode;
+}) {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      subscribeThemeMode(onStoreChange, initialMode),
+    [initialMode],
+  );
+  const getModeSnapshot = useCallback(
+    () => currentThemeMode(initialMode),
+    [initialMode],
+  );
+  const getResolvedModeSnapshot = useCallback(
+    () => currentResolvedThemeMode(initialMode),
+    [initialMode],
+  );
+  const getServerModeSnapshot = useCallback(() => initialMode, [initialMode]);
+  const getServerResolvedModeSnapshot = useCallback(
+    () => resolveAppThemeMode(initialMode, false),
+    [initialMode],
+  );
   const mode = useSyncExternalStore(
-    subscribeThemeMode,
-    currentThemeMode,
-    serverThemeModeSnapshot,
+    subscribe,
+    getModeSnapshot,
+    getServerModeSnapshot,
   );
   const resolvedMode = useSyncExternalStore(
-    subscribeThemeMode,
-    currentResolvedThemeMode,
-    serverResolvedThemeModeSnapshot,
+    subscribe,
+    getResolvedModeSnapshot,
+    getServerResolvedModeSnapshot,
   );
 
-  const setMode = useCallback((nextMode: AppThemeMode) => {
-    // The chosen mode is authoritative in memory first, so a broken/blocked
-    // store can never revert it: persistence below is best-effort only, and
-    // the change-event notification (via `subscribeThemeMode`) re-reads this
-    // same in-memory store rather than storage.
-    themeStore().mode = nextMode;
-    writeStoredThemeMode(nextMode);
-    applyThemeMode(nextMode);
-    window.dispatchEvent(new Event(THEME_MODE_CHANGE_EVENT));
-  }, []);
+  useEffect(() => {
+    applyThemeMode(mode);
+    writeThemeCookie(mode);
+  }, [mode]);
+
+  const setMode = useCallback(
+    (nextMode: AppThemeMode) => {
+      // The chosen mode is authoritative in memory first, so a broken/blocked
+      // store can never revert it: persistence below is best-effort only, and
+      // the change-event notification (via `subscribeThemeMode`) re-reads this
+      // same in-memory store rather than storage.
+      themeStore(initialMode).mode = nextMode;
+      writeStoredThemeMode(nextMode);
+      writeThemeCookie(nextMode);
+      applyThemeMode(nextMode);
+      window.dispatchEvent(new Event(THEME_MODE_CHANGE_EVENT));
+    },
+    [initialMode],
+  );
 
   const cycleMode = useCallback(() => {
     setMode(nextAppThemeMode(mode));

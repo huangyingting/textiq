@@ -1,12 +1,15 @@
 "use client";
 
-import type { Provider } from "@lexical/yjs";
+import type { Provider, ProviderAwareness } from "@lexical/yjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
 import type { CollabStatus, Peer } from "./use-collaboration";
-import { createLexicalWebsocketProviderAdapter } from "./lexical-provider-adapter";
+import {
+  createLexicalWebsocketProviderAdapter,
+  isLexicalWebsocketProviderAdapter,
+} from "./lexical-provider-adapter";
 import { colorFromId } from "./y-text";
 import { resolveCollabWsUrl } from "./ws-url";
 
@@ -22,6 +25,44 @@ const TITLE_LOCAL_ORIGIN = Symbol("textiq-lexical-title-local");
 const TITLE_SEED_ORIGIN = Symbol("textiq-lexical-title-seed");
 
 type Awareness = WebsocketProvider["awareness"];
+
+type ServerAwareness = ProviderAwareness & {
+  clientID: number;
+  on(event: "change", handler: () => void): void;
+  off(event: "change", handler: () => void): void;
+};
+
+type CollaborationAwareness = Awareness | ServerAwareness;
+
+/**
+ * Server rendering must not construct `WebsocketProvider`: in Node each
+ * instance owns a process `exit` listener and a reconnect interval, while
+ * React never runs effect cleanup for an SSR-only render. This inert adapter
+ * gives Lexical the shape it needs to render without allocating transport.
+ */
+function createServerCollaborationProvider(doc: Y.Doc): {
+  awareness: ServerAwareness;
+  provider: Provider;
+} {
+  const states = new Map();
+  const awareness = {
+    clientID: doc.clientID,
+    getLocalState: () => null,
+    getStates: () => states,
+    on: () => undefined,
+    off: () => undefined,
+    setLocalState: () => undefined,
+    setLocalStateField: () => undefined,
+  } as ServerAwareness;
+  const provider = {
+    awareness,
+    connect: () => undefined,
+    disconnect: () => undefined,
+    on: () => undefined,
+    off: () => undefined,
+  } as Provider;
+  return { awareness, provider };
+}
 
 /**
  * Lexical's `@lexical/yjs` binding stores presence at the top level of each
@@ -69,7 +110,7 @@ export type LexicalCollaboration = {
   degraded: boolean;
   peers: Peer[];
   /** Shared awareness channel used by the document and slide-editor presence. */
-  awareness: Awareness;
+  awareness: CollaborationAwareness;
   /** This client's presence/cursor color. */
   cursorColor: string;
   /** Shared title text, bound to the editor's title input via `useYText`. */
@@ -92,17 +133,27 @@ export function useLexicalCollaboration(opts: {
 }): LexicalCollaboration {
   const { room } = opts;
 
-  // Created once per mount. `connect: false` keeps construction SSR-safe (no
-  // socket/BroadcastChannel) and lets the CollaborationPlugin own connection.
+  // Created once per mount. The browser provider is intentionally absent on
+  // the server: even with `connect: false`, y-websocket allocates a Node exit
+  // listener and reconnect interval that an SSR render can never clean up.
   const [doc] = useState(() => new Y.Doc());
   const ytitle = doc.getText("title");
-  const [provider] = useState(() => {
+  const [provider] = useState<WebsocketProvider | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
     const wsUrl = resolveCollabWsUrl();
     return new WebsocketProvider(wsUrl, room, doc, { connect: false });
   });
-  const [lexicalProvider] = useState(() =>
-    createLexicalWebsocketProviderAdapter(provider, doc),
+  const [serverProvider] = useState(() =>
+    provider === null ? createServerCollaborationProvider(doc) : null,
   );
+  const [lexicalProvider] = useState<Provider>(() =>
+    provider === null
+      ? serverProvider!.provider
+      : createLexicalWebsocketProviderAdapter(provider, doc),
+  );
+  const awareness = provider?.awareness ?? serverProvider!.awareness;
 
   const [status, setStatus] = useState<CollabStatus>("connecting");
   const [synced, setSynced] = useState(false);
@@ -110,6 +161,9 @@ export function useLexicalCollaboration(opts: {
   const [peers, setPeers] = useState<Peer[]>([]);
 
   useEffect(() => {
+    if (provider === null) {
+      return;
+    }
     const awareness = provider.awareness;
     let degradeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -151,8 +205,10 @@ export function useLexicalCollaboration(opts: {
   // The plugin only disconnects on unmount; fully tear down the provider/doc.
   useEffect(() => {
     return () => {
-      lexicalProvider.dispose();
-      provider.destroy();
+      if (isLexicalWebsocketProviderAdapter(lexicalProvider)) {
+        lexicalProvider.dispose();
+      }
+      provider?.destroy();
       doc.destroy();
     };
   }, [doc, lexicalProvider, provider]);
@@ -167,7 +223,7 @@ export function useLexicalCollaboration(opts: {
     [doc, lexicalProvider],
   );
 
-  const cursorColor = colorFromId(provider.awareness.clientID);
+  const cursorColor = colorFromId(awareness.clientID);
   const ready = synced || degraded;
 
   // Seed the title into the shared text from the database (the durable source of
@@ -208,7 +264,7 @@ export function useLexicalCollaboration(opts: {
     synced,
     degraded,
     peers,
-    awareness: provider.awareness,
+    awareness,
     cursorColor,
     ytitle,
     localOrigin: TITLE_LOCAL_ORIGIN,

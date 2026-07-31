@@ -7,10 +7,10 @@
  * the React/DOM bridge `theme-provider.tsx` adds on top: the SSR
  * `getServerSnapshot` fallback (no `window`/`document` touched at all), the
  * client-side `useSyncExternalStore` subscription driving `localStorage`
- * persistence (including the narrow try/catch fallback when storage throws
- * on read and/or write, and that the chosen mode stays authoritative in
- * memory — never reverted — while persistence is unavailable, recovering
- * automatically once storage works again), `setMode`/`cycleMode` applying the
+ * cross-tab persistence and a same-site theme cookie for server rendering
+ * (including the narrow try/catch fallbacks when either target is blocked,
+ * and that the chosen mode stays authoritative in memory — never reverted —
+ * while persistence is unavailable), `setMode`/`cycleMode` applying the
  * resolved theme to `document.documentElement` and firing the
  * cross-instance `textiq-theme-mode-change` custom event, a cross-tab
  * `storage` event re-syncing the mode from the persisted value, a system
@@ -32,7 +32,11 @@ import { after, test } from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { APP_THEME_STORAGE_KEY } from "@/lib/app-shell/theme";
+import {
+  APP_THEME_COOKIE_KEY,
+  APP_THEME_STORAGE_KEY,
+  type AppThemeMode,
+} from "@/lib/app-shell/theme";
 
 import { ThemeProvider, useThemeMode } from "./theme-provider";
 
@@ -80,6 +84,8 @@ function createFakeWindow() {
   const store = new Map<string, string>();
   let getItemThrows = false;
   let setItemThrows = false;
+  let cookieWriteThrows = false;
+  let cookie = "";
   let systemPrefersDark = false;
 
   function on(type: string, handler: (event: unknown) => void) {
@@ -118,6 +124,7 @@ function createFakeWindow() {
         store.set(key, value);
       },
     },
+    location: { protocol: "https:" },
     matchMedia(_query: string) {
       return {
         get matches() {
@@ -139,7 +146,16 @@ function createFakeWindow() {
     },
   };
 
-  const fakeDocument = { documentElement };
+  const fakeDocument = {
+    documentElement,
+    get cookie() {
+      return cookie;
+    },
+    set cookie(value: string) {
+      if (cookieWriteThrows) throw new Error("cookies blocked");
+      cookie = value;
+    },
+  };
 
   return {
     window: fakeWindow,
@@ -159,6 +175,12 @@ function createFakeWindow() {
     },
     setSetItemThrows(value: boolean) {
       setItemThrows = value;
+    },
+    setCookieWriteThrows(value: boolean) {
+      cookieWriteThrows = value;
+    },
+    getCookie() {
+      return cookie;
     },
     getStoredMode() {
       return store.get(APP_THEME_STORAGE_KEY);
@@ -216,7 +238,7 @@ function withFakeDom<T>(
   }
 }
 
-function mountProvider(): {
+function mountProvider(initialMode?: AppThemeMode): {
   latest(): Snapshot;
   unmount(): void;
 } {
@@ -224,7 +246,7 @@ function mountProvider(): {
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
-      <ThemeProvider>
+      <ThemeProvider initialMode={initialMode}>
         <Consumer onRender={(snapshot) => (latest = snapshot)} />
       </ThemeProvider>,
     );
@@ -261,6 +283,21 @@ test("ThemeProvider renders the default 'system'/'light' snapshot during SSR wit
   assert.equal(typeof snapshot!.cycleMode, "function");
 });
 
+test("ThemeProvider renders an explicit server theme snapshot without touching window or document", () => {
+  assert.equal(typeof globalThis.window, "undefined");
+  assert.equal(typeof globalThis.document, "undefined");
+
+  let snapshot: Snapshot | undefined;
+  renderToStaticMarkup(
+    <ThemeProvider initialMode="dark">
+      <Consumer onRender={(value) => (snapshot = value)} />
+    </ThemeProvider>,
+  );
+
+  assert.equal(snapshot?.mode, "dark");
+  assert.equal(snapshot?.resolvedMode, "dark");
+});
+
 // ---------------------------------------------------------------------------
 // useThemeMode guard
 // ---------------------------------------------------------------------------
@@ -294,6 +331,21 @@ test("defaults to 'system' when localStorage has no stored mode, resolved agains
 
     assert.equal(latest().mode, "system");
     assert.equal(latest().resolvedMode, "dark");
+    unmount();
+  }));
+
+test("uses the server-provided mode when localStorage has no stored mode and persists it for future requests", () =>
+  withFakeDom((fake) => {
+    const { latest, unmount } = mountProvider("dark");
+
+    assert.equal(latest().mode, "dark");
+    assert.equal(latest().resolvedMode, "dark");
+    assert.equal(fake.document.documentElement.dataset.theme, "dark");
+    assert.match(
+      fake.getCookie(),
+      new RegExp(`^${APP_THEME_COOKIE_KEY}=dark;`),
+    );
+    assert.match(fake.getCookie(), /SameSite=Lax; Secure$/);
     unmount();
   }));
 
@@ -346,6 +398,20 @@ test("setMode never throws when localStorage.setItem throws, and keeps the newly
     assert.equal(fake.document.documentElement.dataset.theme, "dark");
     assert.equal(fake.document.documentElement.style.colorScheme, "dark");
     assert.equal(fake.getStoredMode(), undefined);
+    unmount();
+  }));
+
+test("setMode remains usable when cookie persistence is blocked", () =>
+  withFakeDom((fake) => {
+    fake.setCookieWriteThrows(true);
+    const { latest, unmount } = mountProvider();
+
+    assert.doesNotThrow(() => {
+      act(() => latest().setMode("dark"));
+    });
+    assert.equal(latest().mode, "dark");
+    assert.equal(fake.getStoredMode(), "dark");
+    assert.equal(fake.document.documentElement.dataset.theme, "dark");
     unmount();
   }));
 

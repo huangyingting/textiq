@@ -678,6 +678,10 @@ export function e2EPlaywrightProcessEnv(env) {
     E2E_WEB_SERVER: "0",
   };
   delete playwrightEnv.E2E_PROFILE_TLS_KEY_FD;
+  // Playwright forces color in its worker processes. Passing an ambient
+  // NO_COLOR alongside that setting makes Node emit a warning in every worker,
+  // obscuring actionable runtime warnings such as listener leaks.
+  delete playwrightEnv.NO_COLOR;
   playwrightEnv.HOME = env.E2E_PROFILE_BROWSER_HOME;
   playwrightEnv.XDG_CONFIG_HOME = join(env.E2E_PROFILE_BROWSER_HOME, ".config");
   playwrightEnv.XDG_CACHE_HOME = join(env.E2E_PROFILE_BROWSER_HOME, ".cache");

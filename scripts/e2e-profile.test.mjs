@@ -389,6 +389,18 @@ test("Playwright and its descendants cannot inherit the proxy key descriptor", a
   assert.equal("E2E_PROFILE_TLS_KEY_FD" in e2EPlaywrightProcessEnv(env), false);
 });
 
+test("Playwright descendants do not inherit ambient NO_COLOR alongside forced color", () => {
+  const env = buildE2EProfileEnv(
+    { NO_COLOR: "1" },
+    {
+      runId: "color-env-isolation",
+      runNonce: "e".repeat(64),
+    },
+  );
+
+  assert.equal("NO_COLOR" in e2EPlaywrightProcessEnv(env), false);
+});
+
 test("direct deterministic Playwright setup fails without the managed secure server", async () => {
   await assert.rejects(
     runE2EGlobalSetup({ env: { E2E_PROFILE: "1" } }),
