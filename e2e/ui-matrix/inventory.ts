@@ -348,6 +348,21 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/documents/README.md"],
   },
   {
+    spec: "e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts",
+    owners: ["documents", "editor", "security"],
+    coverage:
+      "Deterministic owner/viewer comment create, edit, anchored-paragraph mutation, reply, author-only action visibility, resolve/reopen, guarded deletion, and reload persistence lifecycle.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner", "seeded viewer"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/ui-matrix/README.md",
+      "docs/editor/comments-and-anchors.md",
+    ],
+  },
+  {
     spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
     owners: ["documents", "editor", "security"],
     coverage:

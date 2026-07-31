@@ -19,6 +19,11 @@ import { generateBlockId } from "./block-id";
 
 type NodeWithBid = LexicalNode & {
   createDOM(...args: unknown[]): HTMLElement;
+  updateDOM(
+    previousNode: LexicalNode,
+    dom: HTMLElement,
+    ...args: unknown[]
+  ): boolean;
   exportJSON(): SerializedLexicalNode;
   updateFromJSON(serializedNode: SerializedLexicalNode): NodeWithBid;
 };
@@ -84,6 +89,7 @@ function patchNodeClass(klass: PatchableNodeClass): void {
   }
 
   const originalCreateDOM = proto.createDOM;
+  const originalUpdateDOM = proto.updateDOM;
   const originalExportJSON = proto.exportJSON;
   const originalUpdateFromJSON = proto.updateFromJSON;
 
@@ -112,6 +118,27 @@ function patchNodeClass(klass: PatchableNodeClass): void {
       element.setAttribute("data-lexical-block-id", bid);
     }
     return element;
+  };
+
+  proto.updateDOM = function updateDOMWithBid(
+    this: NodeWithBid,
+    previousNode: LexicalNode,
+    dom: HTMLElement,
+    ...args: unknown[]
+  ): boolean {
+    const shouldReplace = originalUpdateDOM.call(
+      this,
+      previousNode,
+      dom,
+      ...args,
+    );
+    const bid = $getNodeBlockId(this);
+    if (bid) {
+      dom.setAttribute("data-lexical-block-id", bid);
+    } else {
+      dom.removeAttribute("data-lexical-block-id");
+    }
+    return shouldReplace;
   };
 
   proto.exportJSON = function exportJSONWithBid(

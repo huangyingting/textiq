@@ -404,6 +404,10 @@ test(
       where: { email: E2E_PROFILE_FIXTURE.editor.email },
       select: { id: true },
     });
+    const viewer = await client.user.findUniqueOrThrow({
+      where: { email: E2E_PROFILE_FIXTURE.viewer.email },
+      select: { id: true },
+    });
     const staleDocumentId = "e2eisolatedstalefixture0001";
     const staleOrphanDocumentId = "e2eisolatedstaleorphan0001";
     const hostileDocumentId = "e2eisolated/../../slide-assets-prefix-collision";
@@ -419,6 +423,9 @@ test(
     const staleWorkspaceLifecycleId = "e2eworkspacelifecyclestale01";
     const staleMetadataVersionId = "e2edocmetahistorystaleversion1";
     const staleMetadataTagId = "e2edocmetahistorystaletag0001";
+    const staleCommentRootId = "e2edoccommentlifestaleroot01";
+    const staleCommentReplyId = "e2edoccommentlifestalereply1";
+    const staleCommentReadId = "e2edoccommentlifestaleread01";
     const outsideSentinelPath = path.join(
       harnessRoot,
       "storage",
@@ -551,6 +558,42 @@ test(
         createdById: owner.id,
       },
     });
+    const commentLifecycle = E2E_PROFILE_FIXTURE.documentCommentLifecycle;
+    await updateDocumentWithCanonicalContent(client, {
+      where: { id: commentLifecycle.id },
+      contentSnapshot: markdownToLexicalStateObject("Stale comment content."),
+      data: {
+        title: "Stale comment lifecycle title",
+        workspaceId: null,
+      },
+    });
+    await client.comment.create({
+      data: {
+        id: staleCommentRootId,
+        documentId: commentLifecycle.id,
+        authorId: owner.id,
+        body: "Stale root comment",
+        anchorType: "text",
+        anchorText: "Stale comment content.",
+        resolved: true,
+      },
+    });
+    await client.comment.create({
+      data: {
+        id: staleCommentReplyId,
+        documentId: commentLifecycle.id,
+        authorId: viewer.id,
+        body: "Stale reply",
+        parentId: staleCommentRootId,
+      },
+    });
+    await client.commentRead.create({
+      data: {
+        id: staleCommentReadId,
+        documentId: commentLifecycle.id,
+        userId: viewer.id,
+      },
+    });
 
     await runFullSeed();
 
@@ -621,6 +664,35 @@ test(
     );
     assert.equal(
       await client.tag.count({ where: { id: staleMetadataTagId } }),
+      0,
+    );
+    assert.deepEqual(
+      await client.document.findUniqueOrThrow({
+        where: { id: commentLifecycle.id },
+        select: {
+          title: true,
+          content: true,
+          ownerId: true,
+          workspaceId: true,
+        },
+      }),
+      {
+        title: commentLifecycle.title,
+        content: commentLifecycle.content,
+        ownerId: owner.id,
+        workspaceId: E2E_PROFILE_FIXTURE.workspaceId,
+      },
+    );
+    assert.equal(
+      await client.comment.count({
+        where: { documentId: commentLifecycle.id },
+      }),
+      0,
+    );
+    assert.equal(
+      await client.commentRead.count({
+        where: { documentId: commentLifecycle.id },
+      }),
       0,
     );
     assert.deepEqual(

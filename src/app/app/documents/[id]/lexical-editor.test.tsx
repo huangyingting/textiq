@@ -740,6 +740,7 @@ describe("LexicalEditor", () => {
 
     const inlineComments = findByName(r, "InlineCommentsLayer")!;
     assert.equal(inlineComments.props.documentId, "doc-1");
+    assert.equal(inlineComments.props.currentUserId, "user-1");
     assert.deepEqual(inlineComments.props.initialComments, [{ id: "c1" }]);
   });
 

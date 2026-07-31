@@ -25,9 +25,15 @@ import { GUTTER_BUTTON } from "@/components/ui/tokens";
 import { Button, IconButton } from "@/components/ui";
 import { cx, FIELD_CONTROL, RADIUS } from "@/components/ui/tokens";
 
-import { createComment } from "./comments-actions";
+import {
+  createComment,
+  deleteComment,
+  editComment,
+  setCommentResolved,
+} from "./comments-actions";
 import type { CommentsActionPort } from "@/lib/action-ports";
-import type { CommentThread } from "@/lib/comments";
+import type { CommentActionResult, CommentThread } from "@/lib/comments";
+import { COMMENT_BODY_MAX_LENGTH } from "@/lib/limits";
 import {
   COMMENT_CARD_VIEWPORT_BLOCK_GAP,
   anchorPositionForBlock,
@@ -41,9 +47,18 @@ import {
   type CommentCardPosition,
 } from "./inline-comment-dom";
 
-const commentsActions: Pick<CommentsActionPort, "createComment"> = {
+const commentsActions: Pick<
+  CommentsActionPort,
+  "createComment" | "editComment" | "deleteComment" | "setCommentResolved"
+> = {
   createComment,
+  editComment,
+  deleteComment,
+  setCommentResolved,
 };
+
+const COMMENT_ACTION_CLASS =
+  "text-[11px] font-semibold text-ds-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50";
 
 function subscribeToHydrationStore(): () => void {
   return () => {};
@@ -79,7 +94,9 @@ function threadsByTextAnchor(
 function textAnchorKey(
   anchor: Pick<AnchorPosition, "nodeId" | "text">,
 ): string {
-  return anchor.nodeId ? `${anchor.nodeId}\u0000${anchor.text}` : anchor.text;
+  return anchor.nodeId
+    ? `node\u0000${anchor.nodeId}`
+    : `text\u0000${anchor.text}`;
 }
 
 function threadsForAnchor(
@@ -90,14 +107,42 @@ function threadsForAnchor(
   if (!anchor.nodeId) {
     return exact;
   }
-  return [...exact, ...(map.get(anchor.text) ?? [])];
+  return [
+    ...exact,
+    ...(map.get(textAnchorKey({ nodeId: null, text: anchor.text })) ?? []),
+  ];
+}
+
+type CommentDot = AnchorPosition & { count: number };
+
+function commentDotsEqual(
+  current: readonly CommentDot[],
+  next: readonly CommentDot[],
+): boolean {
+  return (
+    current.length === next.length &&
+    current.every((dot, index) => {
+      const candidate = next[index];
+      return (
+        candidate !== undefined &&
+        dot.text === candidate.text &&
+        dot.nodeId === candidate.nodeId &&
+        dot.top === candidate.top &&
+        dot.iconLeft === candidate.iconLeft &&
+        dot.markerLeft === candidate.markerLeft &&
+        dot.count === candidate.count
+      );
+    })
+  );
 }
 
 export function InlineCommentsLayer({
   documentId,
+  currentUserId,
   initialComments,
 }: {
   documentId: string;
+  currentUserId: string;
   initialComments: CommentThread[];
 }) {
   const [editor] = useLexicalComposerContext();
@@ -111,6 +156,11 @@ export function InlineCommentsLayer({
   const [activeAnchor, setActiveAnchor] = useState<AnchorPosition | null>(null);
   const [body, setBody] = useState("");
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [cardPosition, setCardPosition] = useState<CommentCardPosition | null>(
     null,
@@ -124,16 +174,43 @@ export function InlineCommentsLayer({
     setActiveAnchor(null);
     setBody("");
     setReplyingToId(null);
+    setEditingCommentId(null);
+    setEditBody("");
+    setDeletingCommentId(null);
     setError(null);
   }, []);
+
+  const runMutation = useCallback(
+    (
+      mutate: () => Promise<CommentActionResult<CommentThread[]>>,
+      fallbackMessage: string,
+      onSuccess?: () => void,
+    ) => {
+      setError(null);
+      startTransition(async () => {
+        try {
+          const result = await mutate();
+          if (!result.ok) {
+            setError(result.error.message);
+            return;
+          }
+          setThreads(result.data);
+          onSuccess?.();
+        } catch {
+          setError(fallbackMessage);
+        }
+      });
+    },
+    [],
+  );
 
   const computeCommentDots = useCallback(() => {
     const root = editor.getRootElement();
     if (!root) {
-      return [] as Array<AnchorPosition & { count: number }>;
+      return [] as CommentDot[];
     }
     const seen = new Set<string>();
-    const dots: Array<AnchorPosition & { count: number }> = [];
+    const dots: CommentDot[] = [];
     for (const child of Array.from(root.children)) {
       if (!(child instanceof HTMLElement) || !isTextCommentBlock(child)) {
         continue;
@@ -157,18 +234,36 @@ export function InlineCommentsLayer({
     return dots;
   }, [byAnchor, editor]);
 
-  const [commentDots, setCommentDots] = useState<
-    Array<AnchorPosition & { count: number }>
-  >([]);
+  const [commentDots, setCommentDots] = useState<CommentDot[]>([]);
 
   const refreshPositions = useCallback(() => {
-    setCommentDots(computeCommentDots());
+    const next = computeCommentDots();
+    setCommentDots((current) =>
+      commentDotsEqual(current, next) ? current : next,
+    );
   }, [computeCommentDots]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(refreshPositions);
-    return () => cancelAnimationFrame(frame);
-  }, [refreshPositions, threads]);
+    let frame: number | null = null;
+    let refreshScheduled = false;
+    const scheduleRefresh = () => {
+      if (refreshScheduled) return;
+      refreshScheduled = true;
+      frame = requestAnimationFrame(() => {
+        refreshScheduled = false;
+        frame = null;
+        refreshPositions();
+      });
+    };
+
+    scheduleRefresh();
+    const unregisterUpdateListener =
+      editor.registerUpdateListener(scheduleRefresh);
+    return () => {
+      unregisterUpdateListener();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [editor, refreshPositions]);
 
   useEffect(() => {
     let cleanupRoot: (() => void) | null = null;
@@ -285,6 +380,10 @@ export function InlineCommentsLayer({
   const activeThreads = activeAnchor
     ? threadsForAnchor(byAnchor, activeAnchor)
     : [];
+  const openThreadCount = activeThreads.filter(
+    (thread) => !thread.resolved,
+  ).length;
+  const resolvedThreadCount = activeThreads.length - openThreadCount;
   const replyingToThread =
     activeThreads.find((thread) => thread.id === replyingToId) ?? null;
   const visibleHoverAnchor =
@@ -387,6 +486,8 @@ export function InlineCommentsLayer({
       {activeAnchor ? (
         <div
           ref={cardRef}
+          role="dialog"
+          aria-label="Inline comments"
           className={cx(
             "pointer-events-auto absolute flex w-[15rem] max-w-[calc(100vw-4.5rem)] flex-col overflow-hidden border border-ds-border-subtle bg-ds-surface-overlay text-ds-text-primary",
             RADIUS.lg,
@@ -415,7 +516,10 @@ export function InlineCommentsLayer({
                   </div>
                   {activeThreads.length > 0 ? (
                     <div className="text-[10px] font-medium leading-3 text-ds-text-muted">
-                      {activeThreads.length} open
+                      {openThreadCount} open
+                      {resolvedThreadCount > 0
+                        ? ` · ${resolvedThreadCount} resolved`
+                        : ""}
                     </div>
                   ) : null}
                 </div>
@@ -444,25 +548,196 @@ export function InlineCommentsLayer({
                         <UserRound aria-hidden="true" className="h-3 w-3" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <span className="font-medium text-ds-text-primary">
-                          {thread.author.name}
-                        </span>
-                        <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
-                          {thread.body}
-                        </p>
-                        <button
-                          type="button"
-                          className="mt-1 text-[11px] font-semibold text-ds-accent hover:underline"
-                          aria-label={`Reply to comment by ${thread.author.name}`}
-                          onClick={() => {
-                            setReplyingToId(thread.id);
-                            setBody("");
-                            setError(null);
-                          }}
-                          disabled={isPending}
-                        >
-                          Reply
-                        </button>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="font-medium text-ds-text-primary">
+                            {thread.author.name}
+                          </span>
+                          {thread.resolved ? (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-ds-success-text">
+                              Resolved
+                            </span>
+                          ) : null}
+                        </div>
+                        {editingCommentId === thread.id ? (
+                          <div className="mt-1.5 space-y-1.5">
+                            <textarea
+                              aria-label={`Edit comment by ${thread.author.name}`}
+                              value={editBody}
+                              onChange={(event) =>
+                                setEditBody(event.target.value)
+                              }
+                              rows={2}
+                              maxLength={COMMENT_BODY_MAX_LENGTH}
+                              className={cx(
+                                "min-h-16 w-full resize-none px-2 py-1.5",
+                                FIELD_CONTROL,
+                              )}
+                              autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                className={COMMENT_ACTION_CLASS}
+                                aria-label={`Cancel editing comment by ${thread.author.name}`}
+                                onClick={() => {
+                                  setEditingCommentId(null);
+                                  setEditBody("");
+                                  setError(null);
+                                }}
+                                disabled={isPending}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className={COMMENT_ACTION_CLASS}
+                                aria-label={`Save comment by ${thread.author.name}`}
+                                onClick={() => {
+                                  const nextBody = editBody.trim();
+                                  if (!nextBody) return;
+                                  runMutation(
+                                    () =>
+                                      commentsActions.editComment(
+                                        documentId,
+                                        thread.id,
+                                        nextBody,
+                                      ),
+                                    "Couldn't edit your comment. Please try again.",
+                                    () => {
+                                      setEditingCommentId(null);
+                                      setEditBody("");
+                                    },
+                                  );
+                                }}
+                                disabled={
+                                  isPending || editBody.trim().length === 0
+                                }
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
+                              {thread.body}
+                            </p>
+                            {deletingCommentId === thread.id ? (
+                              <div className="mt-1.5 rounded-md border border-ds-danger-border bg-ds-danger-surface px-2 py-1.5 text-ds-danger-text">
+                                <p className="text-[11px] font-medium">
+                                  Delete this thread and all of its replies?
+                                </p>
+                                <div className="mt-1 flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    className={COMMENT_ACTION_CLASS}
+                                    aria-label={`Cancel deleting comment by ${thread.author.name}`}
+                                    onClick={() => {
+                                      setDeletingCommentId(null);
+                                      setError(null);
+                                    }}
+                                    disabled={isPending}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={COMMENT_ACTION_CLASS}
+                                    aria-label={`Confirm delete comment by ${thread.author.name}`}
+                                    onClick={() =>
+                                      runMutation(
+                                        () =>
+                                          commentsActions.deleteComment(
+                                            documentId,
+                                            thread.id,
+                                          ),
+                                        "Couldn't delete your comment. Please try again.",
+                                        () => setDeletingCommentId(null),
+                                      )
+                                    }
+                                    disabled={isPending}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                                <button
+                                  type="button"
+                                  className={COMMENT_ACTION_CLASS}
+                                  aria-label={`Reply to comment by ${thread.author.name}`}
+                                  onClick={() => {
+                                    setReplyingToId(thread.id);
+                                    setEditingCommentId(null);
+                                    setEditBody("");
+                                    setDeletingCommentId(null);
+                                    setBody("");
+                                    setError(null);
+                                  }}
+                                  disabled={isPending}
+                                >
+                                  Reply
+                                </button>
+                                <button
+                                  type="button"
+                                  className={COMMENT_ACTION_CLASS}
+                                  aria-label={`${thread.resolved ? "Reopen" : "Resolve"} comment by ${thread.author.name}`}
+                                  onClick={() =>
+                                    runMutation(
+                                      () =>
+                                        commentsActions.setCommentResolved(
+                                          documentId,
+                                          thread.id,
+                                          !thread.resolved,
+                                        ),
+                                      "Couldn't update this thread. Please try again.",
+                                    )
+                                  }
+                                  disabled={isPending}
+                                >
+                                  {thread.resolved ? "Reopen" : "Resolve"}
+                                </button>
+                                {thread.author.id === currentUserId ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className={COMMENT_ACTION_CLASS}
+                                      aria-label={`Edit comment by ${thread.author.name}`}
+                                      onClick={() => {
+                                        setEditingCommentId(thread.id);
+                                        setEditBody(thread.body);
+                                        setReplyingToId(null);
+                                        setBody("");
+                                        setDeletingCommentId(null);
+                                        setError(null);
+                                      }}
+                                      disabled={isPending}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={COMMENT_ACTION_CLASS}
+                                      aria-label={`Delete comment by ${thread.author.name}`}
+                                      onClick={() => {
+                                        setDeletingCommentId(thread.id);
+                                        setEditingCommentId(null);
+                                        setEditBody("");
+                                        setReplyingToId(null);
+                                        setBody("");
+                                        setError(null);
+                                      }}
+                                      disabled={isPending}
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                     {thread.replies.length > 0 ? (
@@ -475,9 +750,147 @@ export function InlineCommentsLayer({
                             <span className="font-medium text-ds-text-primary">
                               {reply.author.name}
                             </span>
-                            <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
-                              {reply.body}
-                            </p>
+                            {editingCommentId === reply.id ? (
+                              <div className="mt-1.5 space-y-1.5">
+                                <textarea
+                                  aria-label={`Edit reply by ${reply.author.name}`}
+                                  value={editBody}
+                                  onChange={(event) =>
+                                    setEditBody(event.target.value)
+                                  }
+                                  rows={2}
+                                  maxLength={COMMENT_BODY_MAX_LENGTH}
+                                  className={cx(
+                                    "min-h-16 w-full resize-none px-2 py-1.5",
+                                    FIELD_CONTROL,
+                                  )}
+                                  autoFocus
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    className={COMMENT_ACTION_CLASS}
+                                    aria-label={`Cancel editing reply by ${reply.author.name}`}
+                                    onClick={() => {
+                                      setEditingCommentId(null);
+                                      setEditBody("");
+                                      setError(null);
+                                    }}
+                                    disabled={isPending}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={COMMENT_ACTION_CLASS}
+                                    aria-label={`Save reply by ${reply.author.name}`}
+                                    onClick={() => {
+                                      const nextBody = editBody.trim();
+                                      if (!nextBody) return;
+                                      runMutation(
+                                        () =>
+                                          commentsActions.editComment(
+                                            documentId,
+                                            reply.id,
+                                            nextBody,
+                                          ),
+                                        "Couldn't edit your comment. Please try again.",
+                                        () => {
+                                          setEditingCommentId(null);
+                                          setEditBody("");
+                                        },
+                                      );
+                                    }}
+                                    disabled={
+                                      isPending || editBody.trim().length === 0
+                                    }
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="mt-0.5 whitespace-pre-wrap leading-5 text-ds-text-secondary">
+                                  {reply.body}
+                                </p>
+                                {deletingCommentId === reply.id ? (
+                                  <div className="mt-1.5 rounded-md border border-ds-danger-border bg-ds-danger-surface px-2 py-1.5 text-ds-danger-text">
+                                    <p className="text-[11px] font-medium">
+                                      Delete this reply?
+                                    </p>
+                                    <div className="mt-1 flex justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        className={COMMENT_ACTION_CLASS}
+                                        aria-label={`Cancel deleting reply by ${reply.author.name}`}
+                                        onClick={() => {
+                                          setDeletingCommentId(null);
+                                          setError(null);
+                                        }}
+                                        disabled={isPending}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={COMMENT_ACTION_CLASS}
+                                        aria-label={`Confirm delete reply by ${reply.author.name}`}
+                                        onClick={() =>
+                                          runMutation(
+                                            () =>
+                                              commentsActions.deleteComment(
+                                                documentId,
+                                                reply.id,
+                                              ),
+                                            "Couldn't delete your comment. Please try again.",
+                                            () => setDeletingCommentId(null),
+                                          )
+                                        }
+                                        disabled={isPending}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : reply.author.id === currentUserId ? (
+                                  <div className="mt-1 flex gap-2">
+                                    <button
+                                      type="button"
+                                      className={COMMENT_ACTION_CLASS}
+                                      aria-label={`Edit reply by ${reply.author.name}`}
+                                      onClick={() => {
+                                        setEditingCommentId(reply.id);
+                                        setEditBody(reply.body);
+                                        setReplyingToId(null);
+                                        setBody("");
+                                        setDeletingCommentId(null);
+                                        setError(null);
+                                      }}
+                                      disabled={isPending}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={COMMENT_ACTION_CLASS}
+                                      aria-label={`Delete reply by ${reply.author.name}`}
+                                      onClick={() => {
+                                        setDeletingCommentId(reply.id);
+                                        setEditingCommentId(null);
+                                        setEditBody("");
+                                        setReplyingToId(null);
+                                        setBody("");
+                                        setError(null);
+                                      }}
+                                      disabled={isPending}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -512,6 +925,7 @@ export function InlineCommentsLayer({
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 rows={2}
+                maxLength={COMMENT_BODY_MAX_LENGTH}
                 placeholder="Add a few words here"
                 className={cx(
                   "min-h-16 w-full resize-none px-2 py-1.5",

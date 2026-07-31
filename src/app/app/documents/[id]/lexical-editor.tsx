@@ -284,7 +284,7 @@ export function LexicalEditor({
   initialTitle,
   initialStateJson = null,
   initialDeckJson = null,
-  userId: _userId,
+  userId,
   userName,
   canEdit = true,
   canManage = false,
@@ -436,11 +436,12 @@ export function LexicalEditor({
       createEditorPlugin("inline-comments", () => (
         <InlineCommentsLayer
           documentId={documentId}
+          currentUserId={userId}
           initialComments={initialComments}
         />
       )),
     ],
-    [documentId, editable, initialComments],
+    [documentId, editable, initialComments, userId],
   );
   const renderVisualNode = useCallback(
     (props: VisualNodeRendererProps) => <VisualCard {...props} />,

@@ -3,7 +3,7 @@
  * text-anchored comment gutter/dots/card that floats over a document via a
  * `document.body` portal.
  *
- * `createComment` (from `./comments-actions`) is a `"use server"` action
+ * The comment mutations from `./comments-actions` are `"use server"` actions
  * already fully covered by `comments-actions.test.ts`; this stubs the
  * sibling `./comments-actions` module via `node:module`'s `registerHooks`
  * (same pattern as `src/app/app/new-document-button.test.tsx`'s `./actions`
@@ -97,9 +97,9 @@ type ModuleHooks = {
 };
 
 // ---------------------------------------------------------------------------
-// `./comments-actions` stub — `createComment` only (the sole export this
-// component imports); `listComments`/`editComment`/`deleteComment`/
-// `setCommentResolved` are not used by `InlineCommentsLayer`.
+// `./comments-actions` mutation stub. Server action behavior is covered in
+// `comments-actions.test.ts`; this state records UI wiring and supplies typed
+// outcomes for each rendered lifecycle control.
 // ---------------------------------------------------------------------------
 
 type CreateCommentCall = {
@@ -113,6 +113,31 @@ type CommentsActionsTestState = {
     documentId: string,
     input: CreateCommentCall["input"],
   ) => Promise<CommentActionResult<CommentThread[]>>;
+  editCalls: Array<{
+    documentId: string;
+    commentId: string;
+    body: string;
+  }>;
+  editImpl: (
+    documentId: string,
+    commentId: string,
+    body: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  deleteCalls: Array<{ documentId: string; commentId: string }>;
+  deleteImpl: (
+    documentId: string,
+    commentId: string,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
+  resolveCalls: Array<{
+    documentId: string;
+    commentId: string;
+    resolved: boolean;
+  }>;
+  resolveImpl: (
+    documentId: string,
+    commentId: string,
+    resolved: boolean,
+  ) => Promise<CommentActionResult<CommentThread[]>>;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -123,6 +148,12 @@ function resetActionsState(): void {
   globalForActions.__inlineCommentsActionsTestState = {
     calls: [],
     impl: async () => ({ ok: true, data: [] }),
+    editCalls: [],
+    editImpl: async () => ({ ok: true, data: [] }),
+    deleteCalls: [],
+    deleteImpl: async () => ({ ok: true, data: [] }),
+    resolveCalls: [],
+    resolveImpl: async () => ({ ok: true, data: [] }),
   };
 }
 resetActionsState();
@@ -147,6 +178,18 @@ registerHooks({
   createComment: async (documentId, input) => {
     globalThis.__inlineCommentsActionsTestState.calls.push({ documentId, input });
     return globalThis.__inlineCommentsActionsTestState.impl(documentId, input);
+  },
+  editComment: async (documentId, commentId, body) => {
+    globalThis.__inlineCommentsActionsTestState.editCalls.push({ documentId, commentId, body });
+    return globalThis.__inlineCommentsActionsTestState.editImpl(documentId, commentId, body);
+  },
+  deleteComment: async (documentId, commentId) => {
+    globalThis.__inlineCommentsActionsTestState.deleteCalls.push({ documentId, commentId });
+    return globalThis.__inlineCommentsActionsTestState.deleteImpl(documentId, commentId);
+  },
+  setCommentResolved: async (documentId, commentId, resolved) => {
+    globalThis.__inlineCommentsActionsTestState.resolveCalls.push({ documentId, commentId, resolved });
+    return globalThis.__inlineCommentsActionsTestState.resolveImpl(documentId, commentId, resolved);
   },
 };`,
         shortCircuit: true,
@@ -390,7 +433,7 @@ function withCommentsDom<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Fake Lexical editor — only `getRootElement`/`registerRootListener`
+// Fake Lexical editor — root/update listener surface used by the component
 // ---------------------------------------------------------------------------
 
 type RootListener = (
@@ -401,6 +444,7 @@ type RootListener = (
 function makeFakeEditor(root: FakeElement | null) {
   let currentRoot = root ? asHTMLElement(root) : null;
   let currentListener: RootListener | null = null;
+  const updateListeners = new Set<() => void>();
   const editor = {
     getRootElement: () => currentRoot,
     registerRootListener: (listener: RootListener) => {
@@ -412,6 +456,10 @@ function makeFakeEditor(root: FakeElement | null) {
         listener(null, prev);
       };
     },
+    registerUpdateListener: (listener: () => void) => {
+      updateListeners.add(listener);
+      return () => updateListeners.delete(listener);
+    },
   } as unknown as LexicalEditor;
   return {
     editor,
@@ -419,6 +467,9 @@ function makeFakeEditor(root: FakeElement | null) {
       const prev = currentRoot;
       currentRoot = next ? asHTMLElement(next) : null;
       currentListener?.(currentRoot, prev);
+    },
+    fireUpdate() {
+      for (const listener of updateListeners) listener();
     },
   };
 }
@@ -608,6 +659,7 @@ function textOf(instance: ReactTestInstance): string {
 function mount(
   editor: LexicalEditor,
   threads: CommentThread[] = buildThreads(),
+  currentUserId = "user-a",
 ) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
@@ -618,7 +670,11 @@ function mount(
     renderer = create(
       withComposer(
         editor,
-        <InlineCommentsLayer documentId="doc-1" initialComments={threads} />,
+        <InlineCommentsLayer
+          documentId="doc-1"
+          currentUserId={currentUserId}
+          initialComments={threads}
+        />,
       ),
     );
   });
@@ -728,6 +784,77 @@ describe("comment dots — anchor positioning, filtering, resolution", () => {
         assert.deepEqual(
           dots.map((dot) => dot.props.style.top),
           [120, 250],
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("keeps a comment attached by durable block id after the paragraph text changes", () => {
+    withCommentsDom(() => {
+      const editedRoot = new FakeElement({
+        rect: ROOT_RECT,
+        children: [
+          new FakeElement({
+            text: "Edited paragraph text",
+            rect: BLOCK_FIRST_RECT,
+            attributes: { "data-lexical-block-id": "bid-first" },
+          }),
+        ],
+      });
+      const { editor } = makeFakeEditor(editedRoot);
+      const renderer = mount(editor, [
+        makeThread({
+          id: "thread-edited-paragraph",
+          body: "Comment survives text edits",
+          anchorText: FIRST_TEXT,
+          anchorNodeId: "bid-first",
+          anchor: {
+            kind: "text",
+            text: FIRST_TEXT,
+            nodeId: "bid-first",
+          },
+        }),
+      ]);
+      try {
+        const marker = renderer.root.findByProps({
+          "aria-label": "1 comment",
+        });
+        act(() => marker.props.onClick());
+        assert.match(textOf(renderer.root), /Comment survives text edits/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("refreshes comment markers when collaboration populates an existing editor root", () => {
+    withCommentsDom(() => {
+      const root = new FakeElement({ rect: ROOT_RECT, children: [] });
+      const fakeEditor = makeFakeEditor(root);
+      const renderer = mount(fakeEditor.editor, [
+        makeThread({
+          id: "thread-late-collaboration",
+          body: "Loaded with the collaborative document",
+          anchorText: FIRST_TEXT,
+          anchorNodeId: "bid-first",
+          anchor: {
+            kind: "text",
+            text: FIRST_TEXT,
+            nodeId: "bid-first",
+          },
+        }),
+      ]);
+      try {
+        assert.equal(findDotButtons(renderer.root).length, 0);
+        root.children = buildRoot().children;
+        act(() => fakeEditor.fireUpdate());
+        assert.equal(
+          findDotButtons(renderer.root).filter(
+            (button) => button.props["aria-label"] === "1 comment",
+          ).length,
+          1,
         );
       } finally {
         act(() => renderer.unmount());
@@ -1006,8 +1133,15 @@ describe("card expansion/selection — thread listing", () => {
         assert.ok(findDialogCard(renderer.root));
         // The one thread there is resolved but is *still* listed (activeThreads
         // doesn't filter by resolved — only the dot count does).
-        assert.match(textOf(renderer.root), /1 open/);
+        assert.match(textOf(renderer.root), /0 open · 1 resolved/);
         assert.match(textOf(renderer.root), /Already resolved/);
+        assert.equal(
+          renderer.root.findByProps({
+            role: "dialog",
+            "aria-label": "Inline comments",
+          }).type,
+          "div",
+        );
       } finally {
         act(() => renderer.unmount());
       }
@@ -1406,6 +1540,318 @@ describe("submit", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Edit/delete/resolve lifecycle controls
+// ---------------------------------------------------------------------------
+
+describe("comment lifecycle controls", () => {
+  test("shows author-only edit/delete controls while every viewer can reply and resolve", () => {
+    withCommentsDom(() => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      threads[0] = {
+        ...threads[0]!,
+        replies: [
+          {
+            id: "reply-owned",
+            body: "Owned reply",
+            author: { id: "user-a", name: "Alice" },
+            createdAt: new Date(1).toISOString(),
+          },
+          {
+            id: "reply-other",
+            body: "Other reply",
+            author: { id: "user-c", name: "Carol" },
+            createdAt: new Date(2).toISOString(),
+          },
+        ],
+      };
+      const renderer = mount(editor, threads, "user-a");
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Edit comment by Alice",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Delete comment by Alice",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Edit comment by Bob",
+          }).length,
+          0,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Delete comment by Bob",
+          }).length,
+          0,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Reply to comment by Bob",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Resolve comment by Bob",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Edit reply by Alice",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Delete reply by Alice",
+          }).length,
+          1,
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Edit reply by Carol",
+          }).length,
+          0,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("edits an authored comment from server-confirmed truth and retains a failed draft", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      const renderer = mount(editor, threads, "user-a");
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        act(() =>
+          renderer.root
+            .findByProps({ "aria-label": "Edit comment by Alice" })
+            .props.onClick(),
+        );
+        const editField = renderer.root.findByProps({
+          "aria-label": "Edit comment by Alice",
+          maxLength: 5000,
+        });
+        act(() =>
+          editField.props.onChange({ target: { value: "  Updated body  " } }),
+        );
+
+        globalForActions.__inlineCommentsActionsTestState.editImpl =
+          async () => ({
+            ok: false,
+            error: {
+              code: "comment_unavailable",
+              message: "Comment is unavailable.",
+            },
+          });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Save comment by Alice" })
+            .props.onClick();
+          await flushMicrotasks();
+        });
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Edit comment by Alice",
+            maxLength: 5000,
+          }).props.value,
+          "  Updated body  ",
+        );
+        assert.equal(
+          textOf(renderer.root.findByProps({ role: "alert" })),
+          "Comment is unavailable.",
+        );
+
+        const updatedThreads = threads.map((thread) =>
+          thread.id === "thread-first-a"
+            ? { ...thread, body: "Updated body" }
+            : thread,
+        );
+        globalForActions.__inlineCommentsActionsTestState.editImpl =
+          async () => ({ ok: true, data: updatedThreads });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Save comment by Alice" })
+            .props.onClick();
+          await flushMicrotasks();
+        });
+
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.editCalls,
+          [
+            {
+              documentId: "doc-1",
+              commentId: "thread-first-a",
+              body: "Updated body",
+            },
+            {
+              documentId: "doc-1",
+              commentId: "thread-first-a",
+              body: "Updated body",
+            },
+          ],
+        );
+        assert.match(textOf(renderer.root), /Updated body/);
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Save comment by Alice",
+          }).length,
+          0,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("resolves and reopens a thread from server-confirmed truth", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      const renderer = mount(editor, threads, "user-a");
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+
+        const resolvedThreads = threads.map((thread) =>
+          thread.id === "thread-first-a"
+            ? { ...thread, resolved: true }
+            : thread,
+        );
+        globalForActions.__inlineCommentsActionsTestState.resolveImpl =
+          async () => ({ ok: true, data: resolvedThreads });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Resolve comment by Alice" })
+            .props.onClick();
+          await flushMicrotasks();
+        });
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.resolveCalls,
+          [
+            {
+              documentId: "doc-1",
+              commentId: "thread-first-a",
+              resolved: true,
+            },
+          ],
+        );
+        assert.equal(
+          renderer.root.findAllByProps({
+            "aria-label": "Reopen comment by Alice",
+          }).length,
+          1,
+        );
+        assert.match(textOf(renderer.root), /1 open · 1 resolved/);
+
+        globalForActions.__inlineCommentsActionsTestState.resolveImpl =
+          async () => ({ ok: true, data: threads });
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Reopen comment by Alice" })
+            .props.onClick();
+          await flushMicrotasks();
+        });
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.resolveCalls[1],
+          {
+            documentId: "doc-1",
+            commentId: "thread-first-a",
+            resolved: false,
+          },
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("requires confirmation before deleting an authored thread", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const threads = buildThreads();
+      const renderer = mount(editor, threads, "user-a");
+      try {
+        const first = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => first.props.onClick());
+        act(() =>
+          renderer.root
+            .findByProps({ "aria-label": "Delete comment by Alice" })
+            .props.onClick(),
+        );
+        assert.match(
+          textOf(renderer.root),
+          /Delete this thread and all of its replies\?/,
+        );
+        act(() =>
+          renderer.root
+            .findByProps({
+              "aria-label": "Cancel deleting comment by Alice",
+            })
+            .props.onClick(),
+        );
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.deleteCalls,
+          [],
+        );
+
+        const remainingThreads = threads.filter(
+          (thread) => thread.id !== "thread-first-a",
+        );
+        globalForActions.__inlineCommentsActionsTestState.deleteImpl =
+          async () => ({ ok: true, data: remainingThreads });
+        act(() =>
+          renderer.root
+            .findByProps({ "aria-label": "Delete comment by Alice" })
+            .props.onClick(),
+        );
+        await act(async () => {
+          renderer.root
+            .findByProps({
+              "aria-label": "Confirm delete comment by Alice",
+            })
+            .props.onClick();
+          await flushMicrotasks();
+        });
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.deleteCalls,
+          [{ documentId: "doc-1", commentId: "thread-first-a" }],
+        );
+        assert.doesNotMatch(
+          textOf(renderer.root),
+          /First comment on paragraph one/,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Escape-to-close
 // ---------------------------------------------------------------------------
 
@@ -1643,7 +2089,11 @@ describe("server-side rendering", () => {
     const html = renderToStaticMarkup(
       withComposer(
         editor,
-        <InlineCommentsLayer documentId="doc-1" initialComments={[]} />,
+        <InlineCommentsLayer
+          documentId="doc-1"
+          currentUserId="user-a"
+          initialComments={[]}
+        />,
       ),
     );
     assert.equal(html, "");

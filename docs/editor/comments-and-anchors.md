@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document describes comment threads and their document/slide anchors."
 ---
 
@@ -122,6 +122,23 @@ root renders its replies directly beneath it. Selecting a root's accessible
 Reply control sends its ID as `parentId`; a successful response keeps the anchor
 card open and renders refreshed server truth, while typed or transport failures
 retain the draft for retry.
+
+The rendered inline card exposes the complete thread lifecycle. Every viewer
+can reply, resolve, and reopen a root; only authors see edit and guarded delete
+controls for their own roots or replies. Root deletion explicitly warns that
+replies will also be removed. Mutation failures preserve editable drafts and
+surface an alert, and successful actions replace local state with the refreshed
+server result. Resolved-only anchors remain reachable from the paragraph gutter
+and report resolved counts separately from open counts. Marker geometry is
+recomputed when collaborative editor updates arrive, and durable block IDs keep
+threads attached when their paragraph text changes.
+
+The deterministic owner/viewer browser lifecycle creates and edits a root,
+edits and reloads the anchored paragraph without losing the thread, creates and
+edits a reply, verifies author-only controls, resolves and reopens across reload,
+cancels and confirms reply/root deletion, and proves final durability after
+reload.
+
 Slide-aware comment behavior is exposed through the comment service filters,
 anchor helpers, lifecycle helpers, and the presentation slide-anchor facade so
 slide-specific callers do not duplicate anchor logic.
@@ -158,3 +175,4 @@ does not duplicate anchor fields.
 - [`src/app/app/documents/[id]/slide-comment-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-permissions-lifecycle.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-permissions-lifecycle.test.ts)
 - [`src/app/app/documents/[id]/slide-comment-unread.test.ts`](../../src/app/app/documents/%5Bid%5D/slide-comment-unread.test.ts)
+- [`e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts)

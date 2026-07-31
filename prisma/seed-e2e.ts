@@ -352,6 +352,36 @@ async function main() {
     },
   });
 
+  const commentLifecycle = F.documentCommentLifecycle;
+  await prisma.commentRead.deleteMany({
+    where: { documentId: commentLifecycle.id },
+  });
+  await prisma.comment.deleteMany({
+    where: { documentId: commentLifecycle.id },
+  });
+  await upsertDocumentWithCanonicalContent(prisma, {
+    where: { id: commentLifecycle.id },
+    contentSnapshot: markdownToLexicalStateObject(commentLifecycle.content),
+    update: {
+      title: commentLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: F.workspaceId,
+      deckJson: Prisma.DbNull,
+      deckRevisionToken: null,
+      isShared: false,
+      shareId: null,
+      slug: null,
+      deletedAt: null,
+      tags: { set: [] },
+    },
+    create: {
+      id: commentLifecycle.id,
+      title: commentLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: F.workspaceId,
+    },
+  });
+
   // -------------------------------------------------------------------------
   // 3. Visual — embedded into the document's contentJson as a VisualNode.
   // -------------------------------------------------------------------------

@@ -103,6 +103,16 @@ export const E2E_PROFILE_FIXTURE = {
     versionLabel: "E2E restore baseline",
     tagName: "E2E metadata lifecycle",
   },
+  documentCommentLifecycle: {
+    id: "e2efixturedoccommentlife001",
+    title: "E2E document comment lifecycle",
+    content: "E2E comment lifecycle anchor paragraph.",
+    editedContent: "E2E edited comment lifecycle anchor paragraph.",
+    ownerComment: "Owner comment before lifecycle edit.",
+    editedOwnerComment: "Owner comment after lifecycle edit.",
+    viewerReply: "Viewer reply before lifecycle edit.",
+    editedViewerReply: "Viewer reply after lifecycle edit.",
+  },
 } as const;
 
 const F = E2E_PROFILE_FIXTURE;

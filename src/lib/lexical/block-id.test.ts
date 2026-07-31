@@ -679,6 +679,89 @@ test("block id runtime exposes the durable bid on rendered block DOM", () => {
   }
 });
 
+test("block id runtime updates an existing block DOM node when its bid is repaired", () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    writable: true,
+    value: {
+      createElement: () => {
+        const attributes = new Map<string, string>();
+        return {
+          classList: { add: () => undefined },
+          className: "",
+          dir: "",
+          style: {},
+          setAttribute(name: string, value: string) {
+            attributes.set(name, value);
+          },
+          removeAttribute(name: string) {
+            attributes.delete(name);
+          },
+          getAttribute(name: string) {
+            return attributes.get(name) ?? null;
+          },
+        };
+      },
+    },
+  });
+
+  const { editor, unregister } = makeHeadlessEditor();
+  try {
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        $setNodeBlockId(paragraph, "initial-block-id");
+        paragraph.append($createTextNode("Comment anchor"));
+        $getRoot().clear().append(paragraph);
+      },
+      { discrete: true },
+    );
+    const previousState = editor.getEditorState();
+    let previousParagraph!: ReturnType<typeof $createParagraphNode>;
+    let dom!: HTMLElement;
+    previousState.read(() => {
+      previousParagraph = $getRoot().getFirstChild() as ReturnType<
+        typeof $createParagraphNode
+      >;
+      dom = previousParagraph.createDOM({ theme: { paragraph: "" } } as never);
+    });
+    assert.equal(dom.getAttribute("data-lexical-block-id"), "initial-block-id");
+
+    editor.update(
+      () => {
+        const paragraph = $getRoot().getFirstChild();
+        assert.ok(paragraph, "expected paragraph");
+        $setNodeBlockId(paragraph, "repaired-block-id");
+      },
+      { discrete: true },
+    );
+    editor.getEditorState().read(() => {
+      const currentParagraph = $getRoot().getFirstChild();
+      assert.ok(currentParagraph, "expected repaired paragraph");
+      const shouldReplace = currentParagraph.updateDOM(previousParagraph, dom, {
+        theme: { paragraph: "" },
+      } as never);
+      assert.equal(shouldReplace, false);
+    });
+
+    assert.equal(
+      dom.getAttribute("data-lexical-block-id"),
+      "repaired-block-id",
+    );
+  } finally {
+    unregister();
+    if (previousDocument) {
+      Object.defineProperty(globalThis, "document", previousDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+  }
+});
+
 function seedPlainParagraph(editor: LexicalEditor, text: string): void {
   editor.update(
     () => {
