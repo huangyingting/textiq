@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
-import type { BillingActionData } from "@/lib/billing/action-types";
+import {
+  BILLING_ACTION_FAILURE_MESSAGE,
+  type BillingActionData,
+} from "@/lib/billing/action-types";
 import type { Plan } from "@/lib/billing/catalog";
 import { PLAN_CATALOG } from "@/lib/billing/catalog";
 import { changePlanAction, cancelSubscriptionAction } from "./actions";
@@ -62,6 +65,19 @@ export function mapBillingActionOutcome(
   return { message: result.data.message, isError: false };
 }
 
+export async function resolveBillingActionOutcome(
+  action: () => Promise<ActionResult<BillingActionData>>,
+): Promise<BillingActionOutcome> {
+  try {
+    return mapBillingActionOutcome(await action());
+  } catch {
+    return {
+      message: BILLING_ACTION_FAILURE_MESSAGE,
+      isError: true,
+    };
+  }
+}
+
 interface BillingActionsProps {
   currentPlan: Plan;
   cancelAtPeriodEnd: boolean;
@@ -79,8 +95,9 @@ export function BillingActions({
     setMessage(null);
     setIsError(false);
     startTransition(async () => {
-      const result = await changePlanAction(targetPlan);
-      const outcome = mapBillingActionOutcome(result);
+      const outcome = await resolveBillingActionOutcome(() =>
+        changePlanAction(targetPlan),
+      );
       if (outcome.redirectUrl) {
         window.location.href = outcome.redirectUrl;
         return;
@@ -94,8 +111,9 @@ export function BillingActions({
     setMessage(null);
     setIsError(false);
     startTransition(async () => {
-      const result = await cancelSubscriptionAction();
-      const outcome = mapBillingActionOutcome(result);
+      const outcome = await resolveBillingActionOutcome(
+        cancelSubscriptionAction,
+      );
       setMessage(outcome.message);
       setIsError(outcome.isError);
     });
@@ -108,7 +126,7 @@ export function BillingActions({
         <PlanCard
           label="Free"
           price="Free"
-          description={`${compactCreditPeriod(PLAN_CATALOG.free.entitlements.creditsPerPeriod, PLAN_CATALOG.free.entitlements.periodDays)} · PNG &amp; PDF`}
+          description={`${compactCreditPeriod(PLAN_CATALOG.free.entitlements.creditsPerPeriod, PLAN_CATALOG.free.entitlements.periodDays)} · PNG & PDF`}
           isCurrent={currentPlan === "free"}
           onSelect={() => handleChange("free")}
           disabled={isPending || currentPlan === "free"}
@@ -116,7 +134,7 @@ export function BillingActions({
         <PlanCard
           label="Plus"
           price="$12/mo"
-          description={`${compactCreditPeriod(PLAN_CATALOG.plus.entitlements.creditsPerPeriod, PLAN_CATALOG.plus.entitlements.periodDays)} · SVG &amp; PPTX · Brand Styles`}
+          description={`${compactCreditPeriod(PLAN_CATALOG.plus.entitlements.creditsPerPeriod, PLAN_CATALOG.plus.entitlements.periodDays)} · SVG & PPTX · Brand Styles`}
           isCurrent={currentPlan === "plus"}
           onSelect={() => handleChange("plus")}
           disabled={isPending || currentPlan === "plus"}
@@ -124,7 +142,7 @@ export function BillingActions({
         <PlanCard
           label="Pro"
           price="$29/mo"
-          description={`${compactCreditPeriod(PLAN_CATALOG.pro.entitlements.creditsPerPeriod, PLAN_CATALOG.pro.entitlements.periodDays)} · SVG &amp; PPTX · Custom fonts`}
+          description={`${compactCreditPeriod(PLAN_CATALOG.pro.entitlements.creditsPerPeriod, PLAN_CATALOG.pro.entitlements.periodDays)} · SVG & PPTX · Custom fonts`}
           isCurrent={currentPlan === "pro"}
           onSelect={() => handleChange("pro")}
           disabled={isPending || currentPlan === "pro"}
@@ -146,6 +164,7 @@ export function BillingActions({
       {/* Feedback */}
       {message && (
         <p
+          role={isError ? "alert" : "status"}
           className={`rounded-lg px-4 py-2 text-sm ${
             isError
               ? "bg-ds-danger-surface text-ds-danger-text"
@@ -156,7 +175,11 @@ export function BillingActions({
         </p>
       )}
 
-      {isPending && <p className="text-sm text-ds-text-secondary">Updating…</p>}
+      {isPending && (
+        <p role="status" className="text-sm text-ds-text-secondary">
+          Updating…
+        </p>
+      )}
     </div>
   );
 }
@@ -196,10 +219,7 @@ function PlanCard({
         )}
       </div>
       <span className="text-base font-bold text-ds-text-primary">{price}</span>
-      <span
-        className="text-xs text-ds-text-secondary"
-        dangerouslySetInnerHTML={{ __html: description }}
-      />
+      <span className="text-xs text-ds-text-secondary">{description}</span>
     </button>
   );
 }

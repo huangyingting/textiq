@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import clarityPackageJson from "../prototypes/slide-themes/packages/clarity.package.json";
 
 import { Prisma } from "../src/generated/prisma/client";
+import { PLAN_CATALOG } from "../src/lib/billing/catalog";
 import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
 import {
   deleteDocuments,
@@ -104,6 +105,10 @@ async function main() {
     F.accountLifecycle.password,
     12,
   );
+  const billingLifecycleHash = await bcrypt.hash(
+    F.billingLifecycle.password,
+    12,
+  );
   const now = new Date();
 
   const owner = await prisma.user.upsert({
@@ -175,6 +180,37 @@ async function main() {
       emailVerified: now,
       plan: F.accountLifecycle.plan,
     },
+  });
+
+  await prisma.user.upsert({
+    where: { id: F.billingLifecycle.id },
+    update: {
+      email: F.billingLifecycle.email,
+      passwordHash: billingLifecycleHash,
+      sessionInvalidatedAt: null,
+      name: F.billingLifecycle.name,
+      emailVerified: now,
+      plan: F.billingLifecycle.plan,
+      creditBalance:
+        PLAN_CATALOG[F.billingLifecycle.plan].entitlements.creditsPerPeriod,
+      creditPeriodStart: now,
+      onboardingDismissed: true,
+    },
+    create: {
+      id: F.billingLifecycle.id,
+      email: F.billingLifecycle.email,
+      passwordHash: billingLifecycleHash,
+      name: F.billingLifecycle.name,
+      emailVerified: now,
+      plan: F.billingLifecycle.plan,
+      creditBalance:
+        PLAN_CATALOG[F.billingLifecycle.plan].entitlements.creditsPerPeriod,
+      creditPeriodStart: now,
+      onboardingDismissed: true,
+    },
+  });
+  await prisma.subscription.deleteMany({
+    where: { userId: F.billingLifecycle.id },
   });
 
   await prisma.brand.deleteMany({ where: { ownerId: editor.id } });

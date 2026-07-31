@@ -229,6 +229,7 @@ test("shared builder entry point re-exports stable fixture helpers", () => {
   assert.equal(builders.E2E_PROFILE_FIXTURE.owner.plan, "free");
   assert.equal(builders.E2E_PROFILE_FIXTURE.editor.plan, "pro");
   assert.equal(builders.E2E_PROFILE_FIXTURE.viewer.plan, "free");
+  assert.equal(builders.E2E_PROFILE_FIXTURE.billingLifecycle.plan, "free");
   assert.equal(
     builders.E2E_PROFILE_FIXTURE.brandWorkflow.fontFamily,
     "'source-sans-3-latin-400-normal', sans-serif",

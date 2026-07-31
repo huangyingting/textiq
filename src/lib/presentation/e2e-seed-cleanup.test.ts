@@ -414,6 +414,27 @@ test(
       where: { id: E2E_PROFILE_FIXTURE.accountLifecycle.id },
       select: { id: true },
     });
+    const billingLifecycle = E2E_PROFILE_FIXTURE.billingLifecycle;
+    await client.user.update({
+      where: { id: billingLifecycle.id },
+      data: {
+        plan: "pro",
+        creditBalance: 123,
+        creditPeriodStart: new Date("2020-01-01T00:00:00.000Z"),
+        onboardingDismissed: false,
+      },
+    });
+    await client.subscription.create({
+      data: {
+        id: billingLifecycle.subscriptionId,
+        userId: billingLifecycle.id,
+        plan: "pro",
+        status: "active",
+        currentPeriodStart: new Date("2020-01-01T00:00:00.000Z"),
+        currentPeriodEnd: new Date("2020-02-01T00:00:00.000Z"),
+        cancelAtPeriodEnd: true,
+      },
+    });
     const signupLifecycle = E2E_PROFILE_FIXTURE.signupLifecycle;
     await client.user.create({
       data: {
@@ -735,6 +756,51 @@ test(
         resetAccountLifecycle.passwordHash ?? "",
       ),
       true,
+    );
+    const resetBillingLifecycle = await client.user.findUniqueOrThrow({
+      where: { id: billingLifecycle.id },
+      select: {
+        email: true,
+        name: true,
+        passwordHash: true,
+        plan: true,
+        creditBalance: true,
+        creditPeriodStart: true,
+        onboardingDismissed: true,
+      },
+    });
+    assert.deepEqual(
+      {
+        email: resetBillingLifecycle.email,
+        name: resetBillingLifecycle.name,
+        plan: resetBillingLifecycle.plan,
+        creditBalance: resetBillingLifecycle.creditBalance,
+        onboardingDismissed: resetBillingLifecycle.onboardingDismissed,
+        creditPeriodReset:
+          (resetBillingLifecycle.creditPeriodStart?.getTime() ?? 0) >
+          new Date("2020-01-01T00:00:00.000Z").getTime(),
+      },
+      {
+        email: billingLifecycle.email,
+        name: billingLifecycle.name,
+        plan: billingLifecycle.plan,
+        creditBalance: 500,
+        onboardingDismissed: true,
+        creditPeriodReset: true,
+      },
+    );
+    assert.equal(
+      await bcrypt.compare(
+        billingLifecycle.password,
+        resetBillingLifecycle.passwordHash ?? "",
+      ),
+      true,
+    );
+    assert.equal(
+      await client.subscription.count({
+        where: { userId: billingLifecycle.id },
+      }),
+      0,
     );
     assert.equal(
       await client.user.count({ where: { email: signupLifecycle.email } }),

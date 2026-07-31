@@ -231,7 +231,7 @@ Key properties:
 | Spec (Epic #517)                                     | Covers                                                                                                                                        |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `e2e/import/import-roundtrip.spec.ts`                | #519 Markdown + deterministic DOCX import → editor render → reload persistence; workspace-role enforcement; unsupported-type error            |
-| `e2e/presentation/present-export.spec.ts`            | #520 authenticated + public present render seeded text; real PDF download (nonzero bytes)                                                     |
+| `e2e/presentation/present-export.spec.ts`            | #520 authenticated/public present render; real document PDF, selected-width infographic PNG/PDF, and paid document-deck PPTX downloads        |
 | `e2e/presentation/slide-asset-upload.spec.ts`        | #521 inspector image upload → reload resolves protected asset; private-asset 403 vs shared 200                                                |
 | `e2e/presentation/slides-layout-screenshots.spec.ts` | #1449 deterministic presentation layout rendering (desktop/tablet/mobile + rail-hidden + notes-expanded + panel-open); pixel snapshots opt-in |
 
@@ -247,15 +247,16 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Document flows
 
-| #   | Flow                              | Owner           | Notes                                                                                                                                |
-| --- | --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                                 |
-| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                    |
-| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                            |
-| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                    |
-| D-5 | Document import (markdown, .docx) | **A** + **E2E** | Markdown and generated-fixture DOCX round-trips gate required deterministic CI in `e2e/import/import-roundtrip.spec.ts` (#519/#1734) |
-| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                     |
-| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                      |
+| #   | Flow                              | Owner           | Notes                                                                                                                                 |
+| --- | --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| D-1 | Document edit and Lexical save    | **A**           | `saveDocumentLexical` path; block-id stamping tested                                                                                  |
+| D-2 | Inline visual edit and save       | **A**           | `mirrorVisualNodes` + diff tested                                                                                                     |
+| D-3 | Document duplicate                | **A**           | `regenerateBlockIds` tested; share-id regeneration tested                                                                             |
+| D-4 | Document version restore          | **A**           | Snapshot policy tested in `save-conflict.test.ts`                                                                                     |
+| D-5 | Document import (markdown, .docx) | **A** + **E2E** | Markdown and generated-fixture DOCX round-trips gate required deterministic CI in `e2e/import/import-roundtrip.spec.ts` (#519/#1734)  |
+| D-6 | Document search                   | **A**           | `search.test.ts`                                                                                                                      |
+| D-7 | Document delete / trash / restore | **A**           | `trash.test.ts`                                                                                                                       |
+| D-8 | Document PDF / infographic export | **A** + **E2E** | Real document PDF plus selected-width infographic PNG/PDF downloads are format-validated in `e2e/presentation/present-export.spec.ts` |
 
 ### Slide / deck flows
 
@@ -266,7 +267,7 @@ For each flow below, check the indicated owner: **A** = automated test,
 | S-3 | Stale revision conflict recovery    | **A**           | Deck stale-token handling + conflict state covered by `deck-cas-writer.test.ts`, `use-slide-editor-open.test.ts`, and `slide-editor-collaboration-state.test.ts`                     |
 | S-4 | Oversized deck rejection            | **A**           | `perf-budgets.test.ts`, `autosave-hardening.test.ts`                                                                                                                                 |
 | S-5 | Present mode (read-only render)     | **M** + **E2E** | SlideCanvas rendering; authenticated + public present asserted in `e2e/presentation/present-export.spec.ts` (#520)                                                                   |
-| S-6 | Deck PPTX / PDF export              | **A** + **E2E** | `export-preflight.test.ts`; real PDF download asserted in `e2e/presentation/present-export.spec.ts` (#520)                                                                           |
+| S-6 | Deck export                         | **A** + **E2E** | `export-preflight.test.ts`; slide-editor PPTX and document-toolbar current-deck PPTX downloads are browser-validated                                                                 |
 | S-7 | Export preflight (fatal / warning)  | **A**           | `export-preflight.test.ts`                                                                                                                                                           |
 | S-8 | Slide editor responsive layout      | **A** + **E2E** | Deterministic presentation layout rendering in `e2e/presentation/slides-layout-screenshots.spec.ts` (#1449); pixel snapshot comparisons opt-in via `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` |
 

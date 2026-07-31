@@ -65,6 +65,14 @@ export function profileAccountLifecycleCredentials(): Credentials {
   };
 }
 
+/** Isolated credentials for plan mutation and subscription lifecycle coverage. */
+export function profileBillingLifecycleCredentials(): Credentials {
+  return {
+    email: E2E_PROFILE_FIXTURE.billingLifecycle.email,
+    password: E2E_PROFILE_FIXTURE.billingLifecycle.password,
+  };
+}
+
 /** App editor URL for the seeded document. */
 export function profileDocPath(
   fixtureName?: PresentationTestFixtureName,

@@ -7,11 +7,13 @@ import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
   profileDocPath,
+  profileEditorCredentials,
   profileOwnerCredentials,
   profilePresentEmbedPath,
   profilePresentPath,
   profileViewerCredentials,
 } from "../helpers/profile";
+import { expectNoPageErrors } from "../ui-matrix/helpers";
 
 /**
  * Present + export E2E coverage (Epic #517, issue #520).
@@ -21,8 +23,8 @@ import {
  *      seeded title text via the in-editor `PresentButton` overlay.
  *   2. PUBLIC present mode renders the SAME seeded deck through the valid public
  *      share link (`/present/<slug>-<shareId>`).
- *   3. A real export download is triggered (PDF) and asserted to produce a file
- *      with a `.pdf` extension and nonzero bytes (via `waitForEvent('download')`).
+ *   3. Real document PDF and infographic PNG/PDF downloads are generated and
+ *      validated for format, dimensions, and nonzero bytes.
  *
  * Pixel-level editor regression stays in
  * `e2e/presentation/slides-layout-screenshots.spec.ts`; this suite owns the
@@ -114,6 +116,17 @@ async function openPresentationOverlay(
   }, "present: presentation overlay did not open").toPass({
     timeout: 45_000,
   });
+}
+
+async function openDocumentExportMenu(page: Page): Promise<Locator> {
+  const exportButton = page.getByRole("button", { name: "Export document" });
+  const exportMenu = page.getByRole("menu", { name: "Export document" });
+  await expect(exportButton).toBeVisible({ timeout: 20_000 });
+  await expect(async () => {
+    await exportButton.click();
+    await expect(exportMenu).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  return exportMenu;
 }
 
 test.describe("present + export", () => {
@@ -594,17 +607,7 @@ test.describe("present + export", () => {
     await login(page, profileOwnerCredentials());
     await page.goto(profileDocPath());
 
-    const exportBtn = page.getByRole("button", { name: "Export document" });
-    await expect(
-      exportBtn,
-      "export: Export button not found in editor toolbar",
-    ).toBeVisible({ timeout: 20_000 });
-
-    const menu = page.getByRole("menu", { name: "Export document" });
-    await expect(async () => {
-      await exportBtn.click();
-      await expect(menu).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 10_000 });
+    const menu = await openDocumentExportMenu(page);
     await expect(menu, "export: export menu did not open").toBeVisible();
 
     // PDF is always available (no plan gating); it produces a real blob
@@ -625,5 +628,108 @@ test.describe("present + export", () => {
       stat.size,
       "export: downloaded PDF should have nonzero bytes",
     ).toBeGreaterThan(0);
+  });
+
+  test("exports real infographic PNG and PDF files at the selected widths", async ({
+    page,
+  }) => {
+    const assertNoPageErrors = await expectNoPageErrors(page);
+    await login(page, profileOwnerCredentials());
+    await page.goto(profileDocPath());
+
+    const exportButton = page.getByRole("button", {
+      name: "Export document",
+    });
+    await expect(exportButton).toBeVisible({ timeout: 20_000 });
+    let exportMenu = await openDocumentExportMenu(page);
+    await exportMenu.getByRole("button", { name: "1200px" }).click();
+    await expect(
+      exportMenu.getByRole("button", { name: "1200px" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    const pngDownloadPromise = page.waitForEvent("download", {
+      timeout: 45_000,
+    });
+    await exportMenu
+      .getByRole("menuitem", { name: /^Infographic PNG\b/ })
+      .click();
+    const pngDownload = await pngDownloadPromise;
+    expect(pngDownload.suggestedFilename()).toMatch(/\.png$/i);
+    const pngPath = await pngDownload.path();
+    expect(
+      pngPath,
+      "infographic PNG download produced no file path",
+    ).toBeTruthy();
+    const pngBytes = await fs.readFile(pngPath!);
+    expect(pngBytes.subarray(0, 8)).toEqual(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    expect(pngBytes.readUInt32BE(16)).toBe(1200);
+    expect(pngBytes.readUInt32BE(20)).toBeGreaterThan(0);
+
+    await expect(exportButton).toBeEnabled();
+    exportMenu = await openDocumentExportMenu(page);
+    await exportMenu.getByRole("button", { name: "800px" }).click();
+    await expect(
+      exportMenu.getByRole("button", { name: "800px" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    const pdfDownloadPromise = page.waitForEvent("download", {
+      timeout: 45_000,
+    });
+    await exportMenu
+      .getByRole("menuitem", { name: /^Infographic PDF\b/ })
+      .click();
+    const pdfDownload = await pdfDownloadPromise;
+    expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
+    const pdfPath = await pdfDownload.path();
+    expect(
+      pdfPath,
+      "infographic PDF download produced no file path",
+    ).toBeTruthy();
+    const pdfBytes = await fs.readFile(pdfPath!);
+    expect(pdfBytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    expect(pdfBytes.length).toBeGreaterThan(0);
+
+    await expect(exportButton).toBeEnabled();
+    await expect(page.getByText("Infographic export failed")).toHaveCount(0);
+    await assertNoPageErrors();
+  });
+
+  test("a paid workspace editor exports the current document deck as PPTX", async ({
+    page,
+  }) => {
+    const assertNoPageErrors = await expectNoPageErrors(page);
+    await login(page, profileEditorCredentials());
+    await page.goto(profileDocPath());
+
+    const exportButton = page.getByRole("button", {
+      name: "Export document",
+    });
+    await expect(exportButton).toBeVisible({ timeout: 20_000 });
+    const exportMenu = await openDocumentExportMenu(page);
+    const pptxItem = exportMenu.getByRole("menuitem", {
+      name: /^PPTX deck\b/,
+    });
+    await expect(pptxItem).toBeEnabled({ timeout: 10_000 });
+
+    const downloadPromise = page.waitForEvent("download", { timeout: 45_000 });
+    await pptxItem.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.pptx$/i);
+    const filePath = await download.path();
+    expect(
+      filePath,
+      "document PPTX download produced no file path",
+    ).toBeTruthy();
+    const bytes = await fs.readFile(filePath!);
+    expect(bytes.subarray(0, 4)).toEqual(Buffer.from([80, 75, 3, 4]));
+    expect(bytes.length).toBeGreaterThan(0);
+
+    await expect(exportButton).toBeEnabled();
+    await expect(
+      page.getByText("PPTX export failed", { exact: true }),
+    ).toHaveCount(0);
+    await assertNoPageErrors();
   });
 });

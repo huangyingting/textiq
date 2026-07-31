@@ -14,20 +14,22 @@ see [theme-packages.md](theme-packages.md).
 
 ## Source Files
 
-| Area                  | Source                                                                                                                 |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Shared slide canvas   | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                   |
-| Node renderer         | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)     |
-| Render resolver       | [`src/lib/presentation/render-resolver.ts`](../../src/lib/presentation/render-resolver.ts)                             |
-| Render tree contract  | [`src/lib/presentation/render-tree.ts`](../../src/lib/presentation/render-tree.ts)                                     |
-| In-app present mode   | [`src/components/presentation/present-mode.tsx`](../../src/components/presentation/present-mode.tsx)                   |
-| Public present viewer | [`src/components/presentation/public-present-viewer.tsx`](../../src/components/presentation/public-present-viewer.tsx) |
-| Export spec builder   | [`src/lib/presentation/export-spec.ts`](../../src/lib/presentation/export-spec.ts)                                     |
-| Export geometry       | [`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts)                             |
-| Raster export         | [`src/lib/presentation/raster-browser-export.tsx`](../../src/lib/presentation/raster-browser-export.tsx)               |
-| PPTX spec adapter     | [`src/lib/presentation/pptx-export-adapter.ts`](../../src/lib/presentation/pptx-export-adapter.ts)                     |
-| PPTX applier          | [`src/lib/presentation/pptx-apply.ts`](../../src/lib/presentation/pptx-apply.ts)                                       |
-| Visual export         | [`src/lib/visual/export.ts`](../../src/lib/visual/export.ts)                                                           |
+| Area                    | Source                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Shared slide canvas     | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                   |
+| Node renderer           | [`src/components/presentation/slide-node-renderer.tsx`](../../src/components/presentation/slide-node-renderer.tsx)     |
+| Render resolver         | [`src/lib/presentation/render-resolver.ts`](../../src/lib/presentation/render-resolver.ts)                             |
+| Render tree contract    | [`src/lib/presentation/render-tree.ts`](../../src/lib/presentation/render-tree.ts)                                     |
+| In-app present mode     | [`src/components/presentation/present-mode.tsx`](../../src/components/presentation/present-mode.tsx)                   |
+| Public present viewer   | [`src/components/presentation/public-present-viewer.tsx`](../../src/components/presentation/public-present-viewer.tsx) |
+| Export spec builder     | [`src/lib/presentation/export-spec.ts`](../../src/lib/presentation/export-spec.ts)                                     |
+| Export geometry         | [`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts)                             |
+| Raster export           | [`src/lib/presentation/raster-browser-export.tsx`](../../src/lib/presentation/raster-browser-export.tsx)               |
+| PPTX spec adapter       | [`src/lib/presentation/pptx-export-adapter.ts`](../../src/lib/presentation/pptx-export-adapter.ts)                     |
+| PPTX applier            | [`src/lib/presentation/pptx-apply.ts`](../../src/lib/presentation/pptx-apply.ts)                                       |
+| Visual export           | [`src/lib/visual/export.ts`](../../src/lib/visual/export.ts)                                                           |
+| Document export UI      | [`src/components/editor/document-export-button.tsx`](../../src/components/editor/document-export-button.tsx)           |
+| Document export targets | [`src/lib/visual/document-export-targets.ts`](../../src/lib/visual/document-export-targets.ts)                         |
 
 ## Rendering Contract
 
@@ -118,6 +120,15 @@ render tree order as `SlideCanvas`, converts resolved nodes into export
 operations, and carries diagnostics forward. `buildPptxSpec` converts those
 operations into inch-based PPTX operations; `applyPptxSpec` owns PptxGenJS
 side effects.
+
+The document-editor export menu owns whole-document targets separately from the
+slide-editor export menu. It exports a multipage text-and-visual PDF, the
+freshest persisted Deck as editable PPTX for paid plans, and one-page
+infographic PNG/PDF files. Infographic width presets feed the canvas width
+directly; free-plan infographic exports carry the product watermark. Browser
+coverage validates real files rather than menu reachability alone: PNG
+signature and selected pixel width, PDF signature, and PPTX ZIP signature are
+checked after the downloads complete.
 
 Custom and square export sizing is centralized in
 [`src/lib/presentation/export-geometry.ts`](../../src/lib/presentation/export-geometry.ts).

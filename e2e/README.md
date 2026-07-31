@@ -14,7 +14,7 @@ app.
 | `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                 |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                   |
 | `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                 |
-| `e2e/presentation/present-export.spec.ts`               | Authenticated + public present render; real PDF export download (profile-gated, #520)                                           |
+| `e2e/presentation/present-export.spec.ts`               | Authenticated/public present render; real document PDF, infographic PNG/PDF, and paid document-deck PPTX downloads              |
 | `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                             |
 | `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                               |
 | `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                     |
@@ -154,6 +154,8 @@ users and isolated documents, and the specs run for real against them.
   **editor** user (passwords hashed with the same bcrypt path the app uses);
 - an isolated account-mutation user whose display name, password hash, and
   session-revocation stamp reset before profile/password lifecycle coverage;
+- an isolated billing-mutation user whose plan, credits, period, and
+  subscription reset before upgrade/cancel/downgrade lifecycle coverage;
 - exact-email cleanup for the signup lifecycle account so an interrupted
   signup/onboarding/deletion run is self-healing on the next seed;
 - a workspace granting the viewer read-only access;

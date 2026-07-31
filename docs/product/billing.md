@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
@@ -13,18 +13,20 @@ design lives in [brand-studio.md](brand-studio.md).
 
 ## Source Files
 
-| Area                       | Source                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------- |
-| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                         |
-| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts)   |
-| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                         |
-| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)               |
-| Legacy key backfill        | [`src/lib/billing/legacy-key-backfill.ts`](../../src/lib/billing/legacy-key-backfill.ts) |
-| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                         |
-| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                       |
-| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)         |
-| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)             |
-| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)                 |
+| Area                       | Source                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Plan catalog               | [`src/lib/billing/catalog.ts`](../../src/lib/billing/catalog.ts)                                             |
+| Entitlement facade         | [`src/lib/billing/entitlement-facade.ts`](../../src/lib/billing/entitlement-facade.ts)                       |
+| Credits                    | [`src/lib/billing/credits.ts`](../../src/lib/billing/credits.ts)                                             |
+| Usage ledger               | [`src/lib/billing/usage-ledger.ts`](../../src/lib/billing/usage-ledger.ts)                                   |
+| Legacy key backfill        | [`src/lib/billing/legacy-key-backfill.ts`](../../src/lib/billing/legacy-key-backfill.ts)                     |
+| Billing service            | [`src/lib/billing/service.ts`](../../src/lib/billing/service.ts)                                             |
+| Billing provider interface | [`src/lib/billing/provider.ts`](../../src/lib/billing/provider.ts)                                           |
+| Stripe provider            | [`src/lib/billing/stripe-provider.ts`](../../src/lib/billing/stripe-provider.ts)                             |
+| Mock provider              | [`src/lib/billing/mock-provider.ts`](../../src/lib/billing/mock-provider.ts)                                 |
+| Billing settings actions   | [`src/app/app/settings/billing/actions.ts`](../../src/app/app/settings/billing/actions.ts)                   |
+| Billing settings UI        | [`src/app/app/settings/billing/billing-actions.tsx`](../../src/app/app/settings/billing/billing-actions.tsx) |
+| Attribution rules          | [`src/lib/billing/attribution.ts`](../../src/lib/billing/attribution.ts)                                     |
 
 ## Plans And Entitlements
 
@@ -104,6 +106,13 @@ not by billing plans.
 The provider interface owns plan change, period-end cancellation, and immediate
 subscription cancellation for account deletion.
 
+Provider exceptions are operational failures, not user-facing payloads. Billing
+server actions log them with an operation-specific scope and return the shared
+safe billing failure message. The client adapter also maps rejected action
+transports to that message, so network and server-action failures remain inline
+instead of escaping as unhandled UI errors. Success feedback uses a live status
+region; failure feedback uses an alert.
+
 ## Subscription Writes
 
 Local plan changes update both `User.plan` / credit fields and the one-row
@@ -127,6 +136,8 @@ individual subscription.
    `keyHashVersion`/`keyHash` only.
 8. Prior-period reservations refund to a terminal ledger state without
    increasing the new period's refreshed allowance.
+9. Billing provider and action-transport exceptions produce safe inline
+   feedback; raw exception messages are never returned to the browser.
 
 ## Primary Tests
 
@@ -141,6 +152,9 @@ individual subscription.
 - [`src/lib/billing/stripe-provider.test.ts`](../../src/lib/billing/stripe-provider.test.ts)
 - [`src/lib/billing/service.test.ts`](../../src/lib/billing/service.test.ts)
 - [`src/lib/billing/attribution.test.ts`](../../src/lib/billing/attribution.test.ts)
+- [`src/app/app/settings/billing/actions.test.ts`](../../src/app/app/settings/billing/actions.test.ts)
+- [`src/app/app/settings/billing/billing-actions.test.tsx`](../../src/app/app/settings/billing/billing-actions.test.tsx)
+- [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)
 
 Opt-in Postgres command:
 

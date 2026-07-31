@@ -54,6 +54,14 @@ export const E2E_PROFILE_FIXTURE = {
     updatedName: "E2E Account Lifecycle Updated",
     plan: "free",
   },
+  billingLifecycle: {
+    id: "e2efixturebillinglife00001",
+    subscriptionId: "e2efixturebillingsub000001",
+    email: "e2e-billing-lifecycle@textiq.test",
+    password: "e2e-billing-pw-2026",
+    name: "E2E Billing Lifecycle",
+    plan: "free",
+  },
   signupLifecycle: {
     id: "e2efixturesignuplife000001",
     email: "e2e-signup-lifecycle@textiq.test",

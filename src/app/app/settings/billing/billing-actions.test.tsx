@@ -23,6 +23,7 @@ import {
   BillingActions,
   compactCreditPeriod,
   mapBillingActionOutcome,
+  resolveBillingActionOutcome,
 } from "./billing-actions";
 
 (
@@ -110,6 +111,19 @@ describe("mapBillingActionOutcome", () => {
     assert.deepEqual(outcome, {
       message: "Switched to the plus plan.",
       isError: false,
+    });
+  });
+});
+
+describe("resolveBillingActionOutcome", () => {
+  test("maps a rejected action transport to safe inline feedback", async () => {
+    const outcome = await resolveBillingActionOutcome(async () => {
+      throw new Error("server action transport failed");
+    });
+
+    assert.deepEqual(outcome, {
+      message: "Could not update billing. Please try again.",
+      isError: true,
     });
   });
 });

@@ -158,10 +158,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/present-export.spec.ts",
     owners: ["presentation", "public-render"],
     coverage:
-      "Authenticated/public present render, mobile safe areas, embed mode, and real PDF export.",
+      "Authenticated/public present render, mobile safe areas, embed mode, real document PDF export, selected-width infographic PNG/PDF files, and paid workspace-editor document-deck PPTX export.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
-    roles: ["seeded owner", "seeded viewer", "anonymous public"],
+    roles: [
+      "seeded owner",
+      "seeded Pro editor",
+      "seeded viewer",
+      "anonymous public",
+    ],
     devices: ["Desktop Chrome", "mobile viewport"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/rendering-and-export.md"],
@@ -469,15 +474,19 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
     owners: ["workspace", "billing", "brand"],
     coverage:
-      "Deterministic dashboard and billing checks plus free-plan Brand Studio gating and a Pro create/font-upload/reload/edit/delete lifecycle.",
+      "Deterministic dashboard checks; isolated billing upgrade, scheduled cancellation, further plan change, downgrade, reload persistence, live feedback, and mobile overflow coverage; plus free-plan Brand Studio gating and a Pro create/font-upload/reload/edit/delete lifecycle.",
     runMode: "advisory-ci",
     prerequisites: [
       "E2E_PROFILE=1",
       "npm run db:seed:e2e",
       "optional BILLING_UNLIMITED_CREDITS",
     ],
-    roles: ["seeded owner", "seeded Pro editor"],
-    devices: ["Desktop Chrome"],
+    roles: [
+      "seeded owner",
+      "isolated billing lifecycle user",
+      "seeded Pro editor",
+    ],
+    devices: ["Desktop Chrome", "390x844 mobile"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",

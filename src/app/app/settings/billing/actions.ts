@@ -11,9 +11,16 @@ import { revalidatePath } from "next/cache";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { requireUser } from "@/lib/session";
-import { getBillingProvider } from "@/lib/billing/provider";
+import {
+  getBillingProvider,
+  type ChangePlanResult,
+} from "@/lib/billing/provider";
 import { isPlan, type Plan } from "@/lib/billing/catalog";
-import type { BillingActionData } from "@/lib/billing/action-types";
+import {
+  BILLING_ACTION_FAILURE_MESSAGE,
+  type BillingActionData,
+} from "@/lib/billing/action-types";
+import { logError } from "@/lib/log";
 
 /** Change the current user's plan (upgrade or downgrade). */
 export async function changePlanAction(
@@ -25,8 +32,14 @@ export async function changePlanAction(
     return actionError(`Invalid plan: ${targetPlan}.`);
   }
 
-  const provider = await getBillingProvider();
-  const result = await provider.changePlan(user.id, targetPlan as Plan);
+  let result: ChangePlanResult;
+  try {
+    const provider = await getBillingProvider();
+    result = await provider.changePlan(user.id, targetPlan as Plan);
+  } catch (error) {
+    logError("billing.plan-change", error, { targetPlan });
+    return actionError(BILLING_ACTION_FAILURE_MESSAGE);
+  }
 
   if (!result.success) {
     return actionError(result.message);
@@ -44,8 +57,14 @@ export async function cancelSubscriptionAction(): Promise<
 > {
   const user = await requireUser(redirect);
 
-  const provider = await getBillingProvider();
-  const result = await provider.cancelSubscription(user.id);
+  let result: ChangePlanResult;
+  try {
+    const provider = await getBillingProvider();
+    result = await provider.cancelSubscription(user.id);
+  } catch (error) {
+    logError("billing.subscription-cancel", error);
+    return actionError(BILLING_ACTION_FAILURE_MESSAGE);
+  }
 
   if (!result.success) {
     return actionError(result.message);

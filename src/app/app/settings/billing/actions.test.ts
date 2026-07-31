@@ -32,6 +32,11 @@ type BillingActionsTestState = {
   requireUser: (redirect: (url: string) => never) => Promise<{ id: string }>;
   changePlan: (userId: string, plan: string) => Promise<ChangePlanResult>;
   cancelSubscription: (userId: string) => Promise<CancelResult>;
+  logError: (
+    scope: string,
+    error: unknown,
+    context?: Record<string, unknown>,
+  ) => void;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -64,6 +69,9 @@ function createDefaultState(): BillingActionsTestState {
     async cancelSubscription(userId) {
       calls.push(["cancelSubscription", userId]);
       return { success: true, message: "Subscription canceled." };
+    },
+    logError(scope, error, context) {
+      calls.push(["logError", scope, error, context]);
     },
   };
 }
@@ -113,6 +121,14 @@ const stubbedModules = new Map<string, string>([
             return globalThis.__billingActionsTestState.cancelSubscription(userId);
           },
         };
+      }
+    `,
+  ],
+  [
+    "@/lib/log",
+    `
+      export function logError(scope, error, context) {
+        globalThis.__billingActionsTestState.logError(scope, error, context);
       }
     `,
   ],
@@ -211,6 +227,29 @@ describe("changePlanAction", () => {
     assert.equal(callsOf("revalidatePath").length, 0);
   });
 
+  it("maps a thrown provider error to safe feedback and logs the operation", async () => {
+    const providerError = new Error("provider transport included a secret");
+    state().changePlan = async () => {
+      throw providerError;
+    };
+
+    const result = await actions.changePlanAction("plus");
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "Could not update billing. Please try again.",
+    });
+    assert.deepEqual(callsOf("logError"), [
+      [
+        "logError",
+        "billing.plan-change",
+        providerError,
+        { targetPlan: "plus" },
+      ],
+    ]);
+    assert.equal(callsOf("revalidatePath").length, 0);
+  });
+
   it("changes the plan for the session user, revalidates settings pages, and returns the result payload", async () => {
     state().changePlan = async (userId, plan) => {
       state().calls.push(["changePlan", userId, plan]);
@@ -264,6 +303,24 @@ describe("cancelSubscriptionAction", () => {
       ok: false,
       error: "No active subscription to cancel.",
     });
+    assert.equal(callsOf("revalidatePath").length, 0);
+  });
+
+  it("maps a thrown provider error to safe feedback and logs the operation", async () => {
+    const providerError = new Error("provider cancellation failed");
+    state().cancelSubscription = async () => {
+      throw providerError;
+    };
+
+    const result = await actions.cancelSubscriptionAction();
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: "Could not update billing. Please try again.",
+    });
+    assert.deepEqual(callsOf("logError"), [
+      ["logError", "billing.subscription-cancel", providerError, undefined],
+    ]);
     assert.equal(callsOf("revalidatePath").length, 0);
   });
 
