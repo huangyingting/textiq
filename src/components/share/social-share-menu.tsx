@@ -77,6 +77,7 @@ interface MenuContentProps {
 }
 
 function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
+  type ImageOperation = "copy" | "share";
   const [copyState, setCopyState] = useState<
     "idle" | "copying" | "copied" | "error"
   >("idle");
@@ -84,21 +85,35 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
     "idle" | "sharing" | "error"
   >("idle");
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nativeShareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const imageOperationRef = useRef<ImageOperation | null>(null);
+  const [imageOperation, setImageOperation] = useState<ImageOperation | null>(
+    null,
+  );
 
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      if (nativeShareTimerRef.current !== null) {
+        clearTimeout(nativeShareTimerRef.current);
+      }
     };
   }, []);
 
   // ── Copy image to clipboard ──────────────────────────────────────────────
 
   const handleCopyImage = useCallback(async () => {
+    if (imageOperationRef.current) return;
     if (!getSvgElement) return;
     const svg = getSvgElement();
     if (!svg) return;
 
+    imageOperationRef.current = "copy";
+    setImageOperation("copy");
+    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
     setCopyState("copying");
 
     try {
@@ -116,16 +131,25 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
     } catch {
       setCopyState("error");
       copyTimerRef.current = setTimeout(() => setCopyState("idle"), 2500);
+    } finally {
+      imageOperationRef.current = null;
+      setImageOperation(null);
     }
   }, [getSvgElement]);
 
   // ── Native Web Share ─────────────────────────────────────────────────────
 
   const handleNativeShare = useCallback(async () => {
+    if (imageOperationRef.current) return;
     if (!getSvgElement) return;
     const svg = getSvgElement();
     if (!svg) return;
 
+    imageOperationRef.current = "share";
+    setImageOperation("share");
+    if (nativeShareTimerRef.current !== null) {
+      clearTimeout(nativeShareTimerRef.current);
+    }
     setNativeShareState("sharing");
 
     try {
@@ -155,8 +179,14 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
         setNativeShareState("idle");
       } else {
         setNativeShareState("error");
-        setTimeout(() => setNativeShareState("idle"), 2500);
+        nativeShareTimerRef.current = setTimeout(
+          () => setNativeShareState("idle"),
+          2500,
+        );
       }
+    } finally {
+      imageOperationRef.current = null;
+      setImageOperation(null);
     }
   }, [getSvgElement, title, shareUrl]);
 
@@ -166,14 +196,14 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
   const showCopyImage = hasImage && canCopyImageToClipboard();
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" aria-busy={imageOperation !== null}>
       {/* Native share — mobile / supported platforms only */}
       {showNativeShare && (
         <ActionButton
           icon={<Share2 className="h-4 w-4" />}
           label={nativeShareState === "error" ? "Share failed" : "Share via…"}
           onClick={() => void handleNativeShare()}
-          disabled={nativeShareState === "sharing"}
+          disabled={imageOperation !== null}
         />
       )}
 
@@ -197,7 +227,7 @@ function MenuContent({ shareUrl, title, getSvgElement }: MenuContentProps) {
                   : "Copy image"
           }
           onClick={() => void handleCopyImage()}
-          disabled={copyState === "copying"}
+          disabled={imageOperation !== null}
         />
       )}
 

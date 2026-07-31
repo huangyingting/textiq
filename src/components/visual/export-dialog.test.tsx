@@ -508,10 +508,13 @@ describe("ExportDialog", () => {
   test("PNG export: shows a pending state (disabled button, 'Exporting…') until the export resolves", async () => {
     await withExportDom(async () => {
       let resolveExport!: (blob: Blob | null) => void;
+      let closed = 0;
       const renderer = mountWithPortalDom(
         <ExportDialog
           open
-          onClose={() => {}}
+          onClose={() => {
+            closed += 1;
+          }}
           getSvgElement={fakeSvg}
           filename="chart"
         />,
@@ -527,12 +530,37 @@ describe("ExportDialog", () => {
         );
         act(() => {
           (downloadButton.props.onClick as () => void)();
+          (downloadButton.props.onClick as () => void)();
         });
         downloadButton = renderer.root.find(
           (node) =>
             node.type === "button" && textOf(node).includes("Exporting…"),
         );
         assert.equal(downloadButton.props.disabled, true);
+        assert.equal(
+          renderer.root.findByProps({ role: "dialog" }).props["aria-busy"],
+          true,
+        );
+        assert.equal(
+          globalForExport.__exportDialogTestState.pngCalls.length,
+          2,
+          "one preview plus one guarded export",
+        );
+
+        const cancel = renderer.root.find(
+          (node) => node.type === "button" && textOf(node).trim() === "Cancel",
+        );
+        assert.equal(cancel.props.disabled, true);
+        act(() => {
+          (cancel.props.onClick as () => void)();
+          dispatchWindowKeydown("Escape");
+          (
+            renderer.root.findByProps({
+              "aria-label": "Close export dialog",
+            }).props.onClick as () => void
+          )();
+        });
+        assert.equal(closed, 0);
 
         await act(async () => {
           resolveExport(new Blob(["png-bytes"], { type: "image/png" }));
@@ -540,6 +568,7 @@ describe("ExportDialog", () => {
           await waitForAsyncDrain();
         });
         assert.match(textOf(renderer.root), /Download PNG/);
+        assert.equal(closed, 1);
       } finally {
         act(() => renderer.unmount());
       }
@@ -572,6 +601,14 @@ describe("ExportDialog", () => {
         });
         assert.match(textOf(renderer.root), /PNG export failed/);
         assert.equal(closed, 0);
+        act(() => {
+          (
+            renderer.root.findByProps({
+              "aria-label": "Dismiss export error",
+            }).props.onClick as () => void
+          )();
+        });
+        assert.doesNotMatch(textOf(renderer.root), /PNG export failed/);
       } finally {
         act(() => renderer.unmount());
       }

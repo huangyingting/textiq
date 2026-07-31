@@ -5,6 +5,7 @@ import {
   type JSX,
   type SetStateAction,
 } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import type { ActionResult } from "@/lib/action-result";
 import type { Deck } from "@/lib/presentation/schema";
@@ -130,7 +131,9 @@ export interface UseSlideEditorShellControllerArgs {
 export interface SlideEditorShellController {
   toolbarError: string | null;
   setToolbarError: Dispatch<SetStateAction<string | null>>;
+  toolbarActionPending: boolean;
   closeConfirmOpen: boolean;
+  handleSaveNow: () => Promise<void>;
   handleExportPptx: () => Promise<void>;
   handleExportPdf: () => Promise<void>;
   handleExportPng: () => Promise<void>;
@@ -138,15 +141,49 @@ export interface SlideEditorShellController {
   handleRoundtripAction: (
     action: (() => Promise<ActionResult>) | undefined,
     fallbackError: string,
+    successAnnouncement?: string,
   ) => Promise<void>;
   handleCloseRequest: () => void;
   handleCloseConfirmCancel: () => void;
   handleCloseConfirmDiscard: () => void;
 }
 
+export type SlideEditorToolbarOperation =
+  | "save"
+  | "export-pptx"
+  | "export-pdf"
+  | "export-png"
+  | "regenerate"
+  | "roundtrip";
+
+export function createSlideEditorToolbarOperationBoundary(): {
+  claim: (operation: SlideEditorToolbarOperation) => boolean;
+  release: (operation: SlideEditorToolbarOperation) => boolean;
+} {
+  let currentOperation: SlideEditorToolbarOperation | null = null;
+  return {
+    claim(operation) {
+      if (currentOperation) return false;
+      currentOperation = operation;
+      return true;
+    },
+    release(operation) {
+      if (currentOperation !== operation) return false;
+      currentOperation = null;
+      return true;
+    },
+  };
+}
+
 interface CreateSlideEditorShellControllerArgs extends UseSlideEditorShellControllerArgs {
   toolbarError: string | null;
   setToolbarError: Dispatch<SetStateAction<string | null>>;
+  toolbarOperation: SlideEditorToolbarOperation | null;
+  setToolbarOperation: Dispatch<
+    SetStateAction<SlideEditorToolbarOperation | null>
+  >;
+  claimToolbarOperation: (operation: SlideEditorToolbarOperation) => boolean;
+  releaseToolbarOperation: (operation: SlideEditorToolbarOperation) => boolean;
   closeConfirmOpen: boolean;
   setCloseConfirmOpen: Dispatch<SetStateAction<boolean>>;
 }
@@ -163,80 +200,124 @@ export function createSlideEditorShellController({
   setStageAnnouncement,
   toolbarError,
   setToolbarError,
+  toolbarOperation,
+  setToolbarOperation,
+  claimToolbarOperation,
+  releaseToolbarOperation,
   closeConfirmOpen,
   setCloseConfirmOpen,
 }: CreateSlideEditorShellControllerArgs): SlideEditorShellController {
-  async function handleExportPptx() {
-    if (!onExportPptx) return;
+  async function runToolbarOperation(
+    operation: SlideEditorToolbarOperation,
+    action: () => Promise<void>,
+    fallbackError: string,
+    logLabel?: string,
+  ): Promise<void> {
+    if (!claimToolbarOperation(operation)) return;
+    setToolbarOperation(operation);
     setToolbarError(null);
     try {
-      await onExportPptx();
+      await action();
     } catch (error) {
-      console.error("PPTX export failed", error);
-      setToolbarError("PPTX export failed. Please try again.");
+      unstable_rethrow(error);
+      if (logLabel) console.error(logLabel, error);
+      setToolbarError(fallbackError);
+    } finally {
+      if (releaseToolbarOperation(operation)) {
+        setToolbarOperation(null);
+      }
     }
+  }
+
+  async function handleSaveNow() {
+    if (!onSave) return;
+    await runToolbarOperation(
+      "save",
+      async () => {
+        const result = await onSave(deck);
+        if (!result.ok) {
+          setToolbarError(result.error);
+          return;
+        }
+        setStageAnnouncement("Slide deck saved.");
+      },
+      "Save failed. Please try again.",
+    );
+  }
+
+  async function handleExportPptx() {
+    if (!onExportPptx) return;
+    await runToolbarOperation(
+      "export-pptx",
+      onExportPptx,
+      "PPTX export failed. Please try again.",
+      "PPTX export failed",
+    );
   }
 
   async function handleExportPdf() {
     if (!onExportPdf) return;
-    setToolbarError(null);
-    try {
-      await onExportPdf();
-    } catch (error) {
-      console.error("PDF export failed", error);
-      setToolbarError("PDF export failed. Please try again.");
-    }
+    await runToolbarOperation(
+      "export-pdf",
+      onExportPdf,
+      "PDF export failed. Please try again.",
+      "PDF export failed",
+    );
   }
 
   async function handleExportPng() {
     if (!onExportPng) return;
-    setToolbarError(null);
-    try {
-      await onExportPng();
-    } catch (error) {
-      console.error("PNG export failed", error);
-      setToolbarError("PNG export failed. Please try again.");
-    }
+    await runToolbarOperation(
+      "export-png",
+      onExportPng,
+      "PNG export failed. Please try again.",
+      "PNG export failed",
+    );
   }
 
   async function handleRegenerate() {
     if (!onRegenerate) return;
-    setToolbarError(null);
-    try {
-      const result = await onRegenerate();
-      if (!result.ok) {
-        setToolbarError(result.error);
-        return;
-      }
-      setStageAnnouncement(
-        "Regenerated slides from the latest saved document.",
-      );
-    } catch {
-      setToolbarError("Regenerate failed. Please try again.");
-    }
+    await runToolbarOperation(
+      "regenerate",
+      async () => {
+        const result = await onRegenerate();
+        if (!result.ok) {
+          setToolbarError(result.error);
+          return;
+        }
+        setStageAnnouncement(
+          "Regenerated slides from the latest saved document.",
+        );
+      },
+      "Regenerate failed. Please try again.",
+    );
   }
 
   async function handleRoundtripAction(
     action: (() => Promise<ActionResult>) | undefined,
     fallbackError: string,
+    successAnnouncement?: string,
   ) {
     if (!action) return;
-    setToolbarError(null);
-    try {
-      if (onSave) {
-        const saveResult = await onSave(deck);
-        if (!saveResult.ok) {
-          setToolbarError(saveResult.error);
+    await runToolbarOperation(
+      "roundtrip",
+      async () => {
+        if (onSave) {
+          const saveResult = await onSave(deck);
+          if (!saveResult.ok) {
+            setToolbarError(saveResult.error);
+            return;
+          }
+        }
+        const result = await action();
+        if (!result.ok) {
+          setToolbarError(result.error);
           return;
         }
-      }
-      const result = await action();
-      if (!result.ok) {
-        setToolbarError(result.error);
-      }
-    } catch {
-      setToolbarError(fallbackError);
-    }
+        if (successAnnouncement) setStageAnnouncement(successAnnouncement);
+      },
+      fallbackError,
+    );
   }
 
   function handleCloseRequest() {
@@ -263,7 +344,9 @@ export function createSlideEditorShellController({
   return {
     toolbarError,
     setToolbarError,
+    toolbarActionPending: toolbarOperation !== null,
     closeConfirmOpen,
+    handleSaveNow,
     handleExportPptx,
     handleExportPdf,
     handleExportPng,
@@ -287,6 +370,11 @@ export function useSlideEditorShellController({
   setStageAnnouncement,
 }: UseSlideEditorShellControllerArgs): SlideEditorShellController {
   const [toolbarError, setToolbarError] = useState<string | null>(null);
+  const [toolbarOperationBoundary] = useState(
+    createSlideEditorToolbarOperationBoundary,
+  );
+  const [toolbarOperation, setToolbarOperation] =
+    useState<SlideEditorToolbarOperation | null>(null);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const controller = createSlideEditorShellController({
@@ -301,6 +389,10 @@ export function useSlideEditorShellController({
     setStageAnnouncement,
     toolbarError,
     setToolbarError,
+    toolbarOperation,
+    setToolbarOperation,
+    claimToolbarOperation: toolbarOperationBoundary.claim,
+    releaseToolbarOperation: toolbarOperationBoundary.release,
     closeConfirmOpen,
     setCloseConfirmOpen,
   });

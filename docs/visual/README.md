@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-10"
+last_updated: "2026-07-31"
 description: "The visual subsystem owns visual schemas, kind capabilities, renderer/export support, transformations, and AI prompt constraints. Persistence of visual nodes and Visual rows is documented in ../data-model/visual-mirror.md; editor lifecycle is documented in ../editor/document-editor.md."
 ---
 
@@ -15,18 +15,20 @@ lifecycle is documented in [../editor/document-editor.md](../editor/document-edi
 
 ## Source Anchors
 
-| Area                  | Source                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| Schema facade         | [`src/lib/visual/schema.ts`](../../src/lib/visual/schema.ts)                                   |
-| Schema types          | [`src/lib/visual/schema-types.ts`](../../src/lib/visual/schema-types.ts)                       |
-| Schema validation     | [`src/lib/visual/schema-validation/`](../../src/lib/visual/schema-validation/)                 |
-| Kind registry facade  | [`src/lib/visual/registry.ts`](../../src/lib/visual/registry.ts)                               |
-| Runtime descriptors   | [`src/lib/visual/registry-runtime.ts`](../../src/lib/visual/registry-runtime.ts)               |
-| Registry completeness | [`src/lib/visual/registry-validation.ts`](../../src/lib/visual/registry-validation.ts)         |
-| Display renderer      | [`src/components/visual/visual-renderer.tsx`](../../src/components/visual/visual-renderer.tsx) |
-| Transform helpers     | [`src/lib/visual/transforms.ts`](../../src/lib/visual/transforms.ts)                           |
-| Export support        | [`src/lib/visual/registry-export.ts`](../../src/lib/visual/registry-export.ts)                 |
-| PPTX native specs     | [`src/lib/visual/pptx-shapes.ts`](../../src/lib/visual/pptx-shapes.ts)                         |
+| Area                  | Source                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| Schema facade         | [`src/lib/visual/schema.ts`](../../src/lib/visual/schema.ts)                                     |
+| Schema types          | [`src/lib/visual/schema-types.ts`](../../src/lib/visual/schema-types.ts)                         |
+| Schema validation     | [`src/lib/visual/schema-validation/`](../../src/lib/visual/schema-validation/)                   |
+| Kind registry facade  | [`src/lib/visual/registry.ts`](../../src/lib/visual/registry.ts)                                 |
+| Runtime descriptors   | [`src/lib/visual/registry-runtime.ts`](../../src/lib/visual/registry-runtime.ts)                 |
+| Registry completeness | [`src/lib/visual/registry-validation.ts`](../../src/lib/visual/registry-validation.ts)           |
+| Display renderer      | [`src/components/visual/visual-renderer.tsx`](../../src/components/visual/visual-renderer.tsx)   |
+| Export dialog         | [`src/components/visual/export-dialog.tsx`](../../src/components/visual/export-dialog.tsx)       |
+| Social image actions  | [`src/components/share/social-share-menu.tsx`](../../src/components/share/social-share-menu.tsx) |
+| Transform helpers     | [`src/lib/visual/transforms.ts`](../../src/lib/visual/transforms.ts)                             |
+| Export support        | [`src/lib/visual/registry-export.ts`](../../src/lib/visual/registry-export.ts)                   |
+| PPTX native specs     | [`src/lib/visual/pptx-shapes.ts`](../../src/lib/visual/pptx-shapes.ts)                           |
 
 ## Schema Contract
 
@@ -79,6 +81,18 @@ Export support is capability-driven. A kind can support SVG/PNG/PDF, native
 PPTX, raster fallback, and documented fidelity degradations. Presentation export
 uses these capabilities through the pipeline documented in
 [../presentation/rendering-and-export.md](../presentation/rendering-and-export.md).
+
+The visual export dialog owns one synchronous export boundary across SVG, PNG,
+PDF, and PPTX. Same-event duplicate activation is ignored, and while export is
+pending the dialog reports busy state and locks Download, Cancel, backdrop,
+close-button, and Escape dismissal. Ordinary renderer failures retain the
+dialog with explicit dismissible feedback so the user can adjust settings and
+retry.
+
+Social copy-image and native-share actions likewise share one image-operation
+boundary. Copy and share cannot race the same SVG rasterization; both buttons
+are disabled and the menu is marked busy until the active clipboard or Web
+Share operation settles. User-cancelled native share remains a normal outcome.
 
 ## Invariants
 

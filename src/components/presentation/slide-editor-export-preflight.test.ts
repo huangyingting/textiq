@@ -14,6 +14,7 @@ import { ExportPreflightDialog } from "./export-preflight-dialog";
 import { SlideCommandPalette } from "./slide-command-palette";
 import { SlideEditor } from "./slide-editor";
 import { SlideEditorTopToolbar } from "./slide-editor-top-toolbar";
+import { DeckToolbar, DeckToolbarButton } from "./toolbar/deck-toolbar";
 import {
   buildDeck,
   buildImageNode,
@@ -635,5 +636,138 @@ describe("SlideEditor export preflight", () => {
       continueExport();
 
       assert.equal(pptxExports, 1);
+    }));
+
+  test("locks duplicate and competing export activation while the toolbar operation is pending", () =>
+    runWithSettledDom(async () => {
+      const deck = buildDeck([
+        buildSlide("content", [], { id: "slide-export-lock" }),
+      ]);
+      const renderer = createHookRenderer();
+      let exportCalls = 0;
+      let resolveExport!: () => void;
+      const exportPromise = new Promise<void>((resolve) => {
+        resolveExport = resolve;
+      });
+      const renderEditor = () =>
+        renderer.run(() =>
+          SlideEditor({
+            documentId: "doc-export-lock",
+            deck,
+            themePackage: buildMinimalThemePackage(),
+            onDeckChange: () => undefined,
+            onExportPptx: () => {
+              exportCalls += 1;
+              return exportPromise;
+            },
+          }),
+        );
+
+      let tree = renderEditor();
+      const requestPptxExport = findRequiredElement(
+        renderTopToolbar(tree),
+        (element) =>
+          element.type === "button" &&
+          element.props["aria-label"] === "Export PPTX",
+        "expected PPTX export menu item",
+      ).props.onClick;
+      assert.equal(typeof requestPptxExport, "function");
+      (requestPptxExport as () => void)();
+      (requestPptxExport as () => void)();
+      assert.equal(exportCalls, 1);
+
+      tree = renderEditor();
+      const pendingToolbar = renderTopToolbar(tree) as ElementLike;
+      assert.equal(pendingToolbar.type, DeckToolbar);
+      assert.equal(pendingToolbar.props.busy, true);
+      const pendingExportPopover = findRequiredElement(
+        pendingToolbar,
+        (element) =>
+          element.type === Popover &&
+          element.props["aria-label"] === "Export slides",
+        "expected export popover",
+      );
+      const pendingExportTrigger = pendingExportPopover.props
+        .trigger as ElementLike;
+      assert.equal(pendingExportTrigger.type, DeckToolbarButton);
+      assert.equal(pendingExportTrigger.props.disabled, true);
+      assert.equal(
+        findRequiredElement(
+          pendingToolbar,
+          (element) => element.props["aria-label"] === "Export PPTX",
+          "expected pending PPTX menu item",
+        ).props.disabled,
+        true,
+      );
+
+      resolveExport();
+      await exportPromise;
+      await waitForAsyncDrain();
+      tree = renderEditor();
+      const settledToolbar = renderTopToolbar(tree) as ElementLike;
+      assert.equal(settledToolbar.props.busy, false);
+      const settledExportPopover = findRequiredElement(
+        settledToolbar,
+        (element) =>
+          element.type === Popover &&
+          element.props["aria-label"] === "Export slides",
+        "expected settled export popover",
+      );
+      const settledExportTrigger = settledExportPopover.props
+        .trigger as ElementLike;
+      assert.equal(settledExportTrigger.type, DeckToolbarButton);
+      assert.equal(settledExportTrigger.props.disabled, false);
+    }));
+
+  test("renders ordinary export failure as dismissible toolbar feedback", () =>
+    runWithSettledDom(async () => {
+      const deck = buildDeck([
+        buildSlide("content", [], { id: "slide-export-error" }),
+      ]);
+      const renderer = createHookRenderer();
+      const renderEditor = () =>
+        renderer.run(() =>
+          SlideEditor({
+            documentId: "doc-export-error",
+            deck,
+            themePackage: buildMinimalThemePackage(),
+            onDeckChange: () => undefined,
+            onExportPptx: async () => {
+              throw new Error("private export failure");
+            },
+          }),
+        );
+      const originalConsoleError = console.error;
+      console.error = () => undefined;
+      try {
+        let tree = renderEditor();
+        const requestPptxExport = findRequiredElement(
+          renderTopToolbar(tree),
+          (element) => element.props["aria-label"] === "Export PPTX",
+          "expected PPTX export menu item",
+        ).props.onClick;
+        assert.equal(typeof requestPptxExport, "function");
+        (requestPptxExport as () => void)();
+        await waitForAsyncDrain();
+
+        tree = renderEditor();
+        assert.match(
+          flattenText(tree),
+          /PPTX export failed\. Please try again\./,
+        );
+        const dismiss = findRequiredElement(
+          tree,
+          (element) =>
+            element.type === "button" &&
+            element.props["aria-label"] === "Dismiss toolbar error",
+          "expected dismissible toolbar error",
+        );
+        (dismiss.props.onClick as () => void)();
+
+        tree = renderEditor();
+        assert.doesNotMatch(flattenText(tree), /PPTX export failed/);
+      } finally {
+        console.error = originalConsoleError;
+      }
     }));
 });

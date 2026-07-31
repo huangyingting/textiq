@@ -65,10 +65,9 @@ async function selectFile(
 ): Promise<void> {
   const target = { files: [file], value: "mock.md" };
   await act(async () => {
-    findInput(renderer).props.onChange({
+    await findInput(renderer).props.onChange({
       target,
     } as unknown as React.ChangeEvent<HTMLInputElement>);
-    await waitForAsyncDrain();
   });
   assert.equal(target.value, "");
 }
@@ -184,6 +183,69 @@ describe("ImportButton", () => {
         new File(["x"], "notes.md", { type: "text/markdown" }),
       );
       assert.match(textOf(findAlert(renderer)), /Could not reach the server/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("an editor apply failure remains recoverable and is not counted as import success", async () => {
+    const renderer = mountImportButton({
+      onImport: () => {
+        throw new Error("Lexical apply failed");
+      },
+      importFile: async () => ({
+        ok: true,
+        data: { markdown: "# Parsed" },
+      }),
+    });
+    try {
+      await selectFile(
+        renderer,
+        new File(["# Parsed"], "notes.md", { type: "text/markdown" }),
+      );
+      assert.match(
+        textOf(findAlert(renderer)),
+        /Could not apply imported content/,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("Next navigation control flow escapes import recovery and releases the upload boundary", async () => {
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;replace;/login;307;",
+    });
+    let importCalls = 0;
+    const imported: string[] = [];
+    const renderer = mountImportButton({
+      onImport: (markdown) => imported.push(markdown),
+      importFile: async () => {
+        importCalls += 1;
+        if (importCalls === 1) throw redirectError;
+        return { ok: true, data: { markdown: "# Recovered" } };
+      },
+    });
+    try {
+      const target = {
+        files: [new File(["x"], "first.md", { type: "text/markdown" })],
+        value: "first.md",
+      };
+      await assert.rejects(
+        () =>
+          findInput(renderer).props.onChange({
+            target,
+          } as unknown as React.ChangeEvent<HTMLInputElement>),
+        (error: unknown) => error === redirectError,
+      );
+      assert.equal(target.value, "");
+
+      await selectFile(
+        renderer,
+        new File(["second"], "second.md", { type: "text/markdown" }),
+      );
+      assert.equal(importCalls, 2);
+      assert.deepEqual(imported, ["# Recovered"]);
     } finally {
       act(() => renderer.unmount());
     }

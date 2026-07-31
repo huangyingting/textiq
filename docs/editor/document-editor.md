@@ -438,6 +438,28 @@ pickers, per-node overrides, and kind switching are progressive disclosure. Each
 edit is a pure transform from `transforms.ts`, committed via `node.setVisual()`
 inside `editor.update()`.
 
+### Document import and export
+
+The top editor chrome owns whole-document import and export workflows:
+
+- [`ImportButton`](../../src/components/editor/import-button.tsx) validates the
+  upload size, calls the injected server parse port, and applies the returned
+  Markdown through `ImportPlugin`. One synchronous upload boundary suppresses
+  duplicate file-change events before React renders pending state. A parse is
+  counted as successful only after the editor apply callback completes. Typed
+  parse failures, transport failures, and editor-apply failures retain direct
+  retry and dismiss controls.
+- [`DocumentExportButton`](../../src/components/editor/document-export-button.tsx)
+  owns PDF, PPTX, infographic PNG, and infographic PDF output. All formats share
+  one synchronous export boundary, so duplicate or competing menu activation
+  cannot start two renderers. While active, the menu closes and the toolbar
+  trigger exposes disabled `Exporting…` state. Ordinary failures render
+  dismissible feedback and release the boundary for retry.
+- PPTX export asks the injected deck port for the freshest saved deck and uses
+  the page-load deck only as the documented fallback. Next.js redirect and
+  not-found control flow from import/export ports is rethrown to the framework;
+  it is never rewritten as a network or export error.
+
 ### Persist / version
 
 On the debounced autosave, the serialized state is written to `contentJson`, and

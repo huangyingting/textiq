@@ -5,11 +5,18 @@ import { type ReactNode, type Ref } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 
-export function DeckToolbar({ children }: { children: ReactNode }) {
+export function DeckToolbar({
+  children,
+  busy = false,
+}: {
+  children: ReactNode;
+  busy?: boolean;
+}) {
   return (
     <header
       role="toolbar"
       aria-label="Deck tools"
+      aria-busy={busy}
       data-slide-editor-chrome="true"
       className="flex h-10 shrink-0 items-center justify-between gap-1 border-b border-ds-border-subtle bg-ds-surface-chrome px-2 py-1 backdrop-blur"
     >

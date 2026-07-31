@@ -29,9 +29,11 @@ function controllerArgs(
     sourceReviewCount: 0,
     diagnosticsCount: 0,
     saveStatus: "saved",
+    toolbarActionPending: false,
     canUndo: false,
     canRedo: false,
     handleEditorKeyDown: () => undefined,
+    handleSaveNow: async () => undefined,
     handleRoundtripAction: async () => undefined,
     handleExportRequest: () => undefined,
     handleInsertSlide: () => undefined,
@@ -131,5 +133,32 @@ describe("useSlideCommandPaletteController", () => {
     }
 
     assert.deepEqual(requestedFormats, ["pptx", "pdf", "png"]);
+  });
+
+  test("routes Save now through the shared toolbar operation boundary", () => {
+    let directSaveCalls = 0;
+    let guardedSaveCalls = 0;
+    const announcements: string[] = [];
+    const controller = useSlideCommandPaletteController(
+      controllerArgs({
+        onSave: async () => {
+          directSaveCalls += 1;
+          return { ok: true, data: undefined };
+        },
+        handleSaveNow: async () => {
+          guardedSaveCalls += 1;
+        },
+        setStageAnnouncement: (message) => announcements.push(message),
+      }),
+    );
+    const command = controller.commandPaletteCommands.find(
+      (entry) => entry.id === "deck.save",
+    );
+
+    assert.ok(command, "deck.save should be discoverable");
+    controller.handleRunCommandPaletteCommand(command);
+    assert.equal(guardedSaveCalls, 1);
+    assert.equal(directSaveCalls, 0);
+    assert.deepEqual(announcements, []);
   });
 });

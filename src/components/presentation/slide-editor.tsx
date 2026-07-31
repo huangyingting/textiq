@@ -252,7 +252,7 @@ import {
   SlideEditorInspectorRegion,
 } from "./slide-editor-regions";
 import { buildMobileInspectorContext } from "./mobile-inspector-context";
-import { cx } from "@/components/ui/tokens";
+import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import {
   focusFirstMenuCommand,
   isMenuCommandNavigationKey,
@@ -657,7 +657,9 @@ export function SlideEditor({
   const {
     toolbarError,
     setToolbarError,
+    toolbarActionPending,
     closeConfirmOpen,
+    handleSaveNow,
     handleExportPptx,
     handleExportPdf,
     handleExportPng,
@@ -2225,9 +2227,11 @@ export function SlideEditor({
     sourceReviewCount: sourceReview.length,
     diagnosticsCount: diagnostics.length,
     saveStatus,
+    toolbarActionPending,
     canUndo,
     canRedo,
     onSave,
+    handleSaveNow,
     onUndo,
     onRedo,
     onPresent,
@@ -2452,11 +2456,13 @@ export function SlideEditor({
         documentSourceIndex={documentSourceIndex}
         onRegenerate={onRegenerate}
         saveStatus={saveStatus}
+        toolbarActionPending={toolbarActionPending}
         compactToolbarMenuOpen={compactToolbarMenuOpen}
         compactToolbarMenuTriggerRef={compactToolbarMenuTriggerRef}
         compactToolbarMenuPanelRef={compactToolbarMenuPanelRef}
         compactToolbarMenuId={compactToolbarMenuId}
         onSave={onSave}
+        handleSaveNow={handleSaveNow}
         saveStatusLabel={saveStatusLabel}
         diagnosticsCount={diagnostics.length}
         canUndo={canUndo}
@@ -2515,9 +2521,20 @@ export function SlideEditor({
       {toolbarError ? (
         <div
           role="alert"
-          className="shrink-0 border-b border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text"
         >
-          {toolbarError}
+          <span>{toolbarError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss toolbar error"
+            onClick={() => setToolbarError(null)}
+            className={cx(
+              "shrink-0 rounded-ds-sm px-2 py-1 font-semibold hover:bg-ds-danger-border",
+              FOCUS_RING,
+            )}
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
 

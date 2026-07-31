@@ -456,6 +456,58 @@ describe("SocialShareMenu — capability gating", () => {
 // ---------------------------------------------------------------------------
 
 describe("SocialShareMenu — copy image to clipboard", () => {
+  test("one synchronous image-operation boundary suppresses duplicate and competing actions", async () => {
+    const browser = setupBrowser();
+    let resolveExport!: (blob: Blob | null) => void;
+    resetExportState(
+      () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    const renderer = mount(
+      {
+        title: "My doc",
+        shareUrl: "https://x.test/s/doc",
+        inline: true,
+        getSvgElement: fakeSvg,
+      },
+      browser,
+    );
+
+    const copyButton = findActionButton(renderer, "Copy image");
+    const shareButton = findActionButton(renderer, "Share via");
+    act(() => {
+      (copyButton.props.onClick as () => void)();
+      (copyButton.props.onClick as () => void)();
+      (shareButton.props.onClick as () => void)();
+    });
+
+    assert.equal(globalForExport.__socialShareMenuExportState.calls.length, 1);
+    assert.equal(
+      renderer.root.findByProps({ "aria-busy": true }).props["aria-busy"],
+      true,
+    );
+    assert.equal(findActionButton(renderer, "Copying").props.disabled, true);
+    assert.equal(findActionButton(renderer, "Share via").props.disabled, true);
+    assert.equal(browser.state.shareCalls.length, 0);
+
+    await act(async () => {
+      resolveExport(new Blob(["png"], { type: "image/png" }));
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+    });
+    assert.equal(browser.state.clipboardWriteCalls.length, 1);
+
+    resetExportState();
+    await act(async () => {
+      (findActionButton(renderer, "Share via").props.onClick as () => void)();
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+    });
+    assert.equal(browser.state.shareCalls.length, 1);
+  });
+
   test("success: exports the square preset, writes a ClipboardItem, shows 'Copied!' then reverts after 2500ms", async (t: TestContext) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const browser = setupBrowser();

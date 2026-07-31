@@ -7,6 +7,7 @@ import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 import {
   createSlideEditorShellController,
   type SlideEditorShellController,
+  type SlideEditorToolbarOperation,
   type UseSlideEditorShellControllerArgs,
 } from "./use-slide-editor-shell-controller";
 
@@ -14,6 +15,10 @@ function createControllerHarness(
   args: UseSlideEditorShellControllerArgs,
 ): () => SlideEditorShellController {
   let toolbarError: string | null = null;
+  let toolbarOperation: SlideEditorToolbarOperation | null = null;
+  const toolbarOperationRef: {
+    current: SlideEditorToolbarOperation | null;
+  } = { current: null };
   let closeConfirmOpen = false;
   const setToolbarError = (next: SetStateAction<string | null>): void => {
     toolbarError = typeof next === "function" ? next(toolbarError) : next;
@@ -22,12 +27,30 @@ function createControllerHarness(
     closeConfirmOpen =
       typeof next === "function" ? next(closeConfirmOpen) : next;
   };
+  const setToolbarOperation = (
+    next: SetStateAction<SlideEditorToolbarOperation | null>,
+  ): void => {
+    toolbarOperation =
+      typeof next === "function" ? next(toolbarOperation) : next;
+  };
 
   return () =>
     createSlideEditorShellController({
       ...args,
       toolbarError,
       setToolbarError,
+      toolbarOperation,
+      setToolbarOperation,
+      claimToolbarOperation: (operation) => {
+        if (toolbarOperationRef.current) return false;
+        toolbarOperationRef.current = operation;
+        return true;
+      },
+      releaseToolbarOperation: (operation) => {
+        if (toolbarOperationRef.current !== operation) return false;
+        toolbarOperationRef.current = null;
+        return true;
+      },
       closeConfirmOpen,
       setCloseConfirmOpen,
     });
@@ -46,7 +69,13 @@ describe("useSlideEditorShellController", () => {
     });
 
     let controller = renderController();
-    await controller.handleExportPptx();
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await controller.handleExportPptx();
+    } finally {
+      console.error = originalConsoleError;
+    }
 
     controller = renderController();
     assert.equal(
@@ -78,6 +107,145 @@ describe("useSlideEditorShellController", () => {
     controller = renderController();
     assert.deepEqual(calls, ["save"]);
     assert.equal(controller.toolbarError, "Save blocked");
+  });
+
+  test("Save now surfaces action failures and announces only confirmed success", async () => {
+    const deck = buildMinimalDeck();
+    const announcements: string[] = [];
+    let saveCalls = 0;
+    const renderController = createControllerHarness({
+      deck,
+      hasUnsavedWork: false,
+      onSave: async () => {
+        saveCalls += 1;
+        return saveCalls === 1
+          ? { ok: false, error: "Save rejected" }
+          : { ok: true, data: undefined };
+      },
+      setStageAnnouncement: (message) => announcements.push(message),
+    });
+
+    let controller = renderController();
+    await controller.handleSaveNow();
+    controller = renderController();
+    assert.equal(controller.toolbarError, "Save rejected");
+    assert.deepEqual(announcements, []);
+
+    await controller.handleSaveNow();
+    controller = renderController();
+    assert.equal(controller.toolbarError, null);
+    assert.deepEqual(announcements, ["Slide deck saved."]);
+  });
+
+  test("one synchronous boundary suppresses duplicate and competing toolbar operations", async () => {
+    const deck = buildMinimalDeck();
+    let exportCalls = 0;
+    let regenerateCalls = 0;
+    let saveCalls = 0;
+    let resolveExport!: () => void;
+    const exportPromise = new Promise<void>((resolve) => {
+      resolveExport = resolve;
+    });
+    const renderController = createControllerHarness({
+      deck,
+      hasUnsavedWork: false,
+      onExportPptx: () => {
+        exportCalls += 1;
+        return exportPromise;
+      },
+      onRegenerate: async () => {
+        regenerateCalls += 1;
+        return { ok: true, data: undefined };
+      },
+      onSave: async () => {
+        saveCalls += 1;
+        return { ok: true, data: undefined };
+      },
+      setStageAnnouncement: () => undefined,
+    });
+
+    let controller = renderController();
+    const firstExport = controller.handleExportPptx();
+    const duplicateExport = controller.handleExportPptx();
+    const competingRegenerate = controller.handleRegenerate();
+    const competingSave = controller.handleSaveNow();
+
+    assert.equal(exportCalls, 1);
+    assert.equal(regenerateCalls, 0);
+    assert.equal(saveCalls, 0);
+    controller = renderController();
+    assert.equal(controller.toolbarActionPending, true);
+
+    resolveExport();
+    await Promise.all([
+      firstExport,
+      duplicateExport,
+      competingRegenerate,
+      competingSave,
+    ]);
+    controller = renderController();
+    assert.equal(controller.toolbarActionPending, false);
+
+    await controller.handleRegenerate();
+    assert.equal(regenerateCalls, 1);
+  });
+
+  test("Next navigation control flow escapes toolbar recovery and releases the operation lock", async () => {
+    const deck = buildMinimalDeck();
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;replace;/present;307;",
+    });
+    let successfulRoundtrips = 0;
+    const renderController = createControllerHarness({
+      deck,
+      hasUnsavedWork: false,
+      setStageAnnouncement: () => undefined,
+    });
+
+    let controller = renderController();
+    await assert.rejects(
+      () =>
+        controller.handleRoundtripAction(
+          () => Promise.reject(redirectError),
+          "fallback should not replace redirect control flow",
+        ),
+      (error: unknown) => error === redirectError,
+    );
+
+    controller = renderController();
+    assert.equal(controller.toolbarActionPending, false);
+    assert.equal(controller.toolbarError, null);
+    await controller.handleRoundtripAction(async () => {
+      successfulRoundtrips += 1;
+      return { ok: true, data: undefined };
+    }, "roundtrip failed");
+    assert.equal(successfulRoundtrips, 1);
+  });
+
+  test("announces roundtrip success only after the action confirms it", async () => {
+    const deck = buildMinimalDeck();
+    const announcements: string[] = [];
+    const renderController = createControllerHarness({
+      deck,
+      hasUnsavedWork: false,
+      setStageAnnouncement: (message) => announcements.push(message),
+    });
+
+    let controller = renderController();
+    await controller.handleRoundtripAction(
+      async () => ({ ok: false, error: "Share rejected" }),
+      "Share route failed. Please try again.",
+      "Share flow opened.",
+    );
+    assert.deepEqual(announcements, []);
+
+    controller = renderController();
+    await controller.handleRoundtripAction(
+      async () => ({ ok: true, data: undefined }),
+      "Share route failed. Please try again.",
+      "Share flow opened.",
+    );
+    assert.deepEqual(announcements, ["Share flow opened."]);
   });
 
   test("announces successful regeneration after clearing prior errors", async () => {

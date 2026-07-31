@@ -18,6 +18,7 @@
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { FileDown, Image as ImageIcon } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FOCUS_RING } from "@/components/ui/tokens";
@@ -84,6 +85,7 @@ export function DocumentExportButton({
   const [infogramWidth, setInfogramWidth] =
     useState<InfographicWidthPreset>("1080");
   const menuRef = useRef<HTMLDivElement>(null);
+  const exportInFlightRef = useRef(false);
 
   const entitlements = useUserEntitlements();
   const exportPolicy = resolveExportPolicy(entitlements);
@@ -175,12 +177,16 @@ export function DocumentExportButton({
     try {
       const fetched = await deckPort.fetchDeckJson(documentId);
       return fetched.ok ? fetched.deckJson : null;
-    } catch {
+    } catch (error) {
+      setStatus("idle");
+      unstable_rethrow(error);
       return null;
     }
   };
 
   const handleExportPDF = async () => {
+    if (exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
     setErrorMsg(null);
     setStatus("exporting");
     setIsOpen(false);
@@ -205,15 +211,21 @@ export function DocumentExportButton({
       trackExportSuccess("pdf", startedAt, blob);
       downloadBlob(blob, safeFilename("pdf"));
       setStatus("idle");
-    } catch {
+    } catch (error) {
+      setStatus("idle");
+      unstable_rethrow(error);
       trackExportFailure("pdf", startedAt, "exception");
       setErrorMsg("PDF export failed");
       setStatus("error");
+    } finally {
+      exportInFlightRef.current = false;
     }
   };
 
   const handleExportPPTX = async () => {
     if (!canPptx) return;
+    if (exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
     setErrorMsg(null);
     setStatus("exporting");
     setIsOpen(false);
@@ -241,14 +253,20 @@ export function DocumentExportButton({
       trackExportSuccess("pptx", startedAt, blob);
       downloadBlob(blob, safeFilename("pptx"));
       setStatus("idle");
-    } catch {
+    } catch (error) {
+      setStatus("idle");
+      unstable_rethrow(error);
       trackExportFailure("pptx", startedAt, "exception");
       setErrorMsg("PPTX export failed");
       setStatus("error");
+    } finally {
+      exportInFlightRef.current = false;
     }
   };
 
   const handleExportInfographic = async (format: "png" | "pdf") => {
+    if (exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
     const outputFormat = `infographic-${format}`;
     setErrorMsg(null);
     setStatus("exporting");
@@ -281,10 +299,14 @@ export function DocumentExportButton({
       trackExportSuccess(outputFormat, startedAt, blob);
       downloadBlob(blob, safeFilename(format));
       setStatus("idle");
-    } catch {
+    } catch (error) {
+      setStatus("idle");
+      unstable_rethrow(error);
       trackExportFailure(outputFormat, startedAt, "exception");
       setErrorMsg("Infographic export failed");
       setStatus("error");
+    } finally {
+      exportInFlightRef.current = false;
     }
   };
 
@@ -351,7 +373,7 @@ export function DocumentExportButton({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleExportPDF()}
+                  onClick={handleExportPDF}
                   className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}`}
                 >
                   <span>PDF</span>
@@ -363,7 +385,7 @@ export function DocumentExportButton({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleExportPPTX()}
+                  onClick={handleExportPPTX}
                   disabled={!canPptx}
                   aria-disabled={!canPptx}
                   className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm transition-colors ${canPptx ? `text-ds-text-primary hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}` : "cursor-not-allowed text-ds-text-muted"}`}
@@ -417,7 +439,7 @@ export function DocumentExportButton({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleExportInfographic("png")}
+                  onClick={() => handleExportInfographic("png")}
                   className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}`}
                 >
                   <span>Infographic PNG</span>
@@ -429,7 +451,7 @@ export function DocumentExportButton({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleExportInfographic("pdf")}
+                  onClick={() => handleExportInfographic("pdf")}
                   className={`tiq-touch-target flex w-full items-center justify-between rounded-ds-sm px-3 py-2 text-left text-sm text-ds-text-primary transition-colors hover:bg-ds-state-hover active:bg-ds-state-active ${FOCUS_RING}`}
                 >
                   <span>Infographic PDF</span>
@@ -452,15 +474,6 @@ export function DocumentExportButton({
                   </p>
                 )}
               </div>
-
-              {errorMsg ? (
-                <div
-                  role="alert"
-                  className="border-t border-ds-danger-border bg-ds-danger-surface px-3 py-2 text-xs text-ds-danger-text"
-                >
-                  {errorMsg}
-                </div>
-              ) : null}
             </div>
           </div>
         </>
@@ -472,7 +485,20 @@ export function DocumentExportButton({
         </ExportWorkflowMessage>
       ) : null}
       {status === "error" && !isOpen && errorMsg ? (
-        <ExportWorkflowMessage kind="error">{errorMsg}</ExportWorkflowMessage>
+        <div className="flex items-center gap-2">
+          <ExportWorkflowMessage kind="error">{errorMsg}</ExportWorkflowMessage>
+          <button
+            type="button"
+            aria-label="Dismiss export error"
+            onClick={() => {
+              setErrorMsg(null);
+              setStatus("idle");
+            }}
+            className={`mt-1 shrink-0 rounded-ds-sm px-1.5 py-0.5 text-xs font-semibold text-ds-danger-text hover:bg-ds-danger-surface ${FOCUS_RING}`}
+          >
+            Dismiss
+          </button>
+        </div>
       ) : null}
     </div>
   );

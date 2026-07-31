@@ -73,11 +73,13 @@ export interface SlideEditorTopToolbarProps {
   documentSourceIndex: unknown;
   onRegenerate: (() => Promise<ActionResult>) | undefined;
   saveStatus: SaveStatus;
+  toolbarActionPending: boolean;
   compactToolbarMenuOpen: boolean;
   compactToolbarMenuTriggerRef: RefObject<HTMLButtonElement | null>;
   compactToolbarMenuPanelRef: RefObject<HTMLDivElement | null>;
   compactToolbarMenuId: string;
   onSave: ((deck: Deck) => Promise<ActionResult>) | undefined;
+  handleSaveNow: () => Promise<void>;
   saveStatusLabel: string;
   diagnosticsCount: number;
   canUndo: boolean;
@@ -125,6 +127,7 @@ export interface SlideEditorTopToolbarProps {
   handleRoundtripAction: (
     action: () => Promise<ActionResult>,
     failureMessage: string,
+    successAnnouncement?: string,
   ) => Promise<void>;
   setExportMenuOpen: Dispatch<SetStateAction<boolean>>;
   handleExportRequest: (format: PresentationExportFormat) => void;
@@ -147,11 +150,13 @@ export function SlideEditorTopToolbar({
   documentSourceIndex,
   onRegenerate,
   saveStatus,
+  toolbarActionPending,
   compactToolbarMenuOpen,
   compactToolbarMenuTriggerRef,
   compactToolbarMenuPanelRef,
   compactToolbarMenuId,
   onSave,
+  handleSaveNow,
   saveStatusLabel,
   diagnosticsCount,
   canUndo,
@@ -216,7 +221,7 @@ export function SlideEditorTopToolbar({
   }
 
   return (
-    <DeckToolbar>
+    <DeckToolbar busy={toolbarActionPending}>
       <div aria-hidden="true" className="flex-1" />
       <DeckToolbarRow>
         <DeckToolbarGroup label="Deck setup">
@@ -311,7 +316,7 @@ export function SlideEditorTopToolbar({
             <DeckToolbarIconButton
               label="Regenerate deck from document"
               tooltip="Regenerate deck from document"
-              disabled={saveStatus === "saving"}
+              disabled={saveStatus === "saving" || toolbarActionPending}
               onClick={() => void handleRegenerate()}
             >
               <RefreshCw size={14} aria-hidden="true" />
@@ -392,9 +397,9 @@ export function SlideEditorTopToolbar({
                   type="button"
                   role="menuitem"
                   aria-label="Save now"
-                  disabled={saveStatus === "saving"}
+                  disabled={saveStatus === "saving" || toolbarActionPending}
                   onClick={() => {
-                    void onSave(deck);
+                    void handleSaveNow();
                     closeCompactToolbarMenuAndRestoreFocus();
                   }}
                   className={cx(
@@ -450,11 +455,12 @@ export function SlideEditorTopToolbar({
           {onPresent ? (
             <DeckToolbarIconButton
               label="Present slides"
-              disabled={saveStatus === "saving"}
+              disabled={saveStatus === "saving" || toolbarActionPending}
               onClick={() =>
                 void handleRoundtripAction(
                   onPresent,
                   "Presentation route failed. Please try again.",
+                  "Presentation opened.",
                 )
               }
             >
@@ -464,11 +470,12 @@ export function SlideEditorTopToolbar({
           {onShare ? (
             <DeckToolbarIconButton
               label="Share slides"
-              disabled={saveStatus === "saving"}
+              disabled={saveStatus === "saving" || toolbarActionPending}
               onClick={() =>
                 void handleRoundtripAction(
                   onShare,
                   "Share route failed. Please try again.",
+                  "Share flow opened.",
                 )
               }
             >
@@ -492,6 +499,7 @@ export function SlideEditorTopToolbar({
                   hasPopup="menu"
                   expanded={exportMenuOpen}
                   controls={exportMenuOpen ? exportMenuId : undefined}
+                  disabled={toolbarActionPending}
                   onClick={() => setExportMenuOpen((open) => !open)}
                   className="font-semibold"
                 >
@@ -512,11 +520,12 @@ export function SlideEditorTopToolbar({
                     type="button"
                     role="menuitem"
                     aria-label="Export PPTX"
+                    disabled={toolbarActionPending}
                     onClick={() => {
                       handleExportRequest("pptx");
                     }}
                     className={cx(
-                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:pointer-events-none disabled:opacity-40",
                       FOCUS_RING,
                     )}
                   >
@@ -528,11 +537,12 @@ export function SlideEditorTopToolbar({
                     type="button"
                     role="menuitem"
                     aria-label="Export PDF"
+                    disabled={toolbarActionPending}
                     onClick={() => {
                       handleExportRequest("pdf");
                     }}
                     className={cx(
-                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:pointer-events-none disabled:opacity-40",
                       FOCUS_RING,
                     )}
                   >
@@ -544,11 +554,12 @@ export function SlideEditorTopToolbar({
                     type="button"
                     role="menuitem"
                     aria-label="Export PNGs"
+                    disabled={toolbarActionPending}
                     onClick={() => {
                       handleExportRequest("png");
                     }}
                     className={cx(
-                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary",
+                      "rounded-ds-sm px-2 py-1.5 text-left text-xs font-medium text-ds-text-secondary transition-colors hover:bg-ds-state-hover hover:text-ds-text-primary disabled:pointer-events-none disabled:opacity-40",
                       FOCUS_RING,
                     )}
                   >

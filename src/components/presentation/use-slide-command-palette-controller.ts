@@ -44,9 +44,11 @@ export interface SlideCommandPaletteControllerArgs {
   sourceReviewCount: number;
   diagnosticsCount: number;
   saveStatus: SaveStatus;
+  toolbarActionPending: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onSave?: (deck: Deck) => Promise<ActionResult>;
+  handleSaveNow: () => Promise<void>;
   onUndo?: () => void;
   onRedo?: () => void;
   onPresent?: () => Promise<ActionResult>;
@@ -58,6 +60,7 @@ export interface SlideCommandPaletteControllerArgs {
   handleRoundtripAction: (
     action: (() => Promise<ActionResult>) | undefined,
     fallbackError: string,
+    successAnnouncement?: string,
   ) => Promise<void>;
   handleExportRequest: (format: PresentationExportFormat) => void;
   handleInsertSlide: () => void;
@@ -107,6 +110,7 @@ export function useSlideCommandPaletteController(
     sourceReviewCount,
     diagnosticsCount,
     saveStatus,
+    toolbarActionPending,
     canUndo,
     canRedo,
     onSave,
@@ -145,6 +149,7 @@ export function useSlideCommandPaletteController(
       canExportPdf: onExportPdf !== undefined,
       canExportPng: onExportPng !== undefined,
       saveStatus,
+      actionPending: toolbarActionPending,
     },
   });
 
@@ -266,6 +271,7 @@ export function useSlideCommandPaletteController(
   function handleRunCommandPaletteCommand(command: SlideCommandPaletteCommand) {
     if (command.disabledReason) return;
     args.setCommandPaletteOpen(false);
+    let announceImmediately = true;
     switch (command.intent.kind) {
       case "current-object":
         runCurrentObjectPaletteCommand(command.intent.commandId);
@@ -277,7 +283,10 @@ export function useSlideCommandPaletteController(
         args.setShortcutHelpOpen(true);
         break;
       case "save":
-        if (onSave) void onSave(deck);
+        if (onSave) {
+          void args.handleSaveNow();
+          announceImmediately = false;
+        }
         break;
       case "undo":
         if (canUndo && onUndo) onUndo();
@@ -290,7 +299,9 @@ export function useSlideCommandPaletteController(
           void args.handleRoundtripAction(
             onPresent,
             "Presentation route failed. Please try again.",
+            "Presentation opened.",
           );
+          announceImmediately = false;
         }
         break;
       case "share":
@@ -298,7 +309,9 @@ export function useSlideCommandPaletteController(
           void args.handleRoundtripAction(
             onShare,
             "Share route failed. Please try again.",
+            "Share flow opened.",
           );
+          announceImmediately = false;
         }
         break;
       case "deck-chrome":
@@ -315,7 +328,7 @@ export function useSlideCommandPaletteController(
         args.handleExportRequest(command.intent.format);
         break;
     }
-    args.setStageAnnouncement(command.liveMessage);
+    if (announceImmediately) args.setStageAnnouncement(command.liveMessage);
   }
 
   function handleSlideEditorKeyDown(event: SlideCommandPaletteKeyboardEvent) {

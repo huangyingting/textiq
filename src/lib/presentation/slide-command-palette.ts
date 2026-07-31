@@ -42,6 +42,7 @@ export type SlideCommandPaletteDisabledReason =
   | CurrentObjectCommandDisabledReason
   | "missing-capability"
   | "already-saving"
+  | "action-pending"
   | "requires-finished-editing";
 
 export interface SlideCommandPaletteCommand {
@@ -67,6 +68,7 @@ export interface SlideCommandPaletteCapabilities {
   canExportPdf?: boolean;
   canExportPng?: boolean;
   saveStatus?: SaveStatus;
+  actionPending?: boolean;
 }
 
 export interface SlideCommandPaletteContext {
@@ -145,11 +147,26 @@ function disabledReasonLabel(
       return "This command is not available in this editor session.";
     case "already-saving":
       return "Wait for the current save to finish.";
+    case "action-pending":
+      return "Wait for the current deck action to finish.";
     case "requires-finished-editing":
       return "Finish text or table editing first.";
     default:
       return "This command is not available right now.";
   }
+}
+
+function asyncDeckActionDisabledReason(
+  available: boolean,
+  capabilities: SlideCommandPaletteCapabilities,
+  blockWhileSaving: boolean,
+): SlideCommandPaletteDisabledReason | undefined {
+  if (!available) return "missing-capability";
+  if (capabilities.actionPending === true) return "action-pending";
+  if (blockWhileSaving && capabilities.saveStatus === "saving") {
+    return "already-saving";
+  }
+  return undefined;
 }
 
 function selectedObjectKind({
@@ -338,12 +355,11 @@ export function resolveSlideCommandPaletteCommands(
       shortcut: "Ctrl+S",
       keywords: ["persist", "autosave"],
       intent: { kind: "save" },
-      disabledReasonCode:
-        capabilities.canSave === true
-          ? capabilities.saveStatus === "saving"
-            ? "already-saving"
-            : undefined
-          : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canSave === true,
+        capabilities,
+        true,
+      ),
       liveMessage: "Slide deck saved.",
     }),
     fixedCommand({
@@ -377,12 +393,11 @@ export function resolveSlideCommandPaletteCommands(
       section: "Deck",
       keywords: ["play", "slideshow"],
       intent: { kind: "present" },
-      disabledReasonCode:
-        capabilities.canPresent === true
-          ? capabilities.saveStatus === "saving"
-            ? "already-saving"
-            : undefined
-          : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canPresent === true,
+        capabilities,
+        true,
+      ),
       liveMessage: "Presentation opened.",
     }),
     fixedCommand({
@@ -392,12 +407,11 @@ export function resolveSlideCommandPaletteCommands(
       section: "Deck",
       keywords: ["public", "link"],
       intent: { kind: "share" },
-      disabledReasonCode:
-        capabilities.canShare === true
-          ? capabilities.saveStatus === "saving"
-            ? "already-saving"
-            : undefined
-          : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canShare === true,
+        capabilities,
+        true,
+      ),
       liveMessage: "Share flow opened.",
     }),
     fixedCommand({
@@ -443,8 +457,11 @@ export function resolveSlideCommandPaletteCommands(
       section: "Export",
       keywords: ["download", "powerpoint"],
       intent: { kind: "export", format: "pptx" },
-      disabledReasonCode:
-        capabilities.canExportPptx === true ? undefined : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canExportPptx === true,
+        capabilities,
+        false,
+      ),
       liveMessage: "PPTX export started.",
     }),
     fixedCommand({
@@ -454,8 +471,11 @@ export function resolveSlideCommandPaletteCommands(
       section: "Export",
       keywords: ["download"],
       intent: { kind: "export", format: "pdf" },
-      disabledReasonCode:
-        capabilities.canExportPdf === true ? undefined : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canExportPdf === true,
+        capabilities,
+        false,
+      ),
       liveMessage: "PDF export started.",
     }),
     fixedCommand({
@@ -465,8 +485,11 @@ export function resolveSlideCommandPaletteCommands(
       section: "Export",
       keywords: ["download", "images"],
       intent: { kind: "export", format: "png" },
-      disabledReasonCode:
-        capabilities.canExportPng === true ? undefined : "missing-capability",
+      disabledReasonCode: asyncDeckActionDisabledReason(
+        capabilities.canExportPng === true,
+        capabilities,
+        false,
+      ),
       liveMessage: "PNG export started.",
     }),
     ...context.availablePanels.map((panel) =>

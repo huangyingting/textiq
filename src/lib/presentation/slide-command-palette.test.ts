@@ -192,4 +192,37 @@ describe("resolveSlideCommandPaletteCommands", () => {
       "already-saving",
     );
   });
+
+  test("disables every async deck action while a toolbar operation is pending", () => {
+    const pending = context({
+      capabilities: {
+        canSave: true,
+        canPresent: true,
+        canShare: true,
+        canExportPptx: true,
+        canExportPdf: true,
+        canExportPng: true,
+        actionPending: true,
+      },
+    });
+
+    for (const commandId of [
+      "deck.save",
+      "deck.present",
+      "deck.share",
+      "export.pptx",
+      "export.pdf",
+      "export.png",
+    ]) {
+      assert.equal(
+        command(pending, commandId).disabledReasonCode,
+        "action-pending",
+        `${commandId} should share the pending-operation guard`,
+      );
+      assert.equal(
+        command(pending, commandId).disabledReason,
+        "Wait for the current deck action to finish.",
+      );
+    }
+  });
 });

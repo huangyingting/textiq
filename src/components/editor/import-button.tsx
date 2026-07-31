@@ -1,6 +1,7 @@
 "use client";
 
 import { Upload, X } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { useCallback, useRef, useState, type Ref } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
@@ -90,48 +91,70 @@ export function ImportButton({
         surface: "toolbar",
       });
 
-      let result: ImportActionResult<{ markdown: string }>;
       try {
-        result = await importFile(file);
-      } catch {
-        result = { ok: false, error: networkError() };
-      }
+        let result: ImportActionResult<{ markdown: string }>;
+        try {
+          result = await importFile(file);
+        } catch (error) {
+          setState({ status: "idle" });
+          unstable_rethrow(error);
+          result = { ok: false, error: networkError() };
+        }
 
-      if (result.ok) {
+        if (!result.ok) {
+          emitProductTelemetry("product.import.failed", {
+            durationBucket: bucketDurationMs(performance.now() - startedAt),
+            failureReason: importFailureReason(result.error),
+            fileSizeBucket,
+            fileType,
+            status: result.error.status,
+            surface: "toolbar",
+          });
+          setState({ status: "error", message: result.error.message });
+          return;
+        }
+
+        try {
+          onImport(result.data.markdown);
+        } catch (error) {
+          setState({ status: "idle" });
+          unstable_rethrow(error);
+          emitProductTelemetry("product.import.failed", {
+            durationBucket: bucketDurationMs(performance.now() - startedAt),
+            failureReason: "apply_failed",
+            fileSizeBucket,
+            fileType,
+            surface: "toolbar",
+          });
+          setState({
+            status: "error",
+            message: "Could not apply imported content. Please try again.",
+          });
+          return;
+        }
+
         emitProductTelemetry("product.import.succeeded", {
           durationBucket: bucketDurationMs(performance.now() - startedAt),
           fileSizeBucket,
           fileType,
           surface: "toolbar",
         });
-        isUploadingRef.current = false;
         setState({ status: "idle" });
-        onImport(result.data.markdown);
-        return;
+      } finally {
+        isUploadingRef.current = false;
       }
-
-      emitProductTelemetry("product.import.failed", {
-        durationBucket: bucketDurationMs(performance.now() - startedAt),
-        failureReason: importFailureReason(result.error),
-        fileSizeBucket,
-        fileType,
-        status: result.error.status,
-        surface: "toolbar",
-      });
-      isUploadingRef.current = false;
-      setState({ status: "error", message: result.error.message });
     },
     [importFile, onImport],
   );
 
   const dismissError = () => setState({ status: "idle" });
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      void processFile(file);
-    }
     event.target.value = "";
+    if (file) await processFile(file);
   };
 
   return (

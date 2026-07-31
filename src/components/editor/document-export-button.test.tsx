@@ -410,6 +410,17 @@ describe("DocumentExportButton", () => {
       // The menu closed and the button returned to its idle, enabled state.
       assert.equal(findExportButton(renderer).props["aria-expanded"], false);
       assert.equal(findExportButton(renderer).props.disabled, false);
+
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Dismiss export error" })
+          .props.onClick();
+      });
+      assert.equal(
+        renderer.root.findAll((instance) => instance.props.role === "alert")
+          .length,
+        0,
+      );
     } finally {
       act(() => renderer.unmount());
       globalThis.fetch = originalFetch;
@@ -426,6 +437,7 @@ describe("DocumentExportButton", () => {
       themeDiagnostics: [];
     }>();
     const originalFetch = globalThis.fetch;
+    let fetchDeckJsonCalls = 0;
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ entitlements: getEntitlements("pro") }), {
         status: 200,
@@ -434,7 +446,10 @@ describe("DocumentExportButton", () => {
     const renderer = mountButton(
       makeEditor(),
       baseProps({
-        deckPort: stubDeckPort(() => deferred.promise),
+        deckPort: stubDeckPort(() => {
+          fetchDeckJsonCalls += 1;
+          return deferred.promise;
+        }),
       }),
     );
     try {
@@ -451,11 +466,13 @@ describe("DocumentExportButton", () => {
       let settled: Promise<void> | undefined;
       act(() => {
         settled = pptxItem.props.onClick() as Promise<void> | undefined;
+        void pptxItem.props.onClick();
       });
 
       const pendingButton = findExportButton(renderer);
       assert.equal(pendingButton.props.disabled, true);
       assert.equal(textOf(pendingButton), "Exporting…");
+      assert.equal(fetchDeckJsonCalls, 1);
       // Menu closed immediately when the export started.
       assert.equal(
         renderer.root.findAll((instance) => instance.props.role === "menu")
@@ -477,6 +494,63 @@ describe("DocumentExportButton", () => {
       assert.equal(idleButton.props.disabled, false);
     } finally {
       act(() => renderer.unmount());
+      restoreDom();
+    }
+  });
+
+  test("Next navigation control flow escapes deck-fetch recovery and releases the export boundary", async () => {
+    const restoreDom = installFakeDom();
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;replace;/login;307;",
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ entitlements: getEntitlements("pro") }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    let fetchDeckJsonCalls = 0;
+    const renderer = mountButton(
+      makeEditor(),
+      baseProps({
+        deckPort: stubDeckPort(async () => {
+          fetchDeckJsonCalls += 1;
+          if (fetchDeckJsonCalls === 1) throw redirectError;
+          return {
+            ok: false,
+            deckJson: null,
+            revisionToken: null,
+            error: "no deck",
+            failure: { code: "document_not_found", retryable: false },
+          };
+        }),
+      }),
+    );
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      globalThis.fetch = originalFetch;
+
+      act(() => findExportButton(renderer).props.onClick());
+      const firstPptxItem = findPptxMenuItem(renderer);
+      await assert.rejects(
+        () => firstPptxItem.props.onClick(),
+        (error: unknown) => error === redirectError,
+      );
+
+      act(() => findExportButton(renderer).props.onClick());
+      await act(async () => {
+        await findPptxMenuItem(renderer).props.onClick();
+      });
+      assert.equal(fetchDeckJsonCalls, 2);
+      assert.match(
+        textOf(renderer.root.findByProps({ role: "alert" })),
+        /requires a current Deck presentation/,
+      );
+    } finally {
+      act(() => renderer.unmount());
+      globalThis.fetch = originalFetch;
       restoreDom();
     }
   });

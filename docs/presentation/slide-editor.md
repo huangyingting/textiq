@@ -21,6 +21,7 @@ and pointer state rules, see
 | Route page          | [`src/app/app/documents/[id]/slides/page.tsx`](../../src/app/app/documents/%5Bid%5D/slides/page.tsx)                                             |
 | Route controller    | [`src/app/app/documents/[id]/slides/slide-editor-route-client.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.tsx)   |
 | Editor shell        | [`src/components/presentation/slide-editor.tsx`](../../src/components/presentation/slide-editor.tsx)                                             |
+| Shell actions       | [`src/components/presentation/use-slide-editor-shell-controller.tsx`](../../src/components/presentation/use-slide-editor-shell-controller.tsx)   |
 | Top toolbar         | [`src/components/presentation/slide-editor-top-toolbar.tsx`](../../src/components/presentation/slide-editor-top-toolbar.tsx)                     |
 | Deck toolbar        | [`src/components/presentation/toolbar/deck-toolbar.tsx`](../../src/components/presentation/toolbar/deck-toolbar.tsx)                             |
 | Read-only canvas    | [`src/components/presentation/slide-canvas.tsx`](../../src/components/presentation/slide-canvas.tsx)                                             |
@@ -180,7 +181,7 @@ Export controls keep minimal labels for disambiguation, while every other
 control is an icon-only button:
 
 ```text
-Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Present | Share | Export PPTX | Close
+Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Present | Share | Export | Close
 ```
 
 - **Theme** selects the active theme package: theme tokens, package templates,
@@ -196,7 +197,7 @@ Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Pre
 - **More** contains low-frequency editor/deck utilities such as keyboard
   shortcuts, manual save, and diagnostics fallback access.
 - **Present** and **Share** stay as icon-only deck-level route actions.
-- **Export PPTX** stays first-level as the primary deck output action.
+- **Export** stays first-level and opens the PPTX, PDF, and PNG output menu.
 - **Close** is the fixed rightmost full-screen editor exit.
 - **Insert actions** live in the current-object surfaces: slide templates come
   from the canvas popover/current-object commands, while text, image, shape,
@@ -222,6 +223,15 @@ Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Pre
 Toolbar popovers that execute commands expose menu semantics
 (`role="menu"`/`menuitem*`) and keyboard traversal so assistive technology gets
 the same command contract as pointer users.
+
+Manual save, regenerate, present/share, and all export formats share one
+synchronous toolbar-operation boundary. Duplicate or competing activation is
+ignored before React rerenders; the toolbar exposes busy state and disables
+every affected pointer and command-palette action until the operation settles.
+Manual save reports failed action results, and save/present/share success is
+announced only after the action result confirms it.
+Ordinary thrown failures render dismissible toolbar feedback, while Next.js
+redirect/not-found control flow escapes to the framework.
 
 Fine-grained selected-element formatting stays out of the top toolbar. The
 canvas popover and inspector continue to own text style, object-specific

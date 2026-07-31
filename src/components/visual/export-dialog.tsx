@@ -209,6 +209,7 @@ export function ExportDialog({
   >(undefined);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const exportInFlightRef = useRef(false);
 
   const effectiveWatermark = canRemoveWatermark
     ? (watermarkOverride ?? defaultWatermark)
@@ -220,15 +221,20 @@ export function ExportDialog({
 
   const previewUrl = useExportPreview(getSvgElement, exportOptions, format);
 
+  const requestClose = useCallback(() => {
+    if (exportInFlightRef.current) return;
+    onClose();
+  }, [onClose]);
+
   // Close on Escape
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, requestClose]);
 
   const setBackground = useCallback(
     (bg: BackgroundMode) =>
@@ -267,6 +273,8 @@ export function ExportDialog({
   );
 
   const handleExport = useCallback(async () => {
+    if (exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
     setError(null);
     setExporting(true);
     const startedAt = performance.now();
@@ -275,44 +283,41 @@ export function ExportDialog({
       outputFormat: format,
     });
 
-    // Entitlement guard
-    if (format === "svg" && !canSvg) {
-      emitProductTelemetry("product.export.failed", {
-        durationBucket: bucketDurationMs(performance.now() - startedAt),
-        exportKind: "visual",
-        failureReason: "entitlement",
-        outputFormat: format,
-      });
-      setError("SVG export requires Plus or Pro. Upgrade your plan.");
-      setExporting(false);
-      return;
-    }
-    if (format === "pptx" && !canPptx) {
-      emitProductTelemetry("product.export.failed", {
-        durationBucket: bucketDurationMs(performance.now() - startedAt),
-        exportKind: "visual",
-        failureReason: "entitlement",
-        outputFormat: format,
-      });
-      setError("PPTX export requires Plus or Pro. Upgrade your plan.");
-      setExporting(false);
-      return;
-    }
-
-    const svg = getSvgElement();
-    if (!svg) {
-      emitProductTelemetry("product.export.failed", {
-        durationBucket: bucketDurationMs(performance.now() - startedAt),
-        exportKind: "visual",
-        failureReason: "missing_visual",
-        outputFormat: format,
-      });
-      setError("No visual to export");
-      setExporting(false);
-      return;
-    }
-
     try {
+      // Entitlement guard
+      if (format === "svg" && !canSvg) {
+        emitProductTelemetry("product.export.failed", {
+          durationBucket: bucketDurationMs(performance.now() - startedAt),
+          exportKind: "visual",
+          failureReason: "entitlement",
+          outputFormat: format,
+        });
+        setError("SVG export requires Plus or Pro. Upgrade your plan.");
+        return;
+      }
+      if (format === "pptx" && !canPptx) {
+        emitProductTelemetry("product.export.failed", {
+          durationBucket: bucketDurationMs(performance.now() - startedAt),
+          exportKind: "visual",
+          failureReason: "entitlement",
+          outputFormat: format,
+        });
+        setError("PPTX export requires Plus or Pro. Upgrade your plan.");
+        return;
+      }
+
+      const svg = getSvgElement();
+      if (!svg) {
+        emitProductTelemetry("product.export.failed", {
+          durationBucket: bucketDurationMs(performance.now() - startedAt),
+          exportKind: "visual",
+          failureReason: "missing_visual",
+          outputFormat: format,
+        });
+        setError("No visual to export");
+        return;
+      }
+
       let blob: Blob | null = null;
       const ext = format;
 
@@ -375,6 +380,7 @@ export function ExportDialog({
       });
       setError(`${formatLabel(format)} export failed`);
     } finally {
+      exportInFlightRef.current = false;
       setExporting(false);
     }
   }, [
@@ -398,7 +404,11 @@ export function ExportDialog({
     <AnimatePresence>
       {open && (
         <>
-          <VisualExportDialogShell title="Export visual" onClose={onClose}>
+          <VisualExportDialogShell
+            title="Export visual"
+            onClose={requestClose}
+            busy={exporting}
+          >
             {/* Body */}
             <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto overscroll-contain sm:flex-row sm:overflow-hidden">
               {/* Preview panel */}
@@ -581,14 +591,32 @@ export function ExportDialog({
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-ds-border-subtle px-5 py-3">
               {error ? (
-                <p role="alert" className="text-xs text-ds-danger">
-                  {error}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p role="alert" className="text-xs text-ds-danger">
+                    {error}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="Dismiss export error"
+                    onClick={() => setError(null)}
+                    className={cx(
+                      "rounded-ds-sm px-1.5 py-0.5 text-xs font-semibold text-ds-danger hover:bg-ds-danger-surface",
+                      FOCUS_RING,
+                    )}
+                  >
+                    Dismiss
+                  </button>
+                </div>
               ) : (
                 <span />
               )}
               <div className="flex items-center gap-2">
-                <Button variant="plain" size="sm" onClick={onClose}>
+                <Button
+                  variant="plain"
+                  size="sm"
+                  disabled={exporting}
+                  onClick={requestClose}
+                >
                   Cancel
                 </Button>
                 <Button

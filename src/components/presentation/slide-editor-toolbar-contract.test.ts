@@ -42,10 +42,13 @@ const precisionGuidesControlsSource = readFileSync(
 
 describe("SlideEditor toolbar command ownership", () => {
   test("exposes the top command row as a named deck toolbar landmark", () => {
-    assert.equal(topToolbarSource.includes("<DeckToolbar>"), true);
+    assert.equal(
+      topToolbarSource.includes("<DeckToolbar busy={toolbarActionPending}>"),
+      true,
+    );
     assert.match(
       deckToolbarSource,
-      /<header[\s\S]*role="toolbar"[\s\S]*aria-label="Deck tools"/,
+      /<header[\s\S]*role="toolbar"[\s\S]*aria-label="Deck tools"[\s\S]*aria-busy={busy}/,
     );
   });
 
@@ -426,6 +429,22 @@ describe("SlideEditor toolbar command ownership", () => {
           "const saveResult = await onSave(deck);",
         ) &&
         shellControllerSource.includes("if (!saveResult.ok)"),
+      true,
+    );
+  });
+
+  test("routes Save now and all async deck commands through one pending operation boundary", () => {
+    assert.equal(
+      topToolbarSource.includes("void handleSaveNow();") &&
+        !topToolbarSource.includes("void onSave(deck);") &&
+        topToolbarSource.includes(
+          'disabled={saveStatus === "saving" || toolbarActionPending}',
+        ) &&
+        shellControllerSource.includes(
+          "if (!claimToolbarOperation(operation))",
+        ) &&
+        shellControllerSource.includes("unstable_rethrow(error)") &&
+        commandPaletteControllerSource.includes("void args.handleSaveNow();"),
       true,
     );
   });

@@ -11,10 +11,12 @@ import type { BackgroundMode } from "@/lib/visual/export-options";
 export function VisualExportDialogShell({
   title,
   onClose,
+  busy = false,
   children,
 }: {
   title: string;
   onClose: () => void;
+  busy?: boolean;
   children: ReactNode;
 }) {
   const popMotion = usePopMotion();
@@ -33,6 +35,7 @@ export function VisualExportDialogShell({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-busy={busy}
         {...popMotion}
         className="tiq-full-viewport fixed inset-0 z-modal flex items-center justify-center p-4"
       >
@@ -50,6 +53,7 @@ export function VisualExportDialogShell({
               aria-label="Close export dialog"
               variant="plain"
               size="sm"
+              disabled={busy}
               onClick={onClose}
             >
               <X className="h-4 w-4" aria-hidden="true" />
