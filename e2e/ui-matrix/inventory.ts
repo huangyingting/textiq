@@ -368,12 +368,16 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
     owners: ["auth", "public-render", "system"],
     coverage:
-      "Representative UI matrix checks for public auth pages, OAuth CTA state, and protected redirects.",
-    runMode: "opt-in-local",
-    prerequisites: ["running app", "optional GOOGLE_CLIENT_ID/SECRET"],
-    roles: ["anonymous"],
+      "Deterministic public auth controls, OAuth CTA state, protected deep-link redirects, generic invalid-credential feedback, and successful callback-preserving retry.",
+    runMode: "advisory-ci",
+    prerequisites: [
+      "E2E_PROFILE=1",
+      "npm run db:seed:e2e",
+      "optional GOOGLE_CLIENT_ID/SECRET",
+    ],
+    roles: ["anonymous", "seeded owner"],
     devices: ["Desktop Chrome"],
-    ciStatus: "explicit UI matrix browser run only",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/security/access-and-sharing.md",

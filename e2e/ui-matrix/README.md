@@ -47,8 +47,8 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 
 | Run mode     | Specs |
 | ------------ | ----- |
-| advisory-ci  | 18    |
-| opt-in-local | 10    |
+| advisory-ci  | 19    |
+| opt-in-local | 9     |
 | required-ci  | 1     |
 
 | Spec                                                            | Owners                              | Run mode     | Prerequisites / gates                                                                               | Roles                                          | Devices / viewports                            | CI status                                  |
@@ -75,7 +75,7 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 | `e2e/presentation/slides-smoke.spec.ts`                         | presentation                        | advisory-ci  | `E2E_PROFILE=1 for mutating coverage`, `optional E2E_USER_EMAIL/PASSWORD and E2E_SLIDES_DOC_URL`    | seeded owner, owner, anonymous fallback routes | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/presentation/slides-conflict-recovery.spec.ts`             | presentation, collaboration         | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner in two isolated sessions          | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/presentation/touch-controls.spec.ts`                       | presentation, accessibility         | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Chromium touch 390x844                         | advisory deterministic E2E workflow        |
-| `e2e/ui-matrix/auth-public-ui.spec.ts`                          | auth, public-render, system         | opt-in-local | `running app`, `optional GOOGLE_CLIENT_ID/SECRET`                                                   | anonymous                                      | Desktop Chrome                                 | explicit UI matrix browser run only        |
+| `e2e/ui-matrix/auth-public-ui.spec.ts`                          | auth, public-render, system         | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional GOOGLE_CLIENT_ID/SECRET`                          | anonymous, seeded owner                        | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/catalog.spec.ts`                                 | operations, presentation, ui        | advisory-ci  | `none beyond Playwright test runner`                                                                | not browser-flow-specific                      | Playwright runner only                         | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/document-editor-ui.spec.ts`                      | editor, documents                   | opt-in-local | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded viewer                    | Desktop Chrome                                 | explicit UI matrix browser run only        |
 | `e2e/ui-matrix/presentation-ui.spec.ts`                         | presentation, public-render         | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, anonymous public                 | Desktop Chrome                                 | advisory deterministic E2E workflow        |

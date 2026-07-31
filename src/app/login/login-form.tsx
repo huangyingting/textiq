@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState, type ChangeEventHandler } from "react";
 
 import {
   AuthField,
@@ -17,7 +17,33 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
     authenticate,
     undefined,
   );
+  const [email, setEmail] = useState("");
 
+  return renderLoginFormView({
+    callbackUrl,
+    errorMessage,
+    formAction,
+    isPending,
+    email,
+    onEmailChange: (event) => setEmail(event.currentTarget.value),
+  });
+}
+
+export function renderLoginFormView({
+  callbackUrl,
+  errorMessage,
+  formAction,
+  isPending,
+  email,
+  onEmailChange,
+}: {
+  callbackUrl: string;
+  errorMessage: string | undefined;
+  formAction: (payload: FormData) => void;
+  isPending: boolean;
+  email: string;
+  onEmailChange: ChangeEventHandler<HTMLInputElement>;
+}) {
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
@@ -29,6 +55,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         autoComplete="email"
         required
         placeholder="you@example.com"
+        value={email}
+        onChange={onEmailChange}
       />
 
       <AuthField

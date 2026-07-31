@@ -204,6 +204,33 @@ test("test subsystem plan keeps e2e specs opt-in", () => {
   });
 });
 
+test("test subsystem plan keeps the Postgres billing harness opt-in", () => {
+  const postgresHarness = "scripts/usage-ledger-postgres-integration.test.ts";
+  const plan = buildTestPlan({
+    subsystems: ["billing"],
+    testFiles: ["src/lib/billing/usage-ledger.test.ts", postgresHarness],
+  });
+
+  assert.deepEqual(plan.commands, [
+    {
+      label: "source unit tests",
+      command: "node",
+      args: [
+        "--import",
+        "tsx",
+        "--test",
+        "src/lib/billing/usage-ledger.test.ts",
+      ],
+    },
+  ]);
+  assert.deepEqual(plan.skippedOptIn, [
+    {
+      filePath: postgresHarness,
+      command: "npm run test:billing:postgres",
+    },
+  ]);
+});
+
 test("test subsystem plan routes the document table autosave regression to editor e2e", () => {
   const filePath = "e2e/editor/document-table-autosave.spec.ts";
   const plan = buildTestPlan({

@@ -68,6 +68,7 @@ const deterministicProfileSpecs = [
   "presentation/slides-layout-screenshots.spec.ts",
   "presentation/slides-smoke.spec.ts",
   "presentation/touch-controls.spec.ts",
+  "ui-matrix/auth-public-ui.spec.ts",
   "ui-matrix/catalog.spec.ts",
   "ui-matrix/presentation-ui.spec.ts",
   "ui-matrix/workspace-billing-brand-ui.spec.ts",

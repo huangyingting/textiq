@@ -42,6 +42,12 @@ const WEAK_TEST_TITLES = new Set([
 ]);
 const MIN_TEST_TITLE_LENGTH = 8;
 const TEST_SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs"]);
+const OPT_IN_TEST_COMMANDS = new Map([
+  [
+    "scripts/usage-ledger-postgres-integration.test.ts",
+    "npm run test:billing:postgres",
+  ],
+]);
 
 export const SUBSYSTEM_TEST_TARGETS = {
   ai: {
@@ -616,7 +622,14 @@ export function buildTestPlan({ subsystems, testFiles, includeE2e = false }) {
       return normalizedSubsystems.some((name) => owners.includes(name));
     })
     .sort();
-  const buckets = splitByRunner(selected);
+  const skippedOptIn = selected.flatMap((filePath) => {
+    const command = OPT_IN_TEST_COMMANDS.get(filePath);
+    return command ? [{ filePath, command }] : [];
+  });
+  const runnable = selected.filter(
+    (filePath) => !OPT_IN_TEST_COMMANDS.has(filePath),
+  );
+  const buckets = splitByRunner(runnable);
   const commands = [];
 
   if (buckets.source.length > 0) {
@@ -652,6 +665,7 @@ export function buildTestPlan({ subsystems, testFiles, includeE2e = false }) {
     buckets,
     commands,
     skippedE2e: includeE2e ? [] : buckets.e2e,
+    skippedOptIn,
   };
 }
 
@@ -769,6 +783,14 @@ export function main(argv = process.argv.slice(2), repoRoot = process.cwd()) {
   if (plan.skippedE2e.length > 0) {
     console.log(
       `[test:subsystem] ${plan.skippedE2e.length} e2e file(s) are mapped but skipped. Add --with-e2e to include them.`,
+    );
+  }
+  if (plan.skippedOptIn.length > 0) {
+    const commands = [
+      ...new Set(plan.skippedOptIn.map(({ command }) => command)),
+    ];
+    console.log(
+      `[test:subsystem] ${plan.skippedOptIn.length} opt-in integration file(s) are mapped but skipped. Run ${commands.join(" or ")} explicitly.`,
     );
   }
 
