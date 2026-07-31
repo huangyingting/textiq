@@ -173,6 +173,18 @@ async function main() {
   // 2. Workspace — owned by the owner, with editor + viewer memberships so
   //    editor can mutate documents while viewer remains read-only.
   // -------------------------------------------------------------------------
+  await prisma.workspace.deleteMany({
+    where: {
+      ownerId: { in: [owner.id, editor.id] },
+      name: {
+        in: [
+          F.workspaceLifecycle.initialName,
+          F.workspaceLifecycle.renamedName,
+        ],
+      },
+    },
+  });
+
   await prisma.workspace.upsert({
     where: { id: F.workspaceId },
     update: { ownerId: owner.id, name: "E2E Fixture Workspace" },
@@ -290,6 +302,53 @@ async function main() {
       workspaceId: F.workspaceId,
       favorite: false,
       tags: { connect: { id: dashboardTag.id } },
+    },
+  });
+
+  const metadataLifecycle = F.documentMetadataLifecycle;
+  await prisma.documentVersion.deleteMany({
+    where: { documentId: metadataLifecycle.id },
+  });
+  await upsertDocumentWithCanonicalContent(prisma, {
+    where: { id: metadataLifecycle.id },
+    contentSnapshot: markdownToLexicalStateObject(
+      metadataLifecycle.currentContent,
+    ),
+    update: {
+      title: metadataLifecycle.title,
+      ownerId: owner.id,
+      workspaceId: null,
+      deckJson: Prisma.DbNull,
+      deckRevisionToken: null,
+      isShared: false,
+      shareId: null,
+      slug: null,
+      deletedAt: null,
+      tags: { set: [] },
+    },
+    create: {
+      id: metadataLifecycle.id,
+      title: metadataLifecycle.title,
+      ownerId: owner.id,
+    },
+  });
+  await prisma.tag.deleteMany({
+    where: {
+      ownerId: owner.id,
+      name: metadataLifecycle.tagName,
+    },
+  });
+  await prisma.documentVersion.create({
+    data: {
+      id: metadataLifecycle.versionId,
+      documentId: metadataLifecycle.id,
+      contentJson: markdownToLexicalStateObject(
+        metadataLifecycle.restoredContent,
+      ) as unknown as Prisma.InputJsonValue,
+      deckJson: Prisma.DbNull,
+      label: metadataLifecycle.versionLabel,
+      createdById: owner.id,
+      createdAt: new Date("2026-04-01T12:00:00.000Z"),
     },
   });
 

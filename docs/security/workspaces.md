@@ -104,6 +104,11 @@ Current test evidence is real SQLite/Prisma only (success path, cap-exhausted
 second accept, downstream rollback, and composite-unique classification). We do
 not claim Postgres concurrency execution in this suite.
 
+The deterministic browser lifecycle exercises the rendered invite controls with
+accessible role/link labels, verifies revoked-link denial before accepting
+active viewer and editor invites, and confirms the persisted use count after a
+limited invite is consumed.
+
 ## Member Removal And Workspace Deletion
 
 Removing a member does not transfer their authored documents to the workspace
@@ -166,4 +171,5 @@ semantics.
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)
 - [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
+- [`e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/workspace-lifecycle-ui.spec.ts)
 - [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)

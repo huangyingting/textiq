@@ -120,6 +120,10 @@ Tags are owner-scoped. Names are normalized; slugs are deterministic and use a
 bounded retry loop on unique-constraint collisions. Adding/removing a tag
 returns the document's current sorted tag list.
 
+The deterministic browser lifecycle creates, removes, reloads, and reuses a tag
+through the rendered editor control. It also proves tags remain attached across
+a content-version restore and are absent after final removal and reload.
+
 Favorite toggles ignore soft-deleted documents. Trash is a soft delete that
 sets `deletedAt`; restore clears `deletedAt`. Dashboard-load maintenance purges
 documents older than the soft-delete retention window and also removes expired,
@@ -154,4 +158,5 @@ revoked, or exhausted invite links under the same lock policy.
 - [`src/lib/document/tags.test.ts`](../../src/lib/document/tags.test.ts)
 - [`src/lib/dashboard/view-model.test.ts`](../../src/lib/dashboard/view-model.test.ts)
 - [`e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts)
+- [`e2e/ui-matrix/document-metadata-history-ui.spec.ts`](../../e2e/ui-matrix/document-metadata-history-ui.spec.ts)
 - [`src/lib/onboarding/checklist.test.ts`](../../src/lib/onboarding/checklist.test.ts)

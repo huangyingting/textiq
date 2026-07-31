@@ -109,7 +109,11 @@ export function WorkspaceSettings({
         </div>
       )}
 
-      {error && <p className="text-xs text-ds-danger-text">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-ds-danger-text">
+          {error}
+        </p>
+      )}
 
       <div className="flex items-center justify-between gap-3 border-t border-ds-border-subtle pt-4">
         <div className="flex flex-col gap-0.5">

@@ -43,11 +43,11 @@ The 500-case catalog is generated from `e2e/ui-matrix/cases.ts`; this README sec
 
 ## Playwright spec inventory
 
-The repository currently has 25 Playwright specs under `e2e/`. Every `e2e/**/*.spec.ts` file must appear here, and stale rows fail the inventory check.
+The repository currently has 27 Playwright specs under `e2e/`. Every `e2e/**/*.spec.ts` file must appear here, and stale rows fail the inventory check.
 
 | Run mode    | Specs |
 | ----------- | ----- |
-| advisory-ci | 24    |
+| advisory-ci | 26    |
 | required-ci | 1     |
 
 | Spec                                                            | Owners                              | Run mode    | Prerequisites / gates                                                                               | Roles                                          | Devices / viewports                            | CI status                                  |
@@ -73,9 +73,11 @@ The repository currently has 25 Playwright specs under `e2e/`. Every `e2e/**/*.s
 | `e2e/ui-matrix/auth-public-ui.spec.ts`                          | auth, public-render, system         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional GOOGLE_CLIENT_ID/SECRET`                          | anonymous, seeded owner                        | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/catalog.spec.ts`                                 | operations, presentation, ui        | advisory-ci | `none beyond Playwright test runner`                                                                | not browser-flow-specific                      | Playwright runner only                         | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`         | documents                           | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
+| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`            | documents, editor, security         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner                                   | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/document-editor-ui.spec.ts`                      | editor, documents                   | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded viewer                    | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/presentation-ui.spec.ts`                         | presentation, public-render         | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, anonymous public                 | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/public-render-ui.spec.ts`                        | public-render, security             | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | anonymous public, request API                  | Desktop Chrome                                 | advisory deterministic E2E workflow        |
+| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`                  | workspace, security                 | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded editor, seeded viewer     | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`              | workspace, billing, brand           | advisory-ci | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional BILLING_UNLIMITED_CREDITS`                        | seeded owner, seeded Pro editor                | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 
 ## Mapped deterministic tests

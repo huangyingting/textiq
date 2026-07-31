@@ -52,6 +52,10 @@ export const E2E_PROFILE_FIXTURE = {
       "public/fonts/slides/source-sans-3/source-sans-3-latin-400-normal.woff2",
     fontFamily: "'source-sans-3-latin-400-normal', sans-serif",
   },
+  workspaceLifecycle: {
+    initialName: "E2E workspace lifecycle",
+    renamedName: "E2E workspace lifecycle renamed",
+  },
   workspaceId: "e2efixtureworkspace0000001",
   documentId: "e2efixturedocument0000001",
   deckRevisionToken: "e2e-deck-revision-canonical",
@@ -89,6 +93,15 @@ export const E2E_PROFILE_FIXTURE = {
       renamedTitle: "E2E dashboard lifecycle copy renamed",
       content: "E2E dashboard lifecycle duplicated content.",
     },
+  },
+  documentMetadataLifecycle: {
+    id: "e2efixturedocmetahistory001",
+    title: "E2E document metadata and history",
+    currentContent: "E2E current state before version restore.",
+    restoredContent: "E2E earlier state from version history.",
+    versionId: "e2efixtureversionhistory01",
+    versionLabel: "E2E restore baseline",
+    tagName: "E2E metadata lifecycle",
   },
 } as const;
 

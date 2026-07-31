@@ -492,6 +492,12 @@ sent as a durable write log.
 This invariant ensures that a conflict storm (e.g., two tabs rapidly saving)
 cannot create unbounded phantom version entries.
 
+The deterministic browser lifecycle restores a seeded earlier snapshot through
+the rendered confirmation controls, reloads to prove durability, then restores
+the forced `Before restore` checkpoint and reloads again. This verifies that
+history recovery remains reversible and that unrelated tag metadata survives
+content restoration.
+
 ### Conflict recovery UX
 
 When a conflict is detected:

@@ -122,6 +122,16 @@ test("test subsystem map classifies files by owning subsystem", () => {
     ["documents"],
     "dashboard lifecycle browser coverage must run with the documents subsystem",
   );
+  assert.deepEqual(
+    classifyTestFile("e2e/ui-matrix/workspace-lifecycle-ui.spec.ts"),
+    ["security", "workspace"],
+    "workspace lifecycle browser coverage must run with both owning subsystems",
+  );
+  assert.deepEqual(
+    classifyTestFile("e2e/ui-matrix/document-metadata-history-ui.spec.ts"),
+    ["documents", "editor", "security"],
+    "document metadata/history browser coverage must run with every owning subsystem",
+  );
   assert.ok(
     classifyTestFile("src/app/api/brand/route.test.ts").includes("brand"),
     "src/app/api/brand/** must classify under the brand subsystem",

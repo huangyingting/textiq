@@ -93,6 +93,7 @@ export function InviteLinkManager({
               }
             }}
             className={cx("h-10 flex-1 px-3", FIELD_CONTROL)}
+            aria-label="Invite member role"
           >
             <option value="EDITOR">Editor</option>
             <option value="VIEWER">Viewer</option>
@@ -172,6 +173,7 @@ export function InviteLinkManager({
                   <input
                     readOnly
                     value={getInviteUrl(link.token)}
+                    aria-label={`Invite link for ${roleLabels[link.role]}`}
                     onClick={(e) => {
                       e.currentTarget.select();
                       navigator.clipboard.writeText(e.currentTarget.value);

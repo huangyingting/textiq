@@ -348,6 +348,22 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/documents/README.md"],
   },
   {
+    spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
+    owners: ["documents", "editor", "security"],
+    coverage:
+      "Deterministic tag create/remove/reuse persistence plus cancellable version restore, pre-restore checkpoint recovery, metadata retention, and reload durability.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/ui-matrix/README.md",
+      "docs/documents/README.md",
+      "docs/editor/document-editor.md",
+    ],
+  },
+  {
     spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
     owners: ["editor", "documents"],
     coverage:
@@ -385,6 +401,18 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/public-render/README.md"],
+  },
+  {
+    spec: "e2e/ui-matrix/workspace-lifecycle-ui.spec.ts",
+    owners: ["workspace", "security"],
+    coverage:
+      "Deterministic owner/editor/viewer workspace creation, validation, rename, invite revocation/acceptance, member removal, ownership transfer, leave, and deletion lifecycle.",
+    runMode: "advisory-ci",
+    prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
+    roles: ["seeded owner", "seeded editor", "seeded viewer"],
+    devices: ["Desktop Chrome"],
+    ciStatus: "advisory deterministic E2E workflow",
+    sourceRefs: ["e2e/ui-matrix/README.md", "docs/security/workspaces.md"],
   },
   {
     spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",

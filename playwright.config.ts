@@ -73,9 +73,11 @@ const deterministicProfileSpecs = [
   "ui-matrix/auth-public-ui.spec.ts",
   "ui-matrix/catalog.spec.ts",
   "ui-matrix/dashboard-document-lifecycle-ui.spec.ts",
+  "ui-matrix/document-metadata-history-ui.spec.ts",
   "ui-matrix/document-editor-ui.spec.ts",
   "ui-matrix/presentation-ui.spec.ts",
   "ui-matrix/public-render-ui.spec.ts",
+  "ui-matrix/workspace-lifecycle-ui.spec.ts",
   "ui-matrix/workspace-billing-brand-ui.spec.ts",
 ];
 const explicitProfileSpecs = parseExplicitProfileSpecs(

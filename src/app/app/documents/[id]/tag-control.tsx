@@ -67,6 +67,7 @@ export function TagControl({
 
   return (
     <div
+      role="group"
       aria-label="Tags"
       className="flex flex-wrap items-center gap-1.5 text-ds-text-primary"
     >

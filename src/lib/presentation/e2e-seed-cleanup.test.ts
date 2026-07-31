@@ -7,7 +7,12 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient } from "../../generated/prisma/client";
+import { Prisma, PrismaClient } from "../../generated/prisma/client";
+import { markdownToLexicalStateObject } from "../content/from-markdown";
+import {
+  updateDocumentMetadata,
+  updateDocumentWithCanonicalContent,
+} from "../document/document-write-port";
 import type { PrismaTransactionRunner } from "../prisma-surface";
 import { E2E_PROFILE_FIXTURE } from "../../test/builders/e2e-profile";
 import {
@@ -395,6 +400,10 @@ test(
       where: { email: E2E_PROFILE_FIXTURE.owner.email },
       select: { id: true },
     });
+    const editor = await client.user.findUniqueOrThrow({
+      where: { email: E2E_PROFILE_FIXTURE.editor.email },
+      select: { id: true },
+    });
     const staleDocumentId = "e2eisolatedstalefixture0001";
     const staleOrphanDocumentId = "e2eisolatedstaleorphan0001";
     const hostileDocumentId = "e2eisolated/../../slide-assets-prefix-collision";
@@ -407,6 +416,9 @@ test(
     const hostileStorageKey = `${hostileDocumentId}/${"e".repeat(64)}.png`;
     const unrelatedStorageKey = `unrelated/${"d".repeat(64)}.png`;
     const staleDashboardLifecycleCopyId = "e2edashboardlifecyclestalecopy01";
+    const staleWorkspaceLifecycleId = "e2eworkspacelifecyclestale01";
+    const staleMetadataVersionId = "e2edocmetahistorystaleversion1";
+    const staleMetadataTagId = "e2edocmetahistorystaletag0001";
     const outsideSentinelPath = path.join(
       harnessRoot,
       "storage",
@@ -503,6 +515,42 @@ test(
         deletedAt: new Date(),
       },
     });
+    await client.workspace.create({
+      data: {
+        id: staleWorkspaceLifecycleId,
+        name: E2E_PROFILE_FIXTURE.workspaceLifecycle.renamedName,
+        ownerId: editor.id,
+      },
+    });
+    const metadataLifecycle = E2E_PROFILE_FIXTURE.documentMetadataLifecycle;
+    const staleMetadataContent = markdownToLexicalStateObject(
+      metadataLifecycle.restoredContent,
+    );
+    await updateDocumentWithCanonicalContent(client, {
+      where: { id: metadataLifecycle.id },
+      contentSnapshot: staleMetadataContent,
+    });
+    await client.tag.create({
+      data: {
+        id: staleMetadataTagId,
+        ownerId: owner.id,
+        name: metadataLifecycle.tagName,
+        slug: "e2e-metadata-lifecycle",
+      },
+    });
+    await updateDocumentMetadata(client, {
+      where: { id: metadataLifecycle.id },
+      data: { tags: { connect: { id: staleMetadataTagId } } },
+    });
+    await client.documentVersion.create({
+      data: {
+        id: staleMetadataVersionId,
+        documentId: metadataLifecycle.id,
+        contentJson: staleMetadataContent as unknown as Prisma.InputJsonValue,
+        label: "Stale browser checkpoint",
+        createdById: owner.id,
+      },
+    });
 
     await runFullSeed();
 
@@ -537,6 +585,42 @@ test(
       await client.document.count({
         where: { id: staleDashboardLifecycleCopyId },
       }),
+      0,
+    );
+    assert.equal(
+      await client.workspace.count({
+        where: { id: staleWorkspaceLifecycleId },
+      }),
+      0,
+    );
+    assert.deepEqual(
+      await client.document.findUniqueOrThrow({
+        where: { id: metadataLifecycle.id },
+        select: {
+          content: true,
+          tags: { select: { id: true } },
+        },
+      }),
+      {
+        content: metadataLifecycle.currentContent,
+        tags: [],
+      },
+    );
+    assert.deepEqual(
+      await client.documentVersion.findMany({
+        where: { documentId: metadataLifecycle.id },
+        orderBy: { id: "asc" },
+        select: { id: true, label: true },
+      }),
+      [
+        {
+          id: metadataLifecycle.versionId,
+          label: metadataLifecycle.versionLabel,
+        },
+      ],
+    );
+    assert.equal(
+      await client.tag.count({ where: { id: staleMetadataTagId } }),
       0,
     );
     assert.deepEqual(

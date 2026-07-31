@@ -22,6 +22,8 @@ app.
 | `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                           |
 | `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                 |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                       |
+| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag create/remove/reuse persistence and reversible version-history restore across reloads                                     |
+| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite, membership, ownership-transfer, leave, and delete lifecycle                       |
 | `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically |
 
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
@@ -131,9 +133,11 @@ that ambiguity for the critical-flow specs
 `e2e/ui-matrix/account-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/auth-public-ui.spec.ts`,
 `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`,
+`e2e/ui-matrix/document-metadata-history-ui.spec.ts`,
 `e2e/ui-matrix/document-editor-ui.spec.ts`,
 `e2e/ui-matrix/presentation-ui.spec.ts`,
 `e2e/ui-matrix/public-render-ui.spec.ts`, and
+`e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`,
 `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`): a fixed seed produces known
 users and isolated documents, and the specs run for real against them.
 
@@ -149,6 +153,11 @@ users and isolated documents, and the specs run for real against them.
   cancel deletion, delete, and verify protected-asset retirement;
 - resettable dashboard documents for search/filter coverage and an isolated
   duplicate/rename/trash/restore/permanent-delete lifecycle;
+- an isolated document with a known earlier `DocumentVersion` for tag
+  persistence and reversible restore coverage;
+- stale disposable workspace-lifecycle records are removed before each seed so
+  interrupted create/invite/transfer/delete browser runs cannot contaminate a
+  later profile run;
 - one **shared** document with intro text + an embedded visual, a persisted
   `deckJson` in `schemaVersion: 7` (`Deck`) whose first slide carries known
   text and an `ImageNode` backed by a slide `Asset` (bytes written under

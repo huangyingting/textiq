@@ -95,7 +95,11 @@ export function MembersList({
 
   return (
     <ul className={cx("flex flex-col gap-2 p-4", PANEL_CHROME)}>
-      {error && <li className="text-xs text-ds-danger-text">{error}</li>}
+      {error && (
+        <li role="alert" className="text-xs text-ds-danger-text">
+          {error}
+        </li>
+      )}
       {allMembers.map((member) => (
         <li
           key={member.id}
