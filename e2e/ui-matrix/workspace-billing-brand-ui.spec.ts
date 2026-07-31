@@ -74,7 +74,6 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
   test("billing upgrades, cancellation, downgrade, persistence, and mobile layout work end to end", async ({
     page,
   }) => {
-    const assertNoPageErrors = await expectNoPageErrors(page);
     await login(
       page,
       profileBillingLifecycleCredentials(),
@@ -90,8 +89,44 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     await expect(currentPlanSection).toContainText("You are on the Free plan.");
     await expect(planButton("Free")).toBeDisabled();
 
+    const billingPath = "/app/settings/billing";
+    const billingActionRoute = `**${billingPath}`;
+    let billingActionCount = 0;
+    await page.route(billingActionRoute, async (route) => {
+      const request = route.request();
+      const isBillingAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === billingPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isBillingAction) {
+        await route.continue();
+        return;
+      }
+      billingActionCount += 1;
+      if (billingActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
     await planButton("Plus").click();
+    await expect(
+      page.getByRole("alert").filter({
+        hasText: "Could not update billing. Please try again.",
+      }),
+    ).toBeVisible();
+    await expect(currentPlanSection).toContainText("You are on the Free plan.");
+    const upgradeResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === billingPath,
+    );
+    await planButton("Plus").dblclick();
+    expect((await upgradeResponse).ok()).toBe(true);
+    await expect.poll(() => billingActionCount).toBe(2);
+    await page.unroute(billingActionRoute);
     await expect(currentPlanSection).toContainText("You are on the Plus plan.");
+    const assertNoPageErrors = await expectNoPageErrors(page);
     await expect(
       page.getByRole("status").filter({ hasText: "Plan updated to plus." }),
     ).toBeVisible();
@@ -204,6 +239,14 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
       .click();
     await expect(removePaletteColors).toHaveCount(paletteSizeBefore);
 
+    let releaseFontUpload!: () => void;
+    const fontUploadGate = new Promise<void>((resolve) => {
+      releaseFontUpload = resolve;
+    });
+    await page.route("**/api/brand/font", async (route) => {
+      await fontUploadGate;
+      await route.continue();
+    });
     const fontUploadResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
@@ -212,7 +255,27 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     await page
       .locator('input[type="file"][accept*=".woff2"]')
       .setInputFiles(path.resolve(process.cwd(), fixture.fontPath));
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Uploading and validating font…",
+      }),
+    ).toBeVisible();
+    const createPanel = page
+      .getByRole("heading", { name: "New brand style" })
+      .locator("..")
+      .locator("..");
+    await expect(
+      createPanel.getByRole("button", { name: "Create brand" }),
+    ).toBeDisabled();
+    await expect(
+      createPanel.getByRole("button", { name: "Cancel", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      createPanel.getByRole("button", { name: "Close", exact: true }),
+    ).toBeDisabled();
+    releaseFontUpload();
     const uploaded = await fontUploadResponse;
+    await page.unroute("**/api/brand/font");
     expect(uploaded.status()).toBe(200);
     const uploadBody: unknown = await uploaded.json();
     expect(uploadBody).toEqual(
@@ -227,7 +290,43 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
       fixture.fontFamily,
     );
 
+    const brandsPath = "/app/brands";
+    const brandActionRoute = `**${brandsPath}`;
+    let brandActionCount = 0;
+    await page.route(brandActionRoute, async (route) => {
+      const request = route.request();
+      const isBrandAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === brandsPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isBrandAction) {
+        await route.continue();
+        return;
+      }
+      brandActionCount += 1;
+      if (brandActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
     await page.getByRole("button", { name: "Create brand" }).click();
+    await expect(
+      page.getByRole("alert").filter({
+        hasText:
+          "Couldn't save the brand. Please check your connection and try again.",
+      }),
+    ).toBeVisible();
+    await expect(nameInput).toHaveValue(fixture.initialName);
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === brandsPath,
+    );
+    await page.getByRole("button", { name: "Create brand" }).dblclick();
+    expect((await createResponse).ok()).toBe(true);
+    await expect.poll(() => brandActionCount).toBe(2);
+    await page.unroute(brandActionRoute);
     const createdCard = page.getByRole("article", {
       name: `Brand: ${fixture.initialName}`,
     });

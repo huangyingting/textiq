@@ -159,15 +159,17 @@ users and isolated documents, and the specs run for real against them.
 - an isolated account-mutation user whose display name, password hash, and
   session-revocation stamp reset before profile/password lifecycle coverage;
 - an isolated billing-mutation user whose plan, credits, period, and
-  subscription reset before upgrade/cancel/downgrade lifecycle coverage;
+  subscription reset before transport-recovery, duplicate-suppressed
+  upgrade/cancel/downgrade lifecycle coverage;
 - exact-email cleanup for the signup lifecycle account so an interrupted
   signup/onboarding/deletion run is self-healing on the next seed;
 - cleanup of default-titled template documents owned by the dedicated profile
   owner/editor so repeated creation specs do not contaminate list caps;
 - a workspace granting the viewer read-only access;
 - an empty, owner-partitioned Brand Studio state for the Pro editor so the
-  deterministic browser workflow can create, upload a font, reload, edit,
-  cancel deletion, delete, and verify protected-asset retirement;
+  deterministic browser workflow can lock save/dismissal during font upload,
+  recover a duplicate-suppressed failed create, reload, edit, cancel deletion,
+  delete, and verify protected-asset retirement;
 - resettable dashboard documents for search/filter coverage and an isolated
   duplicate/rename/trash/restore/permanent-delete lifecycle;
 - an isolated document with a known earlier `DocumentVersion` for tag

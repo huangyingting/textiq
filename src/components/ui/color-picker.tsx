@@ -155,6 +155,8 @@ export type ColorPickerProps = {
   icon?: ReactNode;
   /** Whether the trigger reads as active/selected (a value is applied). */
   active?: boolean;
+  /** Prevents opening or changing the picker while its owning form is busy. */
+  disabled?: boolean;
   /** Use shared toolbar button chrome for icon-only toolbar triggers. */
   triggerChrome?: "swatch" | "toolbar";
   /** Portal z-layer for the picker popover. Defaults from triggerChrome. */
@@ -200,6 +202,7 @@ export function ColorPicker({
   fallback = "#000000",
   icon,
   active,
+  disabled = false,
   triggerChrome = "swatch",
   layer,
   allowCustom = true,
@@ -209,6 +212,7 @@ export function ColorPicker({
   preserveSelection = false,
 }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
+  const pickerOpen = open && !disabled;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const firstPresetRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -250,7 +254,7 @@ export function ColorPicker({
   }, []);
 
   useLayoutEffect(() => {
-    if (!open) {
+    if (!pickerOpen) {
       return;
     }
     let animationFrame = 0;
@@ -271,7 +275,7 @@ export function ColorPicker({
       window.visualViewport?.removeEventListener("resize", reposition);
       window.visualViewport?.removeEventListener("scroll", reposition);
     };
-  }, [open, reposition]);
+  }, [pickerOpen, reposition]);
 
   // Move focus into the grid when the popover opens so it's keyboard-operable,
   // and restore focus to the trigger when it closes (focus management). Both are
@@ -279,16 +283,16 @@ export function ColorPicker({
   // host editor so the anchored selection + toolbar survive.
   useEffect(() => {
     if (preserveSelection) {
-      wasOpenRef.current = open;
+      wasOpenRef.current = pickerOpen;
       return;
     }
-    if (open) {
+    if (pickerOpen) {
       firstPresetRef.current?.focus();
     } else if (wasOpenRef.current) {
       triggerRef.current?.focus();
     }
-    wasOpenRef.current = open;
-  }, [open, preserveSelection]);
+    wasOpenRef.current = pickerOpen;
+  }, [pickerOpen, preserveSelection]);
 
   // Trap Tab within the popover so keyboard focus can't escape behind it while
   // it's open (skipped in `preserveSelection` mode, which keeps editor focus).
@@ -424,7 +428,8 @@ export function ColorPicker({
         aria-pressed={active}
         aria-label={ariaLabel}
         aria-haspopup="dialog"
-        aria-expanded={open}
+        aria-expanded={pickerOpen}
+        disabled={disabled}
         onMouseDown={
           preserveSelection ? (event) => event.preventDefault() : undefined
         }
@@ -462,7 +467,8 @@ export function ColorPicker({
           selected={active && !icon}
           aria-label={ariaLabel}
           aria-haspopup="dialog"
-          aria-expanded={open}
+          aria-expanded={pickerOpen}
+          disabled={disabled}
           onClick={() => setOpen((value) => !value)}
         >
           {icon ? (
@@ -478,7 +484,7 @@ export function ColorPicker({
         </Swatch>
       )}
       <FloatingSurface
-        open={open}
+        open={pickerOpen}
         onClose={() => setOpen(false)}
         position={coords}
         role="dialog"

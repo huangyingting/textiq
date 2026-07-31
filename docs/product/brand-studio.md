@@ -58,6 +58,14 @@ parallel. The view model exposes:
 Brand style access and font upload are separate features. A plan can allow saved
 brand styles without allowing custom font upload.
 
+Create/update, media upload, and delete interactions each use a synchronous
+operation boundary. Repeated activation cannot dispatch duplicate writes, a
+form cannot save or close while its selected logo/font is still uploading, and
+delete confirmation cannot close while deletion is unresolved. Typed action
+failures stay visible and retryable; rejected transports use safe generic
+feedback while preserving the draft or confirmation. Framework redirect and
+not-found control flow is rethrown rather than rendered as an ordinary error.
+
 ## Persistence And Asset Ownership
 
 Brand create/update happens inside a transaction:

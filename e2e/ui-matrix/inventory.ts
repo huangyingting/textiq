@@ -569,7 +569,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
     owners: ["workspace", "billing", "brand"],
     coverage:
-      "Deterministic dashboard checks; isolated billing upgrade, scheduled cancellation, further plan change, downgrade, reload persistence, live feedback, and mobile overflow coverage; plus free-plan Brand Studio gating and a Pro create/font-upload/reload/edit/delete lifecycle.",
+      "Deterministic dashboard checks; isolated billing transport-failure recovery with duplicate suppression, upgrade, scheduled cancellation, further plan change, downgrade, reload persistence, live feedback, and mobile overflow coverage; plus free-plan Brand Studio gating and a Pro upload-lock, create-failure recovery with duplicate suppression, font-upload/reload/edit/delete lifecycle.",
     runMode: "advisory-ci",
     prerequisites: [
       "E2E_PROFILE=1",

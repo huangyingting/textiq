@@ -129,11 +129,15 @@ const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
 ) as ModuleHooks;
 const actionsStubUrl = "brand-studio-actions:test";
+const navigationStubUrl = "brand-studio-navigation:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "./actions") {
       return { url: actionsStubUrl, shortCircuit: true };
+    }
+    if (specifier === "next/navigation") {
+      return { url: navigationStubUrl, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
@@ -153,6 +157,19 @@ registerHooks({
   deleteBrand: async (id) => {
     globalThis.__brandActionsTestState.deleteCalls.push(id);
     return globalThis.__brandActionsTestState.deleteImpl(id);
+  },
+};`,
+        shortCircuit: true,
+      };
+    }
+    if (url === navigationStubUrl) {
+      return {
+        format: "commonjs",
+        source: `module.exports = {
+  unstable_rethrow: (error) => {
+    if (error instanceof Error && error.message.startsWith("NEXT_REDIRECT")) {
+      throw error;
+    }
   },
 };`,
         shortCircuit: true,
@@ -223,6 +240,20 @@ function textOf(instance: ReactTestInstance): string {
 
 function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 function buildBrand(overrides: Partial<BrandStyle> = {}): BrandStyle {
@@ -495,6 +526,139 @@ describe("BrandStudio", () => {
       });
     });
 
+    test("a pending create has one synchronous write boundary and locks every dismissal path", async () => {
+      await withPortalDom(async () => {
+        const createAttempt = deferred<ActionResultLike>();
+        globalForActions.__brandActionsTestState.createImpl = () =>
+          createAttempt.promise;
+        const renderer = mount({ initialBrands: [], canFontUpload: false });
+        try {
+          act(() => {
+            findButtonByText(renderer.root, /New brand style/).props.onClick();
+          });
+          act(() => {
+            renderer.root
+              .findByProps({ id: "brand-name" })
+              .props.onChange({ target: { value: "One Write" } });
+          });
+          const submit = findButtonByText(renderer.root, /Create brand/);
+          const close = renderer.root.findByProps({ "aria-label": "Close" });
+          const cancel = findButtonByText(renderer.root, /^Cancel$/);
+
+          await act(async () => {
+            submit.props.onClick();
+            submit.props.onClick();
+            close.props.onClick();
+            cancel.props.onClick();
+            await waitForAsyncDrain();
+          });
+
+          assert.equal(
+            globalForActions.__brandActionsTestState.createCalls.length,
+            1,
+          );
+          assert.equal(
+            renderer.root.findByProps({ id: "brand-name" }).props.disabled,
+            true,
+          );
+          assert.equal(
+            renderer.root.findByProps({ "aria-label": "Close" }).props.disabled,
+            true,
+          );
+          assert.equal(
+            findButtonByText(renderer.root, /^Cancel$/).props.disabled,
+            true,
+          );
+          assert.match(textOf(renderer.root), /Creating brand…/);
+
+          await act(async () => {
+            createAttempt.resolve({
+              ok: true,
+              data: buildBrand({ id: "created-once", name: "One Write" }),
+            });
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+          renderer.root.findByProps({ "aria-label": "Brand: One Write" });
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("a rejected create transport shows safe dismissible feedback and retains the draft", async () => {
+      await withPortalDom(async () => {
+        globalForActions.__brandActionsTestState.createImpl = async () => {
+          throw new Error("database transport leaked details");
+        };
+        const renderer = mount({ initialBrands: [], canFontUpload: false });
+        try {
+          act(() => {
+            findButtonByText(renderer.root, /New brand style/).props.onClick();
+          });
+          act(() => {
+            renderer.root
+              .findByProps({ id: "brand-name" })
+              .props.onChange({ target: { value: "Retained Draft" } });
+          });
+          await act(async () => {
+            findButtonByText(renderer.root, /Create brand/).props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+
+          const alert = renderer.root.findByProps({ role: "alert" });
+          assert.match(textOf(alert), /Couldn't save the brand/);
+          assert.doesNotMatch(textOf(alert), /database transport/);
+          assert.equal(
+            renderer.root.findByProps({ id: "brand-name" }).props.value,
+            "Retained Draft",
+          );
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Dismiss brand error" })
+              .props.onClick();
+          });
+          assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("framework redirect control flow escapes create recovery", async () => {
+      await withPortalDom(async () => {
+        const redirectError = new Error("NEXT_REDIRECT:/login");
+        globalForActions.__brandActionsTestState.createImpl = async () => {
+          throw redirectError;
+        };
+        const renderer = mount({ initialBrands: [], canFontUpload: false });
+        try {
+          act(() => {
+            findButtonByText(renderer.root, /New brand style/).props.onClick();
+          });
+          act(() => {
+            renderer.root
+              .findByProps({ id: "brand-name" })
+              .props.onChange({ target: { value: "Redirect Draft" } });
+          });
+          await assert.rejects(
+            async () => {
+              await act(async () => {
+                await findButtonByText(
+                  renderer.root,
+                  /Create brand/,
+                ).props.onClick();
+              });
+            },
+            (error: unknown) => error === redirectError,
+          );
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
     test("the Create-brand submit button is disabled while empty and enabled once a name is entered", () => {
       withPortalDom(() => {
         const renderer = mount({ initialBrands: [], canFontUpload: false });
@@ -700,8 +864,20 @@ describe("BrandStudio", () => {
               .findByProps({ "aria-label": "Delete brand" })
               .props.onClick();
           });
-          act(() => {
-            findButtonByText(renderer.root, /Delete brand$/).props.onClick();
+          await act(async () => {
+            const confirm = findButtonByText(renderer.root, /Delete brand$/);
+            confirm.props.onClick();
+            confirm.props.onClick();
+            findButtonByText(renderer.root, /^Cancel$/).props.onClick();
+            renderer.root
+              .find(
+                (element) =>
+                  element.type === "div" &&
+                  element.props["aria-hidden"] === "true" &&
+                  typeof element.props.onClick === "function",
+              )
+              .props.onClick();
+            await waitForAsyncDrain();
           });
 
           // Pending: dialog reflects aria-busy, both actions disabled, and
@@ -723,6 +899,11 @@ describe("BrandStudio", () => {
               .disabled,
             true,
           );
+          assert.deepEqual(
+            globalForActions.__brandActionsTestState.deleteCalls,
+            ["b1"],
+          );
+          renderer.root.findByProps({ role: "dialog" });
 
           await act(async () => {
             resolveDelete({ ok: true, data: undefined });
@@ -760,9 +941,10 @@ describe("BrandStudio", () => {
               .props.onClick();
           });
           await act(async () => {
-            findButtonByText(renderer.root, /Delete brand$/).props.onClick();
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
+            await findButtonByText(
+              renderer.root,
+              /Delete brand$/,
+            ).props.onClick();
           });
 
           assert.deepEqual(
@@ -774,6 +956,84 @@ describe("BrandStudio", () => {
           assert.equal(
             findButtonByText(renderer.root, /Delete brand$/).props.disabled,
             false,
+          );
+          assert.match(
+            textOf(renderer.root.findByProps({ role: "alert" })),
+            /Not authorized/,
+          );
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Dismiss delete error" })
+              .props.onClick();
+          });
+          assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("a rejected delete transport shows safe feedback and keeps the confirmation retryable", async () => {
+      await withPortalDom(async () => {
+        globalForActions.__brandActionsTestState.deleteImpl = async () => {
+          throw new Error("database transport leaked details");
+        };
+        const renderer = mount({
+          initialBrands: [buildBrand({ id: "b1", name: "Acme" })],
+          canFontUpload: false,
+        });
+        try {
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Delete brand" })
+              .props.onClick();
+          });
+          await act(async () => {
+            findButtonByText(renderer.root, /Delete brand$/).props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+
+          const alert = renderer.root.findByProps({ role: "alert" });
+          assert.match(textOf(alert), /Couldn't delete the brand/);
+          assert.doesNotMatch(textOf(alert), /database transport/);
+          renderer.root.findByProps({ role: "dialog" });
+          assert.equal(
+            findButtonByText(renderer.root, /Delete brand$/).props.disabled,
+            false,
+          );
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("framework redirect control flow escapes delete recovery", async () => {
+      await withPortalDom(async () => {
+        const redirectError = new Error("NEXT_REDIRECT:/login");
+        globalForActions.__brandActionsTestState.deleteImpl = async () => {
+          throw redirectError;
+        };
+        const renderer = mount({
+          initialBrands: [buildBrand({ id: "b1", name: "Acme" })],
+          canFontUpload: false,
+        });
+        try {
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Delete brand" })
+              .props.onClick();
+          });
+          await assert.rejects(
+            async () => {
+              await act(async () => {
+                await findButtonByText(
+                  renderer.root,
+                  /Delete brand$/,
+                ).props.onClick();
+              });
+            },
+            (error: unknown) => error === redirectError,
           );
         } finally {
           act(() => renderer.unmount());
@@ -864,6 +1124,109 @@ describe("BrandStudio", () => {
           assert.doesNotMatch(
             textOf(renderer.root),
             /Uploading logo and extracting/,
+          );
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("a logo upload has one operation boundary and blocks save or close until its asset is ready", async () => {
+      await withPortalDom(async () => {
+        const uploadAttempt = deferred<{ url: string; assetId: string }>();
+        let uploadCalls = 0;
+        const uploadPort = buildUploadPort({
+          uploadLogo: () => {
+            uploadCalls += 1;
+            return uploadAttempt.promise;
+          },
+        });
+        globalForActions.__brandActionsTestState.createImpl = async (
+          payload,
+        ) => ({
+          ok: true,
+          data: buildBrand({
+            id: "created-with-logo",
+            name: (payload as { name: string }).name,
+            logoAssetId: (payload as { logoAssetId: string | null })
+              .logoAssetId,
+            logoAssetUrl: "https://textiq.test/api/brand-assets/logo-pending",
+          }),
+        });
+        const renderer = mount({
+          initialBrands: [],
+          canFontUpload: false,
+          uploadPort,
+        });
+        try {
+          act(() => {
+            findButtonByText(renderer.root, /New brand style/).props.onClick();
+          });
+          act(() => {
+            renderer.root
+              .findByProps({ id: "brand-name" })
+              .props.onChange({ target: { value: "Upload First" } });
+          });
+          const logoInput = findFileInput(renderer.root, "image");
+          const file = new File(["x"], "logo.png", { type: "image/png" });
+          await act(async () => {
+            logoInput.props.onChange({
+              target: { files: [file], value: "logo.png" },
+            });
+            logoInput.props.onChange({
+              target: { files: [file], value: "logo.png" },
+            });
+            await waitForAsyncDrain();
+          });
+
+          const create = findButtonByText(renderer.root, /Create brand/);
+          const cancel = findButtonByText(renderer.root, /^Cancel$/);
+          const close = renderer.root.findByProps({ "aria-label": "Close" });
+          await act(async () => {
+            create.props.onClick();
+            cancel.props.onClick();
+            close.props.onClick();
+            await waitForAsyncDrain();
+          });
+
+          assert.equal(uploadCalls, 1);
+          assert.equal(
+            globalForActions.__brandActionsTestState.createCalls.length,
+            0,
+          );
+          assert.equal(create.props.disabled, true);
+          assert.equal(cancel.props.disabled, true);
+          assert.equal(close.props.disabled, true);
+          assert.equal(
+            renderer.root.findByProps({ id: "brand-name" }).props.value,
+            "Upload First",
+          );
+
+          await act(async () => {
+            uploadAttempt.resolve({
+              url: "https://textiq.test/api/brand-assets/logo-pending",
+              assetId: "logo-asset-pending",
+            });
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+          assert.equal(
+            renderer.root.findByProps({ alt: "Brand logo preview" }).props.src,
+            "https://textiq.test/api/brand-assets/logo-pending",
+          );
+
+          await act(async () => {
+            findButtonByText(renderer.root, /Create brand/).props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+          assert.equal(
+            (
+              globalForActions.__brandActionsTestState.createCalls[0] as {
+                logoAssetId: string;
+              }
+            ).logoAssetId,
+            "logo-asset-pending",
           );
         } finally {
           act(() => renderer.unmount());

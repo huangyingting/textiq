@@ -585,6 +585,47 @@ test("ColorPicker covers swatch, reset, custom hex, slider, keyboard, and pointe
   assert.ok(changes.length >= 5);
 });
 
+test("ColorPicker closes and disables its trigger when an owning form becomes busy", () => {
+  installDom();
+  const tree = withFakeReact(
+    {
+      states: [
+        true,
+        { top: 12, left: 16 },
+        { source: "#336699", value: "#336699" },
+        "swatches",
+        210,
+      ],
+    },
+    () =>
+      resolveKnown(
+        ColorPicker({
+          color: "#336699",
+          onChange: () => undefined,
+          "aria-label": "Busy color",
+          disabled: true,
+          icon: "A",
+          triggerChrome: "toolbar",
+        }),
+      ),
+  );
+
+  const trigger = findAll(
+    tree,
+    (element) =>
+      element.type === "button" && element.props["aria-label"] === "Busy color",
+  )[0];
+  assert.equal(trigger.props.disabled, true);
+  assert.equal(trigger.props["aria-expanded"], false);
+  assert.equal(
+    findAll(
+      tree,
+      (element) => element.props["aria-label"] === "Busy color picker",
+    ).length,
+    0,
+  );
+});
+
 test("Floating surfaces, overlays, popovers, tooltips, and generation status handle open branches", () => {
   const dom = installDom();
   const closed: string[] = [];

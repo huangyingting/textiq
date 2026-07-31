@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -56,6 +57,13 @@ const DEFAULT_PALETTE = [
   "#ef4444",
   "#8b5cf6",
 ];
+
+const BRAND_SAVE_FAILURE_MESSAGE =
+  "Couldn't save the brand. Please check your connection and try again.";
+const BRAND_DELETE_FAILURE_MESSAGE =
+  "Couldn't delete the brand. Please check your connection and try again.";
+
+type BrandFormOperation = "save" | "logo-upload" | "font-upload";
 
 type BrandFormState = BrandInput & {
   id?: string;
@@ -165,22 +173,48 @@ function BrandForm({
   initial,
   onSave,
   onCancel,
+  onBusyChange,
   canFontUpload,
   uploadPort,
 }: {
   initial: BrandFormState;
   onSave: (saved: BrandStyle) => void;
   onCancel: () => void;
+  onBusyChange: (busy: boolean) => void;
   canFontUpload: boolean;
   uploadPort: BrandUploadPort;
 }) {
   const [form, setForm] = useState<BrandFormState>(initial);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingFont, setUploadingFont] = useState(false);
+  const [pendingOperation, setPendingOperation] =
+    useState<BrandFormOperation | null>(null);
+  const operationInFlightRef = useRef(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
+  const formBusy = pendingOperation !== null;
+  const uploadingLogo = pendingOperation === "logo-upload";
+  const uploadingFont = pendingOperation === "font-upload";
+
+  function beginOperation(operation: BrandFormOperation): boolean {
+    if (operationInFlightRef.current) return false;
+
+    operationInFlightRef.current = true;
+    setPendingOperation(operation);
+    setError(null);
+    onBusyChange(true);
+    return true;
+  }
+
+  function finishOperation() {
+    operationInFlightRef.current = false;
+    setPendingOperation(null);
+    onBusyChange(false);
+  }
+
+  function handleCancel() {
+    if (operationInFlightRef.current) return;
+    onCancel();
+  }
 
   function setPaletteColor(index: number, color: string) {
     setForm((f) => {
@@ -209,13 +243,15 @@ function BrandForm({
   }
 
   async function handleLogoUpload(file: File) {
+    if (operationInFlightRef.current) return;
+
     const v = validateLogoUpload(file.type, file.name, file.size);
     if (!v.ok) {
       setError(formatUploadError(v.error));
       return;
     }
-    setUploadingLogo(true);
-    setError(null);
+    if (!beginOperation("logo-upload")) return;
+
     try {
       const fd = new FormData();
       fd.append("logo", file);
@@ -246,21 +282,24 @@ function BrandForm({
         }
       };
       img.src = logoAssetUrl;
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       setError("Logo upload failed. Please try again.");
     } finally {
-      setUploadingLogo(false);
+      finishOperation();
     }
   }
 
   async function handleFontUpload(file: File) {
+    if (operationInFlightRef.current) return;
+
     const v = validateFontUpload(file.type, file.name, file.size);
     if (!v.ok) {
       setError(formatUploadError(v.error));
       return;
     }
-    setUploadingFont(true);
-    setError(null);
+    if (!beginOperation("font-upload")) return;
+
     try {
       const fd = new FormData();
       fd.append("font", file);
@@ -281,28 +320,31 @@ function BrandForm({
         fontAssetId: json.assetId,
         fontAssetUrl,
       }));
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       setError("Font upload failed. Please try again.");
     } finally {
-      setUploadingFont(false);
+      finishOperation();
     }
   }
 
-  function handleSubmit() {
-    setError(null);
-    startTransition(async () => {
-      const payload: BrandInput = {
-        name: form.name,
-        palette: form.palette,
-        background: form.background,
-        nodeFill: form.nodeFill,
-        nodeStroke: form.nodeStroke,
-        nodeText: form.nodeText,
-        edgeColor: form.edgeColor,
-        fontFamily: form.fontFamily,
-        logoAssetId: form.logoAssetId ?? null,
-        fontAssetId: form.fontAssetId ?? null,
-      };
+  async function handleSubmit() {
+    if (!form.name.trim() || !beginOperation("save")) return;
+
+    const payload: BrandInput = {
+      name: form.name,
+      palette: form.palette,
+      background: form.background,
+      nodeFill: form.nodeFill,
+      nodeStroke: form.nodeStroke,
+      nodeText: form.nodeText,
+      edgeColor: form.edgeColor,
+      fontFamily: form.fontFamily,
+      logoAssetId: form.logoAssetId ?? null,
+      fontAssetId: form.fontAssetId ?? null,
+    };
+
+    try {
       const result = form.id
         ? await updateBrand(form.id, payload)
         : await createBrand(payload);
@@ -312,13 +354,18 @@ function BrandForm({
         return;
       }
       onSave(result.data);
-    });
+    } catch (error) {
+      unstable_rethrow(error);
+      setError(BRAND_SAVE_FAILURE_MESSAGE);
+    } finally {
+      finishOperation();
+    }
   }
 
   const palette = form.palette ?? DEFAULT_PALETTE;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div aria-busy={formBusy} className="flex flex-col gap-5">
       {/* Name */}
       <div className="flex flex-col gap-1.5">
         <label
@@ -332,6 +379,7 @@ function BrandForm({
           type="text"
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          disabled={formBusy}
           placeholder="e.g. Acme Brand"
           maxLength={80}
           className={cx(
@@ -350,15 +398,18 @@ function BrandForm({
           {palette.map((color, i) => (
             <div key={i} className="relative flex flex-col items-center">
               <ColorPicker
+                key={`${i}:${formBusy}`}
                 color={color}
                 onChange={(c) => setPaletteColor(i, c)}
                 aria-label={`Palette color ${i + 1}`}
+                disabled={formBusy}
               />
               {palette.length > 1 && (
                 <button
                   type="button"
                   aria-label={`Remove palette color ${i + 1}`}
                   onClick={() => removePaletteColor(i)}
+                  disabled={formBusy}
                   className="tiq-touch-target absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--ds-surface-raised)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-danger,#dc2626)] hover:text-[var(--ds-text-on-accent,#ffffff)]"
                 >
                   <X className="h-2 w-2" />
@@ -371,6 +422,7 @@ function BrandForm({
               type="button"
               aria-label="Add palette color"
               onClick={addPaletteColor}
+              disabled={formBusy}
               className={cx(
                 "flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed border-[var(--ds-border-subtle)] text-[var(--ds-text-muted)] hover:border-[var(--ds-accent)] hover:text-[var(--ds-accent)]",
                 FOCUS_RING,
@@ -398,9 +450,11 @@ function BrandForm({
               {label}
             </span>
             <ColorPicker
+              key={`${field}:${formBusy}`}
               color={form[field] ?? DEFAULT_STYLE[field]}
               onChange={(c) => setForm((f) => ({ ...f, [field]: c }))}
               aria-label={label}
+              disabled={formBusy}
             />
           </div>
         ))}
@@ -416,6 +470,7 @@ function BrandForm({
           onChange={(e) =>
             setForm((f) => ({ ...f, fontFamily: e.target.value || null }))
           }
+          disabled={formBusy}
           className={cx(
             "h-9 rounded-[var(--ds-radius-md,10px)] border bg-[var(--ds-surface-base,#fff)] px-3 text-sm text-[var(--ds-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-focus-ring,#6366f1)]",
             "border-[var(--ds-border-subtle,rgba(0,0,0,0.08))]",
@@ -441,6 +496,7 @@ function BrandForm({
               type="file"
               accept=".ttf,.otf,.woff,.woff2"
               className="sr-only"
+              disabled={formBusy}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFontUpload(file);
@@ -458,7 +514,7 @@ function BrandForm({
                 )
               }
               onClick={() => fontInputRef.current?.click()}
-              disabled={uploadingFont}
+              disabled={formBusy}
             >
               Upload font (TTF/OTF/WOFF)
             </Button>
@@ -501,6 +557,7 @@ function BrandForm({
                     logoAssetId: null,
                   }))
                 }
+                disabled={formBusy}
                 className="tiq-touch-target absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ds-surface-raised)] border border-[var(--ds-border-subtle)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-danger,#dc2626)] hover:text-[var(--ds-text-on-accent,#ffffff)]"
               >
                 <X className="h-2.5 w-2.5" />
@@ -512,6 +569,7 @@ function BrandForm({
             type="file"
             accept="image/png,image/jpeg,image/svg+xml,image/webp"
             className="sr-only"
+            disabled={formBusy}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) handleLogoUpload(file);
@@ -529,7 +587,7 @@ function BrandForm({
               )
             }
             onClick={() => logoInputRef.current?.click()}
-            disabled={uploadingLogo}
+            disabled={formBusy}
           >
             {form.logoAssetUrl ? "Replace logo" : "Upload logo (PNG/SVG/JPG)"}
           </Button>
@@ -579,29 +637,47 @@ function BrandForm({
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-[var(--ds-danger,#dc2626)]">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 text-sm text-[var(--ds-danger,#dc2626)]"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            aria-label="Dismiss brand error"
+            onClick={() => setError(null)}
+            disabled={formBusy}
+            className="shrink-0 text-xs font-medium underline-offset-4 hover:underline disabled:opacity-50"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
 
       {/* Actions */}
       <div className="sticky bottom-0 -mx-1 flex justify-end gap-2 border-t border-[var(--ds-border-subtle)] bg-[var(--ds-surface-base,#fff)] px-1 py-3 pb-[calc(var(--ds-space-3)+var(--tiq-safe-area-bottom))]">
-        <Button variant="plain" onClick={onCancel} disabled={isPending}>
+        <Button variant="plain" onClick={handleCancel} disabled={formBusy}>
           Cancel
         </Button>
         <Button
           variant="solid"
           onClick={handleSubmit}
-          disabled={isPending || !form.name.trim()}
+          disabled={formBusy || !form.name.trim()}
           leadingIcon={
-            isPending ? (
+            pendingOperation === "save" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Check className="h-4 w-4" />
             )
           }
         >
-          {form.id ? "Save changes" : "Create brand"}
+          {pendingOperation === "save"
+            ? form.id
+              ? "Saving changes…"
+              : "Creating brand…"
+            : form.id
+              ? "Save changes"
+              : "Create brand"}
         </Button>
       </div>
     </div>
@@ -626,23 +702,66 @@ function BrandCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, startDelete] = useTransition();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [formBusy, setFormBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteInFlightRef = useRef(false);
+  const formBusyRef = useRef(false);
 
   useHydrateBrandFont(brand);
 
   const previewStyle = brandPreviewStyle(brand);
+  const cardBusy = deleting || formBusy;
 
-  function handleDelete() {
-    startDelete(async () => {
+  const handleFormBusyChange = useCallback((busy: boolean) => {
+    formBusyRef.current = busy;
+    setFormBusy(busy);
+  }, []);
+
+  function toggleExpanded() {
+    if (deleteInFlightRef.current || formBusyRef.current) return;
+    setExpanded((value) => !value);
+  }
+
+  function openDeleteConfirmation() {
+    if (deleteInFlightRef.current || formBusyRef.current) return;
+    setDeleteError(null);
+    setConfirmingDelete(true);
+  }
+
+  function closeDeleteConfirmation() {
+    if (deleteInFlightRef.current) return;
+    setDeleteError(null);
+    setConfirmingDelete(false);
+  }
+
+  async function handleDelete() {
+    if (deleteInFlightRef.current || formBusyRef.current) return;
+
+    deleteInFlightRef.current = true;
+    setDeleteError(null);
+    setDeleting(true);
+    try {
       const result = await deleteBrand(brand.id);
-      if (result.ok) onDeleted(brand.id);
-    });
+      if (!result.ok) {
+        setDeleteError(result.error);
+        return;
+      }
+      onDeleted(brand.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      setDeleteError(BRAND_DELETE_FAILURE_MESSAGE);
+    } finally {
+      deleteInFlightRef.current = false;
+      setDeleting(false);
+    }
   }
 
   return (
     <article
       className="flex flex-col overflow-hidden rounded-[var(--ds-radius-lg,14px)] border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-base,#fff)] shadow-[var(--ds-shadow-raised)]"
       aria-label={`Brand: ${brand.name}`}
+      aria-busy={cardBusy}
     >
       {/* Card header */}
       <div className="flex items-center gap-3 px-4 py-3">
@@ -688,7 +807,8 @@ function BrandCard({
             size="sm"
             variant="plain"
             aria-label="Edit brand"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={toggleExpanded}
+            disabled={cardBusy}
           >
             <Edit2 className="h-3.5 w-3.5" />
           </IconButton>
@@ -696,8 +816,8 @@ function BrandCard({
             size="sm"
             variant="plain"
             aria-label="Delete brand"
-            onClick={() => setConfirmingDelete(true)}
-            disabled={deleting}
+            onClick={openDeleteConfirmation}
+            disabled={cardBusy}
           >
             {deleting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -709,7 +829,8 @@ function BrandCard({
             size="sm"
             variant="plain"
             aria-label={expanded ? "Collapse" : "Expand"}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={toggleExpanded}
+            disabled={cardBusy}
           >
             {expanded ? (
               <ChevronUp className="h-3.5 w-3.5" />
@@ -722,7 +843,7 @@ function BrandCard({
 
       <Dialog
         open={confirmingDelete}
-        onClose={() => setConfirmingDelete(false)}
+        onClose={closeDeleteConfirmation}
         aria-labelledby={`delete-brand-${brand.id}`}
         aria-busy={deleting}
         className="max-w-sm"
@@ -736,7 +857,7 @@ function BrandCard({
             <Button
               size="sm"
               variant="plain"
-              onClick={() => setConfirmingDelete(false)}
+              onClick={closeDeleteConfirmation}
               disabled={deleting}
             >
               Cancel
@@ -755,6 +876,22 @@ function BrandCard({
               Delete brand
             </Button>
           </div>
+          {deleteError ? (
+            <div
+              role="alert"
+              className="mt-3 flex items-center justify-between gap-3 rounded-md bg-ds-danger-surface px-3 py-2 text-xs"
+            >
+              <span>{deleteError}</span>
+              <button
+                type="button"
+                aria-label="Dismiss delete error"
+                onClick={() => setDeleteError(null)}
+                className="shrink-0 font-medium underline-offset-4 hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
         </div>
       </Dialog>
 
@@ -794,7 +931,8 @@ function BrandCard({
               onUpdated(saved);
               setExpanded(false);
             }}
-            onCancel={() => setExpanded(false)}
+            onCancel={toggleExpanded}
+            onBusyChange={handleFormBusyChange}
             canFontUpload={canFontUpload}
             uploadPort={uploadPort}
           />
@@ -817,12 +955,28 @@ function CreateBrandPanel({
   uploadPort: BrandUploadPort;
 }) {
   const [open, setOpen] = useState(false);
+  const [formBusy, setFormBusy] = useState(false);
+  const formBusyRef = useRef(false);
+
+  const handleFormBusyChange = useCallback((busy: boolean) => {
+    formBusyRef.current = busy;
+    setFormBusy(busy);
+  }, []);
+
+  function closePanel() {
+    if (formBusyRef.current) return;
+    setOpen(false);
+  }
 
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (formBusyRef.current) return;
+          setOpen(true);
+        }}
+        disabled={formBusy}
         className={cx(
           "flex w-full items-center justify-center gap-2 rounded-[var(--ds-radius-lg,14px)] border-2 border-dashed border-[var(--ds-border-subtle)] py-6 text-sm font-medium text-[var(--ds-text-muted)] transition hover:border-[var(--ds-accent)] hover:text-[var(--ds-accent)]",
           FOCUS_RING,
@@ -835,7 +989,10 @@ function CreateBrandPanel({
   }
 
   return (
-    <div className="rounded-[var(--ds-radius-lg,14px)] border border-[var(--ds-accent,#6366f1)] bg-[var(--ds-surface-base,#fff)] p-4 shadow-[var(--ds-shadow-raised)]">
+    <div
+      aria-busy={formBusy}
+      className="rounded-[var(--ds-radius-lg,14px)] border border-[var(--ds-accent,#6366f1)] bg-[var(--ds-surface-base,#fff)] p-4 shadow-[var(--ds-shadow-raised)]"
+    >
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--ds-text-primary)]">
           New brand style
@@ -844,7 +1001,8 @@ function CreateBrandPanel({
           size="sm"
           variant="plain"
           aria-label="Close"
-          onClick={() => setOpen(false)}
+          onClick={closePanel}
+          disabled={formBusy}
         >
           <X className="h-3.5 w-3.5" />
         </IconButton>
@@ -855,7 +1013,8 @@ function CreateBrandPanel({
           onCreated(saved);
           setOpen(false);
         }}
-        onCancel={() => setOpen(false)}
+        onCancel={closePanel}
+        onBusyChange={handleFormBusyChange}
         canFontUpload={canFontUpload}
         uploadPort={uploadPort}
       />

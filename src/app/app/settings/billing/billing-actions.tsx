@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useRef, useState } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -70,7 +71,8 @@ export async function resolveBillingActionOutcome(
 ): Promise<BillingActionOutcome> {
   try {
     return mapBillingActionOutcome(await action());
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     return {
       message: BILLING_ACTION_FAILURE_MESSAGE,
       isError: true,
@@ -81,46 +83,77 @@ export async function resolveBillingActionOutcome(
 interface BillingActionsProps {
   currentPlan: Plan;
   cancelAtPeriodEnd: boolean;
+  actionPort?: BillingActionPort;
 }
+
+export type BillingActionPort = {
+  changePlan: (targetPlan: Plan) => Promise<ActionResult<BillingActionData>>;
+  cancelSubscription: () => Promise<ActionResult<BillingActionData>>;
+};
+
+const routeBillingActionPort: BillingActionPort = {
+  changePlan: changePlanAction,
+  cancelSubscription: cancelSubscriptionAction,
+};
+
+type PendingBillingAction =
+  { kind: "change"; targetPlan: Plan } | { kind: "cancel" };
 
 export function BillingActions({
   currentPlan,
   cancelAtPeriodEnd,
+  actionPort = routeBillingActionPort,
 }: BillingActionsProps) {
-  const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
+  const [pendingAction, setPendingAction] =
+    useState<PendingBillingAction | null>(null);
+  const actionInFlightRef = useRef(false);
+  const mutationBusy = pendingAction !== null;
 
-  function handleChange(targetPlan: string) {
+  async function runAction(
+    pending: PendingBillingAction,
+    action: () => Promise<ActionResult<BillingActionData>>,
+  ) {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
     setMessage(null);
     setIsError(false);
-    startTransition(async () => {
-      const outcome = await resolveBillingActionOutcome(() =>
-        changePlanAction(targetPlan),
-      );
+    setPendingAction(pending);
+    try {
+      const outcome = await resolveBillingActionOutcome(action);
       if (outcome.redirectUrl) {
         window.location.href = outcome.redirectUrl;
         return;
       }
       setMessage(outcome.message);
       setIsError(outcome.isError);
-    });
+    } finally {
+      actionInFlightRef.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  function handleChange(targetPlan: Plan) {
+    runAction({ kind: "change", targetPlan }, () =>
+      actionPort.changePlan(targetPlan),
+    );
   }
 
   function handleCancel() {
-    setMessage(null);
-    setIsError(false);
-    startTransition(async () => {
-      const outcome = await resolveBillingActionOutcome(
-        cancelSubscriptionAction,
-      );
-      setMessage(outcome.message);
-      setIsError(outcome.isError);
-    });
+    runAction({ kind: "cancel" }, actionPort.cancelSubscription);
   }
 
+  const pendingLabel =
+    pendingAction?.kind === "change"
+      ? `Changing to ${PLAN_CATALOG[pendingAction.targetPlan].displayName}…`
+      : pendingAction?.kind === "cancel"
+        ? "Cancelling subscription…"
+        : "Updating…";
+
   return (
-    <div className="flex flex-col gap-4">
+    <div aria-busy={mutationBusy} className="flex flex-col gap-4">
       {/* Plan buttons */}
       <div className="grid grid-cols-3 gap-3">
         <PlanCard
@@ -129,7 +162,7 @@ export function BillingActions({
           description={`${compactCreditPeriod(PLAN_CATALOG.free.entitlements.creditsPerPeriod, PLAN_CATALOG.free.entitlements.periodDays)} · PNG & PDF`}
           isCurrent={currentPlan === "free"}
           onSelect={() => handleChange("free")}
-          disabled={isPending || currentPlan === "free"}
+          disabled={mutationBusy || currentPlan === "free"}
         />
         <PlanCard
           label="Plus"
@@ -137,7 +170,7 @@ export function BillingActions({
           description={`${compactCreditPeriod(PLAN_CATALOG.plus.entitlements.creditsPerPeriod, PLAN_CATALOG.plus.entitlements.periodDays)} · SVG & PPTX · Brand Styles`}
           isCurrent={currentPlan === "plus"}
           onSelect={() => handleChange("plus")}
-          disabled={isPending || currentPlan === "plus"}
+          disabled={mutationBusy || currentPlan === "plus"}
         />
         <PlanCard
           label="Pro"
@@ -145,7 +178,7 @@ export function BillingActions({
           description={`${compactCreditPeriod(PLAN_CATALOG.pro.entitlements.creditsPerPeriod, PLAN_CATALOG.pro.entitlements.periodDays)} · SVG & PPTX · Custom fonts`}
           isCurrent={currentPlan === "pro"}
           onSelect={() => handleChange("pro")}
-          disabled={isPending || currentPlan === "pro"}
+          disabled={mutationBusy || currentPlan === "pro"}
         />
       </div>
 
@@ -154,7 +187,7 @@ export function BillingActions({
         <button
           type="button"
           onClick={handleCancel}
-          disabled={isPending}
+          disabled={mutationBusy}
           className="w-fit text-sm text-ds-text-secondary underline-offset-4 transition hover:text-ds-danger hover:underline disabled:opacity-50"
         >
           Cancel subscription
@@ -163,21 +196,29 @@ export function BillingActions({
 
       {/* Feedback */}
       {message && (
-        <p
+        <div
           role={isError ? "alert" : "status"}
-          className={`rounded-lg px-4 py-2 text-sm ${
+          className={`flex items-center justify-between gap-3 rounded-lg px-4 py-2 text-sm ${
             isError
               ? "bg-ds-danger-surface text-ds-danger-text"
               : "bg-ds-success-surface text-ds-success-text"
           }`}
         >
-          {message}
-        </p>
+          <span>{message}</span>
+          <button
+            type="button"
+            aria-label="Dismiss billing message"
+            onClick={() => setMessage(null)}
+            className="shrink-0 text-xs font-medium underline-offset-4 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
 
-      {isPending && (
+      {mutationBusy && (
         <p role="status" className="text-sm text-ds-text-secondary">
-          Updating…
+          {pendingLabel}
         </p>
       )}
     </div>

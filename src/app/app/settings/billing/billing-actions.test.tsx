@@ -24,6 +24,7 @@ import {
   compactCreditPeriod,
   mapBillingActionOutcome,
   resolveBillingActionOutcome,
+  type BillingActionPort,
 } from "./billing-actions";
 
 (
@@ -58,6 +59,29 @@ function textContentOf(node: ReactNode): string {
     return textContentOf(props.children);
   }
   return "";
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function buttonByText(renderer: ReturnType<typeof create>, pattern: RegExp) {
+  const button = renderer.root
+    .findAllByType("button")
+    .find((candidate) => pattern.test(textContentOf(candidate.props.children)));
+  assert.ok(button, `expected a button matching ${pattern}`);
+  return button;
+}
+
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("compactCreditPeriod", () => {
@@ -126,6 +150,20 @@ describe("resolveBillingActionOutcome", () => {
       isError: true,
     });
   });
+
+  test("rethrows Next redirect control flow instead of converting it to billing feedback", async () => {
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;push;/login;307;",
+    });
+
+    await assert.rejects(
+      () =>
+        resolveBillingActionOutcome(async () => {
+          throw redirectError;
+        }),
+      (error: unknown) => error === redirectError,
+    );
+  });
 });
 
 describe("BillingActions", () => {
@@ -186,5 +224,187 @@ describe("BillingActions", () => {
       <BillingActions currentPlan="free" cancelAtPeriodEnd={false} />,
     );
     assert.doesNotMatch(html, /Updating…/);
+  });
+
+  test("plan changes use one synchronous mutation boundary and disable every billing action while pending", async () => {
+    const attempt =
+      deferred<Awaited<ReturnType<BillingActionPort["changePlan"]>>>();
+    const changeCalls: string[] = [];
+    let cancelCalls = 0;
+    const actionPort: BillingActionPort = {
+      changePlan: (plan) => {
+        changeCalls.push(plan);
+        return attempt.promise;
+      },
+      cancelSubscription: async () => {
+        cancelCalls += 1;
+        return { ok: true, data: { message: "Cancelled." } };
+      },
+    };
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <BillingActions
+          currentPlan="plus"
+          cancelAtPeriodEnd={false}
+          actionPort={actionPort}
+        />,
+      );
+    });
+    try {
+      const pro = buttonByText(renderer, /^Pro/);
+      const cancel = buttonByText(renderer, /^Cancel subscription$/);
+      await act(async () => {
+        pro.props.onClick();
+        pro.props.onClick();
+        cancel.props.onClick();
+        await waitForAsyncDrain();
+      });
+
+      assert.deepEqual(changeCalls, ["pro"]);
+      assert.equal(cancelCalls, 0);
+      assert.equal(buttonByText(renderer, /^Free/).props.disabled, true);
+      assert.equal(buttonByText(renderer, /^Plus/).props.disabled, true);
+      assert.equal(buttonByText(renderer, /^Pro/).props.disabled, true);
+      assert.equal(
+        buttonByText(renderer, /^Cancel subscription$/).props.disabled,
+        true,
+      );
+      renderer.root.find(
+        (element) =>
+          element.type === "div" && element.props["aria-busy"] === true,
+      );
+      assert.match(
+        textContentOf(
+          renderer.root.findByProps({ role: "status" }).props.children,
+        ),
+        /Changing to Pro…/,
+      );
+
+      await act(async () => {
+        attempt.resolve({
+          ok: true,
+          data: { message: "Plan updated to pro." },
+        });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(
+        textContentOf(
+          renderer.root.findByProps({ role: "status" }).props.children,
+        ),
+        /Plan updated to pro/,
+      );
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Dismiss billing message" })
+          .props.onClick();
+      });
+      assert.throws(() => renderer.root.findByProps({ role: "status" }));
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("cancellation shares the mutation boundary and exposes contextual pending feedback", async () => {
+    const attempt =
+      deferred<Awaited<ReturnType<BillingActionPort["cancelSubscription"]>>>();
+    let cancelCalls = 0;
+    const changeCalls: string[] = [];
+    const actionPort: BillingActionPort = {
+      changePlan: async (plan) => {
+        changeCalls.push(plan);
+        return { ok: true, data: { message: "Changed." } };
+      },
+      cancelSubscription: () => {
+        cancelCalls += 1;
+        return attempt.promise;
+      },
+    };
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <BillingActions
+          currentPlan="pro"
+          cancelAtPeriodEnd={false}
+          actionPort={actionPort}
+        />,
+      );
+    });
+    try {
+      const cancel = buttonByText(renderer, /^Cancel subscription$/);
+      const plus = buttonByText(renderer, /^Plus/);
+      await act(async () => {
+        cancel.props.onClick();
+        cancel.props.onClick();
+        plus.props.onClick();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(cancelCalls, 1);
+      assert.deepEqual(changeCalls, []);
+      assert.match(
+        textContentOf(
+          renderer.root.findByProps({ role: "status" }).props.children,
+        ),
+        /Cancelling subscription…/,
+      );
+
+      await act(async () => {
+        attempt.resolve({ ok: false, error: "No active subscription." });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(
+        textContentOf(
+          renderer.root.findByProps({ role: "alert" }).props.children,
+        ),
+        /No active subscription/,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a rejected billing transport renders safe dismissible inline feedback", async () => {
+    const actionPort: BillingActionPort = {
+      changePlan: async () => {
+        throw new Error("provider transport leaked details");
+      },
+      cancelSubscription: async () => ({
+        ok: true,
+        data: { message: "Cancelled." },
+      }),
+    };
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <BillingActions
+          currentPlan="free"
+          cancelAtPeriodEnd={false}
+          actionPort={actionPort}
+        />,
+      );
+    });
+    try {
+      await act(async () => {
+        buttonByText(renderer, /^Plus/).props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      const alert = renderer.root.findByProps({ role: "alert" });
+      const alertText = textContentOf(alert.props.children);
+      assert.match(alertText, /Could not update billing/);
+      assert.doesNotMatch(alertText, /provider transport/);
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Dismiss billing message" })
+          .props.onClick();
+      });
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+    } finally {
+      act(() => renderer.unmount());
+    }
   });
 });

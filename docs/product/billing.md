@@ -111,7 +111,12 @@ server actions log them with an operation-specific scope and return the shared
 safe billing failure message. The client adapter also maps rejected action
 transports to that message, so network and server-action failures remain inline
 instead of escaping as unhandled UI errors. Success feedback uses a live status
-region; failure feedback uses an alert.
+region; failure feedback uses an alert. A synchronous client-side mutation
+boundary suppresses repeated plan-change or cancellation activation before
+React can render the pending state, disables every competing billing action,
+and reports the specific operation in progress. Framework redirect/not-found
+control flow is rethrown instead of being converted to ordinary billing
+feedback, and inline feedback can be dismissed before retrying.
 
 ## Subscription Writes
 
