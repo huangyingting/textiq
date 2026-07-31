@@ -47,8 +47,8 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 
 | Run mode     | Specs |
 | ------------ | ----- |
-| advisory-ci  | 17    |
-| opt-in-local | 11    |
+| advisory-ci  | 18    |
+| opt-in-local | 10    |
 | required-ci  | 1     |
 
 | Spec                                                            | Owners                              | Run mode     | Prerequisites / gates                                                                               | Roles                                          | Devices / viewports                            | CI status                                  |
@@ -80,7 +80,7 @@ The repository currently has 29 Playwright specs under `e2e/`. Every `e2e/**/*.s
 | `e2e/ui-matrix/document-editor-ui.spec.ts`                      | editor, documents                   | opt-in-local | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, seeded viewer                    | Desktop Chrome                                 | explicit UI matrix browser run only        |
 | `e2e/ui-matrix/presentation-ui.spec.ts`                         | presentation, public-render         | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | seeded owner, anonymous public                 | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/ui-matrix/public-render-ui.spec.ts`                        | public-render, security             | opt-in-local | `E2E_PROFILE=1`, `npm run db:seed:e2e`                                                              | anonymous public, request API                  | Desktop Chrome                                 | explicit UI matrix browser run only        |
-| `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`              | workspace, billing, brand           | opt-in-local | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional BILLING_UNLIMITED_CREDITS`                        | seeded owner                                   | Desktop Chrome                                 | explicit UI matrix browser run only        |
+| `e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`              | workspace, billing, brand           | advisory-ci  | `E2E_PROFILE=1`, `npm run db:seed:e2e`, `optional BILLING_UNLIMITED_CREDITS`                        | seeded owner, seeded Pro editor                | Desktop Chrome                                 | advisory deterministic E2E workflow        |
 | `e2e/workspace/workspace.spec.ts`                               | workspace, documents                | opt-in-local | `E2E_USER_EMAIL/PASSWORD`, `optional E2E_VIEWER_*`, `optional E2E_VIEWER_DOC_URL`                   | owner, viewer                                  | Desktop Chrome                                 | opt-in local/staging only                  |
 
 ## Mapped deterministic tests

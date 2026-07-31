@@ -31,16 +31,26 @@ export const E2E_PROFILE_FIXTURE = {
     email: process.env.E2E_USER_EMAIL ?? "e2e-owner@textiq.test",
     password: process.env.E2E_USER_PASSWORD ?? "e2e-owner-pw-2026",
     name: "E2E Owner",
+    plan: "free",
   },
   editor: {
     email: "e2e-editor@textiq.test",
     password: "e2e-editor-pw-2026",
     name: "E2E Editor",
+    plan: "pro",
   },
   viewer: {
     email: process.env.E2E_VIEWER_EMAIL ?? "e2e-viewer@textiq.test",
     password: process.env.E2E_VIEWER_PASSWORD ?? "e2e-viewer-pw-2026",
     name: "E2E Viewer",
+    plan: "free",
+  },
+  brandWorkflow: {
+    initialName: "E2E Pro Brand Workflow",
+    updatedName: "E2E Pro Brand Workflow Updated",
+    fontPath:
+      "public/fonts/slides/source-sans-3/source-sans-3-latin-400-normal.woff2",
+    fontFamily: "'source-sans-3-latin-400-normal', sans-serif",
   },
   workspaceId: "e2efixtureworkspace0000001",
   documentId: "e2efixturedocument0000001",

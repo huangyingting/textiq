@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document describes saved brand styles, brand media assets, brand entitlement gates, and applying brands to visuals. Billing plans and credits live in billing.md."
 ---
 
@@ -123,3 +123,4 @@ changed by applying a brand.
 - [`src/lib/brand-studio/view-model.test.ts`](../../src/lib/brand-studio/view-model.test.ts)
 - [`src/lib/billing/brand-entitlements.test.ts`](../../src/lib/billing/brand-entitlements.test.ts)
 - [`e2e/product/billing-brand.spec.ts`](../../e2e/product/billing-brand.spec.ts)
+- [`e2e/ui-matrix/workspace-billing-brand-ui.spec.ts`](../../e2e/ui-matrix/workspace-billing-brand-ui.spec.ts)

@@ -70,6 +70,7 @@ const deterministicProfileSpecs = [
   "presentation/touch-controls.spec.ts",
   "ui-matrix/catalog.spec.ts",
   "ui-matrix/presentation-ui.spec.ts",
+  "ui-matrix/workspace-billing-brand-ui.spec.ts",
 ];
 const explicitProfileSpecs = parseExplicitProfileSpecs(
   process.env.E2E_PROFILE_EXPLICIT_SPECS,

@@ -99,12 +99,18 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: F.owner.email },
-    update: { passwordHash: ownerHash, name: F.owner.name, emailVerified: now },
+    update: {
+      passwordHash: ownerHash,
+      name: F.owner.name,
+      emailVerified: now,
+      plan: F.owner.plan,
+    },
     create: {
       email: F.owner.email,
       name: F.owner.name,
       passwordHash: ownerHash,
       emailVerified: now,
+      plan: F.owner.plan,
     },
   });
 
@@ -114,12 +120,14 @@ async function main() {
       passwordHash: viewerHash,
       name: F.viewer.name,
       emailVerified: now,
+      plan: F.viewer.plan,
     },
     create: {
       email: F.viewer.email,
       name: F.viewer.name,
       passwordHash: viewerHash,
       emailVerified: now,
+      plan: F.viewer.plan,
     },
   });
 
@@ -129,13 +137,28 @@ async function main() {
       passwordHash: editorHash,
       name: F.editor.name,
       emailVerified: now,
+      plan: F.editor.plan,
     },
     create: {
       email: F.editor.email,
       name: F.editor.name,
       passwordHash: editorHash,
       emailVerified: now,
+      plan: F.editor.plan,
     },
+  });
+
+  await prisma.brand.deleteMany({ where: { ownerId: editor.id } });
+  await prisma.asset.deleteMany({
+    where: {
+      storageKey: { startsWith: `${editor.id}/` },
+      documentId: null,
+      workspaceId: null,
+    },
+  });
+  await fs.rm(path.join(process.cwd(), "storage", "brand-assets", editor.id), {
+    force: true,
+    recursive: true,
   });
 
   await prisma.themePackageSnapshot.deleteMany({

@@ -434,16 +434,16 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
     owners: ["workspace", "billing", "brand"],
     coverage:
-      "Representative UI matrix checks for dashboard search, billing credits, and Brand Studio gate.",
-    runMode: "opt-in-local",
+      "Deterministic dashboard and billing checks plus free-plan Brand Studio gating and a Pro create/font-upload/reload/edit/delete lifecycle.",
+    runMode: "advisory-ci",
     prerequisites: [
       "E2E_PROFILE=1",
       "npm run db:seed:e2e",
       "optional BILLING_UNLIMITED_CREDITS",
     ],
-    roles: ["seeded owner"],
+    roles: ["seeded owner", "seeded Pro editor"],
     devices: ["Desktop Chrome"],
-    ciStatus: "explicit UI matrix browser run only",
+    ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/product/billing.md",

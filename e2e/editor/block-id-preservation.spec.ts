@@ -11,6 +11,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { credentialGatedRequest } from "../helpers/credential-gate";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -61,7 +62,9 @@ function isExportDocument(value: unknown): value is ExportDocumentSnapshot {
 async function loadOwnerDocuments(
   page: Page,
 ): Promise<ExportDocumentSnapshot[]> {
-  const response = await page.request.get("/api/account/export");
+  const response = await credentialGatedRequest(page).get(
+    "/api/account/export",
+  );
   expect(response.ok()).toBe(true);
   const payload: unknown = await response.json();
   expect(isRecord(payload) && Array.isArray(payload.documents)).toBe(true);

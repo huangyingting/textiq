@@ -226,6 +226,13 @@ test("shared builder entry point re-exports stable fixture helpers", () => {
     "asset-fixture",
   );
   assert.equal(builders.E2E_PROFILE_FIXTURE.viewer.name, "E2E Viewer");
+  assert.equal(builders.E2E_PROFILE_FIXTURE.owner.plan, "free");
+  assert.equal(builders.E2E_PROFILE_FIXTURE.editor.plan, "pro");
+  assert.equal(builders.E2E_PROFILE_FIXTURE.viewer.plan, "free");
+  assert.equal(
+    builders.E2E_PROFILE_FIXTURE.brandWorkflow.fontFamily,
+    "'source-sans-3-latin-400-normal', sans-serif",
+  );
   assert.equal(builders.e2eProfileAssetChecksum(), e2eProfileAssetChecksum());
   assert.equal(
     e2eProfile.fixtureAssetChecksum(e2eProfile.fixturePngBuffer()),
