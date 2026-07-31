@@ -6,7 +6,10 @@ import { CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE } from "@/lib/presentation/co
 import type { Deck } from "@/lib/presentation/schema";
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
 import { createReactRenderHarness } from "@/test/react-render-harness";
-import { ConflictRecoveryDialog } from "./conflict-recovery-dialog";
+import {
+  ConflictRecoveryDialog,
+  resolveConflictOperation,
+} from "./conflict-recovery-dialog";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -120,6 +123,12 @@ describe("ConflictRecoveryDialog", () => {
       flattenText(tree),
       /Couldn't save your version\. Check your connection and retry\./,
     );
+    (
+      findButtonByLabel(tree, "Dismiss")?.props.onClick as
+        (() => void) | undefined
+    )?.();
+    tree = renderDialog(hookRenderer);
+    assert.doesNotMatch(flattenText(tree), /Couldn't save your version/);
   });
 
   test("surfaces use-theirs reload failure state", async () => {
@@ -144,6 +153,83 @@ describe("ConflictRecoveryDialog", () => {
     assert.match(
       flattenText(tree),
       new RegExp(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE),
+    );
+  });
+
+  test("one synchronous operation boundary suppresses duplicate and competing resolution actions", async () => {
+    const hookRenderer = createHookRenderer();
+    let keepMineCalls = 0;
+    let useTheirsCalls = 0;
+    let dismissCalls = 0;
+    let resolveKeepMine!: () => void;
+    const onKeepMine = () => {
+      keepMineCalls += 1;
+      return new Promise<void>((resolve) => {
+        resolveKeepMine = resolve;
+      });
+    };
+    const onUseTheirs = async () => {
+      useTheirsCalls += 1;
+    };
+    const onDismiss = () => {
+      dismissCalls += 1;
+    };
+
+    let tree = renderDialog(hookRenderer, {
+      onKeepMine,
+      onUseTheirs,
+      onDismiss,
+    });
+    const keepMine = findButtonByLabel(tree, "Keep my version");
+    const useTheirs = findButtonByLabel(tree, "Use server version");
+    const clickKeepMine = keepMine?.props.onClick as (() => void) | undefined;
+    const clickUseTheirs = useTheirs?.props.onClick as (() => void) | undefined;
+    clickKeepMine?.();
+    clickKeepMine?.();
+    clickUseTheirs?.();
+
+    assert.equal(keepMineCalls, 1);
+    assert.equal(useTheirsCalls, 0);
+
+    tree = renderDialog(hookRenderer, {
+      onKeepMine,
+      onUseTheirs,
+      onDismiss,
+    });
+    assert.equal((tree as ElementLike).props["aria-busy"], true);
+    assert.equal(findButtonByLabel(tree, "Saving…")?.props.disabled, true);
+    assert.equal(
+      findButtonByLabel(tree, "Use server version")?.props.disabled,
+      true,
+    );
+    ((tree as ElementLike).props.onClose as () => void)();
+    assert.equal(dismissCalls, 0);
+
+    resolveKeepMine();
+    await waitForAsyncDrain();
+    tree = renderDialog(hookRenderer, {
+      onKeepMine,
+      onUseTheirs,
+      onDismiss,
+    });
+    assert.equal((tree as ElementLike).props["aria-busy"], false);
+    assert.equal(
+      findButtonByLabel(tree, "Keep my version")?.props.disabled,
+      false,
+    );
+  });
+
+  test("Next navigation control flow escapes conflict recovery feedback", async () => {
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;replace;/login;307;",
+    });
+    await assert.rejects(
+      () =>
+        resolveConflictOperation(
+          () => Promise.reject(redirectError),
+          "fallback should not be returned",
+        ),
+      (error: unknown) => error === redirectError,
     );
   });
 });

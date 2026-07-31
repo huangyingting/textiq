@@ -372,7 +372,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/slides-conflict-recovery.spec.ts",
     owners: ["presentation", "collaboration"],
     coverage:
-      "Real two-context Chromium deck conflicts for Keep my version and Use server version, including independent geometry edits, history reset, and reload persistence.",
+      "Real two-context Chromium deck conflicts with duplicate-activated Keep my version and Use server version recovery, including independent geometry edits, history reset, and reload persistence.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner in two isolated sessions"],
@@ -487,7 +487,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
     owners: ["documents", "public-render", "security"],
     coverage:
-      "Deterministic owner share enablement, viewport-reachable policy controls, clipboard payloads, opener-isolated social intents, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
+      "Deterministic owner share transport-failure recovery with duplicate suppression, enablement, viewport-reachable policy controls, clipboard payloads, opener-isolated social intents, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "anonymous public"],

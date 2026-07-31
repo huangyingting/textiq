@@ -1,8 +1,40 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { isGoogleAuthConfigured } from "@/lib/auth/google-provider";
+
+export type GoogleSignInPort = {
+  signIn: (
+    provider: "google",
+    options: { redirectTo: string },
+  ) => Promise<unknown>;
+  rethrow: (error: unknown) => void;
+  redirect: (path: string) => never;
+};
+
+const routeGoogleSignInPort: GoogleSignInPort = {
+  signIn: (provider, options) => signIn(provider, options),
+  rethrow: unstable_rethrow,
+  redirect,
+};
+
+export async function executeGoogleSignIn(
+  {
+    callbackUrl,
+    errorRedirectPath,
+  }: { callbackUrl?: string; errorRedirectPath: string },
+  port: GoogleSignInPort = routeGoogleSignInPort,
+): Promise<void> {
+  try {
+    await port.signIn("google", {
+      redirectTo: safeCallbackUrl(callbackUrl),
+    });
+  } catch (error) {
+    port.rethrow(error);
+    port.redirect(`${errorRedirectPath}?error=OAuthError`);
+  }
+}
 
 // coverage-breadth: mapped-e2e ref=e2e/ui-matrix/auth-public-ui.spec.ts
 export function GoogleSignInSection({
@@ -43,18 +75,7 @@ export function GoogleSignInButton({
     <form
       action={async () => {
         "use server";
-        try {
-          await signIn("google", { redirectTo: safeCallbackUrl(callbackUrl) });
-        } catch (error) {
-          // Re-throw Next.js redirect signals so the router can handle them.
-          if (
-            error instanceof Error &&
-            (error as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")
-          ) {
-            throw error;
-          }
-          redirect(`${errorRedirectPath}?error=OAuthError`);
-        }
+        await executeGoogleSignIn({ callbackUrl, errorRedirectPath });
       }}
     >
       <button

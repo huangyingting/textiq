@@ -4,8 +4,7 @@
  * Save-conflict recovery dialog for presentation decks.
  *
  * Surfaces when a {@link Deck} autosave returns `{ ok: "conflict" }`.
- * Mirrors the v6 {@link ConflictRecoveryDialog} but carries a Deck snapshot
- * so the caller can force-save it directly without coercing to Deck.
+ * Carries a Deck snapshot so the caller can force-save it directly.
  *
  * Recovery paths:
  * 1. **Keep mine** — re-saves the local presentation snapshot with the server's token.
@@ -14,7 +13,8 @@
  */
 
 import { AlertTriangle, RefreshCw, Save, Trash2 } from "lucide-react";
-import { useState, useId } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useId, useRef, useState } from "react";
 
 import { Button, Dialog } from "@/components/ui";
 import { cx } from "@/components/ui/tokens";
@@ -33,6 +33,21 @@ export interface ConflictRecoveryDialogProps {
   onDismiss: () => void;
 }
 
+type ConflictOperation = "keep-mine" | "use-theirs";
+
+export async function resolveConflictOperation(
+  operation: () => Promise<void>,
+  fallbackError: string,
+): Promise<string | null> {
+  try {
+    await operation();
+    return null;
+  } catch (error) {
+    unstable_rethrow(error);
+    return fallbackError;
+  }
+}
+
 export function ConflictRecoveryDialog({
   open,
   localDeck,
@@ -42,41 +57,49 @@ export function ConflictRecoveryDialog({
   onDismiss,
 }: ConflictRecoveryDialogProps) {
   const headingId = useId();
-  const [isSaving, setIsSaving] = useState(false);
-  const [isReloading, setIsReloading] = useState(false);
+  const operationRef = useRef<ConflictOperation | null>(null);
+  const [operation, setOperation] = useState<ConflictOperation | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const isWorking = isSaving || isReloading;
+  const isWorking = operation !== null;
 
-  async function handleKeepMine() {
-    setIsSaving(true);
+  async function runOperation(
+    nextOperation: ConflictOperation,
+    action: () => Promise<void>,
+    fallbackError: string,
+  ) {
+    if (operationRef.current) return;
+    operationRef.current = nextOperation;
+    setOperation(nextOperation);
     setSaveError(null);
     try {
-      await onKeepMine(localDeck, serverRevisionToken);
-    } catch {
-      setSaveError(
-        "Couldn't save your version. Check your connection and retry.",
-      );
+      const error = await resolveConflictOperation(action, fallbackError);
+      if (error) setSaveError(error);
     } finally {
-      setIsSaving(false);
+      operationRef.current = null;
+      setOperation(null);
     }
   }
 
+  async function handleKeepMine() {
+    await runOperation(
+      "keep-mine",
+      () => onKeepMine(localDeck, serverRevisionToken),
+      "Couldn't save your version. Check your connection and retry.",
+    );
+  }
+
   async function handleUseTheirs() {
-    setIsReloading(true);
-    setSaveError(null);
-    try {
-      await onUseTheirs();
-    } catch {
-      setSaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
-    } finally {
-      setIsReloading(false);
-    }
+    await runOperation(
+      "use-theirs",
+      onUseTheirs,
+      CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE,
+    );
   }
 
   return (
     <Dialog
       open={open}
-      onClose={onDismiss}
+      onClose={isWorking ? () => undefined : onDismiss}
       aria-labelledby={headingId}
       aria-busy={isWorking}
       className="max-w-sm"
@@ -103,12 +126,20 @@ export function ConflictRecoveryDialog({
         </div>
 
         {saveError && (
-          <p
+          <div
             role="alert"
-            className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400"
+            className="flex items-start justify-between gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400"
           >
-            {saveError}
-          </p>
+            <span>{saveError}</span>
+            <button
+              type="button"
+              aria-label="Dismiss conflict error"
+              onClick={() => setSaveError(null)}
+              className="shrink-0 rounded px-1 font-medium hover:bg-red-100 dark:hover:bg-red-950/70"
+            >
+              Dismiss
+            </button>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
@@ -120,7 +151,7 @@ export function ConflictRecoveryDialog({
             disabled={isWorking}
           >
             <Save size={14} aria-hidden />
-            {isSaving ? "Saving…" : "Keep my version"}
+            {operation === "keep-mine" ? "Saving…" : "Keep my version"}
           </Button>
 
           <Button
@@ -131,7 +162,7 @@ export function ConflictRecoveryDialog({
             disabled={isWorking}
           >
             <RefreshCw size={14} aria-hidden />
-            {isReloading ? "Reloading…" : "Use server version"}
+            {operation === "use-theirs" ? "Reloading…" : "Use server version"}
           </Button>
 
           <button

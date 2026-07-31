@@ -125,7 +125,43 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       dialog.getByText("Enable sharing to create a public read-only link."),
     ).toBeVisible();
 
-    await dialog.getByRole("switch", { name: "Private" }).click();
+    const documentActionRoute = `**${documentPath}`;
+    let shareActionCount = 0;
+    await page.route(documentActionRoute, async (route) => {
+      const request = route.request();
+      const isDocumentAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === documentPath &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isDocumentAction) {
+        await route.continue();
+        return;
+      }
+      shareActionCount += 1;
+      if (shareActionCount === 1) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+    const sharingSwitch = dialog.getByRole("switch", { name: "Private" });
+    await sharingSwitch.click();
+    await expect(dialog.getByRole("alert")).toContainText(
+      "Couldn't update document sharing. Please try again.",
+    );
+    await expect(dialog.getByText("Private", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Dismiss sharing error" }).click();
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+
+    const enableResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === documentPath,
+    );
+    await sharingSwitch.dblclick();
+    expect((await enableResponse).ok()).toBe(true);
+    await expect.poll(() => shareActionCount).toBe(2);
+    await page.unroute(documentActionRoute);
     await mutationExpect(
       dialog.getByText("Public link enabled", { exact: true }),
     ).toBeVisible();
@@ -270,7 +306,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await expect(setPasscode).toBeDisabled();
       await passcode.fill("123");
       await setPasscode.click();
-      await expect(dialog.getByRole("alert")).toHaveText(
+      await expect(dialog.getByRole("alert")).toContainText(
         "Passcode must be at least 4 characters.",
       );
       await expect(passcode).toHaveValue("123");

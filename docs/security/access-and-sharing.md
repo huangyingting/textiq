@@ -157,10 +157,12 @@ the `shareId` extracted from the segment.
 
 The document share dialog keeps the complete policy reachable inside a
 viewport-bounded scrolling panel. Only one policy mutation runs at a time so a
-slower response cannot overwrite a newer local state. Passcode creation and
+slower response cannot overwrite a newer local state, including repeated
+activation before React commits its pending render. Passcode creation and
 replacement require a non-empty value; clearing protection remains an explicit
 separate action. Typed action failures and transport failures remain in the
-dialog as accessible alerts.
+dialog as accessible, dismissible alerts. Next.js redirect and not-found control
+flow is rethrown instead of being converted into generic transport feedback.
 
 Clipboard actions report pending work before announcing success, and failures
 remain inline instead of claiming that content was copied. Social-platform

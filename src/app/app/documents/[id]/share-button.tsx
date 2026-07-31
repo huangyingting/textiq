@@ -1,6 +1,7 @@
 "use client";
 
 import { Share2 } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
@@ -39,6 +40,18 @@ type ShareState = {
 
 type ShareMutationResult =
   { ok: true; data: ShareSettings } | { ok: false; error: string };
+
+export async function resolveShareMutation(
+  mutate: () => Promise<ShareMutationResult>,
+  fallbackMessage: string,
+): Promise<ShareMutationResult> {
+  try {
+    return await mutate();
+  } catch (error) {
+    unstable_rethrow(error);
+    return { ok: false, error: fallbackMessage };
+  }
+}
 
 /** Builds the displayed share URL from the current origin + shareId/slug. */
 function shareUrlFor(
@@ -169,16 +182,13 @@ export function ShareButton({
     setIsMutating(true);
     setError(null);
     try {
-      const result = await mutate();
+      const result = await resolveShareMutation(mutate, fallbackMessage);
       if (!result.ok) {
         setError(result.error);
         return null;
       }
       setShareState(toShareState(result.data));
       return result.data;
-    } catch {
-      setError(fallbackMessage);
-      return null;
     } finally {
       mutationInFlightRef.current = false;
       setIsMutating(false);
@@ -367,9 +377,20 @@ export function ShareButton({
       </div>
 
       {error && (
-        <p role="alert" className="mb-3 text-xs text-ds-danger">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="mb-3 flex items-start justify-between gap-2 text-xs text-ds-danger"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            aria-label="Dismiss sharing error"
+            onClick={() => setError(null)}
+            className="shrink-0 rounded px-1 font-medium hover:bg-ds-danger-surface"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
 
       {shareState.isShared && shareState.shareUrl && (

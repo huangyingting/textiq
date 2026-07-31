@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-07-31"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -463,6 +463,13 @@ Conflict recovery has three user outcomes:
 | Keep my version    | Save the local deck against the server's latest token.       |
 | Use server version | Fetch/accept the server deck and replace local editor state. |
 | Dismiss            | Keep local unsaved changes and leave the editor dirty.       |
+
+Keep-mine and use-server share one synchronous operation boundary. Repeated or
+competing activation cannot start a second resolution before React renders the
+pending state; while resolution is pending, both choices and every dialog
+dismissal path remain locked. Ordinary failures retain the conflict and show
+dismissible retry feedback, while Next.js redirect/not-found control flow
+escapes to the framework.
 
 Presence is advisory only. It shows who has the deck open and which slide they
 are viewing, but optimistic revision tokens are the conflict authority.

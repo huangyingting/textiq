@@ -104,6 +104,7 @@ test("getMessages objects expose all required keys", () => {
     "languageSwitcher.label",
     "languageSwitcher.selectLanguage",
     "languageSwitcher.persistenceError",
+    "languageSwitcher.dismissError",
   ] as const;
 
   for (const locale of SUPPORTED_LOCALES) {

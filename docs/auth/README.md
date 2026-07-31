@@ -70,7 +70,10 @@ Google sign-in is enabled only when both Google client env vars are present.
 OAuth sign-ins must include an email. The JWT callback links the OAuth profile
 to a local user by normalized email, updating name/image on existing accounts or
 creating a new local account and seeding onboarding content for first-time
-users.
+users. Callback targets pass through the same-origin callback validator. Next.js
+redirect and not-found control flow is preserved through the structured
+framework rethrow API; ordinary provider failures redirect to generic local
+feedback without exposing provider details.
 
 ## Recovery And Verification Tokens
 

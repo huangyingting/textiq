@@ -187,7 +187,7 @@ const keepMineConflictTest = async ({
 
     const dialog = conflictDialog(sessions.secondPage);
     await expect(dialog).toBeVisible({ timeout: 30_000 });
-    await dialog.getByRole("button", { name: "Keep my version" }).click();
+    await dialog.getByRole("button", { name: "Keep my version" }).dblclick();
     // handleConflictKeepMine calls setConflictState(null) only after saveDeckJson
     // resolves; the dialog stays visible until the save completes.  Wait for the
     // observable semantic condition (save acknowledged in the footer) before
@@ -315,7 +315,7 @@ const useServerConflictTest = async ({
       },
       { bodySelector: BODY_NODE_SELECTOR, serverWidth: serverFrame.width },
     );
-    await dialog.getByRole("button", { name: "Use server version" }).click();
+    await dialog.getByRole("button", { name: "Use server version" }).dblclick();
     // handleConflictUseTheirs batches setDeck and setConflictState(null) in one
     // React render after the reload resolves.  Wait for the frame to reflect the
     // server geometry (observable semantic condition) before asserting the dialog

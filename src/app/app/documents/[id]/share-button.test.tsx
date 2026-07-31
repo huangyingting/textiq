@@ -105,6 +105,17 @@ stubModule(
 };`,
 );
 
+stubModule(
+  "next/navigation",
+  `module.exports = {
+  unstable_rethrow(error) {
+    if (error instanceof Error && error.message.startsWith("NEXT_")) {
+      throw error;
+    }
+  },
+};`,
+);
+
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const [message] = args;
@@ -126,8 +137,11 @@ after(() => {
 // statements run, which would load the real `"use server"` `"./actions"`
 // instead of the stub.
 let ShareButton: typeof import("./share-button").ShareButton;
+let resolveShareMutation: typeof import("./share-button").resolveShareMutation;
 before(async () => {
-  ShareButton = (await import("./share-button")).ShareButton;
+  const shareButtonModule = await import("./share-button");
+  ShareButton = shareButtonModule.ShareButton;
+  resolveShareMutation = shareButtonModule.resolveShareMutation;
 });
 
 beforeEach(resetActionsState);
@@ -338,7 +352,9 @@ describe("ShareButton", () => {
         });
 
         assert.equal(
-          textOf(renderer.root.findByProps({ role: "alert" })),
+          textOf(
+            renderer.root.findByProps({ role: "alert" }).findByType("span"),
+          ),
           "Couldn't update document sharing. Please try again.",
         );
         assert.equal(
@@ -347,10 +363,77 @@ describe("ShareButton", () => {
           }).props.disabled,
           false,
         );
+        act(() => {
+          findByAria(renderer.root, "Dismiss sharing error").props.onClick();
+        });
+        assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
       } finally {
         act(() => renderer.unmount());
       }
     });
+  });
+
+  test("same-event sharing activation submits one mutation and locks every policy control", async () => {
+    await withShareDom(async () => {
+      let resolveToggle!: (value: ActionResult<ShareSettings>) => void;
+      globalForActions.__shareButtonActionsTestState.toggleImpl = () =>
+        new Promise((resolve) => {
+          resolveToggle = resolve;
+        });
+      const renderer = mountWithPortalDom(
+        <ShareButton
+          id="doc-1"
+          initialIsShared={false}
+          initialShareId={null}
+        />,
+      );
+      try {
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        const toggle = renderer.root.findByProps({
+          "aria-labelledby": "share-toggle-label",
+        });
+        let first!: Promise<void>;
+        let duplicate!: Promise<void>;
+        act(() => {
+          first = toggle.props.onCheckedChange(true) as Promise<void>;
+          duplicate = toggle.props.onCheckedChange(true) as Promise<void>;
+        });
+
+        assert.deepEqual(
+          globalForActions.__shareButtonActionsTestState.toggleCalls,
+          [{ id: "doc-1", isShared: true }],
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-labelledby": "share-toggle-label",
+          }).props.disabled,
+          true,
+        );
+
+        resolveToggle({ ok: true, data: SHARED_SETTINGS });
+        await act(async () => {
+          await Promise.all([first, duplicate]);
+        });
+
+        assert.match(textOf(renderer.root), /Public link enabled/);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("Next navigation control flow escapes share mutation recovery", async () => {
+    const frameworkError = new Error("NEXT_REDIRECT:/login");
+    await assert.rejects(
+      () =>
+        resolveShareMutation(
+          () => Promise.reject(frameworkError),
+          "fallback should not be returned",
+        ),
+      (error: unknown) => error === frameworkError,
+    );
   });
 
   test("copying the link calls navigator.clipboard.writeText and shows a transient Copied! label", async (t) => {

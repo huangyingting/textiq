@@ -34,6 +34,7 @@ export type LanguageSwitcherMessages = {
   "languageSwitcher.label": string;
   "languageSwitcher.selectLanguage": string;
   "languageSwitcher.persistenceError": string;
+  "languageSwitcher.dismissError": string;
 };
 
 const appShellMessages: Record<Locale, AppShellMessages> = {
@@ -103,12 +104,14 @@ const languageSwitcherMessages: Record<Locale, LanguageSwitcherMessages> = {
     "languageSwitcher.selectLanguage": "Select language",
     "languageSwitcher.persistenceError":
       "Unable to save your language preference. Please try again.",
+    "languageSwitcher.dismissError": "Dismiss error",
   },
   es: {
     "languageSwitcher.label": "Idioma",
     "languageSwitcher.selectLanguage": "Seleccionar idioma",
     "languageSwitcher.persistenceError":
       "No se pudo guardar tu preferencia de idioma. Inténtalo de nuevo.",
+    "languageSwitcher.dismissError": "Descartar error",
   },
 };
 

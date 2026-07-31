@@ -63,6 +63,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/lib\/account\//,
       /^src\/lib\/settings\//,
       /^src\/components\/auth\//,
+      /^src\/components\/google-sign-in-button\.test\.tsx$/,
       /^src\/app\/app\/settings\//,
       /^src\/app\/login\//,
       /^src\/app\/signup\//,

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-07-31"
 description: "The localization subsystem owns typed UI message catalogs, locale resolution, and the gate that keeps the language switcher hidden until enough user-facing surfaces are translated."
 ---
 
@@ -69,7 +69,11 @@ an exact supported locale; invalid values are rejected before the cookie store
 is accessed. It writes the shared, HTTP-only cookie policy only after validation.
 If persistence fails or the action rejects, the language switcher restores the
 last confirmed locale, keeps the server tree unchanged, and displays an
-accessible retryable error instead of reporting success.
+accessible, dismissible retryable error instead of reporting success. A locale
+write has one synchronous in-flight boundary, so repeated activation cannot
+submit duplicate cookie mutations. Framework redirect and not-found control
+flow remains owned by Next.js rather than being converted into persistence
+feedback.
 
 ## Adding A Surface
 

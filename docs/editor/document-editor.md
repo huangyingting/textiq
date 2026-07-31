@@ -517,6 +517,11 @@ When a conflict is detected:
    state, discards local changes.
 4. **Dismiss:** closes the dialog; unsaved changes remain (conflict may recur).
 
+The resolution buttons share one synchronous in-flight guard, so rapid repeated
+or competing choices cannot race. Pending resolution locks buttons, backdrop,
+and Escape dismissal. A failed resolution leaves the conflict open with
+dismissible retry feedback; framework navigation control flow is rethrown.
+
 Self-conflicts (same user, two tabs) are handled identically.
 
 ### Presence model

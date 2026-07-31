@@ -188,6 +188,11 @@ test("test subsystem map classifies files by owning subsystem", () => {
     "src/components/auth/** shared form primitives must classify under auth",
   );
   assert.deepEqual(
+    classifyTestFile("src/components/google-sign-in-button.test.tsx"),
+    ["auth"],
+    "the Google sign-in action contract must classify under auth",
+  );
+  assert.deepEqual(
     classifyTestFile("src/app/api/brand-assets/route.test.ts").includes(
       "brand",
     ),
