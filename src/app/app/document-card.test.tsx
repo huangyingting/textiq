@@ -35,6 +35,7 @@ type CardActionsTestState = {
   duplicateCalls: string[];
   renameCalls: Array<{ id: string; title: string }>;
   favoriteCalls: string[];
+  rethrowCalls: unknown[];
   duplicateImpl: (id: string) => Promise<void>;
   renameImpl: (id: string, title: string) => Promise<{ title: string }>;
   favoriteImpl: (id: string) => Promise<{ favorite: boolean }>;
@@ -49,12 +50,23 @@ function resetActionsState(): void {
     duplicateCalls: [],
     renameCalls: [],
     favoriteCalls: [],
+    rethrowCalls: [],
     duplicateImpl: async () => undefined,
     renameImpl: async (_id, title) => ({ title }),
     favoriteImpl: async () => ({ favorite: true }),
   };
 }
 resetActionsState();
+
+stubModule(
+  "next/navigation",
+  `module.exports = {
+  unstable_rethrow: (error) => {
+    globalThis.__documentCardActionsTestState.rethrowCalls.push(error);
+    if (error && error.__nextControlFlow === true) throw error;
+  },
+};`,
+);
 
 stubModule(
   "./actions",
@@ -130,6 +142,30 @@ function openMenu(renderer: ReactTestRenderer, title = "Quarterly Plan") {
   act(() => {
     (kebab.props.onClick as () => void)();
   });
+}
+
+function buttonByText(renderer: ReactTestRenderer, label: string) {
+  return renderer.root.find(
+    (el) => el.type === "button" && textOf(el) === label,
+  );
+}
+
+function backdropFor(renderer: ReactTestRenderer) {
+  return renderer.root.find(
+    (el) =>
+      el.type === "div" &&
+      el.props["aria-hidden"] === "true" &&
+      typeof el.props.className === "string" &&
+      el.props.className.includes("bg-ds-backdrop"),
+  );
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 describe("DocumentCard", () => {
@@ -271,10 +307,13 @@ describe("DocumentCard", () => {
           });
         });
 
-        // Dialog closes immediately on submit.
-        assert.throws(() =>
-          renderer.root.findByProps({ "aria-label": "Document title" }),
+        // The dialog stays mounted and locked until persistence settles.
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Document title" }).props
+            .disabled,
+          true,
         );
+        assert.ok(buttonByText(renderer, "Renaming…"));
         // The optimistic title (normalized: trimmed) is visible right away,
         // before the transition's `renameDocument` call has settled.
         assert.match(textOf(renderer.root), /New Title/);
@@ -290,6 +329,9 @@ describe("DocumentCard", () => {
         assert.deepEqual(
           globalForActions.__documentCardActionsTestState.renameCalls,
           [{ id: "doc-1", title: "  New Title  " }],
+        );
+        assert.throws(() =>
+          renderer.root.findByProps({ "aria-label": "Document title" }),
         );
       } finally {
         act(() => renderer.unmount());
@@ -493,6 +535,260 @@ describe("DocumentCard", () => {
         assert.deepEqual(
           globalForActions.__documentCardActionsTestState.duplicateCalls,
           ["doc-1"],
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a failed favorite rolls back, redacts private details, dismisses cleanly, and retries without duplicate toggles", async () => {
+    await withPortalDom(async () => {
+      const privateFailure = new Error("private favorite storage detail");
+      const retry = createDeferred<{ favorite: boolean }>();
+      let attempt = 0;
+      globalForActions.__documentCardActionsTestState.favoriteImpl =
+        async () => {
+          attempt += 1;
+          if (attempt <= 2) throw privateFailure;
+          return retry.promise;
+        };
+
+      const renderer = mount({ favorite: false });
+      try {
+        const clickFavorite = async () => {
+          await act(async () => {
+            renderer.root
+              .findByProps({
+                "aria-label": "Favorite Quarterly Plan",
+              })
+              .props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+        };
+
+        await clickFavorite();
+        let alert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(alert),
+          /Could not update the favorite\. Please try again\./,
+        );
+        assert.doesNotMatch(textOf(alert), /private favorite storage detail/);
+        assert.ok(
+          renderer.root.findByProps({
+            "aria-label": "Favorite Quarterly Plan",
+          }),
+        );
+
+        await act(async () => {
+          buttonByText(renderer, "Dismiss error").props.onClick();
+          await waitForAsyncDrain();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+
+        await clickFavorite();
+        alert = renderer.root.findByProps({ role: "alert" });
+        const retryButton = alert.find(
+          (el) => el.type === "button" && textOf(el) === "Try favorite again",
+        );
+        act(() => {
+          retryButton.props.onClick();
+          retryButton.props.onClick();
+        });
+        assert.deepEqual(
+          globalForActions.__documentCardActionsTestState.favoriteCalls,
+          ["doc-1", "doc-1", "doc-1"],
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Unfavorite Quarterly Plan",
+          }).props.disabled,
+          true,
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Actions for Quarterly Plan",
+          }).props.disabled,
+          true,
+        );
+
+        retry.resolve({ favorite: true });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+        assert.deepEqual(
+          globalForActions.__documentCardActionsTestState.rethrowCalls,
+          [privateFailure, privateFailure],
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a failed rename stays in its locked dialog and retries the same title exactly once", async () => {
+    await withPortalDom(async () => {
+      const privateFailure = new Error("private rename storage detail");
+      const retry = createDeferred<{ title: string }>();
+      let attempt = 0;
+      globalForActions.__documentCardActionsTestState.renameImpl = async () => {
+        attempt += 1;
+        if (attempt === 1) throw privateFailure;
+        return retry.promise;
+      };
+
+      const renderer = mount();
+      try {
+        openMenu(renderer);
+        act(() => {
+          renderer.root
+            .find(
+              (el) => el.props.role === "menuitem" && textOf(el) === "Rename",
+            )
+            .props.onClick();
+        });
+        act(() => {
+          renderer.root
+            .findByProps({
+              "aria-label": "Document title",
+            })
+            .props.onChange({ target: { value: "Recovered title" } });
+        });
+
+        await act(async () => {
+          renderer.root.findByType("form").props.onSubmit({
+            preventDefault: () => {},
+          });
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        const alert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(alert),
+          /Could not rename the document\. Please try again\./,
+        );
+        assert.doesNotMatch(textOf(alert), /private rename storage detail/);
+        assert.ok(buttonByText(renderer, "Try rename again"));
+
+        const form = renderer.root.findByType("form");
+        act(() => {
+          form.props.onSubmit({ preventDefault: () => {} });
+          form.props.onSubmit({ preventDefault: () => {} });
+        });
+        assert.deepEqual(
+          globalForActions.__documentCardActionsTestState.renameCalls,
+          [
+            { id: "doc-1", title: "Recovered title" },
+            { id: "doc-1", title: "Recovered title" },
+          ],
+        );
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-label": "Document title",
+          }).props.disabled,
+          true,
+        );
+        assert.equal(buttonByText(renderer, "Cancel").props.disabled, true);
+        act(() => backdropFor(renderer).props.onClick());
+        assert.ok(renderer.root.findByProps({ role: "dialog" }));
+
+        retry.resolve({ title: "Recovered title" });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "dialog" }));
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("a failed duplicate stays inline and a double-activated retry creates one copy", async () => {
+    await withPortalDom(async () => {
+      const privateFailure = new Error("private duplicate storage detail");
+      const retry = createDeferred<void>();
+      let attempt = 0;
+      globalForActions.__documentCardActionsTestState.duplicateImpl =
+        async () => {
+          attempt += 1;
+          if (attempt === 1) throw privateFailure;
+          return retry.promise;
+        };
+
+      const renderer = mount();
+      try {
+        openMenu(renderer);
+        await act(async () => {
+          renderer.root
+            .find(
+              (el) =>
+                el.props.role === "menuitem" && textOf(el) === "Duplicate",
+            )
+            .props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        const alert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(alert),
+          /Could not duplicate the document\. Please try again\./,
+        );
+        assert.doesNotMatch(textOf(alert), /private duplicate storage detail/);
+        const retryButton = alert.find(
+          (el) => el.type === "button" && textOf(el) === "Try duplicate again",
+        );
+        act(() => {
+          retryButton.props.onClick();
+          retryButton.props.onClick();
+        });
+        assert.deepEqual(
+          globalForActions.__documentCardActionsTestState.duplicateCalls,
+          ["doc-1", "doc-1"],
+        );
+
+        retry.resolve();
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("framework navigation control-flow errors still escape card recovery", async () => {
+    await withPortalDom(async () => {
+      const controlFlowError = Object.assign(new Error("NEXT_REDIRECT"), {
+        __nextControlFlow: true,
+      });
+      globalForActions.__documentCardActionsTestState.duplicateImpl =
+        async () => {
+          throw controlFlowError;
+        };
+      const renderer = mount();
+      try {
+        openMenu(renderer);
+        const duplicateItem = renderer.root.find(
+          (el) => el.props.role === "menuitem" && textOf(el) === "Duplicate",
+        );
+        await assert.rejects(
+          () =>
+            Promise.resolve(
+              act(async () => {
+                duplicateItem.props.onClick();
+                await waitForAsyncDrain();
+                await waitForAsyncDrain();
+              }),
+            ),
+          controlFlowError,
         );
       } finally {
         act(() => renderer.unmount());

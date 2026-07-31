@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui";
 import type { OnboardingStep } from "@/lib/onboarding/checklist";
 import { emitProductTelemetry } from "@/lib/telemetry/product";
 
@@ -21,6 +23,9 @@ interface OnboardingChecklistProps {
  */
 export function OnboardingChecklist({ steps }: OnboardingChecklistProps) {
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = useState(false);
+  const dismissInFlightRef = useRef(false);
   const doneCount = steps.filter((s) => s.done).length;
 
   useEffect(() => {
@@ -33,18 +38,33 @@ export function OnboardingChecklist({ steps }: OnboardingChecklistProps) {
   }, [doneCount, steps.length]);
 
   function handleDismiss() {
-    emitProductTelemetry("product.onboarding.dismissed", {
-      completedStepCount: doneCount,
-      stepCount: steps.length,
-    });
+    if (dismissInFlightRef.current) return;
+
+    dismissInFlightRef.current = true;
+    setError(null);
     startTransition(async () => {
-      await dismissOnboarding();
+      try {
+        await dismissOnboarding();
+        emitProductTelemetry("product.onboarding.dismissed", {
+          completedStepCount: doneCount,
+          stepCount: steps.length,
+        });
+        setIsDismissed(true);
+      } catch (dismissError) {
+        unstable_rethrow(dismissError);
+        setError("Could not dismiss the checklist. Please try again.");
+      } finally {
+        dismissInFlightRef.current = false;
+      }
     });
   }
+
+  if (isDismissed) return null;
 
   return (
     <section
       aria-label="Getting started checklist"
+      aria-busy={isPending}
       className="rounded-2xl border border-ds-border-subtle bg-ds-surface-raised p-5 shadow-sm"
     >
       <div className="flex items-start justify-between gap-4">
@@ -144,6 +164,33 @@ export function OnboardingChecklist({ steps }: OnboardingChecklistProps) {
           </li>
         ))}
       </ol>
+
+      {error ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+        >
+          <p>{error}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              variant="subtle"
+              size="sm"
+              disabled={isPending}
+              onClick={handleDismiss}
+            >
+              Try dismiss again
+            </Button>
+            <Button
+              variant="plain"
+              size="sm"
+              disabled={isPending}
+              onClick={() => setError(null)}
+            >
+              Dismiss error
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"

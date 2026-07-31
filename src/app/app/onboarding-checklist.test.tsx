@@ -58,6 +58,7 @@ type ModuleHooks = {
 
 type OnboardingActionsTestState = {
   dismissCalls: number;
+  rethrowCalls: unknown[];
   dismissImpl: () => Promise<void>;
 };
 
@@ -68,6 +69,7 @@ const globalForActions = globalThis as typeof globalThis & {
 function resetActionsState(): void {
   globalForActions.__onboardingActionsTestState = {
     dismissCalls: 0,
+    rethrowCalls: [],
     dismissImpl: async () => undefined,
   };
 }
@@ -77,11 +79,15 @@ const { registerHooks } = createRequire(import.meta.url)(
   "node:module",
 ) as ModuleHooks;
 const actionsStubUrl = "onboarding-checklist-actions:test";
+const navigationStubUrl = "onboarding-checklist-navigation:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "./actions") {
       return { url: actionsStubUrl, shortCircuit: true };
+    }
+    if (specifier === "next/navigation") {
+      return { url: navigationStubUrl, shortCircuit: true };
     }
     return nextResolve(specifier, context);
   },
@@ -93,6 +99,18 @@ registerHooks({
   dismissOnboarding: async () => {
     globalThis.__onboardingActionsTestState.dismissCalls += 1;
     return globalThis.__onboardingActionsTestState.dismissImpl();
+  },
+};`,
+        shortCircuit: true,
+      };
+    }
+    if (url === navigationStubUrl) {
+      return {
+        format: "commonjs",
+        source: `module.exports = {
+  unstable_rethrow: (error) => {
+    globalThis.__onboardingActionsTestState.rethrowCalls.push(error);
+    if (error && error.__nextControlFlow === true) throw error;
   },
 };`,
         shortCircuit: true,
@@ -181,6 +199,14 @@ function mountChecklist(steps: OnboardingStep[]): {
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 function captureTelemetry(): {
@@ -306,10 +332,136 @@ describe("OnboardingChecklist", () => {
         await flush();
       });
 
-      findButtonByText(root, "Mark as complete and dismiss");
+      assert.equal(renderer.toJSON(), null);
       assert.equal(
         globalForActions.__onboardingActionsTestState.dismissCalls,
         1,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a failed dismiss stays inline, redacts details, can be dismissed, and retries without duplicate writes", async () => {
+    const { events, restore } = captureTelemetry();
+    const privateFailure = new Error("private onboarding storage detail");
+    const retry = createDeferred<void>();
+    let attempt = 0;
+    globalForActions.__onboardingActionsTestState.dismissImpl = async () => {
+      attempt += 1;
+      if (attempt <= 2) throw privateFailure;
+      return retry.promise;
+    };
+
+    const { renderer, root } = mountChecklist(buildSteps());
+    try {
+      await act(async () => {
+        root
+          .findByProps({
+            "aria-label": "Dismiss onboarding checklist",
+          })
+          .props.onClick();
+        await flush();
+      });
+
+      let alert = root.findByProps({ role: "alert" });
+      assert.match(
+        textOf(alert),
+        /Could not dismiss the checklist\. Please try again\./,
+      );
+      assert.doesNotMatch(textOf(alert), /private onboarding storage detail/);
+      assert.equal(
+        events.filter(
+          (event) => event.eventName === "product.onboarding.dismissed",
+        ).length,
+        0,
+      );
+
+      await act(async () => {
+        findButtonByText(root, "Dismiss error").props.onClick();
+        await flush();
+      });
+      assert.throws(() => root.findByProps({ role: "alert" }));
+
+      await act(async () => {
+        findButtonByText(root, "Mark as complete and dismiss").props.onClick();
+        await flush();
+      });
+      alert = root.findByProps({ role: "alert" });
+      const retryButton = alert.find(
+        (element) =>
+          element.type === "button" && textOf(element) === "Try dismiss again",
+      );
+      act(() => {
+        retryButton.props.onClick();
+        retryButton.props.onClick();
+      });
+      assert.equal(
+        globalForActions.__onboardingActionsTestState.dismissCalls,
+        3,
+      );
+      assert.equal(
+        root.findByProps({
+          "aria-label": "Getting started checklist",
+        }).props["aria-busy"],
+        true,
+      );
+      assert.equal(
+        root.findByProps({
+          "aria-label": "Dismiss onboarding checklist",
+        }).props.disabled,
+        true,
+      );
+
+      retry.resolve();
+      await act(async () => {
+        await flush();
+        await flush();
+      });
+      assert.equal(renderer.toJSON(), null);
+      assert.equal(
+        events.filter(
+          (event) => event.eventName === "product.onboarding.dismissed",
+        ).length,
+        1,
+      );
+      assert.deepEqual(
+        globalForActions.__onboardingActionsTestState.rethrowCalls,
+        [privateFailure, privateFailure],
+      );
+    } finally {
+      act(() => renderer.unmount());
+      restore();
+    }
+  });
+
+  test("framework navigation control-flow errors escape onboarding recovery", async () => {
+    const controlFlowError = Object.assign(new Error("NEXT_REDIRECT"), {
+      __nextControlFlow: true,
+    });
+    globalForActions.__onboardingActionsTestState.dismissImpl = async () => {
+      throw controlFlowError;
+    };
+    const { renderer, root } = mountChecklist(buildSteps());
+    try {
+      await assert.rejects(
+        () =>
+          Promise.resolve(
+            act(async () => {
+              root
+                .findByProps({
+                  "aria-label": "Dismiss onboarding checklist",
+                })
+                .props.onClick();
+              await flush();
+              await flush();
+            }),
+          ),
+        controlFlowError,
+      );
+      assert.deepEqual(
+        globalForActions.__onboardingActionsTestState.rethrowCalls,
+        [controlFlowError],
       );
     } finally {
       act(() => renderer.unmount());

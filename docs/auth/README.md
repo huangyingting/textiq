@@ -54,10 +54,17 @@ only when the submitted password matches the stored hash.
 
 The deterministic browser profile exercises this lifecycle end to end: it
 creates a new account through the public form, verifies automatic sign-in and
-first-run content, persists onboarding dismissal, deletes the account through
-settings, and confirms that the deleted credentials no longer authenticate.
+first-run content, recovers a forced onboarding-dismissal transport failure,
+persists the retry, deletes the account through settings, and confirms that the
+deleted credentials no longer authenticate.
 The seed removes that exact fixture email before each run so an interrupted
 browser session cannot contaminate later runs.
+
+Onboarding dismissal uses a synchronous in-flight guard so repeated header or
+footer activation persists once. Ordinary failures remain in the checklist as
+generic retry/dismiss feedback; successful dismissal removes the checklist
+immediately and emits completion telemetry only after persistence. Next
+redirect/not-found control flow is not converted into a local error.
 
 Google sign-in is enabled only when both Google client env vars are present.
 OAuth sign-ins must include an email. The JWT callback links the OAuth profile

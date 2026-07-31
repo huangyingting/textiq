@@ -126,7 +126,7 @@ test.describe("UI matrix: account lifecycle", () => {
     );
   });
 
-  test("new account signs up, sees first-run content, persists onboarding dismissal, and deletes cleanly", async ({
+  test("new account signs up, recovers onboarding dismissal, persists it, and deletes cleanly", async ({
     page,
   }) => {
     test.skip(
@@ -134,7 +134,13 @@ test.describe("UI matrix: account lifecycle", () => {
       "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run signup lifecycle coverage",
     );
 
-    const assertNoPageErrors = await expectNoPageErrors(page);
+    let isForcingDismissTransportFailure = false;
+    const assertNoPageErrors = await expectNoPageErrors(
+      page,
+      (message) =>
+        isForcingDismissTransportFailure &&
+        message === "Failed to load resource: net::ERR_FAILED",
+    );
     const fixture = E2E_PROFILE_FIXTURE.signupLifecycle;
     await page.goto("/signup");
     await page.getByLabel(/^Name/).fill(fixture.name);
@@ -171,9 +177,46 @@ test.describe("UI matrix: account lifecycle", () => {
       onboarding.getByText("Select text → generate a visual"),
     ).toBeVisible();
 
+    let dismissActionCount = 0;
+    const dashboardRoute = "**/app*";
+    await page.route(dashboardRoute, async (route) => {
+      const request = route.request();
+      const isDashboardAction =
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === "/app" &&
+        typeof request.headers()["next-action"] === "string";
+      if (!isDashboardAction) {
+        await route.continue();
+        return;
+      }
+      dismissActionCount += 1;
+      if (dismissActionCount === 1) {
+        isForcingDismissTransportFailure = true;
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    });
+
     await onboarding
       .getByRole("button", { name: "Mark as complete and dismiss" })
       .click();
+    const dismissAlert = onboarding.getByRole("alert").filter({
+      hasText: "Could not dismiss the checklist. Please try again.",
+    });
+    await expect(dismissAlert).toBeVisible();
+    const dismissResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/app",
+    );
+    await dismissAlert
+      .getByRole("button", { name: "Try dismiss again" })
+      .dblclick();
+    expect((await dismissResponse).ok()).toBe(true);
+    await expect.poll(() => dismissActionCount).toBe(2);
+    await page.unroute(dashboardRoute);
+    isForcingDismissTransportFailure = false;
     await expect(onboarding).toHaveCount(0, { timeout: 20_000 });
     await page.reload();
     await expect(onboarding).toHaveCount(0);

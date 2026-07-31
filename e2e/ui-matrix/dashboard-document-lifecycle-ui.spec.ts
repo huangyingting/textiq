@@ -3,7 +3,9 @@ import {
   test,
   type Locator,
   type Page,
+  type Request,
   type Response,
+  type Route,
 } from "@playwright/test";
 
 import { login } from "../helpers/auth";
@@ -28,6 +30,25 @@ function dashboardActionResponse(response: Response): boolean {
     response.request().method() === "POST" &&
     new URL(response.url()).pathname === "/app"
   );
+}
+
+function isDashboardServerAction(request: Request): boolean {
+  return (
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === "/app" &&
+    typeof request.headers()["next-action"] === "string"
+  );
+}
+
+async function continueUnlessDashboardAction(
+  route: Route,
+  onAction: () => Promise<void>,
+): Promise<void> {
+  if (!isDashboardServerAction(route.request())) {
+    await route.continue();
+    return;
+  }
+  await onAction();
 }
 
 function trashActionResponse(response: Response): boolean {
@@ -108,7 +129,7 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
   );
   test.setTimeout(120_000);
 
-  test("favorite, duplicate, rename, undo, trash restore, and permanent delete persist", async ({
+  test("search and favorite failure recovery, duplicate, rename, undo, trash restore, and permanent delete persist", async ({
     page,
   }) => {
     const fixture = E2E_PROFILE_FIXTURE.dashboardDocuments.lifecycle;
@@ -120,12 +141,67 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     ).toBeVisible({ timeout: 60_000 });
     await expect(documentLink(page, fixture.title)).toBeVisible();
 
-    await runServerAction({
-      page,
-      matches: dashboardActionResponse,
-      action: () =>
-        page.getByRole("button", { name: `Favorite ${fixture.title}` }).click(),
+    const dashboardRoute = "**/app*";
+    let searchActionCount = 0;
+    await page.route(dashboardRoute, async (route) => {
+      await continueUnlessDashboardAction(route, async () => {
+        searchActionCount += 1;
+        if (searchActionCount === 1) {
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      });
     });
+    const search = page.getByRole("searchbox", { name: "Search documents" });
+    await search.fill("__dashboard_search_transport_failure__");
+    const searchAlert = page
+      .getByRole("alert")
+      .filter({ hasText: "Could not search documents. Please try again." });
+    await expect(searchAlert).toBeVisible();
+    const searchResponse = page.waitForResponse(dashboardActionResponse);
+    await searchAlert
+      .getByRole("button", { name: "Try search again" })
+      .dblclick();
+    expect((await searchResponse).ok()).toBe(true);
+    await expect.poll(() => searchActionCount).toBe(2);
+    await page.unroute(dashboardRoute);
+    await search.fill("");
+    await expect(documentLink(page, fixture.title)).toBeVisible();
+
+    let favoriteActionCount = 0;
+    await page.route(dashboardRoute, async (route) => {
+      await continueUnlessDashboardAction(route, async () => {
+        favoriteActionCount += 1;
+        if (favoriteActionCount === 1) {
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      });
+    });
+
+    await page
+      .getByRole("button", { name: `Favorite ${fixture.title}` })
+      .click();
+    const favoriteAlert = page
+      .getByRole("alert")
+      .filter({ hasText: "Could not update the favorite. Please try again." });
+    await expect(favoriteAlert).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /your documents/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: `Favorite ${fixture.title}` }),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    const favoriteResponse = page.waitForResponse(dashboardActionResponse);
+    await favoriteAlert
+      .getByRole("button", { name: "Try favorite again" })
+      .dblclick();
+    expect((await favoriteResponse).ok()).toBe(true);
+    await expect.poll(() => favoriteActionCount).toBe(2);
+    await page.unroute(dashboardRoute);
     await expect(
       page.getByRole("button", { name: `Unfavorite ${fixture.title}` }),
     ).toHaveAttribute("aria-pressed", "true");

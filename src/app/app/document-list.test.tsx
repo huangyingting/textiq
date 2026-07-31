@@ -55,6 +55,10 @@ stubModule(
   `module.exports = {
   usePathname: () => globalThis.__documentListNavState.pathname,
   useSearchParams: () => new URLSearchParams(globalThis.__documentListNavState.search),
+  unstable_rethrow: (error) => {
+    globalThis.__documentListActionsTestState.rethrowCalls.push(error);
+    if (error && error.__nextControlFlow === true) throw error;
+  },
 };`,
 );
 
@@ -62,6 +66,7 @@ type ActionsTestState = {
   deleteCalls: string[];
   restoreCalls: string[];
   searchCalls: string[];
+  rethrowCalls: unknown[];
   deleteImpl: (id: string) => Promise<void>;
   restoreImpl: (id: string) => Promise<void>;
   searchImpl: (
@@ -77,6 +82,7 @@ function resetActionsState(): void {
     deleteCalls: [],
     restoreCalls: [],
     searchCalls: [],
+    rethrowCalls: [],
     deleteImpl: async () => undefined,
     restoreImpl: async () => undefined,
     searchImpl: async () => ({ results: [], hasMore: false }),
@@ -474,6 +480,110 @@ describe("DocumentList", () => {
         );
       } finally {
         act(() => renderer.unmount());
+        t.mock.timers.reset();
+      }
+    });
+  });
+
+  test("a failed search stays inline with generic dismissible copy and keeps the dashboard usable", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await withPortalDom(async () => {
+      installHistorySpy();
+      const privateFailure = new Error("private search provider detail");
+      globalForActions.__documentListActionsTestState.searchImpl = async () => {
+        throw privateFailure;
+      };
+      const renderer = mount({ documents: [doc("seed", { title: "Seed" })] });
+      try {
+        act(() => {
+          renderer.root
+            .findByProps({
+              "aria-label": "Search documents",
+            })
+            .props.onChange({ target: { value: "missing" } });
+        });
+        await act(async () => {
+          t.mock.timers.tick(300);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        const alert = renderer.root.findByProps({ role: "alert" });
+        assert.match(
+          textOf(alert),
+          /Could not search documents\. Please try again\./,
+        );
+        assert.doesNotMatch(textOf(alert), /private search provider detail/);
+        assert.ok(
+          renderer.root.findByProps({ "aria-label": "Search documents" }),
+        );
+        assert.deepEqual(
+          globalForActions.__documentListActionsTestState.rethrowCalls,
+          [privateFailure],
+        );
+
+        await act(async () => {
+          alert
+            .find(
+              (el) => el.type === "button" && textOf(el) === "Dismiss error",
+            )
+            .props.onClick();
+          await waitForAsyncDrain();
+        });
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      } finally {
+        await act(async () => renderer.unmount());
+        t.mock.timers.reset();
+      }
+    });
+  });
+
+  test("search retry runs immediately and replaces the failed result with the recovered response", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await withPortalDom(async () => {
+      installHistorySpy();
+      let attempt = 0;
+      globalForActions.__documentListActionsTestState.searchImpl = async () => {
+        attempt += 1;
+        if (attempt === 1) throw new Error("temporary search failure");
+        return {
+          results: [doc("recovered", { title: "Recovered result" })],
+          hasMore: false,
+        };
+      };
+      const renderer = mount({ documents: [doc("seed", { title: "Seed" })] });
+      try {
+        act(() => {
+          renderer.root
+            .findByProps({
+              "aria-label": "Search documents",
+            })
+            .props.onChange({ target: { value: "recover" } });
+        });
+        await act(async () => {
+          t.mock.timers.tick(300);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        const retry = renderer.root.find(
+          (el) => el.type === "button" && textOf(el) === "Try search again",
+        );
+        await act(async () => {
+          retry.props.onClick();
+          retry.props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.deepEqual(
+          globalForActions.__documentListActionsTestState.searchCalls,
+          ["recover", "recover"],
+        );
+        assert.ok(renderer.root.findByProps({ id: "recovered" }));
+        assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+      } finally {
+        await act(async () => renderer.unmount());
         t.mock.timers.reset();
       }
     });

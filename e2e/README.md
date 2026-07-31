@@ -22,7 +22,8 @@ app.
 | `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                          |
 | `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                             |
 | `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                   |
-| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup/onboarding/deletion, profile persistence, scoped export, password rotation/re-login, recovery failures, and safeguards   |
+| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup, onboarding failure recovery/deletion, profile persistence, export, password rotation, recovery failures, and safeguards |
+| `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts` | Search/favorite failure recovery, persistence, duplicate/rename, delete/undo, trash restore, and permanent deletion             |
 | `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
 | `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Owner/viewer comment lifecycle, anchored-paragraph edits, permissions, resolve/reopen, guarded deletion, and reload persistence |
 | `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling |

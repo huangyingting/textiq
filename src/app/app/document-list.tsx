@@ -1,7 +1,13 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  unstable_rethrow,
+  usePathname,
+  useSearchParams,
+} from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+
+import { Button } from "@/components/ui";
 
 import type {
   AvailableTag,
@@ -60,9 +66,14 @@ export function DocumentList({
     DashboardDocument[] | null
   >(null);
   const [searchCapped, setSearchCapped] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearchPending, startSearchTransition] = useTransition();
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestSeqRef = useRef(0);
+  const inFlightSearchRef = useRef<{
+    query: string;
+    requestSeq: number;
+  } | null>(null);
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -78,7 +89,11 @@ export function DocumentList({
   };
 
   const handleQueryChange = (nextQuery: string) => {
+    if (nextQuery.trim() !== query.trim()) {
+      inFlightSearchRef.current = null;
+    }
     setQuery(nextQuery);
+    setSearchError(null);
     if (!nextQuery.trim()) {
       searchRequestSeqRef.current = nextDocumentListRequestSeq(
         searchRequestSeqRef.current,
@@ -87,6 +102,69 @@ export function DocumentList({
       setSearchCapped(false);
     }
   };
+
+  const executeSearch = useCallback(
+    (trimmed: string) => {
+      if (inFlightSearchRef.current?.query === trimmed) return;
+
+      const requestSeq = nextDocumentListRequestSeq(
+        searchRequestSeqRef.current,
+      );
+      searchRequestSeqRef.current = requestSeq;
+      inFlightSearchRef.current = { query: trimmed, requestSeq };
+      startSearchTransition(async () => {
+        try {
+          const { results, hasMore } =
+            await documentListActions.searchDocuments(trimmed);
+          if (
+            !isCurrentDocumentListRequest(
+              searchRequestSeqRef.current,
+              requestSeq,
+            )
+          ) {
+            return;
+          }
+          setSearchError(null);
+          setSearchCapped(hasMore);
+          setSearchResults(
+            results.map((result: SearchResult) => ({
+              id: result.id,
+              title: result.title,
+              favorite: result.favorite,
+              editedLabel: result.editedLabel,
+              workspaceName: result.workspaceName,
+              thumbnail: result.thumbnail,
+              excerpt: result.excerpt,
+              readingMinutes: result.readingMinutes,
+              createdAtMs: result.createdAtMs,
+              updatedAtMs: result.updatedAtMs,
+              canEdit: result.canEdit,
+              canManage: result.canManage,
+              tags: result.tags,
+            })),
+          );
+        } catch (error) {
+          unstable_rethrow(error);
+          if (
+            !isCurrentDocumentListRequest(
+              searchRequestSeqRef.current,
+              requestSeq,
+            )
+          ) {
+            return;
+          }
+          setSearchCapped(false);
+          setSearchResults([]);
+          setSearchError("Could not search documents. Please try again.");
+        } finally {
+          if (inFlightSearchRef.current?.requestSeq === requestSeq) {
+            inFlightSearchRef.current = null;
+          }
+        }
+      });
+    },
+    [startSearchTransition],
+  );
 
   const setSort = (next: SortKey) => {
     updateParams((params) => {
@@ -123,40 +201,15 @@ export function DocumentList({
       clearTimeout(searchDebounceRef.current);
     }
     const trimmed = query.trim();
-    const requestSeq = nextDocumentListRequestSeq(searchRequestSeqRef.current);
-    searchRequestSeqRef.current = requestSeq;
+    searchRequestSeqRef.current = nextDocumentListRequestSeq(
+      searchRequestSeqRef.current,
+    );
     if (!trimmed) {
       searchDebounceRef.current = null;
       return;
     }
     searchDebounceRef.current = setTimeout(() => {
-      startSearchTransition(async () => {
-        const { results, hasMore } =
-          await documentListActions.searchDocuments(trimmed);
-        if (
-          !isCurrentDocumentListRequest(searchRequestSeqRef.current, requestSeq)
-        ) {
-          return;
-        }
-        setSearchCapped(hasMore);
-        setSearchResults(
-          results.map((result: SearchResult) => ({
-            id: result.id,
-            title: result.title,
-            favorite: result.favorite,
-            editedLabel: result.editedLabel,
-            workspaceName: result.workspaceName,
-            thumbnail: result.thumbnail,
-            excerpt: result.excerpt,
-            readingMinutes: result.readingMinutes,
-            createdAtMs: result.createdAtMs,
-            updatedAtMs: result.updatedAtMs,
-            canEdit: result.canEdit,
-            canManage: result.canManage,
-            tags: result.tags,
-          })),
-        );
-      });
+      executeSearch(trimmed);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => {
@@ -165,7 +218,7 @@ export function DocumentList({
         searchDebounceRef.current = null;
       }
     };
-  }, [query]);
+  }, [executeSearch, query]);
 
   const {
     combinedDocuments,
@@ -232,6 +285,36 @@ export function DocumentList({
             >
               {trashErrorMessage}
             </p>
+          )}
+          {searchError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-ds-danger-border bg-ds-danger-surface px-4 py-3 text-sm text-ds-danger-text"
+            >
+              <p>{searchError}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  disabled={isSearchPending}
+                  onClick={() => {
+                    if (!trimmedQuery) return;
+                    setSearchError(null);
+                    executeSearch(trimmedQuery);
+                  }}
+                >
+                  Try search again
+                </Button>
+                <Button
+                  variant="plain"
+                  size="sm"
+                  disabled={isSearchPending}
+                  onClick={() => setSearchError(null)}
+                >
+                  Dismiss error
+                </Button>
+              </div>
+            </div>
           )}
 
           <DocumentGrid

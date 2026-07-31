@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import {
   useEffect,
   useOptimistic,
   useRef,
   useState,
   useTransition,
+  type RefObject,
 } from "react";
 
-import { Dialog, MENU_CHROME, MENU_ITEM, cx } from "@/components/ui";
+import { Button, Dialog, MENU_CHROME, MENU_ITEM, cx } from "@/components/ui";
 import type { DocumentListActionPort } from "@/lib/action-ports";
 import { VisualRenderer } from "@/components/visual/visual-renderer";
 import type { Visual } from "@/lib/visual/schema";
@@ -92,10 +94,12 @@ function StarButton({
   active,
   title,
   onToggle,
+  disabled,
 }: {
   active: boolean;
   title: string;
   onToggle: () => void;
+  disabled: boolean;
 }) {
   return (
     <button
@@ -103,7 +107,8 @@ function StarButton({
       aria-label={active ? `Unfavorite ${title}` : `Favorite ${title}`}
       aria-pressed={active}
       onClick={onToggle}
-      className={`flex h-7 w-7 items-center justify-center rounded-full shadow-sm backdrop-blur transition ${
+      disabled={disabled}
+      className={`flex h-7 w-7 items-center justify-center rounded-full shadow-sm backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-60 ${
         active
           ? "bg-ds-surface-base/80 text-ds-warning hover:bg-ds-surface-base"
           : "bg-ds-surface-base/80 text-ds-text-secondary hover:bg-ds-surface-base hover:text-ds-warning"
@@ -129,15 +134,18 @@ function DeleteConfirmDialog({
   title,
   onCancel,
   onConfirm,
+  restoreFocusRef,
 }: {
   title: string;
   onCancel: () => void;
   onConfirm: () => void;
+  restoreFocusRef: RefObject<HTMLElement | null>;
 }) {
   return (
     <Dialog
       open
       onClose={onCancel}
+      restoreFocusRef={restoreFocusRef}
       aria-labelledby="delete-document-title"
       className="max-w-sm"
     >
@@ -181,10 +189,18 @@ function RenameDialog({
   initialTitle,
   onCancel,
   onSubmit,
+  onDismissError,
+  isPending,
+  error,
+  restoreFocusRef,
 }: {
   initialTitle: string;
   onCancel: () => void;
   onSubmit: (title: string) => void;
+  onDismissError: () => void;
+  isPending: boolean;
+  error: string | null;
+  restoreFocusRef: RefObject<HTMLElement | null>;
 }) {
   const [value, setValue] = useState(initialTitle);
   const isEmpty = value.trim().length === 0;
@@ -193,7 +209,9 @@ function RenameDialog({
     <Dialog
       open
       onClose={onCancel}
+      restoreFocusRef={restoreFocusRef}
       aria-labelledby="rename-document-title"
+      aria-busy={isPending}
       className="max-w-sm"
     >
       <h2
@@ -223,29 +241,71 @@ function RenameDialog({
           value={value}
           maxLength={MAX_TITLE_LENGTH}
           aria-label="Document title"
-          onChange={(event) => setValue(event.target.value)}
+          disabled={isPending}
+          onChange={(event) => {
+            setValue(event.target.value);
+            if (error) onDismissError();
+          }}
           className="mt-1.5 w-full rounded-lg border border-ds-border-strong bg-ds-surface-base px-3 py-2 text-sm text-ds-text-primary outline-none transition focus:border-ds-accent focus:ring-2 focus:ring-ds-accent/30"
         />
+        {error ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+          >
+            <p>{error}</p>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={onDismissError}
+              className="mt-2"
+            >
+              Dismiss error
+            </Button>
+          </div>
+        ) : null}
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
+          <Button
+            variant="subtle"
+            size="lg"
             onClick={onCancel}
-            className="flex h-9 items-center justify-center rounded-full border border-ds-border-strong px-4 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary"
+            disabled={isPending}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="solid"
+            size="lg"
             type="submit"
-            disabled={isEmpty}
-            className="flex h-9 items-center justify-center rounded-full bg-ds-accent px-4 text-sm font-medium text-ds-text-on-accent transition hover:opacity-90 disabled:opacity-60"
+            disabled={isEmpty || isPending}
           >
-            Rename
-          </button>
+            {isPending ? "Renaming…" : error ? "Try rename again" : "Rename"}
+          </Button>
         </div>
       </form>
     </Dialog>
   );
 }
+
+type DocumentCardActionAttempt =
+  | { kind: "favorite"; target: boolean }
+  | { kind: "rename"; title: string }
+  | { kind: "duplicate" };
+
+const CARD_ACTION_COPY = {
+  favorite: {
+    error: "Could not update the favorite. Please try again.",
+    retry: "Try favorite again",
+  },
+  rename: {
+    error: "Could not rename the document. Please try again.",
+    retry: "Try rename again",
+  },
+  duplicate: {
+    error: "Could not duplicate the document. Please try again.",
+    retry: "Try duplicate again",
+  },
+} as const;
 
 /**
  * A dashboard document card: a navigable link plus an overflow (kebab) menu for
@@ -258,12 +318,14 @@ function RenameDialog({
  * `stopPropagation`, which would be unreliable under the App Router's delegated
  * events.
  *
- * Rename and Duplicate are owned here (each runs its server action in a
- * transition; the dashboard reconciles via `revalidatePath("/app")` — a
- * duplicate appears at the top as the most-recent document). Deletion is owned
- * by the parent `DocumentList` (which manages optimistic removal and the
- * transient undo affordance): confirming the dialog calls the `onDelete(data)`
- * callback rather than deleting here.
+ * Favorite, Rename, and Duplicate are owned here. One synchronous in-flight
+ * guard prevents repeated activation before React commits disabled state;
+ * ordinary failures remain local with generic retry/dismiss UI, while Next
+ * control-flow errors are rethrown. The dashboard reconciles successful writes
+ * via `revalidatePath("/app")`. Deletion is owned by the parent `DocumentList`
+ * (which manages optimistic removal and the transient undo affordance):
+ * confirming the dialog calls the `onDelete(data)` callback rather than
+ * deleting here.
  */
 export function DocumentCard({
   id,
@@ -281,10 +343,17 @@ export function DocumentCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [actionError, setActionError] =
+    useState<DocumentCardActionAttempt | null>(null);
+  const [pendingKind, setPendingKind] = useState<
+    DocumentCardActionAttempt["kind"] | null
+  >(null);
   const [optimisticTitle, setOptimisticTitle] = useOptimistic(title);
   const [optimisticFavorite, setOptimisticFavorite] = useOptimistic(favorite);
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
+  const actionInFlightRef = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -315,30 +384,81 @@ export function DocumentCard({
     });
   };
 
-  const handleToggleFavorite = () => {
+  const runAction = (
+    attempt: DocumentCardActionAttempt,
+    action: () => Promise<void>,
+    onSuccess?: () => void,
+  ) => {
+    if (actionInFlightRef.current) return;
+
+    actionInFlightRef.current = true;
+    setActionError(null);
+    setPendingKind(attempt.kind);
     startTransition(async () => {
-      setOptimisticFavorite(!optimisticFavorite);
+      try {
+        await action();
+        onSuccess?.();
+      } catch (error) {
+        unstable_rethrow(error);
+        setActionError(attempt);
+      } finally {
+        actionInFlightRef.current = false;
+        setPendingKind(null);
+      }
+    });
+  };
+
+  const runFavorite = (target: boolean) => {
+    runAction({ kind: "favorite", target }, async () => {
+      setOptimisticFavorite(target);
       await documentCardActions.toggleFavorite(id);
     });
   };
 
-  const handleRename = (nextTitle: string) => {
-    setRenameOpen(false);
+  const handleToggleFavorite = () => {
+    runFavorite(!optimisticFavorite);
+  };
+
+  const runRename = (nextTitle: string) => {
     const normalized = normalizeTitle(nextTitle);
     if (normalized === optimisticTitle) {
+      setRenameOpen(false);
+      setActionError(null);
       return;
     }
-    startTransition(async () => {
-      setOptimisticTitle(normalized);
-      await documentCardActions.renameDocument(id, nextTitle);
+
+    runAction(
+      { kind: "rename", title: nextTitle },
+      async () => {
+        setOptimisticTitle(normalized);
+        await documentCardActions.renameDocument(id, nextTitle);
+      },
+      () => setRenameOpen(false),
+    );
+  };
+
+  const runDuplicate = () => {
+    setMenuOpen(false);
+    runAction({ kind: "duplicate" }, async () => {
+      await documentCardActions.duplicateDocument(id);
     });
   };
 
-  const handleDuplicate = () => {
-    setMenuOpen(false);
-    startTransition(async () => {
-      await documentCardActions.duplicateDocument(id);
-    });
+  const retryAction = () => {
+    if (!actionError) return;
+    if (actionError.kind === "favorite") {
+      runFavorite(actionError.target);
+    } else if (actionError.kind === "rename") {
+      runRename(actionError.title);
+    } else {
+      runDuplicate();
+    }
+  };
+
+  const closeRename = () => {
+    if (actionInFlightRef.current) return;
+    setActionError(null);
+    setRenameOpen(false);
   };
 
   return (
@@ -389,18 +509,21 @@ export function DocumentCard({
             active={optimisticFavorite}
             title={optimisticTitle}
             onToggle={handleToggleFavorite}
+            disabled={isPending}
           />
         )}
       </div>
 
       <div ref={menuRef} className="absolute right-2 top-2 z-raised">
         <button
+          ref={menuTriggerRef}
           type="button"
           aria-label={`Actions for ${optimisticTitle}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          disabled={isPending}
           onClick={() => setMenuOpen((open) => !open)}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-ds-surface-base/80 text-ds-text-secondary shadow-sm backdrop-blur transition hover:bg-ds-surface-base hover:text-ds-text-primary"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-ds-surface-base/80 text-ds-text-secondary shadow-sm backdrop-blur transition hover:bg-ds-surface-base hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           <svg
             aria-hidden="true"
@@ -426,8 +549,10 @@ export function DocumentCard({
               <button
                 type="button"
                 role="menuitem"
+                disabled={isPending}
                 onClick={() => {
                   setMenuOpen(false);
+                  setActionError(null);
                   setRenameOpen(true);
                 }}
                 className={MENU_ITEM}
@@ -438,7 +563,8 @@ export function DocumentCard({
             <button
               type="button"
               role="menuitem"
-              onClick={handleDuplicate}
+              disabled={isPending}
+              onClick={runDuplicate}
               className={MENU_ITEM}
             >
               Duplicate
@@ -447,6 +573,7 @@ export function DocumentCard({
               <button
                 type="button"
                 role="menuitem"
+                disabled={isPending}
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirmOpen(true);
@@ -463,11 +590,46 @@ export function DocumentCard({
         )}
       </div>
 
+      {actionError && actionError.kind !== "rename" ? (
+        <div
+          role="alert"
+          className="mt-2 rounded-ds-md border border-ds-danger-border bg-ds-danger-surface p-3 text-sm text-ds-danger-text"
+        >
+          <p>{CARD_ACTION_COPY[actionError.kind].error}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={retryAction}
+              disabled={isPending}
+            >
+              {CARD_ACTION_COPY[actionError.kind].retry}
+            </Button>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => setActionError(null)}
+              disabled={isPending}
+            >
+              Dismiss error
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {renameOpen && (
         <RenameDialog
           initialTitle={optimisticTitle}
-          onCancel={() => setRenameOpen(false)}
-          onSubmit={handleRename}
+          onCancel={closeRename}
+          onSubmit={runRename}
+          onDismissError={() => setActionError(null)}
+          isPending={pendingKind === "rename"}
+          error={
+            actionError?.kind === "rename"
+              ? CARD_ACTION_COPY.rename.error
+              : null
+          }
+          restoreFocusRef={menuTriggerRef}
         />
       )}
 
@@ -476,6 +638,7 @@ export function DocumentCard({
           title={optimisticTitle}
           onCancel={() => setConfirmOpen(false)}
           onConfirm={handleConfirmDelete}
+          restoreFocusRef={menuTriggerRef}
         />
       )}
     </li>

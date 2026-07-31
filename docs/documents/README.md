@@ -87,8 +87,14 @@ dashboard cards with:
 
 Search normalizes the query and reuses the accessible-document query policy.
 Text search matches title and the persisted `Document.content` plain-text
-projection with provider-aware case-insensitive contains. Every canonical
-`contentJson` create, save, duplicate, import, onboarding seed, and version
+projection with provider-aware case-insensitive contains. Debounced dashboard
+searches invalidate older responses, suppress repeated same-query retries, and
+contain ordinary Server Action or transport failures in a generic retry/dismiss
+alert. A failed current request clears stale results; failures from superseded
+queries cannot overwrite the latest result or error state, and Next
+redirect/not-found control flow is rethrown.
+
+Every canonical `contentJson` create, save, duplicate, import, onboarding seed, and version
 restore supplies one canonical snapshot to the document write port. The port
 clones and seals that snapshot, derives both persisted fields immediately before
 the Prisma mutation, and does not accept caller-supplied projection fields.
@@ -147,6 +153,14 @@ sets `deletedAt`; restore clears `deletedAt`. Dashboard-load maintenance purges
 documents older than the soft-delete retention window and also removes expired,
 revoked, or exhausted invite links under the same lock policy.
 
+Dashboard favorite, rename, and duplicate actions share one card-level
+in-flight boundary. It suppresses repeated durable mutations, locks competing
+card controls while pending, keeps rename open until persistence succeeds, and
+contains ordinary failures in generic retry/dismiss UI without exposing server
+details. Failed optimistic favorite/title state rolls back, while Next
+redirect/not-found control flow remains authoritative. Rename and delete
+dialogs restore focus to the card action trigger.
+
 Restore and permanent-delete confirmations share one dialog implementation.
 Pending actions suppress duplicate activation and lock dismissal. Ordinary
 Server Action failures remain inline with generic retry/dismiss controls, while
@@ -179,6 +193,7 @@ visible row is removed.
 - [`type-tests/document-prisma-boundary/contract.ts`](../../type-tests/document-prisma-boundary/contract.ts)
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
+- [`src/app/app/document-card.test.tsx`](../../src/app/app/document-card.test.tsx)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)
 - [`src/lib/document/tags.test.ts`](../../src/lib/document/tags.test.ts)
 - [`src/lib/dashboard/view-model.test.ts`](../../src/lib/dashboard/view-model.test.ts)

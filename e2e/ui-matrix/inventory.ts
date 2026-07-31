@@ -396,7 +396,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
     owners: ["auth", "security", "settings"],
     coverage:
-      "Deterministic signup with automatic sign-in, first-run content, persistent onboarding dismissal, and complete account deletion; password-recovery and email-verification failure states; plus authenticated settings, profile persistence, scoped export, password failure and successful rotation/re-login, and non-destructive deletion safeguards.",
+      "Deterministic signup with automatic sign-in, first-run content, onboarding dismissal transport-failure recovery and duplicate suppression, persistence, and complete account deletion; password-recovery and email-verification failure states; plus authenticated settings, profile persistence, scoped export, password failure and successful rotation/re-login, and non-destructive deletion safeguards.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: [
@@ -460,7 +460,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts",
     owners: ["documents"],
     coverage:
-      "Deterministic dashboard favorite persistence, duplicate and rename durability, immediate delete/undo recovery, trash restore, and cancellable permanent deletion with fixture cleanup.",
+      "Deterministic dashboard search and favorite transport-failure containment, retry and duplicate suppression; search/favorite persistence, duplicate and rename durability, immediate delete/undo recovery, trash restore, and cancellable permanent deletion with fixture cleanup.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],
