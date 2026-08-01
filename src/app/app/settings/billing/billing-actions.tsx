@@ -133,6 +133,7 @@ export function BillingActions({
     setMessage(null);
     setIsError(false);
     setPendingAction(pending);
+    let checkoutHandoffStarted = false;
     try {
       const outcome = await resolveBillingActionOutcome(action);
       if (!mountedRef.current || actionOperationIdRef.current !== operationId) {
@@ -140,12 +141,17 @@ export function BillingActions({
       }
       if (outcome.redirectUrl) {
         window.location.href = outcome.redirectUrl;
+        checkoutHandoffStarted = true;
         return;
       }
       setMessage(outcome.message);
       setIsError(outcome.isError);
     } finally {
-      if (mountedRef.current && actionOperationIdRef.current === operationId) {
+      if (
+        !checkoutHandoffStarted &&
+        mountedRef.current &&
+        actionOperationIdRef.current === operationId
+      ) {
         actionInFlightRef.current = false;
         setPendingAction(null);
       }

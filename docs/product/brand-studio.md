@@ -59,6 +59,13 @@ parallel. The view model exposes:
 Brand style access and font upload are separate features. A plan can allow saved
 brand styles without allowing custom font upload.
 
+Logo upload accepts PNG, JPEG, and WebP. The picker is rendered from the same
+allowlist as client and server validation; SVG remains unavailable until a
+server-side sanitization path exists. When a user switches from an uploaded
+custom font to a built-in font or the system default, the form clears the
+custom font asset reference so an unused asset is not retained or subjected to
+the Pro-only font entitlement on save.
+
 Create/update, media upload, and delete interactions each use a synchronous
 operation boundary. Repeated activation cannot dispatch duplicate writes, a
 form cannot save or close while its selected logo/font is still uploading, and
@@ -73,6 +80,8 @@ automatic palette. The palette can be edited normally after that boundary ends.
 Unmounting a form invalidates its pending save or media upload: late results
 cannot update detached form state, notify a detached parent, inject a custom
 font into a replacement page, or run delayed logo-palette extraction.
+Each simultaneously open brand form also owns a unique name-input id so its
+visible label cannot focus another card's field.
 
 Document-editor brand pickers load `/api/brand` through the shared saved-brand
 client boundary. The complete response is parsed as `BrandStyle[]` before any

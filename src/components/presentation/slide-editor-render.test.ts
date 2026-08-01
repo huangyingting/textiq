@@ -19,6 +19,7 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
+import { SLIDE_IMAGE_TYPES } from "@/lib/limits";
 import {
   createReactRenderHarness,
   withDefaultDom,
@@ -103,6 +104,36 @@ test("SlideEditor renders the full editor shell for mixed slide content", () => 
   assert.match(html, /Deck tools/);
   assert.match(html, /data-slide-bottom-dock="true"/);
 });
+
+test("SlideEditor image pickers advertise exactly the accepted upload formats", () => {
+  const renderer = createHookRenderer();
+  const tree = renderer.run(() =>
+    SlideEditor({
+      documentId: "doc-image-accept",
+      deck: mixedDeck(),
+      onDeckChange: () => undefined,
+      onUploadImage: async () => ({ src: "", assetId: "replacement" }),
+    }),
+  );
+
+  try {
+    const fileInputs = collectElements(tree).filter(
+      (element) =>
+        element.type === "input" &&
+        (element.props as { type?: string }).type === "file",
+    );
+    assert.equal(fileInputs.length, 2);
+    for (const input of fileInputs) {
+      assert.equal(
+        (input.props as { accept?: string }).accept,
+        SLIDE_IMAGE_TYPES.join(","),
+      );
+    }
+  } finally {
+    renderer.cleanup();
+  }
+});
+
 test("SlideEditor top-level handlers tolerate no-op editor callbacks", async () => {
   const actionOk = async () => ({ ok: true as const, data: undefined });
   const renderer = createHookRenderer();

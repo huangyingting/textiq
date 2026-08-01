@@ -371,6 +371,79 @@ describe("BillingActions", () => {
     }
   });
 
+  test("a successful checkout handoff stays terminally owned until unmount", async () => {
+    const changeCalls: string[] = [];
+    const actionPort: BillingActionPort = {
+      changePlan: async (plan) => {
+        changeCalls.push(plan);
+        return {
+          ok: true,
+          data: {
+            message: "Redirecting…",
+            redirectUrl: "https://billing.example/checkout",
+          },
+        };
+      },
+      cancelSubscription: async () => ({
+        ok: true,
+        data: { message: "Cancelled." },
+      }),
+    };
+    const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    const fakeWindow = {
+      location: { href: "https://app.example/settings/billing" },
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: fakeWindow,
+      writable: true,
+    });
+    let renderer!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        renderer = create(
+          <BillingActions
+            currentPlan="free"
+            cancelAtPeriodEnd={false}
+            actionPort={actionPort}
+          />,
+        );
+      });
+      await act(async () => {
+        buttonByText(renderer, /^Plus/).props.onClick();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        fakeWindow.location.href,
+        "https://billing.example/checkout",
+      );
+      assert.equal(buttonByText(renderer, /^Plus/).props.disabled, true);
+      assert.equal(buttonByText(renderer, /^Pro/).props.disabled, true);
+      renderer.root.find(
+        (element) =>
+          element.type === "div" && element.props["aria-busy"] === true,
+      );
+
+      await act(async () => {
+        buttonByText(renderer, /^Pro/).props.onClick();
+        await waitForAsyncDrain();
+      });
+      assert.deepEqual(changeCalls, ["plus"]);
+    } finally {
+      if (renderer?.toJSON() !== null) act(() => renderer.unmount());
+      if (originalWindowDescriptor) {
+        Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, "window");
+      }
+    }
+  });
+
   test("cancellation shares the mutation boundary and exposes contextual pending feedback", async () => {
     const attempt =
       deferred<Awaited<ReturnType<BillingActionPort["cancelSubscription"]>>>();

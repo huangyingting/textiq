@@ -246,12 +246,15 @@ export class StripeBillingProvider implements BillingProvider {
       cancel_url: `${appUrl}/app/settings/billing?cancelled=1`,
       metadata: { userId, plan: targetPlan },
     });
+    if (!session.url) {
+      throw new Error("Stripe checkout did not return a redirect URL.");
+    }
 
     return {
       success: true,
       plan: targetPlan,
       message: "Redirecting to Stripe checkout…",
-      redirectUrl: session.url ?? undefined,
+      redirectUrl: session.url,
     };
   }
 

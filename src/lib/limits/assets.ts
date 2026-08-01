@@ -31,7 +31,6 @@ export const BRAND_FONT_ACCEPTED_TYPES = [
 export const BRAND_LOGO_ACCEPTED_TYPES = [
   "image/png",
   "image/jpeg",
-  "image/svg+xml",
   "image/webp",
 ] as const;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   DocumentImportCreateActionPort,
@@ -143,6 +143,17 @@ function useImportWorkflow<TPayload>(input: {
   const [state, setState] = useState<DocumentImportState>({ status: "idle" });
   const inputRef = useRef<HTMLInputElement>(null);
   const isUploadingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const operationIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      operationIdRef.current += 1;
+      isUploadingRef.current = false;
+    };
+  }, []);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -167,6 +178,7 @@ function useImportWorkflow<TPayload>(input: {
       }
 
       isUploadingRef.current = true;
+      const operationId = ++operationIdRef.current;
       setState({ status: "uploading" });
       const startedAt = performance.now();
       emitProductTelemetry("product.import.started", {
@@ -180,6 +192,9 @@ function useImportWorkflow<TPayload>(input: {
         result = await input.importFile(file);
       } catch {
         result = { ok: false, error: networkError() };
+      }
+      if (!mountedRef.current || operationIdRef.current !== operationId) {
+        return;
       }
       isUploadingRef.current = false;
       if (result.ok) {

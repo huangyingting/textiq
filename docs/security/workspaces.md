@@ -72,8 +72,10 @@ keeps pending actions and dismissal locked, contains ordinary failures in an
 inline retry/dismiss alert, and preserves Next redirect control flow. The
 picker invalidates late UI work after unmount. Workspace document state is
 owned by `workspaceId`, so switching workspaces resets loading, creation, and
-import state; an old workspace's late list or create result cannot populate or
-lock the new workspace surface. The server-side
+import state; an old workspace's late list, create, or import result cannot
+populate, navigate, or lock the new workspace surface. Ordinary document-list
+failures remain retryable, while framework redirect/not-found control flow is
+re-thrown before the loader maps failures into UI state. The server-side
 `createWorkspaceDocumentForUser` capability check remains authoritative even
 when the client action is hidden.
 

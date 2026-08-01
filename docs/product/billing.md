@@ -119,7 +119,10 @@ control flow is rethrown instead of being converted to ordinary billing
 feedback, and inline feedback can be dismissed before retrying. Checkout and
 portal handoffs remain owned by the mounted billing surface; leaving that
 surface invalidates the active operation so a late provider response cannot
-navigate the user away from their newer route.
+navigate the user away from their newer route. A hosted Stripe checkout is
+reported as successful only when Stripe returns a non-empty redirect URL;
+missing handoff URLs fail through the same logged, generic action-error path
+instead of showing a false “Redirecting…” success.
 
 ## Subscription Writes
 

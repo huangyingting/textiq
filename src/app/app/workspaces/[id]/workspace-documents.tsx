@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { FileText, Plus, Upload } from "lucide-react";
 
 import { Button, EMPTY_STATE_CHROME, PANEL_CHROME, cx } from "@/components/ui";
@@ -29,6 +29,18 @@ function DocumentThumbnail() {
       <FileText aria-hidden="true" className="h-8 w-8 text-ds-text-muted" />
     </div>
   );
+}
+
+export async function resolveWorkspaceDocumentsLoad(workspaceId: string) {
+  try {
+    return {
+      ok: true as const,
+      data: await getWorkspaceDocuments(workspaceId),
+    };
+  } catch (loadError) {
+    unstable_rethrow(loadError);
+    return { ok: false as const };
+  }
 }
 
 /** Toolbar with New and Import buttons for owners and editors. */
@@ -168,19 +180,18 @@ function WorkspaceDocumentsForWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    getWorkspaceDocuments(workspaceId)
-      .then((result) => {
-        if (cancelled) return;
-        setDocuments(result.documents);
-        setHasMore(result.hasMore);
-        setLoading(false);
-        setError(null);
-      })
-      .catch(() => {
-        if (cancelled) return;
+    resolveWorkspaceDocumentsLoad(workspaceId).then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
         setError("Could not load documents. Please try again.");
         setLoading(false);
-      });
+        return;
+      }
+      setDocuments(result.data.documents);
+      setHasMore(result.data.hasMore);
+      setLoading(false);
+      setError(null);
+    });
     return () => {
       cancelled = true;
     };

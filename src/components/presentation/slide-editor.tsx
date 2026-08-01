@@ -48,6 +48,7 @@ import type {
   SaveBrandKitDraftResult,
 } from "@/lib/action-ports";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
+import { SLIDE_IMAGE_TYPES } from "@/lib/limits";
 import type { SaveStatus } from "@/lib/presentation/save-status";
 import type {
   Deck,
@@ -2684,7 +2685,7 @@ export function SlideEditor({
       <input
         ref={replaceImageFileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        accept={SLIDE_IMAGE_TYPES.join(",")}
         className="hidden"
         onChange={(event) => {
           handleReplaceImageFile(event.currentTarget.files?.[0]);
@@ -2694,7 +2695,7 @@ export function SlideEditor({
       <input
         ref={replaceSlideBackgroundFileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        accept={SLIDE_IMAGE_TYPES.join(",")}
         className="hidden"
         onChange={(event) => {
           handleReplaceSlideBackgroundImageFile(event.currentTarget.files?.[0]);

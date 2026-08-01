@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -38,6 +38,7 @@ import {
 } from "@/lib/brand/upload";
 import { DEFAULT_STYLE } from "@/lib/visual/schema";
 import { buildSampleBrandedVisual } from "@/lib/brand/sample-visual";
+import { BRAND_LOGO_ACCEPTED_TYPES } from "@/lib/limits";
 import { VisualRenderer } from "@/components/visual/visual-renderer";
 import { createBrand, updateBrand, deleteBrand } from "./actions";
 import {
@@ -251,6 +252,7 @@ function BrandForm({
   const logoExtractionAbortRef = useRef<AbortController | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
+  const nameInputId = useId();
   const formBusy = pendingOperation !== null;
   const uploadingLogo = pendingOperation === "logo-upload";
   const uploadingFont = pendingOperation === "font-upload";
@@ -449,13 +451,14 @@ function BrandForm({
       {/* Name */}
       <div className="flex flex-col gap-1.5">
         <label
-          htmlFor="brand-name"
+          htmlFor={nameInputId}
           className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-muted,#6f7d83)]"
         >
           Brand name
         </label>
         <input
-          id="brand-name"
+          id={nameInputId}
+          aria-label="Brand name"
           type="text"
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -547,9 +550,23 @@ function BrandForm({
         </span>
         <select
           value={form.fontFamily ?? ""}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, fontFamily: e.target.value || null }))
-          }
+          onChange={(e) => {
+            const nextFontFamily = e.target.value || null;
+            setForm((current) => {
+              const keepsUploadedFont =
+                nextFontFamily !== null &&
+                nextFontFamily === current.fontFamily &&
+                !BRAND_WEB_FONTS.some(
+                  (font) => font.cssFamily === nextFontFamily,
+                );
+              return {
+                ...current,
+                fontFamily: nextFontFamily,
+                fontAssetId: keepsUploadedFont ? current.fontAssetId : null,
+                fontAssetUrl: keepsUploadedFont ? current.fontAssetUrl : null,
+              };
+            });
+          }}
           disabled={formBusy}
           className={cx(
             "h-9 rounded-[var(--ds-radius-md,10px)] border bg-[var(--ds-surface-base,#fff)] px-3 text-sm text-[var(--ds-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-focus-ring,#6366f1)]",
@@ -647,7 +664,7 @@ function BrandForm({
           <input
             ref={logoInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            accept={BRAND_LOGO_ACCEPTED_TYPES.join(",")}
             className="sr-only"
             disabled={formBusy}
             onChange={(e) => {
@@ -669,7 +686,7 @@ function BrandForm({
             onClick={() => logoInputRef.current?.click()}
             disabled={formBusy}
           >
-            {form.logoAssetUrl ? "Replace logo" : "Upload logo (PNG/SVG/JPG)"}
+            {form.logoAssetUrl ? "Replace logo" : "Upload logo (PNG/JPG/WebP)"}
           </Button>
         </div>
         {form.logoAssetUrl && (

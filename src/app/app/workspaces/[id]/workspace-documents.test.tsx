@@ -530,6 +530,15 @@ describe("WorkspaceDocuments", () => {
     }
   });
 
+  test("workspace document loading rethrows framework redirect control flow", async () => {
+    state().requireUser = async (redirect) => redirect("/login");
+
+    await assert.rejects(
+      () => mod.resolveWorkspaceDocumentsLoad("workspace-1"),
+      /NEXT_REDIRECT:\/login/,
+    );
+  });
+
   test("owners/editors see New + Import actions; viewers see neither", async () => {
     const owner = mountWorkspaceDocuments({
       workspaceId: "workspace-1",

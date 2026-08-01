@@ -281,7 +281,7 @@ describe("StripeBillingProvider local plan guards", () => {
     assert.equal(plusSession.line_items[0]?.price, "price_plus");
   });
 
-  it("reuses an existing Stripe customer for paid checkout", async (t) => {
+  it("fails closed when paid checkout does not return a redirect URL", async (t) => {
     process.env.STRIPE_SECRET_KEY = "sk_test_textiq";
     process.env.STRIPE_PRO_PRICE_ID = "price_pro";
     const customerCalls: unknown[] = [];
@@ -326,10 +326,10 @@ describe("StripeBillingProvider local plan guards", () => {
     }));
     const provider = new StripeBillingProvider();
 
-    const result = await provider.changePlan("user-checkout", "pro");
-
-    assert.equal(result.success, true);
-    assert.equal(result.redirectUrl, undefined);
+    await assert.rejects(
+      () => provider.changePlan("user-checkout", "pro"),
+      /Stripe checkout did not return a redirect URL/,
+    );
     assert.equal(customerCalls.length, 0);
     const proSession = sessionCalls[0] as {
       customer: string;

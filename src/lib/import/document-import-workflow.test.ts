@@ -333,6 +333,42 @@ test("creation workflow ignores a second file while durable import is pending", 
   unmount();
 });
 
+test("creation workflow ignores a late import result after its surface unmounts", async () => {
+  let resolveImport!: (
+    value: Awaited<ReturnType<DocumentImportCreateActionPort["importFile"]>>,
+  ) => void;
+  const port: DocumentImportCreateActionPort = {
+    importFile() {
+      return new Promise((resolve) => {
+        resolveImport = resolve;
+      });
+    },
+  };
+  const created: ImportedDocumentCreationPayload[] = [];
+  const { ref, unmount } = renderWorkflow({
+    port,
+    onCreated: (payload) => created.push(payload),
+  });
+
+  let pendingImport!: Promise<void>;
+  act(() => {
+    pendingImport = ref.current!.processFile(
+      fakeFile(1024, "late.md", "text/markdown"),
+    );
+  });
+  unmount();
+
+  await act(async () => {
+    resolveImport({
+      ok: true,
+      data: { documentId: "doc-late", documentPath: "/app/documents/doc-late" },
+    });
+    await pendingImport;
+  });
+
+  assert.deepEqual(created, []);
+});
+
 test("creation workflow contains a thrown port error and becomes retryable", async () => {
   const port: DocumentImportCreateActionPort = {
     async importFile() {

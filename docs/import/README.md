@@ -59,9 +59,10 @@ mounted while work is pending and synchronously guard the workflow so a second
 input change cannot start a concurrent create or parse. Client-side oversized
 file rejection and malformed/transport response failures remain retryable.
 Failed editor parses offer direct retry and dismiss actions.
-If the editor import surface unmounts while parsing, it invalidates ownership of
-that request; a late result cannot reach the editor apply callback or emit a
-success/failure settlement for the abandoned surface.
+If any import surface unmounts while parsing or durably creating a document, it
+invalidates ownership of that request; a late result cannot reach the editor
+apply callback, navigate through a detached dashboard/workspace callback, or
+emit a success/failure settlement for the abandoned surface.
 
 Replacing a non-empty editor document requires a modal confirmation. The shared
 dialog primitive provides initial focus, Tab containment, Escape and backdrop

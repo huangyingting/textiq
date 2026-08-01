@@ -334,6 +334,10 @@ function findFileInput(
   return match;
 }
 
+function findBrandNameInput(root: ReactTestInstance): ReactTestInstance {
+  return root.findByProps({ "aria-label": "Brand name" });
+}
+
 async function selectFile(input: ReactTestInstance, file: File): Promise<void> {
   await act(async () => {
     input.props.onChange({ target: { files: [file], value: "mock" } });
@@ -391,7 +395,45 @@ describe("BrandStudio", () => {
           canFontUpload: false,
         });
         try {
-          assert.throws(() => renderer.root.findByProps({ id: "brand-name" }));
+          assert.throws(() => findBrandNameInput(renderer.root));
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("simultaneously open brand forms own unique name labels and inputs", () => {
+      withPortalDom(() => {
+        const renderer = mount({
+          initialBrands: [
+            buildBrand({ id: "b1", name: "Acme" }),
+            buildBrand({ id: "b2", name: "Globex" }),
+          ],
+          canFontUpload: false,
+        });
+        try {
+          act(() => {
+            for (const edit of renderer.root.findAll(
+              (element) =>
+                element.type === "button" &&
+                element.props["aria-label"] === "Edit brand",
+            )) {
+              edit.props.onClick();
+            }
+          });
+
+          const labels = renderer.root.findAllByType("label");
+          const inputs = renderer.root.findAll(
+            (element) =>
+              element.type === "input" && element.props.maxLength === 80,
+          );
+          assert.equal(labels.length, 2);
+          assert.equal(inputs.length, 2);
+          assert.equal(new Set(inputs.map((input) => input.props.id)).size, 2);
+          assert.deepEqual(
+            labels.map((label) => label.props.htmlFor),
+            inputs.map((input) => input.props.id),
+          );
         } finally {
           act(() => renderer.unmount());
         }
@@ -456,7 +498,7 @@ describe("BrandStudio", () => {
           act(() => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
-          const nameInput = renderer.root.findByProps({ id: "brand-name" });
+          const nameInput = findBrandNameInput(renderer.root);
           act(() => {
             nameInput.props.onChange({ target: { value: "New Co" } });
           });
@@ -491,7 +533,7 @@ describe("BrandStudio", () => {
           );
           // Panel closed; the new brand now renders as a card.
           renderer.root.findByProps({ "aria-label": "Brand: New Co" });
-          assert.throws(() => renderer.root.findByProps({ id: "brand-name" }));
+          assert.throws(() => findBrandNameInput(renderer.root));
         } finally {
           act(() => renderer.unmount());
         }
@@ -510,9 +552,9 @@ describe("BrandStudio", () => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "New Co" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "New Co" },
+            });
           });
           await act(async () => {
             findButtonByText(renderer.root, /Create brand/).props.onClick();
@@ -523,7 +565,7 @@ describe("BrandStudio", () => {
           const alert = renderer.root.findByProps({ role: "alert" });
           assert.match(textOf(alert), /reached the brand style limit/);
           // Still open: name input still present.
-          renderer.root.findByProps({ id: "brand-name" });
+          findBrandNameInput(renderer.root);
         } finally {
           act(() => renderer.unmount());
         }
@@ -541,9 +583,9 @@ describe("BrandStudio", () => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "One Write" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "One Write" },
+            });
           });
           const submit = findButtonByText(renderer.root, /Create brand/);
           const close = renderer.root.findByProps({ "aria-label": "Close" });
@@ -561,10 +603,7 @@ describe("BrandStudio", () => {
             globalForActions.__brandActionsTestState.createCalls.length,
             1,
           );
-          assert.equal(
-            renderer.root.findByProps({ id: "brand-name" }).props.disabled,
-            true,
-          );
+          assert.equal(findBrandNameInput(renderer.root).props.disabled, true);
           assert.equal(
             renderer.root.findByProps({ "aria-label": "Close" }).props.disabled,
             true,
@@ -601,9 +640,9 @@ describe("BrandStudio", () => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "Retained Draft" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "Retained Draft" },
+            });
           });
           await act(async () => {
             findButtonByText(renderer.root, /Create brand/).props.onClick();
@@ -615,7 +654,7 @@ describe("BrandStudio", () => {
           assert.match(textOf(alert), /Couldn't save the brand/);
           assert.doesNotMatch(textOf(alert), /database transport/);
           assert.equal(
-            renderer.root.findByProps({ id: "brand-name" }).props.value,
+            findBrandNameInput(renderer.root).props.value,
             "Retained Draft",
           );
           act(() => {
@@ -642,9 +681,9 @@ describe("BrandStudio", () => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "Redirect Draft" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "Redirect Draft" },
+            });
           });
           await assert.rejects(
             async () => {
@@ -675,9 +714,9 @@ describe("BrandStudio", () => {
             true,
           );
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "N" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "N" },
+            });
           });
           assert.equal(
             findButtonByText(renderer.root, /Create brand/).props.disabled,
@@ -699,7 +738,7 @@ describe("BrandStudio", () => {
           act(() => {
             findButtonByText(renderer.root, /^Cancel$/).props.onClick();
           });
-          assert.throws(() => renderer.root.findByProps({ id: "brand-name" }));
+          assert.throws(() => findBrandNameInput(renderer.root));
           assert.equal(
             globalForActions.__brandActionsTestState.createCalls.length,
             0,
@@ -725,7 +764,7 @@ describe("BrandStudio", () => {
               .findByProps({ "aria-label": "Edit brand" })
               .props.onClick();
           });
-          const nameInput = renderer.root.findByProps({ id: "brand-name" });
+          const nameInput = findBrandNameInput(renderer.root);
           assert.equal(nameInput.props.value, "Acme");
 
           act(() => {
@@ -757,7 +796,7 @@ describe("BrandStudio", () => {
           );
           // Collapsed again; header now shows the renamed brand.
           renderer.root.findByProps({ "aria-label": "Brand: Acme Renamed" });
-          assert.throws(() => renderer.root.findByProps({ id: "brand-name" }));
+          assert.throws(() => findBrandNameInput(renderer.root));
         } finally {
           act(() => renderer.unmount());
         }
@@ -787,7 +826,7 @@ describe("BrandStudio", () => {
           });
           const alert = renderer.root.findByProps({ role: "alert" });
           assert.match(textOf(alert), /Not authorized/);
-          renderer.root.findByProps({ id: "brand-name" });
+          findBrandNameInput(renderer.root);
         } finally {
           act(() => renderer.unmount());
         }
@@ -805,14 +844,14 @@ describe("BrandStudio", () => {
           act(() => {
             toggle.props.onClick();
           });
-          renderer.root.findByProps({ id: "brand-name" });
+          findBrandNameInput(renderer.root);
           const collapse = renderer.root.findByProps({
             "aria-label": "Collapse",
           });
           act(() => {
             collapse.props.onClick();
           });
-          assert.throws(() => renderer.root.findByProps({ id: "brand-name" }));
+          assert.throws(() => findBrandNameInput(renderer.root));
         } finally {
           act(() => renderer.unmount());
         }
@@ -1047,6 +1086,35 @@ describe("BrandStudio", () => {
   });
 
   describe("logo upload", () => {
+    test("the logo picker advertises only the formats accepted by the upload policy", () => {
+      withPortalDom(() => {
+        const renderer = mount({
+          initialBrands: [buildBrand()],
+          canFontUpload: false,
+        });
+        try {
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Edit brand" })
+              .props.onClick();
+          });
+
+          const logoInput = findFileInput(renderer.root, "image");
+          assert.equal(
+            logoInput.props.accept,
+            "image/png,image/jpeg,image/webp",
+          );
+          assert.match(
+            textOf(findButtonByText(renderer.root, /Upload logo/)),
+            /PNG\/JPG\/WebP/,
+          );
+          assert.doesNotMatch(textOf(renderer.root), /PNG\/SVG\/JPG/);
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
     test("logo palette extraction stays inside the upload boundary before manual editing unlocks", async () => {
       await withPortalDom(async () => {
         let uploadCalls = 0;
@@ -1270,9 +1338,9 @@ describe("BrandStudio", () => {
             findButtonByText(renderer.root, /New brand style/).props.onClick();
           });
           act(() => {
-            renderer.root
-              .findByProps({ id: "brand-name" })
-              .props.onChange({ target: { value: "Upload First" } });
+            findBrandNameInput(renderer.root).props.onChange({
+              target: { value: "Upload First" },
+            });
           });
           const logoInput = findFileInput(renderer.root, "image");
           const file = new File(["x"], "logo.png", { type: "image/png" });
@@ -1305,7 +1373,7 @@ describe("BrandStudio", () => {
           assert.equal(cancel.props.disabled, true);
           assert.equal(close.props.disabled, true);
           assert.equal(
-            renderer.root.findByProps({ id: "brand-name" }).props.value,
+            findBrandNameInput(renderer.root).props.value,
             "Upload First",
           );
 
@@ -1426,7 +1494,7 @@ describe("BrandStudio", () => {
           assert.throws(() =>
             renderer.root.findByProps({ alt: "Brand logo preview" }),
           );
-          findButtonByText(renderer.root, /Upload logo \(PNG\/SVG\/JPG\)/);
+          findButtonByText(renderer.root, /Upload logo \(PNG\/JPG\/WebP\)/);
         } finally {
           act(() => renderer.unmount());
         }
@@ -1435,6 +1503,59 @@ describe("BrandStudio", () => {
   });
 
   describe("font upload (entitled)", () => {
+    test("choosing a non-custom font clears the uploaded font asset before save", async () => {
+      await withPortalDom(async () => {
+        const renderer = mount({
+          initialBrands: [
+            buildBrand({
+              fontFamily: "'Custom Font', sans-serif",
+              fontAssetId: "font-asset-custom",
+              fontAssetUrl: "https://textiq.test/api/brand-assets/font-custom",
+            }),
+          ],
+          canFontUpload: true,
+        });
+        globalForActions.__brandActionsTestState.updateImpl = async (
+          id,
+          payload,
+        ) => ({
+          ok: true,
+          data: buildBrand({ id, ...(payload as object) }),
+        });
+
+        try {
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Edit brand" })
+              .props.onClick();
+          });
+          act(() => {
+            renderer.root.findByType("select").props.onChange({
+              target: { value: "" },
+            });
+          });
+          await act(async () => {
+            findButtonByText(renderer.root, /Save changes/).props.onClick();
+            await waitForAsyncDrain();
+            await waitForAsyncDrain();
+          });
+
+          const [{ payload }] =
+            globalForActions.__brandActionsTestState.updateCalls;
+          assert.deepEqual(
+            {
+              fontFamily: (payload as { fontFamily: string | null }).fontFamily,
+              fontAssetId: (payload as { fontAssetId: string | null })
+                .fontAssetId,
+            },
+            { fontFamily: null, fontAssetId: null },
+          );
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
     test("unmounting invalidates a pending font upload before its late result hydrates the page", async () => {
       await withPortalDom(async () => {
         const uploadAttempt =
@@ -1473,10 +1594,7 @@ describe("BrandStudio", () => {
         assert.equal(target.value, "");
         assert.equal(uploadCallCount, 1);
         assert.equal(hydrationCount, 0);
-        assert.equal(
-          renderer.root.findByProps({ id: "brand-name" }).props.disabled,
-          true,
-        );
+        assert.equal(findBrandNameInput(renderer.root).props.disabled, true);
 
         act(() => renderer.unmount());
         assert.equal(hydrationCount, 0);

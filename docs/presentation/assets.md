@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-08-01"
 description: "This document defines the slide image asset lifecycle: upload, storage, serving, resolution, export behavior, and cleanup."
 ---
 
@@ -56,6 +56,9 @@ Accepted MIME types:
 
 SVG is not accepted. Uploads are capped by `ASSET_MAX_BYTES` and raster images
 are dimension-limited by `ASSET_MAX_DIMENSION_PX`.
+The slide editor's image-replacement and background-image pickers are rendered
+from this same MIME tuple, so they offer GIF while excluding unsupported SVG
+instead of drifting from server validation.
 
 The storage key is derived from validated data:
 
