@@ -519,17 +519,19 @@ test("chrome, dialog, and overlay provider primitives render remaining variants"
       const tree = OverlayProvider({ children: "Layer" }) as ElementLike;
       const value = tree.props.value as {
         register: (entry: { id: string; onEscape?: () => void }) => () => void;
-        topId: string | null;
+        isTop: (id: string) => boolean;
       };
       const unregister = value.register({ id: "second" });
+      assert.equal(value.isTop("second"), true);
       unregister();
-      return { setters, topId: value.topId };
+      assert.equal(value.isTop("first"), true);
+      return { setters, firstIsTop: value.isTop("first") };
     },
   );
 
   assert.match(html, /Required/);
   assert.match(html, /Toolbar item/);
-  assert.equal(provider.topId, "first");
+  assert.equal(provider.firstIsTop, true);
   assert.equal(provider.setters.length, 2);
 });
 
@@ -914,6 +916,7 @@ test("Tooltip top placement and overlay stack escape/focus branches remain acces
     {
       refs: [panel, fakeElement(), "overlay-fake-id-2", () => undefined],
       contextValue: {
+        isTop: () => false,
         topId: "overlay-other",
         register: () => () => undefined,
       },

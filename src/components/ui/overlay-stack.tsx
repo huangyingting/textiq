@@ -29,7 +29,7 @@ type OverlayEntry = {
 
 type OverlayStackContextValue = {
   register(entry: OverlayEntry): () => void;
-  topId: string | null;
+  isTop(id: string): boolean;
 };
 
 const OverlayStackContext = createContext<OverlayStackContextValue | null>(
@@ -38,17 +38,25 @@ const OverlayStackContext = createContext<OverlayStackContextValue | null>(
 
 export function OverlayProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<OverlayEntry[]>([]);
-  const topId = stack.at(-1)?.id ?? null;
+  const stackRef = useRef<OverlayEntry[]>(stack);
 
   const register = useCallback((entry: OverlayEntry) => {
-    setStack((current) => [
-      ...current.filter((item) => item.id !== entry.id),
+    const next = [
+      ...stackRef.current.filter((item) => item.id !== entry.id),
       entry,
-    ]);
+    ];
+    stackRef.current = next;
+    setStack(next);
     return () => {
-      setStack((current) => current.filter((item) => item.id !== entry.id));
+      const remaining = stackRef.current.filter((item) => item.id !== entry.id);
+      stackRef.current = remaining;
+      setStack(remaining);
     };
   }, []);
+  const isTop = useCallback(
+    (id: string) => stackRef.current.at(-1)?.id === id,
+    [],
+  );
 
   useEffect(() => {
     if (stack.length === 0) {
@@ -62,8 +70,8 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   }, [stack.length]);
 
   const value = useMemo<OverlayStackContextValue>(
-    () => ({ register, topId }),
-    [register, topId],
+    () => ({ register, isTop }),
+    [isTop, register],
   );
 
   return (
@@ -78,7 +86,7 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
   const fallbackId = useRef(`overlay-${explicitId}`);
   const context = useContext(OverlayStackContext);
   const register = context?.register;
-  const topId = context?.topId ?? null;
+  const isTop = context?.isTop;
   const onEscapeRef = useRef(onEscape);
 
   useEffect(() => {
@@ -100,7 +108,7 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
       if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
-      if (topId !== null && topId !== fallbackId.current) {
+      if (isTop && !isTop(fallbackId.current)) {
         return;
       }
       event.preventDefault();
@@ -109,7 +117,7 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, topId]);
+  }, [isTop, open]);
 }
 
 function useFocusTrap(

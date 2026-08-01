@@ -122,18 +122,33 @@ test.describe("UI matrix: app shell", () => {
     const userMenuTrigger = page.getByRole("button", { name: "User menu" });
     await userMenuTrigger.click();
     const userMenu = page.getByRole("menu");
-    await expect(
-      userMenu.getByRole("menuitem", { name: "Settings" }),
-    ).toBeVisible();
-    await expect(
-      userMenu.getByRole("menuitem", { name: "Billing & Plan" }),
-    ).toBeVisible();
-    await expect(
-      userMenu.getByRole("menuitem", { name: "Sign out" }),
-    ).toBeVisible();
+    const settingsItem = userMenu.getByRole("menuitem", { name: "Settings" });
+    const billingItem = userMenu.getByRole("menuitem", {
+      name: "Billing & Plan",
+    });
+    const signOutItem = userMenu.getByRole("menuitem", { name: "Sign out" });
+    await expect(settingsItem).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(billingItem).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(signOutItem).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(settingsItem).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(signOutItem).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(userMenu).toHaveCount(0);
     await expect(userMenuTrigger).toBeFocused();
+
+    await userMenuTrigger.press("ArrowUp");
+    await expect(signOutItem).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(userMenuTrigger).toBeFocused();
+
+    await userMenuTrigger.click();
+    await expect(settingsItem).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(userMenu).toHaveCount(0);
 
     const shortcutTrigger = page.getByRole("button", {
       name: "Keyboard shortcuts",
@@ -162,6 +177,11 @@ test.describe("UI matrix: app shell", () => {
     await expect(shortcutDialog).toBeVisible();
     await dispatchHelpShortcut(page);
     await expect(shortcutDialog).toHaveCount(0);
+
+    await userMenuTrigger.click();
+    await billingItem.click();
+    await expect(page).toHaveURL(/\/app\/settings\/billing$/);
+    await expect(userMenu).toHaveCount(0);
     await assertNoPageErrors();
   });
 

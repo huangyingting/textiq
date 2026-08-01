@@ -52,8 +52,11 @@ closing or detaching an open instance restores the configured target or the
 original opener so focus cannot remain in removed panel content.
 Nested `Tooltip`, `Popover`, and `FloatingSurface` layers consume Escape after
 dismissing themselves, and the modal overlay stack honors that handled event so
-one keypress unwinds exactly one layer. Modal focus capture likewise runs once
-per opening and restores only on close or teardown, never on an open rerender.
+one keypress unwinds exactly one layer. Stack ownership is queried from the
+synchronous registry rather than a render-time snapshot, so a fresh Escape
+immediately after nested teardown reaches the still-visible parent surface.
+Modal focus capture likewise runs once per opening and restores only on close or
+teardown, never on an open rerender.
 `SelectMenu` uses the semantic menu layer and releases parent-owned open-state
 coordination when detached, including responsive toolbar replacement.
 `SegmentedControl` keeps one enabled option in the tab order even when its
@@ -79,8 +82,11 @@ of duplicating navigation or account logic.
 The desktop shortcut-help instance owns the single global `?` listener. The
 mobile drawer renders a trigger-only instance, so opening the drawer never
 duplicates the help dialog or Escape handling. App-shell menus close on Escape
-and restore focus to their opener; nested drawer, theme-listbox, and help-dialog
-surfaces unwind one layer at a time.
+and restore focus to their opener. The user menu moves focus into its first
+enabled action when opened, supports wrapping Arrow navigation plus Home/End,
+opens at the last action with ArrowUp, and releases Tab without trapping focus.
+Nested drawer, theme-listbox, and help-dialog surfaces unwind one layer at a
+time.
 
 Right-side editor surfaces are mutually exclusive. The pure
 `rightSurfaceReducer` records when the slide editor is open, and
