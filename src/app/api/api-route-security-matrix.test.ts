@@ -30,11 +30,15 @@ const MATRIX_DOC = join(
 );
 
 /**
- * Routes that legitimately have no app-level gate (only the framework/auth
- * handler). They still REQUIRE a matrix row — this set just records that the
- * "public by design" decision is intentional.
+ * Routes that legitimately have no app-level gate (framework/auth handlers or
+ * minimal operational probes). They still REQUIRE a matrix row — this set just
+ * records that the "public by design" decision is intentional.
  */
-const NO_APP_GATE_ALLOWLIST = new Set<string>(["auth/[...nextauth]"]);
+const NO_APP_GATE_ALLOWLIST = new Set<string>([
+  "auth/[...nextauth]",
+  "health/live",
+  "health/ready",
+]);
 const MATRIX_HEADERS = [
   "Route",
   "Classification",
@@ -55,6 +59,7 @@ const CLASSIFICATIONS = new Set([
   "webhook-signature",
   "internal-secret",
   "framework-auth",
+  "operational-health",
 ]);
 const RESPONSE_EXCEPTIONS = new Set([
   "None",
@@ -283,6 +288,23 @@ test("#509: the no-app-gate allowlist only names real routes", () => {
     assert.ok(
       fsRoutes.has(route),
       `allowlisted route does not exist on disk: ${route}`,
+    );
+  }
+});
+
+test("operational health routes remain minimal and public by design", () => {
+  const rows = new Map(parseMatrixRows().map((row) => [row.Route, row]));
+
+  for (const route of ["health/live", "health/ready"]) {
+    const row = rows.get(route);
+    assert.ok(row, `${route}: missing matrix row`);
+    assert.equal(row.Classification, "operational-health");
+    assert.equal(row["Auth/session"], "None");
+    assert.equal(row["Rate limit"], "No");
+    assert.equal(row["Response exception"], "None");
+    assert.ok(
+      NO_APP_GATE_ALLOWLIST.has(route),
+      `${route}: public health route must remain explicitly allowlisted`,
     );
   }
 });

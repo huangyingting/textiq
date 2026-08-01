@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-15"
+last_updated: "2026-08-01"
 description: "Operational docs cover deployment, runtime constraints, readiness checks, and manual release procedures."
 ---
 
@@ -16,6 +16,7 @@ manual release procedures.
 | [quality-gates.md](quality-gates.md)                                                 | Reference | Local/CI quality gates, lint chain, focused test router, and governance scripts.                     |
 | [developer-bootstrap.md](developer-bootstrap.md)                                     | Runbook   | Local developer doctor/setup, worktree-safe development, local CI parity, and browser QA commands.   |
 | [collaboration-deployment.md](collaboration-deployment.md)                           | Runbook   | Yjs collaboration server deployment, authorization, durability window, and scaling options.          |
+| [application-health.md](application-health.md)                                       | Runbook   | Application liveness/readiness probe contracts and deployment configuration.                         |
 | [release-gate.md](release-gate.md)                                                   | Runbook   | Release readiness checklist and local/CI quality gate.                                               |
 | [schema-repair-runbook.md](schema-repair-runbook.md)                                 | Runbook   | Repair playbook: parse-failure telemetry, audit CLI, mirror rebuild, version restore (Epic #493).    |
 | [billing-ledger-cutover-runbook.md](billing-ledger-cutover-runbook.md)               | Runbook   | Dry-run/apply key-hash migration for legacy usage-ledger rows with collision-safe cutover semantics. |
