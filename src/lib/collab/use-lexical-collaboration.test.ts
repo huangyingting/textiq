@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { Provider } from "@lexical/yjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { act } from "react-test-renderer";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
@@ -39,12 +39,32 @@ function withFakeTimers<T>(run: (timers: Map<number, FakeTimer>) => T): T {
     }
   }) as typeof clearTimeout;
 
-  try {
-    return run(timers);
-  } finally {
+  const restore = () => {
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
+  };
+
+  let result: T;
+  try {
+    result = run(timers);
+  } catch (error) {
+    restore();
+    throw error;
   }
+  if (result instanceof Promise) {
+    return result.then(
+      (value) => {
+        restore();
+        return value;
+      },
+      (error: unknown) => {
+        restore();
+        throw error;
+      },
+    ) as T;
+  }
+  restore();
+  return result;
 }
 
 function mountCollaboration(opts: { room: string; userName: string }): {
@@ -324,8 +344,93 @@ test("useLexicalCollaboration: a sync before the timeout leaves degraded false f
 // awareness → peers
 // ---------------------------------------------------------------------------
 
-test("useLexicalCollaboration: computes peers from awareness state, self first then by join order", () => {
-  withFakeTimers(() => {
+test("useLexicalCollaboration: awareness changes during another component's render do not synchronously update peers", async () => {
+  await withDefaultDom(async () => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { host: "textiq.test", protocol: "https:" },
+    });
+
+    let collaboration: LexicalCollaboration | undefined;
+    let renderer: ReactTestRenderer | null = null;
+    let awarenessTriggered = false;
+    const yjsDocMap = new Map<string, Y.Doc>();
+    const renderErrors: string[] = [];
+
+    function AwarenessRenderTrigger() {
+      if (!awarenessTriggered) {
+        awarenessTriggered = true;
+        assert.ok(collaboration, "expected collaboration state before trigger");
+        const lexicalProvider = collaboration.providerFactory(
+          "doc-render-awareness",
+          yjsDocMap,
+        );
+        lexicalProvider.awareness.setLocalState({
+          anchorPos: null,
+          awarenessData: {},
+          color: collaboration.cursorColor,
+          focusPos: null,
+          focusing: false,
+          name: "Alice",
+        });
+      }
+      return null;
+    }
+
+    function CollaborationOwner({ trigger }: { trigger: boolean }) {
+      collaboration = useLexicalCollaboration({
+        room: "room-render-awareness",
+        userName: "Alice",
+      });
+      return trigger ? createElement(AwarenessRenderTrigger) : null;
+    }
+
+    try {
+      act(() => {
+        renderer = create(
+          createElement(CollaborationOwner, { trigger: false }),
+        );
+      });
+
+      const originalConsoleError = console.error;
+      console.error = (...args: unknown[]) => {
+        renderErrors.push(args.map(String).join(" "));
+      };
+      try {
+        await act(async () => {
+          renderer?.update(
+            createElement(CollaborationOwner, { trigger: true }),
+          );
+          await Promise.resolve();
+        });
+      } finally {
+        console.error = originalConsoleError;
+      }
+
+      const crossComponentUpdateErrors = renderErrors.filter((message) =>
+        message.includes(
+          "Cannot update a component (`%s`) while rendering a different component (`%s`)",
+        ),
+      );
+      assert.deepEqual(
+        crossComponentUpdateErrors,
+        [],
+        `unexpected render-phase update: ${crossComponentUpdateErrors.join("\n")}`,
+      );
+      assert.deepEqual(
+        collaboration?.peers.map((peer) => peer.name),
+        ["Alice"],
+      );
+    } finally {
+      act(() => {
+        renderer?.unmount();
+      });
+    }
+  });
+});
+
+test("useLexicalCollaboration: computes peers from awareness state, self first then by join order", async () => {
+  await withFakeTimers(async () => {
     const { harness, get } = mountCollaboration({
       room: "room-peers",
       userName: "Alice",
@@ -337,8 +442,9 @@ test("useLexicalCollaboration: computes peers from awareness state, self first t
       const awareness = provider.awareness;
       const selfId = awareness.clientID;
 
-      act(() => {
+      await act(async () => {
         awareness.setLocalStateField("name", "Alice");
+        await Promise.resolve();
       });
       assert.deepEqual(get().peers, [
         {
@@ -352,12 +458,13 @@ test("useLexicalCollaboration: computes peers from awareness state, self first t
       // Simulate a remote peer joining awareness using the real Awareness
       // instance's own state map + change event (not a mock/stub).
       const remoteId = selfId + 1;
-      act(() => {
+      await act(async () => {
         awareness.states.set(remoteId, { name: "Bob", color: "#123456" });
         awareness.emit("change", [
           { added: [remoteId], updated: [], removed: [] },
           "remote",
         ]);
+        await Promise.resolve();
       });
 
       assert.deepEqual(get().peers, [
@@ -375,8 +482,8 @@ test("useLexicalCollaboration: computes peers from awareness state, self first t
   });
 });
 
-test("useLexicalCollaboration: awareness states without a name are excluded from peers", () => {
-  withFakeTimers(() => {
+test("useLexicalCollaboration: awareness states without a name are excluded from peers", async () => {
+  await withFakeTimers(async () => {
     const { harness, get } = mountCollaboration({
       room: "room-peers-filter",
       userName: "Alice",
@@ -388,12 +495,13 @@ test("useLexicalCollaboration: awareness states without a name are excluded from
       const awareness = provider.awareness;
       const remoteId = awareness.clientID + 1;
 
-      act(() => {
+      await act(async () => {
         awareness.states.set(remoteId, { color: "#123456" });
         awareness.emit("change", [
           { added: [remoteId], updated: [], removed: [] },
           "remote",
         ]);
+        await Promise.resolve();
       });
 
       assert.deepEqual(get().peers, []);
