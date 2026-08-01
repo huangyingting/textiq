@@ -55,7 +55,13 @@ export type DocumentCardData = {
 
 type DocumentCardProps = DocumentCardData & {
   onDelete: (data: DocumentCardData) => void;
+  onUpdated: (id: string, update: DocumentCardUpdate) => void;
+  onRefreshRequested: () => void;
 };
+
+export type DocumentCardUpdate = Partial<
+  Pick<DocumentCardData, "title" | "favorite">
+>;
 
 /**
  * The card's preview area. When the document has a visual, it renders the first
@@ -345,6 +351,8 @@ export function DocumentCard({
   canEdit,
   canManage,
   onDelete,
+  onUpdated,
+  onRefreshRequested,
 }: DocumentCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -462,7 +470,9 @@ export function DocumentCard({
   const runFavorite = (target: boolean) => {
     runAction({ kind: "favorite", target }, async () => {
       setOptimisticFavorite(target);
-      await documentCardActions.toggleFavorite(id);
+      const result = await documentCardActions.toggleFavorite(id);
+      setOptimisticFavorite(result.favorite);
+      onUpdated(id, { favorite: result.favorite });
     });
   };
 
@@ -482,7 +492,10 @@ export function DocumentCard({
       { kind: "rename", title: nextTitle },
       async () => {
         setOptimisticTitle(normalized);
-        await documentCardActions.renameDocument(id, nextTitle);
+        const result = await documentCardActions.renameDocument(id, nextTitle);
+        setOptimisticTitle(result.title);
+        onUpdated(id, { title: result.title });
+        onRefreshRequested();
       },
       () => setRenameOpen(false),
     );
@@ -492,6 +505,7 @@ export function DocumentCard({
     setMenuOpen(false);
     runAction({ kind: "duplicate" }, async () => {
       await documentCardActions.duplicateDocument(id);
+      onRefreshRequested();
     });
   };
 

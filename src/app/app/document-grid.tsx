@@ -1,6 +1,10 @@
 import type { DashboardDocument } from "@/lib/document/list";
 
-import { DocumentCard, type DocumentCardData } from "./document-card";
+import {
+  DocumentCard,
+  type DocumentCardData,
+  type DocumentCardUpdate,
+} from "./document-card";
 import { NewDocumentButton } from "./new-document-button";
 
 const primaryButtonClass =
@@ -31,6 +35,8 @@ export function DocumentGrid({
   clearTag,
   noFavorites,
   onDelete,
+  onUpdated,
+  onRefreshRequested,
 }: {
   visible: DashboardDocument[];
   noTagMatch: boolean;
@@ -38,6 +44,8 @@ export function DocumentGrid({
   clearTag: () => void;
   noFavorites: boolean;
   onDelete: (data: DocumentCardData) => void;
+  onUpdated: (id: string, update: DocumentCardUpdate) => void;
+  onRefreshRequested: () => void;
 }) {
   if (noTagMatch) {
     return (
@@ -104,6 +112,8 @@ export function DocumentGrid({
           canEdit={document.canEdit}
           canManage={document.canManage}
           onDelete={onDelete}
+          onUpdated={onUpdated}
+          onRefreshRequested={onRefreshRequested}
         />
       ))}
     </ul>

@@ -227,6 +227,7 @@ export function ColorPicker({
     left: -1000,
   });
   const labelId = useId();
+  const hexErrorId = useId();
   const hex = toHex(color, fallback);
   const hasColor = color.trim() !== "";
   const [hexDraftState, setHexDraftState] = useState({
@@ -234,6 +235,7 @@ export function ColorPicker({
     value: hex,
   });
   const hexDraft = hexDraftState.source === hex ? hexDraftState.value : hex;
+  const hexDraftValid = HEX_PATTERN.test(hexDraft);
 
   const reposition = useCallback(() => {
     const el = triggerRef.current;
@@ -717,6 +719,8 @@ export function ColorPicker({
                     <input
                       type="text"
                       aria-label={`${ariaLabel} hex value`}
+                      aria-invalid={hexDraftValid ? undefined : true}
+                      aria-describedby={hexDraftValid ? undefined : hexErrorId}
                       value={hexDraft}
                       spellCheck={false}
                       onBlur={() => {
@@ -733,13 +737,18 @@ export function ColorPicker({
                       }}
                       className={cx(
                         "h-7 w-full min-w-0 border bg-ds-surface-base px-2 text-xs font-normal tracking-normal text-ds-text-primary outline-none transition",
-                        HEX_PATTERN.test(hexDraft)
+                        hexDraftValid
                           ? "border-ds-border-subtle"
                           : "border-red-400/70",
                         RADIUS.sm,
                         FOCUS_RING,
                       )}
                     />
+                    {!hexDraftValid ? (
+                      <span id={hexErrorId} className="sr-only">
+                        Enter a six-digit hex color such as #336699.
+                      </span>
+                    ) : null}
                   </label>
                 </div>
               </div>

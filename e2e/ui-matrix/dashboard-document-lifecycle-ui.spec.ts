@@ -168,6 +168,8 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     await page.unroute(dashboardRoute);
     await search.fill("");
     await expect(documentLink(page, fixture.title)).toBeVisible();
+    await search.fill("source");
+    await expect(documentLink(page, fixture.title)).toBeVisible();
 
     let favoriteActionCount = 0;
     await page.route(dashboardRoute, async (route) => {
@@ -205,6 +207,7 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     await expect(
       page.getByRole("button", { name: `Unfavorite ${fixture.title}` }),
     ).toHaveAttribute("aria-pressed", "true");
+    await expect(search).toHaveValue("source");
     await page.reload();
     await expect(
       page.getByRole("button", { name: `Unfavorite ${fixture.title}` }),
@@ -226,6 +229,8 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     const sourceHref = await documentLink(page, fixture.title).getAttribute(
       "href",
     );
+    await search.fill("source");
+    await expect(documentLink(page, fixture.title)).toBeVisible();
     const sourceMenu = await openDocumentActions(page, fixture.title);
     await runServerAction({
       page,
@@ -247,8 +252,10 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
       action: () =>
         renameDialog.getByRole("button", { name: "Rename" }).click(),
     });
-    await expect(documentLink(page, fixture.renamedTitle)).toBeVisible();
     await expect(documentLink(page, copyTitle)).toHaveCount(0);
+    await expect(documentLink(page, fixture.renamedTitle)).toHaveCount(0);
+    await search.fill("");
+    await expect(documentLink(page, fixture.renamedTitle)).toBeVisible();
     await page.reload();
     await expect(documentLink(page, fixture.renamedTitle)).toBeVisible();
 

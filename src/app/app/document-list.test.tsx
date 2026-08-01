@@ -589,6 +589,190 @@ describe("DocumentList", () => {
     });
   });
 
+  test("a favorite write stays reconciled when server props refresh during an active search", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await withPortalDom(async () => {
+      installHistorySpy();
+      const searchHit = doc("search-hit", {
+        title: "Search Hit",
+        favorite: false,
+      });
+      globalForActions.__documentListActionsTestState.searchImpl =
+        async () => ({
+          results: [searchHit],
+          hasMore: false,
+        });
+      const renderer = mount({ documents: [searchHit] });
+      try {
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Search documents" })
+            .props.onChange({ target: { value: "Search Hit" } });
+        });
+        await act(async () => {
+          t.mock.timers.tick(300);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        await act(async () => {
+          renderer.root
+            .findByProps({ "aria-label": "Favorite Search Hit" })
+            .props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        await act(async () => {
+          renderer.update(
+            <DocumentList
+              documents={[doc("search-hit", { ...searchHit, favorite: true })]}
+              availableTags={TAGS}
+              listCapped={false}
+            />,
+          );
+          await waitForAsyncDrain();
+        });
+
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Unfavorite Search Hit" })
+            .props["aria-pressed"],
+          true,
+        );
+      } finally {
+        act(() => renderer.unmount());
+        t.mock.timers.reset();
+      }
+    });
+  });
+
+  test("duplicating an active search result refreshes the query so the matching copy appears", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await withPortalDom(async () => {
+      installHistorySpy();
+      let searchAttempt = 0;
+      const searchHit = doc("search-hit", { title: "Search Hit" });
+      globalForActions.__documentListActionsTestState.searchImpl = async () => {
+        searchAttempt += 1;
+        return {
+          results:
+            searchAttempt === 1
+              ? [searchHit]
+              : [
+                  searchHit,
+                  doc("search-hit-copy", { title: "Search Hit (copy)" }),
+                ],
+          hasMore: false,
+        };
+      };
+      const renderer = mount({ documents: [searchHit] });
+      try {
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Search documents" })
+            .props.onChange({ target: { value: "Search Hit" } });
+        });
+        await act(async () => {
+          t.mock.timers.tick(300);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Actions for Search Hit" })
+            .props.onClick();
+        });
+        await act(async () => {
+          renderer.root
+            .find(
+              (element) =>
+                element.props.role === "menuitem" &&
+                textOf(element) === "Duplicate",
+            )
+            .props.onClick();
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.deepEqual(
+          globalForActions.__documentListActionsTestState.searchCalls,
+          ["Search Hit", "Search Hit"],
+        );
+        assert.ok(renderer.root.findByProps({ id: "search-hit-copy" }));
+      } finally {
+        act(() => renderer.unmount());
+        t.mock.timers.reset();
+      }
+    });
+  });
+
+  test("renaming an active search result refreshes membership when it stops matching", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await withPortalDom(async () => {
+      installHistorySpy();
+      let searchAttempt = 0;
+      const searchHit = doc("search-hit", { title: "Search Hit" });
+      globalForActions.__documentListActionsTestState.searchImpl = async () => {
+        searchAttempt += 1;
+        return {
+          results: searchAttempt === 1 ? [searchHit] : [],
+          hasMore: false,
+        };
+      };
+      const renderer = mount({ documents: [searchHit] });
+      try {
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Search documents" })
+            .props.onChange({ target: { value: "Search Hit" } });
+        });
+        await act(async () => {
+          t.mock.timers.tick(300);
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Actions for Search Hit" })
+            .props.onClick();
+        });
+        act(() => {
+          renderer.root
+            .find(
+              (element) =>
+                element.props.role === "menuitem" &&
+                textOf(element) === "Rename",
+            )
+            .props.onClick();
+        });
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Document title" })
+            .props.onChange({ target: { value: "Renamed Away" } });
+        });
+        await act(async () => {
+          renderer.root.findByType("form").props.onSubmit({
+            preventDefault: () => undefined,
+          });
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.deepEqual(
+          globalForActions.__documentListActionsTestState.searchCalls,
+          ["Search Hit", "Search Hit"],
+        );
+        assert.throws(() => renderer.root.findByProps({ id: "search-hit" }));
+        assert.match(textOf(renderer.root), /No documents match your search/);
+      } finally {
+        act(() => renderer.unmount());
+        t.mock.timers.reset();
+      }
+    });
+  });
+
   test("listCapped shows the capped notice outside of an active search", () => {
     withPortalDom(() => {
       installHistorySpy();

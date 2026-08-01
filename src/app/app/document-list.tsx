@@ -18,6 +18,7 @@ import type { DocumentListActionPort } from "@/lib/action-ports";
 
 import { deleteDocument, restoreDocument, searchDocuments } from "./actions";
 import { DocumentGrid, EmptyDocumentList } from "./document-grid";
+import type { DocumentCardUpdate } from "./document-card";
 import { DocumentListToolbar } from "./document-list-toolbar";
 import { UndoToast } from "./document-list-undo-toast";
 import {
@@ -248,6 +249,21 @@ export function DocumentList({
   const isSearching = isSearchPending && Boolean(trimmedQuery);
   const capActive = trimmedQuery ? searchCapped : listCapped;
   const showCapNotice = capActive && visible.length > 0;
+  const handleDocumentUpdated = useCallback(
+    (id: string, update: DocumentCardUpdate) => {
+      setSearchResults((current) =>
+        current
+          ? current.map((document) =>
+              document.id === id ? { ...document, ...update } : document,
+            )
+          : current,
+      );
+    },
+    [],
+  );
+  const refreshActiveSearch = useCallback(() => {
+    if (trimmedQuery) executeSearch(trimmedQuery);
+  }, [executeSearch, trimmedQuery]);
 
   return (
     <>
@@ -324,6 +340,8 @@ export function DocumentList({
             clearTag={() => setTag(null)}
             noFavorites={noFavorites}
             onDelete={handleDelete}
+            onUpdated={handleDocumentUpdated}
+            onRefreshRequested={refreshActiveSearch}
           />
         </div>
       )}

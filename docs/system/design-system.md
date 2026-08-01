@@ -41,7 +41,9 @@ Transient primitive state follows the visible surface lifecycle. In particular,
 `ColorPicker` treats a parent `disabled` transition as dismissal rather than
 temporarily hiding an open picker, and its custom-color pointer listeners exist
 only while that picker is visible. Clearing a form's busy state therefore never
-reopens stale color UI or resumes a drag that began in a closed surface.
+reopens stale color UI or resumes a drag that began in a closed surface. Invalid
+custom hex drafts expose `aria-invalid` plus programmatic format guidance; blur
+restores the last valid controlled color and clears that invalid state.
 `Tooltip` remains visible while either pointer hover or keyboard focus owns it,
 ignores focus movement within its trigger wrapper, and clears delayed show work
 when detached. Escape remains an immediate dismissal regardless of ownership.

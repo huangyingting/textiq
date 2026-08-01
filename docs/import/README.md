@@ -56,9 +56,12 @@ is authoritative.
 
 Dashboard, workspace, and editor import controls keep the hidden file input
 mounted while work is pending and synchronously guard the workflow so a second
-input change cannot start a concurrent create or parse. Client-side oversized
-file rejection and malformed/transport response failures remain retryable.
-Failed editor parses offer direct retry and dismiss actions.
+input change cannot start a concurrent create or parse. Dashboard and workspace
+controls disable both the hidden input and visible trigger while uploading,
+expose the trigger's busy state with `aria-busy`, and announce progress through
+a polite live status. Client-side oversized file rejection and
+malformed/transport response failures remain retryable. Failed editor parses
+offer direct retry and dismiss actions.
 If any import surface unmounts while parsing or durably creating a document, it
 invalidates ownership of that request; a late result cannot reach the editor
 apply callback, navigate through a detached dashboard/workspace callback, or

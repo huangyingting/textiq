@@ -225,6 +225,7 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     page,
   }) => {
     const fixture = E2E_PROFILE_FIXTURE.brandWorkflow;
+    await page.setViewportSize({ width: 390, height: 844 });
     await login(page, profileEditorCredentials(), "/app/brands");
     await expect(
       page.getByRole("heading", { name: /brand studio/i }),
@@ -235,6 +236,20 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     const nameInput = page.getByLabel("Brand name");
     await expect(nameInput).toBeVisible();
     await nameInput.fill(fixture.initialName);
+
+    await page
+      .getByRole("button", { name: "Palette color 1", exact: true })
+      .click();
+    const palettePicker = page.getByRole("dialog", {
+      name: "Palette color 1 picker",
+    });
+    await expect(palettePicker).toBeVisible();
+    await palettePicker.getByRole("button", { name: "#ef4444" }).click();
+    await expect(
+      palettePicker.getByRole("button", { name: "#ef4444" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(palettePicker).toHaveCount(0);
 
     const removePaletteColors = page.getByRole("button", {
       name: /remove palette color/i,
@@ -283,6 +298,17 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     await expect(
       createPanel.getByRole("button", { name: "Close", exact: true }),
     ).toBeDisabled();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Math.max(
+            document.body.scrollWidth - document.body.clientWidth,
+            document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+          ),
+        ),
+      )
+      .toBe(0);
     releaseFontUpload();
     const uploaded = await fontUploadResponse;
     await page.unroute("**/api/brand/font");
@@ -352,6 +378,16 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     ).toBe(200);
 
     await createdCard.getByRole("button", { name: "Edit brand" }).click();
+    await createdCard
+      .getByRole("button", { name: "Palette color 1", exact: true })
+      .click();
+    const persistedPalettePicker = page.getByRole("dialog", {
+      name: "Palette color 1 picker",
+    });
+    await expect(
+      persistedPalettePicker.getByRole("button", { name: "#ef4444" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
     await createdCard.getByLabel("Brand name").fill(fixture.updatedName);
     await createdCard.getByRole("button", { name: "Save changes" }).click();
     const updatedCard = page.getByRole("article", {

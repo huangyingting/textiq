@@ -136,7 +136,14 @@ function mount(
     ...BASE,
     ...overrides,
   };
-  return mountWithPortalDom(<DocumentCard {...data} onDelete={onDelete} />);
+  return mountWithPortalDom(
+    <DocumentCard
+      {...data}
+      onDelete={onDelete}
+      onUpdated={() => undefined}
+      onRefreshRequested={() => undefined}
+    />,
+  );
 }
 
 function openMenu(renderer: ReactTestRenderer, title = "Quarterly Plan") {
@@ -273,27 +280,35 @@ describe("DocumentCard", () => {
       };
       let renderer!: ReactTestRenderer;
       act(() => {
-        renderer = create(<DocumentCard {...data} onDelete={() => {}} />, {
-          createNodeMock(element) {
-            const nodeElement = element as {
-              type: unknown;
-              props: Record<string, unknown>;
-            };
-            if (
-              nodeElement.type === "button" &&
-              nodeElement.props["aria-label"] === "Actions for Quarterly Plan"
-            ) {
-              return triggerNode;
-            }
-            if (
-              nodeElement.type === "div" &&
-              nodeElement.props.role === "menu"
-            ) {
-              return menuNode;
-            }
-            return createPortalNodeMock();
+        renderer = create(
+          <DocumentCard
+            {...data}
+            onDelete={() => {}}
+            onUpdated={() => undefined}
+            onRefreshRequested={() => undefined}
+          />,
+          {
+            createNodeMock(element) {
+              const nodeElement = element as {
+                type: unknown;
+                props: Record<string, unknown>;
+              };
+              if (
+                nodeElement.type === "button" &&
+                nodeElement.props["aria-label"] === "Actions for Quarterly Plan"
+              ) {
+                return triggerNode;
+              }
+              if (
+                nodeElement.type === "div" &&
+                nodeElement.props.role === "menu"
+              ) {
+                return menuNode;
+              }
+              return createPortalNodeMock();
+            },
           },
-        });
+        );
       });
 
       const menuKeyboardContainer = () =>

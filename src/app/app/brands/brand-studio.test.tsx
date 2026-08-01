@@ -1198,6 +1198,10 @@ describe("BrandStudio", () => {
             textOf(renderer.root),
             /Uploading logo and extracting/,
           );
+          assert.match(
+            textOf(renderer.root.findByProps({ role: "status" })),
+            /Palette extracted automatically from the logo/,
+          );
 
           act(() => extractedPalettePicker.props.onChange("#123456"));
           const [manuallyUpdatedPalettePicker] = renderer.root.findAll(
@@ -1245,6 +1249,40 @@ describe("BrandStudio", () => {
           );
           renderer.root.findByProps({ "aria-label": "Remove logo" });
           assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
+    test("does not claim palette extraction when the uploaded logo cannot be decoded", async () => {
+      await withPortalDom(async () => {
+        const renderer = mount({
+          initialBrands: [buildBrand()],
+          canFontUpload: false,
+          uploadPort: buildUploadPort(),
+        });
+        try {
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Edit brand" })
+              .props.onClick();
+          });
+
+          await selectFile(
+            findFileInput(renderer.root, "image"),
+            new File(["not-an-image"], "logo.png", { type: "image/png" }),
+          );
+
+          renderer.root.findByProps({ alt: "Brand logo preview" });
+          assert.doesNotMatch(
+            textOf(renderer.root),
+            /Palette extracted automatically from the logo/,
+          );
+          const extractionStatus = renderer.root.findByProps({
+            role: "status",
+          });
+          assert.match(textOf(extractionStatus), /couldn't extract a palette/i);
         } finally {
           act(() => renderer.unmount());
         }

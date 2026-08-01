@@ -76,7 +76,10 @@ not-found control flow is rethrown rather than rendered as an ordinary error.
 Logo decoding and best-effort palette extraction remain inside the logo-upload
 operation boundary, so a late image load cannot overwrite newer palette edits;
 image failure, cancellation, or a bounded timeout releases the form without an
-automatic palette. The palette can be edited normally after that boundary ends.
+automatic palette. The post-upload status reports whether colors were actually
+extracted or whether the existing palette was retained; an existing logo alone
+never implies that extraction succeeded. The palette can be edited normally
+after that boundary ends.
 Unmounting a form invalidates its pending save or media upload: late results
 cannot update detached form state, notify a detached parent, inject a custom
 font into a replacement page, or run delayed logo-palette extraction.

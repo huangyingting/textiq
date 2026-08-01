@@ -889,6 +889,75 @@ describe("WorkspaceDocuments", () => {
     }
   });
 
+  test("a pending workspace import exposes busy state and a live announcement", async () => {
+    let resolveFetch!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (() =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      })) as typeof fetch;
+    const renderer = mountWorkspaceDocuments({
+      workspaceId: "workspace-1",
+      userRole: "owner",
+    });
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      const input = renderer.root.findByProps({
+        "aria-label": "Import a document file into workspace",
+      });
+      const file = new File(["# Imported"], "notes.md", {
+        type: "text/markdown",
+      });
+      act(() => {
+        input.props.onChange({
+          target: { files: [file], value: "notes.md" },
+        } as unknown as React.ChangeEvent<HTMLInputElement>);
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      const pendingInput = renderer.root.findByProps({
+        "aria-label": "Import a document file into workspace",
+      });
+      const importButton = renderer.root.findByProps({
+        "aria-label": "Import document",
+      });
+      assert.equal(pendingInput.props.disabled, true);
+      assert.equal(importButton.props.disabled, true);
+      assert.equal(importButton.props["aria-busy"], true);
+      assert.match(
+        JSON.stringify(renderer.root.findByProps({ role: "status" }).children),
+        /Importing document/,
+      );
+
+      await act(async () => {
+        resolveFetch(
+          jsonResponse({
+            ok: true,
+            documentId: "doc-2",
+            documentPath: "/app/documents/doc-2",
+          }),
+        );
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        renderer.root.findByProps({ "aria-label": "Import document" }).props[
+          "aria-busy"
+        ],
+        false,
+      );
+      assert.throws(() => renderer.root.findByProps({ role: "status" }));
+    } finally {
+      act(() => renderer.unmount());
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("a failed import shows a retryable inline error", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>

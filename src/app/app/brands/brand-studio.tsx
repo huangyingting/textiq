@@ -66,6 +66,7 @@ const BRAND_DELETE_FAILURE_MESSAGE =
 const LOGO_PALETTE_EXTRACTION_TIMEOUT_MS = 5_000;
 
 type BrandFormOperation = "save" | "logo-upload" | "font-upload";
+type LogoPaletteOutcome = "extracted" | "unavailable";
 
 type BrandFormState = BrandInput & {
   id?: string;
@@ -246,6 +247,8 @@ function BrandForm({
   const [error, setError] = useState<string | null>(null);
   const [pendingOperation, setPendingOperation] =
     useState<BrandFormOperation | null>(null);
+  const [logoPaletteOutcome, setLogoPaletteOutcome] =
+    useState<LogoPaletteOutcome | null>(null);
   const mountedRef = useRef(true);
   const operationIdRef = useRef(0);
   const operationInFlightRef = useRef(false);
@@ -332,6 +335,7 @@ function BrandForm({
     }
     const operationId = beginOperation("logo-upload");
     if (operationId === null) return;
+    setLogoPaletteOutcome(null);
 
     try {
       const fd = new FormData();
@@ -353,6 +357,9 @@ function BrandForm({
       if (!ownsOperation(operationId)) return;
       if (palette.length >= 2) {
         setForm((f) => ({ ...f, palette }));
+        setLogoPaletteOutcome("extracted");
+      } else {
+        setLogoPaletteOutcome("unavailable");
       }
     } catch (error) {
       unstable_rethrow(error);
@@ -647,13 +654,14 @@ function BrandForm({
               <button
                 type="button"
                 aria-label="Remove logo"
-                onClick={() =>
+                onClick={() => {
+                  setLogoPaletteOutcome(null);
                   setForm((f) => ({
                     ...f,
                     logoAssetUrl: null,
                     logoAssetId: null,
-                  }))
-                }
+                  }));
+                }}
                 disabled={formBusy}
                 className="tiq-touch-target absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ds-surface-raised)] border border-[var(--ds-border-subtle)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-danger,#dc2626)] hover:text-[var(--ds-text-on-accent,#ffffff)]"
               >
@@ -689,11 +697,13 @@ function BrandForm({
             {form.logoAssetUrl ? "Replace logo" : "Upload logo (PNG/JPG/WebP)"}
           </Button>
         </div>
-        {form.logoAssetUrl && (
-          <p className="text-xs text-[var(--ds-text-muted)]">
-            Palette extracted automatically from the logo.
+        {form.logoAssetUrl && logoPaletteOutcome && !uploadingLogo ? (
+          <p role="status" className="text-xs text-[var(--ds-text-muted)]">
+            {logoPaletteOutcome === "extracted"
+              ? "Palette extracted automatically from the logo."
+              : "Couldn't extract a palette from this logo. Existing colors were kept."}
           </p>
-        )}
+        ) : null}
         {uploadingLogo ? (
           <p role="status" className="text-xs text-[var(--ds-text-muted)]">
             Uploading logo and extracting palette…

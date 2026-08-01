@@ -87,6 +87,7 @@ function WorkspaceDocumentActions({
             ref={inputRef}
             type="file"
             accept={DOCUMENT_IMPORT_ACCEPT}
+            disabled={isUploading}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void processFile(file);
@@ -99,6 +100,7 @@ function WorkspaceDocumentActions({
             variant="subtle"
             size="lg"
             disabled={isUploading}
+            aria-busy={isUploading}
             onClick={() => {
               clearError();
               inputRef.current?.click();
@@ -108,6 +110,11 @@ function WorkspaceDocumentActions({
           >
             {isUploading ? "Importing…" : "Import"}
           </Button>
+          {isUploading ? (
+            <p role="status" aria-live="polite" className="sr-only">
+              Importing document…
+            </p>
+          ) : null}
           {state.status === "error" && (
             <p role="alert" className="text-xs text-ds-danger-text">
               {state.message} —{" "}

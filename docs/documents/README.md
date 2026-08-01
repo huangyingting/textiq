@@ -93,7 +93,11 @@ searches invalidate older responses, suppress repeated same-query retries, and
 contain ordinary Server Action or transport failures in a generic retry/dismiss
 alert. A failed current request clears stale results; failures from superseded
 queries cannot overwrite the latest result or error state, and Next
-redirect/not-found control flow is rethrown.
+redirect/not-found control flow is rethrown. Successful favorite writes patch
+the active search-result cache with the server-confirmed value. Rename and
+duplicate writes immediately rerun an active query because they can remove or
+add matching rows; refreshed dashboard props alone never leave the local search
+cache stale.
 
 Every canonical `contentJson` create, save, duplicate, import, onboarding seed, and version
 restore supplies one canonical snapshot to the document write port. The port
@@ -171,7 +175,9 @@ card controls while pending, keeps rename open until persistence succeeds, and
 contains ordinary failures in generic retry/dismiss UI without exposing server
 details. Failed optimistic favorite/title state rolls back, while Next
 redirect/not-found control flow remains authoritative. Rename and delete
-dialogs restore focus to the card action trigger.
+dialogs restore focus to the card action trigger. Server-confirmed favorite and
+title values flow back through the grid owner so cached search cards cannot snap
+back after the action transition settles.
 
 Dashboard delete and Undo update the visible list immediately, but durable
 mutations are claimed and serialized per document. Same-turn duplicate intent

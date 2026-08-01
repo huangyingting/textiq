@@ -102,6 +102,8 @@ function mountGrid(overrides: {
   clearTag?: () => void;
   noFavorites?: boolean;
   onDelete?: (data: DocumentCardData) => void;
+  onUpdated?: () => void;
+  onRefreshRequested?: () => void;
 }): ReactTestRenderer {
   return mountWithPortalDom(
     <DocumentGrid
@@ -111,6 +113,8 @@ function mountGrid(overrides: {
       clearTag={overrides.clearTag ?? (() => {})}
       noFavorites={overrides.noFavorites ?? false}
       onDelete={overrides.onDelete ?? (() => {})}
+      onUpdated={overrides.onUpdated ?? (() => {})}
+      onRefreshRequested={overrides.onRefreshRequested ?? (() => {})}
     />,
   );
 }

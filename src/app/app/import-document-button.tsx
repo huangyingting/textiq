@@ -35,6 +35,7 @@ export function ImportDocumentButton({ className }: { className: string }) {
         ref={inputRef}
         type="file"
         accept={DOCUMENT_IMPORT_ACCEPT}
+        disabled={isUploading}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void processFile(file);
@@ -46,6 +47,7 @@ export function ImportDocumentButton({ className }: { className: string }) {
       <button
         type="button"
         disabled={isUploading}
+        aria-busy={isUploading}
         onClick={() => {
           clearError();
           inputRef.current?.click();
@@ -58,6 +60,11 @@ export function ImportDocumentButton({ className }: { className: string }) {
           ? t("dashboard.action.importing")
           : t("dashboard.action.import")}
       </button>
+      {isUploading ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          {t("dashboard.action.importing")}
+        </p>
+      ) : null}
       {state.status === "error" && (
         <p
           role="alert"

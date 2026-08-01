@@ -57,6 +57,12 @@ function pickerDialogs(renderer: ReactTestRenderer): ReactTestInstance[] {
   );
 }
 
+function textOf(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => (typeof child === "string" ? child : textOf(child)))
+    .join("");
+}
+
 test("disabling an open ColorPicker closes it without reopening when re-enabled", () => {
   withPortalDom(() => {
     const renderer = mountWithPortalDom(renderPicker());
@@ -122,6 +128,50 @@ test("closing ColorPicker during a custom-color drag removes global pointer list
       );
       assert.equal(listeners.get("pointerup")?.size ?? 0, 0);
       assert.equal(listeners.get("pointercancel")?.size ?? 0, 0);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+});
+
+test("custom hex validation exposes invalid state and recovery to assistive technology", () => {
+  withPortalDom(() => {
+    const changes: string[] = [];
+    const renderer = mountWithPortalDom(
+      renderPicker({ onChange: (value) => changes.push(value) }),
+    );
+    try {
+      act(() => trigger(renderer).props.onClick());
+      const customTab = renderer.root
+        .findAllByType("button")
+        .find((button) => textOf(button).toLowerCase() === "custom");
+      assert.ok(customTab);
+      act(() => customTab.props.onClick());
+
+      const hexInput = renderer.root.findByProps({
+        "aria-label": "Accent color hex value",
+      });
+      act(() => hexInput.props.onChange({ target: { value: "not-a-color" } }));
+
+      const invalidInput = renderer.root.findByProps({
+        "aria-label": "Accent color hex value",
+      });
+      assert.equal(invalidInput.props["aria-invalid"], true);
+      const errorId = invalidInput.props["aria-describedby"];
+      assert.equal(typeof errorId, "string");
+      assert.match(
+        textOf(renderer.root.findByProps({ id: errorId })),
+        /six-digit hex color/i,
+      );
+      assert.deepEqual(changes, []);
+
+      act(() => invalidInput.props.onBlur());
+      const recoveredInput = renderer.root.findByProps({
+        "aria-label": "Accent color hex value",
+      });
+      assert.equal(recoveredInput.props.value, "#336699");
+      assert.equal(recoveredInput.props["aria-invalid"], undefined);
+      assert.equal(recoveredInput.props["aria-describedby"], undefined);
     } finally {
       act(() => renderer.unmount());
     }

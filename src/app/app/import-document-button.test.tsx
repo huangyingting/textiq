@@ -235,8 +235,14 @@ describe("ImportDocumentButton", () => {
       });
 
       const button = findButton(renderer);
+      assert.equal(findInput(renderer).props.disabled, true);
       assert.equal(button.props.disabled, true);
+      assert.equal(button.props["aria-busy"], true);
       assert.match(textOf(button), /Importing…/);
+      assert.match(
+        textOf(renderer.root.findByProps({ role: "status" })),
+        /Importing/i,
+      );
 
       await act(async () => {
         resolveFetch(
@@ -249,7 +255,10 @@ describe("ImportDocumentButton", () => {
         await waitForAsyncDrain();
         await waitForAsyncDrain();
       });
+      assert.equal(findInput(renderer).props.disabled, false);
       assert.equal(findButton(renderer).props.disabled, false);
+      assert.equal(findButton(renderer).props["aria-busy"], false);
+      assert.throws(() => renderer.root.findByProps({ role: "status" }));
       assert.deepEqual(globalForRouter.__importRouterTestState.pushes, [
         "/app/documents/doc-2",
       ]);
