@@ -12,6 +12,7 @@ import {
 } from "../helpers/profile";
 import {
   waitForSlideAutosave,
+  waitForSlideAutosaveAfter,
   waitForStableSlideStage,
 } from "../helpers/readiness";
 
@@ -277,6 +278,301 @@ test.describe("slides edit and save persistence", () => {
       "aria-label",
       new RegExp(`Text:\\s*${uniqueMark}`),
     );
+  });
+
+  test("inline selection formatting stays in edit mode and survives history and reload", async ({
+    page,
+  }) => {
+    test.skip(
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
+    );
+
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.inlineRichText,
+    );
+    const titleNode = editor
+      .locator(
+        '[data-slide-stage-viewport="true"] [data-node-id="fixture-title"]',
+      )
+      .first();
+    const inlineEditor = page.getByRole("textbox", { name: "Edit text" });
+    const toolbar = page.getByRole("toolbar", { name: "Context toolbar" });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+    const richText = "Alpha Beta Gamma";
+
+    await titleNode.dblclick();
+    await expect(inlineEditor).toBeVisible();
+    await inlineEditor.fill(richText);
+    await inlineEditor.evaluate((node) => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let current = walker.nextNode();
+      while (current && !current.textContent?.includes("Beta")) {
+        current = walker.nextNode();
+      }
+      if (!current?.textContent) throw new Error("Beta text node not found");
+      const start = current.textContent.indexOf("Beta");
+      const range = document.createRange();
+      range.setStart(current, start);
+      range.setEnd(current, start + "Beta".length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (node as HTMLElement).focus();
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+      .toBe("Beta");
+
+    await toolbar.getByRole("button", { name: "Bold", exact: true }).click();
+    await expect(inlineEditor).toBeVisible();
+    await expect
+      .poll(() =>
+        inlineEditor.evaluate((node) =>
+          Array.from(node.querySelectorAll("span")).some(
+            (span) =>
+              span.textContent === "Beta" &&
+              getComputedStyle(span).fontWeight === "700",
+          ),
+        ),
+      )
+      .toBe(true);
+
+    await toolbar.getByRole("button", { name: "Link", exact: true }).click();
+    const linkDialog = page.getByRole("dialog", { name: "Add link" });
+    await expect(linkDialog).toBeVisible();
+    await linkDialog.getByLabel("URL").fill("https://example.com/docs");
+    await expect(inlineEditor).toBeVisible();
+    await linkDialog.getByRole("button", { name: "Apply link" }).click();
+    await expect(
+      inlineEditor.locator('a[href="https://example.com/docs"]'),
+    ).toHaveText("Beta");
+    await expect(
+      inlineEditor.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCSS("font-weight", "700");
+
+    await toolbar.getByRole("spinbutton", { name: "Font size" }).fill("24");
+    await expect(inlineEditor).toBeVisible();
+    await expect
+      .poll(() =>
+        inlineEditor.evaluate((node) =>
+          Array.from(node.querySelectorAll("span")).some(
+            (span) =>
+              span.textContent === "Beta" && span.style.fontSize === "24pt",
+          ),
+        ),
+      )
+      .toBe(true);
+
+    await inlineEditor.focus();
+    await waitForSlideAutosaveAfter(page, () => page.keyboard.press("Escape"));
+    await expect(inlineEditor).toHaveCount(0);
+    await expect(titleNode).toHaveAttribute(
+      "aria-label",
+      new RegExp(`Text:\\s*${richText}`),
+    );
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveText("Beta");
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCSS("font-weight", "700");
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCSS("font-size", "32px");
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(titleNode).toHaveAttribute(
+      "aria-label",
+      /Text:\s*Release Gate Fixture Slide/,
+    );
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(titleNode).toHaveAttribute(
+      "aria-label",
+      new RegExp(`Text:\\s*${richText}`),
+    );
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(titleNode).toHaveAttribute(
+      "aria-label",
+      new RegExp(`Text:\\s*${richText}`),
+    );
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveText("Beta");
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCSS("font-weight", "700");
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCSS("font-size", "32px");
+
+    await titleNode.dblclick({ position: { x: 8, y: 8 } });
+    await expect(inlineEditor).toBeVisible();
+    const linkedBeta = inlineEditor.locator(
+      'a[href="https://example.com/docs"]',
+    );
+    await linkedBeta.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      node.closest<HTMLElement>("[data-inline-editor-presentation]")?.focus();
+    });
+    await toolbar.getByRole("button", { name: "Link", exact: true }).click();
+    await expect(linkDialog).toBeVisible();
+    await linkDialog.getByRole("button", { name: "Remove link" }).click();
+    await expect(inlineEditor).toBeVisible();
+    await expect(
+      inlineEditor.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCount(0);
+
+    await waitForSlideAutosaveAfter(page, () => page.keyboard.press("Escape"));
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCount(0);
+    const formattedBeta = titleNode
+      .locator("span")
+      .filter({ hasText: /^Beta$/ })
+      .first();
+    await expect(formattedBeta).toHaveCSS("font-weight", "700");
+    await expect(formattedBeta).toHaveCSS("font-size", "32px");
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveText("Beta");
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCount(0);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(
+      titleNode.locator('a[href="https://example.com/docs"]'),
+    ).toHaveCount(0);
+    await expect(formattedBeta).toHaveCSS("font-weight", "700");
+    await expect(formattedBeta).toHaveCSS("font-size", "32px");
+  });
+
+  test("inline list conversion and indentation stay editable through history and reload", async ({
+    page,
+  }) => {
+    test.skip(
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
+    );
+
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.inlineList,
+    );
+    const bodyNode = editor
+      .locator(
+        '[data-slide-stage-viewport="true"] [data-node-id="fixture-bullets"]',
+      )
+      .first();
+    const inlineEditor = page.getByRole("textbox", { name: "Edit text" });
+    const toolbar = page.getByRole("toolbar", { name: "Context toolbar" });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+
+    await bodyNode.dblclick();
+    await expect(inlineEditor).toBeVisible();
+    const bulletParagraphs = inlineEditor.locator('p[data-list-kind="bullet"]');
+    await expect(bulletParagraphs).toHaveCount(2);
+    await inlineEditor
+      .locator('p[data-list-kind="bullet"]')
+      .first()
+      .evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        range.collapse(true);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        node.closest<HTMLElement>("[data-inline-editor-presentation]")?.focus();
+      });
+
+    await toolbar
+      .getByRole("button", { name: "Numbered list", exact: true })
+      .click();
+    await expect(inlineEditor).toBeVisible();
+    await expect(inlineEditor.locator("ol > li")).toHaveCount(1);
+    await expect(bulletParagraphs).toHaveCount(1);
+    await inlineEditor
+      .locator("li")
+      .first()
+      .evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        range.collapse(true);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        node.closest<HTMLElement>("[data-inline-editor-presentation]")?.focus();
+      });
+
+    const firstItem = inlineEditor.locator("ol > li").first();
+    await toolbar
+      .getByRole("button", { name: "Indent list", exact: true })
+      .click();
+    await expect(firstItem).toHaveAttribute("data-list-indent", "1");
+    await toolbar
+      .getByRole("button", { name: "Outdent list", exact: true })
+      .click();
+    await expect(firstItem).not.toHaveAttribute("data-list-indent");
+    await toolbar
+      .getByRole("button", { name: "Indent list", exact: true })
+      .click();
+    await expect(firstItem).toHaveAttribute("data-list-indent", "1");
+
+    await waitForSlideAutosaveAfter(page, () => page.keyboard.press("Escape"));
+    await expect(inlineEditor).toHaveCount(0);
+    const renderedParagraphs = bodyNode.locator("p");
+    await expect(renderedParagraphs).toHaveCount(2);
+    await expect(renderedParagraphs.first().locator("span").first()).toHaveText(
+      "1.",
+    );
+    expect(
+      await renderedParagraphs
+        .first()
+        .evaluate((node) => node.style.paddingLeft),
+    ).toBe("1.5em");
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(renderedParagraphs.first().locator("span").first()).toHaveText(
+      "•",
+    );
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(renderedParagraphs.first().locator("span").first()).toHaveText(
+      "1.",
+    );
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(renderedParagraphs.first().locator("span").first()).toHaveText(
+      "1.",
+    );
+    expect(
+      await renderedParagraphs
+        .first()
+        .evaluate((node) => node.style.paddingLeft),
+    ).toBe("1.5em");
   });
 });
 

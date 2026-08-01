@@ -1264,11 +1264,13 @@ export function ContextToolbar({
               onChange={updateTextColor}
             />
             <ContextToolbarNumberInput
+              key={`font-size-${selectedNode?.id ?? "none"}-${isInlineEditing ? "inline" : "node"}`}
               label="Font size"
               value={fontSize}
               min={4}
               max={160}
               onChange={updateFontSize}
+              inlineCommandSurface={isInlineEditing}
             />
             {isInlineEditing ? (
               <Popover
@@ -1287,52 +1289,55 @@ export function ContextToolbar({
                 }
                 className="w-64 p-2"
                 aria-label="Add link"
+                restoreFocusOnClose
               >
-                <form
-                  className="flex flex-col gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (!linkCommandEnabled) return;
-                    const url = normalizeInlineTextLink(linkDraft);
-                    if (url) {
-                      dispatchInlineTextCommand({
-                        command: "link",
-                        value: url,
-                      });
-                      setLinkOpen(false);
-                    }
-                  }}
-                >
-                  <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
-                    URL
-                    <input
-                      value={linkDraft}
-                      onChange={(event) =>
-                        setLinkDraft(event.currentTarget.value)
-                      }
-                      className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none focus:border-ds-accent focus:ring-2 focus:ring-ds-focus-ring/20"
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={!linkCommandEnabled}
-                    className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
-                  >
-                    Apply link
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!linkCommandEnabled}
-                    onClick={() => {
+                <div data-inline-text-command-surface="true">
+                  <form
+                    className="flex flex-col gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
                       if (!linkCommandEnabled) return;
-                      dispatchInlineTextCommand({ command: "unlink" });
-                      setLinkOpen(false);
+                      const url = normalizeInlineTextLink(linkDraft);
+                      if (url) {
+                        dispatchInlineTextCommand({
+                          command: "link",
+                          value: url,
+                        });
+                        setLinkOpen(false);
+                      }
                     }}
-                    className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
                   >
-                    Remove link
-                  </button>
-                </form>
+                    <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+                      URL
+                      <input
+                        value={linkDraft}
+                        onChange={(event) =>
+                          setLinkDraft(event.currentTarget.value)
+                        }
+                        className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none focus:border-ds-accent focus:ring-2 focus:ring-ds-focus-ring/20"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={!linkCommandEnabled}
+                      className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
+                    >
+                      Apply link
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!linkCommandEnabled}
+                      onClick={() => {
+                        if (!linkCommandEnabled) return;
+                        dispatchInlineTextCommand({ command: "unlink" });
+                        setLinkOpen(false);
+                      }}
+                      className="self-end rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover"
+                    >
+                      Remove link
+                    </button>
+                  </form>
+                </div>
               </Popover>
             ) : null}
           </>

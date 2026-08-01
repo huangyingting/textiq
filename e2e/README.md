@@ -11,7 +11,7 @@ app.
 | Spec                                                    | Coverage                                                                                                                        |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                          |
-| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                 |
+| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save, inline rich text, present, and export smoke (auth-gated, skips cleanly without creds)                         |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                   |
 | `e2e/documents/template-creation.spec.ts`               | Dashboard/workspace template failure/retry, duplicate suppression, modal accessibility, permissions, and reload persistence     |
 | `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                 |
@@ -348,7 +348,10 @@ cannot reach create/import actions. All four cases carry `@required-profile`.
 
 ## Slides smoke (`e2e/presentation/slides-smoke.spec.ts`)
 
-The Slides smoke spec covers the core edit → save → present → export flow. It
+The Slides smoke spec covers the core edit → save → present → export flow. Its
+deterministic profile also exercises inline selection formatting through the
+real context toolbar, including link apply/remove, font-size focus ownership,
+list conversion and indentation, history, autosave, and reload persistence. It
 degrades cleanly at every step:
 
 - Without `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`: all authenticated tests skip.

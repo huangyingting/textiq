@@ -19,6 +19,7 @@ import {
   useMemo,
   useRef,
   type CSSProperties,
+  type FocusEvent,
   type JSX,
   type KeyboardEvent,
 } from "react";
@@ -142,6 +143,7 @@ export function InlineTextEditorPresentation({
   onTabPrev,
 }: InlineTextEditorPresentationProps): JSX.Element {
   const editableRef = useRef<HTMLDivElement | null>(null);
+  const preservedCommandRangeRef = useRef<Range | null>(null);
   const adapter = useMemo(
     () =>
       createInlineTextDomAdapter({
@@ -218,6 +220,51 @@ export function InlineTextEditorPresentation({
     finishAdapterExit(adapter.commit(editableRef.current));
   }
 
+  function preserveCommandSelection() {
+    const el = editableRef.current;
+    const selection = window.getSelection();
+    if (!el || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (
+      !el.contains(range.startContainer) ||
+      !el.contains(range.endContainer)
+    ) {
+      return;
+    }
+    preservedCommandRangeRef.current = range.cloneRange();
+  }
+
+  function restoreCommandSelection() {
+    const el = editableRef.current;
+    const range = preservedCommandRangeRef.current;
+    if (
+      !el ||
+      !range ||
+      !el.contains(range.startContainer) ||
+      !el.contains(range.endContainer)
+    ) {
+      preservedCommandRangeRef.current = null;
+      return;
+    }
+    const selection = window.getSelection();
+    if (!selection) return;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    preservedCommandRangeRef.current = null;
+  }
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Element &&
+      nextTarget.closest('[data-inline-text-command-surface="true"]')
+    ) {
+      preserveCommandSelection();
+      return;
+    }
+    doCommit();
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       const exit = adapter.commitOrCancelForEscape(editableRef.current);
@@ -251,19 +298,54 @@ export function InlineTextEditorPresentation({
 
   // Listen for toolbar format commands
   useEffect(() => {
+    function rememberCommandSelection() {
+      const el = editableRef.current;
+      const selection = window.getSelection();
+      if (!el || !selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      if (
+        el.contains(range.startContainer) &&
+        el.contains(range.endContainer)
+      ) {
+        preservedCommandRangeRef.current = range.cloneRange();
+      }
+    }
+
     function handleCommand(event: Event) {
       const payload = (event as CustomEvent<InlineTextCommandPayload>).detail;
       const el = editableRef.current;
+      const activeElement = document.activeElement;
+      const commandSurfaceActive = activeElement?.closest(
+        '[data-inline-text-command-surface="true"]',
+      );
       if (
         !el ||
-        (!el.contains(document.activeElement) && document.activeElement !== el)
-      )
+        (!el.contains(activeElement) &&
+          activeElement !== el &&
+          !commandSurfaceActive)
+      ) {
         return;
+      }
+      const selection = window.getSelection();
+      const activeRange = selection?.rangeCount
+        ? selection.getRangeAt(0)
+        : null;
+      if (
+        !activeRange ||
+        !el.contains(activeRange.startContainer) ||
+        !el.contains(activeRange.endContainer)
+      ) {
+        restoreCommandSelection();
+      }
       adapter.applyCommand(el, payload);
+      preserveCommandSelection();
     }
+    document.addEventListener("selectionchange", rememberCommandSelection);
     document.addEventListener(INLINE_TEXT_COMMAND_EVENT_, handleCommand);
-    return () =>
+    return () => {
+      document.removeEventListener("selectionchange", rememberCommandSelection);
       document.removeEventListener(INLINE_TEXT_COMMAND_EVENT_, handleCommand);
+    };
   }, [adapter]);
 
   return (
@@ -280,7 +362,8 @@ export function InlineTextEditorPresentation({
       onKeyDown={handleKeyDown}
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
-      onBlur={doCommit}
+      onFocus={restoreCommandSelection}
+      onBlur={handleBlur}
     />
   );
 }

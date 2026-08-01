@@ -171,6 +171,7 @@ export function ContextToolbarNumberInput({
   max,
   step = 1,
   onChange,
+  inlineCommandSurface = false,
 }: {
   label: string;
   value: number;
@@ -178,17 +179,33 @@ export function ContextToolbarNumberInput({
   max?: number;
   step?: number;
   onChange: (value: number) => void;
+  inlineCommandSurface?: boolean;
 }) {
+  const normalizedValue = Number.isFinite(value) ? value : 0;
   return (
     <input
       type="number"
       aria-label={label}
       title={label}
-      value={Number.isFinite(value) ? value : 0}
+      value={inlineCommandSurface ? undefined : normalizedValue}
+      defaultValue={inlineCommandSurface ? normalizedValue : undefined}
       min={min}
       max={max}
       step={step}
-      onChange={(event) => onChange(Number(event.currentTarget.value))}
+      data-inline-text-command-surface={
+        inlineCommandSurface ? "true" : undefined
+      }
+      onMouseDown={
+        inlineCommandSurface
+          ? (event) => {
+              event.stopPropagation();
+            }
+          : undefined
+      }
+      onChange={(event) => {
+        const nextValue = event.currentTarget.value;
+        onChange(Number(nextValue));
+      }}
       className={cx(
         "h-7 w-14 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none",
         FOCUS_RING,

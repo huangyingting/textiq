@@ -211,6 +211,16 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr34",
     "e2e-isolated-image-crop",
   ),
+  inlineRichText: presentationFixture(
+    "e2eisolatedrichtext0001",
+    "e2eisolatedshr35",
+    "e2e-isolated-rich-text",
+  ),
+  inlineList: presentationFixture(
+    "e2eisolatedinlinelist001",
+    "e2eisolatedshr36",
+    "e2e-isolated-inline-list",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -236,6 +246,8 @@ export const SLIDES_SMOKE_MUTATION_FIXTURES = {
   addSlide: "slidesSmokeAddSlide",
   visualInsert: "slidesSmokeVisualInsert",
   present: "slidesSmokePresent",
+  inlineRichText: "inlineRichText",
+  inlineList: "inlineList",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const POINTER_INTERACTION_FIXTURES = {

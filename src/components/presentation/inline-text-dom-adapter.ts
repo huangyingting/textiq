@@ -587,7 +587,6 @@ export function createInlineTextDomAdapter({
       return commitNow(container);
     },
     applyCommand(container, { command, value }) {
-      container.focus();
       const textAlign = inlineTextAlignForCommand(command);
       if (textAlign) {
         committedTextAlign = textAlign;
