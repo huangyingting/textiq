@@ -20,6 +20,9 @@ import {
 
 const PING_TIMEOUT = 30_000;
 const DEFAULT_ACCESS_REVALIDATE_MS = 60_000;
+const DEFAULT_WEBSOCKET_SHUTDOWN_TIMEOUT_MS = 5_000;
+const SERVICE_RESTART_CLOSE_CODE = 1012;
+const SERVICE_RESTART_CLOSE_REASON = "Service restart";
 
 /**
  * How long (ms) an empty room stays in memory after the last connection closes
@@ -529,6 +532,94 @@ export const connCount = () => {
   return total;
 };
 
+async function drainRooms(onBeforeEvict) {
+  const roomEntries = [...docs.entries()];
+  const pendingFlushes = [];
+
+  for (const [roomName, doc] of roomEntries) {
+    cancelEviction(roomName);
+
+    for (const conn of doc.conns.keys()) {
+      try {
+        conn.close(SERVICE_RESTART_CLOSE_CODE, SERVICE_RESTART_CLOSE_REASON);
+      } catch {
+        // The socket may already be closing; teardown still continues.
+      }
+    }
+    // Prevent late socket close events from scheduling new idle-eviction timers
+    // after this room has been destroyed.
+    doc.conns.clear();
+
+    if (onBeforeEvict && roomHasPendingUpdates(roomName, doc)) {
+      try {
+        const update = Y.encodeStateAsUpdate(doc);
+        pendingFlushes.push(
+          Promise.resolve(onBeforeEvict(roomName, update)).catch((err) => {
+            logScriptError("collab.core.shutdown", err, { room: roomName });
+          }),
+        );
+      } catch (err) {
+        logScriptError("collab.core.shutdown", err, {
+          room: roomName,
+          phase: "encode",
+        });
+      }
+    }
+  }
+
+  await Promise.all(pendingFlushes);
+
+  for (const [roomName, doc] of roomEntries) {
+    if (docs.get(roomName) === doc) {
+      evictRoom(doc, roomName, null);
+    }
+  }
+}
+
+function closeWebSocketServer(wss, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+
+    timeout = setTimeout(() => {
+      for (const client of wss.clients) {
+        try {
+          client.terminate();
+        } catch {
+          // The client may already be closed.
+        }
+      }
+      finish();
+    }, timeoutMs);
+
+    try {
+      wss.close(() => finish());
+      for (const client of wss.clients) {
+        try {
+          client.close(
+            SERVICE_RESTART_CLOSE_CODE,
+            SERVICE_RESTART_CLOSE_REASON,
+          );
+        } catch {
+          try {
+            client.terminate();
+          } catch {
+            // The client may already be closed.
+          }
+        }
+      }
+    } catch {
+      finish();
+    }
+  });
+}
+
 /**
  * Writes a minimal HTTP error response to a raw upgrade socket and destroys it,
  * so an unauthorized/forbidden upgrade is refused with a real status code
@@ -536,9 +627,12 @@ export const connCount = () => {
  */
 const refuseUpgrade = (socket, status) => {
   const reason =
-    { 401: "Unauthorized", 403: "Forbidden", 500: "Internal Server Error" }[
-      status
-    ] || "Bad Request";
+    {
+      401: "Unauthorized",
+      403: "Forbidden",
+      500: "Internal Server Error",
+      503: "Service Unavailable",
+    }[status] || "Bad Request";
   try {
     socket.write(
       `HTTP/1.1 ${status} ${reason}\r\n` +
@@ -572,6 +666,10 @@ const refuseUpgrade = (socket, status) => {
  * invoked when a room is about to be evicted and has pending unsaved changes.
  * The callback receives the room name and the full Yjs update bytes so it can
  * flush them to durable storage. Errors are logged and never re-thrown.
+ *
+ * The returned `shutdown()` is idempotent. It stops new upgrades, closes active
+ * clients with WebSocket code 1012, awaits dirty-room flush callbacks, and then
+ * destroys all in-memory room state.
  */
 export function createCollabWss(roomFromUrl, options = {}) {
   const wss = new WebSocketServer({ noServer: true });
@@ -580,6 +678,11 @@ export function createCollabWss(roomFromUrl, options = {}) {
     throw new Error("[collab] createCollabWss requires options.authorize");
   }
   const onBeforeEvict = options.onBeforeEvict ?? null;
+  const shutdownTimeoutMs = readPositiveInt(
+    options.shutdownTimeoutMs,
+    DEFAULT_WEBSOCKET_SHUTDOWN_TIMEOUT_MS,
+  );
+  let shutdownPromise = null;
   const toRoom =
     roomFromUrl ?? ((url) => (url || "/").slice(1).split("?")[0] || "default");
 
@@ -595,6 +698,10 @@ export function createCollabWss(roomFromUrl, options = {}) {
   });
 
   const handleUpgrade = async (req, socket, head) => {
+    if (shutdownPromise) {
+      refuseUpgrade(socket, 503);
+      return;
+    }
     if (rawSocketClosed(socket)) {
       return;
     }
@@ -616,6 +723,10 @@ export function createCollabWss(roomFromUrl, options = {}) {
       refuseUpgrade(socket, decision?.status || 403);
       return;
     }
+    if (shutdownPromise) {
+      refuseUpgrade(socket, 503);
+      return;
+    }
     if (rawSocketClosed(socket)) {
       return;
     }
@@ -625,5 +736,15 @@ export function createCollabWss(roomFromUrl, options = {}) {
     });
   };
 
-  return { wss, handleUpgrade };
+  const shutdown = () => {
+    if (shutdownPromise) return shutdownPromise;
+
+    shutdownPromise = (async () => {
+      await closeWebSocketServer(wss, shutdownTimeoutMs);
+      await drainRooms(onBeforeEvict);
+    })();
+    return shutdownPromise;
+  };
+
+  return { wss, handleUpgrade, shutdown };
 }

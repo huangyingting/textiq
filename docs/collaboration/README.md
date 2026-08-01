@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-08-01"
 description: "This subsystem covers the application-level collaboration contract: Yjs room identity, client readiness, degraded local-only mode, title sync, presence, and room authorization. Deployment and scaling procedures live in ../operations/collaboration-deployment.md."
 ---
 
@@ -23,6 +23,7 @@ room authorization. Deployment and scaling procedures live in
 | Collab authorize route       | [`src/app/api/collab/authorize/route.ts`](../../src/app/api/collab/authorize/route.ts)                                     |
 | Eviction flush route         | [`src/app/api/collab/flush/route.ts`](../../src/app/api/collab/flush/route.ts)                                             |
 | Standalone server            | [`scripts/collab-server.mjs`](../../scripts/collab-server.mjs), [`scripts/collab-core.mjs`](../../scripts/collab-core.mjs) |
+| Graceful shutdown            | [`scripts/collab-graceful-shutdown.mjs`](../../scripts/collab-graceful-shutdown.mjs)                                       |
 | Flood controls and config    | [`scripts/collab-config.mjs`](../../scripts/collab-config.mjs), [`scripts/collab-core.mjs`](../../scripts/collab-core.mjs) |
 
 ## Room Model
@@ -110,6 +111,14 @@ room name and a full Yjs update. That flush is best-effort recovery only: errors
 are logged, eviction still completes, and the saved-state vector is cleared so
 the database remains the durable source of truth.
 
+Both server entry points install the same idempotent `SIGINT`/`SIGTERM`
+shutdown interface. `createCollabWss().shutdown()` stops upgrade acceptance,
+closes clients with WebSocket code 1012, awaits the recovery flusher for dirty
+rooms, and destroys all room state. The outer shutdown module then closes HTTP
+and, in inline mode, Next. This ordering is required because the inline flusher
+POSTs to the same app server; HTTP must remain available until room drains
+finish. Forced termination and crashes cannot run this best-effort path.
+
 `POST /api/collab/flush` accepts only object JSON payloads with a non-empty
 `documentId` and a valid base64 `update`. Malformed JSON, missing bodies, and
 non-object JSON values such as `null`, arrays, strings, or numbers are rejected
@@ -140,9 +149,10 @@ path segment.
 5. The title can reseed from the database when the shared title is empty.
 6. Long-lived sessions are periodically reauthorized when server support is
    available.
-7. Empty rooms evict after the idle TTL; eviction flush is best-effort recovery,
-   not canonical persistence.
-8. Provider and `Y.Doc` are destroyed on unmount.
+7. Empty rooms evict after the idle TTL; eviction and graceful-shutdown flushes
+   are best-effort recovery, not canonical persistence.
+8. Collaboration drains before HTTP closes so inline recovery writes can finish.
+9. Provider and `Y.Doc` are destroyed on unmount.
 
 ## Primary Tests
 
@@ -151,6 +161,8 @@ path segment.
 - [`src/lib/lexical/use-collaboration-gate.test.ts`](../../src/lib/lexical/use-collaboration-gate.test.ts)
 - [`scripts/collab-auth.test.mjs`](../../scripts/collab-auth.test.mjs)
 - [`scripts/collab-runtime.test.mjs`](../../scripts/collab-runtime.test.mjs)
+- [`scripts/collab-graceful-shutdown.test.mjs`](../../scripts/collab-graceful-shutdown.test.mjs)
+- [`scripts/collab-core-room-lifecycle.test.mjs`](../../scripts/collab-core-room-lifecycle.test.mjs)
 - [`scripts/collab-durability.test.mjs`](../../scripts/collab-durability.test.mjs)
 - [`scripts/collab-flood-controls.test.mjs`](../../scripts/collab-flood-controls.test.mjs)
 - [`scripts/collab-eviction.test.mjs`](../../scripts/collab-eviction.test.mjs)

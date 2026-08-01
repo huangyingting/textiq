@@ -28,6 +28,7 @@ import {
   createRuntimeAuthorizer,
   createRuntimeEvictionFlusher,
   emitDeploymentDiagnostics,
+  installCollabServerShutdown,
   resolveCollabDeployment,
   roomFromStandaloneUrl,
 } from "./collab-runtime.mjs";
@@ -83,12 +84,21 @@ const onBeforeEvict = createRuntimeEvictionFlusher({
   runtimeMode: "standalone",
   env: process.env,
 });
-const { handleUpgrade } = createCollabWss(roomFromStandaloneUrl, {
-  authorize,
-  onBeforeEvict,
-});
+const { handleUpgrade, shutdown: closeCollaboration } = createCollabWss(
+  roomFromStandaloneUrl,
+  {
+    authorize,
+    onBeforeEvict,
+  },
+);
 server.on("upgrade", (req, socket, head) => {
   handleUpgrade(req, socket, head);
+});
+
+installCollabServerShutdown({
+  server,
+  closeCollaboration,
+  runtimeMode: "standalone",
 });
 
 server.listen(PORT, HOST, () => {

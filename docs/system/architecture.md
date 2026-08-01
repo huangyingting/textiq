@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-08-01"
 description: "Purpose: Current system design map"
 ---
 
@@ -77,7 +77,8 @@ The failure window where a synced edit may not reach the DB:
   after a confirmed save; the **standalone** process runs separately and relies on
   DB reseed on reconnect rather than cross-process vector advancement.
 - `onBeforeEvict(roomName, update)` callback — fires with the full Yjs update
-  bytes before a room is torn down when unsaved changes are detected. Wired at
+  bytes before a dirty room is torn down by idle eviction or graceful shutdown.
+  Wired at
   `createCollabWss` time in **both** entry points (`server.mjs`,
   `scripts/collab-server.mjs`) via `createEvictionFlusher` from
   `scripts/collab-flush.mjs`, which POSTs the update (base64) to the internal
@@ -250,7 +251,7 @@ TTL expires        → hasPendingUpdates? → onBeforeEvict(roomName, update) �
 - `docs: Map<string, WSSharedDoc>` — the in-memory room registry.
 - `savedStateVectors: Map<string, Uint8Array>` — tracks what has been durably saved per room.
 
-### 7.2 Authorization and eviction flush
+### 7.2 Authorization, eviction flush, and graceful shutdown
 
 `createCollabWss(roomFromUrl, { authorize, onBeforeEvict })` requires an
 authorization callback and accepts an optional eviction-flush callback:
@@ -268,6 +269,13 @@ authorization callback and accepts an optional eviction-flush callback:
   `flushFailures`) without room or document ids and never advance the saved-state
   vector. When `COLLAB_INTERNAL_SECRET` is unset the flusher is a no-op and the
   endpoint returns `503`.
+
+`createCollabWss` also returns an idempotent `shutdown()` interface. It rejects
+new and authorization-in-flight upgrades with 503, closes clients with code
+1012, waits for dirty-room flushes, and destroys room state. Both server entry
+points install `installCollabServerShutdown`, which drains collaboration before
+closing HTTP (and Next in inline mode) so the same-process flush endpoint remains
+reachable.
 
 Read-only connections (viewers) receive sync-step-1 replies but cannot send updates (sync-step-2 / update messages are dropped).
 
@@ -389,7 +397,7 @@ durable command log yet.
 - **Deck full save** → `saveDeckJson` → `persistDeck` (CAS token)
 - **Version restore** → `restoreDocumentVersion` → `restoreVersion` (checkpoint + atomic restore)
 - **Mirror rebuild** → `rebuildVisualMirror` → `rebuildMirror` (repair, idempotent)
-- **Collab flush on evict** → `onBeforeEvict` (`createEvictionFlusher`) → `POST /api/collab/flush` → best-effort recovery snapshot on `Document.collabRecoverySnapshot` (NOT canonical; `contentJson` remains the source of truth)
+- **Collab flush on evict/shutdown** → `onBeforeEvict` (`createEvictionFlusher`) → `POST /api/collab/flush` → best-effort recovery snapshot on `Document.collabRecoverySnapshot` (NOT canonical; `contentJson` remains the source of truth)
 
 ---
 

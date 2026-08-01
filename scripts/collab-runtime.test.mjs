@@ -8,6 +8,7 @@ import {
   createRuntimeAuthorizer,
   createRuntimeEvictionFlusher,
   emitDeploymentDiagnostics,
+  installCollabServerShutdown,
   resolveCollabDeployment,
   resolveCollabInternalSecret,
   resolveCollabServiceUrls,
@@ -26,6 +27,7 @@ import {
   createRuntimeAuthorizer as createRuntimeAuthorizerImpl,
   createRuntimeEvictionFlusher as createRuntimeEvictionFlusherImpl,
 } from "./collab-runtime-bootstrap.mjs";
+import { installCollabServerShutdown as installCollabServerShutdownImpl } from "./collab-graceful-shutdown.mjs";
 import {
   COLLAB_INLINE_PATH as COLLAB_INLINE_PATH_IMPL,
   resolveCollabInternalSecret as resolveCollabInternalSecretImpl,
@@ -456,5 +458,9 @@ describe("collab-runtime facade parity", () => {
       createRuntimeEvictionFlusher,
       createRuntimeEvictionFlusherImpl,
     );
+  });
+
+  test("re-exports graceful shutdown through the stable runtime facade", () => {
+    assert.equal(installCollabServerShutdown, installCollabServerShutdownImpl);
   });
 });

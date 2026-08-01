@@ -37,6 +37,7 @@ import {
   createRuntimeAuthorizer,
   createRuntimeEvictionFlusher,
   emitDeploymentDiagnostics,
+  installCollabServerShutdown,
   resolveCollabDeployment,
   roomFromInlineUrl,
 } from "./scripts/collab-runtime.mjs";
@@ -95,6 +96,8 @@ const server = createServer((req, res) => {
   handle(req, res);
 });
 
+let closeCollaboration = async () => {};
+
 if (inlineCollab) {
   // Authenticate + authorize each upgrade against the app's permission rules by
   // forwarding the request cookies to the `/api/collab/authorize` route on this
@@ -116,10 +119,14 @@ if (inlineCollab) {
   });
 
   // Room name is the path after `/collab/` (`/collab/<documentId>`).
-  const { handleUpgrade: handleCollabUpgrade } = createCollabWss(
-    (url) => roomFromInlineUrl(url, COLLAB_PATH),
-    { authorize, onBeforeEvict },
-  );
+  const {
+    handleUpgrade: handleCollabUpgrade,
+    shutdown: shutdownCollaboration,
+  } = createCollabWss((url) => roomFromInlineUrl(url, COLLAB_PATH), {
+    authorize,
+    onBeforeEvict,
+  });
+  closeCollaboration = shutdownCollaboration;
 
   const handleNextUpgrade = app.getUpgradeHandler();
 
@@ -133,6 +140,13 @@ if (inlineCollab) {
     void handleNextUpgrade(req, socket, head);
   });
 }
+
+installCollabServerShutdown({
+  server,
+  closeCollaboration,
+  closeApplication: () => app.close(),
+  runtimeMode: "inline",
+});
 
 server.listen(port, hostname, () => {
   console.log(`▲ Ready on http://${hostname}:${port}`);

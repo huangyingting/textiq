@@ -26,3 +26,4 @@ export {
   createRuntimeAuthorizer,
   createRuntimeEvictionFlusher,
 } from "./collab-runtime-bootstrap.mjs";
+export { installCollabServerShutdown } from "./collab-graceful-shutdown.mjs";

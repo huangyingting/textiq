@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-21"
+last_updated: "2026-08-01"
 description: "Real-time collaborative editing (multiple cursors, presence, conflict-free merges) is powered by a self-hosted Yjs websocket sync server, scripts/collab-server.mjs. The browser editor connects to it through useLexicalCollaboration. The application-level room/readiness/access contract is documented in ../collaboration/README.md."
 ---
 
@@ -20,10 +20,8 @@ single-instance operational constraint**, what happens to live rooms on restart
 or deploy, and the upgrade paths for when you need horizontal scale or durable
 collab state.
 
-> **No application change is required to read this document.** It explains the
-> existing behavior and the upgrade paths; the app already degrades gracefully to
-> local-only editing when the server is unreachable (see
-> [Graceful degradation](#graceful-degradation)).
+The app degrades gracefully to local-only editing when the server is unreachable
+(see [Graceful degradation](#graceful-degradation)).
 
 ## What the server does
 
@@ -38,6 +36,8 @@ collab state.
   for liveness/readiness probes and operational visibility.
 - Keeps a room in memory after its last client disconnects, so a reconnecting
   client re-syncs without a round-trip to the database.
+- Handles `SIGINT` and `SIGTERM` through a shared graceful-shutdown path that
+  drains dirty rooms before the HTTP and application layers close.
 
 It is **runtime tooling, not part of the Next.js bundle** — it runs as its own
 Node process alongside the web app.
@@ -200,19 +200,31 @@ Both the standalone server (`GET /health`) and the inline collab socket
 
 ### What happens to live rooms on restart/deploy
 
-When the collaboration server restarts (crash, deploy, rolling update, or manual
-restart):
+On a normal `SIGINT` or `SIGTERM` deploy, both the inline and standalone entry
+points use this ordered shutdown sequence:
 
-1. **All in-memory `Y.Doc` rooms are dropped immediately.** There is no graceful
-   drain — rooms cannot be serialised to disk and restored.
-2. **Active WebSocket connections are closed.** Clients receive a close event and
-   the browser y-websocket provider begins its reconnect backoff.
-3. **Clients reconnect and re-seed the room from the database.** The editor's
+1. **Stop accepting collaboration upgrades.** New or in-flight upgrades receive
+   HTTP 503 once shutdown begins.
+2. **Close active WebSocket connections with code 1012 (`Service restart`).** The
+   server waits up to five seconds for close handshakes, then terminates any
+   remaining sockets.
+3. **Drain every in-memory room.** Dirty rooms invoke the same recovery-snapshot
+   flusher used by idle eviction. Flushes run in parallel and finish while the
+   inline app's internal HTTP endpoint is still reachable; clean rooms do not
+   issue a write.
+4. **Destroy room state, then close HTTP and the Next application.** HTTP gets a
+   separate five-second drain window before remaining connections are forced
+   closed.
+
+`SIGKILL`, process crashes, host loss, and power loss cannot run this sequence;
+those failures still drop in-memory rooms immediately. In every restart mode:
+
+1. **Clients reconnect and re-seed the room from the database.** The editor's
    autosave writes the document content to the app database through debounced
    server actions. On reconnect, the first client to join re-seeds the in-memory
    room from the DB snapshot; subsequent clients receive the full document through
    the normal Yjs sync step.
-4. **Awareness (presence) is lost and rebuilt.** Live cursors and user-presence
+2. **Awareness (presence) is lost and rebuilt.** Live cursors and user-presence
    states are not persisted. They reappear as clients reconnect and re-announce
    their presence.
 
@@ -229,16 +241,20 @@ debounce window:
 - Edits already flushed to the database are safe — they will be in the re-seeded
   room after reconnect.
 - Edits in the **last debounce window** that have not yet been flushed to the
-  database will be **lost from the collaborative state** after restart. The
-  in-memory Yjs update that was pending flush is gone, and the DB snapshot does
-  not contain it.
+  database will be **absent from the normal collaborative state** after restart
+  because the room re-seeds from the DB snapshot. A graceful shutdown with
+  `COLLAB_INTERNAL_SECRET` configured preserves the dirty Yjs state as a
+  best-effort recovery snapshot; crashes, forced termination, missing secrets,
+  or flush failures may leave no snapshot.
 - Each reconnecting client will re-seed the room from the DB, so the loss is the
   same for all clients — there is no silent divergence, just a short rollback
   to the last persisted state.
 
-**Mitigation:** deploy during low-traffic windows and keep the autosave debounce
-as short as acceptable for your write throughput. The CRDT ensures that after the
-rollback all clients converge on the same (slightly older) document state.
+**Mitigation:** configure `COLLAB_INTERNAL_SECRET`, give the process at least a
+20-second termination grace period, deploy during low-traffic windows, and keep
+the autosave debounce as short as acceptable for your write throughput. The
+CRDT ensures that after any rollback all clients converge on the same (slightly
+older) canonical document state.
 
 ### Rolling deploys
 
@@ -368,7 +384,8 @@ failure never loses a saved document.
 ## Eviction recovery snapshot (best-effort)
 
 When a dirty room is evicted (all clients gone, idle TTL elapsed, unsaved changes
-detected) the server flushes the room's Yjs update to the internal
+detected) or drained during graceful shutdown, the server flushes the room's Yjs
+update to the internal
 `/api/collab/flush` endpoint, which stores it on `Document.collabRecoverySnapshot`
 / `collabRecoverySavedAt`. This is a **best-effort recovery aid only** — it is not
 the source of truth and is not read on the normal load path. Configure it with:
@@ -382,3 +399,8 @@ Both health endpoints surface aggregate flush observability only:
 `flushFailures` (total counter) and `recentFlushFailureCount` (count of entries
 currently retained in the in-memory failure ring). Public health responses do
 not include room or document ids for individual failures.
+
+Shutdown emits structured `collab.server.shutdown` start/finish records. A
+finish record with `ok: false` means a runtime layer failed to close and sets a
+non-zero process exit code. Individual recovery flush failures continue to use
+the existing `collab.flush.result` diagnostics and remain best-effort.
