@@ -7,9 +7,11 @@ import test from "node:test";
 import {
   checkEnvInventory,
   checkRouteInventory,
+  checkRuntimeConfigDefaults,
   collectApiRouteKeys,
   parseRouteMatrixKeys,
   parseRuntimeConfigNames,
+  parseRuntimeConfigRows,
   scanEnvReads,
   scanEnvReadsInText,
 } from "./check-docs-source-inventory.mjs";
@@ -108,6 +110,52 @@ test("docs source inventory: parses runtime-config table names", () => {
 `);
 
   assert.deepEqual(names, ["AUTH_SECRET", "DATABASE_URL"]);
+});
+
+test("docs source inventory: parses runtime-config table rows", () => {
+  const rows = parseRuntimeConfigRows(`
+| Variable | Read by | Default |
+| --- | --- | --- |
+| \`AUTH_SECRET\` | App server | None |
+| not a row | no | ignored |
+| \`COVERAGE_BREADTH_MAX_GAP_FILES\` | Test tooling | \`0\` |
+`);
+
+  assert.deepEqual(rows.get("AUTH_SECRET"), [
+    "`AUTH_SECRET`",
+    "App server",
+    "None",
+  ]);
+  assert.deepEqual(rows.get("COVERAGE_BREADTH_MAX_GAP_FILES"), [
+    "`COVERAGE_BREADTH_MAX_GAP_FILES`",
+    "Test tooling",
+    "`0`",
+  ]);
+});
+
+test("docs source inventory: compares documented defaults with source contracts", () => {
+  const expectedDefaults = new Map([["COVERAGE_BREADTH_MAX_GAP_FILES", "0"]]);
+
+  assert.deepEqual(
+    checkRuntimeConfigDefaults(
+      "| `COVERAGE_BREADTH_MAX_GAP_FILES` | Test tooling | `0` |",
+      expectedDefaults,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    checkRuntimeConfigDefaults(
+      "| `COVERAGE_BREADTH_MAX_GAP_FILES` | Test tooling | `167` |",
+      expectedDefaults,
+    ),
+    [
+      {
+        name: "COVERAGE_BREADTH_MAX_GAP_FILES",
+        expected: "0",
+        actual: "167",
+      },
+    ],
+  );
 });
 
 test("docs source inventory: parses only route matrix rows from the Matrix section", () => {
@@ -280,4 +328,39 @@ test("docs source inventory CLI reports pass and drift results", (t) => {
   });
   assert.equal(missingOnly.status, 1);
   assert.doesNotMatch(missingOnly.stderr, /Env rows that no source file reads/);
+
+  const defaultMismatchRoot = fixtureRoot(
+    "docs-source-cli-default-mismatch",
+    t,
+  );
+  mkdirSync(join(defaultMismatchRoot, "docs", "operations"), {
+    recursive: true,
+  });
+  mkdirSync(join(defaultMismatchRoot, "docs", "security"), {
+    recursive: true,
+  });
+  mkdirSync(join(defaultMismatchRoot, "src"), { recursive: true });
+  writeFileSync(
+    join(defaultMismatchRoot, "docs", "operations", "runtime-config.md"),
+    "| Name | Context | Default |\n| --- | --- | --- |\n| `COVERAGE_BREADTH_MAX_GAP_FILES` | Test tooling | `167` |\n",
+  );
+  writeFileSync(
+    join(
+      defaultMismatchRoot,
+      "docs",
+      "security",
+      "api-route-security-matrix.md",
+    ),
+    "## Matrix\n| Route | Classification |\n| --- | --- |\n",
+  );
+
+  const defaultMismatch = spawnSync(process.execPath, [scriptPath], {
+    cwd: defaultMismatchRoot,
+    encoding: "utf8",
+  });
+  assert.equal(defaultMismatch.status, 1);
+  assert.match(
+    defaultMismatch.stderr,
+    /COVERAGE_BREADTH_MAX_GAP_FILES: documented "167", expected "0"/,
+  );
 });

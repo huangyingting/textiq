@@ -3,6 +3,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, relative, sep } from "node:path";
 import process from "node:process";
+import {
+  DEFAULT_MAX_GAP_FILES,
+  MAX_GAP_ENV_KEY,
+} from "./check-coverage-breadth.mjs";
 import { toPosix } from "./source-scan-utils.mjs";
 
 const SOURCE_ROOTS = ["src", "scripts", "prisma", "e2e"];
@@ -135,14 +139,44 @@ export function scanEnvReads(repoRoot = process.cwd()) {
 }
 
 export function parseRuntimeConfigNames(markdown) {
-  const names = [];
+  return [...parseRuntimeConfigRows(markdown).keys()];
+}
+
+export function parseRuntimeConfigRows(markdown) {
+  const rows = new Map();
   for (const line of markdown.split(/\r?\n/)) {
-    const match = line.trim().match(/^\|\s*`([A-Z][A-Z0-9_]*)`\s*\|/);
-    if (match) {
-      names.push(match[1]);
+    const cells = line
+      .trim()
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    const name = cells[0]?.match(/^`([A-Z][A-Z0-9_]*)`$/)?.[1];
+    if (name) {
+      rows.set(name, cells);
     }
   }
-  return names;
+  return rows;
+}
+
+export function checkRuntimeConfigDefaults(
+  markdown,
+  expectedDefaults = new Map([
+    [MAX_GAP_ENV_KEY, String(DEFAULT_MAX_GAP_FILES)],
+  ]),
+) {
+  const rows = parseRuntimeConfigRows(markdown);
+  const mismatches = [];
+  for (const [name, expected] of expectedDefaults) {
+    const row = rows.get(name);
+    if (!row) {
+      continue;
+    }
+    const actual = row[2]?.replace(/^`([^`]*)`$/, "$1") ?? "";
+    if (actual !== expected) {
+      mismatches.push({ name, expected, actual });
+    }
+  }
+  return mismatches;
 }
 
 export function collectApiRouteKeys(repoRoot = process.cwd()) {
@@ -198,7 +232,11 @@ export function checkEnvInventory(repoRoot = process.cwd()) {
   const reads = scanEnvReads(repoRoot);
   const actual = [...reads.keys()].sort();
   const documented = parseRuntimeConfigNames(runtimeDoc).sort();
-  return { ...compareSets(actual, documented), reads };
+  return {
+    ...compareSets(actual, documented),
+    reads,
+    defaultMismatches: checkRuntimeConfigDefaults(runtimeDoc),
+  };
 }
 
 export function checkRouteInventory(repoRoot = process.cwd()) {
@@ -227,7 +265,11 @@ function main() {
   const routes = checkRouteInventory();
   let failed = false;
 
-  if (env.missing.length > 0 || env.stale.length > 0) {
+  if (
+    env.missing.length > 0 ||
+    env.stale.length > 0 ||
+    env.defaultMismatches.length > 0
+  ) {
     failed = true;
     console.error("Runtime config inventory drift detected.");
     printList(
@@ -239,6 +281,13 @@ function main() {
       "Env rows that no source file reads:",
       env.stale,
       () => "remove the row or update the source scanner scope if intentional",
+    );
+    printList(
+      "Env rows whose documented default differs from source:",
+      env.defaultMismatches.map(
+        ({ name, expected, actual }) =>
+          `${name}: documented ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`,
+      ),
     );
   }
 
