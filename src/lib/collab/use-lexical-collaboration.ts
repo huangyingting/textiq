@@ -166,6 +166,8 @@ export function useLexicalCollaboration(opts: {
     }
     const awareness = provider.awareness;
     let degradeTimer: ReturnType<typeof setTimeout> | undefined;
+    let awarenessUpdateQueued = false;
+    let disposed = false;
 
     const onStatus = (event: { status: CollabStatus }) => {
       setStatus(event.status);
@@ -180,8 +182,18 @@ export function useLexicalCollaboration(opts: {
         setDegraded(false);
       }
     };
+    const flushAwareness = () => {
+      awarenessUpdateQueued = false;
+      if (!disposed) {
+        setPeers(computePeers(awareness));
+      }
+    };
     const onAwareness = () => {
-      setPeers(computePeers(awareness));
+      if (awarenessUpdateQueued) {
+        return;
+      }
+      awarenessUpdateQueued = true;
+      queueMicrotask(flushAwareness);
     };
 
     provider.on("status", onStatus);
@@ -195,6 +207,7 @@ export function useLexicalCollaboration(opts: {
     }, DEGRADED_TIMEOUT_MS);
 
     return () => {
+      disposed = true;
       if (degradeTimer) clearTimeout(degradeTimer);
       provider.off("status", onStatus);
       provider.off("sync", onSync);
