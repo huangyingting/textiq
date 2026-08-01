@@ -80,6 +80,34 @@ test.describe("presentation focus and mobile control regressions", () => {
     await expect(returnedOpener).toBeFocused();
   });
 
+  test("forced-colors keeps the focused stage node visibly outlined", async ({
+    page,
+  }, testInfo) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    const editor = await openSeededSlideEditor(page, 1280, 900);
+    const stageNode = editor
+      .locator(
+        '[data-slide-stage-viewport="true"] [data-node-id][role="button"]',
+      )
+      .first();
+
+    await stageNode.focus();
+    await expect(stageNode).toBeFocused();
+    await expect(stageNode).toHaveCSS("outline-style", "solid");
+    await expect(stageNode).toHaveCSS("outline-width", "2px");
+    await expect(stageNode).toHaveCSS("outline-offset", "2px");
+
+    const outlineColor = await stageNode.evaluate(
+      (node) => getComputedStyle(node).outlineColor,
+    );
+    expect(outlineColor).not.toBe("transparent");
+    expect(outlineColor).not.toBe("rgba(0, 0, 0, 0)");
+
+    await stageNode.screenshot({
+      path: testInfo.outputPath("forced-colors-focused-stage-node.png"),
+    });
+  });
+
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 412, height: 915 },
