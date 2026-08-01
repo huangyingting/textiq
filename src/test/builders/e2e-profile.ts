@@ -330,6 +330,26 @@ export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
   };
 }
 
+export const E2E_DIAGNOSTIC_MISSING_ASSET_ID = "e2e-missing-diagnostic-asset";
+
+export function buildE2EDiagnosticsDeck(
+  assetUrl: string,
+  assetId: string,
+): Deck {
+  const deck = buildE2EProfileDeck(assetUrl, assetId);
+  const imageNode = deck.slides[0]?.children.find(
+    (node) => node.type === "image",
+  );
+  if (imageNode?.type !== "image") {
+    throw new Error("E2E diagnostics deck requires a first-slide image node.");
+  }
+  imageNode.content = {
+    ...imageNode.content,
+    assetId: E2E_DIAGNOSTIC_MISSING_ASSET_ID,
+  };
+  return deck;
+}
+
 export function buildE2ESourceLinkedDeck(
   assetUrl: string,
   assetId: string,

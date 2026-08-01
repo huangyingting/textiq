@@ -93,6 +93,7 @@ function createCommandHarness(
     panels: [],
     source: [],
     repairs: [],
+    reviewOpen: [],
   };
   const args = {
     deck,
@@ -111,7 +112,10 @@ function createCommandHarness(
     setActiveGroupId: noopSetter,
     setActiveSlideIndex: (value: number | ((current: number) => number)) =>
       calls.focus.push(typeof value === "function" ? value(0) : value),
-    setDeckDiagnosticsReviewOpen: noopSetter,
+    setDeckDiagnosticsReviewOpen: (
+      value: boolean | ((current: boolean) => boolean),
+    ) =>
+      calls.reviewOpen.push(typeof value === "function" ? value(true) : value),
     setInspectorSheetOpen: noopSetter,
     requestImageRepair: (nodeId: string) => calls.repairs.push(nodeId),
     exitInlineEdit: () => calls.focus.push("exit-inline"),
@@ -346,6 +350,22 @@ describe("inspector command descriptors", () => {
         "Source diagnostic target is no longer present.",
       ),
     );
+  });
+
+  test("closes diagnostics review before opening an image asset repair", () => {
+    const { commands, calls } = createCommandHarness();
+
+    commands.handleDiagnosticAction(
+      { type: "open-asset-panel" },
+      diagnostic({
+        scope: "node",
+        slideId: "slide-a",
+        nodeId: "image-a",
+      }),
+    );
+
+    assert.deepEqual(calls.repairs, ["image-a"]);
+    assert.deepEqual(calls.reviewOpen, [false]);
   });
 
   test("detaches deck chrome and theme decorations when selected", () => {

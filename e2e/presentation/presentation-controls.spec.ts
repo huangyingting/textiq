@@ -16,6 +16,7 @@ import {
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
+  fixturePngBuffer,
   profileDocPath,
   profileOwnerCredentials,
   profilePresentPath,
@@ -53,7 +54,8 @@ async function openPresentationFixture(
     | "slideMaster"
     | "sourceReview"
     | "sourceActions"
-    | "speakerNotes",
+    | "speakerNotes"
+    | "deckDiagnostics",
 ): Promise<{ editor: Locator; canvas: Locator }> {
   await login(
     page,
@@ -1000,6 +1002,106 @@ test.describe("presentation editing controls", () => {
     await expect(
       presentation.getByText(updatedNotes, { exact: true }),
     ).toBeVisible();
+  });
+
+  test("deck diagnostics review traps focus, navigates, repairs, and persists an empty state", async ({
+    page,
+  }, testInfo) => {
+    const { editor, canvas } = await openPresentationFixture(
+      page,
+      testInfo,
+      "deckDiagnostics",
+    );
+    const diagnosticsTrigger = editor.getByRole("button", {
+      name: /open deck diagnostics review \(1 diagnostic\)/i,
+    });
+    const dialog = page.getByRole("dialog", {
+      name: "Deck diagnostics review",
+    });
+    const close = dialog.getByRole("button", { name: "Close", exact: true });
+    const goToTarget = dialog.getByRole("button", {
+      name: /^Go to target for missing-asset:/,
+    });
+    const openAssetRepair = dialog.getByRole("button", {
+      name: /^Open asset panel for missing-asset:/,
+    });
+    const imageNode = canvas.locator(
+      '[data-node-id="fixture-image"][role="button"]',
+    );
+
+    await expect(diagnosticsTrigger).toBeVisible();
+    await diagnosticsTrigger.click();
+    await expect(dialog).toBeVisible();
+    await expect(close).toBeFocused();
+    await expect(
+      dialog.getByText(
+        'Image node "fixture-image" references missing asset "e2e-missing-diagnostic-asset"',
+        { exact: true },
+      ),
+    ).toBeVisible();
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(openAssetRepair).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(diagnosticsTrigger).toBeFocused();
+
+    await diagnosticsTrigger.click();
+    await expect(dialog).toBeVisible();
+    await dialog.locator("..").click({ position: { x: 2, y: 2 } });
+    await expect(dialog).toHaveCount(0);
+    await expect(diagnosticsTrigger).toBeFocused();
+
+    await diagnosticsTrigger.click();
+    await goToTarget.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(imageNode).toHaveAttribute("aria-pressed", "true");
+
+    await diagnosticsTrigger.click();
+    const chooserPromise = page.waitForEvent("filechooser");
+    await openAssetRepair.click();
+    const chooser = await chooserPromise;
+    await expect(dialog).toHaveCount(0);
+    await waitForSlideAutosaveAfter(page, () =>
+      chooser.setFiles({
+        name: "diagnostic-repair.png",
+        mimeType: "image/png",
+        buffer: fixturePngBuffer(),
+      }),
+    );
+    await expect(
+      page.locator('[role="alert"]:not(#__next-route-announcer__)'),
+    ).toHaveCount(0, { timeout: 15_000 });
+    await expect(diagnosticsTrigger).toHaveCount(0);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(diagnosticsTrigger).toHaveCount(0);
+
+    const more = editor.getByRole("button", {
+      name: "Open more deck commands",
+    });
+    await more.click();
+    const moreMenu = page.getByRole("menu", { name: "More deck commands" });
+    await moreMenu.getByRole("menuitem", { name: "Diagnostics 0" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByText("No diagnostics found across this deck.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "This deck has no validation, render, asset, theme, source, or export diagnostics to review.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await close.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(more).toBeFocused();
   });
 
   test("custom theme authoring saves, re-enters the picker, applies, and persists", async ({

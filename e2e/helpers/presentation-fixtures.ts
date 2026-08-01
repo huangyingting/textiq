@@ -12,6 +12,7 @@ function presentationFixture<
     | "generated"
     | "sourceLinked"
     | "sourceReview"
+    | "diagnostics"
     | "themeVersions",
 >(
   documentId: DocumentId,
@@ -199,6 +200,12 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr32",
     "e2e-isolated-speaker-notes",
   ),
+  deckDiagnostics: presentationFixture(
+    "e2eisolateddiagnostics001",
+    "e2eisolatedshr33",
+    "e2e-isolated-deck-diagnostics",
+    "diagnostics",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -250,6 +257,7 @@ export const PRESENTATION_CONTROL_FIXTURES = {
   sourceReview: "sourceReview",
   sourceActions: "sourceActions",
   speakerNotes: "speakerNotes",
+  deckDiagnostics: "deckDiagnostics",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const E2E_CUSTOM_THEME_FIXTURE = {

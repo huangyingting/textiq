@@ -26,6 +26,7 @@ import {
   E2E_PROFILE_FIXTURE,
   buildE2EProfileContentJson,
   buildE2EProfileDeck,
+  buildE2EDiagnosticsDeck,
   buildE2EProfileDeckFixture,
   buildE2EProfileFixtureDescriptor,
   buildE2ESourceLinkedDeck,
@@ -842,7 +843,12 @@ async function main() {
                         isolatedAsset.id,
                         fixture.documentId,
                       )
-                    : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
+                    : fixture.deckKind === "diagnostics"
+                      ? buildE2EDiagnosticsDeck(
+                          isolatedAssetUrl,
+                          isolatedAsset.id,
+                        )
+                      : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
     if (fixture.deckKind === "themeVersions") {
       isolatedDeck.theme = {
         ...isolatedDeck.theme,

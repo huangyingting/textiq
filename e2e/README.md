@@ -8,29 +8,29 @@ app.
 
 ## What's covered
 
-| Spec                                                    | Coverage                                                                                                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                                   |
-| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                          |
-| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                            |
-| `e2e/documents/template-creation.spec.ts`               | Dashboard/workspace template failure/retry, duplicate suppression, modal accessibility, permissions, and reload persistence              |
-| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                          |
-| `e2e/presentation/present-export.spec.ts`               | Present rendering; real PDF/PNG/PPTX downloads; browser raster-failure containment and successful retry                                  |
-| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                                      |
-| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                                        |
-| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                              |
-| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                                   |
-| `e2e/presentation/presentation-controls.spec.ts`        | Arrange/group controls, precision guides, themes, ratio/master, source review, and speaker-note history/persistence/presenter lifecycles |
-| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                            |
-| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup, onboarding failure recovery/deletion, profile persistence, export, password rotation, recovery failures, and safeguards          |
-| `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts` | Search/favorite failure recovery, persistence, duplicate/rename, delete/undo, trash restore, and permanent deletion                      |
-| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                                  |
-| `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Comment failure recovery/duplicate suppression, owner/viewer lifecycle, permissions, guarded deletion, and reload persistence            |
-| `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling          |
-| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag/restore failure recovery and duplicate suppression, tag persistence, and reversible history restore across reloads                   |
-| `e2e/ui-matrix/public-render-ui.spec.ts`                | Public share/embed/present rendering, asset policy, safe 404s, read-only UI, and accessible visual-lightbox behavior                     |
-| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite failure recovery/copy/revoke, membership, transfer, leave, and delete lifecycle               |
-| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically            |
+| Spec                                                    | Coverage                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                          |
+| `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save/present/export smoke (auth-gated, skips cleanly without creds)                                                 |
+| `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                   |
+| `e2e/documents/template-creation.spec.ts`               | Dashboard/workspace template failure/retry, duplicate suppression, modal accessibility, permissions, and reload persistence     |
+| `e2e/import/import-roundtrip.spec.ts`                   | Markdown + DOCX import → editor render → reload persistence; unsupported-type error (profile-gated, #519/#1734)                 |
+| `e2e/presentation/present-export.spec.ts`               | Present rendering; real PDF/PNG/PPTX downloads; browser raster-failure containment and successful retry                         |
+| `e2e/presentation/slide-asset-upload.spec.ts`           | Inspector image upload + protected slide-asset access control (profile-gated, #521)                                             |
+| `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                               |
+| `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                     |
+| `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                          |
+| `e2e/presentation/presentation-controls.spec.ts`        | Arrange/group controls, precision guides, themes, ratio/master, source review, diagnostics repair, and speaker-note lifecycles  |
+| `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                   |
+| `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup, onboarding failure recovery/deletion, profile persistence, export, password rotation, recovery failures, and safeguards |
+| `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts` | Search/favorite failure recovery, persistence, duplicate/rename, delete/undo, trash restore, and permanent deletion             |
+| `e2e/ui-matrix/catalog.spec.ts`                         | 500-case subsystem UI matrix catalog validation (included in the deterministic profile)                                         |
+| `e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts`  | Comment failure recovery/duplicate suppression, owner/viewer lifecycle, permissions, guarded deletion, and reload persistence   |
+| `e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`   | Share policy persistence, clipboard/social actions, passcode unlock, public mode gates, link rotation/revocation, and scrolling |
+| `e2e/ui-matrix/document-metadata-history-ui.spec.ts`    | Tag/restore failure recovery and duplicate suppression, tag persistence, and reversible history restore across reloads          |
+| `e2e/ui-matrix/public-render-ui.spec.ts`                | Public share/embed/present rendering, asset policy, safe 404s, read-only UI, and accessible visual-lightbox behavior            |
+| `e2e/ui-matrix/workspace-lifecycle-ui.spec.ts`          | Owner/editor/viewer create, rename, invite failure recovery/copy/revoke, membership, transfer, leave, and delete lifecycle      |
+| `e2e/ui-matrix/*-ui.spec.ts`                            | Representative presentation/public/auth/account/editor/workspace checks; all maintained UI-matrix specs run deterministically   |
 
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
 `e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
@@ -191,8 +191,8 @@ users and isolated documents, and the specs run for real against them.
 - a second **private** (never-shared) document + asset used to assert
   protected-asset denial.
 - dedicated tokenized presentation documents/Yjs rooms for each mutating
-  Arrange, precision-guide, theme-authoring, source-review, speaker-note,
-  touch, pointer, smoke, and conflict workflow.
+  Arrange, precision-guide, theme-authoring, source-review, deck-diagnostics,
+  speaker-note, touch, pointer, smoke, and conflict workflow.
 
 All identifiers and payload builders live in `src/test/builders/e2e-profile.ts`
 (the single source of truth shared by the seed and the specs through

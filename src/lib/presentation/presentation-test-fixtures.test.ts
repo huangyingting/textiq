@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildE2EDiagnosticsDeck,
   buildE2EMultiSelectArrangeDeck,
   buildE2EGroupLayerOrderDeck,
   buildE2EGeneratedPresentationContentJson,
@@ -23,6 +24,7 @@ import {
   type PresentationTestFixtureName,
 } from "../../../e2e/helpers/presentation-fixtures";
 import { deriveDeckFromDocumentContent } from "./deck-derivation";
+import { safeParseDeck } from "./validation";
 
 test("presentation fixtures keep document, share, slug, and revision identities unique", () => {
   const fixtures = Object.values(PRESENTATION_TEST_FIXTURES);
@@ -240,9 +242,25 @@ test("presentation control workflows use isolated deterministic documents", () =
       "sourceReview",
       "sourceReview",
       "default",
+      "diagnostics",
     ],
   );
   assert.ok(fixtures.every((fixture) => fixture.deckRevisionToken.length > 0));
+});
+
+test("deck diagnostics fixture stays valid while referencing one missing image asset", () => {
+  const deck = buildE2EDiagnosticsDeck("/asset.png", "seeded-asset");
+  const parsed = safeParseDeck(deck);
+
+  assert.equal(parsed.success, true);
+  const imageNode = deck.slides[0]?.children.find(
+    (node) => node.type === "image",
+  );
+  assert.equal(imageNode?.type, "image");
+  if (imageNode?.type === "image") {
+    assert.equal(imageNode.content.assetId, "e2e-missing-diagnostic-asset");
+    assert.equal(deck.assets.images[imageNode.content.assetId], undefined);
+  }
 });
 
 test("overlap fixture preserves later-low-z foreground traversal", () => {

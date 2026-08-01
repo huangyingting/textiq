@@ -559,6 +559,7 @@ export function useInspectorCommands(args: CreateInspectorCommandsArgs) {
     }
 
     if (result.port === "asset-panel") {
+      setDeckDiagnosticsReviewOpen(false);
       focusDiagnosticTarget(result.focus);
       const slide = deck.slides.find(
         (candidate) => candidate.id === result.focus.slideId,
