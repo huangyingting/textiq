@@ -11,6 +11,7 @@ function presentationFixture<
     | "group"
     | "generated"
     | "sourceLinked"
+    | "sourceReview"
     | "themeVersions",
 >(
   documentId: DocumentId,
@@ -181,6 +182,18 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr29",
     "e2e-isolated-slide-master",
   ),
+  sourceReview: presentationFixture(
+    "e2eisolatedsourcereview001",
+    "e2eisolatedshr30",
+    "e2e-isolated-source-review",
+    "sourceReview",
+  ),
+  sourceActions: presentationFixture(
+    "e2eisolatedsourceactions01",
+    "e2eisolatedshr31",
+    "e2e-isolated-source-actions",
+    "sourceReview",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -229,6 +242,8 @@ export const PRESENTATION_CONTROL_FIXTURES = {
   groupLayerOrder: "groupLayerOrder",
   slideRatio: "slideRatio",
   slideMaster: "slideMaster",
+  sourceReview: "sourceReview",
+  sourceActions: "sourceActions",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const E2E_CUSTOM_THEME_FIXTURE = {

@@ -21,6 +21,8 @@ import {
   profilePresentPath,
 } from "../helpers/profile";
 import {
+  waitForDocumentAutosaveAfter,
+  waitForDocumentEditorReady,
   waitForSlideAutosave,
   waitForSlideAutosaveAfter,
   waitForStableLocatorBoxes,
@@ -48,7 +50,9 @@ async function openPresentationFixture(
     | "versionedCustomTheme"
     | "groupLayerOrder"
     | "slideRatio"
-    | "slideMaster",
+    | "slideMaster"
+    | "sourceReview"
+    | "sourceActions",
 ): Promise<{ editor: Locator; canvas: Locator }> {
   await login(
     page,
@@ -625,6 +629,301 @@ test.describe("presentation editing controls", () => {
     await expect(
       activePublicCanvas().locator('[data-node-id="deck-chrome-pageNumber"]'),
     ).toContainText("2 / 2");
+    await publicPage.close();
+  });
+
+  test("document source review refreshes stale content through history, reload, and public rendering", async ({
+    page,
+  }, testInfo) => {
+    const fixtureName = PRESENTATION_CONTROL_FIXTURES.sourceReview;
+    const documentPath = profileDocPath(fixtureName, testInfo);
+    const refreshedText = `${E2E_PROFILE_FIXTURE.documentBodyText} [source refreshed]`;
+    const { editor, canvas } = await openPresentationFixture(
+      page,
+      testInfo,
+      "sourceReview",
+    );
+    const sourceNode = canvas.locator(
+      '[data-node-id="fixture-title"][role="button"]',
+    );
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+
+    await expect(sourceNode).toContainText(
+      E2E_PROFILE_FIXTURE.documentBodyText,
+    );
+    await expect(
+      editor.getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(undo).toBeDisabled();
+    await editor
+      .getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      })
+      .click();
+    await expect(
+      editor
+        .locator('[aria-live="polite"]')
+        .filter({ hasText: "Refreshed 0 source links; skipped 0." }),
+    ).toBeAttached();
+    await expect(undo).toBeDisabled();
+
+    await page.goto(documentPath);
+    const documentBody = await waitForDocumentEditorReady(page);
+    const sourceParagraph = documentBody.locator(
+      `[data-lexical-block-id="${E2E_PROFILE_FIXTURE.documentBodyBlockId}"]`,
+    );
+    await expect(sourceParagraph).toContainText(
+      E2E_PROFILE_FIXTURE.documentBodyText,
+    );
+    await waitForDocumentAutosaveAfter(page, async () => {
+      await sourceParagraph.click();
+      await page.keyboard.press("End");
+      await page.keyboard.type(" [source refreshed]");
+    });
+    await expect(sourceParagraph).toContainText(refreshedText);
+
+    await page.goto(`${documentPath}/slides`);
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(sourceNode).toContainText(
+      E2E_PROFILE_FIXTURE.documentBodyText,
+    );
+    const reviewSourceLinks = editor.getByRole("button", {
+      name: "Review source links",
+      exact: true,
+    });
+    await expect(reviewSourceLinks).toBeVisible();
+    const sourceReviewHeading = editor.getByRole("heading", {
+      name: "Source Review",
+    });
+    await expect(sourceReviewHeading).toBeVisible();
+    await expect(editor.getByText("Stale", { exact: true })).toBeVisible();
+
+    await reviewSourceLinks.click();
+    await expect(sourceNode).toHaveAttribute("aria-pressed", "true");
+    const inspector = page.getByRole("region", { name: "Inspector" });
+    await expect(
+      inspector.getByRole("combobox", { name: "Inspector panel" }),
+    ).toHaveValue("source");
+    await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () =>
+      editor
+        .getByRole("button", {
+          name: "Refresh source link for Slide 1, fixture-title",
+          exact: true,
+        })
+        .click(),
+    );
+    await expect(sourceReviewHeading).toHaveCount(0);
+    await expect(sourceNode).toContainText(refreshedText);
+    await expect(
+      editor.getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(sourceNode).not.toContainText("[source refreshed]");
+    await expect(reviewSourceLinks).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () =>
+      editor.getByRole("button", { name: "Redo", exact: true }).click(),
+    );
+    await expect(sourceNode).toContainText(refreshedText);
+    await expect(
+      editor.getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(sourceNode).toContainText(refreshedText);
+    await expect(
+      editor.getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const publicPage = await page.context().newPage();
+    const response = await publicPage.goto(
+      profilePresentPath(fixtureName, testInfo),
+    );
+    expect(response?.status()).toBe(200);
+    const publicSourceNode = publicPage
+      .locator('[data-public-present-viewer] [data-node-id="fixture-title"]')
+      .first();
+    await expect(publicSourceNode).toBeVisible({ timeout: 30_000 });
+    await expect(publicSourceNode).toContainText(refreshedText);
+    await publicPage.close();
+  });
+
+  test("source review navigation, dismiss, unlink, and relink actions preserve reversible state", async ({
+    page,
+  }, testInfo) => {
+    const fixtureName = PRESENTATION_CONTROL_FIXTURES.sourceActions;
+    const documentPath = profileDocPath(fixtureName, testInfo);
+    const refreshedText = `${E2E_PROFILE_FIXTURE.documentBodyText} [source actions]`;
+
+    await login(page, profileOwnerCredentials(), documentPath);
+    const documentBody = await waitForDocumentEditorReady(page);
+    const sourceParagraph = documentBody.locator(
+      `[data-lexical-block-id="${E2E_PROFILE_FIXTURE.documentBodyBlockId}"]`,
+    );
+    await waitForDocumentAutosaveAfter(page, async () => {
+      await sourceParagraph.click();
+      await page.keyboard.press("End");
+      await page.keyboard.type(" [source actions]");
+    });
+
+    await page.goto(`${documentPath}/slides`);
+    const editor = page.locator('[data-slide-editor="true"]').first();
+    const canvas = editor.locator('[data-slide-canvas="true"]').first();
+    const sourceNode = canvas.locator(
+      '[data-node-id="fixture-title"][role="button"]',
+    );
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(sourceNode).not.toContainText("[source actions]");
+
+    const reviewSourceLinks = editor.getByRole("button", {
+      name: "Review source links",
+      exact: true,
+    });
+    const sourceReviewHeading = editor.getByRole("heading", {
+      name: "Source Review",
+    });
+    await expect(reviewSourceLinks).toBeVisible();
+    await expect(sourceReviewHeading).toBeVisible();
+    await reviewSourceLinks.click();
+
+    const inspector = page.getByRole("region", { name: "Inspector" });
+    await expect(
+      inspector.getByRole("combobox", { name: "Inspector panel" }),
+    ).toHaveValue("source");
+    await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
+
+    const sourcePopupPromise = page.waitForEvent("popup");
+    await editor
+      .getByRole("button", {
+        name: "Jump to source block for Slide 1, fixture-title",
+        exact: true,
+      })
+      .click();
+    const sourcePage = await sourcePopupPromise;
+    await expect(sourcePage).toHaveURL(
+      new RegExp(
+        `${documentPath.replaceAll("/", "\\/")}\\?sourceBlock=${E2E_PROFILE_FIXTURE.documentBodyBlockId}$`,
+      ),
+    );
+    const sourcePageBody = await waitForDocumentEditorReady(sourcePage);
+    const focusedSourceBlock = sourcePageBody.locator(
+      `[data-lexical-block-id="${E2E_PROFILE_FIXTURE.documentBodyBlockId}"]`,
+    );
+    await expect(focusedSourceBlock).toContainText(refreshedText);
+    await expect(sourcePageBody).toBeFocused();
+    await expect
+      .poll(() =>
+        focusedSourceBlock.evaluate((block) => {
+          const anchor = window.getSelection()?.anchorNode;
+          return (
+            anchor !== undefined && anchor !== null && block.contains(anchor)
+          );
+        }),
+      )
+      .toBe(true);
+    await sourcePage.close();
+    await expect(
+      editor
+        .locator('[aria-live="polite"]')
+        .filter({ hasText: "Opened the source document block." }),
+    ).toBeAttached();
+
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    await waitForSlideAutosaveAfter(page, () =>
+      editor
+        .getByRole("button", {
+          name: "Dismiss source issue for Slide 1, fixture-title",
+          exact: true,
+        })
+        .click(),
+    );
+    await expect(sourceReviewHeading).toHaveCount(0);
+    await expect(
+      inspector.getByText("Dismissed", { exact: true }),
+    ).toBeVisible();
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(sourceReviewHeading).toBeVisible();
+    await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () =>
+      editor
+        .getByRole("button", {
+          name: "Mark source as unlinked for Slide 1, fixture-title",
+          exact: true,
+        })
+        .click(),
+    );
+    await expect(sourceReviewHeading).toHaveCount(0);
+    await expect(
+      inspector.getByRole("checkbox", { name: "Unlinked", exact: true }),
+    ).toBeChecked();
+    await expect(sourceNode).not.toContainText("[source actions]");
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(sourceReviewHeading).toBeVisible();
+    await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () =>
+      editor
+        .getByRole("combobox", {
+          name: "Relink source for Slide 1, fixture-title",
+          exact: true,
+        })
+        .selectOption(`text:${E2E_PROFILE_FIXTURE.documentBodyBlockId}`),
+    );
+    await expect(sourceReviewHeading).toHaveCount(0);
+    await expect(sourceNode).toContainText(refreshedText);
+    await expect(inspector.getByText("Fresh", { exact: true })).toBeVisible();
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(sourceReviewHeading).toBeVisible();
+    await expect(sourceNode).not.toContainText("[source actions]");
+    await waitForSlideAutosaveAfter(page, () =>
+      editor.getByRole("button", { name: "Redo", exact: true }).click(),
+    );
+    await expect(sourceReviewHeading).toHaveCount(0);
+    await expect(sourceNode).toContainText(refreshedText);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(sourceNode).toContainText(refreshedText);
+    await expect(
+      editor.getByRole("button", {
+        name: "Refresh all source links",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const publicPage = await page.context().newPage();
+    const response = await publicPage.goto(
+      profilePresentPath(fixtureName, testInfo),
+    );
+    expect(response?.status()).toBe(200);
+    await expect(
+      publicPage
+        .locator('[data-public-present-viewer] [data-node-id="fixture-title"]')
+        .first(),
+    ).toContainText(refreshedText, { timeout: 30_000 });
     await publicPage.close();
   });
 

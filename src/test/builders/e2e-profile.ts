@@ -1,4 +1,5 @@
 import type { Deck } from "@/lib/presentation/schema";
+import { hashDocumentBlock } from "@/lib/presentation/document-block-hash";
 import type { Visual } from "@/lib/visual/schema";
 import { markdownToLexicalStateObject } from "@/lib/content/from-markdown";
 import { fixtureAssetChecksum, fixturePngBuffer } from "./assets";
@@ -343,6 +344,41 @@ export function buildE2ESourceLinkedDeck(
     documentId,
     blockId: F.documentBodyBlockId,
     blockKind: "text",
+    linkedAt: "2026-01-01T00:00:00.000Z",
+    display: {
+      documentTitle: F.documentTitle,
+      blockLabel: F.documentBodyText,
+      blockKindLabel: "Text",
+    },
+  };
+  return deck;
+}
+
+export function buildE2ESourceReviewDeck(
+  assetUrl: string,
+  assetId: string,
+  documentId: string,
+): Deck {
+  const deck = buildE2EProfileDeck(assetUrl, assetId);
+  const sourceNode = deck.slides[0]?.children[0];
+  if (sourceNode?.type !== "text") {
+    throw new Error("E2E source-review deck requires a first-slide text node.");
+  }
+  const sourceBlock = {
+    kind: "text" as const,
+    blockType: "paragraph" as const,
+    text: F.documentBodyText,
+    blockId: F.documentBodyBlockId,
+  };
+  sourceNode.content = {
+    ...sourceNode.content,
+    paragraphs: [{ id: "fixture-title-source-p1", text: F.documentBodyText }],
+  };
+  sourceNode.source = {
+    documentId,
+    blockId: F.documentBodyBlockId,
+    blockKind: "text",
+    contentHash: hashDocumentBlock(sourceBlock),
     linkedAt: "2026-01-01T00:00:00.000Z",
     display: {
       documentTitle: F.documentTitle,

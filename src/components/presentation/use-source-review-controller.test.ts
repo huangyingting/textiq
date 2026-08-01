@@ -100,6 +100,30 @@ function buildSourceLinkedDeck(): Deck {
   ]);
 }
 
+function buildFreshSourceLinkedDeck(): Deck {
+  resetBuilderCounter();
+  return buildDeck([
+    buildSlide(
+      "content",
+      [
+        buildTextNode({
+          id: "text-fresh",
+          name: "Fresh source",
+          content: buildTextContent(["Current source copy"]),
+          source: {
+            documentId: "doc-1",
+            blockId: STALE_BLOCK.id,
+            blockKind: "text",
+            contentHash: STALE_BLOCK.hash,
+            display: { blockLabel: STALE_BLOCK.displayLabel },
+          },
+        }),
+      ],
+      { id: "slide-source", name: "Source slide" },
+    ),
+  ]);
+}
+
 function textContent(deck: Deck, nodeId: string): string {
   const node = findNodeById(deck.slides[0]?.children ?? [], nodeId);
   if (!node || node.type !== "text") {
@@ -209,6 +233,33 @@ describe("useSourceReviewController", () => {
       ["text-orphan:orphan"],
     );
     assert.deepEqual(selectedNodeIds(selection), []);
+  });
+
+  test("fresh-only bulk refresh reports its no-op without emitting a deck mutation", () => {
+    const sourceBlockIndex = buildSourceBlockIndex();
+    const deck = buildFreshSourceLinkedDeck();
+    const changedDecks: Deck[] = [];
+    const announcements: string[] = [];
+    const renderController = createControllerHarness(() => ({
+      documentId: "doc-1",
+      documentBlocks: [],
+      sourceBlockIndex,
+      deck,
+      activeSlide: deck.slides[0],
+      selectedNode: undefined,
+      onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+      setActiveSlideIndex: () => undefined,
+      setSelection: () => undefined,
+      focusSelectedNodeSoon: () => undefined,
+      openInspectorPanel: () => undefined,
+      setStageAnnouncement: (message) => announcements.push(message),
+    }));
+
+    assert.deepEqual(renderController().sourceReview, []);
+    renderController().handleRefreshAllSources();
+
+    assert.deepEqual(changedDecks, []);
+    assert.deepEqual(announcements, ["Refreshed 0 source links; skipped 0."]);
   });
 
   test("review source links selects the first issue and opens the source inspector", () => {

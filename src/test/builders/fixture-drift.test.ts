@@ -10,6 +10,8 @@ import {
 import { buildDeckSource } from "@/lib/ai/deck-source";
 import { safeParseDeck as safeParseLegacyDeck } from "@/lib/document/deck-schema";
 import { openDeckFromJson } from "@/lib/presentation/open-deck";
+import { buildSourceBlockIndex } from "@/lib/presentation/block-index";
+import { classifyDeckSourceLinks } from "@/lib/presentation/source-links";
 import { safeParseDeck as safeParsePresentationDeck } from "@/lib/presentation/validation";
 import { createBlankVisual } from "@/lib/visual/blank";
 import { FIXTURE_LIST } from "@/lib/visual/fixtures";
@@ -32,6 +34,7 @@ import {
   buildE2EProfileContentJson,
   buildE2EProfileDeck,
   buildE2EProfileVisual,
+  buildE2ESourceReviewDeck,
   buildE2ESourceLinkedDeck,
   e2eProfileAssetChecksum,
 } from "@/test/builders/e2e-profile";
@@ -520,6 +523,39 @@ test("E2E profile builders are the seed/spec single source of truth", () => {
       blockKindLabel: "Text",
     },
   });
+
+  const sourceReviewDeck = buildE2ESourceReviewDeck(
+    `/api/slide-assets/${storageKey}`,
+    "asset-1",
+    "document-source-review-1",
+  );
+  assert.equal(safeParsePresentationDeck(sourceReviewDeck).success, true);
+  const sourceReviewIndex = buildSourceBlockIndex("document-source-review-1", [
+    {
+      kind: "text",
+      blockType: "paragraph",
+      text: e2eProfile.E2E_PROFILE_FIXTURE.documentBodyText,
+      blockId: e2eProfile.E2E_PROFILE_FIXTURE.documentBodyBlockId,
+    },
+  ]);
+  assert.deepEqual(
+    classifyDeckSourceLinks(sourceReviewDeck, sourceReviewIndex).map(
+      ({ state }) => state,
+    ),
+    ["fresh"],
+  );
+  const sourceReviewNode = sourceReviewDeck.slides[0]?.children[0];
+  assert.equal(sourceReviewNode?.type, "text");
+  if (sourceReviewNode?.type === "text") {
+    assert.equal(
+      sourceReviewNode.content.paragraphs[0]?.text,
+      e2eProfile.E2E_PROFILE_FIXTURE.documentBodyText,
+    );
+    assert.equal(
+      sourceReviewNode.source?.contentHash,
+      sourceReviewIndex.blocks[0]?.hash,
+    );
+  }
 
   const slideTwoTitleNode = deck.slides[1].children.find(
     (child): child is TextNode =>

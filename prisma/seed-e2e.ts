@@ -29,6 +29,7 @@ import {
   buildE2EProfileDeckFixture,
   buildE2EProfileFixtureDescriptor,
   buildE2ESourceLinkedDeck,
+  buildE2ESourceReviewDeck,
   buildE2EMultiSelectArrangeDeck,
   buildE2EGroupLayerOrderDeck,
   buildE2EOverlapSelectionDeck,
@@ -835,7 +836,13 @@ async function main() {
                       isolatedAsset.id,
                       fixture.documentId,
                     )
-                  : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
+                  : fixture.deckKind === "sourceReview"
+                    ? buildE2ESourceReviewDeck(
+                        isolatedAssetUrl,
+                        isolatedAsset.id,
+                        fixture.documentId,
+                      )
+                    : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
     if (fixture.deckKind === "themeVersions") {
       isolatedDeck.theme = {
         ...isolatedDeck.theme,

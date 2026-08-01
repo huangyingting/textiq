@@ -510,7 +510,9 @@ has one synchronous operation boundary and exposes `Updating…` progress in the
 inspector. Closing the editor or replacing its document/deck invalidates the
 request before a late host result can overwrite newer deck state, move
 selection, or announce success. Host refresh failures remain retryable and are
-reported with safe live feedback.
+reported with safe live feedback. Source orchestration forwards a Deck only
+when its identity changed, so a fresh-only bulk refresh can announce its
+zero-change result without creating undo history or scheduling autosave.
 
 Node content updates write `node.content`; style overrides write
 `node.localStyle`; source-link updates write `node.source`. Slide-level styling
@@ -570,7 +572,11 @@ through `saveDeckJson`; `DeckPatch[]` command metadata is not a persistence log.
 `SlideEditor` receives `sourceBlockIndex` and can optionally use host-side
 `onRefreshSource` logic. Source review uses `classifyDeckSourceLinks`,
 `sourceReviewItems`, and `sourceLinkDiagnostics` to surface stale/orphan/unknown
-links.
+links. The top toolbar offers a non-destructive bulk check while all links are
+fresh and switches to Review when an issue exists. Review selects the first
+affected node and opens its Source inspector; a safe refresh updates compatible
+content and its hash through the ordinary undo/redo, autosave, reload, and
+public-render path.
 
 Node-level source operations are explicit and type-aware:
 

@@ -233,7 +233,7 @@ export function createSourceReviewController({
   function applySourceLinkOrchestration(
     result: SourceLinkOrchestrationResult,
   ): void {
-    if (result.deck) {
+    if (result.deck && result.deck !== deck) {
       onDeckChange(result.deck);
     }
     if (result.selection) {

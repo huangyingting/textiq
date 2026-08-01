@@ -2,8 +2,11 @@
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $createNodeSelection,
+  $getNodeByKey,
   $getRoot,
   $isElementNode,
+  $setSelection,
   type ElementNode,
   type LexicalNode,
 } from "lexical";
@@ -39,16 +42,63 @@ export function SourceBlockJumpPlugin(): null {
     const blockId = params.get("sourceBlock");
     if (!blockId) return;
 
-    const nodeKey = editor
-      .getEditorState()
-      .read(() => findNodeKeyByBlockId($getRoot(), blockId));
-    if (!nodeKey) return;
+    let cancelled = false;
+    let completed = false;
+    let frameId: number | null = null;
 
-    window.requestAnimationFrame(() => {
-      const element = editor.getElementByKey(nodeKey);
-      element?.scrollIntoView({ block: "center", behavior: "smooth" });
-      element?.focus({ preventScroll: true });
-    });
+    const jumpWhenReady = () => {
+      if (cancelled || completed || frameId !== null) return;
+
+      const nodeKey = editor
+        .getEditorState()
+        .read(() => findNodeKeyByBlockId($getRoot(), blockId));
+      if (!nodeKey) return;
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        if (cancelled || completed) return;
+        completed = true;
+
+        const element = editor.getElementByKey(nodeKey);
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+
+        let selected = false;
+        editor.update(
+          () => {
+            const node = $getNodeByKey(nodeKey);
+            if (!node) return;
+
+            if ($isElementNode(node)) {
+              node.selectStart();
+            } else {
+              const selection = $createNodeSelection();
+              selection.add(nodeKey);
+              $setSelection(selection);
+            }
+            selected = true;
+          },
+          { discrete: true },
+        );
+        if (!selected) {
+          completed = false;
+          jumpWhenReady();
+          return;
+        }
+
+        editor.getRootElement()?.focus({ preventScroll: true });
+        editor.focus();
+        unregisterUpdate();
+      });
+    };
+
+    const unregisterUpdate = editor.registerUpdateListener(jumpWhenReady);
+    jumpWhenReady();
+
+    return () => {
+      cancelled = true;
+      unregisterUpdate();
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
   }, [editor]);
 
   return null;
