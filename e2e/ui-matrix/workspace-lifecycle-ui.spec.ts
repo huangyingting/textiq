@@ -15,6 +15,8 @@ import {
   profileOwnerCredentials,
   profileViewerCredentials,
 } from "../helpers/profile";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
+import { MAX_INVITE_USES_LIMIT } from "@/lib/workspace/invite-policy";
 
 type AuthenticatedSession = {
   context: BrowserContext;
@@ -91,6 +93,10 @@ test.describe("UI matrix: workspace lifecycle", () => {
     await page.getByRole("button", { name: "New workspace" }).click();
     let dialog = page.getByRole("dialog", { name: "Create workspace" });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Workspace name")).toHaveAttribute(
+      "maxlength",
+      String(WORKSPACE_NAME_MAX_LENGTH),
+    );
     await dialog.getByLabel("Workspace name").fill("cancelled workspace");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toHaveCount(0);
@@ -127,6 +133,23 @@ test.describe("UI matrix: workspace lifecycle", () => {
     await expect(
       page.getByText("No documents in this workspace yet."),
     ).toBeVisible({ timeout: 20_000 });
+
+    const maxUsesInput = page.getByLabel(
+      "Maximum uses (leave blank for unlimited)",
+    );
+    await expect(maxUsesInput).toHaveAttribute(
+      "max",
+      String(MAX_INVITE_USES_LIMIT),
+    );
+    await maxUsesInput.fill(String(MAX_INVITE_USES_LIMIT + 1));
+    await page.getByRole("button", { name: "Create invite link" }).click();
+    const maxUsesAlert = page.getByRole("alert").filter({
+      hasText: "Maximum uses cannot exceed 10,000.",
+    });
+    await expect(maxUsesAlert).toBeVisible();
+    await maxUsesAlert.getByRole("button", { name: "Dismiss error" }).click();
+    await expect(maxUsesAlert).toHaveCount(0);
+    await maxUsesInput.fill("");
 
     const workspaceRoute = `**${workspacePath}`;
     let createActionCount = 0;

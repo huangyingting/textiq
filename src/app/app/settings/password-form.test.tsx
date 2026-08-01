@@ -23,6 +23,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { PasswordResult } from "@/lib/auth/form-state";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 
 type PasswordFormTestState = {
   calls: FormData[];
@@ -174,7 +175,7 @@ describe("renderPasswordFormView", () => {
     assert.match(html, /You signed in with Google/);
   });
 
-  test("wires the new/confirm password fields with hints and autocomplete", () => {
+  test("wires the new/confirm password fields to the shared minimum and autocomplete", () => {
     const tree = mod.renderPasswordFormView({
       hasPassword: true,
       state: null,
@@ -187,12 +188,14 @@ describe("renderPasswordFormView", () => {
         element.type === "input" && element.props.name === "newPassword",
     );
     assert.equal(newPassword.props.autoComplete, "new-password");
+    assert.equal(newPassword.props.minLength, MIN_PASSWORD_LENGTH);
     const confirmPassword = firstElement(
       tree,
       (element) =>
         element.type === "input" && element.props.name === "confirmPassword",
     );
     assert.equal(confirmPassword.props.autoComplete, "new-password");
+    assert.equal(confirmPassword.props.minLength, MIN_PASSWORD_LENGTH);
     const html = renderToStaticMarkup(tree);
     assert.match(html, /Use at least 8 characters\./);
     assert.match(html, /you&#x27;ll be signed out after this change/i);

@@ -17,14 +17,12 @@ import type {
   InviteLink,
   InviteLinkTarget,
 } from "@/lib/workspace/invite-types";
+import {
+  MAX_INVITE_EXPIRY_DAYS,
+  MAX_INVITE_USES_LIMIT,
+} from "@/lib/workspace/invite-policy";
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/** Largest accepted expiry window, guarding against overflow/typos. */
-export const MAX_INVITE_EXPIRY_DAYS = 365;
-
-/** Largest accepted usage cap. */
-export const MAX_INVITE_USES_LIMIT = 10_000;
 
 const MAX_ACCEPT_INVITE_CAS_ATTEMPTS = 2;
 const WORKSPACE_MEMBER_UNIQUE_FIELDS = ["workspaceId", "userId"] as const;

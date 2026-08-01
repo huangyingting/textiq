@@ -46,11 +46,13 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { Prisma } from "@/generated/prisma/client";
 import { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  MAX_INVITE_EXPIRY_DAYS,
+  MAX_INVITE_USES_LIMIT,
+} from "@/lib/workspace/invite-policy";
 import { WorkspaceRoleDataIntegrityError } from "@/lib/workspace/roles";
 
 type InviteServiceModule = typeof import("./invite-service");
-let MAX_INVITE_EXPIRY_DAYS: InviteServiceModule["MAX_INVITE_EXPIRY_DAYS"];
-let MAX_INVITE_USES_LIMIT: InviteServiceModule["MAX_INVITE_USES_LIMIT"];
 let acceptWorkspaceInvite: InviteServiceModule["acceptWorkspaceInvite"];
 let assertInvitableWorkspaceRole: InviteServiceModule["assertInvitableWorkspaceRole"];
 let createWorkspaceInviteLink: InviteServiceModule["createWorkspaceInviteLink"];
@@ -62,8 +64,6 @@ let revokeWorkspaceInviteLink: InviteServiceModule["revokeWorkspaceInviteLink"];
 
 before(async () => {
   const mod = await import("./invite-service");
-  MAX_INVITE_EXPIRY_DAYS = mod.MAX_INVITE_EXPIRY_DAYS;
-  MAX_INVITE_USES_LIMIT = mod.MAX_INVITE_USES_LIMIT;
   acceptWorkspaceInvite = mod.acceptWorkspaceInvite;
   assertInvitableWorkspaceRole = mod.assertInvitableWorkspaceRole;
   createWorkspaceInviteLink = mod.createWorkspaceInviteLink;

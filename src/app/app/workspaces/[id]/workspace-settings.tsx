@@ -10,6 +10,7 @@ import {
   PANEL_CHROME,
   cx,
 } from "@/components/ui";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 
 import { deleteWorkspace, leaveWorkspace, renameWorkspace } from "./actions";
 
@@ -137,7 +138,7 @@ function WorkspaceSettingsForWorkspace({
             <input
               id="workspace-name"
               value={nameValue}
-              maxLength={100}
+              maxLength={WORKSPACE_NAME_MAX_LENGTH}
               disabled={mutationBusy}
               onChange={(event) => {
                 setNameValue(event.target.value);

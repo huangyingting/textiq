@@ -45,11 +45,11 @@ registerHooks({
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { DOCUMENT_LIST_LIMIT } from "@/lib/documents";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { WorkspaceOwnershipTransferConflictError } from "@/lib/workspace/ownership-transfer-types";
 
 type ServiceModule = typeof import("./service");
-let MAX_WORKSPACE_NAME_LENGTH: ServiceModule["MAX_WORKSPACE_NAME_LENGTH"];
 let createWorkspaceForUser: ServiceModule["createWorkspaceForUser"];
 let deleteWorkspaceAndDetachDocuments: ServiceModule["deleteWorkspaceAndDetachDocuments"];
 let getWorkspaceMemberRemovalTarget: ServiceModule["getWorkspaceMemberRemovalTarget"];
@@ -63,7 +63,6 @@ let createWorkspaceDocumentForUser: ServiceModule["createWorkspaceDocumentForUse
 
 before(async () => {
   const mod = await import("./service");
-  MAX_WORKSPACE_NAME_LENGTH = mod.MAX_WORKSPACE_NAME_LENGTH;
   createWorkspaceForUser = mod.createWorkspaceForUser;
   deleteWorkspaceAndDetachDocuments = mod.deleteWorkspaceAndDetachDocuments;
   getWorkspaceMemberRemovalTarget = mod.getWorkspaceMemberRemovalTarget;
@@ -102,8 +101,8 @@ function replacePrismaProperty(
 test("normalizeWorkspaceName trims, caps, and rejects empty names", () => {
   assert.equal(normalizeWorkspaceName("  Team  "), "Team");
   assert.equal(
-    normalizeWorkspaceName("x".repeat(MAX_WORKSPACE_NAME_LENGTH + 1)).length,
-    MAX_WORKSPACE_NAME_LENGTH,
+    normalizeWorkspaceName("x".repeat(WORKSPACE_NAME_MAX_LENGTH + 1)).length,
+    WORKSPACE_NAME_MAX_LENGTH,
   );
   assert.throws(() => normalizeWorkspaceName("   "), /Workspace name/);
 });

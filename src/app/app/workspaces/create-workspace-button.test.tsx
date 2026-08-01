@@ -28,6 +28,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 import "@/test/react-render-harness";
 
 type ModuleHooks = {
@@ -282,6 +283,22 @@ describe("renderCreateWorkspaceView", () => {
     assert.equal(nameField.props.required, true);
     assert.equal(nameField.props.autoFocus, true);
     assert.equal(nameField.props.placeholder, "Marketing team");
+  });
+
+  test("the name field enforces the canonical stored workspace-name limit", () => {
+    const tree = mod.renderCreateWorkspaceView({
+      error: null,
+      action: () => undefined,
+      isPending: false,
+      open: true,
+      onOpenChange: () => undefined,
+    });
+    const nameField = firstElement(
+      tree,
+      (element) => element.type === "input" && element.props.name === "name",
+    );
+
+    assert.equal(nameField.props.maxLength, WORKSPACE_NAME_MAX_LENGTH);
   });
 
   test("dialog onClose and the Cancel button both close the dialog", () => {

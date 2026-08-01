@@ -39,6 +39,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { Button } from "@/components/ui/button";
 import { FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui/tokens";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 import "@/test/react-render-harness";
 
 type ModuleHooks = {
@@ -381,6 +382,7 @@ describe("WorkspaceSettings (owner)", () => {
     try {
       const input = renderer.root.findByProps({ id: "workspace-name" });
       assert.equal(input.props.value, "Marketing");
+      assert.equal(input.props.maxLength, WORKSPACE_NAME_MAX_LENGTH);
       const saveButton = renderer.root.findByProps({ children: "Save" });
       assert.equal(saveButton.props.disabled, true);
       act(() => {

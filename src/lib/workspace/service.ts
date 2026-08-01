@@ -8,6 +8,7 @@ import {
 } from "@/lib/document/document-write-port";
 import { buildDocumentListArgs } from "@/lib/document/query";
 import { DOCUMENT_LIST_LIMIT, capList } from "@/lib/documents";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 import { prisma } from "@/lib/prisma";
 import { type WorkspaceDocumentsResult } from "@/lib/workspace/document-types";
 import {
@@ -20,11 +21,8 @@ export type WorkspaceMemberRemovalTarget = {
   userId: string;
 };
 
-/** Maximum stored workspace name length. */
-export const MAX_WORKSPACE_NAME_LENGTH = 100;
-
 export function normalizeWorkspaceName(rawName: string): string {
-  const name = rawName.trim().slice(0, MAX_WORKSPACE_NAME_LENGTH);
+  const name = rawName.trim().slice(0, WORKSPACE_NAME_MAX_LENGTH);
   if (name === "") {
     throw new Error("Workspace name is required.");
   }

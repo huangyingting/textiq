@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button, Dialog, FIELD_CONTROL } from "@/components/ui";
 import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
+import { WORKSPACE_NAME_MAX_LENGTH } from "@/lib/limits";
 
 import { createWorkspace } from "./actions";
 
@@ -89,6 +90,7 @@ export function renderCreateWorkspaceView({
               name="name"
               type="text"
               required
+              maxLength={WORKSPACE_NAME_MAX_LENGTH}
               disabled={isPending}
               autoFocus
               placeholder="Marketing team"

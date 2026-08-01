@@ -79,6 +79,14 @@ re-thrown before the loader maps failures into UI state. The server-side
 `createWorkspaceDocumentForUser` capability check remains authoritative even
 when the client action is hidden.
 
+Workspace create and rename inputs expose the canonical stored-name length
+limit to the browser. Server normalization uses the same shared limit, so the
+UI cannot accept a name that persistence would silently truncate.
+
+Invite-link usage caps likewise share a browser-safe policy between the
+creation form and server normalization. Values above the stored maximum are
+rejected locally with actionable feedback before any workspace mutation.
+
 Top-level workspace creation also claims its form dispatch synchronously, so
 same-event repeated submission cannot queue duplicate non-idempotent creates.
 While that operation is pending, its dialog remains visibly busy and locks the

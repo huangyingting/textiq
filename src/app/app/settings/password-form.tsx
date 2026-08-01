@@ -10,6 +10,7 @@ import {
 } from "@/components/auth/auth-form";
 import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 import type { PasswordResult } from "@/lib/auth/form-state";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 
 import { changePassword } from "./actions";
 
@@ -67,6 +68,7 @@ export function renderPasswordFormView({
         type="password"
         disabled={isPending}
         autoComplete="new-password"
+        minLength={MIN_PASSWORD_LENGTH}
         aria-label="New password"
         hint="Use at least 8 characters."
       />
@@ -78,6 +80,7 @@ export function renderPasswordFormView({
         type="password"
         disabled={isPending}
         autoComplete="new-password"
+        minLength={MIN_PASSWORD_LENGTH}
         aria-label="Confirm new password"
       />
 

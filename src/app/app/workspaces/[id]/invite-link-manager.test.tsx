@@ -23,6 +23,7 @@ import { FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui/tokens";
 import "@/test/react-render-harness";
 
 import type { InviteLink } from "@/lib/workspace/invite-types";
+import { MAX_INVITE_USES_LIMIT } from "@/lib/workspace/invite-policy";
 
 type ModuleHooks = {
   registerHooks(hooks: {
@@ -679,6 +680,36 @@ describe("InviteLinkManager", () => {
       assert.match(
         JSON.stringify(renderer.toJSON()),
         /Maximum uses must be a whole number of at least 1\./,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a maximum-uses cap above the server policy is rejected before submission", async () => {
+    const renderer = mountManager([]);
+    try {
+      const maxUsesInput = renderer.root.findByProps({
+        "aria-label": "Maximum uses (leave blank for unlimited)",
+      });
+      assert.equal(maxUsesInput.props.max, MAX_INVITE_USES_LIMIT);
+      act(() => {
+        maxUsesInput.props.onChange({
+          target: { value: String(MAX_INVITE_USES_LIMIT + 1) },
+        });
+      });
+      const createButton = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      await act(async () => {
+        createButton.props.onClick();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(callsOf("requireUser").length, 0);
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Maximum uses cannot exceed 10,000\./,
       );
     } finally {
       act(() => renderer.unmount());

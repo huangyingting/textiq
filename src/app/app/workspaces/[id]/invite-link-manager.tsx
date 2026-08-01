@@ -15,6 +15,7 @@ import type {
   CreateInviteLinkOptions,
   InviteLink,
 } from "@/lib/workspace/invite-types";
+import { MAX_INVITE_USES_LIMIT } from "@/lib/workspace/invite-policy";
 import {
   parsePersistedWorkspaceMemberRole,
   type InvitableWorkspaceRole,
@@ -63,6 +64,12 @@ function parseMaxUses(
     return {
       ok: false,
       error: "Maximum uses must be a whole number of at least 1.",
+    };
+  }
+  if (parsed > MAX_INVITE_USES_LIMIT) {
+    return {
+      ok: false,
+      error: `Maximum uses cannot exceed ${MAX_INVITE_USES_LIMIT.toLocaleString("en-US")}.`,
     };
   }
   return { ok: true, value: parsed };
@@ -295,6 +302,7 @@ function InviteLinkManagerForWorkspace({
           <input
             type="number"
             min={1}
+            max={MAX_INVITE_USES_LIMIT}
             step={1}
             value={maxUses}
             disabled={mutationBusy}
