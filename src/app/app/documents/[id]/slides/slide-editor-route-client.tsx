@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 
 import { ConflictRecoveryDialog } from "@/components/presentation/conflict-recovery-dialog";
 import { SlideEditor } from "@/components/presentation/slide-editor";
+import {
+  createPendingVisualPickerRequest,
+  settlePendingVisualPickerRequest,
+  type PendingVisualPickerRequest,
+} from "@/components/presentation/visual-picker-request";
 import { Button } from "@/components/ui";
 import type {
   BrandKitSavePort,
@@ -83,6 +88,8 @@ type SlideRouteOpenState =
       diagnostics: PresentationDiagnostic[];
       validationErrors?: string[];
     };
+
+type VisualPickerValue = { visualId?: string; alt?: string };
 
 export interface SlideEditorRouteClientProps {
   documentId: string;
@@ -330,11 +337,11 @@ function SlideEditorRouteClientDocument({
     slug: initialSlug,
     presentEnabled: initialSharePresentEnabled,
   });
-  const [visualPickerOpen, setVisualPickerOpen] = useState(false);
+  const [visualPickerRequest, setVisualPickerRequest] =
+    useState<PendingVisualPickerRequest<VisualPickerValue> | null>(null);
   const mountedRef = useRef(true);
-  const visualPickerResolverRef = useRef<
-    ((value: { visualId?: string; alt?: string } | undefined) => void) | null
-  >(null);
+  const visualPickerRequestRef =
+    useRef<PendingVisualPickerRequest<VisualPickerValue> | null>(null);
   const focusTokenRef = useRef(0);
   const latestDeckRef = useRef<Deck | null>(
     initialOpenState.ok ? initialOpenState.deck : null,
@@ -377,8 +384,14 @@ function SlideEditorRouteClientDocument({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      visualPickerResolverRef.current?.(undefined);
-      visualPickerResolverRef.current = null;
+      const request = visualPickerRequestRef.current;
+      if (request) {
+        settlePendingVisualPickerRequest(
+          visualPickerRequestRef,
+          request,
+          undefined,
+        );
+      }
     };
   }, []);
 
@@ -858,20 +871,24 @@ function SlideEditorRouteClientDocument({
 
   async function handlePickVisual() {
     if (visualBlocks.length === 0) return undefined;
-    return await new Promise<{ visualId?: string; alt?: string } | undefined>(
-      (resolve) => {
-        visualPickerResolverRef.current = resolve;
-        setVisualPickerOpen(true);
-      },
-    );
+    const pendingRequest = visualPickerRequestRef.current;
+    if (pendingRequest) return await pendingRequest.promise;
+    const request = createPendingVisualPickerRequest<VisualPickerValue>();
+    visualPickerRequestRef.current = request;
+    setVisualPickerRequest(request);
+    return await request.promise;
   }
 
   function resolveVisualPicker(
-    value: { visualId?: string; alt?: string } | undefined,
+    request: PendingVisualPickerRequest<VisualPickerValue>,
+    value: VisualPickerValue | undefined,
   ) {
-    visualPickerResolverRef.current?.(value);
-    visualPickerResolverRef.current = null;
-    setVisualPickerOpen(false);
+    if (
+      !settlePendingVisualPickerRequest(visualPickerRequestRef, request, value)
+    ) {
+      return;
+    }
+    setVisualPickerRequest((current) => (current === request ? null : current));
   }
 
   if (openError) {
@@ -938,10 +955,10 @@ function SlideEditorRouteClientDocument({
         presenceUserName={userName}
       />
 
-      {visualPickerOpen ? (
+      {visualPickerRequest ? (
         <VisualPickerDialog
           visualBlocks={visualBlocks}
-          onResolve={resolveVisualPicker}
+          onResolve={(value) => resolveVisualPicker(visualPickerRequest, value)}
         />
       ) : null}
 

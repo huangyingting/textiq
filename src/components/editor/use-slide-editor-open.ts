@@ -271,11 +271,15 @@ export function useSlideEditorOpen({
 }: UseSlideEditorOpenOptions) {
   const [editor] = useLexicalComposerContext();
   const [open, setOpen] = useState(false);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(
+    null,
+  );
   const [pendingJson, setPendingJson] = useState<string | null>(null);
   const [pendingThemePackageId, setPendingThemePackageId] =
     useState<ThemePackageId>(DEFAULT_THEME_PACKAGE_ID);
   const [emptyDocument, setEmptyDocument] = useState(false);
   const [aiPreview, setAiPreview] = useState<AiPreviewState | null>(null);
+  const [aiPreviewPreparing, setAiPreviewPreparing] = useState(false);
   const [deck, setDeck] = useState<Deck | null>(null);
   const [deckOpenDiagnostics, setDeckOpenDiagnostics] = useState<
     PresentationDiagnostic[]
@@ -301,6 +305,9 @@ export function useSlideEditorOpen({
   const revisionTokenRef = useRef<string | null>(null);
   const aiAppliedDeckRef = useRef<Deck | null>(null);
   const focusTokenRef = useRef(0);
+  const mountedRef = useRef(true);
+  const openOperationRef = useRef<object | null>(null);
+  const aiPreviewOperationRef = useRef<object | null>(null);
   const autosaveQueueRef = useRef<ResilientLatestSnapshotQueue<Deck> | null>(
     null,
   );
@@ -308,6 +315,15 @@ export function useSlideEditorOpen({
   const latestPersistDeckRef = useRef<QueuedPersistDeck | null>(null);
   const latestPersistRequestIdRef = useRef(0);
   const saveAgainPersistRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      openOperationRef.current = null;
+      aiPreviewOperationRef.current = null;
+    };
+  }, [documentId]);
 
   const persistDeckWithSingleWrite = useCallback(
     async (updatedDeck: Deck, requestId: number): Promise<ActionResult> => {
@@ -553,13 +569,18 @@ export function useSlideEditorOpen({
   );
 
   const openSaved = useCallback(
-    async (contentJson?: string | null) => {
+    async (
+      contentJson: string | null | undefined,
+      ownsOpenOperation: () => boolean,
+    ) => {
       aiAppliedDeckRef.current = null;
       const prepared = await prepareOpen(contentJson);
+      if (!ownsOpenOperation()) return;
       if (prepared.ok) {
         revisionTokenRef.current = prepared.revisionToken;
         finishOpen(prepared.deck, prepared.diagnostics);
         const recovered = await autosaveQueueRef.current?.recover();
+        if (!ownsOpenOperation()) return;
         if (recovered) {
           setDeck(recovered.snapshot);
           setDirty(true);
@@ -626,28 +647,43 @@ export function useSlideEditorOpen({
       themePackageId: ThemePackageId,
       json: string,
     ) => {
-      const preparedBaseline = await prepareOpen(json);
-      if (!preparedBaseline.ok) {
-        enterRecovery({
-          error: preparedBaseline.error,
-          diagnostics: preparedBaseline.diagnostics,
-          validationErrors: preparedBaseline.validationErrors,
+      const operation = {};
+      aiPreviewOperationRef.current = operation;
+      setAiPreviewPreparing(true);
+      const ownsPreviewOperation = () =>
+        mountedRef.current && aiPreviewOperationRef.current === operation;
+      try {
+        const preparedBaseline = await prepareOpen(json);
+        if (!ownsPreviewOperation()) return;
+        if (!preparedBaseline.ok) {
+          enterRecovery({
+            error: preparedBaseline.error,
+            diagnostics: preparedBaseline.diagnostics,
+            validationErrors: preparedBaseline.validationErrors,
+          });
+          return;
+        }
+        revisionTokenRef.current = preparedBaseline.revisionToken;
+        setPendingJson(null);
+        setAiPreview({
+          proposedDeck,
+          baselineDeck: preparedBaseline.deck,
+          truncated,
+          generationDiagnostics: dedupePresentationDiagnostics(
+            generationDiagnostics,
+          ),
+          options,
+          themePackageId,
+          contentJson: json,
         });
-        return;
+      } finally {
+        if (aiPreviewOperationRef.current === operation) {
+          aiPreviewOperationRef.current = null;
+          if (mountedRef.current) {
+            setAiPreviewPreparing(false);
+          }
+        }
       }
-      revisionTokenRef.current = preparedBaseline.revisionToken;
-      setPendingJson(null);
-      setAiPreview({
-        proposedDeck,
-        baselineDeck: preparedBaseline.deck,
-        truncated,
-        generationDiagnostics: dedupePresentationDiagnostics(
-          generationDiagnostics,
-        ),
-        options,
-        themePackageId,
-        contentJson: json,
-      });
     },
     [enterRecovery, prepareOpen],
   );
@@ -667,30 +703,49 @@ export function useSlideEditorOpen({
   );
 
   const handleOpen = useCallback(async () => {
-    const liveJson = JSON.stringify(editor.getEditorState().toJSON());
-    const contentJson = effectiveContentJson(liveJson);
+    if (openOperationRef.current) return;
+    const operation = {};
+    openOperationRef.current = operation;
+    setOpeningDocumentId(documentId);
+    const ownsOpenOperation = () =>
+      mountedRef.current && openOperationRef.current === operation;
+    try {
+      const liveJson = JSON.stringify(editor.getEditorState().toJSON());
+      const contentJson = effectiveContentJson(liveJson);
 
-    if (aiEnabled) {
-      const prepared = await prepareOpen(contentJson);
-      if (!prepared.ok) {
-        enterRecovery({
-          error: prepared.error,
-          diagnostics: prepared.diagnostics,
-          validationErrors: prepared.validationErrors,
-        });
+      if (aiEnabled) {
+        const prepared = await prepareOpen(contentJson);
+        if (!ownsOpenOperation()) return;
+        if (!prepared.ok) {
+          enterRecovery({
+            error: prepared.error,
+            diagnostics: prepared.diagnostics,
+            validationErrors: prepared.validationErrors,
+          });
+          return;
+        }
+        revisionTokenRef.current = prepared.revisionToken;
+        setEmptyDocument(isEffectivelyEmptyEditorState(contentJson));
+        setPendingThemePackageId(
+          resolveDeckRequestThemePackageId(prepared.deck),
+        );
+        setPendingJson(contentJson);
         return;
       }
-      revisionTokenRef.current = prepared.revisionToken;
-      setEmptyDocument(isEffectivelyEmptyEditorState(contentJson));
-      setPendingThemePackageId(resolveDeckRequestThemePackageId(prepared.deck));
-      setPendingJson(contentJson);
-      return;
-    }
 
-    await openSaved(contentJson);
+      await openSaved(contentJson, ownsOpenOperation);
+    } finally {
+      if (openOperationRef.current === operation) {
+        openOperationRef.current = null;
+        if (mountedRef.current) {
+          setOpeningDocumentId(null);
+        }
+      }
+    }
   }, [
     aiEnabled,
     editor,
+    documentId,
     effectiveContentJson,
     enterRecovery,
     openSaved,
@@ -698,6 +753,8 @@ export function useSlideEditorOpen({
   ]);
 
   const handleClose = useCallback(() => {
+    openOperationRef.current = null;
+    setOpeningDocumentId(null);
     setOpen(false);
     setDeck(null);
     setDeckOpenDiagnostics([]);
@@ -841,10 +898,14 @@ export function useSlideEditorOpen({
 
   const handleOpenDialogDerive = useCallback(() => {
     if (!pendingJson) return;
+    aiPreviewOperationRef.current = null;
+    setAiPreviewPreparing(false);
     void openDerived(pendingJson);
   }, [openDerived, pendingJson]);
 
   const handleOpenDialogClose = useCallback(() => {
+    aiPreviewOperationRef.current = null;
+    setAiPreviewPreparing(false);
     setPendingJson(null);
     setPendingThemePackageId(DEFAULT_THEME_PACKAGE_ID);
     setEmptyDocument(false);
@@ -866,6 +927,8 @@ export function useSlideEditorOpen({
   }, [aiPreview, openDerived]);
 
   const handleAiPreviewCancel = useCallback(() => {
+    aiPreviewOperationRef.current = null;
+    setAiPreviewPreparing(false);
     setAiPreview(null);
   }, []);
 
@@ -947,6 +1010,7 @@ export function useSlideEditorOpen({
 
   return {
     open,
+    openPreparing: openingDocumentId === documentId,
     deck,
     deckOpenDiagnostics,
     deckOpenError,
@@ -975,6 +1039,7 @@ export function useSlideEditorOpen({
     pendingJson,
     pendingThemePackageId,
     emptyDocument,
+    aiPreviewPreparing,
     handleOpenDialogApply,
     handleOpenDialogDerive,
     handleOpenDialogClose,

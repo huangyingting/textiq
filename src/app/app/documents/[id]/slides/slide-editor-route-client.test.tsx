@@ -690,6 +690,61 @@ test("derived deck: no saved JSON but non-empty content derives a populated deck
   unmount();
 });
 
+test("visual picker: repeated activation shares the pending selection instead of stranding the first request", async () => {
+  const { renderer, unmount } = mount(
+    baseProps({
+      documentId: "doc-repeated-visual-picker",
+      initialDeckJson: validDeckJson(),
+      initialContentJson: contentJsonWithVisual("vis-repeated"),
+    }),
+  );
+
+  try {
+    const onPickVisual = latestSlideEditorProps().onPickVisual as () => Promise<
+      { visualId?: string; alt?: string } | undefined
+    >;
+    let firstPick!: Promise<{ visualId?: string; alt?: string } | undefined>;
+    let secondPick!: Promise<{ visualId?: string; alt?: string } | undefined>;
+
+    act(() => {
+      firstPick = onPickVisual();
+    });
+    await flushMicrotasks();
+    act(() => {
+      secondPick = onPickVisual();
+    });
+    await flushMicrotasks();
+
+    const visualIdLabel = renderer.root.findAll(
+      (node) => node.type === "span" && node.props.children === "vis-repeated",
+    )[0];
+    assert.ok(visualIdLabel, "expected the repeated visual picker to be open");
+    const pickButton = visualIdLabel.parent;
+    assert.ok(pickButton, "expected the visual option button");
+    act(() => {
+      (pickButton?.props as { onClick: () => void }).onClick();
+    });
+
+    const secondResult = await secondPick;
+    const firstResults: Array<{ visualId?: string; alt?: string } | undefined> =
+      [];
+    void firstPick.then((value) => {
+      firstResults.push(value);
+    });
+    await flushMicrotasks();
+
+    assert.equal(secondResult?.visualId, "vis-repeated");
+    assert.equal(
+      firstResults.length,
+      1,
+      "the first picker request must settle after the visible picker resolves",
+    );
+    assert.equal(firstResults[0]?.visualId, "vis-repeated");
+  } finally {
+    unmount();
+  }
+});
+
 test("blank deck: no saved JSON and no content creates a blank deck", () => {
   const { unmount } = mount(
     baseProps({

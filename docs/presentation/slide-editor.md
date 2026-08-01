@@ -239,6 +239,23 @@ The legacy document-page overlay applies the same ownership rule to its PPTX
 export and pending visual picker: unmounting or changing documents invalidates
 late renderer results before they can download a file, and closes unresolved
 picker requests without updating a detached surface.
+Its open controller also claims one deck fetch synchronously: repeated open
+activation cannot start competing fetches, and unmounting or changing documents
+invalidates a late fetch before it can open the external right surface.
+The Slides trigger projects that same ownership as disabled `aria-busy` state
+with an `Opening slide editor` accessible label until the fetch settles.
+AI preview preparation uses a separate latest-request boundary because each
+proposal may differ. Closing the generation dialog or unmounting invalidates
+the pending baseline fetch, while a newer proposal supersedes an older
+out-of-order completion before preview or recovery state can publish.
+While that baseline is loading, the generation dialog stays visibly busy with
+an announced `Preparing preview…` status and a Cancel action backed by the same
+request invalidation boundary.
+Both visual-picker hosts coalesce repeated activation onto the same pending
+request, and resolve only the request that still owns the visible picker.
+`SlideEditor` also claims insertion or replacement synchronously before
+awaiting that request, so a same-turn double activation cannot start competing
+mutations.
 
 Stage clipboard mutations preserve the newest deck snapshot across browser
 clipboard latency. Cut removes the selected nodes synchronously before its
@@ -249,6 +266,11 @@ arrive while clipboard permission or content reads are pending.
 Visual insertion and replacement follow the same rule: they retain their
 initiating slide and node identities, then merge the selected visual into the
 latest deck snapshot when the picker settles.
+Image insertion, image replacement, and slide-background uploads likewise
+retain their initiating target identity and revalidate it against the latest
+deck after upload. If the slide or image node was removed while the upload was
+pending, the editor cancels without publishing an unreferenced deck asset or
+restoring focus to a missing target.
 
 Fine-grained selected-element formatting stays out of the top toolbar. The
 canvas popover and inspector continue to own text style, object-specific
@@ -559,6 +581,11 @@ refs must carry explicit `blockKind`.
 - [`src/lib/presentation/stage-chrome.test.ts`](../../src/lib/presentation/stage-chrome.test.ts)
 - [`src/lib/presentation/slide-editor-collaboration-state.test.ts`](../../src/lib/presentation/slide-editor-collaboration-state.test.ts)
 - [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
+- [`src/components/presentation/slide-editor-render.test.ts`](../../src/components/presentation/slide-editor-render.test.ts)
 - [`src/components/presentation/slide-editor-keyboard-command-path.test.ts`](../../src/components/presentation/slide-editor-keyboard-command-path.test.ts)
+- [`src/components/presentation/visual-picker-request.test.ts`](../../src/components/presentation/visual-picker-request.test.ts)
+- [`src/components/editor/slide-editor-button-lifecycle.test.tsx`](../../src/components/editor/slide-editor-button-lifecycle.test.tsx)
+- [`src/components/editor/use-slide-editor-open-lifecycle.test.tsx`](../../src/components/editor/use-slide-editor-open-lifecycle.test.tsx)
+- [`src/app/app/documents/[id]/slides/slide-editor-route-client.test.tsx`](../../src/app/app/documents/%5Bid%5D/slides/slide-editor-route-client.test.tsx)
 - [`src/lib/presentation/slide-autosave-scheduler.test.ts`](../../src/lib/presentation/slide-autosave-scheduler.test.ts)
 - [`e2e/presentation/slides-smoke.spec.ts`](../../e2e/presentation/slides-smoke.spec.ts)

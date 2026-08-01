@@ -15,6 +15,11 @@ import { LayoutPanelLeft } from "lucide-react";
 import { ConflictRecoveryDialog } from "@/components/presentation/conflict-recovery-dialog";
 import { SlideEditorOpenDialog } from "@/components/editor/slide-editor-open-dialog";
 import { SlideEditor } from "@/components/presentation/slide-editor";
+import {
+  createPendingVisualPickerRequest,
+  settlePendingVisualPickerRequest,
+  type PendingVisualPickerRequest,
+} from "@/components/presentation/visual-picker-request";
 import { DeckGenerationPreview } from "@/components/presentation/deck-generation-preview";
 import { collectDocumentBlocks } from "@/lib/content/document-blocks";
 import type { DocumentBlock } from "@/lib/content/document-blocks";
@@ -229,6 +234,8 @@ interface SlideEditorButtonProps {
   iconOnly?: boolean;
 }
 
+type VisualPickerValue = { visualId?: string; alt?: string };
+
 export function SlideEditorButton(props: SlideEditorButtonProps) {
   return <SlideEditorButtonForDocument key={props.documentId} {...props} />;
 }
@@ -251,6 +258,7 @@ function SlideEditorButtonForDocument({
   const slideEditorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const {
     open,
+    openPreparing,
     deck,
     deckOpenDiagnostics,
     deckOpenError,
@@ -271,6 +279,7 @@ function SlideEditorButtonForDocument({
     pendingJson,
     pendingThemePackageId,
     emptyDocument,
+    aiPreviewPreparing,
     handleOpenDialogApply,
     handleOpenDialogDerive,
     handleOpenDialogClose,
@@ -325,10 +334,10 @@ function SlideEditorButtonForDocument({
       ),
     [documentBlocks],
   );
-  const [visualPickerOpen, setVisualPickerOpen] = useState(false);
-  const visualPickerResolverRef = useRef<
-    ((value: { visualId?: string; alt?: string } | undefined) => void) | null
-  >(null);
+  const [visualPickerRequest, setVisualPickerRequest] =
+    useState<PendingVisualPickerRequest<VisualPickerValue> | null>(null);
+  const visualPickerRequestRef =
+    useRef<PendingVisualPickerRequest<VisualPickerValue> | null>(null);
   const mountedRef = useRef(true);
   const lifecycleIdRef = useRef(0);
 
@@ -337,8 +346,14 @@ function SlideEditorButtonForDocument({
     return () => {
       mountedRef.current = false;
       lifecycleIdRef.current += 1;
-      visualPickerResolverRef.current?.(undefined);
-      visualPickerResolverRef.current = null;
+      const request = visualPickerRequestRef.current;
+      if (request) {
+        settlePendingVisualPickerRequest(
+          visualPickerRequestRef,
+          request,
+          undefined,
+        );
+      }
     };
   }, [documentId]);
 
@@ -464,32 +479,40 @@ function SlideEditorButtonForDocument({
 
   const handlePickVisual = useCallback(async () => {
     if (visualBlocks.length === 0) return undefined;
-    return await new Promise<{ visualId?: string; alt?: string } | undefined>(
-      (resolve) => {
-        visualPickerResolverRef.current = resolve;
-        setVisualPickerOpen(true);
-      },
-    );
+    const pendingRequest = visualPickerRequestRef.current;
+    if (pendingRequest) return await pendingRequest.promise;
+    const request = createPendingVisualPickerRequest<VisualPickerValue>();
+    visualPickerRequestRef.current = request;
+    setVisualPickerRequest(request);
+    return await request.promise;
   }, [visualBlocks.length]);
 
   function resolveVisualPicker(
-    value: { visualId?: string; alt?: string } | undefined,
+    request: PendingVisualPickerRequest<VisualPickerValue>,
+    value: VisualPickerValue | undefined,
   ) {
-    visualPickerResolverRef.current?.(value);
-    visualPickerResolverRef.current = null;
-    setVisualPickerOpen(false);
+    if (
+      !settlePendingVisualPickerRequest(visualPickerRequestRef, request, value)
+    ) {
+      return;
+    }
+    setVisualPickerRequest((current) => (current === request ? null : current));
   }
 
   return (
     <>
       <EditorToolbarButton
         ref={slideEditorTriggerRef}
-        label="Slides"
-        tooltip="Edit slides"
+        label={openPreparing ? "Opening…" : "Slides"}
+        tooltip={openPreparing ? "Opening slides…" : "Edit slides"}
         icon={<LayoutPanelLeft size={15} aria-hidden="true" />}
         iconOnly={iconOnly}
         onClick={handleOpen}
-        aria-label="Open slide editor"
+        disabled={openPreparing}
+        aria-busy={openPreparing}
+        aria-label={
+          openPreparing ? "Opening slide editor" : "Open slide editor"
+        }
       />
 
       {buttonView.showOpenDialog && pendingJson ? (
@@ -497,6 +520,7 @@ function SlideEditorButtonForDocument({
           contentJson={pendingJson}
           themePackageId={pendingThemePackageId}
           isEmptyDocument={emptyDocument}
+          isPreparingPreview={aiPreviewPreparing}
           onApply={handleOpenDialogApply}
           onDerive={handleOpenDialogDerive}
           onClose={handleOpenDialogClose}
@@ -575,11 +599,11 @@ function SlideEditorButtonForDocument({
         />
       ) : null}
 
-      {visualPickerOpen ? (
+      {visualPickerRequest ? (
         <SlideVisualPickerOverlay
           options={visualBlocks}
-          onPick={(value) => resolveVisualPicker(value)}
-          onCancel={() => resolveVisualPicker(undefined)}
+          onPick={(value) => resolveVisualPicker(visualPickerRequest, value)}
+          onCancel={() => resolveVisualPicker(visualPickerRequest, undefined)}
         />
       ) : null}
     </>

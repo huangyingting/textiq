@@ -113,11 +113,13 @@ function baseOpenState(): Record<string, unknown> {
     canUndo: false,
     canRedo: false,
     handleOpen: () => undefined,
+    openPreparing: false,
     handleClose: () => undefined,
     aiEnabled: false,
     pendingJson: null,
     pendingThemePackageId: null,
     emptyDocument: false,
+    aiPreviewPreparing: false,
     handleOpenDialogApply: () => undefined,
     handleOpenDialogDerive: () => undefined,
     handleOpenDialogClose: () => undefined,
@@ -152,6 +154,27 @@ function deferred<T>() {
     resolve = nextResolve;
   });
   return { promise, resolve };
+}
+
+function contentJsonWithVisual(visualId: string): string {
+  return JSON.stringify({
+    root: {
+      type: "root",
+      children: [
+        {
+          type: "visual",
+          visualId,
+          visual: {
+            version: 1,
+            type: "flowchart",
+            nodes: [{ id: `${visualId}-node`, label: "Node" }],
+            edges: [],
+            style: {},
+          },
+        },
+      ],
+    },
+  });
 }
 
 test("SlideEditorButton ignores a PPTX renderer that settles after unmount", async () => {
@@ -190,6 +213,104 @@ test("SlideEditorButton ignores a PPTX renderer that settles after unmount", asy
       globalThis.__slideEditorButtonLifecycleState.downloads.length,
       0,
     );
+  });
+});
+
+test("SlideEditorButton disables and announces the trigger while the deck is opening", () => {
+  globalThis.__slideEditorButtonLifecycleState.openState = {
+    ...baseOpenState(),
+    open: false,
+    deck: null,
+    openPreparing: true,
+  };
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <SlideEditorButton
+        documentId="doc-opening"
+        initialDeckJson={null}
+        deckPort={{} as never}
+      />,
+    );
+  });
+
+  try {
+    const trigger = renderer.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props["aria-label"] === "Opening slide editor",
+    );
+    assert.equal(trigger.props.disabled, true);
+    assert.equal(trigger.props["aria-busy"], true);
+  } finally {
+    act(() => renderer.unmount());
+  }
+});
+
+test("SlideEditorButton shares one pending visual selection across repeated activation", async () => {
+  await withDefaultDom(async () => {
+    Object.assign(document, {
+      body: { style: {} },
+      documentElement: { style: {} },
+    });
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <SlideEditorButton
+          documentId="doc-overlay-picker"
+          initialDeckJson={null}
+          initialContentJson={contentJsonWithVisual("visual-overlay")}
+          deckPort={{} as never}
+        />,
+      );
+    });
+
+    try {
+      const editor = renderer.root.find(
+        (node) => typeof node.props.onPickVisual === "function",
+      );
+      const onPickVisual = editor.props.onPickVisual as () => Promise<
+        { visualId?: string; alt?: string } | undefined
+      >;
+      let firstPick!: ReturnType<typeof onPickVisual>;
+      let secondPick!: ReturnType<typeof onPickVisual>;
+      act(() => {
+        firstPick = onPickVisual();
+      });
+      await Promise.resolve();
+      act(() => {
+        secondPick = onPickVisual();
+      });
+
+      const optionLabel = renderer.root.find(
+        (node) =>
+          node.type === "span" && node.props.children === "visual-overlay",
+      );
+      const optionButton = optionLabel.parent;
+      assert.ok(optionButton, "expected the overlay visual option button");
+      act(() => {
+        (optionButton.props as { onClick: () => void }).onClick();
+      });
+
+      const secondResult = await secondPick;
+      const firstResults: Array<
+        { visualId?: string; alt?: string } | undefined
+      > = [];
+      void firstPick.then((value) => {
+        firstResults.push(value);
+      });
+      await Promise.resolve();
+
+      assert.equal(secondResult?.visualId, "visual-overlay");
+      assert.equal(
+        firstResults.length,
+        1,
+        "the first overlay request must settle with the visible picker",
+      );
+      assert.equal(firstResults[0]?.visualId, "visual-overlay");
+    } finally {
+      act(() => renderer.unmount());
+    }
   });
 });
 

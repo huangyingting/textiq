@@ -59,6 +59,8 @@ export interface SlideEditorOpenDialogProps {
    * deterministic derive remains available.
    */
   isEmptyDocument?: boolean;
+  /** The parent is loading the latest saved deck for proposal comparison. */
+  isPreparingPreview?: boolean;
   /**
    * Hand a successfully generated Deck to the parent (it owns how it opens —
    * issue #269 routes this through a preview/diff before opening the editor).
@@ -79,6 +81,7 @@ export function SlideEditorOpenDialog({
   contentJson,
   themePackageId,
   isEmptyDocument = false,
+  isPreparingPreview = false,
   onApply,
   onDerive,
   onClose,
@@ -100,6 +103,7 @@ export function SlideEditorOpenDialog({
   const mountedRef = useRef(true);
 
   const isLoading = status === "loading";
+  const isBusy = isLoading || isPreparingPreview;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -176,7 +180,7 @@ export function SlideEditorOpenDialog({
       open
       onClose={isLoading ? handleCancel : onClose}
       aria-labelledby={titleId}
-      aria-busy={isLoading}
+      aria-busy={isBusy}
       className="flex w-[26rem] max-w-[calc(100vw-2rem)] flex-col gap-4 border-ds-border-subtle bg-ds-surface-overlay p-5 shadow-ds-popover"
     >
       <div className="flex items-start gap-2">
@@ -213,6 +217,26 @@ export function SlideEditorOpenDialog({
           )}
           <div className="flex justify-end">
             <Button variant="subtle" size="sm" onClick={handleCancel}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : isPreparingPreview ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex flex-col gap-3 rounded-ds-md border border-ds-border-subtle bg-ds-surface-raised p-4 text-sm text-ds-text-secondary"
+        >
+          <div className="flex flex-col gap-1">
+            <span className="font-medium text-ds-text-primary">
+              Preparing preview…
+            </span>
+            <span className="text-xs text-ds-text-muted">
+              Loading the latest slides for comparison.
+            </span>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="subtle" size="sm" onClick={onClose}>
               Cancel
             </Button>
           </div>

@@ -471,6 +471,7 @@ export function SlideEditor({
   );
   const replaceImageTargetIdRef = useRef<string | null>(null);
   const insertImagePendingRef = useRef(false);
+  const visualPickerPendingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -478,6 +479,7 @@ export function SlideEditor({
       mountedRef.current = false;
       replaceImageTargetIdRef.current = null;
       insertImagePendingRef.current = false;
+      visualPickerPendingRef.current = false;
     };
   }, []);
 
@@ -1042,9 +1044,10 @@ export function SlideEditor({
   async function handleReplaceImageFile(file: File | undefined) {
     const targetId = replaceImageTargetIdRef.current;
     const inserting = insertImagePendingRef.current;
+    const targetSlideId = activeSlide?.id;
     replaceImageTargetIdRef.current = null;
     insertImagePendingRef.current = false;
-    if (!file || !activeSlide || (!targetId && !inserting)) return;
+    if (!file || !targetSlideId || (!targetId && !inserting)) return;
     if (!file.type.startsWith("image/")) {
       setToolbarError("Choose an image file to replace the selected image.");
       return;
@@ -1054,10 +1057,14 @@ export function SlideEditor({
       if (!mountedRef.current) return;
       if (!uploadedImage) return;
       const { deckWithAsset, assetId, alt } = uploadedImage;
+      const targetSlide = deckWithAsset.slides.find(
+        (slide) => slide.id === targetSlideId,
+      );
+      if (!targetSlide) return;
       if (inserting) {
-        const node = defaultImageNode(nextLayeredZIndex(activeSlide, "image"));
+        const node = defaultImageNode(nextLayeredZIndex(targetSlide, "image"));
         if (node.type !== "image") return;
-        const result = insertNode(deckWithAsset, activeSlide.id, {
+        const result = insertNode(deckWithAsset, targetSlideId, {
           ...node,
           content: { ...node.content, assetId, alt },
         });
@@ -1065,8 +1072,10 @@ export function SlideEditor({
         setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
         focusSelectedNodeSoon(result.nodeId);
       } else if (targetId) {
+        const targetNode = findNodeById(targetSlide.children, targetId);
+        if (targetNode?.type !== "image") return;
         onDeckChange(
-          updateNodeContent(deckWithAsset, activeSlide.id, targetId, {
+          updateNodeContent(deckWithAsset, targetSlideId, targetId, {
             assetId,
             alt,
           }),
@@ -1097,6 +1106,13 @@ export function SlideEditor({
       const uploadedImage = await deckWithUploadedImageAsset(file);
       if (!mountedRef.current) return;
       if (!uploadedImage) return;
+      if (
+        !uploadedImage.deckWithAsset.slides.some(
+          (slide) => slide.id === slideId,
+        )
+      ) {
+        return;
+      }
       onDeckChange(
         updateSlideLocalStyle(uploadedImage.deckWithAsset, slideId, {
           slide: {
@@ -1126,39 +1142,45 @@ export function SlideEditor({
       setToolbarError(null);
       return;
     }
-    const targetSlideId = activeSlide.id;
-    const pickResult = await runVisualPickerMutation({
-      onPickVisual,
-      onPicked: (picked) => {
-        if (!mountedRef.current) return;
-        const currentDeck = deckRef.current;
-        const targetSlide = currentDeck.slides.find(
-          (slide) => slide.id === targetSlideId,
-        );
-        if (!targetSlide) return;
-        const deckWithAsset = deckWithPickedVisualAsset(currentDeck, picked);
-        const node = defaultVisualNode(
-          nextLayeredZIndex(targetSlide, "visual"),
-        );
-        if (node.type !== "visual") return;
-        const result = insertNode(deckWithAsset, targetSlideId, {
-          ...node,
-          content: {
-            ...node.content,
-            ...visualContentPatchFromPick(picked),
-          },
-        });
-        onDeckChange(result.deck);
-        setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
-        focusSelectedNodeSoon(result.nodeId);
-      },
-    });
-    if (!mountedRef.current) return;
-    if (pickResult === "failed") {
-      setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
-      return;
+    if (visualPickerPendingRef.current) return;
+    visualPickerPendingRef.current = true;
+    try {
+      const targetSlideId = activeSlide.id;
+      const pickResult = await runVisualPickerMutation({
+        onPickVisual,
+        onPicked: (picked) => {
+          if (!mountedRef.current) return;
+          const currentDeck = deckRef.current;
+          const targetSlide = currentDeck.slides.find(
+            (slide) => slide.id === targetSlideId,
+          );
+          if (!targetSlide) return;
+          const deckWithAsset = deckWithPickedVisualAsset(currentDeck, picked);
+          const node = defaultVisualNode(
+            nextLayeredZIndex(targetSlide, "visual"),
+          );
+          if (node.type !== "visual") return;
+          const result = insertNode(deckWithAsset, targetSlideId, {
+            ...node,
+            content: {
+              ...node.content,
+              ...visualContentPatchFromPick(picked),
+            },
+          });
+          onDeckChange(result.deck);
+          setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+          focusSelectedNodeSoon(result.nodeId);
+        },
+      });
+      if (!mountedRef.current) return;
+      if (pickResult === "failed") {
+        setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
+        return;
+      }
+      setToolbarError(null);
+    } finally {
+      visualPickerPendingRef.current = false;
     }
-    setToolbarError(null);
   }
 
   async function handleReplaceSelectedVisual() {
@@ -1167,38 +1189,44 @@ export function SlideEditor({
       setStageAnnouncement("No visual picker is configured for this editor.");
       return;
     }
-    const targetSlideId = activeSlide.id;
-    const targetNodeId = selectedNode.id;
-    const pickResult = await runVisualPickerMutation({
-      onPickVisual,
-      onPicked: (picked) => {
-        if (!mountedRef.current) return;
-        const currentDeck = deckRef.current;
-        const targetSlide = currentDeck.slides.find(
-          (slide) => slide.id === targetSlideId,
-        );
-        const targetNode = targetSlide
-          ? findNodeById(targetSlide.children, targetNodeId)
-          : undefined;
-        if (!targetSlide || targetNode?.type !== "visual") return;
-        onDeckChange(
-          updateNodeContent(
-            deckWithPickedVisualAsset(currentDeck, picked),
-            targetSlideId,
-            targetNodeId,
-            visualContentPatchFromPick(picked),
-          ),
-        );
-        setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
-        focusSelectedNodeSoon(targetNodeId);
-      },
-    });
-    if (!mountedRef.current) return;
-    if (pickResult === "failed") {
-      setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
-      return;
+    if (visualPickerPendingRef.current) return;
+    visualPickerPendingRef.current = true;
+    try {
+      const targetSlideId = activeSlide.id;
+      const targetNodeId = selectedNode.id;
+      const pickResult = await runVisualPickerMutation({
+        onPickVisual,
+        onPicked: (picked) => {
+          if (!mountedRef.current) return;
+          const currentDeck = deckRef.current;
+          const targetSlide = currentDeck.slides.find(
+            (slide) => slide.id === targetSlideId,
+          );
+          const targetNode = targetSlide
+            ? findNodeById(targetSlide.children, targetNodeId)
+            : undefined;
+          if (!targetSlide || targetNode?.type !== "visual") return;
+          onDeckChange(
+            updateNodeContent(
+              deckWithPickedVisualAsset(currentDeck, picked),
+              targetSlideId,
+              targetNodeId,
+              visualContentPatchFromPick(picked),
+            ),
+          );
+          setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
+          focusSelectedNodeSoon(targetNodeId);
+        },
+      });
+      if (!mountedRef.current) return;
+      if (pickResult === "failed") {
+        setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
+        return;
+      }
+      setToolbarError(null);
+    } finally {
+      visualPickerPendingRef.current = false;
     }
-    setToolbarError(null);
   }
 
   function handleInsertConnector() {

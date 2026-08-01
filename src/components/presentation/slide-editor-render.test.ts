@@ -19,7 +19,10 @@ import {
   buildTextNode,
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
-import { createReactRenderHarness } from "@/test/react-render-harness";
+import {
+  createReactRenderHarness,
+  withDefaultDom,
+} from "@/test/react-render-harness";
 
 function createHookRenderer() {
   return createReactRenderHarness({ idPrefix: "fake-id" });
@@ -221,6 +224,244 @@ test("SlideEditor ignores an image upload that settles after the editor unmounts
   await waitForAsyncDrain();
 
   assert.deepEqual(changedDecks, []);
+});
+
+test("SlideEditor ignores an image insertion upload after its initiating slide is removed", async () => {
+  await withDefaultDom(async () => {
+    const uploadAttempt = deferred<{
+      src: string;
+      assetId: string;
+    }>();
+    const changedDecks: unknown[] = [];
+    const renderer = createHookRenderer();
+    const initialDeck = buildDeck([
+      buildSlide("content", [], { id: "slide-1" }),
+      buildSlide("content", [], { id: "slide-2" }),
+    ]);
+    const renderEditor = (deck: typeof initialDeck) =>
+      renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-removed-image-target",
+          deck,
+          onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+          onUploadImage: () => uploadAttempt.promise,
+        }),
+      );
+    try {
+      const tree = renderEditor(initialDeck);
+      const elements = collectElements(tree);
+      const insertImageSurface = elements.find(
+        (element) =>
+          typeof (element.props as { onInsertImage?: unknown })
+            .onInsertImage === "function",
+      );
+      assert.ok(insertImageSurface, "expected an insert-image command surface");
+      const fileInput = elements.find(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { type?: string }).type === "file" &&
+          String((element.props as { accept?: string }).accept).includes(
+            "image/png",
+          ),
+      );
+      assert.ok(fileInput, "expected the image file input");
+
+      (
+        insertImageSurface.props as { onInsertImage: () => void }
+      ).onInsertImage();
+      const target = {
+        files: [
+          new File(["image"], "removed-target.png", { type: "image/png" }),
+        ],
+        value: "removed-target.png",
+      };
+      (fileInput.props as { onChange: (event: unknown) => void }).onChange({
+        currentTarget: target,
+      });
+      assert.equal(target.value, "");
+
+      renderEditor({
+        ...initialDeck,
+        slides: initialDeck.slides.filter((slide) => slide.id !== "slide-1"),
+      });
+      uploadAttempt.resolve({
+        src: "https://textiq.test/api/slide-assets/removed-target.png",
+        assetId: "asset-removed-target",
+      });
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+
+      assert.deepEqual(
+        changedDecks,
+        [],
+        "a removed initiating slide must not receive an orphan asset mutation",
+      );
+    } finally {
+      renderer.cleanup();
+    }
+  });
+});
+
+test("SlideEditor ignores an image replacement upload after its target node is removed", async () => {
+  await withDefaultDom(async () => {
+    const uploadAttempt = deferred<{
+      src: string;
+      assetId: string;
+    }>();
+    const changedDecks: unknown[] = [];
+    const renderer = createHookRenderer();
+    const initialDeck = mixedDeck();
+    const renderEditor = (deck: typeof initialDeck) =>
+      renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-removed-image-node",
+          deck,
+          onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+          onUploadImage: () => uploadAttempt.promise,
+        }),
+      );
+
+    try {
+      const initialElements = collectElements(renderEditor(initialDeck));
+      const canvas = initialElements.find(
+        (element) =>
+          typeof (element.props as { onNodeFocus?: unknown }).onNodeFocus ===
+          "function",
+      );
+      assert.ok(canvas, "expected the slide canvas focus surface");
+      (canvas.props as { onNodeFocus: (nodeId: string) => void }).onNodeFocus(
+        "image-1",
+      );
+
+      const selectedElements = collectElements(renderEditor(initialDeck));
+      const replaceImageSurface = selectedElements.find(
+        (element) =>
+          typeof (element.props as { onReplaceImage?: unknown })
+            .onReplaceImage === "function",
+      );
+      assert.ok(
+        replaceImageSurface,
+        "expected the selected-image replacement surface",
+      );
+      const fileInput = selectedElements.find(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { type?: string }).type === "file" &&
+          String((element.props as { accept?: string }).accept).includes(
+            "image/png",
+          ),
+      );
+      assert.ok(fileInput, "expected the image replacement file input");
+
+      (
+        replaceImageSurface.props as { onReplaceImage: () => void }
+      ).onReplaceImage();
+      const target = {
+        files: [new File(["image"], "removed-node.png", { type: "image/png" })],
+        value: "removed-node.png",
+      };
+      (fileInput.props as { onChange: (event: unknown) => void }).onChange({
+        currentTarget: target,
+      });
+
+      renderEditor({
+        ...initialDeck,
+        slides: initialDeck.slides.map((slide) =>
+          slide.id === "slide-1"
+            ? {
+                ...slide,
+                children: slide.children.filter(
+                  (node) => node.id !== "image-1",
+                ),
+              }
+            : slide,
+        ),
+      });
+      uploadAttempt.resolve({
+        src: "https://textiq.test/api/slide-assets/removed-node.png",
+        assetId: "asset-removed-node",
+      });
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+
+      assert.deepEqual(
+        changedDecks,
+        [],
+        "a removed image node must not receive an orphan asset mutation",
+      );
+    } finally {
+      renderer.cleanup();
+    }
+  });
+});
+
+test("SlideEditor ignores a background upload after its initiating slide is removed", async () => {
+  await withDefaultDom(async () => {
+    const uploadAttempt = deferred<{
+      src: string;
+      assetId: string;
+    }>();
+    const changedDecks: unknown[] = [];
+    const renderer = createHookRenderer();
+    const initialDeck = buildDeck([
+      buildSlide("content", [], { id: "slide-1" }),
+      buildSlide("content", [], { id: "slide-2" }),
+    ]);
+    const renderEditor = (deck: typeof initialDeck) =>
+      renderer.run(() =>
+        SlideEditor({
+          documentId: "doc-removed-background-target",
+          deck,
+          onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+          onUploadImage: () => uploadAttempt.promise,
+        }),
+      );
+
+    try {
+      const elements = collectElements(renderEditor(initialDeck));
+      const fileInputs = elements.filter(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { type?: string }).type === "file" &&
+          String((element.props as { accept?: string }).accept).includes(
+            "image/png",
+          ),
+      );
+      const backgroundInput = fileInputs[1];
+      assert.ok(backgroundInput, "expected the background image file input");
+
+      const target = {
+        files: [
+          new File(["image"], "removed-background.png", {
+            type: "image/png",
+          }),
+        ],
+        value: "removed-background.png",
+      };
+      (
+        backgroundInput.props as { onChange: (event: unknown) => void }
+      ).onChange({ currentTarget: target });
+
+      renderEditor({
+        ...initialDeck,
+        slides: initialDeck.slides.filter((slide) => slide.id !== "slide-1"),
+      });
+      uploadAttempt.resolve({
+        src: "https://textiq.test/api/slide-assets/removed-background.png",
+        assetId: "asset-removed-background",
+      });
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+
+      assert.deepEqual(
+        changedDecks,
+        [],
+        "a removed slide must not receive an orphan background asset mutation",
+      );
+    } finally {
+      renderer.cleanup();
+    }
+  });
 });
 
 test("PrecisionGuideOverlays keeps editor chrome off by default and renders persisted overlays", () => {

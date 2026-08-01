@@ -406,6 +406,45 @@ function findNode(deck: Deck, id: string): SlideChildNode {
 }
 
 describe("SlideEditor keyboard command path", () => {
+  test("repeated visual insertion activation starts only one picker request", async () => {
+    const visualPick = deferred<SlideEditorVisualPickResult | undefined>();
+    let visualPicks = 0;
+    const editor = await renderSlideEditor(rotationDeck(), {
+      onPickVisual: () => {
+        visualPicks += 1;
+        return visualPick.promise;
+      },
+    });
+
+    try {
+      const [insertVisualSurface] = editor.renderer.root.findAll(
+        (node) => typeof node.props.onInsertVisual === "function",
+      );
+      assert.ok(
+        insertVisualSurface,
+        "expected an insert-visual command surface",
+      );
+
+      act(() => {
+        void insertVisualSurface.props.onInsertVisual();
+        void insertVisualSurface.props.onInsertVisual();
+      });
+
+      assert.equal(
+        visualPicks,
+        1,
+        "the editor must claim the picker operation before awaiting it",
+      );
+    } finally {
+      await act(async () => {
+        visualPick.resolve(undefined);
+        await visualPick.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      editor.cleanup();
+    }
+  });
+
   test("a visual replacement settling after a newer deck update preserves the newer content", async () => {
     const visualPick = deferred<SlideEditorVisualPickResult | undefined>();
     const editor = await renderSlideEditor(visualDeck(), {

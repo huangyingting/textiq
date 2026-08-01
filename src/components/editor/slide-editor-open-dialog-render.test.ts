@@ -140,6 +140,36 @@ test("SlideEditorOpenDialog sends the active theme package when generating", asy
   }
 });
 
+test("SlideEditorOpenDialog shows cancellable busy feedback while preparing the preview", () => {
+  const hookRenderer = createReactRenderHarness({
+    idPrefix: "open-dialog-preview-preparing-test-id",
+  });
+  let closeCount = 0;
+  const props = {
+    contentJson: '{"root":{"children":[]}}',
+    themePackageId: "noir" as const,
+    isPreparingPreview: true,
+    onApply: () => undefined,
+    onDerive: () => undefined,
+    onClose: () => {
+      closeCount += 1;
+    },
+  };
+
+  try {
+    const tree = hookRenderer.run(() => SlideEditorOpenDialog(props));
+    const cancel = findElementByText(tree, "Cancel");
+    assert.equal((tree.props as { "aria-busy"?: boolean })["aria-busy"], true);
+    assert.match(textContent(tree), /Preparing preview…/);
+    assert.doesNotMatch(textContent(tree), /Generate with AI/);
+
+    (cancel.props as { onClick: () => void }).onClick();
+    assert.equal(closeCount, 1);
+  } finally {
+    hookRenderer.cleanup();
+  }
+});
+
 test("SlideEditorOpenDialog canceling an in-flight generation does not derive or apply", async () => {
   const hookRenderer = createReactRenderHarness({
     idPrefix: "open-dialog-cancel-test-id",
