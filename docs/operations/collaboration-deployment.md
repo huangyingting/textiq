@@ -183,18 +183,24 @@ Both the standalone server (`GET /health`) and the inline collab socket
   "connections": 7,
   "mode": "single-instance",
   "warnings": [],
-  "healthy": true
+  "healthy": true,
+  "recoveryFlushConfigured": true,
+  "flushFailures": 0,
+  "recentFlushFailureCount": 0
 }
 ```
 
-| Field         | Type       | Description                                                                                               |
-| ------------- | ---------- | --------------------------------------------------------------------------------------------------------- |
-| `ok`          | `boolean`  | `true` when the configuration is healthy. Use this for liveness/readiness checks.                         |
-| `rooms`       | `number`   | In-memory rooms currently alive (documents with at least one connected client, or recently disconnected). |
-| `connections` | `number`   | Total active WebSocket connections across all rooms.                                                      |
-| `mode`        | `string`   | `"single-instance"` (explicitly declared) or `"unconfigured"`.                                            |
-| `warnings`    | `string[]` | Advisory or error messages from the deployment-config check.                                              |
-| `healthy`     | `boolean`  | Mirrors `ok`; `false` means the configuration is actively harmful.                                        |
+| Field                     | Type       | Description                                                                                                       |
+| ------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
+| `ok`                      | `boolean`  | `true` when the configuration is healthy. Use this for liveness/readiness checks.                                 |
+| `rooms`                   | `number`   | In-memory rooms currently alive (documents with at least one connected client, or recently disconnected).         |
+| `connections`             | `number`   | Total active WebSocket connections across all rooms.                                                              |
+| `mode`                    | `string`   | `"single-instance"` (explicitly declared) or `"unconfigured"`.                                                    |
+| `warnings`                | `string[]` | Advisory or error messages from the deployment-config check.                                                      |
+| `healthy`                 | `boolean`  | Mirrors `ok`; `false` means the configuration is actively harmful.                                                |
+| `recoveryFlushConfigured` | `boolean`  | `true` when a non-blank internal secret enables dirty-room recovery flushes. The secret itself is never returned. |
+| `flushFailures`           | `number`   | Process-lifetime count of best-effort recovery-flush failures.                                                    |
+| `recentFlushFailureCount` | `number`   | Number of sanitized failure entries currently retained in the bounded observability ring.                         |
 
 ## Restart and deploy behavior
 
@@ -395,10 +401,11 @@ the source of truth and is not read on the normal load path. Configure it with:
   flusher is a no-op (logs one warning) and the endpoint returns `503`, so dev
   without the secret still runs — it just skips the recovery snapshot.
 
-Both health endpoints surface aggregate flush observability only:
-`flushFailures` (total counter) and `recentFlushFailureCount` (count of entries
-currently retained in the in-memory failure ring). Public health responses do
-not include room or document ids for individual failures.
+Both health endpoints surface configuration and aggregate flush observability
+only: `recoveryFlushConfigured`, `flushFailures` (total counter), and
+`recentFlushFailureCount` (count of entries currently retained in the in-memory
+failure ring). Public health responses never include the internal secret, room
+ids, or document ids for individual failures.
 
 Shutdown emits structured `collab.server.shutdown` start/finish records. A
 finish record with `ok: false` means a runtime layer failed to close and sets a

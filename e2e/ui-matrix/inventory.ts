@@ -52,6 +52,41 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: ["e2e/README.md", ".github/workflows/e2e-deterministic.yml"],
   },
   {
+    spec: "e2e/collaboration/runtime-health.spec.ts",
+    owners: ["collaboration", "operations", "security"],
+    coverage:
+      "The self-contained release profile declares its single-instance topology and exposes recovery-flush readiness without leaking the internal secret.",
+    runMode: "required-ci",
+    prerequisites: ["E2E_PROFILE=1"],
+    roles: ["public health probe"],
+    devices: ["Desktop Chrome request context"],
+    ciStatus: "required deterministic E2E workflow",
+    sourceRefs: [
+      "e2e/README.md",
+      "docs/collaboration/README.md",
+      "docs/operations/collaboration-deployment.md",
+      ".github/workflows/e2e-deterministic.yml",
+    ],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "profile declares single-instance mode and enables recovery flushes",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "profile declares single-instance mode and enables recovery flushes @required-profile",
+        surface: "collaboration deployment health and recovery readiness",
+        viewport: "Desktop Chrome request context",
+        auth: "public health probe",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+    ],
+  },
+  {
     spec: "e2e/editor/block-id-preservation.spec.ts",
     owners: ["editor", "presentation"],
     coverage:

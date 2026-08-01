@@ -109,6 +109,31 @@ test("self-contained profile warms collaboration authorization before browser co
   );
 });
 
+test("self-contained profile isolates production-like collaboration recovery configuration", () => {
+  const env = buildE2EProfileEnv(
+    {
+      COLLAB_INSTANCE_COUNT: "4",
+      COLLAB_STICKY_ROUTING: "true",
+      COLLAB_SINGLE_INSTANCE: "false",
+      COLLAB_INTERNAL_SECRET: "must-not-cross-into-the-profile",
+    },
+    {
+      repoRoot: process.cwd(),
+      runId: "collab-runtime-contract",
+      runNonce: "8".repeat(64),
+    },
+  );
+
+  assert.equal(env.COLLAB_SINGLE_INSTANCE, "1");
+  assert.match(env.COLLAB_INTERNAL_SECRET, /^[a-f0-9]{64}$/);
+  assert.notEqual(
+    env.COLLAB_INTERNAL_SECRET,
+    "must-not-cross-into-the-profile",
+  );
+  assert.equal(env.COLLAB_INSTANCE_COUNT, undefined);
+  assert.equal(env.COLLAB_STICKY_ROUTING, undefined);
+});
+
 test("self-contained profile preserves explicit Google OAuth configuration", () => {
   const env = buildE2EProfileEnv(
     {

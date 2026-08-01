@@ -10,6 +10,7 @@ app.
 
 | Spec                                                    | Coverage                                                                                                                          |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/collaboration/runtime-health.spec.ts`              | Release-profile single-instance declaration and recovery-flush readiness without secret disclosure                                |
 | `e2e/public-render/share-fallback.spec.ts`              | Unknown share/present/embed links → not-found fallback                                                                            |
 | `e2e/presentation/slides-smoke.spec.ts`                 | Slides edit/save, inline rich text, present, export, workspace accessibility, and toolbar smoke (seeded profile or external auth) |
 | `e2e/presentation/slides-layout-screenshots.spec.ts`    | Deterministic presentation layout snapshots (desktop/tablet/mobile + rail/notes/panel states)                                     |
@@ -35,6 +36,9 @@ app.
 The source-backed UI matrix inventory lives in `e2e/ui-matrix/README.md` and
 `e2e/ui-matrix/inventory.ts`. `npm run ui-matrix:check` fails when a Playwright
 spec is missing from the inventory or when the generated README section drifts.
+The self-contained runner also forces a single collaboration instance and an
+ephemeral per-run recovery secret; the required collaboration health spec
+proves that operational path is enabled without exposing the secret.
 
 ## Prerequisites
 

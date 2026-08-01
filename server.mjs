@@ -39,6 +39,7 @@ import {
   emitDeploymentDiagnostics,
   installCollabServerShutdown,
   resolveCollabDeployment,
+  resolveCollabInternalSecret,
   roomFromInlineUrl,
 } from "./scripts/collab-runtime.mjs";
 
@@ -77,6 +78,7 @@ await app.prepare();
 
 const collabHealthHandler = createCollabHealthHandler({
   deploymentConfig,
+  recoveryFlushConfigured: Boolean(resolveCollabInternalSecret(process.env)),
   getStats: () => ({
     rooms: roomCount(),
     connections: connCount(),

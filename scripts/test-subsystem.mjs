@@ -106,6 +106,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/api\/collab\//,
       /^scripts\/collab-/,
       /^src\/app\/app\/documents\/\[id\]\/presence\.test\.tsx$/,
+      /^e2e\/collaboration\/runtime-health\.spec\.ts$/,
     ],
   },
   commands: {
@@ -234,6 +235,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/scripts\//,
       /^src\/test\//,
       /^src\/app\/api\/health\//,
+      /^e2e\/collaboration\/runtime-health\.spec\.ts$/,
       /^e2e\/ui-matrix\/catalog\.spec\.ts$/,
     ],
   },
@@ -305,6 +307,7 @@ export const SUBSYSTEM_TEST_TARGETS = {
       /^src\/app\/public-abuse\.test\.ts$/,
       /^src\/components\/share\//,
       /^e2e\/documents\/template-creation\.spec\.ts$/,
+      /^e2e\/collaboration\/runtime-health\.spec\.ts$/,
       /^e2e\/public-render\/share-fallback\.spec\.ts$/,
       /^e2e\/presentation\/slide-asset-upload\.spec\.ts$/,
       /^e2e\/ui-matrix\/(?:account-lifecycle-ui|auth-public-ui|document-comments-lifecycle-ui|document-metadata-history-ui|document-sharing-lifecycle-ui|public-render-ui|workspace-lifecycle-ui)\.spec\.ts$/,

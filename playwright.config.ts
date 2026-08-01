@@ -53,6 +53,7 @@ const profileGrep = process.env.E2E_PROFILE_GREP
   : undefined;
 const deterministicProfileSpecs = [
   "auth/authenticated-nested-routes.spec.ts",
+  "collaboration/runtime-health.spec.ts",
   "editor/block-id-preservation.spec.ts",
   "editor/document-editor-profile.spec.ts",
   "editor/document-table-autosave.spec.ts",

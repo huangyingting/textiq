@@ -57,6 +57,7 @@ describe("collab-runtime health summary", () => {
       deploymentConfig,
       rooms: 2,
       connections: 5,
+      recoveryFlushConfigured: true,
       flushFailures: 1,
       recentFlushFailureCount: 1,
     });
@@ -68,6 +69,7 @@ describe("collab-runtime health summary", () => {
       mode: "single-instance",
       warnings: [],
       healthy: true,
+      recoveryFlushConfigured: true,
       flushFailures: 1,
       recentFlushFailureCount: 1,
     });
@@ -85,6 +87,7 @@ describe("collab-runtime health summary", () => {
         warnings: [],
         healthy: true,
       },
+      recoveryFlushConfigured: true,
       getStats: () => ({
         rooms: 1,
         connections: 2,
@@ -100,6 +103,7 @@ describe("collab-runtime health summary", () => {
       headers: { "content-type": "application/json" },
     });
     assert.equal(JSON.parse(writes[1].body).connections, 2);
+    assert.equal(JSON.parse(writes[1].body).recoveryFlushConfigured, true);
   });
 
   test("createCollabHealthHandler omits per-room failure ids from the public payload", () => {
@@ -114,6 +118,7 @@ describe("collab-runtime health summary", () => {
         warnings: [],
         healthy: true,
       },
+      recoveryFlushConfigured: false,
       getStats: () => ({
         rooms: 1,
         connections: 2,
@@ -127,6 +132,7 @@ describe("collab-runtime health summary", () => {
     const payload = JSON.parse(writes[1].body);
     assert.equal(payload.flushFailures, 3);
     assert.equal(payload.recentFlushFailureCount, 1);
+    assert.equal(payload.recoveryFlushConfigured, false);
     assert.equal("recentFlushFailures" in payload, false);
     assert.equal("room" in payload, false);
     assert.equal("docId" in payload, false);
@@ -142,6 +148,7 @@ describe("collab-runtime health summary", () => {
       deploymentConfig,
       rooms: 0,
       connections: 0,
+      recoveryFlushConfigured: false,
       flushFailures: 0,
       recentFlushFailureCount: 0,
     });

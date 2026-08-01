@@ -6,6 +6,7 @@
  *   mode: 'single-instance'|'unconfigured',
  *   warnings: string[],
  *   healthy: boolean,
+ *   recoveryFlushConfigured: boolean,
  *   flushFailures: number,
  *   recentFlushFailureCount: number,
  * }} CollabHealthSummary
@@ -19,6 +20,7 @@
  *   deploymentConfig: { mode: 'single-instance'|'unconfigured', warnings: string[], healthy: boolean },
  *   rooms: number,
  *   connections: number,
+ *   recoveryFlushConfigured: boolean,
  *   flushFailures: number,
  *   recentFlushFailureCount: number,
  * }} input
@@ -32,6 +34,7 @@ export function buildCollabHealthSummary(input) {
     mode: input.deploymentConfig.mode,
     warnings: input.deploymentConfig.warnings,
     healthy: input.deploymentConfig.healthy,
+    recoveryFlushConfigured: input.recoveryFlushConfigured,
     flushFailures: input.flushFailures,
     recentFlushFailureCount: input.recentFlushFailureCount,
   };
@@ -44,17 +47,23 @@ export function buildCollabHealthSummary(input) {
  *
  * @param {{
  *   deploymentConfig: { mode: string, warnings: string[], healthy: boolean },
+ *   recoveryFlushConfigured: boolean,
  *   getStats: () => { rooms: number, connections: number, flushFailures: number, recentFlushFailureCount: number },
  * }} options
  * @returns {(req: unknown, res: { writeHead: Function, end: Function }) => void}
  */
-export function createCollabHealthHandler({ deploymentConfig, getStats }) {
+export function createCollabHealthHandler({
+  deploymentConfig,
+  recoveryFlushConfigured,
+  getStats,
+}) {
   return function handleCollabHealth(_req, res) {
     const stats = getStats();
     const summary = buildCollabHealthSummary({
       deploymentConfig,
       rooms: stats.rooms,
       connections: stats.connections,
+      recoveryFlushConfigured,
       flushFailures: stats.flushFailures,
       recentFlushFailureCount: stats.recentFlushFailureCount,
     });

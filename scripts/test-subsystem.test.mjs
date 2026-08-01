@@ -107,6 +107,11 @@ test("test subsystem map classifies files by owning subsystem", () => {
     classifyTestFile("e2e/editor/document-table-autosave.spec.ts"),
     ["editor"],
   );
+  assert.deepEqual(
+    classifyTestFile("e2e/collaboration/runtime-health.spec.ts"),
+    ["collaboration", "operations", "security"],
+    "collaboration runtime health must run with every owning subsystem",
+  );
   assert.ok(
     classifyTestFile("e2e/ui-matrix/public-render-ui.spec.ts").includes(
       "public-render",

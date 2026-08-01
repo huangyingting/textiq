@@ -153,6 +153,10 @@ export function buildE2EProfileEnv(
   delete childEnv.HOST;
   delete childEnv.HOSTNAME;
   delete childEnv.NEXT_HOST;
+  delete childEnv.COLLAB_INSTANCE_COUNT;
+  delete childEnv.COLLAB_STICKY_ROUTING;
+  delete childEnv.COLLAB_SINGLE_INSTANCE;
+  delete childEnv.COLLAB_INTERNAL_SECRET;
   return {
     ...childEnv,
     DB_PROVIDER: "sqlite",
@@ -166,6 +170,8 @@ export function buildE2EProfileEnv(
     E2E_BASE_URL: origin.origin,
     AUTH_URL: origin.origin,
     NEXT_PUBLIC_APP_URL: origin.origin,
+    COLLAB_SINGLE_INSTANCE: "1",
+    COLLAB_INTERNAL_SECRET: randomBytes(32).toString("hex"),
     HOST: AUTHENTICATED_E2E_PROFILE_BIND_HOST,
     NODE_OPTIONS:
       "--dns-result-order=ipv4first --no-network-family-autoselection",

@@ -30,6 +30,7 @@ import {
   emitDeploymentDiagnostics,
   installCollabServerShutdown,
   resolveCollabDeployment,
+  resolveCollabInternalSecret,
   roomFromStandaloneUrl,
 } from "./collab-runtime.mjs";
 import { logScriptInfo } from "./structured-log.mjs";
@@ -50,6 +51,7 @@ if (
 
 const collabHealthHandler = createCollabHealthHandler({
   deploymentConfig,
+  recoveryFlushConfigured: Boolean(resolveCollabInternalSecret(process.env)),
   getStats: () => ({
     rooms: roomCount(),
     connections: connCount(),

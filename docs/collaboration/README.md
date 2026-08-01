@@ -167,3 +167,4 @@ path segment.
 - [`scripts/collab-flood-controls.test.mjs`](../../scripts/collab-flood-controls.test.mjs)
 - [`scripts/collab-eviction.test.mjs`](../../scripts/collab-eviction.test.mjs)
 - [`scripts/collab-flush.test.mjs`](../../scripts/collab-flush.test.mjs)
+- [`e2e/collaboration/runtime-health.spec.ts`](../../e2e/collaboration/runtime-health.spec.ts)
