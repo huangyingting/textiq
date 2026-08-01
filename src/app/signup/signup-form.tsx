@@ -8,18 +8,27 @@ import {
   AuthMessage,
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { register } from "./actions";
 
 // coverage-breadth: mapped-e2e ref=e2e/ui-matrix/auth-public-ui.spec.ts
 export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
+  return <SignupFormForCallback key={callbackUrl} callbackUrl={callbackUrl} />;
+}
+
+function SignupFormForCallback({ callbackUrl }: { callbackUrl: string }) {
   const [errorMessage, formAction, isPending] = useActionState(
     register,
     undefined,
   );
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+  });
 
   return (
-    <form action={formAction} className="flex w-full flex-col gap-4">
+    <form action={guardedAction} className="flex w-full flex-col gap-4">
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
       <AuthField
         id="name"
@@ -31,6 +40,7 @@ export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
         }
         type="text"
         autoComplete="name"
+        disabled={isPending}
         placeholder="Ada Lovelace"
       />
 
@@ -41,6 +51,7 @@ export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
         type="email"
         autoComplete="email"
         required
+        disabled={isPending}
         placeholder="you@example.com"
       />
 
@@ -52,6 +63,7 @@ export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
         autoComplete="new-password"
         required
         minLength={8}
+        disabled={isPending}
         placeholder="At least 8 characters"
       />
 

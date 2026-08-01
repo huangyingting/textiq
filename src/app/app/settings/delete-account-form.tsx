@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 
 import { ActionButton, FormField, ModalSurface } from "@/components/ui";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 import type { ActionDescriptor } from "@/lib/actions/action-descriptor";
 import type { DeleteAccountResult } from "@/lib/auth/form-state";
 
@@ -55,6 +56,7 @@ export function computeDeleteAccountConfirmation({
     id: "settings.delete-account.open",
     label: "Delete account",
     description: "Open account deletion confirmation",
+    disabledReason: isPending ? "Account deletion is in progress" : undefined,
   };
   const cancelAction: ActionDescriptor = {
     id: "settings.delete-account.cancel",
@@ -81,9 +83,11 @@ export function computeDeleteAccountConfirmation({
  *
  * The confirm button is guarded client-side (disabled until the typed value
  * matches), and the server action re-validates the confirmation independently.
- * Submitting calls `deleteAccount`, which signs the user out and redirects to
- * the marketing home on success (so this component simply unmounts); an error
- * keeps the dialog open with a `role="alert"` message.
+ * Submission is synchronously single-flight: pending deletion owns the dialog
+ * and locks every edit/dismiss entry point until an error releases it for
+ * retry. `deleteAccount` signs the user out and redirects to the marketing home
+ * on success (so this component simply unmounts); an error keeps the dialog
+ * open with a `role="alert"` message.
  *
  * The dialog is portaled to `document.body` (per AGENTS.md) so it escapes the
  * settings card's stacking context.
@@ -96,11 +100,23 @@ export function DeleteAccountForm({ email }: { email: string }) {
     initialState,
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const deletionSucceeded = state?.ok === true;
+  const operationBusy = isPending || deletionSucceeded;
+  const { guardedAction: guardedFormAction, ownsSubmission } =
+    useOwnedFormAction({
+      action: formAction,
+      isPending,
+      terminal: deletionSucceeded,
+    });
   const { canSubmit, openAction, cancelAction, confirmAction } =
-    computeDeleteAccountConfirmation({ email, confirmation, isPending });
+    computeDeleteAccountConfirmation({
+      email,
+      confirmation,
+      isPending: operationBusy,
+    });
 
   const close = () => {
-    if (isPending) {
+    if (ownsSubmission() || operationBusy) {
       return;
     }
     setOpen(false);
@@ -116,7 +132,10 @@ export function DeleteAccountForm({ email }: { email: string }) {
       <div>
         <ActionButton
           action={openAction}
-          onClick={() => setOpen(true)}
+          disabled={operationBusy}
+          onClick={() => {
+            if (!ownsSubmission() && !operationBusy) setOpen(true);
+          }}
           className="flex h-11 items-center justify-center rounded-full border border-ds-danger/40 px-6 text-sm font-medium text-ds-danger transition hover:bg-ds-danger/10"
         >
           Delete account
@@ -127,9 +146,10 @@ export function DeleteAccountForm({ email }: { email: string }) {
         open={open}
         onClose={close}
         aria-labelledby="delete-account-title"
+        aria-busy={operationBusy}
         className="max-w-md border-ds-border-strong"
       >
-        <form action={formAction} className="flex flex-col gap-4">
+        <form action={guardedFormAction} className="flex flex-col gap-4">
           <h2
             id="delete-account-title"
             className="text-base font-semibold text-ds-text-primary"
@@ -159,6 +179,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
               ref={inputRef}
               name="confirmation"
               type="text"
+              disabled={operationBusy}
               autoComplete="off"
               spellCheck={false}
               aria-label="Confirm account deletion"
@@ -179,7 +200,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
             <ActionButton
               action={cancelAction}
               onClick={close}
-              disabled={isPending}
+              disabled={operationBusy}
               className="flex h-9 items-center justify-center rounded-full border border-ds-border-strong px-4 text-sm font-medium text-ds-text-secondary transition hover:bg-ds-surface-sunken hover:text-ds-text-primary disabled:opacity-60"
             >
               Cancel
@@ -187,10 +208,10 @@ export function DeleteAccountForm({ email }: { email: string }) {
             <ActionButton
               action={confirmAction}
               type="submit"
-              disabled={!canSubmit || isPending}
+              disabled={!canSubmit || operationBusy}
               className="flex h-9 items-center justify-center rounded-full bg-ds-danger px-4 text-sm font-medium text-ds-text-on-accent transition hover:opacity-90 disabled:opacity-60"
             >
-              {isPending ? "Deleting…" : "Delete account"}
+              {operationBusy ? "Deleting…" : "Delete account"}
             </ActionButton>
           </div>
         </form>

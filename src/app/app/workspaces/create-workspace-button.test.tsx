@@ -8,19 +8,27 @@
  * the "is this error message text or a redirect-target path" branch, and
  * the submit button's pending label/disabled state, so every visual state
  * is unit-testable without exercising `useActionState`. A harness-rendered
- * pass through the real `CreateWorkspaceButton` confirms the hook wiring
- * itself still produces the same idle markup the pure function predicts;
+ * passes through the real `CreateWorkspaceButton` confirm the hook wiring,
+ * synchronous duplicate-submission boundary, and post-validation retry;
  * `./actions`' real dependencies (session, workspace service, next/cache,
  * next/navigation) are stubbed via module hooks purely so the real
  * `createWorkspace` action module can load — its own authorization/service
- * behavior is already covered by `actions.test.ts` and is not re-asserted
- * here.
+ * authorization and persistence behavior are already covered by
+ * `actions.test.ts` and are not re-asserted here.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import {
+  isValidElement,
+  startTransition,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+
+import "@/test/react-render-harness";
 
 type ModuleHooks = {
   registerHooks(hooks: {
@@ -74,6 +82,19 @@ const { registerHooks } = createRequire(import.meta.url)(
 const stubPrefix = "textiq-create-workspace-button-test:";
 
 const stubbedModules = new Map<string, string>([
+  [
+    "@/components/ui",
+    `
+      import { createElement } from "react";
+      export const FIELD_CONTROL = "field-control";
+      export function Button({ variant, size, leadingIcon, children, ...props }) {
+        return createElement("button", props, leadingIcon, children);
+      }
+      export function Dialog({ open, children, restoreFocusRef, ...props }) {
+        return open ? createElement("div", props, children) : null;
+      }
+    `,
+  ],
   [
     "next/navigation",
     `
@@ -176,6 +197,10 @@ function firstElement(
   const element = collectElements(node).find(predicate);
   assert.ok(element, "expected a matching element");
   return element;
+}
+
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("renderCreateWorkspaceView", () => {
@@ -340,20 +365,49 @@ describe("renderCreateWorkspaceView", () => {
     assert.equal(submit.props.children, "Create");
   });
 
-  test("pending: the submit button reads 'Creating...' and is disabled", () => {
+  test("pending creation owns the dialog and locks every dismissal or edit path", () => {
+    const openChanges: boolean[] = [];
     const tree = mod.renderCreateWorkspaceView({
       error: null,
       action: () => undefined,
       isPending: true,
       open: true,
-      onOpenChange: () => undefined,
+      onOpenChange: (open) => openChanges.push(open),
     });
+    const trigger = firstElement(
+      tree,
+      (element) => element.props.children === "New workspace",
+    );
+    const dialog = firstElement(
+      tree,
+      (element) =>
+        (element.props as { "aria-labelledby"?: string })["aria-labelledby"] ===
+        "create-workspace-title",
+    );
+    const nameField = firstElement(
+      tree,
+      (element) => element.type === "input" && element.props.name === "name",
+    );
     const submit = firstElement(
       tree,
       (element) => element.props.type === "submit",
     );
+    const cancel = firstElement(
+      tree,
+      (element) => element.props.children === "Cancel",
+    );
+
+    (trigger.props.onClick as () => void)();
+    (dialog.props.onClose as () => void)();
+    (cancel.props.onClick as () => void)();
+
+    assert.equal(trigger.props.disabled, true);
+    assert.equal(dialog.props["aria-busy"], true);
+    assert.equal(nameField.props.disabled, true);
     assert.equal(submit.props.disabled, true);
     assert.equal(submit.props.children, "Creating...");
+    assert.equal(cancel.props.disabled, true);
+    assert.deepEqual(openChanges, []);
   });
 
   test("the form's action prop is the exact dispatcher passed in", () => {
@@ -373,16 +427,128 @@ describe("renderCreateWorkspaceView", () => {
 });
 
 describe("CreateWorkspaceButton", () => {
+  test("same-event repeated submission issues one workspace creation", async () => {
+    let resolveFirstCreation!: () => void;
+    let creationCount = 0;
+    globalForTest.__createWorkspaceButtonTestState.createWorkspaceForUser = (
+      ownerId,
+      rawName,
+    ) => {
+      globalForTest.__createWorkspaceButtonTestState.calls.push([
+        "createWorkspaceForUser",
+        ownerId,
+        rawName,
+      ]);
+      creationCount += 1;
+      if (creationCount === 1) {
+        return new Promise((resolve) => {
+          resolveFirstCreation = () => resolve({ id: "workspace-1" });
+        });
+      }
+      return Promise.resolve({ id: `workspace-${creationCount}` });
+    };
+
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<mod.CreateWorkspaceButton />);
+    });
+    try {
+      act(() => {
+        renderer.root.findByType("button").props.onClick();
+      });
+      const action = renderer.root.findByType("form").props.action as (
+        payload: FormData,
+      ) => void;
+      const payload = new FormData();
+      payload.set("name", "Production team");
+
+      act(() => {
+        startTransition(() => {
+          action(payload);
+          action(payload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      assert.equal(creationCount, 1);
+
+      await act(async () => {
+        resolveFirstCreation();
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(creationCount, 1);
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-labelledby": "create-workspace-title",
+        }).props["aria-busy"],
+        true,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("a validation result releases the submission boundary for retry", async () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<mod.CreateWorkspaceButton />);
+    });
+    try {
+      act(() => {
+        renderer.root.findByType("button").props.onClick();
+      });
+
+      const invalidPayload = new FormData();
+      invalidPayload.set("name", "   ");
+      act(() => {
+        startTransition(() => {
+          const action = renderer.root.findByType("form").props.action as (
+            payload: FormData,
+          ) => void;
+          action(invalidPayload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Workspace name is required\./,
+      );
+
+      const validPayload = new FormData();
+      validPayload.set("name", "Retry team");
+      act(() => {
+        startTransition(() => {
+          const action = renderer.root.findByType("form").props.action as (
+            payload: FormData,
+          ) => void;
+          action(validPayload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.deepEqual(
+        globalForTest.__createWorkspaceButtonTestState.calls.filter(
+          (call) => (call as unknown[])[0] === "createWorkspaceForUser",
+        ),
+        [["createWorkspaceForUser", "user-1", "Retry team"]],
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the idle trigger through the real useActionState wiring, with no dialog markup (no document)", () => {
-    // Unlike the other settings-form precedents, this component's tree
-    // contains a `Dialog`, so `createReactRenderHarness` (which installs a
-    // body-less fake `document`/`window` for the duration of the render)
-    // cannot be used here — `ModalSurface` would try to `createPortal`
-    // into `document.body`, which does not exist on that fake document.
-    // Rendering directly with `renderToStaticMarkup` keeps this process's
-    // real, undefined `document`, so `ModalSurface` safely no-ops (see
-    // `src/components/ui/overlay-stack.tsx`), matching
-    // `delete-account-form.test.tsx`'s documented convention.
+    // The UI bridge keeps Dialog deterministic and portal-free in this file;
+    // its closed state returns no dialog content, matching the production
+    // primitive's server-rendered result without installing DOM globals.
     const html = renderToStaticMarkup(<mod.CreateWorkspaceButton />);
     assert.match(html, /New workspace/);
     assert.doesNotMatch(html, /Workspace name/);

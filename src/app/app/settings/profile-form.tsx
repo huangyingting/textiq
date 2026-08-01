@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { ReactNode } from "react";
 
 import type { ProfileResult } from "@/lib/auth/form-state";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { updateProfile } from "./actions";
 
@@ -121,12 +122,16 @@ export function ProfileForm({
     updateProfile,
     initialState,
   );
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+  });
 
   return renderProfileFormView({
     initialName,
     email,
     state,
-    formAction,
+    formAction: guardedAction,
     isPending,
   });
 }

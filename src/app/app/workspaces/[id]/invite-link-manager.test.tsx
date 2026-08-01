@@ -458,6 +458,78 @@ describe("InviteLinkManager", () => {
     }
   });
 
+  test("a pending clipboard write suppresses repeated and competing copy activation", async () => {
+    const written: string[] = [];
+    let resolveWrite!: () => void;
+    (
+      navigator as unknown as {
+        clipboard: { writeText: (value: string) => Promise<void> };
+      }
+    ).clipboard.writeText = (value) => {
+      written.push(value);
+      return new Promise((resolve) => {
+        resolveWrite = resolve;
+      });
+    };
+    const renderer = mountManager([
+      makeLink({ id: "link-1", token: "tok-copy-pending" }),
+      makeLink({ id: "link-2", token: "tok-copy-competing", role: "VIEWER" }),
+    ]);
+    try {
+      const copyButtons = renderer.root
+        .findAll(
+          (instance) =>
+            typeof instance.type !== "string" &&
+            typeof instance.props["aria-label"] === "string" &&
+            instance.props["aria-label"].startsWith("Copy "),
+        )
+        .filter((instance) => typeof instance.props.onClick === "function");
+      assert.equal(copyButtons.length, 2);
+
+      await act(async () => {
+        copyButtons[0].props.onClick();
+        copyButtons[0].props.onClick();
+        await waitForAsyncDrain();
+      });
+
+      assert.deepEqual(written, [
+        "https://workspace.test/app/join/tok-copy-pending",
+      ]);
+      const pendingCopy = renderer.root.findByProps({
+        "aria-label": "Copy Editor invite link",
+      });
+      assert.equal(pendingCopy.props.disabled, true);
+      assert.equal(pendingCopy.props.children, "Copying…");
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-label": "Copy Viewer invite link",
+        }).props.disabled,
+        true,
+      );
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-label": "Invite link for Editor",
+        }).props.disabled,
+        true,
+      );
+
+      await act(async () => {
+        resolveWrite();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-label": "Copy Editor invite link",
+        }).props.disabled,
+        false,
+      );
+      assert.match(JSON.stringify(renderer.toJSON()), /Invite link copied\./);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("clipboard rejection stays inline with generic retry and dismiss recovery", async () => {
     let shouldFail = true;
     (

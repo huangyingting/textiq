@@ -3,23 +3,120 @@
  *
  * `renderForgotPasswordView` is the pure state -> markup decision extracted
  * from the component so the "idle"/"sent"/"error" transitions, field
- * wiring, and pending/disabled submit behavior are unit-testable without
- * exercising `useActionState` (which needs a live action dispatch to move
- * between states). A single harness-rendered pass through the exported
- * `ForgotPasswordForm` component confirms the hook wiring itself still
- * produces the same idle markup the pure function predicts.
+ * wiring, and pending/disabled submit behavior are unit-testable directly.
+ * A mounted lifecycle regression exercises `useActionState` to prove repeated
+ * same-event submission sends one email and cannot overwrite terminal sent
+ * feedback.
  */
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { createRequire } from "node:module";
+import { before, beforeEach, describe, test } from "node:test";
+import {
+  isValidElement,
+  startTransition,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import type { ForgotPasswordState } from "@/lib/auth/form-state";
 
-import {
-  ForgotPasswordForm,
-  renderForgotPasswordView,
-} from "./forgot-password-form";
+type ForgotPasswordFormTestState = {
+  calls: FormData[];
+  impl: (
+    previous: ForgotPasswordState,
+    payload: FormData,
+  ) => Promise<ForgotPasswordState>;
+};
+
+const globalForTest = globalThis as typeof globalThis & {
+  __forgotPasswordFormTestState: ForgotPasswordFormTestState;
+};
+
+function resetState() {
+  globalForTest.__forgotPasswordFormTestState = {
+    calls: [],
+    impl: async () => ({ status: "error", message: "Request failed." }),
+  };
+}
+
+resetState();
+
+type ModuleHooks = {
+  registerHooks(hooks: {
+    resolve(
+      specifier: string,
+      context: unknown,
+      nextResolve: (specifier: string, context: unknown) => unknown,
+    ): unknown;
+    load(
+      url: string,
+      context: unknown,
+      nextLoad: (url: string, context: unknown) => unknown,
+    ): unknown;
+  }): void;
+};
+
+const { registerHooks } = createRequire(import.meta.url)(
+  "node:module",
+) as ModuleHooks;
+const actionsStubUrl = "textiq-forgot-password-form-actions:test";
+const linkStubUrl = "textiq-forgot-password-form-link:test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "./actions") {
+      return { url: actionsStubUrl, shortCircuit: true };
+    }
+    if (specifier === "next/link") {
+      return { url: linkStubUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url === actionsStubUrl) {
+      return {
+        format: "module",
+        source: `
+          export async function requestPasswordReset(previous, payload) {
+            const state = globalThis.__forgotPasswordFormTestState;
+            state.calls.push(payload);
+            return state.impl(previous, payload);
+          }
+        `,
+        shortCircuit: true,
+      };
+    }
+    if (url === linkStubUrl) {
+      return {
+        format: "module",
+        source: `
+          import { createElement } from "react";
+          export default function Link({ children, ...props }) {
+            return createElement("a", props, children);
+          }
+        `,
+        shortCircuit: true,
+      };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+type ForgotPasswordFormModule = typeof import("./forgot-password-form");
+let mod: ForgotPasswordFormModule;
+
+before(async () => {
+  mod = await import("./forgot-password-form");
+});
+
+beforeEach(resetState);
+
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -57,7 +154,7 @@ function firstElement(
 describe("renderForgotPasswordView", () => {
   test("idle: renders the email field and an enabled submit button", () => {
     const calls: FormData[] = [];
-    const tree = renderForgotPasswordView({
+    const tree = mod.renderForgotPasswordView({
       state: { status: "idle" },
       formAction: (payload) => calls.push(payload),
       isPending: false,
@@ -80,7 +177,7 @@ describe("renderForgotPasswordView", () => {
   });
 
   test("idle + pending: disables the submit button and shows the pending label", () => {
-    const tree = renderForgotPasswordView({
+    const tree = mod.renderForgotPasswordView({
       state: { status: "idle" },
       formAction: () => undefined,
       isPending: true,
@@ -91,7 +188,7 @@ describe("renderForgotPasswordView", () => {
   });
 
   test("error: renders the error message as an alert alongside the form", () => {
-    const tree = renderForgotPasswordView({
+    const tree = mod.renderForgotPasswordView({
       state: { status: "error", message: "Too many attempts. Try later." },
       formAction: () => undefined,
       isPending: false,
@@ -106,7 +203,7 @@ describe("renderForgotPasswordView", () => {
   });
 
   test("sent: replaces the form with a status confirmation and a back-to-login link", () => {
-    const tree = renderForgotPasswordView({
+    const tree = mod.renderForgotPasswordView({
       state: {
         status: "sent",
         message: "If an account exists, we sent a link.",
@@ -130,10 +227,62 @@ describe("renderForgotPasswordView", () => {
 });
 
 describe("ForgotPasswordForm", () => {
+  test("same-event repeated submission sends one reset request and preserves terminal confirmation", async () => {
+    let resolveFirst!: (state: ForgotPasswordState) => void;
+    globalForTest.__forgotPasswordFormTestState.impl = async () => {
+      if (globalForTest.__forgotPasswordFormTestState.calls.length === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return { status: "error", message: "Duplicate reset email request." };
+    };
+
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<mod.ForgotPasswordForm />);
+    });
+    try {
+      const action = renderer.root.findByType("form").props.action as (
+        payload: FormData,
+      ) => void;
+      const payload = new FormData();
+      payload.set("email", "ada@example.com");
+      act(() => {
+        startTransition(() => {
+          action(payload);
+          action(payload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      assert.equal(globalForTest.__forgotPasswordFormTestState.calls.length, 1);
+
+      await act(async () => {
+        resolveFirst({
+          status: "sent",
+          message: "If an account exists, we sent a link.",
+        });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(globalForTest.__forgotPasswordFormTestState.calls.length, 1);
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /If an account exists, we sent a link\./,
+      );
+      assert.equal(renderer.root.findAllByType("form").length, 0);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the idle form through the real useActionState wiring", () => {
     const renderer = createReactRenderHarness();
     try {
-      const tree = renderer.run(() => ForgotPasswordForm());
+      const tree = renderer.run(() => mod.ForgotPasswordForm());
       const html = renderToStaticMarkup(tree as ReactNode);
       assert.match(html, /you@example\.com/);
       assert.match(html, /Send reset link/);

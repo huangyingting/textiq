@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { ReactNode } from "react";
 
 import { AuthMessage, AuthSubmitButton } from "@/components/auth/auth-form";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 import type { VerifyEmailResult } from "@/lib/auth/form-state";
 
 import { requestEmailVerification } from "./actions";
@@ -66,6 +67,14 @@ export function EmailVerificationForm() {
     requestEmailVerification,
     initialState,
   );
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+  });
 
-  return renderEmailVerificationView({ state, formAction, isPending });
+  return renderEmailVerificationView({
+    state,
+    formAction: guardedAction,
+    isPending,
+  });
 }

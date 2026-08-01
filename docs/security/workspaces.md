@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document describes canonical workspace role/capability policy, ownership, membership, invite links, and how workspace roles feed document permissions."
 ---
 
@@ -77,6 +77,14 @@ lock the new workspace surface. The server-side
 `createWorkspaceDocumentForUser` capability check remains authoritative even
 when the client action is hidden.
 
+Top-level workspace creation also claims its form dispatch synchronously, so
+same-event repeated submission cannot queue duplicate non-idempotent creates.
+While that operation is pending, its dialog remains visibly busy and locks the
+trigger, name field, submit button, Cancel button, Escape, and backdrop
+dismissal. Validation settlement releases the boundary for a corrected retry;
+successful settlement retains ownership through navigation to the new
+workspace.
+
 Member removal, ownership transfer, rename, delete, and leave actions also use
 one synchronous mutation boundary per surface. Their client state is owned by
 the workspace ID: switching workspaces resets open confirmations, drafts,
@@ -117,11 +125,13 @@ failed revoke remains in the dialog for retry and pending confirmation cannot
 be dismissed.
 
 Invite URLs have an explicit copy control while retaining click-to-select/copy
-on the read-only field. Clipboard success is announced through a polite status;
-clipboard rejection stays inline with generic retry/dismiss recovery instead of
-escaping as an unhandled promise. Maximum-use input is validated locally as a
-positive integer before the server action, and the service remains the
-authoritative validator.
+on the read-only field. Clipboard writes share a synchronous in-flight boundary,
+so repeated same-event activation and competing links issue one write while all
+copy entry points expose a disabled pending state. Clipboard success is
+announced through a polite status; clipboard rejection stays inline with generic
+retry/dismiss recovery instead of escaping as an unhandled promise. Maximum-use
+input is validated locally as a positive integer before the server action, and
+the service remains the authoritative validator.
 
 Expiry and max-use values are validated server-side. Links can be revoked.
 Expiry windows and max-use caps are normalized by service helpers so creation and
@@ -222,6 +232,8 @@ semantics.
 - [`src/lib/workspace/service.test.ts`](../../src/lib/workspace/service.test.ts)
 - [`src/lib/workspace/capabilities.test.ts`](../../src/lib/workspace/capabilities.test.ts)
 - [`src/lib/workspace/invite-service.test.ts`](../../src/lib/workspace/invite-service.test.ts)
+- [`src/app/app/workspaces/[id]/invite-link-manager.test.tsx`](../../src/app/app/workspaces/%5Bid%5D/invite-link-manager.test.tsx)
+- [`src/app/app/workspaces/create-workspace-button.test.tsx`](../../src/app/app/workspaces/create-workspace-button.test.tsx)
 - [`src/lib/auth/workspace-capabilities.test.ts`](../../src/lib/auth/workspace-capabilities.test.ts)
 - [`src/lib/auth/document-permissions.test.ts`](../../src/lib/auth/document-permissions.test.ts)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)

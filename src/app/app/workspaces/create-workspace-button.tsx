@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button, Dialog, FIELD_CONTROL } from "@/components/ui";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { createWorkspace } from "./actions";
 
@@ -23,11 +24,13 @@ export type CreateWorkspaceViewProps = {
  * and its open/close callback, decides the trigger button label, whether the
  * validation error paragraph renders (a path-like value signals a pending
  * redirect rather than a validation error, so it is never shown as text),
- * and the submit button's pending label/disabled state. Extracted from the
- * component body — including the submit button, which previously read its
- * own pending flag via `useFormStatus()` — so the same `isPending` value
- * `useActionState` already returns can drive both the effect and the
- * markup without a second, hook-coupled read of form status.
+ * and the dialog's pending ownership state. While creation is pending, every
+ * edit/dismiss entry point stays locked so the durable operation cannot appear
+ * cancelled before its redirect or validation result settles. Extracted from
+ * the component body — including the submit button, which previously read its
+ * own pending flag via `useFormStatus()` — so the same owned pending value can
+ * drive both the effect and the markup without a second, hook-coupled read of
+ * form status.
  */
 export function renderCreateWorkspaceView({
   error,
@@ -38,21 +41,27 @@ export function renderCreateWorkspaceView({
   className,
   children = "New workspace",
 }: CreateWorkspaceViewProps): ReactNode {
+  const requestOpenChange = (nextOpen: boolean) => {
+    if (!isPending) onOpenChange(nextOpen);
+  };
+
   return (
     <>
       <Button
         variant="solid"
         size="lg"
         className={className}
-        onClick={() => onOpenChange(true)}
+        disabled={isPending}
+        onClick={() => requestOpenChange(true)}
       >
         {children}
       </Button>
 
       <Dialog
         open={open}
-        onClose={() => onOpenChange(false)}
+        onClose={() => requestOpenChange(false)}
         aria-labelledby="create-workspace-title"
+        aria-busy={isPending}
         className="max-w-sm"
       >
         <form action={action} className="flex flex-col gap-6">
@@ -80,6 +89,7 @@ export function renderCreateWorkspaceView({
               name="name"
               type="text"
               required
+              disabled={isPending}
               autoFocus
               placeholder="Marketing team"
               className={`${FIELD_CONTROL} h-10 px-3`}
@@ -104,7 +114,8 @@ export function renderCreateWorkspaceView({
             <Button
               variant="subtle"
               size="lg"
-              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+              onClick={() => requestOpenChange(false)}
               className="flex-1"
             >
               Cancel
@@ -114,6 +125,10 @@ export function renderCreateWorkspaceView({
       </Dialog>
     </>
   );
+}
+
+function CreateWorkspaceView(props: CreateWorkspaceViewProps) {
+  return renderCreateWorkspaceView(props);
 }
 
 export function CreateWorkspaceButton({
@@ -126,20 +141,29 @@ export function CreateWorkspaceButton({
   const router = useRouter();
   const [error, action, isPending] = useActionState(createWorkspace, null);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (error && error.startsWith("/app/workspaces/")) {
-      router.push(error);
-    }
-  }, [error, router]);
-
-  return renderCreateWorkspaceView({
-    error,
+  const redirectTarget = error?.startsWith("/app/workspaces/") ? error : null;
+  const { guardedAction } = useOwnedFormAction({
     action,
     isPending,
-    open,
-    onOpenChange: setOpen,
-    className,
-    children,
+    terminal: redirectTarget !== null,
   });
+
+  useEffect(() => {
+    if (redirectTarget) {
+      router.push(redirectTarget);
+    }
+  }, [redirectTarget, router]);
+
+  return (
+    <CreateWorkspaceView
+      error={error}
+      action={guardedAction}
+      isPending={isPending || redirectTarget !== null}
+      open={open}
+      onOpenChange={setOpen}
+      className={className}
+    >
+      {children}
+    </CreateWorkspaceView>
+  );
 }

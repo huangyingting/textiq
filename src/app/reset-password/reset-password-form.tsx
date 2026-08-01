@@ -14,6 +14,7 @@ import {
   initialResetPasswordState,
   type ResetPasswordState,
 } from "@/lib/auth/form-state";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { resetPassword } from "./actions";
 
@@ -105,10 +106,25 @@ export function renderResetPasswordView({
 }
 
 export function ResetPasswordForm({ token }: { token: string }) {
+  return <ResetPasswordFormForToken key={token} token={token} />;
+}
+
+/** Owns action state and submission claims for exactly one reset token. */
+function ResetPasswordFormForToken({ token }: { token: string }) {
   const [state, formAction, isPending] = useActionState(
     resetPassword,
     initialState,
   );
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+    terminal: state.status === "success",
+  });
 
-  return renderResetPasswordView({ token, state, formAction, isPending });
+  return renderResetPasswordView({
+    token,
+    state,
+    formAction: guardedAction,
+    isPending,
+  });
 }

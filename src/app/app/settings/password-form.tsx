@@ -8,6 +8,7 @@ import {
   AuthMessage,
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 import type { PasswordResult } from "@/lib/auth/form-state";
 
 import { changePassword } from "./actions";
@@ -48,6 +49,7 @@ export function renderPasswordFormView({
           name="currentPassword"
           label="Current password"
           type="password"
+          disabled={isPending}
           autoComplete="current-password"
           aria-label="Current password"
         />
@@ -63,6 +65,7 @@ export function renderPasswordFormView({
         name="newPassword"
         label="New password"
         type="password"
+        disabled={isPending}
         autoComplete="new-password"
         aria-label="New password"
         hint="Use at least 8 characters."
@@ -73,6 +76,7 @@ export function renderPasswordFormView({
         name="confirmPassword"
         label="Confirm new password"
         type="password"
+        disabled={isPending}
         autoComplete="new-password"
         aria-label="Confirm new password"
       />
@@ -114,6 +118,13 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
     initialState,
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const passwordChanged = state?.ok === true;
+  const operationBusy = isPending || passwordChanged;
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+    terminal: passwordChanged,
+  });
 
   useEffect(() => {
     if (state?.ok) {
@@ -124,10 +135,15 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
   return (
     <form
       ref={formRef}
-      action={formAction}
+      action={guardedAction}
       className="flex w-full flex-col gap-4"
     >
-      {renderPasswordFormView({ hasPassword, state, formAction, isPending })}
+      {renderPasswordFormView({
+        hasPassword,
+        state,
+        formAction: guardedAction,
+        isPending: operationBusy,
+      })}
     </form>
   );
 }

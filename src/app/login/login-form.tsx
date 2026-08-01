@@ -8,21 +8,30 @@ import {
   AuthMessage,
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { authenticate } from "./actions";
 
 // coverage-breadth: mapped-e2e ref=e2e/ui-matrix/auth-public-ui.spec.ts
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
+  return <LoginFormForCallback key={callbackUrl} callbackUrl={callbackUrl} />;
+}
+
+function LoginFormForCallback({ callbackUrl }: { callbackUrl: string }) {
   const [errorMessage, formAction, isPending] = useActionState(
     authenticate,
     undefined,
   );
   const [email, setEmail] = useState("");
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+  });
 
   return renderLoginFormView({
     callbackUrl,
     errorMessage,
-    formAction,
+    formAction: guardedAction,
     isPending,
     email,
     onEmailChange: (event) => setEmail(event.currentTarget.value),
@@ -54,6 +63,7 @@ export function renderLoginFormView({
         type="email"
         autoComplete="email"
         required
+        disabled={isPending}
         placeholder="you@example.com"
         value={email}
         onChange={onEmailChange}
@@ -66,6 +76,7 @@ export function renderLoginFormView({
         type="password"
         autoComplete="current-password"
         required
+        disabled={isPending}
         placeholder="••••••••"
         labelAccessory={
           <Link

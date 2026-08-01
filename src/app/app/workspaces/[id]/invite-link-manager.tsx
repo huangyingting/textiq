@@ -94,13 +94,18 @@ function InviteLinkManagerForWorkspace({
   >(null);
   const [revokeTarget, setRevokeTarget] = useState<InviteLink | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | null>(null);
+  const [pendingCopyLinkId, setPendingCopyLinkId] = useState<string | null>(
+    null,
+  );
   const mountedRef = useRef(true);
   const mutationIdRef = useRef(0);
   const mutationInFlightRef = useRef(false);
   const copyRequestSeqRef = useRef(0);
+  const copyInFlightRef = useRef(false);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const revokeRestoreFocusRef = useRef<HTMLElement | null>(null);
   const mutationBusy = pendingKind !== null;
+  const copyBusy = pendingCopyLinkId !== null;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -109,6 +114,7 @@ function InviteLinkManagerForWorkspace({
       mutationIdRef.current += 1;
       mutationInFlightRef.current = false;
       copyRequestSeqRef.current += 1;
+      copyInFlightRef.current = false;
     };
   }, []);
 
@@ -211,9 +217,13 @@ function InviteLinkManagerForWorkspace({
   };
 
   const handleCopy = async (link: InviteLink) => {
+    if (copyInFlightRef.current) return;
+
+    copyInFlightRef.current = true;
     const requestSeq = copyRequestSeqRef.current + 1;
     copyRequestSeqRef.current = requestSeq;
     setCopyFeedback(null);
+    setPendingCopyLinkId(link.id);
     try {
       if (typeof navigator === "undefined" || !navigator.clipboard) {
         throw new Error("Clipboard API unavailable");
@@ -230,6 +240,11 @@ function InviteLinkManagerForWorkspace({
       if (!mountedRef.current || copyRequestSeqRef.current !== requestSeq)
         return;
       setCopyFeedback({ linkId: link.id, kind: "error", message: COPY_ERROR });
+    } finally {
+      if (mountedRef.current && copyRequestSeqRef.current === requestSeq) {
+        copyInFlightRef.current = false;
+        setPendingCopyLinkId(null);
+      }
     }
   };
 
@@ -238,7 +253,7 @@ function InviteLinkManagerForWorkspace({
 
   return (
     <div
-      aria-busy={mutationBusy}
+      aria-busy={mutationBusy || copyBusy}
       className={cx("flex flex-col gap-4 p-6", PANEL_CHROME)}
     >
       <div className="flex flex-col gap-3">
@@ -385,6 +400,7 @@ function InviteLinkManagerForWorkspace({
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         readOnly
+                        disabled={copyBusy}
                         value={inviteUrl}
                         aria-label={`Invite link for ${roleLabels[link.role]}`}
                         onClick={(event) => {
@@ -400,9 +416,10 @@ function InviteLinkManagerForWorkspace({
                         variant="subtle"
                         size="sm"
                         onClick={() => void handleCopy(link)}
+                        disabled={copyBusy}
                         aria-label={`Copy ${roleLabels[link.role]} invite link`}
                       >
-                        Copy
+                        {pendingCopyLinkId === link.id ? "Copying…" : "Copy"}
                       </Button>
                     </div>
                     {linkCopyFeedback ? (
@@ -424,6 +441,7 @@ function InviteLinkManagerForWorkspace({
                             <Button
                               variant="subtle"
                               size="sm"
+                              disabled={copyBusy}
                               onClick={() => void handleCopy(link)}
                             >
                               Try copy again
@@ -431,6 +449,7 @@ function InviteLinkManagerForWorkspace({
                             <Button
                               variant="plain"
                               size="sm"
+                              disabled={copyBusy}
                               onClick={() => setCopyFeedback(null)}
                             >
                               Dismiss error

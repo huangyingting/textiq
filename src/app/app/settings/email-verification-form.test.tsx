@@ -4,22 +4,103 @@
  * `renderEmailVerificationView` is the pure state -> markup decision
  * extracted from the component so the "sent"/"already_verified"/error
  * transitions and pending/disabled submit behavior are unit-testable
- * without exercising `useActionState` (which needs a live action dispatch
- * to move between states). A single harness-rendered pass through the
- * exported `EmailVerificationForm` component confirms the hook wiring
- * itself still produces the same idle markup the pure function predicts.
+ * directly. A mounted lifecycle regression exercises `useActionState` to
+ * prove repeated same-event submission sends once while a later deliberate
+ * resend remains available.
  */
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { createRequire } from "node:module";
+import { before, beforeEach, describe, test } from "node:test";
+import {
+  isValidElement,
+  startTransition,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import type { VerifyEmailResult } from "@/lib/auth/form-state";
 
-import {
-  EmailVerificationForm,
-  renderEmailVerificationView,
-} from "./email-verification-form";
+type EmailVerificationFormTestState = {
+  calls: FormData[];
+  impl: (
+    previous: VerifyEmailResult | null,
+    payload: FormData,
+  ) => Promise<VerifyEmailResult>;
+};
+
+const globalForTest = globalThis as typeof globalThis & {
+  __emailVerificationFormTestState: EmailVerificationFormTestState;
+};
+
+function resetState() {
+  globalForTest.__emailVerificationFormTestState = {
+    calls: [],
+    impl: async () => ({ ok: false, error: "Verification request failed." }),
+  };
+}
+
+resetState();
+
+type ModuleHooks = {
+  registerHooks(hooks: {
+    resolve(
+      specifier: string,
+      context: unknown,
+      nextResolve: (specifier: string, context: unknown) => unknown,
+    ): unknown;
+    load(
+      url: string,
+      context: unknown,
+      nextLoad: (url: string, context: unknown) => unknown,
+    ): unknown;
+  }): void;
+};
+
+const { registerHooks } = createRequire(import.meta.url)(
+  "node:module",
+) as ModuleHooks;
+const actionsStubUrl = "textiq-email-verification-form-actions:test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "./actions") {
+      return { url: actionsStubUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url === actionsStubUrl) {
+      return {
+        format: "module",
+        source: `
+          export async function requestEmailVerification(previous, payload) {
+            const state = globalThis.__emailVerificationFormTestState;
+            state.calls.push(payload);
+            return state.impl(previous, payload);
+          }
+        `,
+        shortCircuit: true,
+      };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+type EmailVerificationFormModule = typeof import("./email-verification-form");
+let mod: EmailVerificationFormModule;
+
+before(async () => {
+  mod = await import("./email-verification-form");
+});
+
+beforeEach(resetState);
+
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -56,7 +137,7 @@ function firstElement(
 
 describe("renderEmailVerificationView", () => {
   test("idle: renders an enabled submit button and no message", () => {
-    const tree = renderEmailVerificationView({
+    const tree = mod.renderEmailVerificationView({
       state: null,
       formAction: () => undefined,
       isPending: false,
@@ -70,7 +151,7 @@ describe("renderEmailVerificationView", () => {
   });
 
   test("idle + pending: disables the submit button and shows 'Sending…'", () => {
-    const tree = renderEmailVerificationView({
+    const tree = mod.renderEmailVerificationView({
       state: null,
       formAction: () => undefined,
       isPending: true,
@@ -81,7 +162,7 @@ describe("renderEmailVerificationView", () => {
   });
 
   test("sent: shows the 'check your inbox' success message", () => {
-    const tree = renderEmailVerificationView({
+    const tree = mod.renderEmailVerificationView({
       state: { ok: true, data: { status: "sent" } },
       formAction: () => undefined,
       isPending: false,
@@ -94,7 +175,7 @@ describe("renderEmailVerificationView", () => {
   });
 
   test("already_verified: shows the 'already verified' success message", () => {
-    const tree = renderEmailVerificationView({
+    const tree = mod.renderEmailVerificationView({
       state: { ok: true, data: { status: "already_verified" } },
       formAction: () => undefined,
       isPending: false,
@@ -107,7 +188,7 @@ describe("renderEmailVerificationView", () => {
   });
 
   test("error: renders the server message as an alert alongside the form", () => {
-    const tree = renderEmailVerificationView({
+    const tree = mod.renderEmailVerificationView({
       state: { ok: false, error: "Too many requests. Try later." },
       formAction: () => undefined,
       isPending: false,
@@ -123,10 +204,80 @@ describe("renderEmailVerificationView", () => {
 });
 
 describe("EmailVerificationForm", () => {
+  test("same-event repeated submission sends once, then permits a deliberate resend after settlement", async () => {
+    let resolveFirst!: (result: VerifyEmailResult) => void;
+    globalForTest.__emailVerificationFormTestState.impl = async () => {
+      if (globalForTest.__emailVerificationFormTestState.calls.length === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return { ok: true, data: { status: "already_verified" } };
+    };
+
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<mod.EmailVerificationForm />);
+    });
+    try {
+      const firstAction = renderer.root.findByType("form").props.action as (
+        payload: FormData,
+      ) => void;
+      const payload = new FormData();
+      act(() => {
+        startTransition(() => {
+          firstAction(payload);
+          firstAction(payload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        globalForTest.__emailVerificationFormTestState.calls.length,
+        1,
+      );
+
+      await act(async () => {
+        resolveFirst({ ok: true, data: { status: "sent" } });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        globalForTest.__emailVerificationFormTestState.calls.length,
+        1,
+      );
+      assert.match(JSON.stringify(renderer.toJSON()), /Check your inbox/);
+
+      act(() => {
+        startTransition(() => {
+          const retryAction = renderer.root.findByType("form").props.action as (
+            retryPayload: FormData,
+          ) => void;
+          retryAction(payload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        globalForTest.__emailVerificationFormTestState.calls.length,
+        2,
+      );
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /Your email is already verified/,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the idle form through the real useActionState wiring", () => {
     const renderer = createReactRenderHarness();
     try {
-      const tree = renderer.run(() => EmailVerificationForm());
+      const tree = renderer.run(() => mod.EmailVerificationForm());
       const html = renderToStaticMarkup(tree as ReactNode);
       assert.match(html, /Send verification email/);
       assert.doesNotMatch(html, /role="alert"/);

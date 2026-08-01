@@ -13,6 +13,7 @@ import {
   initialForgotPasswordState,
   type ForgotPasswordState,
 } from "@/lib/auth/form-state";
+import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
 import { requestPasswordReset } from "./actions";
 
@@ -92,6 +93,15 @@ export function ForgotPasswordForm() {
     requestPasswordReset,
     initialState,
   );
+  const { guardedAction } = useOwnedFormAction({
+    action: formAction,
+    isPending,
+    terminal: state.status === "sent",
+  });
 
-  return renderForgotPasswordView({ state, formAction, isPending });
+  return renderForgotPasswordView({
+    state,
+    formAction: guardedAction,
+    isPending,
+  });
 }

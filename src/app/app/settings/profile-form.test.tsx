@@ -3,20 +3,104 @@
  *
  * `renderProfileFormView` is the pure state -> markup decision extracted
  * from the component so the read-only email field, the display-name
- * default, and the success/error/pending mapping are unit-testable without
- * exercising `useActionState` (which needs a live action dispatch to move
- * between states). A single harness-rendered pass through the exported
- * `ProfileForm` component confirms the hook wiring itself still produces the
- * same idle markup the pure function predicts.
+ * default, and the success/error/pending mapping are unit-testable directly.
+ * A mounted lifecycle regression exercises `useActionState` to prove
+ * same-event duplicate saves collapse into one write while later intentional
+ * edits remain saveable.
  */
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { createRequire } from "node:module";
+import { before, beforeEach, describe, test } from "node:test";
+import {
+  isValidElement,
+  startTransition,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import type { ProfileResult } from "@/lib/auth/form-state";
 
-import { ProfileForm, renderProfileFormView } from "./profile-form";
+type ProfileFormTestState = {
+  calls: FormData[];
+  impl: (
+    previous: ProfileResult | null,
+    payload: FormData,
+  ) => Promise<ProfileResult>;
+};
+
+const globalForTest = globalThis as typeof globalThis & {
+  __profileFormTestState: ProfileFormTestState;
+};
+
+function resetState() {
+  globalForTest.__profileFormTestState = {
+    calls: [],
+    impl: async () => ({ ok: false, error: "Profile update failed." }),
+  };
+}
+
+resetState();
+
+type ModuleHooks = {
+  registerHooks(hooks: {
+    resolve(
+      specifier: string,
+      context: unknown,
+      nextResolve: (specifier: string, context: unknown) => unknown,
+    ): unknown;
+    load(
+      url: string,
+      context: unknown,
+      nextLoad: (url: string, context: unknown) => unknown,
+    ): unknown;
+  }): void;
+};
+
+const { registerHooks } = createRequire(import.meta.url)(
+  "node:module",
+) as ModuleHooks;
+const actionsStubUrl = "textiq-profile-form-actions:test";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "./actions") {
+      return { url: actionsStubUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url === actionsStubUrl) {
+      return {
+        format: "module",
+        source: `
+          export async function updateProfile(previous, payload) {
+            const state = globalThis.__profileFormTestState;
+            state.calls.push(payload);
+            return state.impl(previous, payload);
+          }
+        `,
+        shortCircuit: true,
+      };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+type ProfileFormModule = typeof import("./profile-form");
+let mod: ProfileFormModule;
+
+before(async () => {
+  mod = await import("./profile-form");
+});
+
+beforeEach(resetState);
+
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -44,7 +128,7 @@ function firstElement(
 
 describe("renderProfileFormView", () => {
   test("email field is read-only, disabled, and carries the given value", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: null,
@@ -61,7 +145,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("display-name field defaults to initialName and is editable", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: null,
@@ -79,7 +163,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("idle: renders no status/alert message", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: null,
@@ -92,7 +176,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("success: renders the 'Profile updated.' status message", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: { ok: true, data: { name: "Ada" } },
@@ -107,7 +191,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("error: renders the server message as an alert", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: { ok: false, error: "Name is too long." },
@@ -122,7 +206,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("idle: the submit button is enabled and reads 'Save changes'", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: null,
@@ -135,7 +219,7 @@ describe("renderProfileFormView", () => {
   });
 
   test("pending: disables the submit button and shows 'Saving…'", () => {
-    const tree = renderProfileFormView({
+    const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
       state: null,
@@ -149,11 +233,77 @@ describe("renderProfileFormView", () => {
 });
 
 describe("ProfileForm", () => {
+  test("same-event repeated save performs one update and permits a later deliberate save", async () => {
+    let resolveFirst!: (result: ProfileResult) => void;
+    globalForTest.__profileFormTestState.impl = async (_previous, payload) => {
+      if (globalForTest.__profileFormTestState.calls.length === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return { ok: true, data: { name: String(payload.get("name")) } };
+    };
+
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        <mod.ProfileForm initialName="Ada" email="ada@example.com" />,
+      );
+    });
+    try {
+      const firstAction = renderer.root.findByType("form").props.action as (
+        payload: FormData,
+      ) => void;
+      const firstPayload = new FormData();
+      firstPayload.set("name", "Ada One");
+      act(() => {
+        startTransition(() => {
+          firstAction(firstPayload);
+          firstAction(firstPayload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      assert.equal(globalForTest.__profileFormTestState.calls.length, 1);
+
+      await act(async () => {
+        resolveFirst({ ok: true, data: { name: "Ada One" } });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.equal(globalForTest.__profileFormTestState.calls.length, 1);
+      assert.match(JSON.stringify(renderer.toJSON()), /Profile updated\./);
+
+      const secondPayload = new FormData();
+      secondPayload.set("name", "Ada Two");
+      act(() => {
+        startTransition(() => {
+          const secondAction = renderer.root.findByType("form").props
+            .action as (payload: FormData) => void;
+          secondAction(secondPayload);
+        });
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.deepEqual(
+        globalForTest.__profileFormTestState.calls.map((payload) =>
+          payload.get("name"),
+        ),
+        ["Ada One", "Ada Two"],
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the idle form through the real useActionState wiring", () => {
     const renderer = createReactRenderHarness();
     try {
       const tree = renderer.run(() =>
-        ProfileForm({ initialName: "Ada", email: "ada@example.com" }),
+        mod.ProfileForm({ initialName: "Ada", email: "ada@example.com" }),
       );
       const html = renderToStaticMarkup(tree as ReactNode);
       assert.match(html, /ada@example\.com/);

@@ -22,8 +22,10 @@ and remains an authenticated account.
 | Credentials auth            | [`src/lib/auth/credentials-service.ts`](../../src/lib/auth/credentials-service.ts)                                                                 |
 | OAuth local account linking | [`src/lib/auth/oauth-user-service.ts`](../../src/lib/auth/oauth-user-service.ts)                                                                   |
 | Password reset              | [`src/lib/auth/password-reset-service.ts`](../../src/lib/auth/password-reset-service.ts)                                                           |
+| Password reset UI           | [`src/app/reset-password/reset-password-form.tsx`](../../src/app/reset-password/reset-password-form.tsx)                                           |
 | Email verification          | [`src/lib/auth/email-verification-service.ts`](../../src/lib/auth/email-verification-service.ts)                                                   |
 | Single-use token primitive  | [`src/lib/auth/single-use-token.ts`](../../src/lib/auth/single-use-token.ts)                                                                       |
+| Form operation ownership    | [`src/lib/actions/use-owned-form-action.ts`](../../src/lib/actions/use-owned-form-action.ts)                                                       |
 | Account settings model      | [`src/lib/settings/view-model.ts`](../../src/lib/settings/view-model.ts)                                                                           |
 | Account export/deletion     | [`src/lib/account/export.ts`](../../src/lib/account/export.ts), [`src/lib/account/deletion-service.ts`](../../src/lib/account/deletion-service.ts) |
 
@@ -51,6 +53,13 @@ Credentials registration normalizes and validates email/password input, rejects
 duplicate emails, stores a bcrypt password hash, creates the user, and seeds the
 sample onboarding document. Credentials sign-in returns a minimal user record
 only when the submitted password matches the stored hash.
+
+The login and registration forms claim dispatch synchronously so repeated
+same-event activation cannot queue duplicate authentication or account-creation
+requests. While either operation is pending, all identity and credential fields
+are locked. Ordinary failures release ownership for a corrected retry, and the
+validated callback target owns the client action state: changing destinations
+remounts the form and prevents feedback from the old request from surfacing.
 
 The deterministic browser profile exercises this lifecycle end to end: it
 creates a new account through the public form, verifies automatic sign-in and
@@ -95,6 +104,20 @@ emails remain valid until they are consumed or expire. Each token is still
 single-use: consuming one verification token marks it used, verifies the email,
 and invalidates that user's other outstanding verification tokens.
 
+Reset-password submission is synchronously single-flight, so a repeated
+same-event activation cannot queue a second consume that overwrites success
+with an already-used error. Its client action state is owned by the raw reset
+token: switching tokens remounts the form, unlocks the replacement request, and
+prevents the old token's late result from changing it.
+
+Form actions with side effects use a shared synchronous ownership boundary in
+addition to rendered pending state. Password-reset requests preserve their
+terminal anti-enumeration confirmation after one delivery. Email-verification
+requests suppress accidental same-event duplicate delivery but release after
+settlement for a deliberate resend. Profile saves likewise collapse same-event
+duplicates while remaining available for later edits. Server validation, abuse
+budgets, and token rules remain authoritative.
+
 ## JWT Session Revocation
 
 Auth.js uses JWT sessions, so the Edge proxy can verify only the signed cookie
@@ -113,6 +136,11 @@ signs out the current browser immediately and returns it to login with an
 explicit confirmation; this avoids leaving stale authenticated chrome visible
 after the current JWT has been revoked.
 
+The settings password form locks all secret fields while rotation is pending
+and synchronously suppresses repeated dispatch. Ordinary errors release the
+boundary for a corrected retry; success clears the submitted secrets and stays
+terminally owned through the expected sign-out navigation.
+
 ## Settings, Export, And Deletion
 
 The settings account view model exposes profile defaults, email verification
@@ -129,6 +157,14 @@ erasure, the deletion service attempts immediate subscription cancellation when
 the billing state requires it. Erasure then removes personal data and verifies
 that no personal-data findings remain. Operational DSAR steps live in
 [../operations/privacy-dsar-runbook.md](../operations/privacy-dsar-runbook.md).
+
+The deletion confirmation claims form dispatch synchronously, so repeated
+same-event submission cannot queue multiple destructive actions and a
+same-turn Escape/backdrop request cannot hide the owned operation. While
+pending, the trigger, confirmation field, Cancel, and Confirm controls are
+locked and the modal exposes busy state. An ordinary failure stays in the same
+dialog and releases the boundary for retry; a successful fallback result stays
+terminally locked until the sign-out navigation unmounts the surface.
 
 ## Invariants
 
@@ -147,6 +183,13 @@ that no personal-data findings remain. Operational DSAR steps live in
 - [`src/lib/auth/credentials-service.test.ts`](../../src/lib/auth/credentials-service.test.ts)
 - [`src/lib/auth/oauth-user-service.test.ts`](../../src/lib/auth/oauth-user-service.test.ts)
 - [`src/lib/auth/password-reset-service.test.ts`](../../src/lib/auth/password-reset-service.test.ts)
+- [`src/app/login/login-form.test.tsx`](../../src/app/login/login-form.test.tsx)
+- [`src/app/signup/signup-form.test.tsx`](../../src/app/signup/signup-form.test.tsx)
+- [`src/app/reset-password/reset-password-form.test.tsx`](../../src/app/reset-password/reset-password-form.test.tsx)
+- [`src/app/forgot-password/forgot-password-form.test.tsx`](../../src/app/forgot-password/forgot-password-form.test.tsx)
+- [`src/app/app/settings/email-verification-form.test.tsx`](../../src/app/app/settings/email-verification-form.test.tsx)
+- [`src/app/app/settings/profile-form.test.tsx`](../../src/app/app/settings/profile-form.test.tsx)
+- [`src/app/app/settings/password-form.test.tsx`](../../src/app/app/settings/password-form.test.tsx)
 - [`src/lib/auth/session-security.test.ts`](../../src/lib/auth/session-security.test.ts)
 - [`src/lib/auth/email-verification-service.test.ts`](../../src/lib/auth/email-verification-service.test.ts)
 - [`src/lib/auth/single-use-token.test.ts`](../../src/lib/auth/single-use-token.test.ts)
@@ -154,4 +197,5 @@ that no personal-data findings remain. Operational DSAR steps live in
 - [`src/app/app/onboarding-checklist.test.tsx`](../../src/app/app/onboarding-checklist.test.tsx)
 - [`src/lib/account/export.test.ts`](../../src/lib/account/export.test.ts)
 - [`src/lib/account/deletion-service.test.ts`](../../src/lib/account/deletion-service.test.ts)
+- [`src/app/app/settings/delete-account-form.test.tsx`](../../src/app/app/settings/delete-account-form.test.tsx)
 - [`e2e/ui-matrix/account-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/account-lifecycle-ui.spec.ts)
