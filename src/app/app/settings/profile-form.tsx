@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import type { ReactNode } from "react";
 
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 import type { ProfileResult } from "@/lib/auth/form-state";
 import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
 
@@ -68,7 +69,7 @@ export function renderProfileFormView({
           id="settings-name"
           name="name"
           type="text"
-          maxLength={100}
+          maxLength={PROFILE_NAME_MAX_LENGTH}
           defaultValue={initialName}
           autoComplete="name"
           disabled={isPending}

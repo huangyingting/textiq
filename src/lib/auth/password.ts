@@ -8,8 +8,11 @@
 
 import bcrypt from "bcryptjs";
 
-/** Minimum number of characters required for a stored password. */
-export const MIN_PASSWORD_LENGTH = 8;
+import {
+  MAX_PASSWORD_UTF8_BYTES,
+  MIN_PASSWORD_LENGTH,
+  passwordExceedsBcryptLimit,
+} from "@/lib/auth/password-policy";
 
 /** bcrypt cost factor used for every credentials password hash. */
 export const PASSWORD_HASH_COST = 12;
@@ -42,6 +45,13 @@ export function validatePasswordChange(input: {
     };
   }
 
+  if (passwordExceedsBcryptLimit(newPassword)) {
+    return {
+      ok: false,
+      message: `New password must be at most ${MAX_PASSWORD_UTF8_BYTES} UTF-8 bytes.`,
+    };
+  }
+
   if (newPassword !== confirmPassword) {
     return { ok: false, message: "New passwords don't match." };
   }
@@ -71,6 +81,12 @@ export function validatePasswordLength(
     return {
       ok: false,
       message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    };
+  }
+  if (passwordExceedsBcryptLimit(password)) {
+    return {
+      ok: false,
+      message: `Password must be at most ${MAX_PASSWORD_UTF8_BYTES} UTF-8 bytes.`,
     };
   }
   return { ok: true };

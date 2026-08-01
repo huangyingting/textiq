@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { signOut } from "@/auth";
 import { actionError, actionOk } from "@/lib/action-result";
 import { deleteAccountForUser } from "@/lib/account/deletion-service";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 import { changePasswordForUser } from "@/lib/auth/credentials-service";
 import { requestEmailVerificationForUser } from "@/lib/auth/email-verification-service";
 import type {
@@ -17,9 +18,6 @@ import type {
 import { prisma } from "@/lib/prisma";
 import { retryMessage, withAbuseBudget } from "@/lib/server-action-abuse";
 import { requireUser } from "@/lib/session";
-
-/** Maximum stored display-name length. */
-const MAX_NAME_LENGTH = 100;
 
 /**
  * Updates the current user's display name.
@@ -42,7 +40,7 @@ export async function updateProfile(
 
   const name = String(formData.get("name") ?? "")
     .trim()
-    .slice(0, MAX_NAME_LENGTH);
+    .slice(0, PROFILE_NAME_MAX_LENGTH);
 
   await prisma.user.update({
     where: { id: user.id },

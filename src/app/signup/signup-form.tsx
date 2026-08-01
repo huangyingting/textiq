@@ -8,7 +8,12 @@ import {
   AuthMessage,
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_INPUT_MAX_LENGTH,
+} from "@/lib/auth/password-policy";
 
 import { register } from "./actions";
 
@@ -40,6 +45,7 @@ function SignupFormForCallback({ callbackUrl }: { callbackUrl: string }) {
         }
         type="text"
         autoComplete="name"
+        maxLength={PROFILE_NAME_MAX_LENGTH}
         disabled={isPending}
         placeholder="Ada Lovelace"
       />
@@ -62,9 +68,10 @@ function SignupFormForCallback({ callbackUrl }: { callbackUrl: string }) {
         type="password"
         autoComplete="new-password"
         required
-        minLength={8}
+        minLength={MIN_PASSWORD_LENGTH}
+        maxLength={PASSWORD_INPUT_MAX_LENGTH}
         disabled={isPending}
-        placeholder="At least 8 characters"
+        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
       />
 
       {errorMessage ? (

@@ -23,7 +23,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { PasswordResult } from "@/lib/auth/form-state";
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_INPUT_MAX_LENGTH,
+} from "@/lib/auth/password-policy";
 
 type PasswordFormTestState = {
   calls: FormData[];
@@ -153,6 +156,8 @@ describe("renderPasswordFormView", () => {
     assert.equal(current.props.id, "settings-current-password");
     assert.equal(current.props.type, "password");
     assert.equal(current.props.autoComplete, "current-password");
+    assert.equal(current.props.required, true);
+    assert.equal(current.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
     const html = renderToStaticMarkup(tree);
     assert.doesNotMatch(html, /You signed in with Google/);
   });
@@ -189,6 +194,8 @@ describe("renderPasswordFormView", () => {
     );
     assert.equal(newPassword.props.autoComplete, "new-password");
     assert.equal(newPassword.props.minLength, MIN_PASSWORD_LENGTH);
+    assert.equal(newPassword.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
+    assert.equal(newPassword.props.required, true);
     const confirmPassword = firstElement(
       tree,
       (element) =>
@@ -196,6 +203,8 @@ describe("renderPasswordFormView", () => {
     );
     assert.equal(confirmPassword.props.autoComplete, "new-password");
     assert.equal(confirmPassword.props.minLength, MIN_PASSWORD_LENGTH);
+    assert.equal(confirmPassword.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
+    assert.equal(confirmPassword.props.required, true);
     const html = renderToStaticMarkup(tree);
     assert.match(html, /Use at least 8 characters\./);
     assert.match(html, /you&#x27;ll be signed out after this change/i);

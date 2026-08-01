@@ -9,6 +9,7 @@ import {
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
 import { useOwnedFormAction } from "@/lib/actions/use-owned-form-action";
+import { PASSWORD_INPUT_MAX_LENGTH } from "@/lib/auth/password-policy";
 
 import { authenticate } from "./actions";
 
@@ -76,6 +77,7 @@ export function renderLoginFormView({
         type="password"
         autoComplete="current-password"
         required
+        maxLength={PASSWORD_INPUT_MAX_LENGTH}
         disabled={isPending}
         placeholder="••••••••"
         labelAccessory={

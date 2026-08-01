@@ -151,7 +151,11 @@ The settings account view model exposes profile defaults, email verification
 state, password state, connected account labels, and stable links to account
 export, billing, and documents. The profile display-name field remains locked
 while a save is pending so the visible value continues to match the owned
-request.
+request. Its browser constraint and server normalization use the same
+browser-safe display-name limit. Settings password fields likewise expose the
+shared password minimum, early input cap, and required-field constraints before
+submission. Server validation rejects passwords beyond bcrypt's 72-byte UTF-8
+boundary so distinct credentials cannot collapse through bcrypt truncation.
 
 The deterministic account browser lifecycle uses an isolated resettable user to
 prove display-name persistence in both the form and app shell, password

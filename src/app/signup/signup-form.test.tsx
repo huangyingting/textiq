@@ -5,6 +5,11 @@ import { startTransition } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import "@/test/react-render-harness";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_INPUT_MAX_LENGTH,
+} from "@/lib/auth/password-policy";
 
 type SignupFormTestState = {
   calls: FormData[];
@@ -119,6 +124,20 @@ function signupPayload(callbackUrl = "/app") {
 }
 
 describe("SignupForm", () => {
+  test("wires shared profile and password constraints into account creation", () => {
+    const renderer = mount();
+    try {
+      const name = renderer.root.findByProps({ name: "name" });
+      const password = renderer.root.findByProps({ name: "password" });
+      assert.equal(name.props.maxLength, PROFILE_NAME_MAX_LENGTH);
+      assert.equal(password.props.required, true);
+      assert.equal(password.props.minLength, MIN_PASSWORD_LENGTH);
+      assert.equal(password.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("pending registration owns every editable identity and credential field", async () => {
     let resolvePending!: (result: string | undefined) => void;
     globalForTest.__signupFormTestState.impl = () =>

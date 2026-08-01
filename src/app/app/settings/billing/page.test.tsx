@@ -140,6 +140,15 @@ describe("renderBillingView", () => {
     );
     assert.match(html, /100 used/);
     assert.match(html, /width:1%/);
+    const progress = firstElement(
+      tree,
+      (element) => element.props.role === "progressbar",
+    );
+    assert.equal(progress.props["aria-label"], "AI credit usage");
+    assert.equal(progress.props["aria-valuemin"], 0);
+    assert.equal(progress.props["aria-valuemax"], 100);
+    assert.equal(progress.props["aria-valuenow"], 1);
+    assert.equal(progress.props["aria-valuetext"], "1% used");
   });
 
   test("credits: caps progress-bar usage at 100% when balance is over-spent", () => {
@@ -165,6 +174,18 @@ describe("renderBillingView", () => {
     assert.match(html, /No usage limits/);
     assert.match(html, /Unlimited AI generations/);
     assert.match(html, /width:100%/);
+    assert.equal(
+      collectElements(tree).some(
+        (element) => element.props.role === "progressbar",
+      ),
+      false,
+    );
+    firstElement(
+      tree,
+      (element) =>
+        element.props["aria-hidden"] === true &&
+        String(element.props.className).includes("overflow-hidden"),
+    );
   });
 
   test("plan features: reflects each entitlement flag as enabled/disabled", () => {

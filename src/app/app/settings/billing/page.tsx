@@ -151,7 +151,19 @@ export function renderBillingView(input: BillingViewInput): ReactNode {
           </div>
 
           {/* Progress bar */}
-          <div className="h-2 w-full overflow-hidden rounded-full bg-ds-border-strong">
+          <div
+            className="h-2 w-full overflow-hidden rounded-full bg-ds-border-strong"
+            {...(unlimitedCredits
+              ? { "aria-hidden": true }
+              : {
+                  role: "progressbar",
+                  "aria-label": "AI credit usage",
+                  "aria-valuemin": 0,
+                  "aria-valuemax": 100,
+                  "aria-valuenow": usagePct,
+                  "aria-valuetext": `${usagePct}% used`,
+                })}
+          >
             <div
               className="h-full rounded-full bg-ds-accent transition-all"
               style={{ width: `${unlimitedCredits ? 100 : usagePct}%` }}
@@ -183,7 +195,7 @@ export function renderBillingView(input: BillingViewInput): ReactNode {
                   : `${entitlements.creditsPerPeriod.toLocaleString()} AI credits / ${entitlements.periodDays === 7 ? "week" : "month"}`
               }
             />
-            <FeatureRow enabled={true} label="PNG &amp; PDF export" />
+            <FeatureRow enabled={true} label="PNG & PDF export" />
             <FeatureRow enabled={entitlements.svgExport} label="SVG export" />
             <FeatureRow enabled={entitlements.pptxExport} label="PPTX export" />
             <FeatureRow
@@ -226,9 +238,7 @@ export function renderBillingView(input: BillingViewInput): ReactNode {
 export default async function BillingPage() {
   const sessionUser = await requireUser(redirect);
 
-  const billingState = await loadAndSyncBillingState(sessionUser.id).catch(() =>
-    redirect("/login"),
-  );
+  const billingState = await loadAndSyncBillingState(sessionUser.id);
 
   const entitlements = createEntitlementFacade(billingState.plan).entitlements;
 
@@ -242,7 +252,13 @@ export default async function BillingPage() {
   });
 }
 
-function FeatureRow({ enabled, label }: { enabled: boolean; label: string }) {
+function FeatureRow({
+  enabled,
+  label,
+}: {
+  enabled: boolean;
+  label: ReactNode;
+}) {
   return (
     <li className="flex items-center gap-2">
       <span
@@ -251,10 +267,9 @@ function FeatureRow({ enabled, label }: { enabled: boolean; label: string }) {
       >
         {enabled ? "✓" : "✗"}
       </span>
-      <span
-        className={enabled ? "text-ds-text-primary" : "text-ds-text-muted"}
-        dangerouslySetInnerHTML={{ __html: label }}
-      />
+      <span className={enabled ? "text-ds-text-primary" : "text-ds-text-muted"}>
+        {label}
+      </span>
     </li>
   );
 }

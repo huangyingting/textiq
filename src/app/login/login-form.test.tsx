@@ -10,6 +10,7 @@ import {
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import "@/test/react-render-harness";
+import { PASSWORD_INPUT_MAX_LENGTH } from "@/lib/auth/password-policy";
 
 type LoginFormTestState = {
   calls: FormData[];
@@ -171,6 +172,8 @@ describe("renderLoginFormView", () => {
     assert.equal(email.props.onChange, onEmailChange);
     assert.equal(password.props.value, undefined);
     assert.equal(password.props.defaultValue, undefined);
+    assert.equal(password.props.required, true);
+    assert.equal(password.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
   });
 
   test("preserves the safe callback target and renders a generic error as an alert", () => {

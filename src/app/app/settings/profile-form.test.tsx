@@ -22,6 +22,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { ProfileResult } from "@/lib/auth/form-state";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 
 type ProfileFormTestState = {
   calls: FormData[];
@@ -157,7 +158,7 @@ describe("renderProfileFormView", () => {
       (element) => element.type === "input" && element.props.name === "name",
     );
     assert.equal(name.props.defaultValue, "Ada");
-    assert.equal(name.props.maxLength, 100);
+    assert.equal(name.props.maxLength, PROFILE_NAME_MAX_LENGTH);
     assert.equal(name.props.readOnly, undefined);
     assert.equal(name.props.disabled, false);
   });

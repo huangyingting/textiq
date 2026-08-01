@@ -8,6 +8,8 @@ import {
   type AuthorizedCredentialsUser,
 } from "@/lib/auth/credentials-service";
 import { comparePassword, hashPassword } from "@/lib/auth/password";
+import { MAX_PASSWORD_UTF8_BYTES } from "@/lib/auth/password-policy";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 
 type CredentialAuthClient = NonNullable<
   Parameters<typeof authorizeCredentialsUser>[1]
@@ -127,6 +129,37 @@ test("authorizeCredentialsUser rejects missing credentials, missing hashes, and 
   );
 });
 
+test("authorizeCredentialsUser rejects text appended beyond bcrypt's 72-byte boundary", async () => {
+  const storedPassword = "a".repeat(72);
+  const passwordHash = await hashPassword(storedPassword);
+  const client = credentialClient({
+    id: "user_1",
+    email: "person@example.com",
+    name: null,
+    image: null,
+    passwordHash,
+    sessionInvalidatedAt: null,
+  });
+
+  assert.notEqual(
+    await authorizeCredentialsUser(
+      { email: "person@example.com", password: storedPassword },
+      client,
+    ),
+    null,
+  );
+  assert.equal(
+    await authorizeCredentialsUser(
+      {
+        email: "person@example.com",
+        password: `${storedPassword}not-the-stored-password`,
+      },
+      client,
+    ),
+    null,
+  );
+});
+
 function credentialsWriteClient(options: {
   existing?: unknown;
   createError?: Error;
@@ -201,6 +234,17 @@ test("registerCredentialsUser rejects invalid, duplicate, and failed-create inpu
   );
   assert.deepEqual(
     await registerCredentialsUser(
+      {
+        name: "Ada",
+        email: "ada@example.com",
+        password: "a".repeat(MAX_PASSWORD_UTF8_BYTES + 1),
+      },
+      credentialsWriteClient({}),
+    ),
+    { ok: false, error: "Password must be at most 72 UTF-8 bytes." },
+  );
+  assert.deepEqual(
+    await registerCredentialsUser(
       { name: "Ada", email: "ada@example.com", password: "valid-password" },
       credentialsWriteClient({ existing: { id: "existing-user" } }),
     ),
@@ -249,6 +293,22 @@ test("registerCredentialsUser stores a hash and does not return the raw password
   assert.deepEqual(seededUsers, ["user_credentials"]);
 });
 
+test("registerCredentialsUser clamps display names to the shared profile limit", async () => {
+  const client = credentialsWriteClient({});
+  const result = await registerCredentialsUser(
+    {
+      name: `  ${"A".repeat(PROFILE_NAME_MAX_LENGTH + 1)}  `,
+      email: "ada@example.com",
+      password: "valid-password",
+    },
+    client,
+    { seedSampleDocument: async () => undefined },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(client._creates[0]?.name?.length, PROFILE_NAME_MAX_LENGTH);
+});
+
 test("changePasswordForUser validates current and replacement passwords", async () => {
   const currentHash = await hashPassword("current-password");
 
@@ -279,6 +339,20 @@ test("changePasswordForUser validates current and replacement passwords", async 
       credentialsWriteClient({ passwordHash: currentHash }),
     ),
     { ok: false, error: "New passwords don't match." },
+  );
+
+  const overlongPassword = "a".repeat(MAX_PASSWORD_UTF8_BYTES + 1);
+  assert.deepEqual(
+    await changePasswordForUser(
+      {
+        userId: "user_credentials",
+        currentPassword: "current-password",
+        newPassword: overlongPassword,
+        confirmPassword: overlongPassword,
+      },
+      credentialsWriteClient({ passwordHash: currentHash }),
+    ),
+    { ok: false, error: "New password must be at most 72 UTF-8 bytes." },
   );
 
   assert.deepEqual(

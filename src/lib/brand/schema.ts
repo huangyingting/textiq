@@ -133,7 +133,8 @@ export interface BrandInput {
   logoAssetId?: AssetReference | null;
 }
 
-const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+const HEX_COLOR =
+  /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 function isHexColor(v: unknown): v is string {
   return typeof v === "string" && HEX_COLOR.test(v);

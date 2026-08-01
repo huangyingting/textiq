@@ -14,6 +14,7 @@ import {
   RESET_TOKEN_REJECTION_MESSAGE,
   hashResetToken,
 } from "@/lib/auth/reset-token";
+import { MAX_PASSWORD_UTF8_BYTES } from "@/lib/auth/password-policy";
 import type { prisma } from "@/lib/prisma";
 
 type PrismaClient = typeof prisma;
@@ -383,6 +384,26 @@ test("resetPasswordWithToken rejects missing, unknown, expired, and invalid repl
       }),
     ),
     { status: "error", message: "New passwords don't match." },
+  );
+  const overlongPassword = "a".repeat(MAX_PASSWORD_UTF8_BYTES + 1);
+  assert.deepEqual(
+    await resetPasswordWithToken(
+      {
+        token: rawToken,
+        newPassword: overlongPassword,
+        confirmPassword: overlongPassword,
+      },
+      clientForRecord({
+        id: "prt_valid",
+        userId: "u1",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      }),
+    ),
+    {
+      status: "error",
+      message: "New password must be at most 72 UTF-8 bytes.",
+    },
   );
 });
 

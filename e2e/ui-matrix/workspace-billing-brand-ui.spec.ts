@@ -66,8 +66,18 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
     if (unlimitedCreditsEnabled()) {
       await expect(page.getByText(/^Unlimited$/).first()).toBeVisible();
       await expect(page.getByText(/no per-word metering/i)).toBeVisible();
+      await expect(
+        page.getByRole("progressbar", { name: "AI credit usage" }),
+      ).toHaveCount(0);
     } else {
       await expect(page.getByText(/remaining|used/i).first()).toBeVisible();
+      const creditUsage = page.getByRole("progressbar", {
+        name: "AI credit usage",
+      });
+      await expect(creditUsage).toBeVisible();
+      await expect(creditUsage).toHaveAttribute("aria-valuemin", "0");
+      await expect(creditUsage).toHaveAttribute("aria-valuemax", "100");
+      await expect(creditUsage).toHaveAttribute("aria-valuetext", /% used$/);
     }
   });
 

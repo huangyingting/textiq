@@ -1,4 +1,5 @@
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
 import {
   comparePassword,
   hashPassword,
@@ -7,6 +8,7 @@ import {
   validatePasswordChange,
   validatePasswordLength,
 } from "@/lib/auth/password";
+import { passwordExceedsBcryptLimit } from "@/lib/auth/password-policy";
 import { seedSampleDocument } from "@/lib/onboarding/seed-sample-document";
 import { prisma } from "@/lib/prisma";
 
@@ -41,7 +43,7 @@ export async function authorizeCredentialsUser(
   const password =
     typeof credentials?.password === "string" ? credentials.password : "";
 
-  if (!email || !password) {
+  if (!email || !password || passwordExceedsBcryptLimit(password)) {
     return null;
   }
 
@@ -73,7 +75,9 @@ export async function registerCredentialsUser(
   client: PrismaClientLike = prisma,
   deps: RegisterCredentialsDeps = defaultRegisterDeps,
 ): Promise<ActionResult<{ id: string; email: string }>> {
-  const name = String(input.name ?? "").trim();
+  const name = String(input.name ?? "")
+    .trim()
+    .slice(0, PROFILE_NAME_MAX_LENGTH);
   const email = normalizeEmail(input.email);
   const password = String(input.password ?? "");
 
@@ -137,6 +141,7 @@ export async function changePasswordForUser(
   if (dbUser.passwordHash) {
     const currentMatches =
       currentPassword.length > 0 &&
+      !passwordExceedsBcryptLimit(currentPassword) &&
       (await comparePassword(currentPassword, dbUser.passwordHash));
     if (!currentMatches) {
       return actionError("Your current password is incorrect.");

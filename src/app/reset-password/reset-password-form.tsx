@@ -9,7 +9,10 @@ import {
   AuthMessage,
   AuthSubmitButton,
 } from "@/components/auth/auth-form";
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_INPUT_MAX_LENGTH,
+} from "@/lib/auth/password-policy";
 import {
   initialResetPasswordState,
   type ResetPasswordState,
@@ -71,6 +74,7 @@ export function renderResetPasswordView({
         autoComplete="new-password"
         required
         minLength={MIN_PASSWORD_LENGTH}
+        maxLength={PASSWORD_INPUT_MAX_LENGTH}
         disabled={isPending}
         placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
       />
@@ -83,6 +87,7 @@ export function renderResetPasswordView({
         autoComplete="new-password"
         required
         minLength={MIN_PASSWORD_LENGTH}
+        maxLength={PASSWORD_INPUT_MAX_LENGTH}
         disabled={isPending}
         placeholder="Re-enter your new password"
       />

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, describe, it } from "node:test";
 
+import { PROFILE_NAME_MAX_LENGTH } from "@/lib/account/profile-policy";
+
 type ModuleHooks = {
   registerHooks(hooks: {
     resolve(
@@ -277,17 +279,20 @@ describe("updateProfile", () => {
     );
   });
 
-  it("clamps names exceeding 100 characters before writing", async () => {
-    const longName = "A".repeat(150);
+  it("clamps names exceeding the shared profile-name limit before writing", async () => {
+    const longName = "A".repeat(PROFILE_NAME_MAX_LENGTH + 50);
     const result = await settingsActions.updateProfile(
       null,
       makeFormData({ name: longName }),
     );
 
-    assert.deepEqual(result, { ok: true, data: { name: "A".repeat(100) } });
+    assert.deepEqual(result, {
+      ok: true,
+      data: { name: "A".repeat(PROFILE_NAME_MAX_LENGTH) },
+    });
     const [updateCall] = callsOf("prisma.user.update") as [unknown[]];
     const storedName = (updateCall[1] as { data: { name: string } }).data.name;
-    assert.equal(storedName.length, 100);
+    assert.equal(storedName.length, PROFILE_NAME_MAX_LENGTH);
   });
 });
 

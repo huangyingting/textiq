@@ -23,7 +23,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { ResetPasswordState } from "@/lib/auth/form-state";
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_INPUT_MAX_LENGTH,
+} from "@/lib/auth/password-policy";
 
 type ResetPasswordFormTestState = {
   calls: FormData[];
@@ -179,6 +182,7 @@ describe("renderResetPasswordView", () => {
     assert.equal(newPassword.props.type, "password");
     assert.equal(newPassword.props.required, true);
     assert.equal(newPassword.props.minLength, MIN_PASSWORD_LENGTH);
+    assert.equal(newPassword.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
     assert.equal(newPassword.props.autoComplete, "new-password");
 
     const confirmPassword = firstElement(
@@ -188,6 +192,7 @@ describe("renderResetPasswordView", () => {
     );
     assert.equal(confirmPassword.props.id, "confirmPassword");
     assert.equal(confirmPassword.props.minLength, MIN_PASSWORD_LENGTH);
+    assert.equal(confirmPassword.props.maxLength, PASSWORD_INPUT_MAX_LENGTH);
 
     const submit = firstElement(tree, (element) => element.type === "button");
     assert.equal(submit.props.disabled, false);

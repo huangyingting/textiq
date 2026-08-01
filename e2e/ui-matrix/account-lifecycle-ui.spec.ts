@@ -96,6 +96,39 @@ test.describe("UI matrix: account lifecycle", () => {
     await expect(page.getByLabel("Display name")).toHaveValue(
       E2E_PROFILE_FIXTURE.owner.name,
     );
+    await expect(page.getByLabel("Display name")).toHaveAttribute(
+      "maxlength",
+      "100",
+    );
+    await expect(page.getByLabel("Current password")).toHaveAttribute(
+      "required",
+      "",
+    );
+    await expect(page.getByLabel("Current password")).toHaveAttribute(
+      "maxlength",
+      "72",
+    );
+    await expect(
+      page.getByLabel("New password", { exact: true }),
+    ).toHaveAttribute("required", "");
+    await expect(page.getByLabel("Confirm new password")).toHaveAttribute(
+      "required",
+      "",
+    );
+    await expect(
+      page.getByLabel("New password", { exact: true }),
+    ).toHaveAttribute("minlength", "8");
+    await expect(
+      page.getByLabel("New password", { exact: true }),
+    ).toHaveAttribute("maxlength", "72");
+    await expect(page.getByLabel("Confirm new password")).toHaveAttribute(
+      "minlength",
+      "8",
+    );
+    await expect(page.getByLabel("Confirm new password")).toHaveAttribute(
+      "maxlength",
+      "72",
+    );
 
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("link", { name: "Download my data" }).click();

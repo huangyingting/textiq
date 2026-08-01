@@ -124,6 +124,12 @@ reported as successful only when Stripe returns a non-empty redirect URL;
 missing handoff URLs fail through the same logged, generic action-error path
 instead of showing a false “Redirecting…” success.
 
+The authenticated billing page distinguishes authorization from operational
+failure: `requireUser` owns login redirects, while billing-state load failures
+propagate to the application error boundary and its retry action. The metered
+credit bar exposes its percentage through progressbar semantics; the unlimited
+state remains textual and hides the decorative full-width bar.
+
 ## Subscription Writes
 
 Local plan changes update both `User.plan` / credit fields and the one-row

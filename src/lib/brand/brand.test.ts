@@ -288,6 +288,22 @@ describe("parsePalette", () => {
   it("accepts valid palette", () => {
     assert.deepEqual(parsePalette(["#ff0000"]), ["#ff0000"]);
   });
+  it("accepts CSS hex lengths and rejects unsupported 5- and 7-digit colors", () => {
+    assert.deepEqual(parsePalette(["#abc", "#abcd", "#abcdef", "#abcdef12"]), [
+      "#abc",
+      "#abcd",
+      "#abcdef",
+      "#abcdef12",
+    ]);
+    assert.equal(parsePalette(["#12345"]), null);
+    assert.equal(parsePalette(["#1234567"]), null);
+
+    assert.equal(
+      validateBrandInput({ name: "Invalid background", background: "#12345" })
+        .ok,
+      false,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
