@@ -80,7 +80,7 @@ test.describe("presentation focus and mobile control regressions", () => {
     await expect(returnedOpener).toBeFocused();
   });
 
-  test("forced-colors keeps the focused stage node visibly outlined", async ({
+  test("forced-colors keeps the focused stage node visibly outlined @required-profile", async ({
     page,
   }, testInfo) => {
     await page.emulateMedia({ forcedColors: "active" });
