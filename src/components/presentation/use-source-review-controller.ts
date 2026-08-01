@@ -1,4 +1,10 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 import type { DocumentBlock } from "@/lib/content/document-blocks";
 import {
@@ -79,6 +85,7 @@ export interface SourceReviewController {
   documentInsertBlocks: readonly DocumentSourceInsertBlock[];
   sourceStatusLabel: string;
   sourceReviewStatus: string;
+  sourceRefreshPending: boolean;
   handleRefreshSelectedSource: () => Promise<void>;
   handleSelectSourceItem: (slideId: string, nodeId: string) => void;
   handleRefreshSourceAt: (slideId: string, nodeId: string) => void;
@@ -93,6 +100,49 @@ export interface SourceReviewController {
   handleRefreshAllSources: () => void;
   handleSyncFromDocument: () => void;
   handleReviewSourceLinks: () => void;
+}
+
+interface SourceReviewRefreshOperation {
+  documentId: string;
+  deck: Deck;
+}
+
+interface SourceReviewRefreshBoundary {
+  activate: () => void;
+  deactivate: () => void;
+  claim: (
+    documentId: string,
+    deck: Deck,
+  ) => SourceReviewRefreshOperation | null;
+  owns: (operation: SourceReviewRefreshOperation) => boolean;
+  release: (operation: SourceReviewRefreshOperation) => boolean;
+}
+
+function createSourceReviewRefreshBoundary(): SourceReviewRefreshBoundary {
+  let active = true;
+  let currentOperation: SourceReviewRefreshOperation | null = null;
+  return {
+    activate() {
+      active = true;
+    },
+    deactivate() {
+      active = false;
+      currentOperation = null;
+    },
+    claim(documentId, deck) {
+      if (!active || currentOperation) return null;
+      currentOperation = { documentId, deck };
+      return currentOperation;
+    },
+    owns(operation) {
+      return active && currentOperation === operation;
+    },
+    release(operation) {
+      if (currentOperation !== operation) return false;
+      currentOperation = null;
+      return active;
+    },
+  };
 }
 
 export interface SourceReviewControllerDerivations {
@@ -130,9 +180,15 @@ interface CreateSourceReviewControllerArgs
   extends UseSourceReviewControllerArgs, SourceReviewControllerDerivations {
   sourceReviewStatus: string;
   setSourceReviewStatus: Dispatch<SetStateAction<string>>;
+  sourceRefreshPending?: boolean;
+  sourceRefreshBoundary?: SourceReviewRefreshBoundary;
+  setSourceRefreshOperation?: Dispatch<
+    SetStateAction<SourceReviewRefreshOperation | null>
+  >;
 }
 
 export function createSourceReviewController({
+  documentId,
   deck,
   activeSlide,
   selectedNode,
@@ -148,6 +204,9 @@ export function createSourceReviewController({
   documentInsertBlocks,
   sourceReviewStatus,
   setSourceReviewStatus,
+  sourceRefreshPending = false,
+  sourceRefreshBoundary = createSourceReviewRefreshBoundary(),
+  setSourceRefreshOperation = () => undefined,
 }: CreateSourceReviewControllerArgs): SourceReviewController {
   const sourceClassifications = sourceDerivations.classifications;
   const sourceReview = sourceDerivations.reviewItems;
@@ -190,16 +249,32 @@ export function createSourceReviewController({
 
   async function handleRefreshSelectedSource() {
     if (!activeSlide || !selectedNode?.source) return;
-    const result = await refreshSelectedSourceLink({
-      deck,
-      slide: activeSlide,
-      node: selectedNode,
-      now: new Date().toISOString(),
-      sourceBlockIndex: documentSourceIndex,
-      onRefreshSource,
-    });
-    if (!result) return;
-    applySourceLinkOrchestration(result);
+    const operation = sourceRefreshBoundary.claim(documentId, deck);
+    if (!operation) return;
+    setSourceRefreshOperation(operation);
+    try {
+      const result = await refreshSelectedSourceLink({
+        deck,
+        slide: activeSlide,
+        node: selectedNode,
+        now: new Date().toISOString(),
+        sourceBlockIndex: documentSourceIndex,
+        onRefreshSource,
+      });
+      if (!sourceRefreshBoundary.owns(operation) || !result) return;
+      applySourceLinkOrchestration(result);
+    } catch {
+      if (!sourceRefreshBoundary.owns(operation)) return;
+      const message = "Could not refresh this source. Please try again.";
+      setSourceReviewStatus(message);
+      setStageAnnouncement(message);
+    } finally {
+      if (sourceRefreshBoundary.release(operation)) {
+        setSourceRefreshOperation((current) =>
+          current === operation ? null : current,
+        );
+      }
+    }
   }
 
   function handleRefreshSourceAt(slideId: string, nodeId: string) {
@@ -295,6 +370,7 @@ export function createSourceReviewController({
     documentInsertBlocks,
     sourceStatusLabel,
     sourceReviewStatus,
+    sourceRefreshPending,
     handleRefreshSelectedSource,
     handleSelectSourceItem,
     handleRefreshSourceAt,
@@ -334,6 +410,17 @@ export function useSourceReviewController({
     [deck, documentBlocks, documentId, sourceBlockIndex],
   );
   const [sourceReviewStatus, setSourceReviewStatus] = useState("");
+  const [sourceRefreshBoundary] = useState(createSourceReviewRefreshBoundary);
+  const [sourceRefreshOperation, setSourceRefreshOperation] =
+    useState<SourceReviewRefreshOperation | null>(null);
+  const sourceRefreshPending =
+    sourceRefreshOperation?.documentId === documentId &&
+    sourceRefreshOperation.deck === deck;
+
+  useEffect(() => {
+    sourceRefreshBoundary.activate();
+    return sourceRefreshBoundary.deactivate;
+  }, [deck, documentId, sourceRefreshBoundary]);
 
   return createSourceReviewController({
     documentId,
@@ -352,5 +439,8 @@ export function useSourceReviewController({
     ...derivations,
     sourceReviewStatus,
     setSourceReviewStatus,
+    sourceRefreshPending,
+    sourceRefreshBoundary,
+    setSourceRefreshOperation,
   });
 }

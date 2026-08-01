@@ -861,6 +861,7 @@ export interface InspectorShellProps {
   onResetToTheme: () => void;
   onUpdateSelectedSource: (source: NodeSourceMetadata | undefined) => void;
   onRefreshSelectedSource?: () => void;
+  sourceRefreshPending?: boolean;
   onUnlinkSelectedSource?: () => void;
   onRelinkSelectedSource?: (block: SourceBlockIndexEntry) => void;
   selectedSourceClassification?: SourceLinkClassification;
@@ -932,6 +933,7 @@ export function InspectorShell({
   onResetToTheme,
   onUpdateSelectedSource,
   onRefreshSelectedSource,
+  sourceRefreshPending = false,
   onUnlinkSelectedSource,
   onRelinkSelectedSource,
   selectedSourceClassification,
@@ -1249,6 +1251,7 @@ export function InspectorShell({
                 node={selectedNode}
                 onUpdateSource={onUpdateSelectedSource}
                 onRefreshSource={onRefreshSelectedSource}
+                sourceRefreshPending={sourceRefreshPending}
                 onUnlinkSource={onUnlinkSelectedSource}
                 onRelinkSource={onRelinkSelectedSource}
                 classification={selectedSourceClassification}

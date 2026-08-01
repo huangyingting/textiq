@@ -10,6 +10,7 @@ import {
 } from "./document-list-async-ordering";
 
 const UNDO_DURATION_MS = 6000;
+type DocumentTrashIntent = "delete" | "restore";
 
 export function useOptimisticDocumentTrash(
   documents: DashboardDocument[],
@@ -21,8 +22,15 @@ export function useOptimisticDocumentTrash(
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
   const operationSeqRef = useRef(0);
   const latestOperationByDocumentRef = useRef<Map<string, number>>(new Map());
+  const latestIntentByDocumentRef = useRef<Map<string, DocumentTrashIntent>>(
+    new Map(),
+  );
+  const mutationQueueByDocumentRef = useRef<Map<string, Promise<void>>>(
+    new Map(),
+  );
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -31,10 +39,68 @@ export function useOptimisticDocumentTrash(
     }
   }, []);
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => {
+    const latestOperations = latestOperationByDocumentRef.current;
+    const latestIntents = latestIntentByDocumentRef.current;
+    const mutationQueues = mutationQueueByDocumentRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimer();
+      latestOperations.clear();
+      latestIntents.clear();
+      mutationQueues.clear();
+    };
+  }, [clearTimer]);
+
+  const enqueueMutation = useCallback(
+    (documentId: string, mutation: () => Promise<void>): Promise<void> => {
+      const previous = mutationQueueByDocumentRef.current.get(documentId);
+      const current = previous
+        ? previous.catch(() => undefined).then(mutation)
+        : Promise.resolve().then(mutation);
+      mutationQueueByDocumentRef.current.set(documentId, current);
+      const clearCurrent = () => {
+        if (mutationQueueByDocumentRef.current.get(documentId) === current) {
+          mutationQueueByDocumentRef.current.delete(documentId);
+        }
+      };
+      void current.then(clearCurrent, clearCurrent);
+      return current;
+    },
+    [],
+  );
+
+  const claimIntent = useCallback(
+    (documentId: string, intent: DocumentTrashIntent): boolean => {
+      if (latestIntentByDocumentRef.current.get(documentId) === intent) {
+        return false;
+      }
+      latestIntentByDocumentRef.current.set(documentId, intent);
+      return true;
+    },
+    [],
+  );
+
+  const releaseIntent = useCallback(
+    (documentId: string, intent: DocumentTrashIntent, operationSeq: number) => {
+      if (
+        isCurrentDocumentTrashOperation(
+          latestOperationByDocumentRef.current,
+          documentId,
+          operationSeq,
+        ) &&
+        latestIntentByDocumentRef.current.get(documentId) === intent
+      ) {
+        latestIntentByDocumentRef.current.delete(documentId);
+      }
+    },
+    [],
+  );
 
   const handleDelete = useCallback(
     (data: DocumentCardData) => {
+      if (!claimIntent(data.id, "delete")) return;
       const full = documents.find((document) => document.id === data.id);
       const stash: DashboardDocument = full
         ? { ...full, title: data.title }
@@ -58,9 +124,10 @@ export function useOptimisticDocumentTrash(
       timerRef.current = setTimeout(() => setUndo(null), UNDO_DURATION_MS);
       startTransition(async () => {
         try {
-          await actions.deleteDocument(data.id);
+          await enqueueMutation(data.id, () => actions.deleteDocument(data.id));
         } catch {
           if (
+            !mountedRef.current ||
             !isCurrentDocumentTrashOperation(
               latestOperationByDocumentRef.current,
               data.id,
@@ -82,15 +149,25 @@ export function useOptimisticDocumentTrash(
           setErrorMessage(
             "Could not move the document to trash. It was restored.",
           );
+        } finally {
+          releaseIntent(data.id, "delete", operationSeq);
         }
       });
     },
-    [actions, clearTimer, documents],
+    [
+      actions,
+      claimIntent,
+      clearTimer,
+      documents,
+      enqueueMutation,
+      releaseIntent,
+    ],
   );
 
   const handleUndo = useCallback(() => {
     if (!undo) return;
     const data = undo;
+    if (!claimIntent(data.id, "restore")) return;
     setUndo(null);
     setErrorMessage(null);
     clearTimer();
@@ -111,9 +188,10 @@ export function useOptimisticDocumentTrash(
     operationSeqRef.current = operationSeq;
     startTransition(async () => {
       try {
-        await actions.restoreDocument(data.id);
+        await enqueueMutation(data.id, () => actions.restoreDocument(data.id));
       } catch {
         if (
+          !mountedRef.current ||
           !isCurrentDocumentTrashOperation(
             latestOperationByDocumentRef.current,
             data.id,
@@ -125,9 +203,11 @@ export function useOptimisticDocumentTrash(
         setRemovedIds((prev) => new Set(prev).add(data.id));
         setRestored((prev) => prev.filter((item) => item.id !== data.id));
         setErrorMessage("Could not restore the document. It remains in trash.");
+      } finally {
+        releaseIntent(data.id, "restore", operationSeq);
       }
     });
-  }, [actions, undo, clearTimer]);
+  }, [actions, claimIntent, undo, clearTimer, enqueueMutation, releaseIntent]);
 
   const base = documents.filter((document) => !removedIds.has(document.id));
   const baseIds = new Set(base.map((document) => document.id));

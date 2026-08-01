@@ -59,14 +59,26 @@ function waitForAsyncDrain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
 function renderDialog(
   hookRenderer: ReturnType<typeof createHookRenderer>,
   {
+    open = true,
     deck = buildMinimalDeck(),
     onKeepMine = async () => undefined,
     onUseTheirs = async () => undefined,
     onDismiss = () => undefined,
   }: {
+    open?: boolean;
     deck?: Deck;
     onKeepMine?: (
       localDeck: Deck,
@@ -78,7 +90,7 @@ function renderDialog(
 ): ReactNode {
   return hookRenderer.run(() =>
     ConflictRecoveryDialog({
-      open: true,
+      open,
       localDeck: deck,
       serverRevisionToken: "server-rev-2",
       onKeepMine,
@@ -102,9 +114,11 @@ describe("ConflictRecoveryDialog", () => {
 
   test("surfaces keep-mine failure state", async () => {
     const hookRenderer = createHookRenderer();
+    const deck = buildMinimalDeck();
     let keepMineCalls = 0;
 
     let tree = renderDialog(hookRenderer, {
+      deck,
       onKeepMine: async () => {
         keepMineCalls += 1;
         throw new Error("network down");
@@ -117,7 +131,7 @@ describe("ConflictRecoveryDialog", () => {
     clickKeepMine?.();
     await waitForAsyncDrain();
 
-    tree = renderDialog(hookRenderer);
+    tree = renderDialog(hookRenderer, { deck });
     assert.equal(keepMineCalls, 1);
     assert.match(
       flattenText(tree),
@@ -127,15 +141,17 @@ describe("ConflictRecoveryDialog", () => {
       findButtonByLabel(tree, "Dismiss")?.props.onClick as
         (() => void) | undefined
     )?.();
-    tree = renderDialog(hookRenderer);
+    tree = renderDialog(hookRenderer, { deck });
     assert.doesNotMatch(flattenText(tree), /Couldn't save your version/);
   });
 
   test("surfaces use-theirs reload failure state", async () => {
     const hookRenderer = createHookRenderer();
+    const deck = buildMinimalDeck();
     let useTheirsCalls = 0;
 
     let tree = renderDialog(hookRenderer, {
+      deck,
       onUseTheirs: async () => {
         useTheirsCalls += 1;
         throw new Error("reload failed");
@@ -148,7 +164,7 @@ describe("ConflictRecoveryDialog", () => {
     clickUseTheirs?.();
     await waitForAsyncDrain();
 
-    tree = renderDialog(hookRenderer);
+    tree = renderDialog(hookRenderer, { deck });
     assert.equal(useTheirsCalls, 1);
     assert.match(
       flattenText(tree),
@@ -158,6 +174,7 @@ describe("ConflictRecoveryDialog", () => {
 
   test("one synchronous operation boundary suppresses duplicate and competing resolution actions", async () => {
     const hookRenderer = createHookRenderer();
+    const deck = buildMinimalDeck();
     let keepMineCalls = 0;
     let useTheirsCalls = 0;
     let dismissCalls = 0;
@@ -176,6 +193,7 @@ describe("ConflictRecoveryDialog", () => {
     };
 
     let tree = renderDialog(hookRenderer, {
+      deck,
       onKeepMine,
       onUseTheirs,
       onDismiss,
@@ -192,6 +210,7 @@ describe("ConflictRecoveryDialog", () => {
     assert.equal(useTheirsCalls, 0);
 
     tree = renderDialog(hookRenderer, {
+      deck,
       onKeepMine,
       onUseTheirs,
       onDismiss,
@@ -208,6 +227,7 @@ describe("ConflictRecoveryDialog", () => {
     resolveKeepMine();
     await waitForAsyncDrain();
     tree = renderDialog(hookRenderer, {
+      deck,
       onKeepMine,
       onUseTheirs,
       onDismiss,
@@ -216,6 +236,46 @@ describe("ConflictRecoveryDialog", () => {
     assert.equal(
       findButtonByLabel(tree, "Keep my version")?.props.disabled,
       false,
+    );
+  });
+
+  test("closing and reopening invalidates an older pending conflict operation and its late failure", async () => {
+    const hookRenderer = createHookRenderer();
+    const oldAttempt = deferred<void>();
+    const oldDeck = buildMinimalDeck();
+    const replacementDeck = buildMinimalDeck();
+    let oldCalls = 0;
+    const onKeepMine = () => {
+      oldCalls += 1;
+      return oldAttempt.promise;
+    };
+
+    let tree = renderDialog(hookRenderer, { deck: oldDeck, onKeepMine });
+    (
+      findButtonByLabel(tree, "Keep my version")?.props.onClick as
+        (() => void) | undefined
+    )?.();
+    assert.equal(oldCalls, 1);
+
+    renderDialog(hookRenderer, { open: false, deck: oldDeck, onKeepMine });
+    tree = renderDialog(hookRenderer, {
+      deck: replacementDeck,
+      onKeepMine: async () => undefined,
+    });
+    const reopenedKeepMine = findButtonByLabel(tree, "Keep my version");
+    assert.ok(reopenedKeepMine);
+    assert.notEqual(reopenedKeepMine.props.disabled, true);
+
+    oldAttempt.reject(new Error("old conflict failed"));
+    await waitForAsyncDrain();
+    tree = renderDialog(hookRenderer, {
+      deck: replacementDeck,
+      onKeepMine: async () => undefined,
+    });
+
+    assert.doesNotMatch(
+      flattenText(tree),
+      /Couldn't save your version\. Check your connection and retry\./,
     );
   });
 

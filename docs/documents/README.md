@@ -14,22 +14,23 @@ and deck shapes are documented in [../data-model/](../data-model/README.md).
 
 ## Source Anchors
 
-| Area                        | Source                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------ |
-| Template picker UI          | [`src/components/template-picker-dialog.tsx`](../../src/components/template-picker-dialog.tsx)   |
-| Create from template/import | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                 |
-| Search-text projection      | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)         |
-| Document write port         | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts)       |
-| Restricted Prisma surface   | [`src/lib/prisma-surface.ts`](../../src/lib/prisma-surface.ts)                                   |
-| Duplicate document          | [`src/lib/document/duplicate.ts`](../../src/lib/document/duplicate.ts)                           |
-| List and search documents   | [`src/lib/document/list.ts`](../../src/lib/document/list.ts)                                     |
-| Query policy builder        | [`src/lib/document/query.ts`](../../src/lib/document/query.ts)                                   |
-| Tags                        | [`src/lib/document/tags.ts`](../../src/lib/document/tags.ts)                                     |
-| Favorites and title changes | [`src/lib/document/mutations.ts`](../../src/lib/document/mutations.ts)                           |
-| Trash and maintenance       | [`src/lib/document/trash.ts`](../../src/lib/document/trash.ts)                                   |
-| Trash lifecycle UI          | [`src/app/app/trash/trash-list.tsx`](../../src/app/app/trash/trash-list.tsx)                     |
-| Dashboard view model        | [`src/lib/dashboard/view-model.ts`](../../src/lib/dashboard/view-model.ts)                       |
-| Onboarding sample document  | [`src/lib/onboarding/seed-sample-document.ts`](../../src/lib/onboarding/seed-sample-document.ts) |
+| Area                        | Source                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Template picker UI          | [`src/components/template-picker-dialog.tsx`](../../src/components/template-picker-dialog.tsx)       |
+| Create from template/import | [`src/lib/document/create.ts`](../../src/lib/document/create.ts)                                     |
+| Search-text projection      | [`src/lib/document/content-projection.ts`](../../src/lib/document/content-projection.ts)             |
+| Document write port         | [`src/lib/document/document-write-port.ts`](../../src/lib/document/document-write-port.ts)           |
+| Restricted Prisma surface   | [`src/lib/prisma-surface.ts`](../../src/lib/prisma-surface.ts)                                       |
+| Duplicate document          | [`src/lib/document/duplicate.ts`](../../src/lib/document/duplicate.ts)                               |
+| List and search documents   | [`src/lib/document/list.ts`](../../src/lib/document/list.ts)                                         |
+| Query policy builder        | [`src/lib/document/query.ts`](../../src/lib/document/query.ts)                                       |
+| Tags                        | [`src/lib/document/tags.ts`](../../src/lib/document/tags.ts)                                         |
+| Favorites and title changes | [`src/lib/document/mutations.ts`](../../src/lib/document/mutations.ts)                               |
+| Trash and maintenance       | [`src/lib/document/trash.ts`](../../src/lib/document/trash.ts)                                       |
+| Trash lifecycle UI          | [`src/app/app/trash/trash-list.tsx`](../../src/app/app/trash/trash-list.tsx)                         |
+| Dashboard trash/undo UI     | [`src/app/app/use-optimistic-document-trash.ts`](../../src/app/app/use-optimistic-document-trash.ts) |
+| Dashboard view model        | [`src/lib/dashboard/view-model.ts`](../../src/lib/dashboard/view-model.ts)                           |
+| Onboarding sample document  | [`src/lib/onboarding/seed-sample-document.ts`](../../src/lib/onboarding/seed-sample-document.ts)     |
 
 ## Creation Paths
 
@@ -172,6 +173,13 @@ details. Failed optimistic favorite/title state rolls back, while Next
 redirect/not-found control flow remains authoritative. Rename and delete
 dialogs restore focus to the card action trigger.
 
+Dashboard delete and Undo update the visible list immediately, but durable
+mutations are claimed and serialized per document. Same-turn duplicate intent
+submits once, while a restore waits for its preceding delete to settle before
+reaching the server. Later opposite intents remain queued in user order, and
+only the latest intent may apply rollback feedback, so network reordering
+cannot leave persistence opposite to the visible optimistic state.
+
 Restore and permanent-delete confirmations share one dialog implementation.
 Pending actions suppress duplicate activation and lock dismissal. Ordinary
 Server Action failures remain inline with generic retry/dismiss controls, while
@@ -207,6 +215,7 @@ focus parent UI.
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/app/app/document-card.test.tsx`](../../src/app/app/document-card.test.tsx)
+- [`src/app/app/use-optimistic-document-trash.test.tsx`](../../src/app/app/use-optimistic-document-trash.test.tsx)
 - [`src/app/app/trash/trash-list.test.tsx`](../../src/app/app/trash/trash-list.test.tsx)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)
 - [`src/lib/document/tags.test.ts`](../../src/lib/document/tags.test.ts)

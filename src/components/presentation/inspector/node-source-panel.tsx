@@ -14,6 +14,7 @@ export interface NodeSourcePanelProps {
   node: SlideChildNode;
   onUpdateSource: (source: NodeSourceMetadata | undefined) => void;
   onRefreshSource?: () => void;
+  sourceRefreshPending?: boolean;
   onUnlinkSource?: () => void;
   onRelinkSource?: (block: SourceBlockIndexEntry) => void;
   classification?: SourceLinkClassification;
@@ -88,6 +89,7 @@ export function NodeSourcePanel({
   node,
   onUpdateSource,
   onRefreshSource,
+  sourceRefreshPending = false,
   onUnlinkSource,
   onRelinkSource,
   classification,
@@ -201,11 +203,14 @@ export function NodeSourcePanel({
         </button>
         <button
           type="button"
-          disabled={!source || onRefreshSource === undefined}
+          disabled={
+            !source || onRefreshSource === undefined || sourceRefreshPending
+          }
+          aria-busy={sourceRefreshPending}
           onClick={onRefreshSource}
           className="rounded-ds-sm border border-ds-border-subtle px-2 py-1 text-xs text-ds-text-secondary hover:bg-ds-state-hover disabled:opacity-40"
         >
-          Update from document
+          {sourceRefreshPending ? "Updating…" : "Update from document"}
         </button>
         <button
           type="button"

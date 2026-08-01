@@ -1914,6 +1914,7 @@ export function SlideEditor({
     documentInsertBlocks,
     sourceStatusLabel,
     sourceReviewStatus,
+    sourceRefreshPending,
     handleRefreshSelectedSource,
     handleSelectSourceItem,
     handleRefreshSourceAt,
@@ -2344,6 +2345,7 @@ export function SlideEditor({
       onResetToTheme={handleResetToTheme}
       onUpdateSelectedSource={handleUpdateSelectedSource}
       onRefreshSelectedSource={handleRefreshSelectedSource}
+      sourceRefreshPending={sourceRefreshPending}
       onUnlinkSelectedSource={
         activeSlide && selectedNode
           ? () => handleUnlinkSourceAt(activeSlide.id, selectedNode.id)

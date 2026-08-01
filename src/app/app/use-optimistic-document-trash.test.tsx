@@ -186,6 +186,34 @@ test("a resolved deleteDocument leaves the optimistic removal in place", async (
   mounted.unmount();
 });
 
+test("same-turn duplicate delete intent submits one server mutation", async () => {
+  const docA = buildDoc("doc-a");
+  const pendingDelete = deferred<void>();
+  let deleteCalls = 0;
+  const mounted = mountHook([docA], {
+    deleteDocument: () => {
+      deleteCalls += 1;
+      return pendingDelete.promise;
+    },
+    restoreDocument: () => Promise.resolve(),
+  });
+
+  await act(async () => {
+    const card = cardDataFor(docA);
+    mounted.latest().handleDelete(card);
+    mounted.latest().handleDelete(card);
+  });
+
+  assert.equal(deleteCalls, 1);
+  assert.deepEqual(mounted.latest().combinedDocuments, []);
+
+  pendingDelete.resolve();
+  await act(async () => {
+    await flush();
+  });
+  mounted.unmount();
+});
+
 // ---------------------------------------------------------------------------
 // Optimistic delete — failure path (rollback + error message)
 // ---------------------------------------------------------------------------
@@ -251,6 +279,48 @@ test("handleUndo optimistically restores the document and clears the undo afford
   );
   assert.equal(snapshot.undo, null);
   assert.equal(snapshot.errorMessage, null);
+
+  pendingRestore.resolve();
+  await act(async () => {
+    await flush();
+  });
+  mounted.unmount();
+});
+
+test("undo waits for the pending delete mutation before submitting restore", async () => {
+  const docA = buildDoc("doc-a");
+  const pendingDelete = deferred<void>();
+  const pendingRestore = deferred<void>();
+  const calls: string[] = [];
+  const mounted = mountHook([docA], {
+    deleteDocument: () => {
+      calls.push("delete");
+      return pendingDelete.promise;
+    },
+    restoreDocument: () => {
+      calls.push("restore");
+      return pendingRestore.promise;
+    },
+  });
+
+  await act(async () => {
+    mounted.latest().handleDelete(cardDataFor(docA));
+  });
+  await act(async () => {
+    mounted.latest().handleUndo();
+  });
+
+  assert.deepEqual(calls, ["delete"]);
+  assert.deepEqual(
+    mounted.latest().combinedDocuments.map((document) => document.id),
+    ["doc-a"],
+  );
+
+  pendingDelete.resolve();
+  await act(async () => {
+    await flush();
+  });
+  assert.deepEqual(calls, ["delete", "restore"]);
 
   pendingRestore.resolve();
   await act(async () => {

@@ -364,6 +364,31 @@ describe("inspector panels render and wire controls", () => {
     assert.ok(updates.length >= 10);
   });
 
+  test("NodeSourcePanel exposes selected-source refresh progress and blocks duplicate activation", () => {
+    const refresh = () => undefined;
+    const panel = NodeSourcePanel({
+      node: childNode({
+        source: {
+          documentId: "doc-1",
+          blockId: "block-1",
+          blockKind: "text",
+        },
+      }),
+      onUpdateSource: () => undefined,
+      onRefreshSource: refresh,
+      sourceRefreshPending: true,
+    });
+
+    const refreshButton = findElement(
+      panel,
+      (candidate) =>
+        candidate.type === "button" && candidate.props.onClick === refresh,
+    );
+    assert.ok(refreshButton);
+    assert.equal(refreshButton.props.disabled, true);
+    assert.equal(refreshButton.props.children, "Updating…");
+  });
+
   test("NodeGeometryPanel preserves aspect ratio and wires attribute toggles", () => {
     const layoutUpdates: unknown[] = [];
     const attributeUpdates: unknown[] = [];

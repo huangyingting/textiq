@@ -15,6 +15,7 @@ import {
   buildTextNode,
   resetBuilderCounter,
 } from "@/test/builders/presentation-deck";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 
 import {
   createSelectionState,
@@ -27,7 +28,16 @@ import {
   sourceStatusLabelForReview,
   type SourceReviewController,
   type UseSourceReviewControllerArgs,
+  useSourceReviewController,
 } from "./use-source-review-controller";
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
 
 const STALE_BLOCK: SourceBlockIndexEntry = {
   documentId: "doc-1",
@@ -241,5 +251,220 @@ describe("useSourceReviewController", () => {
     assert.deepEqual(selectedNodeIds(selection), ["text-stale"]);
     assert.equal(focusedNodeId, "text-stale");
     assert.equal(openedPanel, "source");
+  });
+
+  test("unmounting invalidates a pending selected-source refresh before it mutates the deck", async () => {
+    const deck = buildSourceLinkedDeck();
+    const activeSlide = deck.slides[0];
+    const selectedNode = activeSlide?.children[0];
+    assert.ok(activeSlide);
+    assert.ok(selectedNode?.source);
+    if (!activeSlide || !selectedNode?.source) return;
+
+    const refreshAttempt = deferred<{
+      contentPatch: {
+        paragraphs: Array<{ id: string; text: string }>;
+      };
+    }>();
+    const changedDecks: Deck[] = [];
+    const announcements: string[] = [];
+    const renderer = createReactRenderHarness();
+    const controller = renderer.run(() =>
+      useSourceReviewController({
+        documentId: "doc-1",
+        documentBlocks: [],
+        deck,
+        activeSlide,
+        selectedNode,
+        onRefreshSource: () => refreshAttempt.promise,
+        onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+        setActiveSlideIndex: () => undefined,
+        setSelection: () => undefined,
+        focusSelectedNodeSoon: () => undefined,
+        openInspectorPanel: () => undefined,
+        setStageAnnouncement: (message) => announcements.push(message),
+      }),
+    );
+    const settled = controller.handleRefreshSelectedSource();
+    assert.deepEqual(changedDecks, []);
+
+    renderer.cleanup();
+    refreshAttempt.resolve({
+      contentPatch: {
+        paragraphs: [
+          { id: "text-stale-source-p-1", text: "Late host refresh" },
+        ],
+      },
+    });
+    await settled;
+
+    assert.deepEqual(changedDecks, []);
+    assert.deepEqual(announcements, []);
+  });
+
+  test("selected-source refresh has one synchronous operation boundary and exposes pending state", async () => {
+    const deck = buildSourceLinkedDeck();
+    const activeSlide = deck.slides[0];
+    const selectedNode = activeSlide?.children[0];
+    assert.ok(activeSlide);
+    assert.ok(selectedNode?.source);
+    if (!activeSlide || !selectedNode?.source) return;
+
+    const refreshAttempt = deferred<{
+      contentPatch: {
+        paragraphs: Array<{ id: string; text: string }>;
+      };
+    }>();
+    let refreshCalls = 0;
+    const changedDecks: Deck[] = [];
+    const renderer = createReactRenderHarness();
+    const renderController = () =>
+      renderer.run(() =>
+        useSourceReviewController({
+          documentId: "doc-1",
+          documentBlocks: [],
+          deck,
+          activeSlide,
+          selectedNode,
+          onRefreshSource: () => {
+            refreshCalls += 1;
+            return refreshAttempt.promise;
+          },
+          onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+          setActiveSlideIndex: () => undefined,
+          setSelection: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+          openInspectorPanel: () => undefined,
+          setStageAnnouncement: () => undefined,
+        }),
+      );
+    let controller = renderController();
+    const first = controller.handleRefreshSelectedSource();
+    const duplicate = controller.handleRefreshSelectedSource();
+
+    assert.equal(refreshCalls, 1);
+    controller = renderController();
+    assert.equal(controller.sourceRefreshPending, true);
+
+    refreshAttempt.resolve({
+      contentPatch: {
+        paragraphs: [
+          { id: "text-stale-source-p-1", text: "Current host refresh" },
+        ],
+      },
+    });
+    await Promise.all([first, duplicate]);
+
+    controller = renderController();
+    assert.equal(controller.sourceRefreshPending, false);
+    assert.equal(changedDecks.length, 1);
+    renderer.cleanup();
+  });
+
+  test("a deck identity change invalidates the older selected-source refresh", async () => {
+    const oldDeck = buildSourceLinkedDeck();
+    const oldSlide = oldDeck.slides[0];
+    const oldNode = oldSlide?.children[0];
+    assert.ok(oldSlide);
+    assert.ok(oldNode?.source);
+    if (!oldSlide || !oldNode?.source) return;
+
+    const refreshAttempt = deferred<{
+      contentPatch: {
+        paragraphs: Array<{ id: string; text: string }>;
+      };
+    }>();
+    const changedDecks: Deck[] = [];
+    const renderer = createReactRenderHarness();
+    const renderController = (deck: Deck) => {
+      const activeSlide = deck.slides[0];
+      const selectedNode = activeSlide?.children[0];
+      assert.ok(activeSlide);
+      assert.ok(selectedNode?.source);
+      if (!activeSlide || !selectedNode?.source) {
+        throw new Error("Expected a source-linked node.");
+      }
+      return renderer.run(() =>
+        useSourceReviewController({
+          documentId: "doc-1",
+          documentBlocks: [],
+          deck,
+          activeSlide,
+          selectedNode,
+          onRefreshSource: () => refreshAttempt.promise,
+          onDeckChange: (nextDeck) => changedDecks.push(nextDeck),
+          setActiveSlideIndex: () => undefined,
+          setSelection: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+          openInspectorPanel: () => undefined,
+          setStageAnnouncement: () => undefined,
+        }),
+      );
+    };
+    const oldController = renderController(oldDeck);
+    const settled = oldController.handleRefreshSelectedSource();
+    const replacementDeck = buildSourceLinkedDeck();
+    const replacementController = renderController(replacementDeck);
+    assert.equal(replacementController.sourceRefreshPending, false);
+
+    refreshAttempt.resolve({
+      contentPatch: {
+        paragraphs: [
+          { id: "text-stale-source-p-1", text: "Obsolete host refresh" },
+        ],
+      },
+    });
+    await settled;
+
+    assert.deepEqual(changedDecks, []);
+    renderer.cleanup();
+  });
+
+  test("selected-source refresh rejection resolves with generic recoverable feedback", async () => {
+    const deck = buildSourceLinkedDeck();
+    const activeSlide = deck.slides[0];
+    const selectedNode = activeSlide?.children[0];
+    assert.ok(activeSlide);
+    assert.ok(selectedNode?.source);
+    if (!activeSlide || !selectedNode?.source) return;
+
+    const announcements: string[] = [];
+    const renderer = createReactRenderHarness();
+    const renderController = () =>
+      renderer.run(() =>
+        useSourceReviewController({
+          documentId: "doc-1",
+          documentBlocks: [],
+          deck,
+          activeSlide,
+          selectedNode,
+          onRefreshSource: async () => {
+            throw new Error("private source adapter failure");
+          },
+          onDeckChange: () => undefined,
+          setActiveSlideIndex: () => undefined,
+          setSelection: () => undefined,
+          focusSelectedNodeSoon: () => undefined,
+          openInspectorPanel: () => undefined,
+          setStageAnnouncement: (message) => announcements.push(message),
+        }),
+      );
+    let controller = renderController();
+    await controller.handleRefreshSelectedSource();
+    controller = renderController();
+
+    assert.equal(
+      controller.sourceReviewStatus,
+      "Could not refresh this source. Please try again.",
+    );
+    assert.deepEqual(announcements, [
+      "Could not refresh this source. Please try again.",
+    ]);
+    assert.doesNotMatch(
+      controller.sourceReviewStatus,
+      /private source adapter failure/,
+    );
+    assert.equal(controller.sourceRefreshPending, false);
+    renderer.cleanup();
   });
 });

@@ -14,7 +14,7 @@
 
 import { AlertTriangle, RefreshCw, Save, Trash2 } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button, Dialog } from "@/components/ui";
 import { cx } from "@/components/ui/tokens";
@@ -34,6 +34,41 @@ export interface ConflictRecoveryDialogProps {
 }
 
 type ConflictOperation = "keep-mine" | "use-theirs";
+
+interface ConflictIdentity {
+  localDeck: Deck;
+  open: boolean;
+  serverRevisionToken: string | null;
+}
+
+interface ConflictLifecycle {
+  deactivate: () => void;
+  identity: ConflictIdentity;
+  isActive: () => boolean;
+}
+
+interface OwnedConflictOperation {
+  lifecycle: ConflictLifecycle;
+  kind: ConflictOperation;
+}
+
+interface ConflictOperationError {
+  lifecycle: ConflictLifecycle;
+  message: string;
+}
+
+function createConflictLifecycle(
+  identity: ConflictIdentity,
+): ConflictLifecycle {
+  let active = true;
+  return {
+    deactivate: () => {
+      active = false;
+    },
+    identity,
+    isActive: () => active,
+  };
+}
 
 export async function resolveConflictOperation(
   operation: () => Promise<void>,
@@ -57,26 +92,56 @@ export function ConflictRecoveryDialog({
   onDismiss,
 }: ConflictRecoveryDialogProps) {
   const headingId = useId();
-  const operationRef = useRef<ConflictOperation | null>(null);
-  const [operation, setOperation] = useState<ConflictOperation | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const lifecycle = useMemo(
+    () => createConflictLifecycle({ localDeck, open, serverRevisionToken }),
+    [localDeck, open, serverRevisionToken],
+  );
+  const operationRef = useRef<OwnedConflictOperation | null>(null);
+  const [operationState, setOperationState] =
+    useState<OwnedConflictOperation | null>(null);
+  const [saveErrorState, setSaveErrorState] =
+    useState<ConflictOperationError | null>(null);
+  const operation =
+    operationState?.lifecycle === lifecycle ? operationState.kind : null;
+  const saveError =
+    saveErrorState?.lifecycle === lifecycle ? saveErrorState.message : null;
   const isWorking = operation !== null;
+
+  useEffect(
+    () => () => {
+      lifecycle.deactivate();
+      if (operationRef.current?.lifecycle === lifecycle) {
+        operationRef.current = null;
+      }
+    },
+    [lifecycle],
+  );
 
   async function runOperation(
     nextOperation: ConflictOperation,
     action: () => Promise<void>,
     fallbackError: string,
   ) {
-    if (operationRef.current) return;
-    operationRef.current = nextOperation;
-    setOperation(nextOperation);
-    setSaveError(null);
+    if (operationRef.current?.lifecycle === lifecycle) return;
+    const ownedOperation = { lifecycle, kind: nextOperation };
+    operationRef.current = ownedOperation;
+    setOperationState(ownedOperation);
+    setSaveErrorState(null);
     try {
       const error = await resolveConflictOperation(action, fallbackError);
-      if (error) setSaveError(error);
+      if (!lifecycle.isActive() || operationRef.current !== ownedOperation) {
+        return;
+      }
+      if (error) setSaveErrorState({ lifecycle, message: error });
     } finally {
-      operationRef.current = null;
-      setOperation(null);
+      if (operationRef.current === ownedOperation) {
+        operationRef.current = null;
+        if (lifecycle.isActive()) {
+          setOperationState((current) =>
+            current === ownedOperation ? null : current,
+          );
+        }
+      }
     }
   }
 
@@ -134,7 +199,11 @@ export function ConflictRecoveryDialog({
             <button
               type="button"
               aria-label="Dismiss conflict error"
-              onClick={() => setSaveError(null)}
+              onClick={() =>
+                setSaveErrorState((current) =>
+                  current?.lifecycle === lifecycle ? null : current,
+                )
+              }
               className="shrink-0 rounded px-1 font-medium hover:bg-red-100 dark:hover:bg-red-950/70"
             >
               Dismiss

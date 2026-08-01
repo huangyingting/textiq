@@ -454,7 +454,12 @@ UI event
 
 Source-link operations route through `refreshNodeSource`,
 `refreshAllSafeSourceLinks`, `unlinkNodeSource`, and `relinkNodeSource`, then
-use the same `onDeckChange` + autosave pipeline.
+use the same `onDeckChange` + autosave pipeline. Selected-node source refresh
+has one synchronous operation boundary and exposes `Updating…` progress in the
+inspector. Closing the editor or replacing its document/deck invalidates the
+request before a late host result can overwrite newer deck state, move
+selection, or announce success. Host refresh failures remain retryable and are
+reported with safe live feedback.
 
 Node content updates write `node.content`; style overrides write
 `node.localStyle`; source-link updates write `node.source`. Slide-level styling
@@ -494,7 +499,9 @@ competing activation cannot start a second resolution before React renders the
 pending state; while resolution is pending, both choices and every dialog
 dismissal path remain locked. Ordinary failures retain the conflict and show
 dismissible retry feedback, while Next.js redirect/not-found control flow
-escapes to the framework.
+escapes to the framework. Operation ownership is scoped to the active conflict
+identity, so closing the dialog or replacing its deck invalidates pending work;
+late settlement cannot lock a replacement conflict or publish stale feedback.
 
 Presence is advisory only. It shows who has the deck open and which slide they
 are viewing, but optimistic revision tokens are the conflict authority.
