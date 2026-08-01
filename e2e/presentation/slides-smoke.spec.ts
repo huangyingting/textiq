@@ -57,6 +57,14 @@ function slidesDocUrl(): string | undefined {
   return process.env.E2E_SLIDES_DOC_URL;
 }
 
+function smokeOwnerCredentials() {
+  return e2eProfileEnabled() ? profileOwnerCredentials() : ownerCredentials();
+}
+
+function smokeDocumentUrl(): string | undefined {
+  return e2eProfileEnabled() ? profileDocPath() : slidesDocUrl();
+}
+
 async function openIsolatedMutationEditor(
   page: Page,
   fixtureName: PresentationTestFixtureName,
@@ -208,12 +216,12 @@ test.describe("slides editor smoke", () => {
   test("authenticated user can navigate to the Slides editor", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
+    const creds = smokeOwnerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
 
     await login(page, creds!);
 
-    const docUrl = slidesDocUrl();
+    const docUrl = smokeDocumentUrl();
     if (docUrl) {
       // Use the seeded document URL directly.
       await page.goto(docUrl);
@@ -758,9 +766,9 @@ test.describe("slides export smoke", () => {
   test("export menu or dialog is reachable from the Slides editor", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
+    const creds = smokeOwnerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
+    const docUrl = smokeDocumentUrl();
     test.skip(!docUrl, "Set E2E_SLIDES_DOC_URL to run the export smoke");
 
     await login(page, creds!);
@@ -847,7 +855,7 @@ test.describe("authenticated workspace accessibility", () => {
   test("workspace page has a main landmark and a non-empty page title", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
+    const creds = smokeOwnerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
 
     await login(page, creds!);
@@ -865,7 +873,7 @@ test.describe("authenticated workspace accessibility", () => {
   test("authenticated workspace exposes a visible create-document control", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
+    const creds = smokeOwnerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
 
     await login(page, creds!);
@@ -878,12 +886,7 @@ test.describe("authenticated workspace accessibility", () => {
       .or(page.getByRole("link", { name: /new|create/i }))
       .first();
 
-    const count = await createControl.count();
-    if (count > 0) {
-      await expect(createControl).toBeVisible({ timeout: 10_000 });
-    }
-    // If no matching control exists the workspace layout may differ by plan;
-    // we don't fail — presence of the control is the happy-path assertion.
+    await expect(createControl).toBeVisible({ timeout: 10_000 });
   });
 });
 
@@ -987,9 +990,9 @@ test.describe("slides editor accessible toolbar controls", () => {
   test("slide editor toolbar controls are reachable by accessible role", async ({
     page,
   }) => {
-    const creds = ownerCredentials();
+    const creds = smokeOwnerCredentials();
     test.skip(!creds, "Set E2E_USER_EMAIL/E2E_USER_PASSWORD to run this flow");
-    const docUrl = slidesDocUrl();
+    const docUrl = smokeDocumentUrl();
     test.skip(
       !docUrl,
       "Set E2E_SLIDES_DOC_URL to run the editor accessibility check",

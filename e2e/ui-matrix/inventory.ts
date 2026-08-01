@@ -357,13 +357,17 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/slides-smoke.spec.ts",
     owners: ["presentation"],
     coverage:
-      "Slide edit, inline rich-text selection formatting with link apply/remove and font-size focus ownership, list conversion/indentation, table-cell keyboard editing plus row/column/header commands, history/reload persistence, resize/duplicate, add-slide, and visual-insert mutations use independent deterministic documents and Yjs rooms; optional external fixtures cover non-mutating smoke.",
+      "The deterministic profile covers slide navigation, edit/present/export reachability, inline rich-text selection formatting with link apply/remove and font-size focus ownership, list conversion/indentation, table-cell keyboard editing plus row/column/header commands, history/reload persistence, resize/duplicate, add-slide, visual-insert mutations, workspace landmarks/create controls, and accessible slide-toolbar controls; optional external fixtures can run the same non-mutating smoke outside the profile.",
     runMode: "advisory-ci",
     prerequisites: [
-      "E2E_PROFILE=1 for mutating coverage",
-      "optional E2E_USER_EMAIL/PASSWORD and E2E_SLIDES_DOC_URL",
+      "E2E_PROFILE=1 for complete deterministic coverage",
+      "optional E2E_USER_EMAIL/PASSWORD and E2E_SLIDES_DOC_URL outside the profile",
     ],
-    roles: ["seeded owner", "owner", "anonymous fallback routes"],
+    roles: [
+      "seeded owner",
+      "optional external owner",
+      "anonymous fallback routes",
+    ],
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
