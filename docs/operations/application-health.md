@@ -33,7 +33,10 @@ application can receive traffic. It returns HTTP 503 with
 
 Readiness requires:
 
-- a nonblank `AUTH_SECRET` in production; and
+- a nonblank `AUTH_SECRET` in production;
+- production authentication email delivery configured with
+  `AUTH_EMAIL_DELIVERY=resend`, `AUTH_EMAIL_FROM`, `RESEND_API_KEY`, and a
+  canonical HTTPS `NEXT_PUBLIC_APP_URL`; and
 - a successful bounded query against the expected Prisma `User` schema, which
   validates database connectivity and schema availability without returning
   user data.
@@ -50,10 +53,11 @@ healthy process. This separation avoids restart loops during a database outage
 while still preventing requests from reaching an instance that cannot serve
 them.
 
-Do not add AI providers, Stripe, object storage, or similar optional services to
-application readiness. Those integrations support features that can fail in a
-controlled or degraded mode and should not take the entire application out of
-traffic.
+Authentication email is readiness-critical because credentials recovery and
+account verification are built-in account flows. Do not add AI providers,
+Stripe, object storage, or similar optional services to application readiness.
+Those integrations support features that can fail in a controlled or degraded
+mode and should not take the entire application out of traffic.
 
 ## Deployment Check
 

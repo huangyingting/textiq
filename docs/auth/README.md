@@ -24,6 +24,7 @@ and remains an authenticated account.
 | Password reset              | [`src/lib/auth/password-reset-service.ts`](../../src/lib/auth/password-reset-service.ts)                                                           |
 | Password reset UI           | [`src/app/reset-password/reset-password-form.tsx`](../../src/app/reset-password/reset-password-form.tsx)                                           |
 | Email verification          | [`src/lib/auth/email-verification-service.ts`](../../src/lib/auth/email-verification-service.ts)                                                   |
+| Auth email delivery         | [`src/lib/auth/email.ts`](../../src/lib/auth/email.ts), [`src/lib/auth/auth-email-runtime.ts`](../../src/lib/auth/auth-email-runtime.ts)           |
 | Single-use token primitive  | [`src/lib/auth/single-use-token.ts`](../../src/lib/auth/single-use-token.ts)                                                                       |
 | Form operation ownership    | [`src/lib/actions/use-owned-form-action.ts`](../../src/lib/actions/use-owned-form-action.ts)                                                       |
 | Account settings model      | [`src/lib/settings/view-model.ts`](../../src/lib/settings/view-model.ts)                                                                           |
@@ -106,6 +107,16 @@ verification tokens active when issuing a new link, so concurrent verification
 emails remain valid until they are consumed or expire. Each token is still
 single-use: consuming one verification token marks it used, verifies the email,
 and invalidates that user's other outstanding verification tokens.
+
+Authentication email delivery uses the shared `AuthEmailDeliveryPort` seam.
+Development defaults to a console adapter that prints `DEV ONLY` links.
+Production requires `AUTH_EMAIL_DELIVERY=resend`, a valid `AUTH_EMAIL_FROM`, a
+`RESEND_API_KEY`, and a canonical HTTPS `NEXT_PUBLIC_APP_URL`; invalid or partial
+configuration fails closed and makes application readiness return 503. The
+Resend adapter sends minimal text and HTML bodies through the provider's HTTPS
+endpoint, escapes action URLs in HTML, never reads provider error bodies, and
+aborts delivery after ten seconds. Provider details, recipients, and raw-token
+links are never returned through delivery errors or public health responses.
 
 Reset-password submission is synchronously single-flight, so a repeated
 same-event activation cannot queue a second consume that overwrites success

@@ -1,4 +1,5 @@
 import { createApplicationReadinessProbe } from "@/lib/health/readiness";
+import { isAuthEmailConfigurationReady } from "@/lib/auth/auth-email-runtime";
 import { prisma } from "@/lib/prisma";
 
 import { createReadinessHandler } from "./handler";
@@ -12,7 +13,8 @@ export const GET = createReadinessHandler(
       await prisma.user.findFirst({ select: { id: true } });
     },
     isConfigurationReady: () =>
-      process.env.NODE_ENV !== "production" ||
-      Boolean(process.env.AUTH_SECRET?.trim()),
+      (process.env.NODE_ENV !== "production" ||
+        Boolean(process.env.AUTH_SECRET?.trim())) &&
+      isAuthEmailConfigurationReady(),
   }),
 );

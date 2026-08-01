@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   app,
   auth,
+  authEmail,
   azure,
   db,
   google,
@@ -26,6 +27,9 @@ import {
 
 const MANAGED_VARS = [
   "AUTH_SECRET",
+  "AUTH_EMAIL_DELIVERY",
+  "AUTH_EMAIL_FROM",
+  "RESEND_API_KEY",
   "DB_PROVIDER",
   "DATABASE_URL",
   "STRIPE_SECRET_KEY",
@@ -133,6 +137,31 @@ describe("auth", () => {
   it("requireSecret() returns the value when set", () => {
     process.env.AUTH_SECRET = "s3cret";
     assert.equal(auth.requireSecret(), "s3cret");
+  });
+});
+
+describe("authEmail", () => {
+  it("returns undefined for missing or blank delivery configuration", () => {
+    assert.equal(authEmail.delivery(), undefined);
+    assert.equal(authEmail.from(), undefined);
+    assert.equal(authEmail.resendApiKey(), undefined);
+
+    process.env.AUTH_EMAIL_DELIVERY = "   ";
+    process.env.AUTH_EMAIL_FROM = "";
+    process.env.RESEND_API_KEY = "  ";
+    assert.equal(authEmail.delivery(), undefined);
+    assert.equal(authEmail.from(), undefined);
+    assert.equal(authEmail.resendApiKey(), undefined);
+  });
+
+  it("returns trimmed delivery configuration", () => {
+    process.env.AUTH_EMAIL_DELIVERY = "  resend  ";
+    process.env.AUTH_EMAIL_FROM = "  TextIQ <auth@example.com>  ";
+    process.env.RESEND_API_KEY = "  re_secret  ";
+
+    assert.equal(authEmail.delivery(), "resend");
+    assert.equal(authEmail.from(), "TextIQ <auth@example.com>");
+    assert.equal(authEmail.resendApiKey(), "re_secret");
   });
 });
 

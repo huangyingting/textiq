@@ -99,6 +99,28 @@ export const auth = {
 } as const;
 
 /**
+ * Authentication email delivery configuration.
+ *
+ * Development defaults to the console adapter. Production runtime selection
+ * and cross-field validation live in `@/lib/auth/auth-email-runtime`, which
+ * consumes these read-at-call-time accessors.
+ */
+export const authEmail = {
+  /** Explicit delivery adapter name, or `undefined` when unset. */
+  delivery(): string | undefined {
+    return readOptional("AUTH_EMAIL_DELIVERY");
+  },
+  /** Sender identity accepted by the configured delivery provider. */
+  from(): string | undefined {
+    return readOptional("AUTH_EMAIL_FROM");
+  },
+  /** Resend API key, or `undefined` when unset. */
+  resendApiKey(): string | undefined {
+    return readOptional("RESEND_API_KEY");
+  },
+} as const;
+
+/**
  * Database configuration — delegated to `@/lib/db-provider`, the single source
  * of truth for provider/URL resolution (#147). Re-exposed here so the full env
  * surface is visible in one place without duplicating the resolution logic.

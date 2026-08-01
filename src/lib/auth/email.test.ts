@@ -196,6 +196,56 @@ test("production fallback never logs live auth links", async () => {
   );
 });
 
+test("production runtime routes auth email through configured Resend delivery", async () => {
+  configureAuthEmailDeliveryPort(null);
+  const managedEnv = [
+    "NODE_ENV",
+    "AUTH_EMAIL_DELIVERY",
+    "AUTH_EMAIL_FROM",
+    "RESEND_API_KEY",
+    "NEXT_PUBLIC_APP_URL",
+  ] as const;
+  const previousEnv = Object.fromEntries(
+    managedEnv.map((name) => [name, process.env[name]]),
+  ) as Record<(typeof managedEnv)[number], string | undefined>;
+  const env = process.env as Record<string, string | undefined>;
+  const originalFetch = globalThis.fetch;
+  const requests: RequestInit[] = [];
+
+  env.NODE_ENV = "production";
+  env.AUTH_EMAIL_DELIVERY = "resend";
+  env.AUTH_EMAIL_FROM = "TextIQ <auth@example.com>";
+  env.RESEND_API_KEY = "re_secret";
+  env.NEXT_PUBLIC_APP_URL = "https://textiq.example";
+  globalThis.fetch = (async (_input, init) => {
+    requests.push(init ?? {});
+    return new Response(null, { status: 202 });
+  }) as typeof fetch;
+
+  try {
+    await deliverAuthEmail({
+      kind: "password-reset",
+      to: "ada@example.com",
+      resetUrl: "https://textiq.example/reset-password?token=reset",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const name of managedEnv) {
+      const previous = previousEnv[name];
+      if (previous === undefined) delete env[name];
+      else env[name] = previous;
+    }
+  }
+
+  assert.equal(requests.length, 1);
+  const body = JSON.parse(String(requests[0]?.body)) as {
+    subject: string;
+    to: string[];
+  };
+  assert.equal(body.subject, "Reset your TextIQ password");
+  assert.deepEqual(body.to, ["ada@example.com"]);
+});
+
 test("deliverAuthEmail never forwards transport diagnostics from adapter failures", async () => {
   configureAuthEmailDeliveryPort({
     async send() {
