@@ -294,7 +294,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/presentation-controls.spec.ts",
     owners: ["presentation", "accessibility"],
     coverage:
-      "Real Chromium multi-select Arrange, precision guide preferences/snapping, built-in themes, and custom theme authoring with isolated mutation fixtures.",
+      "Real Chromium multi-select Arrange, precision guide preferences/snapping, themes, source review, and speaker-note history/persistence/presenter lifecycles with isolated mutation fixtures.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],

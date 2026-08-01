@@ -194,6 +194,11 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2e-isolated-source-actions",
     "sourceReview",
   ),
+  speakerNotes: presentationFixture(
+    "e2eisolatedspeakernotes001",
+    "e2eisolatedshr32",
+    "e2e-isolated-speaker-notes",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -244,6 +249,7 @@ export const PRESENTATION_CONTROL_FIXTURES = {
   slideMaster: "slideMaster",
   sourceReview: "sourceReview",
   sourceActions: "sourceActions",
+  speakerNotes: "speakerNotes",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const E2E_CUSTOM_THEME_FIXTURE = {

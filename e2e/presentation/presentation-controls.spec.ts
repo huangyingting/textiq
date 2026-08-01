@@ -52,7 +52,8 @@ async function openPresentationFixture(
     | "slideRatio"
     | "slideMaster"
     | "sourceReview"
-    | "sourceActions",
+    | "sourceActions"
+    | "speakerNotes",
 ): Promise<{ editor: Locator; canvas: Locator }> {
   await login(
     page,
@@ -925,6 +926,80 @@ test.describe("presentation editing controls", () => {
         .first(),
     ).toContainText(refreshedText, { timeout: 30_000 });
     await publicPage.close();
+  });
+
+  test("speaker notes preserve slide scope through history, reload, and presenter mode", async ({
+    page,
+  }, testInfo) => {
+    const fixtureName = PRESENTATION_CONTROL_FIXTURES.speakerNotes;
+    const documentPath = profileDocPath(fixtureName, testInfo);
+    const updatedNotes =
+      "Pause for the production readiness summary and invite questions.";
+    const seededSecondSlideNotes =
+      "Use this seeded slide to verify presentation navigation.";
+    const { editor, canvas } = await openPresentationFixture(
+      page,
+      testInfo,
+      "speakerNotes",
+    );
+    const notesButton = editor.getByRole("button", {
+      name: "Notes",
+      exact: true,
+    });
+    const speakerNotes = editor.getByRole("textbox", {
+      name: "Speaker Notes",
+      exact: true,
+    });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+
+    await notesButton.click();
+    await expect(speakerNotes).toBeVisible();
+    await expect(speakerNotes).toHaveValue("");
+    await waitForSlideAutosaveAfter(page, () =>
+      speakerNotes.fill(updatedNotes),
+    );
+    await expect(speakerNotes).toHaveValue(updatedNotes);
+    await expect(undo).toBeEnabled();
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(speakerNotes).toHaveValue("");
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(speakerNotes).toHaveValue(updatedNotes);
+
+    await editor
+      .getByRole("button", {
+        name: new RegExp(`^Slide 2: ${E2E_PROFILE_FIXTURE.slideTwoTitleText}`),
+      })
+      .click();
+    await expect(speakerNotes).toHaveValue(seededSecondSlideNotes);
+    await editor
+      .getByRole("button", {
+        name: new RegExp(`^Slide 1: ${E2E_PROFILE_FIXTURE.slideTitleText}`),
+      })
+      .click();
+    await expect(speakerNotes).toHaveValue(updatedNotes);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await notesButton.click();
+    await expect(speakerNotes).toHaveValue(updatedNotes);
+
+    await page.goto(documentPath);
+    await waitForDocumentEditorReady(page);
+    const presentButton = page.getByRole("button", { name: /^Present / });
+    const presentation = page.getByRole("region", { name: "Presentation" });
+    await expect(async () => {
+      await presentButton.click();
+      await expect(presentation).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 45_000 });
+    await presentation
+      .getByRole("button", { name: "Show speaker notes" })
+      .click();
+    await expect(
+      presentation.getByText(updatedNotes, { exact: true }),
+    ).toBeVisible();
   });
 
   test("custom theme authoring saves, re-enters the picker, applies, and persists", async ({

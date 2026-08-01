@@ -130,20 +130,82 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     ).toBeVisible();
   });
 
-  test("bottom dock exposes notes, rail, and zoom controls", async ({
+  test("bottom dock zoom controls change canvas geometry without entering deck history", async ({
     page,
   }) => {
     await loginAsProfileOwner(page, `${profileDocPath()}/slides`);
     const editor = page.locator('[data-slide-editor="true"]').first();
     await expect(editor).toBeVisible({ timeout: 30_000 });
+    const canvas = editor.locator('[data-slide-canvas="true"]').first();
+    const stageFrame = editor.locator('[data-slide-stage-frame="true"]');
+    const stageFrameWidth = async () => {
+      const box = await stageFrame.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box?.width).toBeGreaterThan(0);
+      return box?.width ?? 0;
+    };
+    await waitForStableSlideStage(canvas);
 
     await expect(
       editor.getByRole("button", { name: "Hide slide thumbnails" }),
     ).toBeVisible();
     await expect(editor.getByRole("button", { name: "Notes" })).toBeVisible();
-    await expect(
-      editor.getByRole("slider", { name: "Slide zoom" }),
-    ).toBeVisible();
+    const zoomSlider = editor.getByRole("slider", { name: "Slide zoom" });
+    const zoomTrigger = editor.getByRole("button", {
+      name: /^Set slide zoom \(\d+%\)$/,
+    });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    await expect(zoomSlider).toBeVisible();
+    await expect(zoomSlider).toHaveValue("100");
+    await expect(undo).toBeDisabled();
+    const fitWidth = await stageFrameWidth();
+
+    await zoomSlider.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(zoomSlider).toHaveValue("105");
+    await expect(zoomTrigger).toHaveAccessibleName("Set slide zoom (105%)");
+    await expect(undo).toBeDisabled();
+
+    await zoomTrigger.click();
+    const zoomMenu = page.getByRole("menu", { name: "Zoom presets" });
+    await expect(zoomMenu).toBeVisible();
+    const zoom200 = zoomMenu.getByRole("menuitemradio", { name: "200%" });
+    const zoom150 = zoomMenu.getByRole("menuitemradio", { name: "150%" });
+    await expect(zoom200).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(zoom150).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(zoomMenu).toHaveCount(0);
+    await expect(zoomSlider).toHaveValue("150");
+    await expect(zoomTrigger).toBeFocused();
+    await waitForStableSlideStage(stageFrame);
+    const zoomedWidth = await stageFrameWidth();
+    expect(zoomedWidth / fitWidth).toBeCloseTo(1.5, 1);
+    await expect(undo).toBeDisabled();
+
+    await zoomTrigger.click();
+    await zoomMenu
+      .getByRole("menuitemradio", { name: "25%", exact: true })
+      .click();
+    await expect(zoomSlider).toHaveValue("25");
+    await waitForStableSlideStage(stageFrame);
+    const minimumWidth = await stageFrameWidth();
+    expect(minimumWidth / fitWidth).toBeCloseTo(0.25, 1);
+    await expect(undo).toBeDisabled();
+
+    await zoomTrigger.click();
+    await zoomMenu.getByRole("menuitem", { name: "Fit", exact: true }).click();
+    await expect(zoomSlider).toHaveValue("100");
+    await waitForStableSlideStage(stageFrame);
+    const restoredWidth = await stageFrameWidth();
+    expect(restoredWidth / fitWidth).toBeCloseTo(1, 2);
+    await expect(undo).toBeDisabled();
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(zoomSlider).toHaveValue("100");
+    await expect(undo).toBeDisabled();
   });
 
   test("public present route exposes first-slide content and navigation controls", async ({
