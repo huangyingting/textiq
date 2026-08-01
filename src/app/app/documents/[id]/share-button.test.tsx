@@ -424,6 +424,84 @@ describe("ShareButton", () => {
     });
   });
 
+  test("switching documents resets sharing state and rejects a late mutation result from the old document", async () => {
+    await withShareDom(async () => {
+      let resolveDocumentOne!: (value: ActionResult<ShareSettings>) => void;
+      globalForActions.__shareButtonActionsTestState.toggleImpl = (id) => {
+        if (id === "doc-1") {
+          return new Promise((resolve) => {
+            resolveDocumentOne = resolve;
+          });
+        }
+        return Promise.resolve({ ok: true, data: SHARED_SETTINGS });
+      };
+      const renderer = mountWithPortalDom(
+        <ShareButton
+          id="doc-1"
+          initialIsShared={false}
+          initialShareId={null}
+        />,
+      );
+      try {
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        let oldDocumentMutation!: Promise<void>;
+        act(() => {
+          oldDocumentMutation = renderer.root
+            .findByProps({
+              "aria-labelledby": "share-toggle-label",
+            })
+            .props.onCheckedChange(true) as Promise<void>;
+        });
+
+        act(() => {
+          renderer.update(
+            <ShareButton
+              id="doc-2"
+              initialIsShared
+              initialShareId="share222"
+              initialSlug="second-document"
+            />,
+          );
+        });
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        assert.equal(
+          renderer.root.findByProps({
+            "aria-labelledby": "share-toggle-label",
+          }).props.disabled,
+          false,
+        );
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Public share link" }).props
+            .value,
+          "https://textiq.test/share/second-document-share222",
+        );
+
+        await act(async () => {
+          resolveDocumentOne({
+            ok: true,
+            data: {
+              ...SHARED_SETTINGS,
+              shareId: "old-document-late",
+              slug: "old-document",
+            },
+          });
+          await oldDocumentMutation;
+        });
+        assert.equal(
+          renderer.root.findByProps({ "aria-label": "Public share link" }).props
+            .value,
+          "https://textiq.test/share/second-document-share222",
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("Next navigation control flow escapes share mutation recovery", async () => {
     const frameworkError = new Error("NEXT_REDIRECT:/login");
     await assert.rejects(
@@ -527,6 +605,73 @@ describe("ShareButton", () => {
 
         assert.match(textOf(renderer.root), /Copied!/);
         assert.match(textOf(renderer.root), /Public share link copied\./);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("switching documents invalidates a pending clipboard result and resets copy controls", async () => {
+    await withShareDom(async () => {
+      let resolveWrite!: () => void;
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+          clipboard: {
+            writeText() {
+              return new Promise<void>((resolve) => {
+                resolveWrite = resolve;
+              });
+            },
+          },
+        },
+      });
+      const renderer = mountWithPortalDom(
+        <ShareButton
+          id="doc-1"
+          initialIsShared
+          initialShareId="share123"
+          initialSlug="first-document"
+        />,
+      );
+      try {
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        const oldCopyButton = renderer.root
+          .findAllByType("button")
+          .find((node) => textOf(node) === "Copy")!;
+        let oldCopy!: Promise<void>;
+        act(() => {
+          oldCopy = oldCopyButton.props.onClick() as Promise<void>;
+        });
+        assert.match(textOf(renderer.root), /Copying…/);
+
+        act(() => {
+          renderer.update(
+            <ShareButton
+              id="doc-2"
+              initialIsShared
+              initialShareId="share222"
+              initialSlug="second-document"
+            />,
+          );
+        });
+        act(() => {
+          (findByAria(renderer.root, "Share").props.onClick as () => void)();
+        });
+        const newCopyButton = renderer.root
+          .findAllByType("button")
+          .find((node) => textOf(node) === "Copy")!;
+        assert.equal(newCopyButton.props.disabled, false);
+        assert.doesNotMatch(textOf(renderer.root), /Copying public share link/);
+
+        await act(async () => {
+          resolveWrite();
+          await oldCopy;
+        });
+        assert.doesNotMatch(textOf(renderer.root), /Public share link copied/);
+        assert.doesNotMatch(textOf(renderer.root), /Copied!/);
       } finally {
         act(() => renderer.unmount());
       }

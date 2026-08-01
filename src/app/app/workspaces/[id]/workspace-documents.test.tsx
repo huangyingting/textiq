@@ -328,6 +328,90 @@ describe("WorkspaceDocuments", () => {
     }
   });
 
+  test("switching workspaces resets to loading and rejects a late list result from the old workspace", async () => {
+    let resolveWorkspaceOne!: (value: {
+      documents: WorkspaceDocument[];
+      hasMore: boolean;
+    }) => void;
+    let resolveWorkspaceTwo!: (value: {
+      documents: WorkspaceDocument[];
+      hasMore: boolean;
+    }) => void;
+    state().listWorkspaceDocumentsForUser = async (_userId, workspaceId) =>
+      new Promise((resolve) => {
+        if (workspaceId === "workspace-1") {
+          resolveWorkspaceOne = resolve;
+        } else {
+          resolveWorkspaceTwo = resolve;
+        }
+      });
+    const renderer = mountWorkspaceDocuments({
+      workspaceId: "workspace-1",
+      userRole: "owner",
+    });
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      const WorkspaceDocuments = mod.WorkspaceDocuments;
+      act(() => {
+        renderer.update(
+          <WorkspaceDocuments workspaceId="workspace-2" userRole="owner" />,
+        );
+      });
+      assert.equal(
+        renderer.root.findByProps({ role: "status" }).props.children,
+        "Loading documents...",
+      );
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      await act(async () => {
+        resolveWorkspaceOne({
+          documents: [
+            {
+              id: "old-document",
+              title: "Old workspace document",
+              updatedAt: new Date("2024-01-01"),
+            },
+          ],
+          hasMore: false,
+        });
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        renderer.root.findByProps({ role: "status" }).props.children,
+        "Loading documents...",
+      );
+      assert.doesNotMatch(
+        JSON.stringify(renderer.toJSON()),
+        /Old workspace document/,
+      );
+
+      await act(async () => {
+        resolveWorkspaceTwo({
+          documents: [
+            {
+              id: "new-document",
+              title: "New workspace document",
+              updatedAt: new Date("2024-02-01"),
+            },
+          ],
+          hasMore: false,
+        });
+        await waitForAsyncDrain();
+      });
+      assert.match(JSON.stringify(renderer.toJSON()), /New workspace document/);
+      assert.doesNotMatch(
+        JSON.stringify(renderer.toJSON()),
+        /Old workspace document/,
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the document grid with formatted dates once loaded, and the hasMore hint", async () => {
     state().listWorkspaceDocumentsForUser = async () => ({
       documents: [
@@ -482,6 +566,7 @@ describe("WorkspaceDocuments", () => {
 
   test("choosing a template suppresses duplicate activation, locks the picker pending, and redirects after one durable create", async () => {
     let resolveCreation!: (value: { id: string }) => void;
+    let pendingPickerCreation!: Promise<void>;
     state().createWorkspaceDocumentForUser = async (
       userId,
       workspaceId,
@@ -516,7 +601,7 @@ describe("WorkspaceDocuments", () => {
         "aria-label": `${template.name} template`,
       });
       act(() => {
-        templateButton.props.onClick();
+        pendingPickerCreation = templateButton.props.onClick();
         templateButton.props.onClick();
       });
       assert.equal(
@@ -548,8 +633,7 @@ describe("WorkspaceDocuments", () => {
       await assert.rejects(async () => {
         await act(async () => {
           resolveCreation({ id: "doc-1" });
-          await waitForAsyncDrain();
-          await waitForAsyncDrain();
+          await pendingPickerCreation;
         });
       }, /NEXT_REDIRECT:\/app\/documents\/doc-1$/);
       assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [
@@ -560,6 +644,104 @@ describe("WorkspaceDocuments", () => {
           template.id,
         ],
       ]);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
+  test("switching workspaces clears a pending template create and contains its late failure to the old workspace", async () => {
+    let rejectWorkspaceOne!: (reason: Error) => void;
+    state().createWorkspaceDocumentForUser = async (
+      userId,
+      workspaceId,
+      templateId,
+    ) => {
+      state().calls.push([
+        "createWorkspaceDocumentForUser",
+        userId,
+        workspaceId,
+        templateId,
+      ]);
+      return new Promise<{ id: string }>((_resolve, reject) => {
+        rejectWorkspaceOne = reject;
+      });
+    };
+    const renderer = mountWorkspaceDocuments({
+      workspaceId: "workspace-1",
+      userRole: "owner",
+    });
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      act(() => {
+        renderer.root.findByProps({ children: "New document" }).props.onClick();
+      });
+      const template = TEMPLATE_CATALOG[0]!;
+      let oldWorkspaceCreation!: Promise<void>;
+      act(() => {
+        oldWorkspaceCreation = renderer.root
+          .findByProps({ "aria-label": `${template.name} template` })
+          .props.onClick();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      const WorkspaceDocuments = mod.WorkspaceDocuments;
+      act(() => {
+        renderer.update(
+          <WorkspaceDocuments workspaceId="workspace-2" userRole="owner" />,
+        );
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.throws(() => renderer.root.findByProps({ role: "dialog" }));
+
+      await act(async () => {
+        rejectWorkspaceOne(new Error("old workspace create failed"));
+        await oldWorkspaceCreation;
+      });
+      assert.throws(() => renderer.root.findByProps({ role: "alert" }));
+
+      state().createWorkspaceDocumentForUser = async (
+        userId,
+        workspaceId,
+        templateId,
+      ) => {
+        state().calls.push([
+          "createWorkspaceDocumentForUser",
+          userId,
+          workspaceId,
+          templateId,
+        ]);
+        throw new Error("new workspace expected failure");
+      };
+      act(() => {
+        renderer.root.findByProps({ children: "New document" }).props.onClick();
+      });
+      await act(async () => {
+        await renderer.root
+          .findByProps({ "aria-label": `${template.name} template` })
+          .props.onClick();
+      });
+      assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [
+        [
+          "createWorkspaceDocumentForUser",
+          "user-1",
+          "workspace-1",
+          template.id,
+        ],
+        [
+          "createWorkspaceDocumentForUser",
+          "user-1",
+          "workspace-2",
+          template.id,
+        ],
+      ]);
+      assert.ok(renderer.root.findByProps({ role: "alert" }));
     } finally {
       act(() => renderer.unmount());
     }
@@ -614,9 +796,7 @@ describe("WorkspaceDocuments", () => {
       const retry = renderer.root.findByProps({ children: "Try again" });
       await assert.rejects(async () => {
         await act(async () => {
-          retry.props.onClick();
-          await waitForAsyncDrain();
-          await waitForAsyncDrain();
+          await retry.props.onClick();
         });
       }, /NEXT_REDIRECT:\/app\/documents\/doc-recovered$/);
       assert.deepEqual(callsOf("createWorkspaceDocumentForUser"), [

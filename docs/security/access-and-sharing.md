@@ -165,9 +165,16 @@ dialog as accessible, dismissible alerts. Next.js redirect and not-found control
 flow is rethrown instead of being converted into generic transport feedback.
 
 Clipboard actions report pending work before announcing success, and failures
-remain inline instead of claiming that content was copied. Social-platform
-actions open only the public share URL in sized, opener-isolated popups using
-`noopener,noreferrer`; they do not transmit document content directly.
+remain inline instead of claiming that content was copied. The share popover is
+owned by its document ID: switching documents resets policy, passcode, menu,
+mutation, and copy state from the new document's props. Pending policy and
+clipboard operations carry owner tokens, so a late result from an unmounted
+document cannot replace the new document's share settings, report a false copy,
+or schedule feedback timers. Link, embed, and presentation copies share one
+synchronous operation boundary and disable competing copy controls while the
+clipboard write is pending. Social-platform actions open only the public share
+URL in sized, opener-isolated popups using `noopener,noreferrer`; they do not
+transmit document content directly.
 Image copy and native-share actions share one synchronous operation boundary,
 so duplicate or competing activation cannot start a second raster export.
 Closing or unmounting the owning menu invalidates that export before it can

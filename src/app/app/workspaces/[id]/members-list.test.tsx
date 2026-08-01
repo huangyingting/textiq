@@ -614,6 +614,92 @@ describe("MembersList", () => {
     }
   });
 
+  test("switching workspaces resets member actions and suppresses a late reload from the old workspace", async () => {
+    let resolveTransfer!: () => void;
+    state().transferWorkspaceOwnership = (input) => {
+      state().calls.push(["transferWorkspaceOwnership", input]);
+      return new Promise((resolve) => {
+        resolveTransfer = resolve;
+      });
+    };
+    const renderer = mountMembersList({
+      workspace: makeWorkspace(),
+      isOwner: true,
+      currentUserId: "owner-1",
+    });
+    try {
+      act(() =>
+        clickMemberTrigger(
+          renderer.root.findByProps({
+            "aria-label": "Make viewer@example.com the owner",
+          }),
+        ),
+      );
+      const confirmTransfer = firstElement(
+        findDialog(renderer).props.children as ReactNode,
+        (element) => element.props.children === "Transfer ownership",
+      );
+      let oldWorkspaceTransfer!: Promise<void>;
+      act(() => {
+        oldWorkspaceTransfer = (
+          confirmTransfer.props.onClick as () => Promise<void>
+        )();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      const MembersList = mod.MembersList;
+      const workspaceTwo = makeWorkspace({
+        id: "workspace-2",
+        ownerId: "owner-2",
+        owner: { email: "owner-two@example.com", name: "Owner Two" },
+        members: [
+          {
+            id: "member-workspace-two",
+            userId: "user-workspace-two",
+            role: "VIEWER",
+            user: { email: "workspace-two@example.com", name: null },
+          },
+        ],
+      });
+      act(() => {
+        renderer.update(
+          <MembersList
+            workspace={workspaceTwo}
+            isOwner
+            currentUserId="owner-2"
+          />,
+        );
+      });
+      const switchedTree = JSON.stringify(renderer.toJSON());
+      assert.match(switchedTree, /workspace-two@example\.com/);
+      assert.doesNotMatch(switchedTree, /viewer@example\.com/);
+      assert.equal(
+        renderer.root.findByProps({
+          "aria-label": "Make workspace-two@example.com the owner",
+        }).props.disabled,
+        false,
+      );
+
+      await act(async () => {
+        resolveTransfer();
+        await oldWorkspaceTransfer;
+      });
+      assert.equal(callsOf("reload").length, 0);
+      act(() =>
+        clickMemberTrigger(
+          renderer.root.findByProps({
+            "aria-label": "Make workspace-two@example.com the owner",
+          }),
+        ),
+      );
+      assert.equal(findDialog(renderer).props.open, true);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("a failed removal stays in the dialog with generic redacted recovery", async () => {
     state().removeWorkspaceMemberAndDetachDocuments = async () => {
       throw new Error("You cannot remove this member.");

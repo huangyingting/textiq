@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Button,
@@ -27,15 +27,21 @@ const LEAVE_ERROR = "Could not leave the workspace. Please try again.";
  * state. Ordinary failures remain local with generic retry/dismiss recovery;
  * Next navigation control flow is always rethrown.
  */
-export function WorkspaceSettings({
-  workspaceId,
-  name,
-  isOwner,
-}: {
+type WorkspaceSettingsProps = {
   workspaceId: string;
   name: string;
   isOwner: boolean;
-}) {
+};
+
+export function WorkspaceSettings(props: WorkspaceSettingsProps) {
+  return <WorkspaceSettingsForWorkspace key={props.workspaceId} {...props} />;
+}
+
+function WorkspaceSettingsForWorkspace({
+  workspaceId,
+  name,
+  isOwner,
+}: WorkspaceSettingsProps) {
   const [nameValue, setNameValue] = useState(name);
   const [actionError, setActionError] = useState<WorkspaceActionKind | null>(
     null,
@@ -44,10 +50,20 @@ export function WorkspaceSettings({
   const [pendingKind, setPendingKind] = useState<WorkspaceActionKind | null>(
     null,
   );
-  const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const actionIdRef = useRef(0);
   const actionInFlightRef = useRef(false);
   const destructiveTriggerRef = useRef<HTMLButtonElement>(null);
-  const mutationBusy = isPending || pendingKind !== null;
+  const mutationBusy = pendingKind !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      actionIdRef.current += 1;
+      actionInFlightRef.current = false;
+    };
+  }, []);
 
   const trimmed = nameValue.trim();
   const renameDisabled = mutationBusy || trimmed === "" || trimmed === name;
@@ -60,25 +76,30 @@ export function WorkspaceSettings({
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
+    const actionId = ++actionIdRef.current;
     setActionError(null);
     setPendingKind(kind);
-    startTransition(async () => {
+    return (async () => {
       try {
         await action();
+        if (!mountedRef.current || actionIdRef.current !== actionId) return;
         onSuccess?.();
       } catch (error) {
         unstable_rethrow(error);
+        if (!mountedRef.current || actionIdRef.current !== actionId) return;
         setActionError(kind);
       } finally {
-        actionInFlightRef.current = false;
-        setPendingKind(null);
+        if (mountedRef.current && actionIdRef.current === actionId) {
+          actionInFlightRef.current = false;
+          setPendingKind(null);
+        }
       }
-    });
+    })();
   };
 
   const handleRename = () => {
     if (!trimmed || trimmed === name) return;
-    runAction(
+    return runAction(
       "rename",
       () => renameWorkspace(workspaceId, trimmed),
       () => window.location.reload(),
@@ -86,7 +107,7 @@ export function WorkspaceSettings({
   };
 
   const handleDestructive = () => {
-    runAction("destructive", () =>
+    return runAction("destructive", () =>
       isOwner ? deleteWorkspace(workspaceId) : leaveWorkspace(workspaceId),
     );
   };

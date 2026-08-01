@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState, useTransition, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 
 import { Button, Dialog, IconButton, PANEL_CHROME, cx } from "@/components/ui";
@@ -32,8 +32,19 @@ export function TemplatePickerDialog({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const operationIdRef = useRef(0);
   const isCreatingRef = useRef(false);
+  const isCreating = pendingId !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      operationIdRef.current += 1;
+      isCreatingRef.current = false;
+    };
+  }, []);
 
   const requestClose = () => {
     if (!isCreatingRef.current) onClose();
@@ -43,21 +54,27 @@ export function TemplatePickerDialog({
     if (isCreatingRef.current) return;
 
     isCreatingRef.current = true;
+    const operationId = ++operationIdRef.current;
     setPendingId(id);
     setFailedId(null);
     setError(null);
-    startTransition(async () => {
+    return (async () => {
       try {
         await onChoose(id);
       } catch (creationError) {
         unstable_rethrow(creationError);
+        if (!mountedRef.current || operationIdRef.current !== operationId) {
+          return;
+        }
         setFailedId(id);
         setError(t("templatePicker.creationError"));
       } finally {
-        isCreatingRef.current = false;
-        setPendingId(null);
+        if (mountedRef.current && operationIdRef.current === operationId) {
+          isCreatingRef.current = false;
+          setPendingId(null);
+        }
       }
-    });
+    })();
   };
 
   return (
@@ -66,7 +83,7 @@ export function TemplatePickerDialog({
       onClose={requestClose}
       restoreFocusRef={restoreFocusRef}
       aria-labelledby="template-picker-title"
-      aria-busy={isPending}
+      aria-busy={isCreating}
       className="flex max-h-[85vh] flex-col overflow-hidden"
     >
       <div className="flex items-start justify-between gap-4">
@@ -83,7 +100,7 @@ export function TemplatePickerDialog({
         </div>
         <IconButton
           aria-label={t("templatePicker.close")}
-          disabled={isPending}
+          disabled={isCreating}
           onClick={requestClose}
           size="md"
           className="shrink-0"
@@ -98,7 +115,7 @@ export function TemplatePickerDialog({
             <button
               type="button"
               aria-label={`${template.name} template`}
-              disabled={isPending}
+              disabled={isCreating}
               onClick={() => choose(template.id)}
               className={cx(
                 "flex h-full w-full flex-col gap-1 p-4 text-left transition hover:border-ds-accent-border hover:bg-ds-surface-sunken disabled:cursor-not-allowed disabled:opacity-60",
@@ -128,9 +145,7 @@ export function TemplatePickerDialog({
             <Button
               variant="subtle"
               size="sm"
-              onClick={() => {
-                if (failedId) choose(failedId);
-              }}
+              onClick={() => (failedId ? choose(failedId) : undefined)}
             >
               {t("templatePicker.tryAgain")}
             </Button>
@@ -152,7 +167,7 @@ export function TemplatePickerDialog({
         <Button
           variant="subtle"
           size="lg"
-          disabled={isPending}
+          disabled={isCreating}
           onClick={requestClose}
         >
           {t("templatePicker.cancel")}

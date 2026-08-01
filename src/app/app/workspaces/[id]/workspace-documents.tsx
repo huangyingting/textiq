@@ -134,6 +134,22 @@ export function WorkspaceDocuments({
   workspaceId: string;
   userRole: EffectiveWorkspaceRole;
 }) {
+  return (
+    <WorkspaceDocumentsForWorkspace
+      key={workspaceId}
+      workspaceId={workspaceId}
+      userRole={userRole}
+    />
+  );
+}
+
+function WorkspaceDocumentsForWorkspace({
+  workspaceId,
+  userRole,
+}: {
+  workspaceId: string;
+  userRole: EffectiveWorkspaceRole;
+}) {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);

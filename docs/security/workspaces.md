@@ -70,8 +70,19 @@ the actions, while viewers see neither. Template creation uses the shared
 dashboard/workspace picker, which suppresses same-event duplicate creates,
 keeps pending actions and dismissal locked, contains ordinary failures in an
 inline retry/dismiss alert, and preserves Next redirect control flow. The
-server-side `createWorkspaceDocumentForUser` capability check remains
-authoritative even when the client action is hidden.
+picker invalidates late UI work after unmount. Workspace document state is
+owned by `workspaceId`, so switching workspaces resets loading, creation, and
+import state; an old workspace's late list or create result cannot populate or
+lock the new workspace surface. The server-side
+`createWorkspaceDocumentForUser` capability check remains authoritative even
+when the client action is hidden.
+
+Member removal, ownership transfer, rename, delete, and leave actions also use
+one synchronous mutation boundary per surface. Their client state is owned by
+the workspace ID: switching workspaces resets open confirmations, drafts,
+errors, and pending state. A completion from the old workspace cannot close a
+new dialog, show recovery there, or invoke its success reload callback. Next
+redirect/not-found control flow still propagates to the framework.
 
 The workspace detail action module remains the adapter layer: it resolves the
 session, performs the capability check, and revalidates or redirects. Invite
@@ -88,6 +99,13 @@ Invite links are created with:
 - optional expiry in days;
 - optional maximum use count;
 - server-generated token.
+
+Create and revoke actions share one synchronous mutation boundary, so repeated
+or competing activation cannot issue multiple durable writes. Invite manager
+state is owned by `workspaceId`: switching workspaces resets links, dialogs,
+copy feedback, and pending state from the new server props. Late create, revoke,
+or clipboard results from an unmounted workspace cannot update the replacement
+surface or keep its controls locked.
 
 The invite manager serializes create and revoke mutations behind a synchronous
 in-flight guard, so repeated activation cannot create duplicate links or issue

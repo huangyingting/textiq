@@ -570,6 +570,75 @@ describe("WorkspaceSettings (owner)", () => {
     }
   });
 
+  test("switching workspaces resets settings and suppresses a late rename reload from the old workspace", async () => {
+    let resolveWorkspaceOneRename!: () => void;
+    state().renameWorkspaceRecord = (workspaceId, rawName) => {
+      state().calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
+      return new Promise((resolve) => {
+        resolveWorkspaceOneRename = resolve;
+      });
+    };
+    const renderer = mountWorkspaceSettings({
+      workspaceId: "workspace-1",
+      name: "Marketing",
+      isOwner: true,
+    });
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ id: "workspace-name" })
+          .props.onChange({ target: { value: "Growth Team" } });
+      });
+      let oldWorkspaceRename!: Promise<void>;
+      act(() => {
+        oldWorkspaceRename = renderer.root
+          .findByProps({ children: "Save" })
+          .props.onClick();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      const WorkspaceSettings = mod.WorkspaceSettings;
+      act(() => {
+        renderer.update(
+          <WorkspaceSettings workspaceId="workspace-2" name="Sales" isOwner />,
+        );
+      });
+      const workspaceTwoInput = renderer.root.findByProps({
+        id: "workspace-name",
+      });
+      assert.equal(workspaceTwoInput.props.value, "Sales");
+      assert.equal(
+        renderer.root.findByProps({ children: "Save" }).props.disabled,
+        true,
+      );
+
+      await act(async () => {
+        resolveWorkspaceOneRename();
+        await oldWorkspaceRename;
+      });
+      assert.equal(callsOf("reload").length, 0);
+
+      state().renameWorkspaceRecord = async (workspaceId, rawName) => {
+        state().calls.push(["renameWorkspaceRecord", workspaceId, rawName]);
+      };
+      act(() => {
+        workspaceTwoInput.props.onChange({ target: { value: "Sales Team" } });
+      });
+      await act(async () => {
+        await renderer.root.findByProps({ children: "Save" }).props.onClick();
+      });
+      assert.deepEqual(callsOf("renameWorkspaceRecord"), [
+        ["renameWorkspaceRecord", "workspace-1", "Growth Team"],
+        ["renameWorkspaceRecord", "workspace-2", "Sales Team"],
+      ]);
+      assert.equal(callsOf("reload").length, 1);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("framework redirect control flow escapes rename failure recovery", async () => {
     state().requireUser = async () => state().redirect("/login");
     const renderer = mountWorkspaceSettings({
@@ -587,9 +656,7 @@ describe("WorkspaceSettings (owner)", () => {
       await assert.rejects(
         async () =>
           act(async () => {
-            saveButton.props.onClick();
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
+            await saveButton.props.onClick();
           }),
         (error: unknown) => isRedirectSignal(error, "/login"),
       );
@@ -666,9 +733,7 @@ describe("WorkspaceSettings (owner)", () => {
       await assert.rejects(
         async () =>
           act(async () => {
-            (confirmButton.props.onClick as () => void)();
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
+            await (confirmButton.props.onClick as () => Promise<void>)();
           }),
         (err: unknown) => isRedirectSignal(err, "/app/workspaces"),
       );
@@ -848,9 +913,7 @@ describe("WorkspaceSettings (non-owner member)", () => {
       await assert.rejects(
         async () =>
           act(async () => {
-            (confirmButton.props.onClick as () => void)();
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
+            await (confirmButton.props.onClick as () => Promise<void>)();
           }),
         (err: unknown) => isRedirectSignal(err, "/app/workspaces"),
       );

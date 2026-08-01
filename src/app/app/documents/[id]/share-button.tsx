@@ -41,6 +41,8 @@ type ShareState = {
 type ShareMutationResult =
   { ok: true; data: ShareSettings } | { ok: false; error: string };
 
+type CopyKind = "link" | "embed" | "present";
+
 export async function resolveShareMutation(
   mutate: () => Promise<ShareMutationResult>,
   fallbackMessage: string,
@@ -97,20 +99,7 @@ function isoToLocalInput(iso: string | null): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-export function ShareButton({
-  id,
-  initialIsShared,
-  initialShareId,
-  initialSlug = null,
-  initialExpiresAt = null,
-  initialEmbedEnabled = true,
-  initialPresentEnabled = true,
-  initialMetadataMode = "generic",
-  initialDiscoverable = false,
-  initialPasscodeEnabled = false,
-  documentTitle = "Untitled",
-  iconOnly = false,
-}: {
+type ShareButtonProps = {
   id: string;
   initialIsShared: boolean;
   initialShareId: string | null;
@@ -123,7 +112,26 @@ export function ShareButton({
   initialPasscodeEnabled?: boolean;
   documentTitle?: string;
   iconOnly?: boolean;
-}) {
+};
+
+export function ShareButton(props: ShareButtonProps) {
+  return <ShareButtonForDocument key={props.id} {...props} />;
+}
+
+function ShareButtonForDocument({
+  id,
+  initialIsShared,
+  initialShareId,
+  initialSlug = null,
+  initialExpiresAt = null,
+  initialEmbedEnabled = true,
+  initialPresentEnabled = true,
+  initialMetadataMode = "generic",
+  initialDiscoverable = false,
+  initialPasscodeEnabled = false,
+  documentTitle = "Untitled",
+  iconOnly = false,
+}: ShareButtonProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [shareState, setShareState] = useState<ShareState>({
     isShared: initialIsShared,
@@ -140,19 +148,40 @@ export function ShareButton({
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied">(
     "idle",
   );
+  const [pendingCopyKind, setPendingCopyKind] = useState<CopyKind | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const embedCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presentCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [embedCopied, setEmbedCopied] = useState(false);
   const [presentCopied, setPresentCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const mountedRef = useRef(true);
+  const mutationIdRef = useRef(0);
   const mutationInFlightRef = useRef(false);
+  const copyOperationIdRef = useRef(0);
+  const copyInFlightRef = useRef(false);
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      mutationIdRef.current += 1;
+      mutationInFlightRef.current = false;
+      copyOperationIdRef.current += 1;
+      copyInFlightRef.current = false;
       if (copyTimerRef.current !== null) {
         clearTimeout(copyTimerRef.current);
+      }
+      if (embedCopyTimerRef.current !== null) {
+        clearTimeout(embedCopyTimerRef.current);
+      }
+      if (presentCopyTimerRef.current !== null) {
+        clearTimeout(presentCopyTimerRef.current);
       }
     };
   }, []);
@@ -179,10 +208,14 @@ export function ShareButton({
       return null;
     }
     mutationInFlightRef.current = true;
+    const mutationId = ++mutationIdRef.current;
     setIsMutating(true);
     setError(null);
     try {
       const result = await resolveShareMutation(mutate, fallbackMessage);
+      if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+        return null;
+      }
       if (!result.ok) {
         setError(result.error);
         return null;
@@ -190,8 +223,10 @@ export function ShareButton({
       setShareState(toShareState(result.data));
       return result.data;
     } finally {
-      mutationInFlightRef.current = false;
-      setIsMutating(false);
+      if (mountedRef.current && mutationIdRef.current === mutationId) {
+        mutationInFlightRef.current = false;
+        setIsMutating(false);
+      }
     }
   };
 
@@ -203,6 +238,7 @@ export function ShareButton({
   };
 
   const handleRegenerate = async () => {
+    if (mutationInFlightRef.current) return;
     setRegenerating(true);
     try {
       await runMutation(
@@ -210,7 +246,7 @@ export function ShareButton({
         "Couldn't regenerate the share link. Please try again.",
       );
     } finally {
-      setRegenerating(false);
+      if (mountedRef.current) setRegenerating(false);
     }
   };
 
@@ -285,57 +321,124 @@ export function ShareButton({
     }
   };
 
-  const copyLink = async () => {
-    if (!shareState.shareUrl) {
-      return;
-    }
-    if (copyTimerRef.current !== null) {
-      clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = null;
-    }
-    setCopyState("copying");
+  const runCopy = async ({
+    kind,
+    text,
+    onStart,
+    onSuccess,
+    onFailure,
+    failureMessage,
+  }: {
+    kind: CopyKind;
+    text: string;
+    onStart?: () => void;
+    onSuccess: () => void;
+    onFailure: () => void;
+    failureMessage: string;
+  }): Promise<boolean> => {
+    if (copyInFlightRef.current) return false;
+
+    copyInFlightRef.current = true;
+    const operationId = ++copyOperationIdRef.current;
+    setPendingCopyKind(kind);
     setError(null);
+    onStart?.();
     try {
-      await navigator.clipboard.writeText(shareState.shareUrl);
-      setCopyState("copied");
-      copyTimerRef.current = setTimeout(() => {
-        setCopyState("idle");
-        copyTimerRef.current = null;
-      }, 2000);
+      await navigator.clipboard.writeText(text);
+      if (!mountedRef.current || copyOperationIdRef.current !== operationId) {
+        return false;
+      }
+      onSuccess();
+      return true;
     } catch {
-      setCopyState("idle");
-      setError("Couldn't copy the share link. Please copy it manually.");
+      if (!mountedRef.current || copyOperationIdRef.current !== operationId) {
+        return false;
+      }
+      onFailure();
+      setError(failureMessage);
+      return false;
+    } finally {
+      if (mountedRef.current && copyOperationIdRef.current === operationId) {
+        copyInFlightRef.current = false;
+        setPendingCopyKind(null);
+      }
     }
+  };
+
+  const copyLink = async () => {
+    if (!shareState.shareUrl) return;
+
+    await runCopy({
+      kind: "link",
+      text: shareState.shareUrl,
+      onStart: () => {
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+          copyTimerRef.current = null;
+        }
+        setCopyState("copying");
+      },
+      onSuccess: () => {
+        setCopyState("copied");
+        copyTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) setCopyState("idle");
+          copyTimerRef.current = null;
+        }, 2000);
+      },
+      onFailure: () => setCopyState("idle"),
+      failureMessage: "Couldn't copy the share link. Please copy it manually.",
+    });
   };
 
   const copyEmbed = async () => {
-    if (!embedSnippet) {
-      return;
-    }
-    setError(null);
-    try {
-      await navigator.clipboard.writeText(embedSnippet);
-      setEmbedCopied(true);
-      setTimeout(() => setEmbedCopied(false), 2000);
-    } catch {
-      setEmbedCopied(false);
-      setError("Couldn't copy the embed code. Please copy it manually.");
-    }
+    if (!embedSnippet) return;
+
+    await runCopy({
+      kind: "embed",
+      text: embedSnippet,
+      onStart: () => {
+        if (embedCopyTimerRef.current !== null) {
+          clearTimeout(embedCopyTimerRef.current);
+          embedCopyTimerRef.current = null;
+        }
+        setEmbedCopied(false);
+      },
+      onSuccess: () => {
+        setEmbedCopied(true);
+        embedCopyTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) setEmbedCopied(false);
+          embedCopyTimerRef.current = null;
+        }, 2000);
+      },
+      onFailure: () => setEmbedCopied(false),
+      failureMessage: "Couldn't copy the embed code. Please copy it manually.",
+    });
   };
 
   const copyPresentLink = async () => {
-    if (!presentUrl) {
-      return;
-    }
-    setError(null);
-    try {
-      await navigator.clipboard.writeText(presentUrl);
-      setPresentCopied(true);
-      setTimeout(() => setPresentCopied(false), 2000);
-    } catch {
-      setPresentCopied(false);
-      setError("Couldn't copy the presentation link. Please copy it manually.");
-    }
+    if (!presentUrl) return;
+
+    await runCopy({
+      kind: "present",
+      text: presentUrl,
+      onStart: () => {
+        if (presentCopyTimerRef.current !== null) {
+          clearTimeout(presentCopyTimerRef.current);
+          presentCopyTimerRef.current = null;
+        }
+        setPresentCopied(false);
+      },
+      onSuccess: () => {
+        setPresentCopied(true);
+        presentCopyTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) setPresentCopied(false);
+          presentCopyTimerRef.current = null;
+        }, 2000);
+      },
+      onFailure: () => setPresentCopied(false),
+      failureMessage:
+        "Couldn't copy the presentation link. Please copy it manually.",
+    });
   };
 
   return (
@@ -405,7 +508,7 @@ export function ShareButton({
             <button
               type="button"
               onClick={copyLink}
-              disabled={copyState !== "idle"}
+              disabled={pendingCopyKind !== null || copyState !== "idle"}
               className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {copyState === "copying"
@@ -615,9 +718,14 @@ export function ShareButton({
             <button
               type="button"
               onClick={copyEmbed}
+              disabled={pendingCopyKind !== null}
               className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
             >
-              {embedCopied ? "Copied!" : "Copy"}
+              {pendingCopyKind === "embed"
+                ? "Copying…"
+                : embedCopied
+                  ? "Copied!"
+                  : "Copy"}
             </button>
           </div>
           <p
@@ -647,9 +755,14 @@ export function ShareButton({
             <button
               type="button"
               onClick={copyPresentLink}
+              disabled={pendingCopyKind !== null}
               className="shrink-0 rounded px-2 py-1 text-xs font-medium text-ds-text-secondary hover:bg-ds-state-hover hover:text-ds-text-primary"
             >
-              {presentCopied ? "Copied!" : "Copy"}
+              {pendingCopyKind === "present"
+                ? "Copying…"
+                : presentCopied
+                  ? "Copied!"
+                  : "Copy"}
             </button>
           </div>
           <p

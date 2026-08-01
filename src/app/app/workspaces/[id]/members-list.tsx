@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Dialog, PANEL_CHROME, cx } from "@/components/ui";
 import type {
@@ -44,26 +44,42 @@ const roleLabels: Record<EffectiveWorkspaceRole, string> = {
 const REMOVE_ERROR = "Could not remove the member. Please try again.";
 const TRANSFER_ERROR = "Could not transfer ownership. Please try again.";
 
-export function MembersList({
-  workspace,
-  isOwner,
-  currentUserId,
-}: {
+type MembersListProps = {
   workspace: Workspace;
   isOwner: boolean;
   currentUserId: string;
-}) {
+};
+
+export function MembersList(props: MembersListProps) {
+  return <MembersListForWorkspace key={props.workspace.id} {...props} />;
+}
+
+function MembersListForWorkspace({
+  workspace,
+  isOwner,
+  currentUserId,
+}: MembersListProps) {
   const [removeTarget, setRemoveTarget] = useState<DisplayMember | null>(null);
   const [transferTarget, setTransferTarget] = useState<DisplayMember | null>(
     null,
   );
   const [actionError, setActionError] = useState<MemberActionKind | null>(null);
   const [pendingKind, setPendingKind] = useState<MemberActionKind | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const actionIdRef = useRef(0);
   const actionInFlightRef = useRef(false);
   const removeRestoreFocusRef = useRef<HTMLElement | null>(null);
   const transferRestoreFocusRef = useRef<HTMLElement | null>(null);
-  const mutationBusy = isPending || pendingKind !== null;
+  const mutationBusy = pendingKind !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      actionIdRef.current += 1;
+      actionInFlightRef.current = false;
+    };
+  }, []);
 
   const allMembers: DisplayMember[] = [
     {
@@ -82,32 +98,37 @@ export function MembersList({
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
+    const actionId = ++actionIdRef.current;
     setActionError(null);
     setPendingKind(kind);
-    startTransition(async () => {
+    return (async () => {
       try {
         await action();
+        if (!mountedRef.current || actionIdRef.current !== actionId) return;
         if (kind === "remove") setRemoveTarget(null);
         else setTransferTarget(null);
         window.location.reload();
       } catch (error) {
         unstable_rethrow(error);
+        if (!mountedRef.current || actionIdRef.current !== actionId) return;
         setActionError(kind);
       } finally {
-        actionInFlightRef.current = false;
-        setPendingKind(null);
+        if (mountedRef.current && actionIdRef.current === actionId) {
+          actionInFlightRef.current = false;
+          setPendingKind(null);
+        }
       }
-    });
+    })();
   };
 
   const handleRemove = () => {
     if (!removeTarget) return;
-    runAction("remove", () => removeMember(removeTarget.id));
+    return runAction("remove", () => removeMember(removeTarget.id));
   };
 
   const handleTransfer = () => {
     if (!transferTarget) return;
-    runAction("transfer", () =>
+    return runAction("transfer", () =>
       transferOwnership(workspace.id, transferTarget.userId),
     );
   };

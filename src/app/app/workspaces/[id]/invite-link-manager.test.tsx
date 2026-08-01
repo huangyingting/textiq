@@ -305,12 +305,15 @@ function makeLink(overrides: Partial<InviteLink> = {}): InviteLink {
   };
 }
 
-function mountManager(inviteLinks: InviteLink[]): ReactTestRenderer {
+function mountManager(
+  inviteLinks: InviteLink[],
+  workspaceId = "workspace-1",
+): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
   const InviteLinkManager = mod.InviteLinkManager;
   act(() => {
     renderer = create(
-      <InviteLinkManager workspaceId="workspace-1" inviteLinks={inviteLinks} />,
+      <InviteLinkManager workspaceId={workspaceId} inviteLinks={inviteLinks} />,
     );
   });
   return renderer;
@@ -676,6 +679,91 @@ describe("InviteLinkManager", () => {
     }
   });
 
+  test("switching workspaces resets pending invite state and rejects a late create result from the old workspace", async () => {
+    let resolveWorkspaceOne!: (link: InviteLink) => void;
+    state().createWorkspaceInviteLink = (args) => {
+      state().calls.push(["createWorkspaceInviteLink", args]);
+      if (args.workspaceId === "workspace-1") {
+        return new Promise((resolve) => {
+          resolveWorkspaceOne = resolve;
+        });
+      }
+      return Promise.resolve(
+        makeLink({
+          id: "workspace-two-created",
+          token: "tok-workspace-two-created",
+          role: args.role as InviteLink["role"],
+        }),
+      );
+    };
+    const renderer = mountManager([
+      makeLink({ id: "workspace-one-link", token: "tok-workspace-one" }),
+    ]);
+    try {
+      let workspaceOneCreation!: Promise<void>;
+      const createWorkspaceOne = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      act(() => {
+        workspaceOneCreation = createWorkspaceOne.props.onClick();
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+
+      const InviteLinkManager = mod.InviteLinkManager;
+      const workspaceTwoInitial = makeLink({
+        id: "workspace-two-link",
+        token: "tok-workspace-two-initial",
+      });
+      act(() => {
+        renderer.update(
+          <InviteLinkManager
+            workspaceId="workspace-2"
+            inviteLinks={[workspaceTwoInitial]}
+          />,
+        );
+      });
+      const switchedTree = JSON.stringify(renderer.toJSON());
+      assert.match(switchedTree, /tok-workspace-two-initial/);
+      assert.doesNotMatch(switchedTree, /tok-workspace-one/);
+      const createWorkspaceTwo = renderer.root.findByProps({
+        children: "Create invite link",
+      });
+      assert.equal(createWorkspaceTwo.props.disabled, false);
+
+      await act(async () => {
+        await createWorkspaceTwo.props.onClick();
+      });
+      assert.match(
+        JSON.stringify(renderer.toJSON()),
+        /tok-workspace-two-created/,
+      );
+
+      await act(async () => {
+        resolveWorkspaceOne(
+          makeLink({
+            id: "workspace-one-late",
+            token: "tok-workspace-one-late",
+          }),
+        );
+        await workspaceOneCreation;
+      });
+      const finalTree = JSON.stringify(renderer.toJSON());
+      assert.match(finalTree, /tok-workspace-two-created/);
+      assert.match(finalTree, /tok-workspace-two-initial/);
+      assert.doesNotMatch(finalTree, /tok-workspace-one-late/);
+      assert.deepEqual(
+        callsOf("createWorkspaceInviteLink").map(
+          (call) => (call[1] as { workspaceId: string }).workspaceId,
+        ),
+        ["workspace-1", "workspace-2"],
+      );
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("revoking requires confirmation and removes the link only after confirmation succeeds", async () => {
     const renderer = mountManager([
       makeLink({ id: "link-1", token: "tok-1" }),
@@ -899,9 +987,7 @@ describe("InviteLinkManager", () => {
       await assert.rejects(
         async () =>
           act(async () => {
-            createButton.props.onClick();
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
+            await createButton.props.onClick();
           }),
         (error: unknown) =>
           error instanceof Error &&

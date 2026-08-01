@@ -139,7 +139,12 @@ before React commits disabled state. While persistence is pending, the card is
 marked busy and cannot be dismissed through Close, Cancel, Escape, scroll, or
 resize. Typed action failures keep their safe server message; transport failures
 use generic redacted copy; both preserve the active draft or confirmation for
-retry. Next redirect/not-found control flow is rethrown to the framework.
+retry. Each inline-comments instance is owned by its document ID. Switching
+documents invalidates pending operation ownership, resets the surface from the
+new document's initial threads, and prevents a late result from the old document
+from replacing those threads or blocking new mutations. Unmount also suppresses
+late UI callbacks. Next redirect/not-found control flow is rethrown to the
+framework.
 
 The deterministic owner/viewer browser lifecycle forces an initial create
 transport failure, double-activates retry to prove one durable mutation, creates

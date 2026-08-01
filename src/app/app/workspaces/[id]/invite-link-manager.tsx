@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Button,
@@ -68,13 +68,19 @@ function parseMaxUses(
   return { ok: true, value: parsed };
 }
 
-export function InviteLinkManager({
-  workspaceId,
-  inviteLinks,
-}: {
+type InviteLinkManagerProps = {
   workspaceId: string;
   inviteLinks: InviteLink[];
-}) {
+};
+
+export function InviteLinkManager(props: InviteLinkManagerProps) {
+  return <InviteLinkManagerForWorkspace key={props.workspaceId} {...props} />;
+}
+
+function InviteLinkManagerForWorkspace({
+  workspaceId,
+  inviteLinks,
+}: InviteLinkManagerProps) {
   const [links, setLinks] = useState(inviteLinks);
   const [selectedRole, setSelectedRole] =
     useState<InvitableWorkspaceRole>("EDITOR");
@@ -88,12 +94,23 @@ export function InviteLinkManager({
   >(null);
   const [revokeTarget, setRevokeTarget] = useState<InviteLink | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const mutationIdRef = useRef(0);
   const mutationInFlightRef = useRef(false);
   const copyRequestSeqRef = useRef(0);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const revokeRestoreFocusRef = useRef<HTMLElement | null>(null);
-  const mutationBusy = isPending || pendingKind !== null;
+  const mutationBusy = pendingKind !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationIdRef.current += 1;
+      mutationInFlightRef.current = false;
+      copyRequestSeqRef.current += 1;
+    };
+  }, []);
 
   const clearCreateFeedback = () => {
     setValidationError(null);
@@ -106,10 +123,11 @@ export function InviteLinkManager({
     if (mutationInFlightRef.current) return;
 
     mutationInFlightRef.current = true;
+    const mutationId = ++mutationIdRef.current;
     setValidationError(null);
     setMutationError(null);
     setPendingKind(attempt.kind);
-    startTransition(async () => {
+    return (async () => {
       try {
         if (attempt.kind === "create") {
           const link = await createInviteLink(
@@ -117,6 +135,9 @@ export function InviteLinkManager({
             attempt.role,
             attempt.options,
           );
+          if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+            return;
+          }
           setLinks((current) =>
             current.some((existing) => existing.id === link.id)
               ? current
@@ -125,6 +146,9 @@ export function InviteLinkManager({
           setMaxUses("");
         } else {
           await revokeInviteLink(attempt.link.id);
+          if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+            return;
+          }
           revokeRestoreFocusRef.current = createButtonRef.current;
           setLinks((current) =>
             current.filter((link) => link.id !== attempt.link.id),
@@ -136,12 +160,17 @@ export function InviteLinkManager({
         }
       } catch (error) {
         unstable_rethrow(error);
+        if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+          return;
+        }
         setMutationError(attempt);
       } finally {
-        mutationInFlightRef.current = false;
-        setPendingKind(null);
+        if (mountedRef.current && mutationIdRef.current === mutationId) {
+          mutationInFlightRef.current = false;
+          setPendingKind(null);
+        }
       }
-    });
+    })();
   };
 
   const handleCreate = () => {
@@ -152,7 +181,7 @@ export function InviteLinkManager({
       return;
     }
 
-    runMutation({
+    return runMutation({
       kind: "create",
       role: selectedRole,
       options: {
@@ -190,14 +219,16 @@ export function InviteLinkManager({
         throw new Error("Clipboard API unavailable");
       }
       await navigator.clipboard.writeText(getInviteUrl(link.token));
-      if (copyRequestSeqRef.current !== requestSeq) return;
+      if (!mountedRef.current || copyRequestSeqRef.current !== requestSeq)
+        return;
       setCopyFeedback({
         linkId: link.id,
         kind: "success",
         message: "Invite link copied.",
       });
     } catch {
-      if (copyRequestSeqRef.current !== requestSeq) return;
+      if (!mountedRef.current || copyRequestSeqRef.current !== requestSeq)
+        return;
       setCopyFeedback({ linkId: link.id, kind: "error", message: COPY_ERROR });
     }
   };
@@ -286,11 +317,11 @@ export function InviteLinkManager({
                   variant="subtle"
                   size="sm"
                   disabled={mutationBusy}
-                  onClick={() => {
-                    if (mutationError?.kind === "create") {
-                      runMutation(mutationError);
-                    }
-                  }}
+                  onClick={() =>
+                    mutationError?.kind === "create"
+                      ? runMutation(mutationError)
+                      : undefined
+                  }
                 >
                   Try create again
                 </Button>

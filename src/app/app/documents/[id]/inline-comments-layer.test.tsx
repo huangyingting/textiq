@@ -683,6 +683,7 @@ function mount(
   editor: LexicalEditor,
   threads: CommentThread[] = buildThreads(),
   currentUserId = "user-a",
+  documentId = "doc-1",
 ) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
@@ -694,7 +695,7 @@ function mount(
       withComposer(
         editor,
         <InlineCommentsLayer
-          documentId="doc-1"
+          documentId={documentId}
           currentUserId={currentUserId}
           initialComments={threads}
         />,
@@ -702,6 +703,22 @@ function mount(
     );
   });
   return renderer;
+}
+
+function renderLayer(
+  editor: LexicalEditor,
+  documentId: string,
+  threads: CommentThread[],
+  currentUserId = "user-a",
+): ReactElement {
+  return withComposer(
+    editor,
+    <InlineCommentsLayer
+      documentId={documentId}
+      currentUserId={currentUserId}
+      initialComments={threads}
+    />,
+  );
 }
 
 function findDotButtons(root: ReactTestInstance): ReactTestInstance[] {
@@ -1274,7 +1291,7 @@ describe("submit", () => {
         assert.equal(
           pendingButton.props.disabled,
           true,
-          "pending while the transition is in flight",
+          "pending while the mutation is in flight",
         );
         assert.equal(
           globalForActions.__inlineCommentsActionsTestState.calls.length,
@@ -1308,6 +1325,126 @@ describe("submit", () => {
           resolveCreate({ ok: true, data: buildThreads() });
           await flushMicrotasks();
         });
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("switching documents invalidates a pending mutation and lets the new document mutate without accepting the stale result", async () => {
+    await withCommentsDom(async () => {
+      const { editor } = makeFakeEditor(buildRoot());
+      const initialDocumentTwoThreads = [
+        makeThread({
+          id: "doc-two-initial",
+          body: "Document two initial comment",
+          author: { id: "user-b", name: "Bob" },
+          anchorText: FOURTH_TEXT,
+          anchor: { kind: "text", text: FOURTH_TEXT, nodeId: null },
+        }),
+      ];
+      const persistedDocumentTwoThreads = [
+        ...initialDocumentTwoThreads,
+        makeThread({
+          id: "doc-two-created",
+          body: "Document two persisted comment",
+          author: { id: "user-a", name: "Alice" },
+          anchorText: FOURTH_TEXT,
+          anchor: { kind: "text", text: FOURTH_TEXT, nodeId: null },
+        }),
+      ];
+      let resolveDocumentOne!: (
+        result: CommentActionResult<CommentThread[]>,
+      ) => void;
+      globalForActions.__inlineCommentsActionsTestState.impl = (documentId) => {
+        if (documentId === "doc-1") {
+          return new Promise((resolve) => {
+            resolveDocumentOne = resolve;
+          });
+        }
+        return Promise.resolve({ ok: true, data: persistedDocumentTwoThreads });
+      };
+
+      const renderer = mount(editor);
+      try {
+        const documentOneDot = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => documentOneDot.props.onClick());
+        act(() =>
+          findDialogCard(renderer.root)!.props.onChange({
+            target: { value: "Document one pending comment" },
+          }),
+        );
+        act(() => {
+          renderer.root
+            .find(
+              (element) =>
+                element.type === "button" && textOf(element) === "Comment",
+            )
+            .props.onClick();
+        });
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.calls.map(
+            (call) => call.documentId,
+          ),
+          ["doc-1"],
+        );
+
+        act(() => {
+          renderer.update(
+            renderLayer(editor, "doc-2", initialDocumentTwoThreads),
+          );
+        });
+
+        const documentTwoDot = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "1 comment",
+        )!;
+        assert.equal(documentTwoDot.props.disabled, false);
+        act(() => documentTwoDot.props.onClick());
+        assert.match(textOf(renderer.root), /Document two initial comment/);
+        act(() =>
+          findDialogCard(renderer.root)!.props.onChange({
+            target: { value: "Document two mutation" },
+          }),
+        );
+        await act(async () => {
+          renderer.root
+            .find(
+              (element) =>
+                element.type === "button" && textOf(element) === "Comment",
+            )
+            .props.onClick();
+          await flushMicrotasks();
+        });
+        assert.deepEqual(
+          globalForActions.__inlineCommentsActionsTestState.calls.map(
+            (call) => call.documentId,
+          ),
+          ["doc-1", "doc-2"],
+        );
+
+        await act(async () => {
+          resolveDocumentOne({
+            ok: true,
+            data: [
+              makeThread({
+                id: "stale-doc-one-result",
+                body: "Stale document one result",
+                anchorText: FIRST_TEXT,
+                anchor: { kind: "text", text: FIRST_TEXT, nodeId: null },
+              }),
+            ],
+          });
+          await flushMicrotasks();
+        });
+
+        const persistedDocumentTwoDot = findDotButtons(renderer.root).find(
+          (element) => element.props["aria-label"] === "2 comments",
+        )!;
+        act(() => persistedDocumentTwoDot.props.onClick());
+        assert.match(textOf(renderer.root), /Document two persisted comment/);
+        assert.doesNotMatch(textOf(renderer.root), /Stale document one result/);
       } finally {
         act(() => renderer.unmount());
       }
@@ -1580,14 +1717,12 @@ describe("submit", () => {
         await assert.rejects(
           async () => {
             await act(async () => {
-              renderer.root
+              await renderer.root
                 .find(
                   (element) =>
                     element.type === "button" && textOf(element) === "Comment",
                 )
                 .props.onClick();
-              await flushMicrotasks();
-              await flushMicrotasks();
             });
           },
           (error: unknown) => error === redirectError,

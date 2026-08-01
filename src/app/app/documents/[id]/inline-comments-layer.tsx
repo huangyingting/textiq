@@ -18,7 +18,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  useTransition,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -142,15 +141,21 @@ function commentDotsEqual(
   );
 }
 
-export function InlineCommentsLayer({
-  documentId,
-  currentUserId,
-  initialComments,
-}: {
+type InlineCommentsLayerProps = {
   documentId: string;
   currentUserId: string;
   initialComments: CommentThread[];
-}) {
+};
+
+export function InlineCommentsLayer(props: InlineCommentsLayerProps) {
+  return <InlineCommentsLayerForDocument key={props.documentId} {...props} />;
+}
+
+function InlineCommentsLayerForDocument({
+  documentId,
+  currentUserId,
+  initialComments,
+}: InlineCommentsLayerProps) {
   const [editor] = useLexicalComposerContext();
   const canUsePortal = useSyncExternalStore(
     subscribeToHydrationStore,
@@ -172,11 +177,21 @@ export function InlineCommentsLayer({
     null,
   );
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
+  const mutationIdRef = useRef(0);
   const mutationInFlightRef = useRef(false);
   const [pendingAction, setPendingAction] =
     useState<CommentMutationAction | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const mutationBusy = isPending || pendingAction !== null;
+  const mutationBusy = pendingAction !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationIdRef.current += 1;
+      mutationInFlightRef.current = false;
+    };
+  }, []);
 
   const byAnchor = useMemo(() => threadsByTextAnchor(threads), [threads]);
 
@@ -201,11 +216,15 @@ export function InlineCommentsLayer({
       if (mutationInFlightRef.current) return;
 
       mutationInFlightRef.current = true;
+      const mutationId = ++mutationIdRef.current;
       setError(null);
       setPendingAction(action);
-      startTransition(async () => {
+      return (async () => {
         try {
           const result = await mutate();
+          if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+            return;
+          }
           if (!result.ok) {
             setError(result.error.message);
             return;
@@ -214,12 +233,17 @@ export function InlineCommentsLayer({
           onSuccess?.();
         } catch (error) {
           unstable_rethrow(error);
+          if (!mountedRef.current || mutationIdRef.current !== mutationId) {
+            return;
+          }
           setError(fallbackMessage);
         } finally {
-          mutationInFlightRef.current = false;
-          setPendingAction(null);
+          if (mountedRef.current && mutationIdRef.current === mutationId) {
+            mutationInFlightRef.current = false;
+            setPendingAction(null);
+          }
         }
-      });
+      })();
     },
     [],
   );
@@ -366,7 +390,7 @@ export function InlineCommentsLayer({
     const trimmed = body.trim();
     if (!anchor || !trimmed) return;
     const parentId = replyingToId;
-    runMutation(
+    return runMutation(
       { kind: "create" },
       () =>
         commentsActions.createComment(
