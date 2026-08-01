@@ -42,6 +42,18 @@ Transient primitive state follows the visible surface lifecycle. In particular,
 temporarily hiding an open picker, and its custom-color pointer listeners exist
 only while that picker is visible. Clearing a form's busy state therefore never
 reopens stale color UI or resumes a drag that began in a closed surface.
+`Tooltip` remains visible while either pointer hover or keyboard focus owns it,
+ignores focus movement within its trigger wrapper, and clears delayed show work
+when detached. Escape remains an immediate dismissal regardless of ownership.
+Interactive `Popover` focus capture runs once per opening, not once per render;
+closing or detaching an open instance restores the configured target or the
+original opener so focus cannot remain in removed panel content.
+Nested `Tooltip`, `Popover`, and `FloatingSurface` layers consume Escape after
+dismissing themselves, and the modal overlay stack honors that handled event so
+one keypress unwinds exactly one layer. Modal focus capture likewise runs once
+per opening and restores only on close or teardown, never on an open rerender.
+`SelectMenu` uses the semantic menu layer and releases parent-owned open-state
+coordination when detached, including responsive toolbar replacement.
 
 ## App Shell And Responsive Surfaces
 
@@ -135,6 +147,9 @@ smooth scrolling while preserving visible state changes and status content.
 - `src/components/keyboard-shortcuts.test.tsx`
 - `src/components/user-menu.test.tsx`
 - `src/components/ui/color-picker.test.tsx`
+- `src/components/ui/overlay-stack.test.tsx`
+- `src/components/ui/popover.test.tsx`
+- `src/components/ui/tooltip.test.tsx`
 - `e2e/ui-matrix/app-shell-ui.spec.ts`
 - `src/lib/right-surface-coordinator.test.ts`
 - `src/lib/anchored-position.test.ts`

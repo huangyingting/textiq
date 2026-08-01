@@ -97,7 +97,7 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
       if (topId !== null && topId !== fallbackId.current) {
@@ -118,24 +118,45 @@ function useFocusTrap(
 ) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const explicitRestoreFocusRefRef = useRef(explicitRestoreFocusRef);
 
   useEffect(() => {
-    if (!open) {
+    explicitRestoreFocusRefRef.current = explicitRestoreFocusRef;
+  }, [explicitRestoreFocusRef]);
+
+  const restoreCapturedFocus = useCallback(() => {
+    restoreFocusRef.current?.focus();
+    restoreFocusRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      if (wasOpenRef.current) return;
+      wasOpenRef.current = true;
+      restoreFocusRef.current =
+        explicitRestoreFocusRefRef.current?.current ??
+        (document.activeElement as HTMLElement | null);
+      const panel = panelRef.current;
+      if (panel) {
+        const focusable = getTabbableElements(panel);
+        (focusable[0] ?? panel).focus();
+      }
       return;
     }
-    restoreFocusRef.current =
-      explicitRestoreFocusRef?.current ??
-      (document.activeElement as HTMLElement | null);
-    const panel = panelRef.current;
-    if (panel) {
-      const focusable = getTabbableElements(panel);
-      (focusable[0] ?? panel).focus();
-    }
-    return () => {
-      restoreFocusRef.current?.focus();
-      restoreFocusRef.current = null;
-    };
-  }, [explicitRestoreFocusRef, open]);
+    if (!wasOpenRef.current) return;
+    wasOpenRef.current = false;
+    restoreCapturedFocus();
+  }, [explicitRestoreFocusRef, open, restoreCapturedFocus]);
+
+  useEffect(
+    () => () => {
+      if (!wasOpenRef.current) return;
+      wasOpenRef.current = false;
+      restoreCapturedFocus();
+    },
+    [restoreCapturedFocus],
+  );
 
   const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Tab") {

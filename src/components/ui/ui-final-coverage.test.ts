@@ -272,7 +272,10 @@ test("Tooltip final hidden, delayed, escape, and no-document branches remain acc
   }) as typeof clearTimeout;
 
   const tree = withFakeReact(
-    { states: [false, { top: -1000, left: -1000 }], refs: [null, null] },
+    {
+      states: [false, { top: -1000, left: -1000 }],
+      refs: [null, false, false, null, null],
+    },
     (setters) => {
       const result = resolveKnown(
         Tooltip({
@@ -288,6 +291,7 @@ test("Tooltip final hidden, delayed, escape, and no-document branches remain acc
       (trigger.props.onKeyDown as (event: unknown) => void)(keyEvent("Tab"));
       (trigger.props.onKeyDown as (event: unknown) => void)(keyEvent("Escape"));
       (trigger.props.onMouseLeave as () => void)();
+      (trigger.props.onBlur as () => void)();
       return { result, setters };
     },
   );
@@ -296,9 +300,9 @@ test("Tooltip final hidden, delayed, escape, and no-document branches remain acc
     findAll(tree.result, (element) => element.props.role === "tooltip").length,
     0,
   );
-  assert.deepEqual(tree.setters, [true, true, false, false]);
+  assert.deepEqual(tree.setters, [true, true, false]);
   assert.equal(timeoutCalls, 2);
-  assert.equal(clearCalls, 3);
+  assert.equal(clearCalls, 2);
 });
 
 test("Tooltip final open reposition clamps bottom placement and listens for viewport changes", () => {
@@ -309,7 +313,7 @@ test("Tooltip final open reposition clamps bottom placement and listens for view
   const tree = withFakeReact(
     {
       states: [true, { top: 0, left: 0 }],
-      refs: [null, triggerNode, tooltipNode],
+      refs: [null, false, false, triggerNode, tooltipNode],
       runEffects: true,
     },
     (setters) => {

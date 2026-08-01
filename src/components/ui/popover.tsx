@@ -105,7 +105,11 @@ export function Popover({
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(open);
+  const wasOpenRef = useRef(false);
+  const focusRestoreOptionsRef = useRef({
+    restoreFocusOnClose,
+    restoreFocusRef,
+  });
   const popMotion = usePopMotion();
   // Fixed-viewport coordinates: anchor the panel near the trigger, then clamp
   // the measured panel box inside the viewport.
@@ -118,6 +122,13 @@ export function Popover({
     top: -1000,
     left: -1000,
   });
+
+  useEffect(() => {
+    focusRestoreOptionsRef.current = {
+      restoreFocusOnClose,
+      restoreFocusRef,
+    };
+  }, [restoreFocusOnClose, restoreFocusRef]);
 
   const reposition = useCallback(() => {
     const el = containerRef.current;
@@ -208,8 +219,20 @@ export function Popover({
     };
   }, [open, reposition]);
 
+  const restorePreviouslyFocusedElement = useCallback(() => {
+    const restoreOptions = focusRestoreOptionsRef.current;
+    if (restoreOptions.restoreFocusOnClose) {
+      const restoreTarget =
+        restoreOptions.restoreFocusRef?.current ??
+        previouslyFocusedElementRef.current;
+      restoreTarget?.focus({ preventScroll: true });
+    }
+    previouslyFocusedElementRef.current = null;
+  }, []);
+
   useEffect(() => {
     if (open) {
+      if (wasOpenRef.current) return;
       previouslyFocusedElementRef.current =
         typeof document !== "undefined"
           ? (document.activeElement as HTMLElement | null)
@@ -220,19 +243,25 @@ export function Popover({
     }
     if (!wasOpenRef.current) return;
     wasOpenRef.current = false;
-    if (restoreFocusOnClose) {
-      const restoreTarget =
-        restoreFocusRef?.current ?? previouslyFocusedElementRef.current;
-      restoreTarget?.focus({ preventScroll: true });
-    }
-    previouslyFocusedElementRef.current = null;
-  }, [initialFocusRef, open, restoreFocusOnClose, restoreFocusRef]);
+    restorePreviouslyFocusedElement();
+  }, [initialFocusRef, open, restorePreviouslyFocusedElement]);
+
+  useEffect(
+    () => () => {
+      if (!wasOpenRef.current) return;
+      wasOpenRef.current = false;
+      restorePreviouslyFocusedElement();
+    },
+    [restorePreviouslyFocusedElement],
+  );
 
   // Escape closes the popover.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         onClose();
       }
     };

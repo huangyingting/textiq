@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   useCallback,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -48,6 +49,8 @@ export function Tooltip({
   const id = useId();
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hovered = useRef(false);
+  const focused = useRef(false);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const [coords, setCoords] = useState({ top: -1000, left: -1000 });
@@ -84,14 +87,32 @@ export function Tooltip({
     setCoords({ top, left });
   }, [side]);
 
+  const clearShowTimer = useCallback(() => {
+    if (timer.current === null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+
   const show = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setOpen(true), reduce ? 0 : delay);
+    clearShowTimer();
+    timer.current = setTimeout(
+      () => {
+        timer.current = null;
+        setOpen(true);
+      },
+      reduce ? 0 : delay,
+    );
   };
-  const hide = () => {
-    if (timer.current) clearTimeout(timer.current);
+  const dismiss = () => {
+    clearShowTimer();
     setOpen(false);
   };
+  const dismissIfUnowned = () => {
+    if (hovered.current || focused.current) return;
+    dismiss();
+  };
+
+  useEffect(() => () => clearShowTimer(), [clearShowTimer]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -139,12 +160,34 @@ export function Tooltip({
       ref={triggerRef}
       className="relative inline-flex"
       aria-describedby={open ? id : undefined}
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
+      onMouseEnter={() => {
+        hovered.current = true;
+        show();
+      }}
+      onMouseLeave={() => {
+        hovered.current = false;
+        dismissIfUnowned();
+      }}
+      onFocus={() => {
+        focused.current = true;
+        show();
+      }}
+      onBlur={(event) => {
+        if (
+          event?.relatedTarget &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        focused.current = false;
+        dismissIfUnowned();
+      }}
       onKeyDown={(event) => {
-        if (event.key === "Escape") hide();
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          dismiss();
+        }
       }}
     >
       {children}

@@ -104,6 +104,14 @@ describe("SelectMenu keyboard interaction", () => {
       pressTriggerKey(renderer, "ArrowDown");
       pressTriggerKey(renderer, "ArrowDown");
       assert.match(
+        getListbox(renderer).props.className as string,
+        /\bz-menu\b/,
+      );
+      assert.doesNotMatch(
+        getListbox(renderer).props.className as string,
+        /\bz-tooltip\b/,
+      );
+      assert.match(
         getListbox(renderer).props["aria-activedescendant"] as string,
         /-two$/,
       );
@@ -219,6 +227,22 @@ describe("SelectMenu keyboard interaction", () => {
       );
       assert.deepEqual(focusCalls, ["trigger"]);
       assert.deepEqual(openChanges, [true, false]);
+    });
+  });
+
+  test("unmounting an open menu releases parent-owned open coordination", () => {
+    withPortalDom(() => {
+      const { renderer, openChanges } = mountSelectMenu();
+
+      pressTriggerKey(renderer, "ArrowDown");
+      assert.deepEqual(openChanges, [true]);
+
+      act(() => renderer.unmount());
+      assert.deepEqual(
+        openChanges,
+        [true, false],
+        "responsive toolbar teardown must not leave stage interaction blocking active",
+      );
     });
   });
 });

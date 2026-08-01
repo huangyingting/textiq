@@ -31,6 +31,24 @@ export function scheduleEffectStateUpdate(callback: () => void): () => void {
   };
 }
 
+export function readImageFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = typeof reader.result === "string" ? reader.result : "";
+      if (src) {
+        resolve(src);
+      } else {
+        reject(new Error("empty image data"));
+      }
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("image read failed"));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useDesktopInspectorViewport(): boolean {
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
 

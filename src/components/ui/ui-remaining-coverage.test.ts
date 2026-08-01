@@ -848,6 +848,9 @@ test("Tooltip top placement and overlay stack escape/focus branches remain acces
     {
       states: [true, { top: 0, left: 0 }],
       refs: [
+        null,
+        false,
+        false,
         fakeElement({ bounds: rect(6, 5, 40, 18) }),
         fakeElement({ width: 90, height: 24 }),
       ],

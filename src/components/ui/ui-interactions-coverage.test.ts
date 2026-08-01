@@ -681,7 +681,7 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
     event({ stopPropagation: () => stopEvents.push("pointer") }),
   );
   dom.fireDocument("mousedown", { target: fakeNode() });
-  dom.fireDocument("keydown", { key: "Escape" });
+  dom.fireDocument("keydown", event({ key: "Escape" }));
 
   const popover = withFakeReact(
     {
@@ -717,7 +717,7 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
   (popoverPanel.props.onMouseMove as (mouse: unknown) => void)(
     event({ stopPropagation: () => stopEvents.push("popover-mouse") }),
   );
-  dom.fireDocument("keydown", { key: "Escape" });
+  dom.fireDocument("keydown", event({ key: "Escape" }));
   dom.fireDocument("pointerdown", { target: fakeNode() });
 
   withFakeReact(
@@ -743,6 +743,9 @@ test("Floating surfaces, overlays, popovers, tooltips, and generation status han
     {
       states: [true, { top: 5, left: 6 }],
       refs: [
+        null,
+        false,
+        false,
         fakeNode({ rect: fakeRect(100, 200, 40, 20) }),
         fakeNode({ width: 80, height: 24 }),
       ],

@@ -79,6 +79,7 @@ export function SelectMenu({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
   const onOpenChangeRef = useRef(onOpenChange);
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() =>
     Math.max(
@@ -101,6 +102,15 @@ export function SelectMenu({
     onOpenChangeRef.current = onOpenChange;
   }, [onOpenChange]);
 
+  useEffect(
+    () => () => {
+      if (!openRef.current) return;
+      openRef.current = false;
+      onOpenChangeRef.current?.(false);
+    },
+    [],
+  );
+
   const enabledIndexFrom = useCallback(
     (start: number, delta: 1 | -1) => {
       if (options.length === 0) return -1;
@@ -113,13 +123,21 @@ export function SelectMenu({
     [options],
   );
 
-  const closeMenu = useCallback((restoreFocus = false) => {
-    setOpen(false);
-    onOpenChangeRef.current?.(false);
-    if (restoreFocus) {
-      buttonRef.current?.focus();
-    }
+  const setMenuOpen = useCallback((nextOpen: boolean) => {
+    openRef.current = nextOpen;
+    setOpen(nextOpen);
+    onOpenChangeRef.current?.(nextOpen);
   }, []);
+
+  const closeMenu = useCallback(
+    (restoreFocus = false) => {
+      setMenuOpen(false);
+      if (restoreFocus) {
+        buttonRef.current?.focus();
+      }
+    },
+    [setMenuOpen],
+  );
 
   const selectIndex = useCallback(
     (index: number) => {
@@ -141,8 +159,7 @@ export function SelectMenu({
         ? selectedIndex
         : Math.max(0, enabledIndexFrom(0, 1)),
     );
-    setOpen(true);
-    onOpenChangeRef.current?.(true);
+    setMenuOpen(true);
   };
 
   const reposition = useCallback(() => {
@@ -209,13 +226,12 @@ export function SelectMenu({
       ) {
         return;
       }
-      setOpen(false);
-      onOpenChangeRef.current?.(false);
+      setMenuOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () =>
       document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [open]);
+  }, [open, setMenuOpen]);
 
   const handleButtonKeyDown = (
     event: React.KeyboardEvent<HTMLButtonElement>,
@@ -233,8 +249,7 @@ export function SelectMenu({
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const direction = event.key === "ArrowDown" ? 1 : -1;
-      setOpen(true);
-      onOpenChangeRef.current?.(true);
+      setMenuOpen(true);
       if (open) {
         setActiveIndex((current) =>
           enabledIndexFrom(current + direction, direction),
@@ -280,8 +295,7 @@ export function SelectMenu({
       aria-controls={open ? listboxId : undefined}
       onClick={() => {
         if (open) {
-          setOpen(false);
-          onOpenChangeRef.current?.(false);
+          setMenuOpen(false);
         } else {
           openMenu();
         }
@@ -351,7 +365,7 @@ export function SelectMenu({
               }}
               className={cx(
                 menuPosition === "fixed" ? "fixed" : "absolute",
-                "z-tooltip p-1",
+                "z-menu p-1",
                 scrollable ? "max-h-72 overflow-y-auto" : "overflow-visible",
                 MENU_CHROME,
                 menuClassName,
