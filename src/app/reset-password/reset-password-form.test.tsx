@@ -208,14 +208,26 @@ describe("renderResetPasswordView", () => {
     assert.equal(hiddenToken.props.value, "second-token");
   });
 
-  test("idle + pending: disables the submit button and shows the pending label", () => {
+  test("idle + pending: owns both secret fields and the submit control", () => {
     const tree = mod.renderResetPasswordView({
       token: "raw-reset-token",
       state: { status: "idle" },
       formAction: () => undefined,
       isPending: true,
     });
+    const newPassword = firstElement(
+      tree,
+      (element) =>
+        element.type === "input" && element.props.name === "newPassword",
+    );
+    const confirmPassword = firstElement(
+      tree,
+      (element) =>
+        element.type === "input" && element.props.name === "confirmPassword",
+    );
     const submit = firstElement(tree, (element) => element.type === "button");
+    assert.equal(newPassword.props.disabled, true);
+    assert.equal(confirmPassword.props.disabled, true);
     assert.equal(submit.props.disabled, true);
     assert.equal(submit.props.children, "Resetting…");
   });

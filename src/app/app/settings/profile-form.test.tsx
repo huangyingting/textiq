@@ -159,7 +159,7 @@ describe("renderProfileFormView", () => {
     assert.equal(name.props.defaultValue, "Ada");
     assert.equal(name.props.maxLength, 100);
     assert.equal(name.props.readOnly, undefined);
-    assert.equal(name.props.disabled, undefined);
+    assert.equal(name.props.disabled, false);
   });
 
   test("idle: renders no status/alert message", () => {
@@ -218,7 +218,7 @@ describe("renderProfileFormView", () => {
     assert.equal(submit.props.children, "Save changes");
   });
 
-  test("pending: disables the submit button and shows 'Saving…'", () => {
+  test("pending: owns the display-name field and submit control", () => {
     const tree = mod.renderProfileFormView({
       initialName: "Ada",
       email: "ada@example.com",
@@ -226,7 +226,12 @@ describe("renderProfileFormView", () => {
       formAction: () => undefined,
       isPending: true,
     });
+    const name = firstElement(
+      tree,
+      (element) => element.type === "input" && element.props.name === "name",
+    );
     const submit = firstElement(tree, (element) => element.type === "button");
+    assert.equal(name.props.disabled, true);
     assert.equal(submit.props.disabled, true);
     assert.equal(submit.props.children, "Saving…");
   });

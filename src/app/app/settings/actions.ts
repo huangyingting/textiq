@@ -142,8 +142,9 @@ export async function deleteAccount(
  * the logged-in user's own, already-known email — so this returns specific
  * states. If the address is already verified it short-circuits. Otherwise it
  * generates a high-entropy token, stores only its HASH with a short expiry (so a
- * database leak can't be replayed), invalidates the user's other outstanding
- * verification tokens, and hands the raw-token link to the delivery seam.
+ * database leak can't be replayed), preserves the user's other outstanding
+ * verification tokens until one is consumed, and hands the raw-token link to
+ * the delivery seam.
  */
 export async function requestEmailVerification(
   _prevState: VerifyEmailResult | null,

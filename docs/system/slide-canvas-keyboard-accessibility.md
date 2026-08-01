@@ -1,15 +1,15 @@
 ---
 type: "adr"
-status: "accepted with release-gate caveat"
-last_updated: "2026-07-04"
+status: "accepted with connector caveat"
+last_updated: "2026-08-01"
 description: "Architecture decision record for slide canvas keyboard accessibility, roving focus, selection shortcuts, keyboard manipulation, and release-gate evidence boundaries."
 ---
 
 # 2. Canvas keyboard accessibility for the slide editor
 
-- **Status:** Accepted with release-gate caveat — R1–R3 behavior exists in presentation
-  source, but AC-5 remains deferred until direct `SlideEditor` keyboard
-  interaction tests are wired into release-gate evidence
+- **Status:** Accepted with connector caveat — direct `SlideEditor` interaction
+  tests now cover R1–R3; AC-5 remains partially deferred only for arbitrary
+  keyboard free-draw connector routing
 - **Date:** 2026-06-23
 - **Epic:** #517 — Release Gate Automation and Critical Flow E2E Coverage
 - **Issue:** #522
@@ -85,9 +85,11 @@ The canvas already supports a non-trivial keyboard model:
   only and is tracked by A1.
   - Current source anchors: `src/components/presentation/stage-keyboard-interactions.ts`,
     `src/lib/presentation/connector-geometry.ts`.
-- **Traversal and announcement gaps are now narrowed.** R2/R3 added reading-order
-  traversal, focus restoration, and stage announcements; direct end-to-end
-  `SlideEditor` keyboard interaction coverage remains the release-gate caveat.
+- **Traversal and announcement paths are directly covered.** R2/R3 added
+  reading-order traversal, focus restoration, and stage announcements;
+  `slide-editor-keyboard-command-path.test.ts` now drives those paths through
+  the real editor root and verifies that delayed selection messages cannot
+  overwrite newer operation results.
   - Current source anchors: `src/components/presentation/selection-traversal.ts`,
     `src/components/presentation/use-stage-focus-controller.ts`,
     `src/components/presentation/use-stage-interaction-controller.ts`.
@@ -168,8 +170,11 @@ traverse deterministically, and keep their place after every edit.
   `src/lib/presentation/canvas-keyboard-rotate.test.ts`,
   `src/lib/presentation/canvas-shortcut-help.test.ts`,
   `src/components/presentation/slide-editor-toolbar-command-surface.failures.test.ts`).
-  Broader direct `SlideEditor` keyboard interaction coverage for AC-5 is
-  still pending.
+  Direct `SlideEditor` coverage in
+  `src/components/presentation/slide-editor-keyboard-command-path.test.ts`
+  additionally verifies reading-order Tab traversal, keyboard move/resize and
+  rotation, deletion focus restoration, and durable operation announcements.
+  Only free-draw connector parity remains pending under #1574.
 
 ## Implementation issues (delivered)
 

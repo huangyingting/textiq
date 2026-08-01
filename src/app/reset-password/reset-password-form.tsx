@@ -71,6 +71,7 @@ export function renderResetPasswordView({
         autoComplete="new-password"
         required
         minLength={MIN_PASSWORD_LENGTH}
+        disabled={isPending}
         placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
       />
 
@@ -82,6 +83,7 @@ export function renderResetPasswordView({
         autoComplete="new-password"
         required
         minLength={MIN_PASSWORD_LENGTH}
+        disabled={isPending}
         placeholder="Re-enter your new password"
       />
 

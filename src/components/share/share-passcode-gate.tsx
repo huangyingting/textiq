@@ -5,7 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import {
   MAX_SHARE_PASSCODE_LENGTH,
   MIN_SHARE_PASSCODE_LENGTH,
-} from "@/lib/share-passcode";
+} from "@/lib/share-passcode-policy";
 
 type PasscodeGateMode = "view" | "embed" | "present";
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { before, describe, test } from "node:test";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+import "@/test/react-render-harness";
 import { stubModule } from "@/test/module-stub";
 
 stubModule("@/auth", `module.exports = { signIn: async () => undefined };`);
@@ -18,10 +20,42 @@ stubModule(
 
 type GoogleModule = typeof import("./google-sign-in-button");
 let executeGoogleSignIn: GoogleModule["executeGoogleSignIn"];
+let GoogleSignInButton: GoogleModule["GoogleSignInButton"];
 
 before(async () => {
-  executeGoogleSignIn = (await import("./google-sign-in-button"))
-    .executeGoogleSignIn;
+  const mod = await import("./google-sign-in-button");
+  executeGoogleSignIn = mod.executeGoogleSignIn;
+  GoogleSignInButton = mod.GoogleSignInButton;
+});
+
+test("Google sign-in claims submission synchronously and exposes pending ownership", () => {
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(<GoogleSignInButton />);
+  });
+
+  try {
+    const form = renderer.root.findByType("form");
+    const onSubmit = form.props.onSubmit as
+      ((event: { preventDefault(): void }) => void) | undefined;
+    assert.ok(onSubmit, "the OAuth form needs a synchronous client boundary");
+
+    let firstPrevented = 0;
+    let repeatedPrevented = 0;
+    act(() => {
+      onSubmit({ preventDefault: () => (firstPrevented += 1) });
+      onSubmit({ preventDefault: () => (repeatedPrevented += 1) });
+    });
+
+    assert.equal(firstPrevented, 0);
+    assert.equal(repeatedPrevented, 1);
+    assert.equal(form.props["aria-busy"], true);
+    const button = renderer.root.findByType("button");
+    assert.equal(button.props.disabled, true);
+    assert.equal(button.children.at(-1), "Connecting…");
+  } finally {
+    act(() => renderer.unmount());
+  }
 });
 
 describe("executeGoogleSignIn", () => {

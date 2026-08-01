@@ -31,6 +31,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -2279,19 +2280,32 @@ export function SlideEditor({
         ].find((n) => n.id === firstSelectedId)
       : undefined;
 
+  const selectionIdentity = JSON.stringify(selectedIds);
+  const previousStageAnnouncementRef = useRef(stageAnnouncement);
+  const announceCurrentSelection = useEffectEvent(() => {
+    if (selectedIds.length === 0) {
+      setStageAnnouncement("Slide selected");
+      return;
+    }
+    if (selectedIds.length === 1) {
+      setStageAnnouncement(
+        `${selectedNode ? stageNodeMenuLabel(selectedNode) : "Node"} selected`,
+      );
+      return;
+    }
+    setStageAnnouncement(`${selectedIds.length} nodes selected`);
+  });
+
   useEffect(() => {
-    return scheduleEffectStateUpdate(() => {
-      if (selectedIds.length === 0) {
-        setStageAnnouncement("Slide selected");
-      } else if (selectedIds.length === 1) {
-        setStageAnnouncement(
-          `${selectedNode ? stageNodeMenuLabel(selectedNode) : "Node"} selected`,
-        );
-      } else {
-        setStageAnnouncement(`${selectedIds.length} nodes selected`);
-      }
-    });
-  }, [selectedIds, selectedNode, setStageAnnouncement]);
+    if (previousStageAnnouncementRef.current !== stageAnnouncement) {
+      return;
+    }
+    return scheduleEffectStateUpdate(announceCurrentSelection);
+  }, [selectionIdentity, stageAnnouncement]);
+
+  useEffect(() => {
+    previousStageAnnouncementRef.current = stageAnnouncement;
+  }, [stageAnnouncement]);
 
   function resolveDeckAsset(assetId: string): string | undefined {
     return resolveDeckAssetSource(deck, assetId, pkg);

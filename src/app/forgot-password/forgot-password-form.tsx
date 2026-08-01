@@ -64,6 +64,7 @@ export function renderForgotPasswordView({
         type="email"
         autoComplete="email"
         required
+        disabled={isPending}
         placeholder="you@example.com"
       />
 

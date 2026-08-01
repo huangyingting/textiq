@@ -78,6 +78,9 @@ the dashboard invalidates an in-flight dismissal, so its late completion cannot
 update detached UI or emit a misleading dismissal event.
 
 Google sign-in is enabled only when both Google client env vars are present.
+The OAuth form claims submission synchronously, disables its control, and
+exposes busy state while the provider handoff is pending, so rapid repeated
+activation cannot start competing redirects.
 OAuth sign-ins must include an email. The JWT callback links the OAuth profile
 to a local user by normalized email, updating name/image on existing accounts or
 creating a new local account and seeding onboarding content for first-time
@@ -108,7 +111,8 @@ Reset-password submission is synchronously single-flight, so a repeated
 same-event activation cannot queue a second consume that overwrites success
 with an already-used error. Its client action state is owned by the raw reset
 token: switching tokens remounts the form, unlocks the replacement request, and
-prevents the old token's late result from changing it.
+prevents the old token's late result from changing it. Recovery email and
+password fields remain locked while their requests are pending.
 
 Form actions with side effects use a shared synchronous ownership boundary in
 addition to rendered pending state. Password-reset requests preserve their
@@ -145,7 +149,9 @@ terminally owned through the expected sign-out navigation.
 
 The settings account view model exposes profile defaults, email verification
 state, password state, connected account labels, and stable links to account
-export, billing, and documents.
+export, billing, and documents. The profile display-name field remains locked
+while a save is pending so the visible value continues to match the owned
+request.
 
 The deterministic account browser lifecycle uses an isolated resettable user to
 prove display-name persistence in both the form and app shell, password

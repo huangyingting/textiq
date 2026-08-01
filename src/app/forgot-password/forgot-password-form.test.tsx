@@ -176,13 +176,18 @@ describe("renderForgotPasswordView", () => {
     assert.doesNotMatch(html, /role="alert"/);
   });
 
-  test("idle + pending: disables the submit button and shows the pending label", () => {
+  test("idle + pending: owns the email field and submit control", () => {
     const tree = mod.renderForgotPasswordView({
       state: { status: "idle" },
       formAction: () => undefined,
       isPending: true,
     });
+    const email = firstElement(
+      tree,
+      (element) => element.type === "input" && element.props.name === "email",
+    );
     const submit = firstElement(tree, (element) => element.type === "button");
+    assert.equal(email.props.disabled, true);
     assert.equal(submit.props.disabled, true);
     assert.equal(submit.props.children, "Sending…");
   });

@@ -71,6 +71,7 @@ export function renderProfileFormView({
           maxLength={100}
           defaultValue={initialName}
           autoComplete="name"
+          disabled={isPending}
           aria-label="Display name"
           placeholder="Your name"
           className={fieldClass}

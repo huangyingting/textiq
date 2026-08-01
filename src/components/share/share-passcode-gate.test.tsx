@@ -4,7 +4,8 @@
  * These tests assert the unlock form's hidden field wiring (shareId/mode/
  * returnTo passed straight to the POST target), single-flight submission and
  * pending secret ownership, passcode constraints sourced from
- * `@/lib/share-passcode`, and the "invalid"/"limited" error-message gating.
+ * `@/lib/share-passcode-policy`, and the "invalid"/"limited" error-message
+ * gating.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -16,7 +17,7 @@ import "@/test/react-render-harness";
 import {
   MAX_SHARE_PASSCODE_LENGTH,
   MIN_SHARE_PASSCODE_LENGTH,
-} from "@/lib/share-passcode";
+} from "@/lib/share-passcode-policy";
 
 import { SharePasscodeGate } from "./share-passcode-gate";
 

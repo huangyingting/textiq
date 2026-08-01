@@ -213,14 +213,25 @@ function visualDeck(): Deck {
   ]);
 }
 
-function createNodeMock() {
+function createNodeMock(
+  element?: { props?: Record<string, unknown> },
+  focusLog: string[] = [],
+) {
+  const focusTarget =
+    typeof element?.props?.["data-node-id"] === "string"
+      ? element.props["data-node-id"]
+      : element?.props?.["data-slide-editor"] === "true"
+        ? "editor"
+        : null;
   return {
     addEventListener: () => undefined,
     blur: () => undefined,
     childNodes: [],
     click: () => undefined,
     contains: () => false,
-    focus: () => undefined,
+    focus: () => {
+      if (focusTarget) focusLog.push(focusTarget);
+    },
     getBoundingClientRect: () => ({
       bottom: 0,
       height: 0,
@@ -261,7 +272,7 @@ function installBrowserGlobals(): () => void {
   const fakeWindow = {
     addEventListener: () => undefined,
     cancelAnimationFrame: () => undefined,
-    clearTimeout: () => undefined,
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
     getSelection: () => null,
     localStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -276,7 +287,7 @@ function installBrowserGlobals(): () => void {
     }),
     requestAnimationFrame: () => 0,
     removeEventListener: () => undefined,
-    setTimeout: () => 0,
+    setTimeout: globalThis.setTimeout.bind(globalThis),
   };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
@@ -310,6 +321,7 @@ async function renderSlideEditor(
   const restore = installBrowserGlobals();
   let currentDeck = initialDeck;
   const deckChanges: Deck[] = [];
+  const focusLog: string[] = [];
   let setDeckFromTest: ((nextDeck: Deck) => void) | undefined;
   let setDocumentIdFromTest: ((nextDocumentId: string) => void) | undefined;
 
@@ -334,13 +346,18 @@ async function renderSlideEditor(
   let renderer: ReactTestRenderer;
   act(() => {
     renderer = create(createElement(StatefulSlideEditor), {
-      createNodeMock,
+      createNodeMock: (element) =>
+        createNodeMock(
+          element as unknown as { props?: Record<string, unknown> },
+          focusLog,
+        ),
     });
   });
 
   return {
     renderer: renderer!,
     deckChanges,
+    focusLog,
     get currentDeck() {
       return currentDeck;
     },
@@ -382,6 +399,13 @@ async function renderSlideEditor(
       restore();
     },
   };
+}
+
+async function flushScheduledEffects() {
+  await act(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 function keyEvent(
@@ -1386,12 +1410,85 @@ describe("SlideEditor keyboard command path", () => {
     try {
       editor.press("Tab");
       const event = editor.press("}", { shiftKey: true });
+      await flushScheduledEffects();
 
       assert.equal(event.defaultPrevented, true);
       const box = findNode(editor.currentDeck, "box");
       assert.equal(box.layout?.rotation, 1);
       assert.equal(editor.liveRegionText(), "Rotated Box to 1°");
       assert.equal(editor.deckChanges.length, 1);
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  test("traverses in reading order and preserves move and resize announcements after deck updates", async () => {
+    const editor = await renderSlideEditor(connectorDeck());
+    try {
+      editor.press("Tab");
+      await flushScheduledEffects();
+      assert.equal(editor.liveRegionText(), "Source selected");
+
+      editor.press("Tab");
+      await flushScheduledEffects();
+      assert.equal(editor.liveRegionText(), "Target selected");
+
+      editor.press("Tab", { shiftKey: true });
+      await flushScheduledEffects();
+      assert.equal(editor.liveRegionText(), "Source selected");
+
+      const moveEvent = editor.press("ArrowRight");
+      await flushScheduledEffects();
+      assert.equal(moveEvent.defaultPrevented, true);
+      assert.equal(findNode(editor.currentDeck, "source").layout?.frame.x, 11);
+      assert.equal(editor.liveRegionText(), "Moved 1 node right");
+
+      const resizeEvent = editor.press("ArrowDown", {
+        altKey: true,
+        shiftKey: true,
+      });
+      await flushScheduledEffects();
+      assert.equal(resizeEvent.defaultPrevented, true);
+      assert.equal(findNode(editor.currentDeck, "source").layout?.frame.h, 15);
+      assert.equal(editor.liveRegionText(), "Resized 1 node");
+      assert.equal(editor.deckChanges.length, 2);
+
+      editor.press("Tab");
+      await flushScheduledEffects();
+      assert.equal(editor.liveRegionText(), "Target selected");
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  test("deletion keeps its result announcement and restores focus to the replacement node", async () => {
+    const editor = await renderSlideEditor(connectorDeck());
+    try {
+      editor.press("Tab");
+      await flushScheduledEffects();
+      editor.focusLog.length = 0;
+
+      const event = editor.press("Delete");
+      await flushScheduledEffects();
+
+      assert.equal(event.defaultPrevented, true);
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "source",
+        ),
+        false,
+      );
+      assert.equal(editor.liveRegionText(), "Deleted 1 node, 1 remaining");
+      assert.equal(editor.focusLog.at(-1), "target");
+      assert.equal(editor.deckChanges.length, 1);
+
+      const finalDeleteEvent = editor.press("Delete");
+      await flushScheduledEffects();
+      assert.equal(finalDeleteEvent.defaultPrevented, true);
+      assert.equal(editor.currentDeck.slides[0]?.children.length, 0);
+      assert.equal(editor.liveRegionText(), "Deleted 1 node, 0 remaining");
+      assert.equal(editor.focusLog.at(-1), "editor");
+      assert.equal(editor.deckChanges.length, 2);
     } finally {
       editor.cleanup();
     }
