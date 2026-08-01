@@ -506,6 +506,21 @@ test("E2E profile builders are the seed/spec single source of truth", () => {
   assert.equal(opened.ok, true);
   assert.equal(deck.slides.length, 2);
 
+  const tableDeck = e2eProfile.buildE2ETableEditingDeck(
+    `/api/slide-assets/${storageKey}`,
+    "asset-1",
+  );
+  assert.equal(safeParsePresentationDeck(tableDeck).success, true);
+  const tableNode = tableDeck.slides[0]?.children.find(
+    (child) => child.id === "fixture-table",
+  );
+  assert.equal(tableNode?.type, "table");
+  if (tableNode?.type === "table") {
+    assert.equal(tableNode.content.rows.length, 2);
+    assert.equal(tableNode.content.columns.length, 2);
+    assert.equal(tableNode.content.header, true);
+  }
+
   const sourceLinkedDeck = buildE2ESourceLinkedDeck(
     `/api/slide-assets/${storageKey}`,
     "asset-1",

@@ -13,6 +13,7 @@ function presentationFixture<
     | "sourceLinked"
     | "sourceReview"
     | "diagnostics"
+    | "table"
     | "themeVersions",
 >(
   documentId: DocumentId,
@@ -221,6 +222,12 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr36",
     "e2e-isolated-inline-list",
   ),
+  tableEditing: presentationFixture(
+    "e2eisolatedtableedit0001",
+    "e2eisolatedshr37",
+    "e2e-isolated-table-editing",
+    "table",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -248,6 +255,7 @@ export const SLIDES_SMOKE_MUTATION_FIXTURES = {
   present: "slidesSmokePresent",
   inlineRichText: "inlineRichText",
   inlineList: "inlineList",
+  tableEditing: "tableEditing",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const POINTER_INTERACTION_FIXTURES = {

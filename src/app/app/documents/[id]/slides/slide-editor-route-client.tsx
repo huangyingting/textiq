@@ -486,13 +486,16 @@ function SlideEditorRouteClientDocument({
     updatedDeck: Deck,
     options: { persistNow?: boolean } = {},
   ) {
-    setDeck((current) => {
-      if (current) {
-        setUndoStack((stack) => [...stack, current].slice(-50));
-      }
-      return updatedDeck;
-    });
-    setRedoStack([]);
+    const currentDeck = latestDeckRef.current;
+    const changed =
+      currentDeck === null || !structuredJsonEqual(currentDeck, updatedDeck);
+    if (currentDeck && changed) {
+      setUndoStack((stack) => [...stack, currentDeck].slice(-50));
+    }
+    if (changed) {
+      setRedoStack([]);
+    }
+    setDeck(updatedDeck);
     latestDeckRef.current = updatedDeck;
     if (options.persistNow) {
       void saveControllerRef.current?.replaceAndPersist(updatedDeck);
@@ -581,38 +584,34 @@ function SlideEditorRouteClientDocument({
 
   function handleUndo() {
     if (hasUnresolvedDeckSaveConflict(conflictState)) return;
-    setUndoStack((stack) => {
-      const previous = stack.at(-1);
-      if (!previous || !deck) return stack;
-      setRedoStack((redo) => [...redo, deck].slice(-50));
-      const focusTarget = pickUndoFocusTarget(deck, previous);
-      if (focusTarget) {
-        focusTokenRef.current += 1;
-        setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
-      }
-      setDeck(previous);
-      latestDeckRef.current = previous;
-      scheduleAutosave(previous);
-      return stack.slice(0, -1);
-    });
+    const previous = undoStack.at(-1);
+    if (!previous || !deck) return;
+    setRedoStack((redo) => [...redo, deck].slice(-50));
+    setUndoStack((stack) => stack.slice(0, -1));
+    const focusTarget = pickUndoFocusTarget(deck, previous);
+    if (focusTarget) {
+      focusTokenRef.current += 1;
+      setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
+    }
+    setDeck(previous);
+    latestDeckRef.current = previous;
+    scheduleAutosave(previous);
   }
 
   function handleRedo() {
     if (hasUnresolvedDeckSaveConflict(conflictState)) return;
-    setRedoStack((stack) => {
-      const next = stack.at(-1);
-      if (!next || !deck) return stack;
-      setUndoStack((undo) => [...undo, deck].slice(-50));
-      const focusTarget = pickUndoFocusTarget(deck, next);
-      if (focusTarget) {
-        focusTokenRef.current += 1;
-        setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
-      }
-      setDeck(next);
-      latestDeckRef.current = next;
-      scheduleAutosave(next);
-      return stack.slice(0, -1);
-    });
+    const next = redoStack.at(-1);
+    if (!next || !deck) return;
+    setUndoStack((undo) => [...undo, deck].slice(-50));
+    setRedoStack((stack) => stack.slice(0, -1));
+    const focusTarget = pickUndoFocusTarget(deck, next);
+    if (focusTarget) {
+      focusTokenRef.current += 1;
+      setUndoRedoFocus({ nodeId: focusTarget, token: focusTokenRef.current });
+    }
+    setDeck(next);
+    latestDeckRef.current = next;
+    scheduleAutosave(next);
   }
 
   async function handleConflictKeepMine(

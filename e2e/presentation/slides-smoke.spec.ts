@@ -574,6 +574,118 @@ test.describe("slides edit and save persistence", () => {
         .evaluate((node) => node.style.paddingLeft),
     ).toBe("1.5em");
   });
+
+  test("table cells and structure stay keyboard-editable through history and reload", async ({
+    page,
+  }) => {
+    test.skip(
+      !e2eProfileEnabled(),
+      "Set E2E_PROFILE=1 and seed the deterministic profile",
+    );
+
+    const editor = await openIsolatedMutationEditor(
+      page,
+      SLIDES_SMOKE_MUTATION_FIXTURES.tableEditing,
+    );
+    const tableNode = editor
+      .locator(
+        '[data-slide-stage-viewport="true"] [data-node-id="fixture-table"]',
+      )
+      .first();
+    const toolbar = page.getByRole("toolbar", { name: "Context toolbar" });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+    const editableCells = tableNode.locator("[data-table-cell]");
+
+    await tableNode.dblclick();
+    await expect(editableCells).toHaveCount(4);
+    const firstCell = tableNode.locator('[data-table-cell="0:0"]');
+    const secondCell = tableNode.locator('[data-table-cell="0:1"]');
+    const thirdCell = tableNode.locator('[data-table-cell="1:0"]');
+    const fourthCell = tableNode.locator('[data-table-cell="1:1"]');
+    await expect(firstCell).toBeFocused();
+    await firstCell.fill("Alpha updated");
+    await page.keyboard.press("Tab");
+    await expect(secondCell).toBeFocused();
+    await secondCell.fill("11");
+    await page.keyboard.press("Tab");
+    await expect(thirdCell).toBeFocused();
+    await page.keyboard.press("Control+ArrowRight");
+    await expect(fourthCell).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(thirdCell).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(editableCells).toHaveCount(0);
+    await expect(tableNode).toBeFocused();
+    await waitForSlideAutosave(page);
+    await expect(
+      tableNode.locator("tbody tr").first().locator("td"),
+    ).toHaveText(["Alpha updated", "11"]);
+
+    await waitForSlideAutosaveAfter(page, () =>
+      toolbar.getByRole("button", { name: "Insert row", exact: true }).click(),
+    );
+    await expect(tableNode.locator("tbody tr")).toHaveCount(3);
+    await waitForSlideAutosaveAfter(page, () =>
+      toolbar
+        .getByRole("button", { name: "Insert column", exact: true })
+        .click(),
+    );
+    await expect(tableNode.locator("tbody td")).toHaveCount(9);
+    await waitForSlideAutosaveAfter(page, () =>
+      toolbar
+        .getByRole("button", { name: "Toggle header row", exact: true })
+        .click(),
+    );
+    await expect(tableNode.locator("thead")).toHaveCount(0);
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(tableNode.locator("thead")).toHaveCount(1);
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(tableNode.locator("thead")).toHaveCount(0);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(tableNode.locator("tbody tr")).toHaveCount(3);
+    await expect(tableNode.locator("tbody td")).toHaveCount(9);
+    await expect(tableNode.locator("thead")).toHaveCount(0);
+    await expect(
+      tableNode.locator("tbody tr").first().locator("td"),
+    ).toHaveText(["Alpha updated", "11", ""]);
+
+    await tableNode.click();
+    await waitForSlideAutosaveAfter(page, () =>
+      toolbar.getByRole("button", { name: "Delete row", exact: true }).click(),
+    );
+    await expect(tableNode.locator("tbody tr")).toHaveCount(2);
+    await waitForSlideAutosaveAfter(page, () =>
+      toolbar
+        .getByRole("button", { name: "Delete column", exact: true })
+        .click(),
+    );
+    await expect(tableNode.locator("tbody td")).toHaveCount(4);
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(tableNode.locator("tbody td")).toHaveCount(6);
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect(tableNode.locator("tbody tr")).toHaveCount(3);
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(tableNode.locator("tbody tr")).toHaveCount(2);
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect(tableNode.locator("tbody td")).toHaveCount(4);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await expect(tableNode.locator("tbody tr")).toHaveCount(2);
+    await expect(tableNode.locator("tbody td")).toHaveCount(4);
+    await expect(tableNode.locator("thead")).toHaveCount(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

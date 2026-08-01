@@ -37,6 +37,7 @@ import {
   buildE2EGeneratedPresentationContentJson,
   buildE2EPrecisionGuidesDeck,
   buildE2ETouchControlsDeck,
+  buildE2ETableEditingDeck,
   buildE2EProfileVisual,
   fixtureAssetChecksum,
   fixturePngBuffer,
@@ -848,7 +849,15 @@ async function main() {
                           isolatedAssetUrl,
                           isolatedAsset.id,
                         )
-                      : buildE2EProfileDeck(isolatedAssetUrl, isolatedAsset.id);
+                      : fixture.deckKind === "table"
+                        ? buildE2ETableEditingDeck(
+                            isolatedAssetUrl,
+                            isolatedAsset.id,
+                          )
+                        : buildE2EProfileDeck(
+                            isolatedAssetUrl,
+                            isolatedAsset.id,
+                          );
     if (fixture.deckKind === "themeVersions") {
       isolatedDeck.theme = {
         ...isolatedDeck.theme,

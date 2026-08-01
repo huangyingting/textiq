@@ -351,8 +351,9 @@ cannot reach create/import actions. All four cases carry `@required-profile`.
 The Slides smoke spec covers the core edit → save → present → export flow. Its
 deterministic profile also exercises inline selection formatting through the
 real context toolbar, including link apply/remove, font-size focus ownership,
-list conversion and indentation, history, autosave, and reload persistence. It
-degrades cleanly at every step:
+list conversion and indentation, table-cell keyboard editing and structural
+commands, history, autosave, and reload persistence. It degrades cleanly at
+every step:
 
 - Without `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`: all authenticated tests skip.
 - Without `E2E_SLIDES_DOC_URL`: persistence and present tests skip.

@@ -357,7 +357,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/slides-smoke.spec.ts",
     owners: ["presentation"],
     coverage:
-      "Slide edit, inline rich-text selection formatting with link apply/remove and font-size focus ownership, list conversion/indentation, history/reload persistence, resize/duplicate, add-slide, and visual-insert mutations use independent deterministic documents and Yjs rooms; optional external fixtures cover non-mutating smoke.",
+      "Slide edit, inline rich-text selection formatting with link apply/remove and font-size focus ownership, list conversion/indentation, table-cell keyboard editing plus row/column/header commands, history/reload persistence, resize/duplicate, add-slide, and visual-insert mutations use independent deterministic documents and Yjs rooms; optional external fixtures cover non-mutating smoke.",
     runMode: "advisory-ci",
     prerequisites: [
       "E2E_PROFILE=1 for mutating coverage",

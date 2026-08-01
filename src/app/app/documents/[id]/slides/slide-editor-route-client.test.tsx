@@ -74,7 +74,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { after, afterEach, before, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createElement } from "react";
+import { createElement, StrictMode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 type ModuleHooks = {
@@ -857,6 +857,76 @@ test("undo/redo: reverts and restores the deck, toggling canUndo/canRedo", async
   assert.equal(props.canRedo, false);
 
   unmount();
+});
+
+test("undo/redo: consecutive undo and redo traverse every committed deck", async () => {
+  globalThis.__slideRouteActionImpls.saveDeckJson = async () => ({
+    ok: true,
+    revisionToken: "rev-sequence",
+  });
+
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      createElement(
+        StrictMode,
+        null,
+        createElement(
+          SlideEditorRouteClient,
+          baseProps({
+            documentId: "doc-undo-sequence",
+            initialDeckJson: validDeckJson({ title: "Original" }),
+          }),
+        ),
+      ),
+    );
+  });
+
+  const originalDeck = latestSlideEditorProps().deck as Record<string, unknown>;
+  const firstDeck = { ...originalDeck, title: "First" };
+  const secondDeck = { ...firstDeck, title: "Second" };
+  act(() => {
+    (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+      firstDeck,
+    );
+  });
+  act(() => {
+    (latestSlideEditorProps().onDeckChange as (deck: unknown) => void)(
+      secondDeck,
+    );
+  });
+
+  act(() => {
+    (latestSlideEditorProps().onUndo as () => void)();
+  });
+  assert.equal(
+    (latestSlideEditorProps().deck as Record<string, unknown>).title,
+    "First",
+  );
+  act(() => {
+    (latestSlideEditorProps().onUndo as () => void)();
+  });
+  assert.equal(
+    (latestSlideEditorProps().deck as Record<string, unknown>).title,
+    "Original",
+  );
+
+  act(() => {
+    (latestSlideEditorProps().onRedo as () => void)();
+  });
+  assert.equal(
+    (latestSlideEditorProps().deck as Record<string, unknown>).title,
+    "First",
+  );
+  act(() => {
+    (latestSlideEditorProps().onRedo as () => void)();
+  });
+  assert.equal(
+    (latestSlideEditorProps().deck as Record<string, unknown>).title,
+    "Second",
+  );
+
+  act(() => renderer.unmount());
 });
 
 test("cleanup: unmounting before the autosave debounce fires cancels the pending save", async () => {

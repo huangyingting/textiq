@@ -330,6 +330,56 @@ export function buildE2EProfileDeck(assetUrl: string, assetId: string): Deck {
   };
 }
 
+export function buildE2ETableEditingDeck(
+  assetUrl: string,
+  assetId: string,
+): Deck {
+  const deck = buildE2EProfileDeck(assetUrl, assetId);
+  const firstSlide = deck.slides[0];
+  if (!firstSlide) {
+    throw new Error("E2E table editing deck requires a first slide.");
+  }
+  firstSlide.template = { kind: "table" };
+  firstSlide.children = [
+    {
+      id: "fixture-table-title",
+      type: "text",
+      role: "title",
+      layout: { frame: { x: 6, y: 6, w: 88, h: 14 }, zIndex: 0 },
+      style: { ref: "text.title" },
+      content: {
+        paragraphs: [{ id: "fixture-table-title-p1", text: "Team metrics" }],
+      },
+    },
+    {
+      id: "fixture-table",
+      type: "table",
+      role: "table",
+      layout: { frame: { x: 8, y: 24, w: 84, h: 48 }, zIndex: 1 },
+      style: { ref: "surface.table" },
+      content: {
+        caption: "Quarterly team metrics",
+        header: true,
+        columns: [
+          { id: "fixture-table-col-name", label: "Name" },
+          { id: "fixture-table-col-score", label: "Score" },
+        ],
+        rows: [
+          {
+            id: "fixture-table-row-alpha",
+            cells: [{ text: "Alpha" }, { text: "10" }],
+          },
+          {
+            id: "fixture-table-row-beta",
+            cells: [{ text: "Beta" }, { text: "20" }],
+          },
+        ],
+      },
+    },
+  ];
+  return deck;
+}
+
 export const E2E_DIAGNOSTIC_MISSING_ASSET_ID = "e2e-missing-diagnostic-asset";
 
 export function buildE2EDiagnosticsDeck(
