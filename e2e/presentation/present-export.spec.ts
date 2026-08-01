@@ -81,6 +81,34 @@ async function expectHudRespectsSafeAreas(
   ).toBeGreaterThanOrEqual(SAFE_AREA_INSETS.bottom - 1);
 }
 
+async function expectLoadedSlideImage(
+  region: Locator,
+  accessibleName: string,
+): Promise<Locator> {
+  const image = region.getByRole("img", { name: accessibleName }).first();
+  await expect(
+    image,
+    `present: ${accessibleName} image should be visible`,
+  ).toBeVisible({ timeout: 15_000 });
+  await expect
+    .poll(
+      () =>
+        image.evaluate(
+          (node) =>
+            node instanceof HTMLImageElement &&
+            node.complete &&
+            node.naturalWidth > 0 &&
+            node.naturalHeight > 0,
+        ),
+      {
+        message: `present: ${accessibleName} image pixels should finish loading`,
+        timeout: 15_000,
+      },
+    )
+    .toBe(true);
+  return image;
+}
+
 async function detectPresentationState(
   page: Page,
   region: Locator,
@@ -140,7 +168,7 @@ test.describe("present + export", () => {
 
   test("authenticated present mode renders the seeded slide text @required-profile", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await login(page, profileOwnerCredentials());
     await page.goto(profileDocPath());
 
@@ -158,6 +186,14 @@ test.describe("present + export", () => {
       presentRegion.getByText(SLIDE_TEXT, { exact: false }).first(),
       "present: seeded slide text not rendered (blank slide)",
     ).toBeVisible({ timeout: 15_000 });
+    await expectLoadedSlideImage(presentRegion, "Seeded fixture image");
+    await expect(
+      page.getByRole("tooltip", { name: "Present fullscreen" }),
+      "present: the toolbar tooltip must not leak above the fullscreen overlay",
+    ).toHaveCount(0);
+    await presentRegion.screenshot({
+      path: testInfo.outputPath("authenticated-present-mode.png"),
+    });
   });
 
   test("authenticated present mode exposes presenter controls and slide overview navigation", async ({
@@ -276,7 +312,7 @@ test.describe("present + export", () => {
 
   test("public present mode renders the seeded deck via the share link @required-profile", async ({
     page,
-  }) => {
+  }, testInfo) => {
     const response = await page.goto(profilePresentPath());
     expect(
       response?.status(),
@@ -293,6 +329,10 @@ test.describe("present + export", () => {
       page.getByText(SLIDE_TEXT, { exact: false }).first(),
       "present: seeded slide text missing on public present page",
     ).toBeVisible({ timeout: 15_000 });
+    await expectLoadedSlideImage(region, "Seeded fixture image");
+    await region.screenshot({
+      path: testInfo.outputPath("public-present-mode.png"),
+    });
   });
 
   test("public present mode keeps HUD chrome outside mobile safe areas", async ({

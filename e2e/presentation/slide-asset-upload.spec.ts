@@ -128,9 +128,9 @@ test.describe("slide image upload round-trip", () => {
     "Set E2E_PROFILE=1 and seed (npm run db:seed:e2e) to run slide upload",
   );
 
-  test("uploads via the inspector and the reloaded slide resolves the protected asset", async ({
+  test("uploads via the inspector and the reloaded slide resolves the protected asset @required-profile", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await login(page, profileOwnerCredentials());
     await page.goto(profileDocPath("slideAssetUpload", test.info()));
 
@@ -202,6 +202,22 @@ test.describe("slide image upload round-trip", () => {
       slideImg,
       "upload: reloaded slide does not render a protected asset image",
     ).toBeVisible({ timeout: 20_000 });
+    await expect
+      .poll(
+        () =>
+          slideImg.evaluate(
+            (node) =>
+              node instanceof HTMLImageElement &&
+              node.complete &&
+              node.naturalWidth > 0 &&
+              node.naturalHeight > 0,
+          ),
+        {
+          message: "upload: protected image pixels should finish loading",
+          timeout: 20_000,
+        },
+      )
+      .toBe(true);
 
     const src = await slideImg.getAttribute("src");
     expect(src, "upload: protected image has no src").toBeTruthy();
@@ -210,5 +226,14 @@ test.describe("slide image upload round-trip", () => {
       assetResponse.status(),
       "upload: protected asset URL did not resolve to servable bytes",
     ).toBe(200);
+
+    const presentRegion = page.getByRole("region", { name: /^Presentation/ });
+    await expect(
+      presentRegion,
+      "upload: public presentation region missing after upload",
+    ).toBeVisible();
+    await presentRegion.screenshot({
+      path: testInfo.outputPath("uploaded-slide-present-mode.png"),
+    });
   });
 });

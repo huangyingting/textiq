@@ -323,6 +323,12 @@ Run `npm run test:e2e:profile` without that grep for the broader deterministic
 profile. The remaining opt-in UI-matrix specs can be supplied explicitly when
 validating the representative browser UI matrix.
 
+The required CI profile also uploads a `release-review-<commit SHA>` artifact
+for 14 days. It contains PNG evidence for authenticated/public present mode,
+the persisted inspector image-upload round-trip, forced-colors focus, and
+mobile/tablet inspector stacking. Download and inspect that artifact when
+performing the manual release checks in `docs/operations/release-gate.md`.
+
 ### DOCX fixture policy
 
 `e2e/import/import-roundtrip.spec.ts` covers Markdown and DOCX dashboard imports

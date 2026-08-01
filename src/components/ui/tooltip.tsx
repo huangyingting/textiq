@@ -189,6 +189,7 @@ export function Tooltip({
           dismiss();
         }
       }}
+      onClick={dismiss}
     >
       {children}
       {typeof document !== "undefined"

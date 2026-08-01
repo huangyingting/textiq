@@ -18,7 +18,7 @@ jobs:
       DB_PROVIDER: sqlite
       DATABASE_URL: "file:./prisma/dev.db"
       AUTH_SECRET: ci-placeholder-secret-not-used-in-production
-      # The required profile performs 11 owner logins; production's limit is 10/minute.
+      # The required profile performs 12 owner logins; production's limit is 10/minute.
       AUTH_LOGIN_RATE_LIMIT: "100"
       PORT: "4000"
       E2E_PROFILE: "1"
@@ -43,3 +43,12 @@ jobs:
 
       - name: Run deterministic E2E profile
         run: npm run test:e2e:profile:self-contained
+
+      - name: Upload release review artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-review-${{ github.sha }}
+          path: test-results/**/*.png
+          if-no-files-found: warn
+          retention-days: 14

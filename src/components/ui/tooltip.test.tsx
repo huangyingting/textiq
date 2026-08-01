@@ -166,6 +166,41 @@ test("Tooltip clears a delayed show when it unmounts", () => {
   });
 });
 
+test("Tooltip dismisses pending and visible content when its trigger activates", () => {
+  withPortalDom(() => {
+    const renderer = mountWithPortalDom(renderTooltip());
+    const timers = installControlledTimers();
+    try {
+      act(() => trigger(renderer).props.onMouseEnter());
+      assert.equal(timers.pending.size, 1);
+
+      act(() => trigger(renderer).props.onClick());
+      assert.equal(timers.pending.size, 0);
+      act(() => timers.flush());
+      assert.equal(
+        visibleTooltips(renderer).length,
+        0,
+        "activation must cancel a delayed tooltip before opening an overlay",
+      );
+
+      act(() => trigger(renderer).props.onMouseLeave());
+      act(() => trigger(renderer).props.onMouseEnter());
+      act(() => timers.flush());
+      assert.equal(visibleTooltips(renderer).length, 1);
+
+      act(() => trigger(renderer).props.onClick());
+      assert.equal(
+        visibleTooltips(renderer).length,
+        0,
+        "activation must remove a visible portal tooltip",
+      );
+    } finally {
+      act(() => renderer.unmount());
+      timers.restore();
+    }
+  });
+});
+
 test("an open Tooltip consumes Escape after dismissing itself", () => {
   withPortalDom(() => {
     const renderer = mountWithPortalDom(renderTooltip());

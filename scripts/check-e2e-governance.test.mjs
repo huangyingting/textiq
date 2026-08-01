@@ -126,6 +126,58 @@ test("e2e governance: deterministic workflows use the canonical localhost origin
   );
 });
 
+test("e2e governance: required profile retains manual release-review artifacts", () => {
+  const workflow = parseYaml(
+    readFileSync(
+      join(process.cwd(), ".github", "workflows", "e2e-deterministic.yml"),
+      "utf8",
+    ),
+  );
+  const steps = workflow?.jobs?.profile?.steps ?? [];
+  const upload = steps.find(
+    (step) => step?.name === "Upload release review artifacts",
+  );
+
+  assert.ok(upload, "deterministic E2E must upload release-review artifacts");
+  assert.match(String(upload.uses ?? ""), /^actions\/upload-artifact@v\d+$/);
+  assert.equal(upload.if, "always()");
+  assert.equal(upload.with?.name, "release-review-${{ github.sha }}");
+  assert.match(String(upload.with?.path ?? ""), /test-results\/\*\*\/\*\.png/);
+  assert.equal(upload.with?.["if-no-files-found"], "warn");
+
+  const requiredEvidence = [
+    [
+      "e2e/presentation/present-export.spec.ts",
+      "authenticated present mode renders the seeded slide text @required-profile",
+      "authenticated-present-mode.png",
+    ],
+    [
+      "e2e/presentation/present-export.spec.ts",
+      "public present mode renders the seeded deck via the share link @required-profile",
+      "public-present-mode.png",
+    ],
+    [
+      "e2e/presentation/slide-asset-upload.spec.ts",
+      "uploads via the inspector and the reloaded slide resolves the protected asset @required-profile",
+      "uploaded-slide-present-mode.png",
+    ],
+    [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "forced-colors keeps the focused stage node visibly outlined @required-profile",
+      "forced-colors-focused-stage-node.png",
+    ],
+  ];
+
+  for (const [filePath, requiredTitle, artifactName] of requiredEvidence) {
+    const source = readFileSync(join(process.cwd(), filePath), "utf8");
+    assert.match(
+      source,
+      new RegExp(requiredTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
+    assert.match(source, new RegExp(artifactName.replaceAll(".", "\\.")));
+  }
+});
+
 test("e2e governance: runnable profile docs leave static URL env vars unset", () => {
   const profileCommands = [];
 
