@@ -212,6 +212,11 @@ export function ColorPicker({
   preserveSelection = false,
 }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
+  // A parent busy state owns dismissal. Reset during the prop transition so
+  // clearing `disabled` cannot reopen a stale picker on the following render.
+  if (disabled && open) {
+    setOpen(false);
+  }
   const pickerOpen = open && !disabled;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const firstPresetRef = useRef<HTMLButtonElement | null>(null);
@@ -361,7 +366,12 @@ export function ColorPicker({
   // gradient overlays stay perceptually accurate.
   const squareRef = useRef<HTMLDivElement | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => dragCleanupRef.current?.(), []);
+  useEffect(() => {
+    if (!pickerOpen) {
+      dragCleanupRef.current?.();
+    }
+    return () => dragCleanupRef.current?.();
+  }, [pickerOpen]);
 
   const startPointerDrag = (
     event: ReactPointerEvent<HTMLDivElement>,

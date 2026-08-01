@@ -37,6 +37,12 @@ source of truth. Visual-content palettes and themes remain separate in
   surfaces, popover sections, field rows, icon action clusters, and status pills.
 - Feature components compose these primitives with local layout only.
 
+Transient primitive state follows the visible surface lifecycle. In particular,
+`ColorPicker` treats a parent `disabled` transition as dismissal rather than
+temporarily hiding an open picker, and its custom-color pointer listeners exist
+only while that picker is visible. Clearing a form's busy state therefore never
+reopens stale color UI or resumes a drag that began in a closed surface.
+
 ## App Shell And Responsive Surfaces
 
 The app shell owns navigation, header visibility, account/workspace chrome, and
@@ -128,6 +134,7 @@ smooth scrolling while preserving visible state changes and status content.
 - `src/lib/app-shell/theme.test.ts`
 - `src/components/keyboard-shortcuts.test.tsx`
 - `src/components/user-menu.test.tsx`
+- `src/components/ui/color-picker.test.tsx`
 - `e2e/ui-matrix/app-shell-ui.spec.ts`
 - `src/lib/right-surface-coordinator.test.ts`
 - `src/lib/anchored-position.test.ts`

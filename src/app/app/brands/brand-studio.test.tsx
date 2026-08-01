@@ -39,20 +39,11 @@
  * `withPortalDom`/`mountWithPortalDom` rather than the plain
  * `@/test/react-render-harness`.
  *
- * `handleLogoUpload`'s inline canvas palette-quantization loop was extracted
- * to the standalone `extractPaletteFromImageData` (exported from
- * `./brand-studio`) specifically because it was the one piece of this file
- * genuinely blocked from direct testing by concrete `Image`/`canvas` DOM
- * coupling — it's unit-tested directly below, without needing a
- * canvas/Image stub. The surrounding orchestration (drawing the uploaded
- * logo onto an offscreen canvas via `img.onload`) is intentionally left
- * untested at the component level: it would require stubbing a global
- * `Image`/`document.createElement("canvas")`/`CanvasRenderingContext2D` (as
- * `src/lib/visual/export.test.ts` does for a different feature), which is a
- * much larger addition than this task's "avoid broad rewrite" guidance
- * supports for a best-effort, catch-and-ignore auto-fill affordance — the
- * logo upload's primary contract (`logoAssetUrl`/`logoAssetId` persisted,
- * pending/error states) is fully covered without it.
+ * `handleLogoUpload`'s canvas palette-quantization loop is split between the
+ * standalone `extractPaletteFromImageData` algorithm and an owned Image/canvas
+ * orchestration. The algorithm is unit-tested directly below; the component
+ * suite uses a controllable Image plus a minimal canvas context to verify that
+ * extraction remains inside the upload operation boundary.
  *
  * `ColorPicker`'s own popover interaction (opening the swatch grid, picking a
  * color) is a separate, generic UI primitive with no dedicated test file of
@@ -204,27 +195,40 @@ before(async () => {
   extractPaletteFromImageData = mod.extractPaletteFromImageData;
 });
 
-beforeEach(resetActionsState);
+type FakeImageInstance = {
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+};
+
+const fakeImages: FakeImageInstance[] = [];
+let fakeImagesAutoError = true;
+
+beforeEach(() => {
+  resetActionsState();
+  fakeImages.length = 0;
+  fakeImagesAutoError = true;
+});
 
 // `handleLogoUpload` unconditionally constructs `new Image()` after a
 // successful upload to auto-extract a palette from the logo (via
 // `img.onload` + canvas). Node has no global `Image`, so — without this
 // stub — even a *successful* upload's own success path would throw
 // synchronously and be swallowed by `handleLogoUpload`'s outer catch,
-// surfacing a spurious "Logo upload failed" error. This fake deliberately
-// never calls `onload`/`onerror`: driving the canvas/`getImageData`
-// orchestration end-to-end would need a much larger `document.createElement
-// ("canvas")`/`CanvasRenderingContext2D` stub (as in
-// `src/lib/visual/export.test.ts`) for a best-effort, catch-and-ignore
-// affordance — out of proportion for this task. The bucket-counting
-// algorithm itself is unit-tested directly below via
-// `extractPaletteFromImageData`.
+// surfacing a spurious "Logo upload failed" error. By default this fake
+// reports an image error on the next microtask, exercising the best-effort
+// fallback without a real canvas. The ownership regression disables that
+// fallback and settles `onload` against a minimal canvas context explicitly.
 const originalImage = globalThis.Image;
 class FakeImage {
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  constructor() {
+    fakeImages.push(this);
+  }
   set src(_value: string) {
-    // Deliberately inert — see comment above.
+    if (fakeImagesAutoError) {
+      queueMicrotask(() => this.onerror?.());
+    }
   }
 }
 globalThis.Image = FakeImage as unknown as typeof Image;
@@ -1043,6 +1047,109 @@ describe("BrandStudio", () => {
   });
 
   describe("logo upload", () => {
+    test("logo palette extraction stays inside the upload boundary before manual editing unlocks", async () => {
+      await withPortalDom(async () => {
+        let uploadCalls = 0;
+        fakeImagesAutoError = false;
+        const renderer = mount({
+          initialBrands: [buildBrand()],
+          canFontUpload: false,
+          uploadPort: buildUploadPort({
+            uploadLogo: async () => {
+              uploadCalls += 1;
+              return {
+                url: "https://textiq.test/api/brand-assets/logo-late",
+                assetId: "logo-asset-late",
+              };
+            },
+          }),
+        });
+        try {
+          assert.equal(globalThis.Image, FakeImage);
+          act(() => {
+            renderer.root
+              .findByProps({ "aria-label": "Edit brand" })
+              .props.onClick();
+          });
+          const logoInput = findFileInput(renderer.root, "image");
+          await selectFile(
+            logoInput,
+            new File(["x"], "logo.png", { type: "image/png" }),
+          );
+          assert.equal(uploadCalls, 1);
+          assert.equal(fakeImages.length, 1);
+
+          const [pendingPalettePicker] = renderer.root.findAll(
+            (node) =>
+              node.props["aria-label"] === "Palette color 1" &&
+              typeof node.props.color === "string" &&
+              typeof node.props.onChange === "function",
+          );
+          assert.ok(pendingPalettePicker);
+          assert.equal(pendingPalettePicker.props.disabled, true);
+          assert.equal(
+            findButtonByText(renderer.root, /Replace logo/).props.disabled,
+            true,
+            "save, close, replacement, and palette edits must remain locked through extraction",
+          );
+          assert.match(textOf(renderer.root), /Uploading logo and extracting/);
+
+          const originalCreateElement = document.createElement;
+          const imageData = new Uint8ClampedArray(64);
+          imageData.set([255, 0, 0, 255], 0);
+          imageData.set([0, 255, 0, 255], 32);
+          document.createElement = ((tagName: string) => {
+            if (tagName === "canvas") {
+              return {
+                width: 0,
+                height: 0,
+                getContext: () => ({
+                  drawImage: () => undefined,
+                  getImageData: () => ({ data: imageData }),
+                }),
+              } as unknown as HTMLElement;
+            }
+            return originalCreateElement(tagName);
+          }) as typeof document.createElement;
+
+          await act(async () => {
+            fakeImages[0]?.onload?.();
+            await waitForAsyncDrain();
+          });
+
+          const [extractedPalettePicker] = renderer.root.findAll(
+            (node) =>
+              node.props["aria-label"] === "Palette color 1" &&
+              typeof node.props.color === "string" &&
+              typeof node.props.onChange === "function",
+          );
+          assert.ok(extractedPalettePicker);
+          assert.equal(extractedPalettePicker.props.color, "#f00000");
+          assert.equal(extractedPalettePicker.props.disabled, false);
+          assert.doesNotMatch(
+            textOf(renderer.root),
+            /Uploading logo and extracting/,
+          );
+
+          act(() => extractedPalettePicker.props.onChange("#123456"));
+          const [manuallyUpdatedPalettePicker] = renderer.root.findAll(
+            (node) =>
+              node.props["aria-label"] === "Palette color 1" &&
+              typeof node.props.color === "string" &&
+              typeof node.props.onChange === "function",
+          );
+          assert.ok(manuallyUpdatedPalettePicker);
+          assert.equal(
+            manuallyUpdatedPalettePicker.props.color,
+            "#123456",
+            "manual editing starts only after the extraction callback has relinquished ownership",
+          );
+        } finally {
+          act(() => renderer.unmount());
+        }
+      });
+    });
+
     test("uploads via the injected port, persists the returned url/assetId, and shows a remove-logo control", async () => {
       await withPortalDom(async () => {
         const uploadPort = buildUploadPort();

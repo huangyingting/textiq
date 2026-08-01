@@ -66,6 +66,10 @@ delete confirmation cannot close while deletion is unresolved. Typed action
 failures stay visible and retryable; rejected transports use safe generic
 feedback while preserving the draft or confirmation. Framework redirect and
 not-found control flow is rethrown rather than rendered as an ordinary error.
+Logo decoding and best-effort palette extraction remain inside the logo-upload
+operation boundary, so a late image load cannot overwrite newer palette edits;
+image failure, cancellation, or a bounded timeout releases the form without an
+automatic palette. The palette can be edited normally after that boundary ends.
 Unmounting a form invalidates its pending save or media upload: late results
 cannot update detached form state, notify a detached parent, inject a custom
 font into a replacement page, or run delayed logo-palette extraction.

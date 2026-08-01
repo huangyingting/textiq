@@ -62,6 +62,7 @@ const BRAND_SAVE_FAILURE_MESSAGE =
   "Couldn't save the brand. Please check your connection and try again.";
 const BRAND_DELETE_FAILURE_MESSAGE =
   "Couldn't delete the brand. Please check your connection and try again.";
+const LOGO_PALETTE_EXTRACTION_TIMEOUT_MS = 5_000;
 
 type BrandFormOperation = "save" | "logo-upload" | "font-upload";
 
@@ -92,10 +93,9 @@ function emptyInput(): BrandFormState {
  * Quantizes a logo image's pixel data down to up to 6 dominant hex colors,
  * sorted by frequency. Extracted from `handleLogoUpload`'s `img.onload`
  * (issue #1956) so the bucket-counting/sorting algorithm is directly
- * unit-testable without a canvas/Image — the orchestration that produces
- * `data` (drawing the uploaded logo onto an offscreen canvas and reading
- * `ImageData`) still requires a real `document`/`Image`/`CanvasRenderingContext2D`
- * and remains inline in `handleLogoUpload`.
+ * unit-testable without a canvas/Image. The orchestration that produces
+ * `data` still requires a real `document`/`Image`/`CanvasRenderingContext2D`
+ * and is owned by `extractLogoPalette` below.
  *
  * Samples every 8th pixel (`4 * 8` = 32 bytes) for speed, skips
  * near-transparent (`alpha < 128`), near-black, and near-white pixels so the
@@ -120,6 +120,63 @@ export function extractPaletteFromImageData(data: Uint8ClampedArray): string[] {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6)
     .map(([hex]) => hex);
+}
+
+function extractLogoPalette(
+  logoAssetUrl: string,
+  signal: AbortSignal,
+): Promise<string[]> {
+  return new Promise((resolve) => {
+    let image: HTMLImageElement | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
+    const finish = (palette: string[] = []) => {
+      if (settled) return;
+      settled = true;
+      if (timeout !== null) clearTimeout(timeout);
+      signal.removeEventListener("abort", handleAbort);
+      if (image) {
+        image.onload = null;
+        image.onerror = null;
+      }
+      resolve(palette);
+    };
+    const handleAbort = () => finish();
+
+    if (signal.aborted) {
+      finish();
+      return;
+    }
+
+    try {
+      image = new Image();
+      image.onload = () => {
+        try {
+          const size = 64;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const context = canvas.getContext("2d");
+          if (!context) {
+            finish();
+            return;
+          }
+          context.drawImage(image!, 0, 0, size, size);
+          const { data } = context.getImageData(0, 0, size, size);
+          finish(extractPaletteFromImageData(data));
+        } catch {
+          finish();
+        }
+      };
+      image.onerror = () => finish();
+      signal.addEventListener("abort", handleAbort, { once: true });
+      timeout = setTimeout(finish, LOGO_PALETTE_EXTRACTION_TIMEOUT_MS);
+      image.src = logoAssetUrl;
+    } catch {
+      finish();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +248,7 @@ function BrandForm({
   const mountedRef = useRef(true);
   const operationIdRef = useRef(0);
   const operationInFlightRef = useRef(false);
+  const logoExtractionAbortRef = useRef<AbortController | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
   const formBusy = pendingOperation !== null;
@@ -203,6 +261,8 @@ function BrandForm({
       mountedRef.current = false;
       operationIdRef.current += 1;
       operationInFlightRef.current = false;
+      logoExtractionAbortRef.current?.abort();
+      logoExtractionAbortRef.current = null;
     };
   }, []);
 
@@ -280,34 +340,24 @@ function BrandForm({
       const logoAssetUrl = json.url;
       setForm((f) => ({ ...f, logoAssetUrl, logoAssetId: json.assetId }));
 
-      // Auto-extract palette from the image using canvas. The protected URL is
-      // same-origin, so the canvas is not tainted and getImageData succeeds.
-      const img = new Image();
-      img.onload = () => {
-        if (!ownsOperation(operationId)) return;
-        try {
-          const SIZE = 64;
-          const canvas = document.createElement("canvas");
-          canvas.width = SIZE;
-          canvas.height = SIZE;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          ctx.drawImage(img, 0, 0, SIZE, SIZE);
-          const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
-          const top = extractPaletteFromImageData(data);
-          if (top.length >= 2 && ownsOperation(operationId)) {
-            setForm((f) => ({ ...f, palette: top }));
-          }
-        } catch {
-          // Best-effort; ignore extraction errors
-        }
-      };
-      img.src = logoAssetUrl;
+      // Keep palette extraction inside the same operation boundary as upload.
+      // The protected URL is same-origin, so canvas reads are not tainted.
+      const extractionController = new AbortController();
+      logoExtractionAbortRef.current = extractionController;
+      const palette = await extractLogoPalette(
+        logoAssetUrl,
+        extractionController.signal,
+      );
+      if (!ownsOperation(operationId)) return;
+      if (palette.length >= 2) {
+        setForm((f) => ({ ...f, palette }));
+      }
     } catch (error) {
       unstable_rethrow(error);
       if (!ownsOperation(operationId)) return;
       setError("Logo upload failed. Please try again.");
     } finally {
+      logoExtractionAbortRef.current = null;
       finishOperation(operationId);
     }
   }
