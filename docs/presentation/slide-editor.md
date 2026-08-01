@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -232,6 +232,13 @@ Manual save reports failed action results, and save/present/share success is
 announced only after the action result confirms it.
 Ordinary thrown failures render dismissible toolbar feedback, while Next.js
 redirect/not-found control flow escapes to the framework.
+Toolbar-operation ownership ends with the editor lifecycle, so a late save,
+regenerate, export, present, or share settlement cannot publish success/error
+announcements or update pending UI after the shell has unmounted.
+The legacy document-page overlay applies the same ownership rule to its PPTX
+export and pending visual picker: unmounting or changing documents invalidates
+late renderer results before they can download a file, and closes unresolved
+picker requests without updating a detached surface.
 
 Fine-grained selected-element formatting stays out of the top toolbar. The
 canvas popover and inspector continue to own text style, object-specific
@@ -386,6 +393,14 @@ mutations operate only on slide child nodes.
 
 The inspector must not infer missing context. If a workflow requires full source
 document blocks or document id, those values are passed by `SlideEditor`.
+Async image uploads, visual-picker results, and clipboard continuations remain
+owned by the mounted editor instance. Closing or replacing the editor
+invalidates their late results before they can commit a captured deck, move
+focus, publish announcements, or surface detached error state.
+The presentation route applies the same ownership rule to browser exports and
+share/present handoffs: a renderer or share-enablement request that settles
+after route teardown cannot download files, open a public route, update
+conflict state, or leave a visual-picker promise unresolved.
 
 ## Popover Runtime
 

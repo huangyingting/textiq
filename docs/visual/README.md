@@ -102,7 +102,9 @@ strip: PNG download, copy-image, and native share. The card keeps renderer
 failures visible and dismissible, allows retry after settlement, sanitizes
 download and shared-file names, exposes operation progress to assistive
 technology, and makes the strip visible with shared touch-sized controls on
-coarse pointers.
+coarse pointers. Unmounting the card invalidates the active raster operation
+before it can start a download, clipboard write, or native share against a
+detached editor surface.
 
 ## Invariants
 

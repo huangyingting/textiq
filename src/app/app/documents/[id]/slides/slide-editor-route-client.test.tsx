@@ -1625,6 +1625,41 @@ test("export: onExportPdf downloads the rasterized PDF blob named after the docu
   unmount();
 });
 
+test("export: unmounting the route invalidates a pending PDF before its late result downloads", async () => {
+  const exportAttempt = createDeferred<{
+    pngs: { slideId: string; dataUrl: string }[];
+    pdfBlob: Blob;
+    pdfBytes: Uint8Array;
+    pdfPageCount: number;
+    diagnostics: unknown[];
+  }>();
+  globalThis.__exportDeckRasterBrowserImpl = () => exportAttempt.promise;
+  const { unmount } = mount(
+    baseProps({
+      documentId: "doc-export-pdf-late",
+      documentTitle: "Old Route",
+      initialDeckJson: validDeckJson(),
+    }),
+  );
+  const exportPdf = latestSlideEditorProps().onExportPdf as () => Promise<void>;
+  const settled = exportPdf();
+  assert.equal(globalThis.__downloadBlobCalls.length, 0);
+
+  unmount();
+  exportAttempt.resolve({
+    pngs: [],
+    pdfBlob: new Blob(["%PDF-late"], { type: "application/pdf" }),
+    pdfBytes: new Uint8Array(),
+    pdfPageCount: 1,
+    diagnostics: [],
+  });
+  await act(async () => {
+    await settled;
+  });
+
+  assert.equal(globalThis.__downloadBlobCalls.length, 0);
+});
+
 test("export: onExportPng downloads one numbered PNG file per rasterized slide", async () => {
   globalThis.__exportDeckRasterBrowserImpl = async () => ({
     pngs: [

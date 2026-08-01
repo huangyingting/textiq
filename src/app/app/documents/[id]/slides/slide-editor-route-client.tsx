@@ -331,6 +331,7 @@ function SlideEditorRouteClientDocument({
     presentEnabled: initialSharePresentEnabled,
   });
   const [visualPickerOpen, setVisualPickerOpen] = useState(false);
+  const mountedRef = useRef(true);
   const visualPickerResolverRef = useRef<
     ((value: { visualId?: string; alt?: string } | undefined) => void) | null
   >(null);
@@ -371,6 +372,15 @@ function SlideEditorRouteClientDocument({
       ),
     [documentBlocks],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      visualPickerResolverRef.current?.(undefined);
+      visualPickerResolverRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const context: RoutePersistenceContext = {
@@ -601,6 +611,7 @@ function SlideEditorRouteClientDocument({
       localDeck,
       serverToken,
     );
+    if (!mountedRef.current) return;
     if (result.ok === true) {
       const context = persistenceContextRef.current;
       if (context) {
@@ -625,6 +636,7 @@ function SlideEditorRouteClientDocument({
   async function handleConflictUseTheirs() {
     saveControllerRef.current?.cancelScheduled();
     const reload = await reloadConflictServerDeck({ deckPort, documentId });
+    if (!mountedRef.current) return;
     if (!reload.ok) {
       setSaveError(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
       throw new Error(CONFLICT_USE_SERVER_RELOAD_FAILED_MESSAGE);
@@ -677,6 +689,7 @@ function SlideEditorRouteClientDocument({
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
+    if (!mountedRef.current) return;
     if (!blob) throw new Error("PPTX export returned empty result");
     downloadBlob(blob, `${documentTitle || "presentation"}.pptx`);
   }
@@ -691,6 +704,7 @@ function SlideEditorRouteClientDocument({
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
+    if (!mountedRef.current) return;
     downloadBlob(result.pdfBlob, `${documentTitle || "presentation"}.pdf`);
   }
 
@@ -700,10 +714,13 @@ function SlideEditorRouteClientDocument({
       deck,
       themeResolution?.package ?? resolveThemePackageForDeck(deck).package,
     );
+    if (!mountedRef.current) return;
     const baseName = documentTitle || "presentation";
     for (const [index, png] of result.pngs.entries()) {
+      const blob = await dataUrlToBlob(png.dataUrl);
+      if (!mountedRef.current) return;
       downloadBlob(
-        await dataUrlToBlob(png.dataUrl),
+        blob,
         `${baseName}-slide-${String(index + 1).padStart(2, "0")}.png`,
       );
     }
@@ -712,6 +729,9 @@ function SlideEditorRouteClientDocument({
   async function ensureShareState(): Promise<
     ActionResult<SlideEditorShareState>
   > {
+    if (!mountedRef.current) {
+      return actionError("The slide editor is no longer open.");
+    }
     if (shareState.isShared && shareState.shareId && shareState.slug) {
       return actionOk(shareState);
     }
@@ -721,6 +741,9 @@ function SlideEditorRouteClientDocument({
       );
     }
     const result = await toggleDocumentSharing(documentId, true);
+    if (!mountedRef.current) {
+      return actionError("The slide editor is no longer open.");
+    }
     if (!result.ok) return actionError(result.error);
     const nextState: SlideEditorShareState = {
       isShared: result.data.isShared,
@@ -743,6 +766,9 @@ function SlideEditorRouteClientDocument({
   async function handleShare(): Promise<ActionResult> {
     const result = await ensureShareState();
     if (!result.ok) return actionError(result.error);
+    if (!mountedRef.current) {
+      return actionError("The slide editor is no longer open.");
+    }
     const shareUrl = buildDocumentShareUrl(
       window.location.origin,
       result.data.shareId,
@@ -756,6 +782,9 @@ function SlideEditorRouteClientDocument({
   async function handlePresent(): Promise<ActionResult> {
     const result = await ensureShareState();
     if (!result.ok) return actionError(result.error);
+    if (!mountedRef.current) {
+      return actionError("The slide editor is no longer open.");
+    }
     if (!result.data.presentEnabled) {
       return actionError(
         "Presentation links are disabled in share settings for this document.",

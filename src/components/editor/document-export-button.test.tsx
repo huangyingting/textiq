@@ -39,6 +39,10 @@ import "@/test/react-render-harness";
 
 import type { DeckFetchPort } from "@/lib/action-ports";
 import { getEntitlements } from "@/lib/billing/catalog";
+import {
+  configureProductTelemetrySink,
+  type ProductTelemetryRecord,
+} from "@/lib/telemetry/product";
 
 import { DocumentExportButton } from "./document-export-button";
 
@@ -494,6 +498,84 @@ describe("DocumentExportButton", () => {
       assert.equal(idleButton.props.disabled, false);
     } finally {
       act(() => renderer.unmount());
+      restoreDom();
+    }
+  });
+
+  test("unmounting invalidates a pending PPTX fetch before its late failure emits telemetry", async () => {
+    const restoreDom = installFakeDom();
+    const deferred = createDeferred<{
+      ok: false;
+      deckJson: null;
+      revisionToken: null;
+      error: string;
+      failure: { code: "document_not_found"; retryable: false };
+    }>();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ entitlements: getEntitlements("pro") }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    const events: ProductTelemetryRecord[] = [];
+    const restoreTelemetry = configureProductTelemetrySink((event) => {
+      events.push(event);
+    });
+    const renderer = mountButton(
+      makeEditor(),
+      baseProps({
+        deckPort: stubDeckPort(() => deferred.promise),
+      }),
+    );
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      globalThis.fetch = originalFetch;
+
+      act(() => findExportButton(renderer).props.onClick());
+      let settled!: Promise<void>;
+      act(() => {
+        settled = findPptxMenuItem(renderer).props.onClick();
+      });
+      assert.equal(
+        events.filter((event) => event.eventName === "product.export.started")
+          .length,
+        1,
+      );
+      assert.equal(
+        events.filter((event) => event.eventName === "product.export.failed")
+          .length,
+        0,
+      );
+
+      act(() => renderer.unmount());
+      assert.equal(
+        events.filter((event) => event.eventName === "product.export.failed")
+          .length,
+        0,
+      );
+      deferred.resolve({
+        ok: false,
+        deckJson: null,
+        revisionToken: null,
+        error: "no deck",
+        failure: { code: "document_not_found", retryable: false },
+      });
+      await act(async () => {
+        await settled;
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        events.filter((event) => event.eventName === "product.export.failed")
+          .length,
+        0,
+      );
+    } finally {
+      if (renderer.toJSON() !== null) act(() => renderer.unmount());
+      restoreTelemetry();
+      globalThis.fetch = originalFetch;
       restoreDom();
     }
   });

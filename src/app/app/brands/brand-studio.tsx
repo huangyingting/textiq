@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -188,6 +188,8 @@ function BrandForm({
   const [error, setError] = useState<string | null>(null);
   const [pendingOperation, setPendingOperation] =
     useState<BrandFormOperation | null>(null);
+  const mountedRef = useRef(true);
+  const operationIdRef = useRef(0);
   const operationInFlightRef = useRef(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
@@ -195,17 +197,33 @@ function BrandForm({
   const uploadingLogo = pendingOperation === "logo-upload";
   const uploadingFont = pendingOperation === "font-upload";
 
-  function beginOperation(operation: BrandFormOperation): boolean {
-    if (operationInFlightRef.current) return false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      operationIdRef.current += 1;
+      operationInFlightRef.current = false;
+    };
+  }, []);
+
+  function ownsOperation(operationId: number): boolean {
+    return mountedRef.current && operationIdRef.current === operationId;
+  }
+
+  function beginOperation(operation: BrandFormOperation): number | null {
+    if (operationInFlightRef.current) return null;
 
     operationInFlightRef.current = true;
+    const operationId = ++operationIdRef.current;
     setPendingOperation(operation);
     setError(null);
     onBusyChange(true);
-    return true;
+    return operationId;
   }
 
-  function finishOperation() {
+  function finishOperation(operationId: number) {
+    if (!ownsOperation(operationId) || !operationInFlightRef.current) return;
+
     operationInFlightRef.current = false;
     setPendingOperation(null);
     onBusyChange(false);
@@ -250,13 +268,15 @@ function BrandForm({
       setError(formatUploadError(v.error));
       return;
     }
-    if (!beginOperation("logo-upload")) return;
+    const operationId = beginOperation("logo-upload");
+    if (operationId === null) return;
 
     try {
       const fd = new FormData();
       fd.append("logo", file);
       if (form.id) fd.append("brandId", form.id);
       const json = await uploadPort.uploadLogo(fd);
+      if (!ownsOperation(operationId)) return;
       const logoAssetUrl = json.url;
       setForm((f) => ({ ...f, logoAssetUrl, logoAssetId: json.assetId }));
 
@@ -264,6 +284,7 @@ function BrandForm({
       // same-origin, so the canvas is not tainted and getImageData succeeds.
       const img = new Image();
       img.onload = () => {
+        if (!ownsOperation(operationId)) return;
         try {
           const SIZE = 64;
           const canvas = document.createElement("canvas");
@@ -274,7 +295,7 @@ function BrandForm({
           ctx.drawImage(img, 0, 0, SIZE, SIZE);
           const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
           const top = extractPaletteFromImageData(data);
-          if (top.length >= 2) {
+          if (top.length >= 2 && ownsOperation(operationId)) {
             setForm((f) => ({ ...f, palette: top }));
           }
         } catch {
@@ -284,9 +305,10 @@ function BrandForm({
       img.src = logoAssetUrl;
     } catch (error) {
       unstable_rethrow(error);
+      if (!ownsOperation(operationId)) return;
       setError("Logo upload failed. Please try again.");
     } finally {
-      finishOperation();
+      finishOperation(operationId);
     }
   }
 
@@ -298,13 +320,15 @@ function BrandForm({
       setError(formatUploadError(v.error));
       return;
     }
-    if (!beginOperation("font-upload")) return;
+    const operationId = beginOperation("font-upload");
+    if (operationId === null) return;
 
     try {
       const fd = new FormData();
       fd.append("font", file);
       if (form.id) fd.append("brandId", form.id);
       const json = await uploadPort.uploadFont(fd);
+      if (!ownsOperation(operationId)) return;
       const family = json.familyName ?? file.name.replace(/\.[^.]+$/, "");
       const fontAssetUrl = json.url;
       hydrateBrandFont(
@@ -322,14 +346,17 @@ function BrandForm({
       }));
     } catch (error) {
       unstable_rethrow(error);
+      if (!ownsOperation(operationId)) return;
       setError("Font upload failed. Please try again.");
     } finally {
-      finishOperation();
+      finishOperation(operationId);
     }
   }
 
   async function handleSubmit() {
-    if (!form.name.trim() || !beginOperation("save")) return;
+    if (!form.name.trim()) return;
+    const operationId = beginOperation("save");
+    if (operationId === null) return;
 
     const payload: BrandInput = {
       name: form.name,
@@ -349,16 +376,19 @@ function BrandForm({
         ? await updateBrand(form.id, payload)
         : await createBrand(payload);
 
+      if (!ownsOperation(operationId)) return;
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      finishOperation(operationId);
       onSave(result.data);
     } catch (error) {
       unstable_rethrow(error);
+      if (!ownsOperation(operationId)) return;
       setError(BRAND_SAVE_FAILURE_MESSAGE);
     } finally {
-      finishOperation();
+      finishOperation(operationId);
     }
   }
 

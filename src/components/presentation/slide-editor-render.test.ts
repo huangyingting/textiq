@@ -25,6 +25,18 @@ function createHookRenderer() {
   return createReactRenderHarness({ idPrefix: "fake-id" });
 }
 
+function waitForAsyncDrain(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 type FakeEventTarget = {
   value: string;
   checked: boolean;
@@ -154,6 +166,61 @@ test("SlideEditor top-level handlers tolerate no-op editor callbacks", async () 
   }
 
   assert.ok(invoked > 0);
+});
+
+test("SlideEditor ignores an image upload that settles after the editor unmounts", async () => {
+  const uploadAttempt = deferred<{
+    src: string;
+    assetId: string;
+  }>();
+  const changedDecks: unknown[] = [];
+  const renderer = createHookRenderer();
+  const tree = renderer.run(() =>
+    SlideEditor({
+      documentId: "doc-late-image",
+      deck: mixedDeck(),
+      onDeckChange: (deck) => changedDecks.push(deck),
+      onUploadImage: () => uploadAttempt.promise,
+    }),
+  );
+  const elements = collectElements(tree);
+  const insertImageSurface = elements.find(
+    (element) =>
+      typeof (element.props as { onInsertImage?: unknown }).onInsertImage ===
+      "function",
+  );
+  assert.ok(insertImageSurface, "expected an insert-image command surface");
+  const fileInput = elements.find(
+    (element) =>
+      element.type === "input" &&
+      (element.props as { type?: string }).type === "file" &&
+      String((element.props as { accept?: string }).accept).includes(
+        "image/png",
+      ),
+  );
+  assert.ok(fileInput, "expected the image file input");
+
+  (insertImageSurface.props as { onInsertImage: () => void }).onInsertImage();
+  const target = {
+    files: [new File(["image"], "late.png", { type: "image/png" })],
+    value: "late.png",
+  };
+  (fileInput.props as { onChange: (event: unknown) => void }).onChange({
+    currentTarget: target,
+  });
+  assert.equal(target.value, "");
+  assert.deepEqual(changedDecks, []);
+
+  renderer.cleanup();
+  assert.deepEqual(changedDecks, []);
+  uploadAttempt.resolve({
+    src: "https://textiq.test/api/slide-assets/late.png",
+    assetId: "asset-late",
+  });
+  await waitForAsyncDrain();
+  await waitForAsyncDrain();
+
+  assert.deepEqual(changedDecks, []);
 });
 
 test("PrecisionGuideOverlays keeps editor chrome off by default and renders persisted overlays", () => {

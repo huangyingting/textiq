@@ -3,13 +3,23 @@ import { describe, test } from "node:test";
 import type { SetStateAction } from "react";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
+import { createReactRenderHarness } from "@/test/react-render-harness";
 
 import {
   createSlideEditorShellController,
   type SlideEditorShellController,
   type SlideEditorToolbarOperation,
   type UseSlideEditorShellControllerArgs,
+  useSlideEditorShellController,
 } from "./use-slide-editor-shell-controller";
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
 
 function createControllerHarness(
   args: UseSlideEditorShellControllerArgs,
@@ -135,6 +145,31 @@ describe("useSlideEditorShellController", () => {
     controller = renderController();
     assert.equal(controller.toolbarError, null);
     assert.deepEqual(announcements, ["Slide deck saved."]);
+  });
+
+  test("unmounting invalidates a pending save before its late success announcement", async () => {
+    const saveAttempt = deferred<{
+      ok: true;
+      data: undefined;
+    }>();
+    const announcements: string[] = [];
+    const renderer = createReactRenderHarness();
+    const controller = renderer.run(() =>
+      useSlideEditorShellController({
+        deck: buildMinimalDeck(),
+        hasUnsavedWork: true,
+        onSave: () => saveAttempt.promise,
+        setStageAnnouncement: (message) => announcements.push(message),
+      }),
+    );
+    const settled = controller.handleSaveNow();
+    assert.deepEqual(announcements, []);
+
+    renderer.cleanup();
+    saveAttempt.resolve({ ok: true, data: undefined });
+    await settled;
+
+    assert.deepEqual(announcements, []);
   });
 
   test("one synchronous boundary suppresses duplicate and competing toolbar operations", async () => {

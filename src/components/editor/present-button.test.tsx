@@ -345,6 +345,140 @@ describe("PresentButton", () => {
     }
   });
 
+  test("duplicate activation shares one pending deck fetch", async () => {
+    const harness = createReactRenderHarness();
+    const deferred = createDeferred<FetchDeckResult>();
+    let fetchCount = 0;
+    try {
+      const tree = harness.run(() =>
+        PresentButton({
+          documentId: "doc-once",
+          deckPort: stubDeckPort(() => {
+            fetchCount += 1;
+            return deferred.promise;
+          }),
+        }),
+      );
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = clickPresentButton(tree);
+        second = clickPresentButton(tree);
+      });
+
+      assert.equal(fetchCount, 1);
+      deferred.resolve({
+        ok: true,
+        deckJson: null,
+        revisionToken: null,
+        themeDiagnostics: [],
+      });
+      await act(async () => {
+        await Promise.all([first, second]);
+      });
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test("unmounting invalidates a pending presentation before it reads detached visuals", async () => {
+    const harness = createReactRenderHarness();
+    const deferred = createDeferred<FetchDeckResult>();
+    let getVisualsCount = 0;
+    const tree = harness.run(() =>
+      PresentButton({
+        documentId: "doc-late-present",
+        deckPort: stubDeckPort(() => deferred.promise),
+        getVisuals: () => {
+          getVisualsCount += 1;
+          return {};
+        },
+      }),
+    );
+    let settled!: Promise<void>;
+    act(() => {
+      settled = clickPresentButton(tree);
+    });
+    assert.equal(getVisualsCount, 0);
+
+    harness.cleanup();
+    deferred.resolve({
+      ok: true,
+      deckJson: buildMinimalDeck(),
+      revisionToken: "rev-late",
+      themeDiagnostics: [],
+    });
+    await act(async () => {
+      await settled;
+      await waitForAsyncDrain();
+    });
+
+    assert.equal(getVisualsCount, 0);
+  });
+
+  test("switching documents invalidates the old presentation request and unlocks the new document", async () => {
+    const harness = createReactRenderHarness();
+    const oldRequest = createDeferred<FetchDeckResult>();
+    let oldVisualReads = 0;
+    let tree = harness.run(() =>
+      PresentButton({
+        documentId: "doc-old",
+        deckPort: stubDeckPort(() => oldRequest.promise),
+        getVisuals: () => {
+          oldVisualReads += 1;
+          return {};
+        },
+      }),
+    );
+    let settled!: Promise<void>;
+    act(() => {
+      settled = clickPresentButton(tree);
+    });
+
+    tree = harness.run(() =>
+      PresentButton({
+        documentId: "doc-new",
+        documentTitle: "New document",
+        deckPort: stubDeckPort(async () => ({
+          ok: true,
+          deckJson: null,
+          revisionToken: null,
+          themeDiagnostics: [],
+        })),
+      }),
+    );
+    assert.equal(findButton(tree).props.disabled, false);
+    assert.equal(findButton(tree).props["aria-label"], "Present New document");
+
+    oldRequest.resolve({
+      ok: true,
+      deckJson: buildMinimalDeck(),
+      revisionToken: "rev-old",
+      themeDiagnostics: [],
+    });
+    await act(async () => {
+      await settled;
+      await waitForAsyncDrain();
+    });
+    tree = harness.run(() =>
+      PresentButton({
+        documentId: "doc-new",
+        documentTitle: "New document",
+        deckPort: stubDeckPort(async () => ({
+          ok: true,
+          deckJson: null,
+          revisionToken: null,
+          themeDiagnostics: [],
+        })),
+      }),
+    );
+
+    assert.equal(oldVisualReads, 0);
+    assert.equal(findByType(tree, PresentMode), undefined);
+    assert.equal(findButton(tree).props.disabled, false);
+    harness.cleanup();
+  });
+
   test("disables the button while the deck fetch is pending, then re-enables it", async () => {
     const harness = createReactRenderHarness();
     const deferred = createDeferred<FetchDeckResult>();

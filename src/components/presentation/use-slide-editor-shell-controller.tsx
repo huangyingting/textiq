@@ -176,6 +176,7 @@ export function createSlideEditorToolbarOperationBoundary(): {
 }
 
 interface CreateSlideEditorShellControllerArgs extends UseSlideEditorShellControllerArgs {
+  isActive?: () => boolean;
   toolbarError: string | null;
   setToolbarError: Dispatch<SetStateAction<string | null>>;
   toolbarOperation: SlideEditorToolbarOperation | null;
@@ -198,6 +199,7 @@ export function createSlideEditorShellController({
   onRegenerate,
   onSave,
   setStageAnnouncement,
+  isActive = () => true,
   toolbarError,
   setToolbarError,
   toolbarOperation,
@@ -213,6 +215,7 @@ export function createSlideEditorShellController({
     fallbackError: string,
     logLabel?: string,
   ): Promise<void> {
+    if (!isActive()) return;
     if (!claimToolbarOperation(operation)) return;
     setToolbarOperation(operation);
     setToolbarError(null);
@@ -220,10 +223,12 @@ export function createSlideEditorShellController({
       await action();
     } catch (error) {
       unstable_rethrow(error);
+      if (!isActive()) return;
       if (logLabel) console.error(logLabel, error);
       setToolbarError(fallbackError);
     } finally {
-      if (releaseToolbarOperation(operation)) {
+      const released = releaseToolbarOperation(operation);
+      if (released && isActive()) {
         setToolbarOperation(null);
       }
     }
@@ -235,6 +240,7 @@ export function createSlideEditorShellController({
       "save",
       async () => {
         const result = await onSave(deck);
+        if (!isActive()) return;
         if (!result.ok) {
           setToolbarError(result.error);
           return;
@@ -281,6 +287,7 @@ export function createSlideEditorShellController({
       "regenerate",
       async () => {
         const result = await onRegenerate();
+        if (!isActive()) return;
         if (!result.ok) {
           setToolbarError(result.error);
           return;
@@ -304,12 +311,14 @@ export function createSlideEditorShellController({
       async () => {
         if (onSave) {
           const saveResult = await onSave(deck);
+          if (!isActive()) return;
           if (!saveResult.ok) {
             setToolbarError(saveResult.error);
             return;
           }
         }
         const result = await action();
+        if (!isActive()) return;
         if (!result.ok) {
           setToolbarError(result.error);
           return;
@@ -369,6 +378,18 @@ export function useSlideEditorShellController({
   onSave,
   setStageAnnouncement,
 }: UseSlideEditorShellControllerArgs): SlideEditorShellController {
+  const [lifecycle] = useState(() => {
+    let active = true;
+    return {
+      activate: () => {
+        active = true;
+      },
+      deactivate: () => {
+        active = false;
+      },
+      isActive: () => active,
+    };
+  });
   const [toolbarError, setToolbarError] = useState<string | null>(null);
   const [toolbarOperationBoundary] = useState(
     createSlideEditorToolbarOperationBoundary,
@@ -376,6 +397,11 @@ export function useSlideEditorShellController({
   const [toolbarOperation, setToolbarOperation] =
     useState<SlideEditorToolbarOperation | null>(null);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    lifecycle.activate();
+    return lifecycle.deactivate;
+  }, [lifecycle]);
 
   const controller = createSlideEditorShellController({
     deck,
@@ -387,6 +413,7 @@ export function useSlideEditorShellController({
     onRegenerate,
     onSave,
     setStageAnnouncement,
+    isActive: lifecycle.isActive,
     toolbarError,
     setToolbarError,
     toolbarOperation,

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document describes saved brand styles, brand media assets, brand entitlement gates, and applying brands to visuals. Billing plans and credits live in billing.md."
 ---
 
@@ -66,6 +66,9 @@ delete confirmation cannot close while deletion is unresolved. Typed action
 failures stay visible and retryable; rejected transports use safe generic
 feedback while preserving the draft or confirmation. Framework redirect and
 not-found control flow is rethrown rather than rendered as an ordinary error.
+Unmounting a form invalidates its pending save or media upload: late results
+cannot update detached form state, notify a detached parent, inject a custom
+font into a replacement page, or run delayed logo-palette extraction.
 
 Document-editor brand pickers load `/api/brand` through the shared saved-brand
 client boundary. The complete response is parsed as `BrandStyle[]` before any

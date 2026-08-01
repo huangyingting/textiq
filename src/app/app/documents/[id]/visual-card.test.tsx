@@ -795,6 +795,44 @@ describe("VisualCard", () => {
     );
   });
 
+  test("quickDownload ignores a renderer that settles after the visual card unmounts", async () => {
+    restoreDom = installFakeDom();
+    let resolveExport!: (blob: Blob | null) => void;
+    globalThis.__visualCardExport = {
+      calls: [],
+      downloads: [],
+      impl: () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        }),
+    };
+    const editor = makeEditor();
+    const key = insertVisualNode(editor, FIXTURES.list);
+    renderer = mountCard(
+      editor,
+      { nodeKey: key, visual: FIXTURES.list },
+      svgRefMock().createNodeMock,
+    );
+    let settled!: Promise<void>;
+    act(() => {
+      settled = findByAriaLabel(
+        renderer!,
+        "Download visual as PNG",
+      )!.props.onClick({ stopPropagation: () => {} });
+    });
+    assert.equal(globalThis.__visualCardExport.calls.length, 1);
+    assert.equal(globalThis.__visualCardExport.downloads.length, 0);
+
+    unmount(renderer);
+    renderer = null;
+    resolveExport(new Blob(["late-png"], { type: "image/png" }));
+    await act(async () => {
+      await settled;
+    });
+
+    assert.equal(globalThis.__visualCardExport.downloads.length, 0);
+  });
+
   test("quick actions share one synchronous boundary and disable every competing action until settlement", async () => {
     restoreDom = installFakeDom({
       navigator: {

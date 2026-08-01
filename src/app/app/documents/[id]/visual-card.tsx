@@ -428,6 +428,7 @@ export function VisualCard({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      quickActionRef.current = null;
       if (copyImageTimerRef.current !== null) {
         clearTimeout(copyImageTimerRef.current);
         copyImageTimerRef.current = null;
@@ -463,6 +464,12 @@ export function VisualCard({
     }
   }, []);
 
+  const ownsQuickAction = useCallback(
+    (action: VisualQuickAction) =>
+      mountedRef.current && quickActionRef.current === action,
+    [],
+  );
+
   const dismissActionError = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
     setActionError(null);
@@ -484,16 +491,17 @@ export function VisualCard({
           aspectRatio: visualData.aspectRatio,
         };
         const blob = await exportPNG(svg, opts);
+        if (!ownsQuickAction("download")) return;
         if (!blob) {
           throw new Error("exportPNG returned null");
         }
         const filename = sanitizeFilename(visualData.title ?? "") + ".png";
         downloadBlob(blob, filename);
-        if (mountedRef.current) {
+        if (ownsQuickAction("download")) {
           setActionStatus("Visual download started.");
         }
       } catch {
-        if (mountedRef.current) {
+        if (ownsQuickAction("download")) {
           setActionError({
             action: "download",
             message: "Visual download failed. Try again.",
@@ -503,7 +511,7 @@ export function VisualCard({
         finishQuickAction("download");
       }
     },
-    [beginQuickAction, finishQuickAction, parsed],
+    [beginQuickAction, finishQuickAction, ownsQuickAction, parsed],
   );
 
   // Copy image to clipboard.
@@ -518,11 +526,12 @@ export function VisualCard({
           DEFAULT_EXPORT_OPTIONS,
         );
         const blob = await exportPNG(svg, opts);
+        if (!ownsQuickAction("copy")) return;
         if (!blob) throw new Error("exportPNG returned null");
         await navigator.clipboard.write([
           new ClipboardItem({ "image/png": blob }),
         ]);
-        if (mountedRef.current) {
+        if (ownsQuickAction("copy")) {
           setCopyImageState("copied");
           setActionStatus("Visual image copied to the clipboard.");
           copyImageTimerRef.current = setTimeout(() => {
@@ -533,7 +542,7 @@ export function VisualCard({
           }, 2500);
         }
       } catch {
-        if (mountedRef.current) {
+        if (ownsQuickAction("copy")) {
           setCopyImageState("error");
           setActionError({
             action: "copy",
@@ -544,7 +553,7 @@ export function VisualCard({
         finishQuickAction("copy");
       }
     },
-    [beginQuickAction, finishQuickAction],
+    [beginQuickAction, finishQuickAction, ownsQuickAction],
   );
 
   // Native share: share visual image via Web Share API when available.
@@ -562,13 +571,14 @@ export function VisualCard({
           DEFAULT_EXPORT_OPTIONS,
         );
         const blob = await exportPNG(svg, opts);
+        if (!ownsQuickAction("share")) return;
         if (blob) {
           const file = new File([blob], `${sanitizeFilename(name)}.png`, {
             type: "image/png",
           });
           if (canWebShare(file)) {
             await navigator.share({ files: [file], title: name });
-            if (mountedRef.current) {
+            if (ownsQuickAction("share")) {
               setNativeShareState("idle");
               setActionStatus("Visual shared.");
             }
@@ -577,7 +587,7 @@ export function VisualCard({
         }
         if (canWebShare()) {
           await navigator.share({ title: name });
-          if (mountedRef.current) {
+          if (ownsQuickAction("share")) {
             setNativeShareState("idle");
             setActionStatus("Visual shared.");
           }
@@ -585,7 +595,7 @@ export function VisualCard({
         }
         throw new Error("Web Share API became unavailable");
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!ownsQuickAction("share")) return;
         // User-initiated cancellation is a normal outcome, not an error.
         if (err instanceof Error && err.name === "AbortError") {
           setNativeShareState("idle");
@@ -601,7 +611,7 @@ export function VisualCard({
         finishQuickAction("share");
       }
     },
-    [beginQuickAction, finishQuickAction, parsed],
+    [beginQuickAction, finishQuickAction, ownsQuickAction, parsed],
   );
 
   if (!parsed.success) {

@@ -11,7 +11,7 @@
  */
 
 import { MonitorPlay } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PresentMode } from "@/components/presentation/present-mode";
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
@@ -36,6 +36,7 @@ interface PresentButtonProps {
 
 type PresentData =
   | {
+      ownerDocumentId: string;
       mode: "deck";
       deck: Deck;
       themePackage: ThemePackageV1;
@@ -44,6 +45,7 @@ type PresentData =
   | PresentRecoveryData;
 
 type PresentRecoveryData = {
+  ownerDocumentId: string;
   mode: "recovery";
   error: string;
   diagnostics: PresentationDiagnostic[];
@@ -107,41 +109,82 @@ export function PresentButton({
   iconOnly = false,
 }: PresentButtonProps) {
   const [presentData, setPresentData] = useState<PresentData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingDocumentId, setLoadingDocumentId] = useState<string | null>(
+    null,
+  );
+  const mountedRef = useRef(true);
+  const presentOperationIdRef = useRef(0);
+  const presentInFlightRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      presentOperationIdRef.current += 1;
+      presentInFlightRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      presentOperationIdRef.current += 1;
+      presentInFlightRef.current = false;
+    };
+  }, [documentId]);
+
+  const isLoading = loadingDocumentId === documentId;
+  const visiblePresentData =
+    presentData?.ownerDocumentId === documentId ? presentData : null;
 
   const handlePresent = useCallback(async () => {
-    setIsLoading(true);
-    const prepared = await prepareDeckForOpen({
-      documentId,
-      deckPort,
-      fallbackDeck: () => createBlankDeck({ documentId, title: documentTitle }),
-      onFetchFailure: ({ reason, error }) => {
-        logInfo("editor.present", "presentation-open-fetch-failed", {
-          documentId,
-          reason,
-          error,
-        });
-      },
-    });
-    setIsLoading(false);
-
-    if (!prepared.ok) {
-      setPresentData({
-        mode: "recovery",
-        error: prepared.error,
-        diagnostics: prepared.diagnostics,
-        validationErrors: prepared.validationErrors,
+    if (presentInFlightRef.current) return;
+    presentInFlightRef.current = true;
+    const operationId = ++presentOperationIdRef.current;
+    const ownsOperation = () =>
+      mountedRef.current && presentOperationIdRef.current === operationId;
+    setLoadingDocumentId(documentId);
+    try {
+      const prepared = await prepareDeckForOpen({
+        documentId,
+        deckPort,
+        fallbackDeck: () =>
+          createBlankDeck({ documentId, title: documentTitle }),
+        onFetchFailure: ({ reason, error }) => {
+          if (!ownsOperation()) return;
+          logInfo("editor.present", "presentation-open-fetch-failed", {
+            documentId,
+            reason,
+            error,
+          });
+        },
       });
-      return;
-    }
+      if (!ownsOperation()) return;
 
-    const themeResolution = resolveThemePackageForDeck(prepared.deck);
-    setPresentData({
-      mode: "deck",
-      deck: prepared.deck,
-      themePackage: themeResolution.package,
-      visuals: getVisuals?.() ?? {},
-    });
+      if (!prepared.ok) {
+        setPresentData({
+          ownerDocumentId: documentId,
+          mode: "recovery",
+          error: prepared.error,
+          diagnostics: prepared.diagnostics,
+          validationErrors: prepared.validationErrors,
+        });
+        return;
+      }
+
+      const themeResolution = resolveThemePackageForDeck(prepared.deck);
+      setPresentData({
+        ownerDocumentId: documentId,
+        mode: "deck",
+        deck: prepared.deck,
+        themePackage: themeResolution.package,
+        visuals: getVisuals?.() ?? {},
+      });
+    } finally {
+      if (ownsOperation()) {
+        presentInFlightRef.current = false;
+        setLoadingDocumentId(null);
+      }
+    }
   }, [deckPort, documentId, documentTitle, getVisuals]);
 
   const handleClose = useCallback(() => {
@@ -160,17 +203,20 @@ export function PresentButton({
         aria-label={`Present ${documentTitle ?? "document"}`}
       />
 
-      {presentData?.mode === "deck" ? (
+      {visiblePresentData?.mode === "deck" ? (
         <PresentMode
-          deck={presentData.deck}
-          themePackage={presentData.themePackage}
-          visuals={presentData.visuals}
+          deck={visiblePresentData.deck}
+          themePackage={visiblePresentData.themePackage}
+          visuals={visiblePresentData.visuals}
           onClose={handleClose}
         />
       ) : null}
 
-      {presentData?.mode === "recovery" ? (
-        <PresentOpenRecovery recovery={presentData} onClose={handleClose} />
+      {visiblePresentData?.mode === "recovery" ? (
+        <PresentOpenRecovery
+          recovery={visiblePresentData}
+          onClose={handleClose}
+        />
       ) : null}
     </>
   );

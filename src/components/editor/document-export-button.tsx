@@ -85,12 +85,26 @@ export function DocumentExportButton({
   const [infogramWidth, setInfogramWidth] =
     useState<InfographicWidthPreset>("1080");
   const menuRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const exportOperationIdRef = useRef(0);
   const exportInFlightRef = useRef(false);
 
   const entitlements = useUserEntitlements();
   const exportPolicy = resolveExportPolicy(entitlements);
   const canPptx = exportPolicy.canPptx;
   const canRemoveWatermark = exportPolicy.canRemoveWatermark;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportOperationIdRef.current += 1;
+      exportInFlightRef.current = false;
+    };
+  }, []);
+
+  const ownsExport = (operationId: number): boolean =>
+    mountedRef.current && exportOperationIdRef.current === operationId;
 
   // Close the menu on an outside click or Escape. A focus-based `onBlur` missed
   // clicks on non-focusable areas (plain page background), which left the menu
@@ -178,7 +192,6 @@ export function DocumentExportButton({
       const fetched = await deckPort.fetchDeckJson(documentId);
       return fetched.ok ? fetched.deckJson : null;
     } catch (error) {
-      setStatus("idle");
       unstable_rethrow(error);
       return null;
     }
@@ -187,6 +200,7 @@ export function DocumentExportButton({
   const handleExportPDF = async () => {
     if (exportInFlightRef.current) return;
     exportInFlightRef.current = true;
+    const operationId = ++exportOperationIdRef.current;
     setErrorMsg(null);
     setStatus("exporting");
     setIsOpen(false);
@@ -194,14 +208,18 @@ export function DocumentExportButton({
     try {
       const { exportDocumentAsPDF } =
         await import("@/lib/visual/document-export-targets");
+      if (!ownsExport(operationId)) return;
       const blocks = await getBlocks();
+      if (!ownsExport(operationId)) return;
       // Load self-hosted slide fonts before rasterizing the PDF pages.
       await loadSlideFonts();
+      if (!ownsExport(operationId)) return;
       const blob = await exportDocumentAsPDF(
         blocks,
         documentTitle || "Untitled",
         getSvg,
       );
+      if (!ownsExport(operationId)) return;
       if (!blob) {
         trackExportFailure("pdf", startedAt, "empty_blob");
         setErrorMsg("PDF export failed");
@@ -212,13 +230,16 @@ export function DocumentExportButton({
       downloadBlob(blob, safeFilename("pdf"));
       setStatus("idle");
     } catch (error) {
-      setStatus("idle");
+      if (ownsExport(operationId)) setStatus("idle");
       unstable_rethrow(error);
+      if (!ownsExport(operationId)) return;
       trackExportFailure("pdf", startedAt, "exception");
       setErrorMsg("PDF export failed");
       setStatus("error");
     } finally {
-      exportInFlightRef.current = false;
+      if (ownsExport(operationId)) {
+        exportInFlightRef.current = false;
+      }
     }
   };
 
@@ -226,13 +247,16 @@ export function DocumentExportButton({
     if (!canPptx) return;
     if (exportInFlightRef.current) return;
     exportInFlightRef.current = true;
+    const operationId = ++exportOperationIdRef.current;
     setErrorMsg(null);
     setStatus("exporting");
     setIsOpen(false);
     const startedAt = trackExportStart("pptx");
     try {
+      const fetchedDeckJson = await fetchDeckJson();
+      if (!ownsExport(operationId)) return;
       const context = resolveDeckExportContext(
-        await fetchDeckJson(),
+        fetchedDeckJson,
         initialDeckJson,
       );
       if (context.kind === "error") {
@@ -243,7 +267,9 @@ export function DocumentExportButton({
       }
       const { exportDeckAsPPTX } =
         await import("@/lib/presentation/pptx-apply");
+      if (!ownsExport(operationId)) return;
       const blob = await exportDeckAsPPTX(context.deck);
+      if (!ownsExport(operationId)) return;
       if (!blob) {
         trackExportFailure("pptx", startedAt, "empty_blob");
         setErrorMsg("PPTX export failed");
@@ -254,19 +280,23 @@ export function DocumentExportButton({
       downloadBlob(blob, safeFilename("pptx"));
       setStatus("idle");
     } catch (error) {
-      setStatus("idle");
+      if (ownsExport(operationId)) setStatus("idle");
       unstable_rethrow(error);
+      if (!ownsExport(operationId)) return;
       trackExportFailure("pptx", startedAt, "exception");
       setErrorMsg("PPTX export failed");
       setStatus("error");
     } finally {
-      exportInFlightRef.current = false;
+      if (ownsExport(operationId)) {
+        exportInFlightRef.current = false;
+      }
     }
   };
 
   const handleExportInfographic = async (format: "png" | "pdf") => {
     if (exportInFlightRef.current) return;
     exportInFlightRef.current = true;
+    const operationId = ++exportOperationIdRef.current;
     const outputFormat = `infographic-${format}`;
     setErrorMsg(null);
     setStatus("exporting");
@@ -275,7 +305,9 @@ export function DocumentExportButton({
     try {
       const { exportDocumentAsInfographic } =
         await import("@/lib/visual/document-export-targets");
+      if (!ownsExport(operationId)) return;
       const blocks = await getBlocks();
+      if (!ownsExport(operationId)) return;
       const presetWidth = INFOGRAPHIC_WIDTH_PRESETS[infogramWidth].width;
       const blob = await exportDocumentAsInfographic(
         blocks,
@@ -290,6 +322,7 @@ export function DocumentExportButton({
           outputFormat: format,
         },
       );
+      if (!ownsExport(operationId)) return;
       if (!blob) {
         trackExportFailure(outputFormat, startedAt, "empty_blob");
         setErrorMsg("Infographic export failed");
@@ -300,13 +333,16 @@ export function DocumentExportButton({
       downloadBlob(blob, safeFilename(format));
       setStatus("idle");
     } catch (error) {
-      setStatus("idle");
+      if (ownsExport(operationId)) setStatus("idle");
       unstable_rethrow(error);
+      if (!ownsExport(operationId)) return;
       trackExportFailure(outputFormat, startedAt, "exception");
       setErrorMsg("Infographic export failed");
       setStatus("error");
     } finally {
-      exportInFlightRef.current = false;
+      if (ownsExport(operationId)) {
+        exportInFlightRef.current = false;
+      }
     }
   };
 

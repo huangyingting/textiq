@@ -436,6 +436,7 @@ export function SlideEditor({
 }: SlideEditorProps): JSX.Element {
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const editorRootRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
   const themeCatalogEntries = useMemo(
     () =>
       mergeThemePackageCatalogEntries([
@@ -469,6 +470,15 @@ export function SlideEditor({
   );
   const replaceImageTargetIdRef = useRef<string | null>(null);
   const insertImagePendingRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      replaceImageTargetIdRef.current = null;
+      insertImagePendingRef.current = false;
+    };
+  }, []);
 
   const {
     inlineEditNodeId,
@@ -1032,6 +1042,7 @@ export function SlideEditor({
     }
     try {
       const uploadedImage = await deckWithUploadedImageAsset(file);
+      if (!mountedRef.current) return;
       if (!uploadedImage) return;
       const { deckWithAsset, assetId, alt } = uploadedImage;
       if (inserting) {
@@ -1056,6 +1067,7 @@ export function SlideEditor({
       }
       setToolbarError(null);
     } catch {
+      if (!mountedRef.current) return;
       setToolbarError("Image replacement failed. Please try another file.");
     }
   }
@@ -1074,6 +1086,7 @@ export function SlideEditor({
     const slideId = activeSlide.id;
     try {
       const uploadedImage = await deckWithUploadedImageAsset(file);
+      if (!mountedRef.current) return;
       if (!uploadedImage) return;
       onDeckChange(
         updateSlideLocalStyle(uploadedImage.deckWithAsset, slideId, {
@@ -1088,6 +1101,7 @@ export function SlideEditor({
       );
       setToolbarError(null);
     } catch {
+      if (!mountedRef.current) return;
       setToolbarError(
         "Background image upload failed. Please try another file.",
       );
@@ -1106,6 +1120,7 @@ export function SlideEditor({
     const pickResult = await runVisualPickerMutation({
       onPickVisual,
       onPicked: (picked) => {
+        if (!mountedRef.current) return;
         const deckWithAsset = deckWithPickedVisualAsset(deck, picked);
         const node = defaultVisualNode(
           nextLayeredZIndex(activeSlide, "visual"),
@@ -1123,6 +1138,7 @@ export function SlideEditor({
         focusSelectedNodeSoon(result.nodeId);
       },
     });
+    if (!mountedRef.current) return;
     if (pickResult === "failed") {
       setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
       return;
@@ -1139,6 +1155,7 @@ export function SlideEditor({
     const pickResult = await runVisualPickerMutation({
       onPickVisual,
       onPicked: (picked) => {
+        if (!mountedRef.current) return;
         onDeckChange(
           updateNodeContent(
             deckWithPickedVisualAsset(deck, picked),
@@ -1151,6 +1168,7 @@ export function SlideEditor({
         focusSelectedNodeSoon(selectedNode.id);
       },
     });
+    if (!mountedRef.current) return;
     if (pickResult === "failed") {
       setToolbarError(VISUAL_PICKER_FAILURE_MESSAGE);
       return;
@@ -1219,7 +1237,7 @@ export function SlideEditor({
 
   function selectedNodesPngRenderer(ids: readonly string[]) {
     return async () => {
-      if (!activeSlideTree) return null;
+      if (!mountedRef.current || !activeSlideTree) return null;
       return await renderSelectedNodesToPngBlob(
         deck,
         activeSlideTree,
@@ -1239,6 +1257,7 @@ export function SlideEditor({
     const writeResult = await writeTextIqNodesToClipboard(copied, {
       renderPng: selectedNodesPngRenderer(selectedIds),
     });
+    if (!mountedRef.current) return;
     setStageAnnouncement(
       clipboardWriteAnnouncement("Copied", copied.length, writeResult),
     );
@@ -1247,6 +1266,7 @@ export function SlideEditor({
   async function handlePasteNodes() {
     if (!activeSlide) return;
     const clipboard = await readTextIqNodeClipboard();
+    if (!mountedRef.current) return;
     const resolved = resolveExternalTextIqNodePaste({
       osPayload: clipboard.textIqPayload,
       hasImage: clipboard.image !== null,
@@ -1274,6 +1294,7 @@ export function SlideEditor({
           clipboard.image.type,
         );
         const uploadedImage = await deckWithUploadedImageAsset(file);
+        if (!mountedRef.current) return;
         if (!uploadedImage) {
           setToolbarError(
             "Pasted image upload failed. Please try another image.",
@@ -1294,6 +1315,7 @@ export function SlideEditor({
         setToolbarError(null);
         setStageAnnouncement("Pasted image from clipboard.");
       } catch {
+        if (!mountedRef.current) return;
         setToolbarError(
           "Pasted image upload failed. Please try another image.",
         );
@@ -1374,6 +1396,7 @@ export function SlideEditor({
     const writeResult = await writeTextIqNodesToClipboard(result.nodes, {
       renderPng: selectedNodesPngRenderer(selectedIds),
     });
+    if (!mountedRef.current) return;
     applySelectionDeletion(selectedIds, result.deck);
     setStageAnnouncement(
       clipboardWriteAnnouncement("Cut", result.nodes.length, writeResult),

@@ -1328,6 +1328,65 @@ describe("BrandStudio", () => {
   });
 
   describe("font upload (entitled)", () => {
+    test("unmounting invalidates a pending font upload before its late result hydrates the page", async () => {
+      await withPortalDom(async () => {
+        const uploadAttempt =
+          deferred<Awaited<ReturnType<BrandUploadPort["uploadFont"]>>>();
+        let uploadCallCount = 0;
+        const uploadPort = buildUploadPort({
+          uploadFont: () => {
+            uploadCallCount += 1;
+            return uploadAttempt.promise;
+          },
+        });
+        let hydrationCount = 0;
+        document.head.appendChild = () => {
+          hydrationCount += 1;
+          return null as never;
+        };
+        const renderer = mount({
+          initialBrands: [buildBrand()],
+          canFontUpload: true,
+          uploadPort,
+        });
+
+        act(() => {
+          renderer.root
+            .findByProps({ "aria-label": "Edit brand" })
+            .props.onClick();
+        });
+        const fontInput = findFileInput(renderer.root, "ttf");
+        const target = {
+          files: [new File(["x"], "LateFont.woff2", { type: "font/woff2" })],
+          value: "mock",
+        };
+        act(() => {
+          fontInput.props.onChange({ target });
+        });
+        assert.equal(target.value, "");
+        assert.equal(uploadCallCount, 1);
+        assert.equal(hydrationCount, 0);
+        assert.equal(
+          renderer.root.findByProps({ id: "brand-name" }).props.disabled,
+          true,
+        );
+
+        act(() => renderer.unmount());
+        assert.equal(hydrationCount, 0);
+        uploadAttempt.resolve({
+          url: "https://textiq.test/api/brand-assets/font-late",
+          assetId: "font-asset-late",
+          familyName: "Late Font",
+        });
+        await act(async () => {
+          await waitForAsyncDrain();
+          await waitForAsyncDrain();
+        });
+
+        assert.equal(hydrationCount, 0);
+      });
+    });
+
     test("uploads via the injected port, hydrates and persists the font family/asset id", async () => {
       await withPortalDom(async () => {
         const uploadPort = buildUploadPort();

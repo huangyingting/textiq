@@ -438,7 +438,7 @@ pickers, per-node overrides, and kind switching are progressive disclosure. Each
 edit is a pure transform from `transforms.ts`, committed via `node.setVisual()`
 inside `editor.update()`.
 
-### Document import and export
+### Document import, export, and present
 
 The top editor chrome owns whole-document import and export workflows:
 
@@ -456,11 +456,19 @@ The top editor chrome owns whole-document import and export workflows:
   one synchronous export boundary, so duplicate or competing menu activation
   cannot start two renderers. While active, the menu closes and the toolbar
   trigger exposes disabled `Exporting…` state. Ordinary failures render
-  dismissible feedback and release the boundary for retry.
+  dismissible feedback and release the boundary for retry. Unmounting the
+  toolbar invalidates the active export after any pending fetch, dynamic
+  renderer load, font load, or render step; late work cannot continue into a
+  download, publish settlement telemetry, or update detached UI state.
 - PPTX export asks the injected deck port for the freshest saved deck and uses
   the page-load deck only as the documented fallback. Next.js redirect and
   not-found control flow from import/export ports is rethrown to the framework;
   it is never rewritten as a network or export error.
+- [`PresentButton`](../../src/components/editor/present-button.tsx) also reads
+  the freshest saved deck before opening read-only presentation mode. A
+  synchronous request boundary collapses duplicate activation, document
+  identity changes invalidate the old request, and unmounting prevents a late
+  result from reading detached editor visuals or opening a replacement view.
 
 ### Persist / version
 

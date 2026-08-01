@@ -325,18 +325,38 @@ export function SlideEditorButton({
   const visualPickerResolverRef = useRef<
     ((value: { visualId?: string; alt?: string } | undefined) => void) | null
   >(null);
+  const mountedRef = useRef(true);
+  const lifecycleIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      lifecycleIdRef.current += 1;
+      visualPickerResolverRef.current?.(undefined);
+      visualPickerResolverRef.current = null;
+    };
+  }, [documentId]);
 
   const handleExportPptx = useCallback(async () => {
     if (!deck) return;
+    const lifecycleId = lifecycleIdRef.current;
     const opened = openDeckFromJson(deck);
     if (!opened.ok) {
       throw new Error(opened.error);
     }
-    const blob = await exportDeckAsPPTX(
-      opened.deck,
-      themeResolution?.package ??
-        resolveThemePackageForDeck(opened.deck).package,
-    );
+    let blob: Blob | null;
+    try {
+      blob = await exportDeckAsPPTX(
+        opened.deck,
+        themeResolution?.package ??
+          resolveThemePackageForDeck(opened.deck).package,
+      );
+    } catch (error) {
+      if (!mountedRef.current || lifecycleIdRef.current !== lifecycleId) return;
+      throw error;
+    }
+    if (!mountedRef.current || lifecycleIdRef.current !== lifecycleId) return;
     if (!blob) throw new Error("PPTX export returned empty result");
     downloadBlob(blob, "presentation.pptx");
   }, [deck, themeResolution]);
