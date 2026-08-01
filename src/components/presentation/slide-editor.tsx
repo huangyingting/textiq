@@ -394,6 +394,21 @@ function readImageFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+interface ImageUploadQueueScope {
+  documentId: string;
+  generation: number;
+  pendingCount: number;
+  tail: Promise<void>;
+}
+
+interface ClipboardOperationQueueScope {
+  documentId: string;
+  generation: number;
+  pastePendingCount: number;
+  pasteTail: Promise<void>;
+  writeTail: Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -472,6 +487,38 @@ export function SlideEditor({
   const replaceImageTargetIdRef = useRef<string | null>(null);
   const insertImagePendingRef = useRef(false);
   const visualPickerPendingRef = useRef(false);
+  const imageUploadQueueScopeRef = useRef<ImageUploadQueueScope>({
+    documentId,
+    generation: 0,
+    pendingCount: 0,
+    tail: Promise.resolve(),
+  });
+  const [imageUploadQueueState, setImageUploadQueueState] = useState({
+    documentId,
+    pendingCount: 0,
+  });
+  const clipboardOperationQueueScopeRef = useRef<ClipboardOperationQueueScope>({
+    documentId,
+    generation: 0,
+    pastePendingCount: 0,
+    pasteTail: Promise.resolve(),
+    writeTail: Promise.resolve(),
+  });
+  const clipboardMemoryRevisionRef = useRef(0);
+  const clipboardSystemRevisionRef = useRef(0);
+  const [clipboardPasteQueueState, setClipboardPasteQueueState] = useState({
+    documentId,
+    pendingCount: 0,
+  });
+
+  const imageUploadPendingCount =
+    imageUploadQueueState.documentId === documentId
+      ? imageUploadQueueState.pendingCount
+      : 0;
+  const clipboardPastePendingCount =
+    clipboardPasteQueueState.documentId === documentId
+      ? clipboardPasteQueueState.pendingCount
+      : 0;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -480,12 +527,160 @@ export function SlideEditor({
       replaceImageTargetIdRef.current = null;
       insertImagePendingRef.current = false;
       visualPickerPendingRef.current = false;
+      imageUploadQueueScopeRef.current.generation += 1;
+      imageUploadQueueScopeRef.current.pendingCount = 0;
+      imageUploadQueueScopeRef.current.tail = Promise.resolve();
+      clipboardOperationQueueScopeRef.current.generation += 1;
+      clipboardOperationQueueScopeRef.current.pastePendingCount = 0;
+      clipboardOperationQueueScopeRef.current.pasteTail = Promise.resolve();
+      clipboardOperationQueueScopeRef.current.writeTail = Promise.resolve();
     };
   }, []);
 
   useEffect(() => {
+    const currentScope = imageUploadQueueScopeRef.current;
+    if (currentScope.documentId === documentId) return;
+    imageUploadQueueScopeRef.current = {
+      documentId,
+      generation: currentScope.generation + 1,
+      pendingCount: 0,
+      tail: Promise.resolve(),
+    };
+    const currentClipboardScope = clipboardOperationQueueScopeRef.current;
+    clipboardOperationQueueScopeRef.current = {
+      documentId,
+      generation: currentClipboardScope.generation + 1,
+      pastePendingCount: 0,
+      pasteTail: Promise.resolve(),
+      writeTail: Promise.resolve(),
+    };
+    setImageUploadQueueState({ documentId, pendingCount: 0 });
+    setClipboardPasteQueueState({ documentId, pendingCount: 0 });
+  }, [documentId]);
+
+  useEffect(() => {
     deckRef.current = deck;
   }, [deck]);
+
+  function enqueueImageUploadOperation(
+    operation: (isCurrent: () => boolean) => Promise<void>,
+  ): Promise<void> {
+    const scope = imageUploadQueueScopeRef.current;
+    const generation = scope.generation;
+    const isCurrent = () =>
+      mountedRef.current &&
+      imageUploadQueueScopeRef.current === scope &&
+      scope.generation === generation &&
+      scope.documentId === documentId;
+
+    scope.pendingCount += 1;
+    setImageUploadQueueState({
+      documentId: scope.documentId,
+      pendingCount: scope.pendingCount,
+    });
+
+    const queued = scope.tail.then(async () => {
+      if (!isCurrent()) return;
+      await operation(isCurrent);
+    });
+    scope.tail = queued.catch(() => undefined);
+
+    const finish = () => {
+      if (!isCurrent()) return;
+      scope.pendingCount = Math.max(0, scope.pendingCount - 1);
+      setImageUploadQueueState({
+        documentId: scope.documentId,
+        pendingCount: scope.pendingCount,
+      });
+    };
+    void queued.then(finish, finish);
+    return queued;
+  }
+
+  function publishImageUploadDeck(nextDeck: Deck) {
+    deckRef.current = nextDeck;
+    onDeckChange(nextDeck);
+  }
+
+  function enqueueClipboardWriteOperation(
+    memoryRevision: number,
+    operation: (
+      isCurrent: () => boolean,
+    ) => Promise<TextIqNodeClipboardWriteResult>,
+  ): Promise<TextIqNodeClipboardWriteResult | undefined> {
+    const scope = clipboardOperationQueueScopeRef.current;
+    const generation = scope.generation;
+    const isCurrent = () =>
+      mountedRef.current &&
+      clipboardOperationQueueScopeRef.current === scope &&
+      scope.generation === generation &&
+      scope.documentId === documentId;
+    const queued = scope.writeTail.then(async () => {
+      if (!isCurrent()) return undefined;
+      const result = await operation(isCurrent);
+      if (isCurrent() && result.ok) {
+        clipboardSystemRevisionRef.current = Math.max(
+          clipboardSystemRevisionRef.current,
+          memoryRevision,
+        );
+      }
+      return result;
+    });
+    const safeQueued = queued.catch(() => undefined);
+    scope.writeTail = safeQueued.then(() => undefined);
+    return safeQueued;
+  }
+
+  function enqueueClipboardPasteOperation(
+    operation: (options: {
+      isCurrent: () => boolean;
+      preferMemory: boolean;
+    }) => Promise<void>,
+  ): Promise<void> {
+    const scope = clipboardOperationQueueScopeRef.current;
+    const generation = scope.generation;
+    const precedingWrite = scope.writeTail;
+    const memoryRevision = clipboardMemoryRevisionRef.current;
+    const isCurrent = () =>
+      mountedRef.current &&
+      clipboardOperationQueueScopeRef.current === scope &&
+      scope.generation === generation &&
+      scope.documentId === documentId;
+
+    scope.pastePendingCount += 1;
+    setClipboardPasteQueueState({
+      documentId: scope.documentId,
+      pendingCount: scope.pastePendingCount,
+    });
+
+    const queued = scope.pasteTail.then(async () => {
+      await precedingWrite;
+      if (!isCurrent()) return;
+      await operation({
+        isCurrent,
+        preferMemory:
+          memoryRevision > clipboardSystemRevisionRef.current &&
+          clipboardNodesRef.current.length > 0,
+      });
+    });
+    scope.pasteTail = queued.catch(() => undefined);
+
+    const finish = () => {
+      if (!isCurrent()) return;
+      scope.pastePendingCount = Math.max(0, scope.pastePendingCount - 1);
+      setClipboardPasteQueueState({
+        documentId: scope.documentId,
+        pendingCount: scope.pastePendingCount,
+      });
+    };
+    void queued.then(finish, finish);
+    return queued;
+  }
+
+  function publishClipboardDeck(nextDeck: Deck) {
+    deckRef.current = nextDeck;
+    onDeckChange(nextDeck);
+  }
 
   const {
     inlineEditNodeId,
@@ -555,10 +750,7 @@ export function SlideEditor({
   );
   const [snapToGuides, setSnapToGuides] = useState(true);
   const [clipboardNodes, setClipboardNodes] = useState<SlideChildNode[]>([]);
-  const clipboardNodesRef = useRef(clipboardNodes);
-  useEffect(() => {
-    clipboardNodesRef.current = clipboardNodes;
-  }, [clipboardNodes]);
+  const clipboardNodesRef = useRef<SlideChildNode[]>([]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [brandKitAuthoringOpen, setBrandKitAuthoringOpen] = useState(false);
   const themePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -1052,42 +1244,45 @@ export function SlideEditor({
       setToolbarError("Choose an image file to replace the selected image.");
       return;
     }
-    try {
-      const uploadedImage = await deckWithUploadedImageAsset(file);
-      if (!mountedRef.current) return;
-      if (!uploadedImage) return;
-      const { deckWithAsset, assetId, alt } = uploadedImage;
-      const targetSlide = deckWithAsset.slides.find(
-        (slide) => slide.id === targetSlideId,
-      );
-      if (!targetSlide) return;
-      if (inserting) {
-        const node = defaultImageNode(nextLayeredZIndex(targetSlide, "image"));
-        if (node.type !== "image") return;
-        const result = insertNode(deckWithAsset, targetSlideId, {
-          ...node,
-          content: { ...node.content, assetId, alt },
-        });
-        onDeckChange(result.deck);
-        setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
-        focusSelectedNodeSoon(result.nodeId);
-      } else if (targetId) {
-        const targetNode = findNodeById(targetSlide.children, targetId);
-        if (targetNode?.type !== "image") return;
-        onDeckChange(
-          updateNodeContent(deckWithAsset, targetSlideId, targetId, {
-            assetId,
-            alt,
-          }),
+    return enqueueImageUploadOperation(async (isCurrent) => {
+      try {
+        const uploadedImage = await deckWithUploadedImageAsset(file);
+        if (!isCurrent() || !uploadedImage) return;
+        const { deckWithAsset, assetId, alt } = uploadedImage;
+        const targetSlide = deckWithAsset.slides.find(
+          (slide) => slide.id === targetSlideId,
         );
-        setSelection((s) => setSelectedNodeIds(s, [targetId]));
-        focusSelectedNodeSoon(targetId);
+        if (!targetSlide) return;
+        if (inserting) {
+          const node = defaultImageNode(
+            nextLayeredZIndex(targetSlide, "image"),
+          );
+          if (node.type !== "image") return;
+          const result = insertNode(deckWithAsset, targetSlideId, {
+            ...node,
+            content: { ...node.content, assetId, alt },
+          });
+          publishImageUploadDeck(result.deck);
+          setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+          focusSelectedNodeSoon(result.nodeId);
+        } else if (targetId) {
+          const targetNode = findNodeById(targetSlide.children, targetId);
+          if (targetNode?.type !== "image") return;
+          publishImageUploadDeck(
+            updateNodeContent(deckWithAsset, targetSlideId, targetId, {
+              assetId,
+              alt,
+            }),
+          );
+          setSelection((s) => setSelectedNodeIds(s, [targetId]));
+          focusSelectedNodeSoon(targetId);
+        }
+        setToolbarError(null);
+      } catch {
+        if (!isCurrent()) return;
+        setToolbarError("Image replacement failed. Please try another file.");
       }
-      setToolbarError(null);
-    } catch {
-      if (!mountedRef.current) return;
-      setToolbarError("Image replacement failed. Please try another file.");
-    }
+    });
   }
 
   function handleUploadSlideBackgroundImageRequest() {
@@ -1102,35 +1297,36 @@ export function SlideEditor({
       return;
     }
     const slideId = activeSlide.id;
-    try {
-      const uploadedImage = await deckWithUploadedImageAsset(file);
-      if (!mountedRef.current) return;
-      if (!uploadedImage) return;
-      if (
-        !uploadedImage.deckWithAsset.slides.some(
-          (slide) => slide.id === slideId,
-        )
-      ) {
-        return;
-      }
-      onDeckChange(
-        updateSlideLocalStyle(uploadedImage.deckWithAsset, slideId, {
-          slide: {
-            background: {
-              type: "image",
-              assetId: uploadedImage.assetId,
-              opacity: 1,
+    return enqueueImageUploadOperation(async (isCurrent) => {
+      try {
+        const uploadedImage = await deckWithUploadedImageAsset(file);
+        if (!isCurrent() || !uploadedImage) return;
+        if (
+          !uploadedImage.deckWithAsset.slides.some(
+            (slide) => slide.id === slideId,
+          )
+        ) {
+          return;
+        }
+        publishImageUploadDeck(
+          updateSlideLocalStyle(uploadedImage.deckWithAsset, slideId, {
+            slide: {
+              background: {
+                type: "image",
+                assetId: uploadedImage.assetId,
+                opacity: 1,
+              },
             },
-          },
-        }),
-      );
-      setToolbarError(null);
-    } catch {
-      if (!mountedRef.current) return;
-      setToolbarError(
-        "Background image upload failed. Please try another file.",
-      );
-    }
+          }),
+        );
+        setToolbarError(null);
+      } catch {
+        if (!isCurrent()) return;
+        setToolbarError(
+          "Background image upload failed. Please try another file.",
+        );
+      }
+    });
   }
 
   async function handleInsertVisual() {
@@ -1306,11 +1502,19 @@ export function SlideEditor({
       .map((id) => findNodeById(activeSlide.children, id))
       .filter((node): node is SlideChildNode => node !== undefined);
     if (copied.length === 0) return;
+    clipboardNodesRef.current = copied;
     setClipboardNodes(copied);
-    const writeResult = await writeTextIqNodesToClipboard(copied, {
-      renderPng: selectedNodesPngRenderer(selectedIds),
-    });
-    if (!mountedRef.current) return;
+    const memoryRevision = clipboardMemoryRevisionRef.current + 1;
+    clipboardMemoryRevisionRef.current = memoryRevision;
+    const renderPng = selectedNodesPngRenderer(selectedIds);
+    const writeResult = await enqueueClipboardWriteOperation(
+      memoryRevision,
+      async () =>
+        await writeTextIqNodesToClipboard(copied, {
+          renderPng,
+        }),
+    );
+    if (!mountedRef.current || !writeResult) return;
     setStageAnnouncement(
       clipboardWriteAnnouncement("Copied", copied.length, writeResult),
     );
@@ -1319,108 +1523,113 @@ export function SlideEditor({
   async function handlePasteNodes() {
     if (!activeSlide) return;
     const targetSlideId = activeSlide.id;
-    const clipboard = await readTextIqNodeClipboard();
-    if (!mountedRef.current) return;
-    const currentDeck = deckRef.current;
-    const targetSlide = currentDeck.slides.find(
-      (slide) => slide.id === targetSlideId,
-    );
-    if (!targetSlide) return;
-    const resolved = resolveExternalTextIqNodePaste({
-      osPayload: clipboard.textIqPayload,
-      hasImage: clipboard.image !== null,
-      html: clipboard.html,
-      plainText: clipboard.plainText,
-      memoryNodes: clipboardNodesRef.current,
-    });
-    if (resolved.source === "invalid") {
-      setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
-      return;
-    }
-    if (resolved.source === "none" && clipboard.state !== "available") {
-      setStageAnnouncement(
-        clipboard.state === "permission-denied"
-          ? "Clipboard permission was denied. Copy inside TextIQ and try paste again."
-          : "Clipboard paste failed. Copy inside TextIQ and try paste again.",
-      );
-      return;
-    }
-    if (resolved.source === "image") {
-      if (!clipboard.image) return;
-      try {
-        const file = clipboardImageBlobToFile(
-          clipboard.image.blob,
-          clipboard.image.type,
+    return enqueueClipboardPasteOperation(
+      async ({ isCurrent, preferMemory }) => {
+        const clipboard = await readTextIqNodeClipboard();
+        if (!isCurrent()) return;
+        const currentDeck = deckRef.current;
+        const targetSlide = currentDeck.slides.find(
+          (slide) => slide.id === targetSlideId,
         );
-        const uploadedImage = await deckWithUploadedImageAsset(file);
-        if (!mountedRef.current) return;
-        if (!uploadedImage) {
-          setToolbarError(
-            "Pasted image upload failed. Please try another image.",
+        if (!targetSlide) return;
+        const resolved = resolveExternalTextIqNodePaste({
+          osPayload: preferMemory ? null : clipboard.textIqPayload,
+          hasImage: preferMemory ? false : clipboard.image !== null,
+          html: preferMemory ? null : clipboard.html,
+          plainText: preferMemory ? null : clipboard.plainText,
+          memoryNodes: clipboardNodesRef.current,
+        });
+        if (resolved.source === "invalid") {
+          setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
+          return;
+        }
+        if (resolved.source === "none" && clipboard.state !== "available") {
+          setStageAnnouncement(
+            clipboard.state === "permission-denied"
+              ? "Clipboard permission was denied. Copy inside TextIQ and try paste again."
+              : "Clipboard paste failed. Copy inside TextIQ and try paste again.",
           );
           return;
         }
-        const latestTargetSlide = uploadedImage.deckWithAsset.slides.find(
-          (slide) => slide.id === targetSlideId,
-        );
-        if (!latestTargetSlide) return;
-        const result = insertNode(
-          uploadedImage.deckWithAsset,
-          targetSlideId,
-          clipboardImageNode(
-            { assetId: uploadedImage.assetId, alt: uploadedImage.alt },
-            nextLayeredZIndex(latestTargetSlide, "image"),
-          ),
-        );
-        onDeckChange(result.deck);
-        setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
-        focusSelectedNodeSoon(result.nodeId);
-        setToolbarError(null);
-        setStageAnnouncement("Pasted image from clipboard.");
-      } catch {
-        if (!mountedRef.current) return;
-        setToolbarError(
-          "Pasted image upload failed. Please try another image.",
-        );
-      }
-      return;
-    }
-    if (resolved.source === "html" || resolved.source === "plain-text") {
-      const rawText =
-        resolved.source === "html" ? clipboard.html : clipboard.plainText;
-      if (!rawText) return;
-      const node = clipboardTextNode(
-        rawText,
-        nextLayeredZIndex(targetSlide, "text"),
-        { html: resolved.source === "html" },
-      );
-      if (!node) return;
-      const result = insertNode(currentDeck, targetSlideId, node);
-      onDeckChange(result.deck);
-      setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
-      focusSelectedNodeSoon(result.nodeId);
-      setToolbarError(null);
-      setStageAnnouncement("Pasted text from clipboard.");
-      return;
-    }
-    if (resolved.nodes.length === 0) return;
-    const result = pasteNodes(currentDeck, targetSlideId, resolved.nodes);
-    onDeckChange(result.deck);
-    if (result.nodeIds.length > 0) {
-      setSelection((s) => setSelectedNodeIds(s, result.nodeIds));
-      focusSelectedNodeSoon(result.nodeIds[0]);
-      setStageAnnouncement(
-        `Pasted ${result.nodeIds.length} ${
-          result.nodeIds.length === 1 ? "node" : "nodes"
-        }${
-          resolved.source === "os"
-            ? " from clipboard"
-            : clipboard.state === "available"
-              ? ""
-              : " from the in-editor clipboard"
-        }.`,
-      );
-    }
+        if (resolved.source === "image") {
+          if (!clipboard.image) return;
+          const file = clipboardImageBlobToFile(
+            clipboard.image.blob,
+            clipboard.image.type,
+          );
+          return await enqueueImageUploadOperation(async (isUploadCurrent) => {
+            try {
+              const uploadedImage = await deckWithUploadedImageAsset(file);
+              if (!isCurrent() || !isUploadCurrent()) return;
+              if (!uploadedImage) {
+                setToolbarError(
+                  "Pasted image upload failed. Please try another image.",
+                );
+                return;
+              }
+              const latestTargetSlide = uploadedImage.deckWithAsset.slides.find(
+                (slide) => slide.id === targetSlideId,
+              );
+              if (!latestTargetSlide) return;
+              const result = insertNode(
+                uploadedImage.deckWithAsset,
+                targetSlideId,
+                clipboardImageNode(
+                  { assetId: uploadedImage.assetId, alt: uploadedImage.alt },
+                  nextLayeredZIndex(latestTargetSlide, "image"),
+                ),
+              );
+              publishImageUploadDeck(result.deck);
+              setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+              focusSelectedNodeSoon(result.nodeId);
+              setToolbarError(null);
+              setStageAnnouncement("Pasted image from clipboard.");
+            } catch {
+              if (!isCurrent() || !isUploadCurrent()) return;
+              setToolbarError(
+                "Pasted image upload failed. Please try another image.",
+              );
+            }
+          });
+        }
+        if (resolved.source === "html" || resolved.source === "plain-text") {
+          const rawText =
+            resolved.source === "html" ? clipboard.html : clipboard.plainText;
+          if (!rawText) return;
+          const node = clipboardTextNode(
+            rawText,
+            nextLayeredZIndex(targetSlide, "text"),
+            { html: resolved.source === "html" },
+          );
+          if (!node) return;
+          const result = insertNode(currentDeck, targetSlideId, node);
+          publishClipboardDeck(result.deck);
+          setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
+          focusSelectedNodeSoon(result.nodeId);
+          setToolbarError(null);
+          setStageAnnouncement("Pasted text from clipboard.");
+          return;
+        }
+        if (resolved.nodes.length === 0) return;
+        const result = pasteNodes(currentDeck, targetSlideId, resolved.nodes);
+        publishClipboardDeck(result.deck);
+        if (result.nodeIds.length > 0) {
+          setSelection((s) => setSelectedNodeIds(s, result.nodeIds));
+          focusSelectedNodeSoon(result.nodeIds[0]);
+          setStageAnnouncement(
+            `Pasted ${result.nodeIds.length} ${
+              result.nodeIds.length === 1 ? "node" : "nodes"
+            }${
+              resolved.source === "os"
+                ? " from clipboard"
+                : clipboard.state === "available" && !preferMemory
+                  ? ""
+                  : " from the in-editor clipboard"
+            }.`,
+          );
+        }
+      },
+    );
   }
 
   function applySelectionDeletion(
@@ -1453,14 +1662,28 @@ export function SlideEditor({
 
   async function handleCutNodes() {
     if (!activeSlide || selectedIds.length === 0) return;
-    const result = cutNodes(deck, activeSlide.id, selectedIds);
+    const currentDeck = deckRef.current;
+    const targetSlide = currentDeck.slides.find(
+      (slide) => slide.id === activeSlide.id,
+    );
+    if (!targetSlide) return;
+    const result = cutNodes(currentDeck, targetSlide.id, selectedIds);
     if (result.nodes.length === 0) return;
+    clipboardNodesRef.current = result.nodes;
     setClipboardNodes(result.nodes);
+    const memoryRevision = clipboardMemoryRevisionRef.current + 1;
+    clipboardMemoryRevisionRef.current = memoryRevision;
+    deckRef.current = result.deck;
     applySelectionDeletion(selectedIds, result.deck);
-    const writeResult = await writeTextIqNodesToClipboard(result.nodes, {
-      renderPng: selectedNodesPngRenderer(selectedIds),
-    });
-    if (!mountedRef.current) return;
+    const renderPng = selectedNodesPngRenderer(selectedIds);
+    const writeResult = await enqueueClipboardWriteOperation(
+      memoryRevision,
+      async () =>
+        await writeTextIqNodesToClipboard(result.nodes, {
+          renderPng,
+        }),
+    );
+    if (!mountedRef.current || !writeResult) return;
     setStageAnnouncement(
       clipboardWriteAnnouncement("Cut", result.nodes.length, writeResult),
     );
@@ -2458,6 +2681,7 @@ export function SlideEditor({
     <div
       role="dialog"
       aria-label="Slide editor"
+      aria-busy={imageUploadPendingCount > 0 || clipboardPastePendingCount > 0}
       data-slide-editor="true"
       ref={editorRootRef}
       tabIndex={-1}
@@ -2623,6 +2847,42 @@ export function SlideEditor({
           >
             Dismiss
           </button>
+        </div>
+      ) : null}
+      {imageUploadPendingCount > 0 ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-image-upload-status="true"
+          className="flex shrink-0 items-center gap-2 border-b border-ds-border-subtle bg-ds-surface-raised px-3 py-2 text-xs text-ds-text-secondary"
+        >
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 animate-pulse rounded-full bg-ds-accent"
+          />
+          <span>
+            {imageUploadPendingCount === 1
+              ? "Uploading image…"
+              : `Uploading image… ${imageUploadPendingCount - 1} queued.`}
+          </span>
+        </div>
+      ) : null}
+      {clipboardPastePendingCount > 0 ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-clipboard-paste-status="true"
+          className="flex shrink-0 items-center gap-2 border-b border-ds-border-subtle bg-ds-surface-raised px-3 py-2 text-xs text-ds-text-secondary"
+        >
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 animate-pulse rounded-full bg-ds-accent"
+          />
+          <span>
+            {clipboardPastePendingCount === 1
+              ? "Pasting…"
+              : `Pasting… ${clipboardPastePendingCount - 1} queued.`}
+          </span>
         </div>
       ) : null}
 

@@ -218,6 +218,7 @@ function createNodeMock() {
     addEventListener: () => undefined,
     blur: () => undefined,
     childNodes: [],
+    click: () => undefined,
     contains: () => false,
     focus: () => undefined,
     getBoundingClientRect: () => ({
@@ -303,20 +304,23 @@ function installBrowserGlobals(): () => void {
 
 async function renderSlideEditor(
   initialDeck: Deck,
-  overrides: Pick<SlideEditorProps, "onPickVisual"> = {},
+  overrides: Pick<SlideEditorProps, "onPickVisual" | "onUploadImage"> = {},
 ) {
   const SlideEditor = await getSlideEditor();
   const restore = installBrowserGlobals();
   let currentDeck = initialDeck;
   const deckChanges: Deck[] = [];
   let setDeckFromTest: ((nextDeck: Deck) => void) | undefined;
+  let setDocumentIdFromTest: ((nextDocumentId: string) => void) | undefined;
 
   function StatefulSlideEditor() {
     const [deck, setDeck] = useState(initialDeck);
+    const [documentId, setDocumentId] = useState("keyboard-command-path");
     setDeckFromTest = setDeck;
+    setDocumentIdFromTest = setDocumentId;
     currentDeck = deck;
     return createElement(SlideEditor, {
-      documentId: "keyboard-command-path",
+      documentId,
       deck,
       ...overrides,
       onDeckChange: (nextDeck) => {
@@ -343,6 +347,13 @@ async function renderSlideEditor(
     updateDeck(update: (deck: Deck) => Deck) {
       assert.ok(setDeckFromTest, "expected the stateful editor to be mounted");
       act(() => setDeckFromTest?.(update(currentDeck)));
+    },
+    updateDocumentId(documentId: string) {
+      assert.ok(
+        setDocumentIdFromTest,
+        "expected the stateful editor to be mounted",
+      );
+      act(() => setDocumentIdFromTest?.(documentId));
     },
     press(key: string, options: Partial<KeyboardEventStub> = {}) {
       const event = keyEvent(key, options);
@@ -406,6 +417,266 @@ function findNode(deck: Deck, id: string): SlideChildNode {
 }
 
 describe("SlideEditor keyboard command path", () => {
+  test("competing image upload entry paths serialize and preserve every mutation", async () => {
+    const uploads = [
+      deferred<{ src: string; assetId: string }>(),
+      deferred<{ src: string; assetId: string }>(),
+      deferred<{ src: string; assetId: string }>(),
+    ];
+    let uploadCalls = 0;
+    const restoreClipboard = installClipboard({
+      read: async () => [
+        new TestClipboardItem({
+          "image/png": new Blob(["clipboard-image"], { type: "image/png" }),
+        }) as unknown as ClipboardItem,
+      ],
+    });
+    const editor = await renderSlideEditor(rotationDeck(), {
+      onUploadImage: () => {
+        const upload = uploads[uploadCalls];
+        uploadCalls += 1;
+        assert.ok(upload, "unexpected extra image upload");
+        return upload.promise;
+      },
+    });
+
+    try {
+      const [insertImageSurface] = editor.renderer.root.findAll(
+        (node) => typeof node.props.onInsertImage === "function",
+      );
+      assert.ok(insertImageSurface, "expected an insert-image command surface");
+      const [imageFileInput, backgroundFileInput] =
+        editor.renderer.root.findAll(
+          (node) =>
+            node.type === "input" &&
+            node.props.type === "file" &&
+            String(node.props.accept).includes("image/png"),
+        );
+      assert.ok(imageFileInput, "expected the image file input");
+      assert.ok(backgroundFileInput, "expected the background file input");
+
+      act(() => {
+        insertImageSurface.props.onInsertImage();
+        imageFileInput.props.onChange({
+          currentTarget: {
+            files: [
+              new File(["file-image"], "inserted.png", {
+                type: "image/png",
+              }),
+            ],
+            value: "inserted.png",
+          },
+        });
+        backgroundFileInput.props.onChange({
+          currentTarget: {
+            files: [
+              new File(["background-image"], "background.png", {
+                type: "image/png",
+              }),
+            ],
+            value: "background.png",
+          },
+        });
+      });
+      const pasteEvent = editor.press("v", { ctrlKey: true });
+      assert.equal(pasteEvent.defaultPrevented, true);
+
+      await act(async () => {
+        for (let attempt = 0; attempt < 10 && uploadCalls < 1; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(
+        uploadCalls,
+        1,
+        "the clipboard upload must wait behind the active file upload",
+      );
+      assert.equal(
+        editor.renderer.root.findByProps({
+          "data-slide-editor": "true",
+        }).props["aria-busy"],
+        true,
+      );
+      assert.equal(
+        textContent(
+          editor.renderer.root.findByProps({
+            "data-image-upload-status": "true",
+          }),
+        ),
+        "Uploading image… 2 queued.",
+      );
+
+      await act(async () => {
+        uploads[0]?.resolve({
+          src: "https://textiq.test/api/slide-assets/file.png",
+          assetId: "asset-file",
+        });
+        await uploads[0]?.promise;
+        for (let attempt = 0; attempt < 10 && uploadCalls < 2; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(uploadCalls, 2);
+      assert.deepEqual(
+        editor.currentDeck.slides[0]?.children
+          .filter((node) => node.type === "image")
+          .map((node) => node.content.assetId),
+        ["asset-file"],
+      );
+
+      await act(async () => {
+        uploads[1]?.resolve({
+          src: "https://textiq.test/api/slide-assets/background.png",
+          assetId: "asset-background",
+        });
+        await uploads[1]?.promise;
+        for (let attempt = 0; attempt < 10 && uploadCalls < 3; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(uploadCalls, 3);
+      assert.equal(
+        editor.currentDeck.slides[0]?.localStyle?.slide?.background?.type,
+        "image",
+      );
+      const background =
+        editor.currentDeck.slides[0]?.localStyle?.slide?.background;
+      assert.equal(background?.type, "image");
+      assert.ok(background && "assetId" in background);
+      if (background && "assetId" in background) {
+        assert.equal(background.assetId, "asset-background");
+      }
+
+      await act(async () => {
+        uploads[2]?.resolve({
+          src: "https://textiq.test/api/slide-assets/clipboard.png",
+          assetId: "asset-clipboard",
+        });
+        await uploads[2]?.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      const imageAssetIds = editor.currentDeck.slides[0]?.children
+        .filter((node) => node.type === "image")
+        .map((node) => node.content.assetId)
+        .sort();
+      assert.deepEqual(imageAssetIds, ["asset-clipboard", "asset-file"]);
+      assert.ok(editor.currentDeck.assets.images["asset-file"]);
+      assert.ok(editor.currentDeck.assets.images["asset-background"]);
+      assert.ok(editor.currentDeck.assets.images["asset-clipboard"]);
+      assert.equal(
+        editor.renderer.root.findByProps({
+          "data-slide-editor": "true",
+        }).props["aria-busy"],
+        false,
+      );
+      assert.equal(
+        editor.renderer.root.findAllByProps({
+          "data-image-upload-status": "true",
+        }).length,
+        0,
+      );
+    } finally {
+      for (const [index, upload] of uploads.entries()) {
+        upload.resolve({
+          src: `https://textiq.test/api/slide-assets/cleanup-${index}.png`,
+          assetId: `asset-cleanup-${index}`,
+        });
+      }
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("a failed image upload does not poison the queued operation behind it", async () => {
+    const backgroundUpload = deferred<{ src: string; assetId: string }>();
+    let uploadCalls = 0;
+    const editor = await renderSlideEditor(rotationDeck(), {
+      onUploadImage: () => {
+        uploadCalls += 1;
+        if (uploadCalls === 1) {
+          return Promise.reject(new Error("first upload failed"));
+        }
+        return backgroundUpload.promise;
+      },
+    });
+
+    try {
+      const [insertImageSurface] = editor.renderer.root.findAll(
+        (node) => typeof node.props.onInsertImage === "function",
+      );
+      assert.ok(insertImageSurface);
+      const [imageFileInput, backgroundFileInput] =
+        editor.renderer.root.findAll(
+          (node) =>
+            node.type === "input" &&
+            node.props.type === "file" &&
+            String(node.props.accept).includes("image/png"),
+        );
+      assert.ok(imageFileInput);
+      assert.ok(backgroundFileInput);
+
+      act(() => {
+        insertImageSurface.props.onInsertImage();
+        imageFileInput.props.onChange({
+          currentTarget: {
+            files: [new File(["bad"], "bad.png", { type: "image/png" })],
+            value: "bad.png",
+          },
+        });
+        backgroundFileInput.props.onChange({
+          currentTarget: {
+            files: [
+              new File(["background"], "background.png", {
+                type: "image/png",
+              }),
+            ],
+            value: "background.png",
+          },
+        });
+      });
+
+      await act(async () => {
+        for (let attempt = 0; attempt < 10 && uploadCalls < 2; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(uploadCalls, 2);
+
+      await act(async () => {
+        backgroundUpload.resolve({
+          src: "https://textiq.test/api/slide-assets/background.png",
+          assetId: "asset-background",
+        });
+        await backgroundUpload.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      const background =
+        editor.currentDeck.slides[0]?.localStyle?.slide?.background;
+      assert.equal(background?.type, "image");
+      assert.ok(background && "assetId" in background);
+      if (background && "assetId" in background) {
+        assert.equal(background.assetId, "asset-background");
+      }
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.type === "image",
+        ),
+        false,
+      );
+      assert.equal(
+        editor.renderer.root.findAllByProps({
+          "data-image-upload-status": "true",
+        }).length,
+        0,
+      );
+    } finally {
+      backgroundUpload.resolve({ src: "", assetId: "cleanup" });
+      editor.cleanup();
+    }
+  });
+
   test("repeated visual insertion activation starts only one picker request", async () => {
     const visualPick = deferred<SlideEditorVisualPickResult | undefined>();
     let visualPicks = 0;
@@ -725,6 +996,323 @@ describe("SlideEditor keyboard command path", () => {
         true,
       );
     } finally {
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("same-turn repeated paste preserves every requested mutation", async () => {
+    const clipboardReads = [
+      deferred<ClipboardItem[]>(),
+      deferred<ClipboardItem[]>(),
+    ];
+    let readCalls = 0;
+    const restoreClipboard = installClipboard({
+      read: () => {
+        const read = clipboardReads[readCalls];
+        readCalls += 1;
+        assert.ok(read, "unexpected extra clipboard read");
+        return read.promise;
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      const firstPaste = editor.press("v", { ctrlKey: true });
+      const secondPaste = editor.press("v", { ctrlKey: true });
+      assert.equal(firstPaste.defaultPrevented, true);
+      assert.equal(secondPaste.defaultPrevented, true);
+
+      await act(async () => {
+        for (let attempt = 0; attempt < 10 && readCalls < 1; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(
+        readCalls,
+        1,
+        "the second paste must wait for the first paste mutation",
+      );
+      assert.equal(
+        editor.renderer.root.findByProps({
+          "data-slide-editor": "true",
+        }).props["aria-busy"],
+        true,
+      );
+      assert.equal(
+        textContent(
+          editor.renderer.root.findByProps({
+            "data-clipboard-paste-status": "true",
+          }),
+        ),
+        "Pasting… 1 queued.",
+      );
+
+      await act(async () => {
+        clipboardReads[0]?.resolve([
+          new TestClipboardItem({
+            "text/plain": new Blob(["First pasted text"], {
+              type: "text/plain",
+            }),
+          }) as unknown as ClipboardItem,
+        ]);
+        await clipboardReads[0]?.promise;
+        for (let attempt = 0; attempt < 10 && readCalls < 2; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(readCalls, 2);
+      assert.match(
+        JSON.stringify(editor.currentDeck.slides[0]?.children),
+        /First pasted text/,
+      );
+
+      await act(async () => {
+        clipboardReads[1]?.resolve([
+          new TestClipboardItem({
+            "text/plain": new Blob(["Second pasted text"], {
+              type: "text/plain",
+            }),
+          }) as unknown as ClipboardItem,
+        ]);
+        await clipboardReads[1]?.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      const pastedTextNodes = editor.currentDeck.slides[0]?.children.filter(
+        (node) => node.type === "text",
+      );
+      const serializedPastedText = JSON.stringify(pastedTextNodes);
+      assert.match(serializedPastedText, /First pasted text/);
+      assert.match(serializedPastedText, /Second pasted text/);
+      assert.equal(
+        pastedTextNodes?.length,
+        2,
+        "each intentional paste must create its own node",
+      );
+      assert.equal(
+        editor.renderer.root.findByProps({
+          "data-slide-editor": "true",
+        }).props["aria-busy"],
+        false,
+      );
+      assert.equal(
+        editor.renderer.root.findAllByProps({
+          "data-clipboard-paste-status": "true",
+        }).length,
+        0,
+      );
+    } finally {
+      for (const read of clipboardReads) read.resolve([]);
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("paste immediately after copy waits for the initiated clipboard write", async () => {
+    const clipboardWrite = deferred<void>();
+    let clipboardItems: ClipboardItem[] = [
+      new TestClipboardItem({
+        "text/plain": new Blob(["Stale clipboard text"], {
+          type: "text/plain",
+        }),
+      }) as unknown as ClipboardItem,
+    ];
+    let clipboardReads = 0;
+    let clipboardWrites = 0;
+    const restoreClipboard = installClipboard({
+      read: async () => {
+        clipboardReads += 1;
+        return clipboardItems;
+      },
+      write: async (items) => {
+        clipboardWrites += 1;
+        await clipboardWrite.promise;
+        clipboardItems = items;
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      editor.press("Tab");
+      const copyEvent = editor.press("c", { ctrlKey: true });
+      const pasteEvent = editor.press("v", { ctrlKey: true });
+      assert.equal(copyEvent.defaultPrevented, true);
+      assert.equal(pasteEvent.defaultPrevented, true);
+
+      await act(async () => {
+        for (
+          let attempt = 0;
+          attempt < 10 && clipboardWrites < 1;
+          attempt += 1
+        ) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(clipboardWrites, 1);
+      assert.equal(
+        clipboardReads,
+        0,
+        "paste must not read the system clipboard before the copy write settles",
+      );
+
+      await act(async () => {
+        clipboardWrite.resolve();
+        await clipboardWrite.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      assert.equal(clipboardReads, 1);
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.filter(
+          (node) => node.type === "shape",
+        ).length,
+        2,
+        "paste must duplicate the shape copied by the preceding operation",
+      );
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.type === "text",
+        ),
+        false,
+        "paste must not consume the stale pre-copy clipboard payload",
+      );
+    } finally {
+      clipboardWrite.resolve();
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("a failed clipboard write makes paste prefer the in-editor copy", async () => {
+    let clipboardReads = 0;
+    let clipboardWrites = 0;
+    const restoreClipboard = installClipboard({
+      read: async () => {
+        clipboardReads += 1;
+        return [
+          new TestClipboardItem({
+            "text/plain": new Blob(["Stale clipboard text"], {
+              type: "text/plain",
+            }),
+          }) as unknown as ClipboardItem,
+        ];
+      },
+      write: async () => {
+        clipboardWrites += 1;
+        throw new Error("clipboard write failed");
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      editor.press("Tab");
+      const copyEvent = editor.press("c", { ctrlKey: true });
+      const pasteEvent = editor.press("v", { ctrlKey: true });
+      assert.equal(copyEvent.defaultPrevented, true);
+      assert.equal(pasteEvent.defaultPrevented, true);
+
+      await act(async () => {
+        for (
+          let attempt = 0;
+          attempt < 10 && clipboardReads < 1;
+          attempt += 1
+        ) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+
+      assert.equal(clipboardWrites, 1);
+      assert.equal(clipboardReads, 1);
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.filter(
+          (node) => node.type === "shape",
+        ).length,
+        2,
+      );
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.type === "text",
+        ),
+        false,
+        "stale system clipboard text must not override the in-editor copy",
+      );
+    } finally {
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("changing documents invalidates running and queued clipboard paste work", async () => {
+    const clipboardReads = [
+      deferred<ClipboardItem[]>(),
+      deferred<ClipboardItem[]>(),
+    ];
+    let readCalls = 0;
+    const restoreClipboard = installClipboard({
+      read: () => {
+        const read = clipboardReads[readCalls];
+        readCalls += 1;
+        assert.ok(read, "unexpected extra clipboard read");
+        return read.promise;
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      editor.press("v", { ctrlKey: true });
+      await act(async () => {
+        for (let attempt = 0; attempt < 10 && readCalls < 1; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(readCalls, 1);
+
+      editor.updateDocumentId("replacement-document");
+      editor.press("v", { ctrlKey: true });
+      await act(async () => {
+        for (let attempt = 0; attempt < 10 && readCalls < 2; attempt += 1) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(
+        readCalls,
+        2,
+        "the replacement document must not wait for the stale paste queue",
+      );
+
+      await act(async () => {
+        clipboardReads[0]?.resolve([
+          new TestClipboardItem({
+            "text/plain": new Blob(["Stale document paste"], {
+              type: "text/plain",
+            }),
+          }) as unknown as ClipboardItem,
+        ]);
+        await clipboardReads[0]?.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      assert.doesNotMatch(
+        JSON.stringify(editor.currentDeck.slides[0]?.children),
+        /Stale document paste/,
+      );
+
+      await act(async () => {
+        clipboardReads[1]?.resolve([
+          new TestClipboardItem({
+            "text/plain": new Blob(["Replacement document paste"], {
+              type: "text/plain",
+            }),
+          }) as unknown as ClipboardItem,
+        ]);
+        await clipboardReads[1]?.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+      const serializedDeck = JSON.stringify(editor.currentDeck);
+      assert.match(serializedDeck, /Replacement document paste/);
+      assert.doesNotMatch(serializedDeck, /Stale document paste/);
+    } finally {
+      for (const read of clipboardReads) read.resolve([]);
       editor.cleanup();
       restoreClipboard();
     }

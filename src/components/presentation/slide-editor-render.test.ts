@@ -226,6 +226,129 @@ test("SlideEditor ignores an image upload that settles after the editor unmounts
   assert.deepEqual(changedDecks, []);
 });
 
+test("SlideEditor resets the image upload queue when the document changes", async () => {
+  await withDefaultDom(async () => {
+    const oldUpload = deferred<{ src: string; assetId: string }>();
+    const newUpload = deferred<{ src: string; assetId: string }>();
+    const uploads = [oldUpload, newUpload];
+    const changedDocuments: string[] = [];
+    let uploadCalls = 0;
+    const renderer = createHookRenderer();
+    const deck = buildDeck([buildSlide("content", [], { id: "slide-1" })]);
+    const renderEditor = (documentId: string) =>
+      renderer.run(() =>
+        SlideEditor({
+          documentId,
+          deck,
+          onDeckChange: () => changedDocuments.push(documentId),
+          onUploadImage: () => {
+            const upload = uploads[uploadCalls];
+            uploadCalls += 1;
+            assert.ok(upload, "stale queued upload must not start");
+            return upload.promise;
+          },
+        }),
+      );
+
+    try {
+      const oldElements = collectElements(renderEditor("doc-old"));
+      const oldInsertImageSurface = oldElements.find(
+        (element) =>
+          typeof (element.props as { onInsertImage?: unknown })
+            .onInsertImage === "function",
+      );
+      assert.ok(oldInsertImageSurface);
+      const oldFileInputs = oldElements.filter(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { type?: string }).type === "file" &&
+          String((element.props as { accept?: string }).accept).includes(
+            "image/png",
+          ),
+      );
+      assert.equal(oldFileInputs.length, 2);
+      (
+        oldInsertImageSurface.props as { onInsertImage: () => void }
+      ).onInsertImage();
+      (
+        oldFileInputs[0]?.props as { onChange: (event: unknown) => void }
+      ).onChange({
+        currentTarget: {
+          files: [new File(["old"], "old.png", { type: "image/png" })],
+          value: "old.png",
+        },
+      });
+      (
+        oldFileInputs[1]?.props as { onChange: (event: unknown) => void }
+      ).onChange({
+        currentTarget: {
+          files: [
+            new File(["old-background"], "old-background.png", {
+              type: "image/png",
+            }),
+          ],
+          value: "old-background.png",
+        },
+      });
+      await waitForAsyncDrain();
+      assert.equal(uploadCalls, 1);
+
+      const newElements = collectElements(renderEditor("doc-new"));
+      const newInsertImageSurface = newElements.find(
+        (element) =>
+          typeof (element.props as { onInsertImage?: unknown })
+            .onInsertImage === "function",
+      );
+      assert.ok(newInsertImageSurface);
+      const newFileInput = newElements.find(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { type?: string }).type === "file" &&
+          String((element.props as { accept?: string }).accept).includes(
+            "image/png",
+          ),
+      );
+      assert.ok(newFileInput);
+      (
+        newInsertImageSurface.props as { onInsertImage: () => void }
+      ).onInsertImage();
+      (newFileInput.props as { onChange: (event: unknown) => void }).onChange({
+        currentTarget: {
+          files: [new File(["new"], "new.png", { type: "image/png" })],
+          value: "new.png",
+        },
+      });
+      await waitForAsyncDrain();
+      assert.equal(
+        uploadCalls,
+        2,
+        "the new document must not wait for the stale document queue",
+      );
+
+      oldUpload.resolve({
+        src: "https://textiq.test/api/slide-assets/old.png",
+        assetId: "asset-old",
+      });
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+      assert.equal(uploadCalls, 2, "stale queued work must not start");
+      assert.deepEqual(changedDocuments, []);
+
+      newUpload.resolve({
+        src: "https://textiq.test/api/slide-assets/new.png",
+        assetId: "asset-new",
+      });
+      await waitForAsyncDrain();
+      await waitForAsyncDrain();
+      assert.deepEqual(changedDocuments, ["doc-new"]);
+    } finally {
+      oldUpload.resolve({ src: "", assetId: "old-cleanup" });
+      newUpload.resolve({ src: "", assetId: "new-cleanup" });
+      renderer.cleanup();
+    }
+  });
+});
+
 test("SlideEditor ignores an image insertion upload after its initiating slide is removed", async () => {
   await withDefaultDom(async () => {
     const uploadAttempt = deferred<{

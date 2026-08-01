@@ -257,12 +257,18 @@ request, and resolve only the request that still owns the visible picker.
 awaiting that request, so a same-turn double activation cannot start competing
 mutations.
 
-Stage clipboard mutations preserve the newest deck snapshot across browser
-clipboard latency. Cut removes the selected nodes synchronously before its
-best-effort system clipboard write, so a late write can only update the live
-announcement. Paste retains the initiating slide identity but applies the
-resolved clipboard payload to the latest deck value, preserving edits that
-arrive while clipboard permission or content reads are pending.
+Stage clipboard operations are ordered within a document. Browser writes run
+in activation order, and each paste waits for writes initiated before it before
+reading the system clipboard. Paste mutations also serialize, retain their
+initiating slide identity, and synchronously advance the authoritative Deck so
+same-turn requests cannot overwrite one another. Cut publishes its deletion
+and in-editor clipboard synchronously before starting its best-effort browser
+write, which prevents repeated same-turn Cut commands from deleting stale
+selection snapshots. If a browser write fails, a following paste prefers the
+newer in-editor clipboard over stale system content. The editor exposes
+`aria-busy` plus a visible, polite `Pasting… N queued.` status while paste work
+is pending. Replacing the document or unmounting invalidates running and queued
+clipboard work before it can mutate the new or detached editor.
 Visual insertion and replacement follow the same rule: they retain their
 initiating slide and node identities, then merge the selected visual into the
 latest deck snapshot when the picker settles.
@@ -271,6 +277,14 @@ retain their initiating target identity and revalidate it against the latest
 deck after upload. If the slide or image node was removed while the upload was
 pending, the editor cancels without publishing an unreferenced deck asset or
 restoring focus to a missing target.
+File insertion/replacement, slide-background selection, and clipboard-image
+paste share one document-scoped serialized upload queue. Every accepted user
+operation keeps its place instead of racing another transport completion; each
+successful mutation synchronously advances the queue's authoritative Deck
+before the next upload starts. The editor exposes `aria-busy` plus a visible,
+polite `Uploading image… N queued.` status until the queue drains. Replacing the
+document or unmounting invalidates the running generation and prevents queued
+work from starting against the stale editor.
 
 Fine-grained selected-element formatting stays out of the top toolbar. The
 canvas popover and inspector continue to own text style, object-specific
@@ -573,6 +587,8 @@ refs must carry explicit `blockKind`.
 5. Node content, local style, and source-link edits write Deck node fields (`SlideNode.children`).
 6. presentation autosave writes full deck snapshots through `saveDeckJson`.
 7. Conflicts are resolved by revision token, not by presence.
+8. All image-upload entry paths serialize through one document-scoped queue and
+   commit against the latest authoritative Deck.
 
 ## Primary Tests
 
