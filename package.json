@@ -14,6 +14,7 @@
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:worktree": "node scripts/dev-worktree.mjs",
     "ci:local": "node scripts/ci-local.mjs",
+    "security:audit": "npm audit --omit=dev --audit-level=high && npm audit signatures",
     "qa:browser": "node scripts/browser-qa.mjs",
     "account:erasure:dry-run": "node --import tsx scripts/account-erasure-dry-run.mjs",
     "retention:run": "node --import tsx scripts/retention-runner.mjs",

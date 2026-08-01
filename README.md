@@ -36,6 +36,7 @@ real secret outside quick local testing.
 | `npm run dev:setup`        | Create a local `.env`, generate Prisma, and apply the SQLite schema.                          |
 | `npm run dev:worktree`     | Create `.env.worktree` and report worktree-local safety checks.                               |
 | `npm run ci:local`         | Run the same SQLite quality stages as GitHub CI, including `build`.                           |
+| `npm run security:audit`   | Audit production advisories and verify installed package provenance.                          |
 | `npm run qa:browser`       | Seed deterministic browser QA data, start dev, and print fixture URLs.                        |
 | `npm run build`            | Create a production build.                                                                    |
 | `npm run start`            | Run the production server.                                                                    |

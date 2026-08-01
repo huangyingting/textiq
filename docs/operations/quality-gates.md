@@ -1,7 +1,7 @@
 ---
 type: "reference"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document is the inventory for local and CI quality gates. It explains what each command protects and where ownership lives. Release sign-off sequence lives in release-gate.md; local setup and troubleshooting live in developer-bootstrap.md."
 ---
 
@@ -17,6 +17,7 @@ in [release-gate.md](release-gate.md); local setup and troubleshooting live in
 | Area                   | Source                                                                    |
 | ---------------------- | ------------------------------------------------------------------------- |
 | Package scripts        | `package.json`                                                            |
+| Dependency security    | `npm audit`, `.github/workflows/ci.yml`                                   |
 | Local CI orchestrator  | `scripts/ci-local.mjs`                                                    |
 | Subsystem test router  | `scripts/test-subsystem.mjs`                                              |
 | Combined coverage gate | `scripts/check-combined-coverage.mjs`                                     |
@@ -36,10 +37,11 @@ in [release-gate.md](release-gate.md); local setup and troubleshooting live in
 
 ## Primary Gate
 
-The broad release gate combines schema, tests, typecheck, lint, docs, format,
-and build checks:
+The broad release gate combines dependency security, schema, tests, typecheck,
+lint, docs, format, and build checks:
 
 ```bash
+npm run security:audit
 npm run db:schema:check
 npm run db:generate
 npm test
@@ -799,7 +801,12 @@ checked inside `npm run docs:check`.
 Docs are still source-backed: when source files, route files, env reads, or
 schema gates change, update the owning subsystem docs in the same change.
 
-## Schema And Build Gates
+## Dependency, Schema, And Build Gates
+
+`npm run security:audit` blocks high or critical advisories in production
+dependencies and verifies npm registry signatures and attestations for the
+installed dependency tree. CI runs it immediately after `npm ci`; the command
+requires npm registry access.
 
 `db:schema:check` verifies the generated SQLite Prisma schema is current.
 `db:generate` refreshes the Prisma client and generated SQLite schema when
@@ -823,6 +830,7 @@ chain.
 ## Primary Tests
 
 - `scripts/ci-local.test.mjs`
+- `scripts/check-dependency-security.test.mjs`
 - `scripts/test-subsystem.test.mjs`
 - `scripts/check-combined-coverage.test.mjs`
 - `scripts/check-line-coverage.test.mjs`

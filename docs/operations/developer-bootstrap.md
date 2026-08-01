@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-01"
+last_updated: "2026-08-01"
 description: "These commands are additive developer tooling. They do not change app runtime behavior."
 ---
 
@@ -55,14 +55,16 @@ npm run ci:local
 This mirrors `.github/workflows/ci.yml` after dependency installation with the
 documented SQLite env:
 
-1. `npm run db:schema:check`
-2. `npm run db:generate`
-3. `npm test`
-4. `npm run typecheck`
-5. `npm run typecheck:unused`
-6. `npm run lint`
-7. `npm run format:check`
-8. `npm run build`
+1. `npm run security:audit`
+2. `npm run db:schema:check`
+3. `npm run db:generate`
+4. `npm test`
+5. `npm run typecheck`
+6. `npm run typecheck:unused`
+7. `npm run lint`
+8. `npm run docs:check`
+9. `npm run format:check`
+10. `npm run build`
 
 Output is staged and the command exits with the first failing stage's exit code.
 

@@ -42,6 +42,7 @@ sequence.
 
 ```bash
 export DB_PROVIDER=sqlite DATABASE_URL="file:./prisma/dev.db" AUTH_SECRET=ci-placeholder
+npm run security:audit
 npm run db:schema:check
 npm run db:generate
 npm test && npm run typecheck && npm run typecheck:unused && npm run lint && npm run docs:check && npm run format:check && npm run build
@@ -49,6 +50,7 @@ npm test && npm run typecheck && npm run typecheck:unused && npm run lint && npm
 
 | Step                | Tool / command             | Failure means                                                                                                       |
 | ------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Dependency security | `npm run security:audit`   | Production dependencies have a high/critical advisory, or a package signature/attestation fails verification        |
 | SQLite schema drift | `npm run db:schema:check`  | The generated SQLite schema is stale                                                                                |
 | Prisma client       | `npm run db:generate`      | Generated Prisma client cannot be refreshed                                                                         |
 | Unit + pure tests   | `npm test`                 | A pure helper, schema, or domain model is broken                                                                    |
@@ -59,12 +61,13 @@ npm test && npm run typecheck && npm run typecheck:unused && npm run lint && npm
 | Formatting          | `npm run format:check`     | Prettier formatting drift                                                                                           |
 | Build               | `npm run build`            | Next.js production build or static-analysis constraints regressed                                                   |
 
-**All nine steps must be green. A single failure is a release blocker.**
+**All ten steps must be green. A single failure is a release blocker.**
 
 The CI job is defined in `.github/workflows/ci.yml` (`quality-gate` job,
-Node 22, SQLite). CI runs the SQLite schema drift check before refreshing the
-generated Prisma client, so stale `prisma/schema.sqlite.prisma` changes fail
-before typechecking. A separate
+Node 22, SQLite). CI audits production advisories and installed package
+provenance immediately after `npm ci`, then runs the SQLite schema drift check
+before refreshing the generated Prisma client, so stale
+`prisma/schema.sqlite.prisma` changes fail before typechecking. A separate
 `.github/workflows/production-install-smoke.yml` job runs `npm ci --omit=dev`,
 `npm run db:generate`, and `npm run production-install:smoke` so runtime
 dependencies cannot accidentally live only in `devDependencies`.
@@ -320,7 +323,7 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 ### Release blockers (must be green)
 
-1. `npm run db:schema:check`, `npm run db:generate`, `npm test`,
+1. `npm run security:audit`, `npm run db:schema:check`, `npm run db:generate`, `npm test`,
    `npm run typecheck`, `npm run typecheck:unused`, `npm run lint`,
    `npm run docs:check`, `npm run format:check`, and `npm run build` — all green.
 2. Every critical flow marked **A** above has its corresponding test passing.
@@ -354,8 +357,8 @@ For each flow below, check the indicated owner: **A** = automated test,
 Before each foundation release wave:
 
 1. Run
-   `npm run db:schema:check && npm run db:generate && npm test && npm run typecheck && npm run typecheck:unused && npm run lint && npm run docs:check && npm run format:check && npm run build`
-   locally. All nine must exit 0.
+   `npm run security:audit && npm run db:schema:check && npm run db:generate && npm test && npm run typecheck && npm run typecheck:unused && npm run lint && npm run docs:check && npm run format:check && npm run build`
+   locally. All ten must exit 0.
 2. Verify CI is green on the merge commit (`.github/workflows/ci.yml` → `quality-gate` job).
 3. Download the deterministic E2E workflow's `release-review-<commit SHA>`
    artifact. Inspect its present-mode, uploaded-asset, forced-colors, and

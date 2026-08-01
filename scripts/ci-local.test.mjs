@@ -14,6 +14,7 @@ test("ci local mirrors the GitHub CI quality gate order", () => {
   assert.deepEqual(
     CI_LOCAL_STAGES.map((stage) => stage.command.join(" ")),
     [
+      "npm run security:audit",
       "npm run db:schema:check",
       "npm run db:generate",
       "npm test",
@@ -38,7 +39,7 @@ test("ci local forces documented SQLite CI environment", () => {
 test("ci local stage banner includes stage position", () => {
   assert.match(
     stageBanner(0, CI_LOCAL_STAGES.length, CI_LOCAL_STAGES[0]),
-    /\[ci:local 1\/9\]/,
+    /\[ci:local 1\/10\]/,
   );
 });
 
@@ -84,5 +85,5 @@ test("ci local CLI returns the first failing stage exit code", () => {
   });
 
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Stage failed: SQLite schema drift/);
+  assert.match(result.stderr, /Stage failed: Dependency security/);
 });

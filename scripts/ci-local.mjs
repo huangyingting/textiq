@@ -12,6 +12,11 @@ export const CI_LOCAL_ENV = {
 
 export const CI_LOCAL_STAGES = [
   {
+    name: "Dependency security",
+    command: ["npm", "run", "security:audit"],
+    hint: "Resolve production advisories or package provenance failures before release.",
+  },
+  {
     name: "SQLite schema drift",
     command: ["npm", "run", "db:schema:check"],
     hint: "Run npm run db:schema:sqlite and commit prisma/schema.sqlite.prisma.",

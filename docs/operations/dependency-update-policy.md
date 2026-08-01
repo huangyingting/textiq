@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-07-04"
+last_updated: "2026-08-01"
 description: "Dependency update automation policy for npm packages and GitHub Actions workflows."
 ---
 
@@ -38,6 +38,23 @@ repository.
 4. Do not hand-edit dependency versions as part of routine Dependabot review;
    let the bot refresh `package-lock.json` unless a human-authored dependency
    change is explicitly scoped.
+
+## Release Enforcement
+
+`npm run security:audit` is a release blocker and runs immediately after
+`npm ci` in the main CI quality gate. It combines two npm registry checks:
+
+1. `npm audit --omit=dev --audit-level=high` fails for high or critical
+   advisories affecting production dependencies. The command reports
+   lower-severity findings without failing, while development-only advisories
+   remain tracked through Dependabot and optional full-tree audits.
+2. `npm audit signatures` verifies registry signatures and attestations for the
+   installed dependency tree. An invalid signature or attestation fails the
+   gate.
+
+Both checks require npm registry access. Resolve or explicitly replace an
+affected dependency; do not bypass the command or weaken its audit threshold to
+make a release pass.
 
 ## Security Disclosure Link
 
