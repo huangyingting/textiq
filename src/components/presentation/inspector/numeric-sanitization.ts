@@ -1,4 +1,8 @@
 import type { ImageCrop, LayoutBox } from "@/lib/presentation/schema";
+import {
+  sanitizeImageCropPercent,
+  updateImageCropSide as updateImageCropSideWithinBounds,
+} from "@/lib/presentation/image-crop";
 
 export function parseFiniteNumberInput(value: string): number | undefined {
   const trimmed = value.trim();
@@ -22,8 +26,7 @@ export function clampLayoutFrame(
 }
 
 export function sanitizeCropPercent(value: number): number | undefined {
-  if (!Number.isFinite(value)) return undefined;
-  return clampToRange(Math.round(value * 10) / 10, 0, 95);
+  return sanitizeImageCropPercent(value);
 }
 
 export function updateImageCropSide(
@@ -31,15 +34,7 @@ export function updateImageCropSide(
   side: keyof ImageCrop,
   value: number,
 ): ImageCrop | undefined {
-  const sanitized = sanitizeCropPercent(value);
-  if (sanitized === undefined) return undefined;
-  return {
-    top: crop?.top ?? 0,
-    right: crop?.right ?? 0,
-    bottom: crop?.bottom ?? 0,
-    left: crop?.left ?? 0,
-    [side]: sanitized,
-  };
+  return updateImageCropSideWithinBounds(crop, side, value);
 }
 
 export function sanitizePercentPoint(value: number): number | undefined {

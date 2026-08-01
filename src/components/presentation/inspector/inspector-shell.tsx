@@ -69,6 +69,7 @@ import { NodeSourcePanel } from "./node-source-panel";
 import { SlideControlsPanel } from "./slide-controls-panel";
 import { SlideSettingsPanel } from "./slide-settings-panel";
 import { StyleBindingPanel } from "./style-binding-panel";
+import { updateImageCropSide } from "./numeric-sanitization";
 
 const DEFAULT_GLOW_COLOR = "#4f46e5";
 const DEFAULT_SHADOW_COLOR = "#000000";
@@ -497,10 +498,13 @@ function AdjustPanel({
               label={`Crop ${side}`}
               value={crop[side]}
               min={0}
-              max={100}
-              onChange={(value) =>
-                onUpdateContent({ crop: { ...crop, [side]: value } })
-              }
+              max={95}
+              onChange={(value) => {
+                const nextCrop = updateImageCropSide(crop, side, value);
+                if (nextCrop !== undefined) {
+                  onUpdateContent({ crop: nextCrop });
+                }
+              }}
             />
           ))}
         </div>

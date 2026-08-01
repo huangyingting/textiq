@@ -16,6 +16,7 @@ import {
 } from "../helpers/profile";
 import {
   waitForSlideAutosave,
+  waitForSlideAutosaveAfter,
   waitForStableLocatorBox,
   waitForStableLocatorBoxes,
   waitForStableSlideStage,
@@ -68,7 +69,7 @@ async function slideLabels(filmstrip: Locator): Promise<string[]> {
 async function selectInspectorPanel(
   page: Page,
   editor: Locator,
-  panel: "arrange" | "line",
+  panel: "arrange" | "image" | "line",
 ): Promise<Locator> {
   const inspector = editor.getByRole("region", { name: "Inspector" });
   if ((await inspector.count()) === 0) {
@@ -82,6 +83,20 @@ async function selectInspectorPanel(
     .getByRole("combobox", { name: "Inspector panel" })
     .selectOption(panel);
   return inspector;
+}
+
+async function readCrop(inspector: Locator): Promise<{
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}> {
+  return {
+    top: Number(await inspector.getByLabel("Crop top").inputValue()),
+    right: Number(await inspector.getByLabel("Crop right").inputValue()),
+    bottom: Number(await inspector.getByLabel("Crop bottom").inputValue()),
+    left: Number(await inspector.getByLabel("Crop left").inputValue()),
+  };
 }
 
 async function readGeometry(inspector: Locator): Promise<{
@@ -349,5 +364,114 @@ test.describe("presentation pointer interactions", () => {
     await expect(inspector.getByLabel("to node id")).toHaveValue(
       "fixture-image",
     );
+  });
+
+  test("image crop handles, inspector values, history, reset, and reload stay in sync", async ({
+    page,
+  }, testInfo) => {
+    const editor = await openPointerFixture(
+      page,
+      testInfo,
+      POINTER_INTERACTION_FIXTURES.imageCrop,
+    );
+    const canvas = editor.locator('[data-slide-canvas="true"]').first();
+    const imageNode = editor
+      .locator(`${STAGE_NODE_SELECTOR}[data-node-id="fixture-image"]`)
+      .first();
+    await imageNode.click();
+    await expect(imageNode).toHaveAttribute("aria-pressed", "true");
+
+    let inspector = await selectInspectorPanel(page, editor, "image");
+    const initialCrop = { top: 0, right: 0, bottom: 0, left: 0 };
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+
+    const toolbar = page.getByRole("toolbar", { name: "Context toolbar" });
+    const cropToggle = toolbar.getByRole("button", { name: "Crop image" });
+    const resetCrop = toolbar.getByRole("button", { name: "Reset crop" });
+    const undo = editor.getByRole("button", { name: "Undo", exact: true });
+    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+    await expect(cropToggle).toHaveAttribute("aria-pressed", "false");
+    await expect(resetCrop).toBeDisabled();
+
+    const rightHandle = editor.locator(
+      '[data-node-chrome-overlay="crop"][data-node-id="fixture-image"] [data-crop-handle="right"]',
+    );
+    await expect(rightHandle).toBeVisible();
+    const handleBox = await waitForStableLocatorBox(rightHandle);
+    await waitForSlideAutosaveAfter(page, () =>
+      dragFromCenter(page, rightHandle, {
+        x: handleBox.x + handleBox.width / 2 - 32,
+        y: handleBox.y + handleBox.height / 2,
+      }),
+    );
+    const pointerCrop = await readCrop(inspector);
+    expect(pointerCrop.right).toBeGreaterThan(5);
+    expect(pointerCrop.top).toBe(0);
+    expect(pointerCrop.bottom).toBe(0);
+    expect(pointerCrop.left).toBe(0);
+    await expect(cropToggle).toHaveAttribute("aria-pressed", "true");
+    await expect(resetCrop).toBeEnabled();
+    const croppedImage = imageNode.locator("img");
+    await expect(croppedImage).toHaveCSS("position", "absolute");
+    expect(
+      await croppedImage.evaluate((node) =>
+        Number.parseFloat(node.style.width),
+      ),
+    ).toBeGreaterThan(100);
+
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+    await expect(resetCrop).toBeDisabled();
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(pointerCrop);
+
+    await waitForSlideAutosaveAfter(page, () => cropToggle.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+    await waitForSlideAutosaveAfter(page, () => cropToggle.click());
+    const defaultCrop = { top: 8, right: 8, bottom: 8, left: 8 };
+    await expect.poll(() => readCrop(inspector)).toEqual(defaultCrop);
+
+    await waitForSlideAutosaveAfter(page, () =>
+      inspector.getByLabel("Crop top").fill("12"),
+    );
+    await waitForSlideAutosaveAfter(page, () =>
+      inspector.getByLabel("Crop right").fill("0"),
+    );
+    await waitForSlideAutosaveAfter(page, () =>
+      inspector.getByLabel("Crop left").fill("95"),
+    );
+    await waitForSlideAutosaveAfter(page, () =>
+      inspector.getByLabel("Crop right").fill("95"),
+    );
+    const persistedCrop = {
+      ...defaultCrop,
+      top: 12,
+      right: 3,
+      left: 95,
+    };
+    await expect.poll(() => readCrop(inspector)).toEqual(persistedCrop);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await imageNode.click();
+    inspector = await selectInspectorPanel(page, editor, "image");
+    await expect.poll(() => readCrop(inspector)).toEqual(persistedCrop);
+    await expect(resetCrop).toBeEnabled();
+
+    await waitForSlideAutosaveAfter(page, () => resetCrop.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+    await waitForSlideAutosaveAfter(page, () => undo.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(persistedCrop);
+    await waitForSlideAutosaveAfter(page, () => redo.click());
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await imageNode.click();
+    inspector = await selectInspectorPanel(page, editor, "image");
+    await expect.poll(() => readCrop(inspector)).toEqual(initialCrop);
+    await expect(resetCrop).toBeDisabled();
   });
 });

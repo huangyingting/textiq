@@ -1,4 +1,8 @@
 import type { ImageCrop, LayoutBox } from "@/lib/presentation/schema";
+import {
+  sanitizeImageCropPercent,
+  updateImageCropSide,
+} from "@/lib/presentation/image-crop";
 
 import type { CropHandlePosition, ResizeHandlePosition } from "./slide-canvas";
 
@@ -32,8 +36,7 @@ export function framesEqual(
 }
 
 export function clampCrop(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(95, Math.round(value * 10) / 10));
+  return sanitizeImageCropPercent(value) ?? 0;
 }
 
 export function cropsEqual(a: ImageCrop, b: ImageCrop): boolean {
@@ -111,13 +114,15 @@ export function cropForHandleDrag({
 }): ImageCrop {
   const deltaX = ((nextPoint.x - startPoint.x) / frame.w) * 100;
   const deltaY = ((nextPoint.y - startPoint.y) / frame.h) * 100;
-  const nextCrop: ImageCrop = { ...startCrop };
-  if (handle === "left") nextCrop.left = clampCrop(startCrop.left + deltaX);
-  if (handle === "right") nextCrop.right = clampCrop(startCrop.right - deltaX);
-  if (handle === "top") nextCrop.top = clampCrop(startCrop.top + deltaY);
-  if (handle === "bottom")
-    nextCrop.bottom = clampCrop(startCrop.bottom - deltaY);
-  return nextCrop;
+  const value =
+    handle === "left"
+      ? startCrop.left + deltaX
+      : handle === "right"
+        ? startCrop.right - deltaX
+        : handle === "top"
+          ? startCrop.top + deltaY
+          : startCrop.bottom - deltaY;
+  return updateImageCropSide(startCrop, handle, clampCrop(value)) ?? startCrop;
 }
 
 export function clientDeltaPct({

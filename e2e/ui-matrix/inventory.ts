@@ -282,7 +282,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/pointer-interactions.spec.ts",
     owners: ["presentation", "accessibility"],
     coverage:
-      "Real Chromium pointer drag coverage for filmstrip reorder, node resize/rotation with undo, and connector endpoint snapping with autosave/reload persistence.",
+      "Real Chromium pointer drag coverage for filmstrip reorder, node resize/rotation with undo, connector endpoint snapping, and image crop handles, bounds, history, and autosave/reload persistence.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],

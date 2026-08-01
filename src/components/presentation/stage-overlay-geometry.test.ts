@@ -86,6 +86,16 @@ describe("stage overlay geometry", () => {
       }),
       { top: 2, right: 3, bottom: 14, left: 5 },
     );
+    assert.deepEqual(
+      cropForHandleDrag({
+        handle: "right",
+        startCrop: { top: 0, right: 0, bottom: 0, left: 95 },
+        startPoint: { x: 50, y: 20 },
+        nextPoint: { x: 0, y: 20 },
+        frame,
+      }),
+      { top: 0, right: 3, bottom: 0, left: 95 },
+    );
   });
 
   test("computes client deltas, centers, angle snapping, and equality", () => {

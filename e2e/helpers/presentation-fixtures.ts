@@ -206,6 +206,11 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2e-isolated-deck-diagnostics",
     "diagnostics",
   ),
+  imageCrop: presentationFixture(
+    "e2eisolatedimagecrop0001",
+    "e2eisolatedshr34",
+    "e2e-isolated-image-crop",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -237,6 +242,7 @@ export const POINTER_INTERACTION_FIXTURES = {
   filmstripReorder: "pointerFilmstripReorder",
   nodeGeometry: "pointerNodeGeometry",
   connectorSnap: "pointerConnectorSnap",
+  imageCrop: "imageCrop",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const CONFLICT_RECOVERY_FIXTURES = {

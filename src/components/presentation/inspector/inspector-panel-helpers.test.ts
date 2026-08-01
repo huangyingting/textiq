@@ -299,6 +299,10 @@ describe("inspector panel pure helpers", () => {
       },
     );
     assert.equal(nextImageCrop(undefined, "right", Number.NaN), undefined);
+    assert.deepEqual(
+      nextImageCrop({ top: 0, right: 0, bottom: 0, left: 95 }, "right", 95),
+      { top: 0, right: 3, bottom: 0, left: 95 },
+    );
   });
 
   test("reads local style color fallbacks for style panels", () => {
