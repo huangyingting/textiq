@@ -113,7 +113,7 @@ profile, which supplies its own seeded credentials:
 | `BILLING_UNLIMITED_CREDITS`     | billing                            | Match the server's unlimited-credit gate                                                                     |
 | `GOOGLE_CLIENT_ID/SECRET`       | auth/public UI matrix              | Match the server's Google provider configuration                                                             |
 | `E2E_SLIDES_DOC_URL`            | slides-smoke                       | Full URL to a seeded document with a Slides presentation                                                     |
-| `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to run layout screenshots outside the deterministic profile                                       |
+| `E2E_SLIDES_LAYOUT_SCREENSHOTS` | slides-layout-screenshots          | Set to `1` to enable pixel comparisons; the profile otherwise runs structural layout assertions only         |
 | `E2E_SLIDES_EDITOR_PATH`        | slides-layout-screenshots          | Override the seeded editor document path used by layout screenshots                                          |
 | `E2E_PROFILE`                   | profile specs + layout screenshots | Set to `1` to run deterministic profile specs (including layout screenshots)                                 |
 
@@ -386,9 +386,11 @@ notes-expanded, and panel-open states using the deterministic profile fixture
 and 12 committed Linux baselines.
 
 - Under `E2E_PROFILE=1`, the suite is part of the deterministic profile run and
-  fails loudly if fixtures are unavailable.
-- Outside the profile, set `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` for explicit
-  screenshot runs.
+  fails loudly if fixtures are unavailable, but it runs structural assertions
+  only unless `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` is also set.
+- Set `E2E_SLIDES_LAYOUT_SCREENSHOTS=1` for both explicit pixel comparisons and
+  baseline generation. Without it, Playwright does not call
+  `toHaveScreenshot`.
 
 Snapshot baselines are opt-in release artifacts, not part of the fast unit
 gate. Update them only when rendered slide-stage output intentionally changes;
@@ -399,11 +401,11 @@ instead of raw sleeps.
 ### Generate baselines
 
 ```bash
-E2E_PROFILE=1 npm run test:e2e:profile -- e2e/presentation/slides-layout-screenshots.spec.ts --update-snapshots
+E2E_PROFILE=1 E2E_SLIDES_LAYOUT_SCREENSHOTS=1 npm run test:e2e:profile -- e2e/presentation/slides-layout-screenshots.spec.ts --update-snapshots
 ```
 
 ### Run comparison
 
 ```bash
-E2E_PROFILE=1 npm run test:e2e:profile -- e2e/presentation/slides-layout-screenshots.spec.ts
+E2E_PROFILE=1 E2E_SLIDES_LAYOUT_SCREENSHOTS=1 npm run test:e2e:profile -- e2e/presentation/slides-layout-screenshots.spec.ts
 ```

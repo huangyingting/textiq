@@ -215,6 +215,35 @@ test("e2e governance: runnable profile docs leave static URL env vars unset", ()
   }
 });
 
+test("e2e governance: documented layout snapshot commands enable pixel comparisons", () => {
+  const readmePath = join(process.cwd(), "e2e", "README.md");
+  const commands = runnableProfileCommands(
+    readFileSync(readmePath, "utf8"),
+  ).filter((command) => command.includes("slides-layout-screenshots.spec.ts"));
+
+  assert.equal(
+    commands.length,
+    2,
+    "layout snapshot docs must expose generation and comparison commands",
+  );
+  assert.ok(
+    commands.some((command) => command.includes("--update-snapshots")),
+    "layout snapshot docs must expose a baseline-generation command",
+  );
+  assert.ok(
+    commands.some((command) => !command.includes("--update-snapshots")),
+    "layout snapshot docs must expose a comparison command",
+  );
+
+  for (const command of commands) {
+    assert.equal(
+      shellAssignments(command).E2E_SLIDES_LAYOUT_SCREENSHOTS,
+      "1",
+      `${readmePath}: ${command} must opt into toHaveScreenshot`,
+    );
+  }
+});
+
 test("e2e governance: only the exact self-contained wrapper implies the profile env", () => {
   assert.equal(isExactImplicitProfileWrapper("npm run test:e2e:profile"), true);
   for (const command of [
