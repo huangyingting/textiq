@@ -21,18 +21,22 @@ export type SwitchProps = Omit<
  */
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
   function Switch(
-    { checked, onCheckedChange, disabled, className, ...rest },
+    { checked, onCheckedChange, disabled, className, onClick, ...rest },
     ref,
   ) {
     return (
       <button
         ref={ref}
+        {...rest}
         type="button"
         role="switch"
         aria-checked={checked}
         disabled={disabled}
-        onClick={() => {
-          if (!disabled) onCheckedChange(!checked);
+        onClick={(event) => {
+          onClick?.(event);
+          if (!disabled && !event.defaultPrevented) {
+            onCheckedChange(!checked);
+          }
         }}
         className={cx(
           "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition motion-reduce:transition-none",
@@ -41,7 +45,6 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
           FOCUS_RING,
           className,
         )}
-        {...rest}
       >
         <span
           aria-hidden="true"

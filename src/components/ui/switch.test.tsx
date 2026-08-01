@@ -40,6 +40,21 @@ function mountSwitch(props: {
   return renderer;
 }
 
+type SwitchClickEvent = {
+  defaultPrevented: boolean;
+  preventDefault(): void;
+};
+
+function clickSwitch(button: { props: Record<string, unknown> }) {
+  const event: SwitchClickEvent = {
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  };
+  (button.props.onClick as (event: SwitchClickEvent) => void)(event);
+}
+
 test("renders role=switch with aria-checked=false and the off-state track/thumb classes when checked is false", () => {
   const renderer = mountSwitch({ checked: false, onCheckedChange: () => {} });
   const button = renderer.root.findByType("button");
@@ -76,7 +91,7 @@ test("clicking calls onCheckedChange with the inverse of the current checked val
   });
   const button = renderer.root.findByType("button");
   act(() => {
-    (button.props.onClick as () => void)();
+    clickSwitch(button);
   });
   assert.deepEqual(calls, [true]);
 });
@@ -89,7 +104,7 @@ test("clicking a checked=true switch calls onCheckedChange(false)", () => {
   });
   const button = renderer.root.findByType("button");
   act(() => {
-    (button.props.onClick as () => void)();
+    clickSwitch(button);
   });
   assert.deepEqual(calls, [false]);
 });
@@ -104,7 +119,7 @@ test("disabled switch sets the disabled attribute and never invokes onCheckedCha
   const button = renderer.root.findByType("button");
   assert.equal(button.props.disabled, true);
   act(() => {
-    (button.props.onClick as () => void)();
+    clickSwitch(button);
   });
   assert.deepEqual(
     calls,
@@ -158,4 +173,44 @@ test("forwards the ref to the underlying button DOM node", () => {
     );
   });
   assert.equal(ref.current, nodeMock);
+});
+
+test("composes the caller onClick before the controlled checked-state transition", () => {
+  const calls: string[] = [];
+  const renderer = mountSwitch({
+    checked: false,
+    onClick: () => calls.push("caller"),
+    onCheckedChange: (next) => calls.push(`checked:${next}`),
+  });
+
+  act(() => {
+    clickSwitch(renderer.root.findByType("button"));
+  });
+
+  assert.deepEqual(calls, ["caller", "checked:true"]);
+});
+
+test("a caller can prevent the controlled checked-state transition", () => {
+  const changes: boolean[] = [];
+  const renderer = mountSwitch({
+    checked: false,
+    onClick: (event: { preventDefault: () => void }) => event.preventDefault(),
+    onCheckedChange: (next) => changes.push(next),
+  });
+
+  act(() => {
+    clickSwitch(renderer.root.findByType("button"));
+  });
+
+  assert.deepEqual(changes, []);
+});
+
+test("controlled state owns aria-checked even when a caller supplies a conflicting value", () => {
+  const renderer = mountSwitch({
+    checked: false,
+    "aria-checked": true,
+    onCheckedChange: () => {},
+  });
+
+  assert.equal(renderer.root.findByType("button").props["aria-checked"], false);
 });

@@ -51,6 +51,13 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const groupId = useId();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedEnabledIndex = options.findIndex(
+    (option) => option.value === value && !option.disabled,
+  );
+  const tabbableIndex =
+    selectedEnabledIndex >= 0
+      ? selectedEnabledIndex
+      : options.findIndex((option) => !option.disabled);
 
   const focusIndex = useCallback((index: number) => {
     const button = refs.current[index];
@@ -60,23 +67,39 @@ export function SegmentedControl<T extends string>({
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
       const last = options.length - 1;
-      let next = index;
+      let next = -1;
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-        next = index === last ? 0 : index + 1;
+        for (let offset = 1; offset <= options.length; offset += 1) {
+          const candidate = (index + offset) % options.length;
+          if (!options[candidate]?.disabled) {
+            next = candidate;
+            break;
+          }
+        }
       } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-        next = index === 0 ? last : index - 1;
+        for (let offset = 1; offset <= options.length; offset += 1) {
+          const candidate = (index - offset + options.length) % options.length;
+          if (!options[candidate]?.disabled) {
+            next = candidate;
+            break;
+          }
+        }
       } else if (event.key === "Home") {
-        next = 0;
+        next = options.findIndex((option) => !option.disabled);
       } else if (event.key === "End") {
-        next = last;
+        for (let candidate = last; candidate >= 0; candidate -= 1) {
+          if (!options[candidate]?.disabled) {
+            next = candidate;
+            break;
+          }
+        }
       } else {
         return;
       }
       event.preventDefault();
       const option = options[next];
-      if (option && !option.disabled) {
-        onChange(option.value);
-      }
+      if (!option) return;
+      onChange(option.value);
       focusIndex(next);
     },
     [options, onChange, focusIndex],
@@ -106,8 +129,9 @@ export function SegmentedControl<T extends string>({
             aria-checked={active}
             aria-label={option.iconOnly ? option.label : undefined}
             disabled={option.disabled}
-            // Roving tabindex: only the active segment is tabbable.
-            tabIndex={active ? 0 : -1}
+            // Keep one enabled segment in the tab order, even while a
+            // controlled value is absent or points at a disabled option.
+            tabIndex={index === tabbableIndex ? 0 : -1}
             id={`${groupId}-${option.value}`}
             onClick={() => !option.disabled && onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}

@@ -18,7 +18,10 @@ export function Skeleton({
   );
 }
 
-export type LoadingRegionProps = HTMLAttributes<HTMLDivElement> & {
+export type LoadingRegionProps = Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "role" | "aria-busy" | "aria-label"
+> & {
   /** Screen-reader announcement. Defaults to "Loading…". */
   label?: string;
 };
@@ -36,11 +39,11 @@ export function LoadingRegion({
 }: LoadingRegionProps) {
   return (
     <div
+      {...props}
       role="status"
       aria-busy="true"
       aria-label={label}
       className={className}
-      {...props}
     >
       <span className="sr-only">{label}</span>
       {children}

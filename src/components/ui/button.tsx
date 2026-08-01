@@ -99,6 +99,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       variant = "plain",
       size = "md",
       active,
+      "aria-pressed": ariaPressed,
       type,
       className,
       children,
@@ -110,7 +111,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       <button
         ref={ref}
         type={type ?? "button"}
-        aria-pressed={active}
+        aria-pressed={active ?? ariaPressed}
         className={cx(
           BASE,
           VARIANT[active ? "solid" : variant],

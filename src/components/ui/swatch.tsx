@@ -33,14 +33,24 @@ export type SwatchProps = Omit<
  */
 export const Swatch = forwardRef<HTMLButtonElement, SwatchProps>(
   function Swatch(
-    { color, selected, size = "md", type, className, children, ...rest },
+    {
+      color,
+      selected,
+      size = "md",
+      type,
+      className,
+      children,
+      "aria-pressed": ariaPressed,
+      style,
+      ...rest
+    },
     ref,
   ) {
     return (
       <button
         ref={ref}
         type={type ?? "button"}
-        aria-pressed={selected}
+        aria-pressed={selected ?? ariaPressed}
         className={cx(
           "relative inline-flex shrink-0 select-none items-center justify-center border transition-shadow",
           SIZE[size],
@@ -51,7 +61,7 @@ export const Swatch = forwardRef<HTMLButtonElement, SwatchProps>(
           FOCUS_RING,
           className,
         )}
-        style={{ backgroundColor: color }}
+        style={{ ...style, backgroundColor: color }}
         {...rest}
       >
         {selected ? (

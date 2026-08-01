@@ -62,6 +62,17 @@ test("ToolbarButton: composes shared toolbar chrome", () => {
   assert.equal(element.props["aria-pressed"], true);
 });
 
+test("ToolbarButton: active state owns aria-pressed over a conflicting caller attribute", () => {
+  const element = ToolbarButton({
+    active: true,
+    "aria-label": "Bold",
+    "aria-pressed": false,
+    children: "B",
+  });
+
+  assert.equal(element.props["aria-pressed"], true);
+});
+
 test("ToolbarButton: supports text buttons, inactive tones, and custom type", () => {
   const element = ToolbarButton({
     children: "Save",

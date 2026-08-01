@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "TextIQ app chrome uses the --ds-* tokens in src/app/globals.css as the source of truth. Visual-content palettes and themes remain separate in src/lib/visual/themes.ts."
 ---
 
@@ -54,6 +54,18 @@ one keypress unwinds exactly one layer. Modal focus capture likewise runs once
 per opening and restores only on close or teardown, never on an open rerender.
 `SelectMenu` uses the semantic menu layer and releases parent-owned open-state
 coordination when detached, including responsive toolbar replacement.
+`SegmentedControl` keeps one enabled option in the tab order even when its
+controlled value is missing or disabled, and arrow/Home/End navigation skips
+disabled options while moving focus and selection together. `Switch` composes
+caller click behavior before its controlled transition, honors cancellation,
+and keeps `aria-checked` owned by controlled state. Likewise, an `IconButton`
+with an explicit `active` state owns the matching `aria-pressed` value; callers
+may supply `aria-pressed` directly only when `active` is omitted.
+The same controlled-state rule applies to `ToolbarButton` and `Swatch`.
+Swatches merge additive caller styles while keeping their `color` prop as the
+rendered fill. `LoadingRegion` owns `role=status`, its busy state, and the
+accessible label derived from `label`, so its visible contract and live
+announcement cannot diverge through passthrough HTML attributes.
 
 ## App Shell And Responsive Surfaces
 
@@ -147,8 +159,14 @@ smooth scrolling while preserving visible state changes and status content.
 - `src/components/keyboard-shortcuts.test.tsx`
 - `src/components/user-menu.test.tsx`
 - `src/components/ui/color-picker.test.tsx`
+- `src/components/ui/action-button.test.tsx`
+- `src/components/ui/button.test.tsx`
 - `src/components/ui/overlay-stack.test.tsx`
 - `src/components/ui/popover.test.tsx`
+- `src/components/ui/segmented-control.test.tsx`
+- `src/components/ui/skeleton.test.tsx`
+- `src/components/ui/swatch.test.tsx`
+- `src/components/ui/switch.test.tsx`
 - `src/components/ui/tooltip.test.tsx`
 - `e2e/ui-matrix/app-shell-ui.spec.ts`
 - `src/lib/right-surface-coordinator.test.ts`

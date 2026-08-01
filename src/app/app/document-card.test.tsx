@@ -24,9 +24,13 @@
  */
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
-import { act, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
-import { mountWithPortalDom, withPortalDom } from "@/test/portal-dom";
+import {
+  createPortalNodeMock,
+  mountWithPortalDom,
+  withPortalDom,
+} from "@/test/portal-dom";
 import { textOf, waitForAsyncDrain } from "@/test/render-text";
 import { stubModule } from "@/test/module-stub";
 import type { DocumentCardData } from "./document-card";
@@ -238,6 +242,110 @@ describe("DocumentCard", () => {
         openMenu(renderer);
         assert.ok(renderer.root.findByProps({ role: "menu" }));
         openMenu(renderer);
+        assert.throws(() => renderer.root.findByProps({ role: "menu" }));
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
+  test("the menu opens from the keyboard, roves focus, closes on Escape, and restores its trigger", () => {
+    withPortalDom(() => {
+      const focusLog: string[] = [];
+      const menuItems = ["Rename", "Duplicate", "Delete"].map((label) => ({
+        ...createPortalNodeMock(),
+        hasAttribute: () => false,
+        getAttribute: () => null,
+        focus: () => focusLog.push(label),
+      }));
+      const triggerNode = {
+        ...createPortalNodeMock(),
+        focus: () => focusLog.push("trigger"),
+      };
+      const menuNode = {
+        ...createPortalNodeMock(),
+        querySelectorAll: () => menuItems,
+      };
+      const data: DocumentCardData = {
+        id: "doc-1",
+        title: "Quarterly Plan",
+        ...BASE,
+      };
+      let renderer!: ReactTestRenderer;
+      act(() => {
+        renderer = create(<DocumentCard {...data} onDelete={() => {}} />, {
+          createNodeMock(element) {
+            const nodeElement = element as {
+              type: unknown;
+              props: Record<string, unknown>;
+            };
+            if (
+              nodeElement.type === "button" &&
+              nodeElement.props["aria-label"] === "Actions for Quarterly Plan"
+            ) {
+              return triggerNode;
+            }
+            if (
+              nodeElement.type === "div" &&
+              nodeElement.props.role === "menu"
+            ) {
+              return menuNode;
+            }
+            return createPortalNodeMock();
+          },
+        });
+      });
+
+      const menuKeyboardContainer = () =>
+        renderer.root.find(
+          (element) =>
+            element.type === "div" &&
+            typeof element.props.className === "string" &&
+            element.props.className.includes("absolute right-2 top-2") &&
+            typeof element.props.onKeyDown === "function",
+        );
+      const press = (key: string, target: object) => {
+        let prevented = false;
+        let stopped = false;
+        act(() => {
+          menuKeyboardContainer().props.onKeyDown({
+            key,
+            target,
+            preventDefault: () => {
+              prevented = true;
+            },
+            stopPropagation: () => {
+              stopped = true;
+            },
+          });
+        });
+        return { prevented, stopped };
+      };
+
+      try {
+        const opened = press("ArrowDown", triggerNode);
+        assert.deepEqual(opened, { prevented: true, stopped: false });
+        assert.deepEqual(focusLog, ["Rename"]);
+        assert.deepEqual(
+          renderer.root
+            .findByProps({ role: "menu" })
+            .findAllByProps({ role: "menuitem" })
+            .map((item) => item.props.tabIndex),
+          [-1, -1, -1],
+        );
+
+        press("ArrowDown", menuItems[0] as object);
+        press("End", menuItems[1] as object);
+        assert.deepEqual(focusLog, ["Rename", "Duplicate", "Delete"]);
+
+        const escaped = press("Escape", menuItems[2] as object);
+        assert.deepEqual(escaped, { prevented: true, stopped: true });
+        assert.deepEqual(focusLog, [
+          "Rename",
+          "Duplicate",
+          "Delete",
+          "trigger",
+        ]);
         assert.throws(() => renderer.root.findByProps({ role: "menu" }));
       } finally {
         act(() => renderer.unmount());

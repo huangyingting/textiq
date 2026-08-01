@@ -8,11 +8,17 @@ import {
   useRef,
   useState,
   useTransition,
+  type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
 } from "react";
 
 import { Button, Dialog, MENU_CHROME, MENU_ITEM, cx } from "@/components/ui";
 import type { DocumentListActionPort } from "@/lib/action-ports";
+import {
+  getMenuCommandItems,
+  isMenuCommandNavigationKey,
+  moveMenuCommandFocus,
+} from "@/lib/a11y/menu-command-semantics";
 import { VisualRenderer } from "@/components/visual/visual-renderer";
 import type { Visual } from "@/lib/visual/schema";
 
@@ -353,7 +359,9 @@ export function DocumentCard({
   const [isPending, startTransition] = useTransition();
   const actionInFlightRef = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuListRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const initialMenuFocusRef = useRef<"first" | "last" | null>(null);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -367,6 +375,49 @@ export function DocumentCard({
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      initialMenuFocusRef.current = null;
+      return;
+    }
+    const requestedFocus = initialMenuFocusRef.current;
+    if (!requestedFocus) return;
+    initialMenuFocusRef.current = null;
+    const items = getMenuCommandItems(menuListRef.current);
+    const target =
+      requestedFocus === "first" ? items[0] : items[items.length - 1];
+    target?.focus();
+  }, [menuOpen]);
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!menuOpen) {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      initialMenuFocusRef.current =
+        event.key === "ArrowDown" ? "first" : "last";
+      setMenuOpen(true);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+      return;
+    }
+    if (event.key === "Tab") {
+      setMenuOpen(false);
+      return;
+    }
+    if (!isMenuCommandNavigationKey(event.key)) return;
+    event.preventDefault();
+    moveMenuCommandFocus({
+      container: menuListRef.current,
+      key: event.key,
+      currentTarget: event.target,
+    });
+  };
 
   const handleConfirmDelete = () => {
     setConfirmOpen(false);
@@ -514,7 +565,11 @@ export function DocumentCard({
         )}
       </div>
 
-      <div ref={menuRef} className="absolute right-2 top-2 z-raised">
+      <div
+        ref={menuRef}
+        className="absolute right-2 top-2 z-raised"
+        onKeyDown={handleMenuKeyDown}
+      >
         <button
           ref={menuTriggerRef}
           type="button"
@@ -539,6 +594,7 @@ export function DocumentCard({
 
         {menuOpen && (
           <div
+            ref={menuListRef}
             role="menu"
             className={cx(
               "absolute right-0 top-full z-dropdown mt-1 w-40",
@@ -549,6 +605,7 @@ export function DocumentCard({
               <button
                 type="button"
                 role="menuitem"
+                tabIndex={-1}
                 disabled={isPending}
                 onClick={() => {
                   setMenuOpen(false);
@@ -563,6 +620,7 @@ export function DocumentCard({
             <button
               type="button"
               role="menuitem"
+              tabIndex={-1}
               disabled={isPending}
               onClick={runDuplicate}
               className={MENU_ITEM}
@@ -573,6 +631,7 @@ export function DocumentCard({
               <button
                 type="button"
                 role="menuitem"
+                tabIndex={-1}
                 disabled={isPending}
                 onClick={() => {
                   setMenuOpen(false);

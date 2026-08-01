@@ -100,21 +100,17 @@ test("LoadingRegion renders its children after the sr-only announcement, and for
   assert.equal(skeletons.length, 2);
 });
 
-test("LoadingRegion's {...props} spread overrides the computed aria-label when a caller also passes an explicit aria-label", () => {
-  // `label` (on `LoadingRegionProps`) and `aria-label` (an ordinary
-  // `HTMLAttributes` entry, not destructured out) are distinct: `label`
-  // feeds the *computed* `aria-label={label}` attribute and the sr-only
-  // text, but the JSX spreads the remaining `{...props}` — which still
-  // contains a literal `aria-label`, since only `label`/`children`/
-  // `className` are destructured out — *after* that computed attribute, so
-  // an explicit `aria-label` passed alongside `label` wins on the rendered
-  // element even though the sr-only text still reflects `label`.
+test("LoadingRegion keeps its status, busy state, and accessible label authoritative and synchronized", () => {
   const renderer = mount(LoadingRegion, {
-    label: "Loading…",
-    "aria-label": "Custom override",
+    label: "Loading brand assets…",
+    role: "alert",
+    "aria-busy": "false",
+    "aria-label": "Conflicting override",
   } as Record<string, unknown>);
   const region = renderer.root.findByType("div");
-  assert.equal(region.props["aria-label"], "Custom override");
+  assert.equal(region.props.role, "status");
+  assert.equal(region.props["aria-busy"], "true");
+  assert.equal(region.props["aria-label"], "Loading brand assets…");
   const srOnlySpan = renderer.root.findByProps({ className: "sr-only" });
-  assert.equal(srOnlySpan.children[0], "Loading…");
+  assert.equal(srOnlySpan.children[0], "Loading brand assets…");
 });

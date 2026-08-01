@@ -169,6 +169,7 @@ export function ToolbarButton({
   shape = "sm",
   type,
   title: _title,
+  "aria-pressed": ariaPressed,
   className,
   children,
   ...rest
@@ -193,7 +194,7 @@ export function ToolbarButton({
   return (
     <button
       type={type ?? "button"}
-      aria-pressed={active === undefined ? undefined : active}
+      aria-pressed={active ?? ariaPressed}
       className={buttonClassName}
       {...rest}
     >
