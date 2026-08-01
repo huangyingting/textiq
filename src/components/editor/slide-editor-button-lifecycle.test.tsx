@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { before, beforeEach, test } from "node:test";
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { act, create } from "react-test-renderer";
 
 import { buildMinimalDeck } from "@/test/builders/presentation-deck";
-import { createReactRenderHarness } from "@/test/react-render-harness";
+import { withDefaultDom } from "@/test/react-render-harness";
 
 type ModuleHooks = {
   registerHooks(hooks: {
@@ -24,6 +24,8 @@ type ModuleHooks = {
 type LifecycleState = {
   exportImpl: () => Promise<Blob | null>;
   downloads: Array<{ blob: Blob; filename: string }>;
+  hookMounts: string[];
+  hookUnmounts: string[];
   openState: Record<string, unknown>;
 };
 
@@ -35,7 +37,14 @@ const stubPrefix = "slide-editor-button-lifecycle:test:";
 const stubSources = new Map<string, string>([
   [
     "@/components/editor/use-slide-editor-open",
-    `export function useSlideEditorOpen() {
+    `import { useEffect } from "react";
+    export function useSlideEditorOpen({ documentId }) {
+      useEffect(() => {
+        globalThis.__slideEditorButtonLifecycleState.hookMounts.push(documentId);
+        return () => {
+          globalThis.__slideEditorButtonLifecycleState.hookUnmounts.push(documentId);
+        };
+      }, []);
       return globalThis.__slideEditorButtonLifecycleState.openState;
     }`,
   ],
@@ -43,6 +52,7 @@ const stubSources = new Map<string, string>([
     "@/components/presentation/slide-editor",
     `export function SlideEditor() { return null; }`,
   ],
+  ["react-dom", `export function createPortal(children) { return children; }`],
   [
     "@/lib/presentation/pptx-apply",
     `export async function exportDeckAsPPTX() {
@@ -130,24 +140,11 @@ beforeEach(() => {
   globalThis.__slideEditorButtonLifecycleState = {
     exportImpl: async () => new Blob(["pptx"]),
     downloads: [],
+    hookMounts: [],
+    hookUnmounts: [],
     openState: baseOpenState(),
   };
 });
-
-function collectElements(
-  node: ReactNode,
-  elements: ReactElement<Record<string, unknown>>[] = [],
-): ReactElement<Record<string, unknown>>[] {
-  if (Array.isArray(node)) {
-    for (const child of node) collectElements(child, elements);
-    return elements;
-  }
-  if (!isValidElement(node)) return elements;
-  const element = node as ReactElement<Record<string, unknown>>;
-  elements.push(element);
-  collectElements(element.props.children as ReactNode, elements);
-  return elements;
-}
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -158,33 +155,84 @@ function deferred<T>() {
 }
 
 test("SlideEditorButton ignores a PPTX renderer that settles after unmount", async () => {
-  const exportAttempt = deferred<Blob | null>();
-  globalThis.__slideEditorButtonLifecycleState.exportImpl = () =>
-    exportAttempt.promise;
-  const renderer = createReactRenderHarness();
-  const tree = renderer.run(() =>
-    SlideEditorButton({
-      documentId: "doc-overlay-export",
-      initialDeckJson: null,
-      deckPort: {} as never,
-    }),
-  );
-  const editor = collectElements(tree).find(
-    (element) => typeof element.props.onExportPptx === "function",
-  );
-  assert.ok(editor, "expected the composed SlideEditor export callback");
-  const settled = (editor.props.onExportPptx as () => Promise<void>)();
-  assert.equal(
-    globalThis.__slideEditorButtonLifecycleState.downloads.length,
-    0,
-  );
+  await withDefaultDom(async () => {
+    Object.assign(document, {
+      body: { style: {} },
+      documentElement: { style: {} },
+    });
+    const exportAttempt = deferred<Blob | null>();
+    globalThis.__slideEditorButtonLifecycleState.exportImpl = () =>
+      exportAttempt.promise;
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <SlideEditorButton
+          documentId="doc-overlay-export"
+          initialDeckJson={null}
+          deckPort={{} as never}
+        />,
+      );
+    });
+    const editor = renderer.root.find(
+      (node) => typeof node.props.onExportPptx === "function",
+    );
+    const settled = (editor.props.onExportPptx as () => Promise<void>)();
+    assert.equal(
+      globalThis.__slideEditorButtonLifecycleState.downloads.length,
+      0,
+    );
 
-  renderer.cleanup();
-  exportAttempt.resolve(new Blob(["late-pptx"]));
-  await settled;
+    act(() => renderer.unmount());
+    exportAttempt.resolve(new Blob(["late-pptx"]));
+    await settled;
 
-  assert.equal(
-    globalThis.__slideEditorButtonLifecycleState.downloads.length,
-    0,
-  );
+    assert.equal(
+      globalThis.__slideEditorButtonLifecycleState.downloads.length,
+      0,
+    );
+  });
+});
+
+test("switching documents remounts the slide-editor controller at the operation identity boundary", () => {
+  globalThis.__slideEditorButtonLifecycleState.openState = {
+    ...baseOpenState(),
+    open: false,
+    deck: null,
+  };
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <SlideEditorButton
+        documentId="doc-old"
+        initialDeckJson={null}
+        deckPort={{} as never}
+      />,
+    );
+  });
+
+  try {
+    assert.deepEqual(globalThis.__slideEditorButtonLifecycleState.hookMounts, [
+      "doc-old",
+    ]);
+    act(() => {
+      renderer.update(
+        <SlideEditorButton
+          documentId="doc-new"
+          initialDeckJson={null}
+          deckPort={{} as never}
+        />,
+      );
+    });
+
+    assert.deepEqual(globalThis.__slideEditorButtonLifecycleState.hookMounts, [
+      "doc-old",
+      "doc-new",
+    ]);
+    assert.deepEqual(
+      globalThis.__slideEditorButtonLifecycleState.hookUnmounts,
+      ["doc-old"],
+    );
+  } finally {
+    act(() => renderer.unmount());
+  }
 });

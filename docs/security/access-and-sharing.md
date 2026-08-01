@@ -133,6 +133,11 @@ The unlock POST endpoint reads bounded `FormData` fields: `shareId`, `mode`,
 `400`/`413` before abuse-budget checks or document lookup. Once a normalized
 `shareId` is present, the public share passcode abuse budget is checked before
 the document row is loaded and the submitted `passcode` field is verified.
+The challenge form claims its first native submission synchronously so repeated
+activation cannot consume multiple attempt-budget entries before navigation.
+While the POST owns the page, the form exposes busy state, keeps the passcode
+read-only so it remains part of native `FormData`, and disables the submit
+control until the response navigation replaces the page.
 
 ## Read-List Scoping
 
@@ -223,6 +228,8 @@ from viewer connections.
 - [`src/lib/auth/document-role-matrix.test.ts`](../../src/lib/auth/document-role-matrix.test.ts)
 - [`src/lib/access-policy/adapters.test.ts`](../../src/lib/access-policy/adapters.test.ts)
 - [`src/lib/share-access.test.ts`](../../src/lib/share-access.test.ts)
+- [`src/components/share/share-passcode-gate.test.tsx`](../../src/components/share/share-passcode-gate.test.tsx)
+- [`src/app/api/share-passcode/unlock/route.test.ts`](../../src/app/api/share-passcode/unlock/route.test.ts)
 - [`src/lib/collab/room-access.test.ts`](../../src/lib/collab/room-access.test.ts)
 - [`e2e/ui-matrix/document-editor-ui.spec.ts`](../../e2e/ui-matrix/document-editor-ui.spec.ts)
 - [`e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts)

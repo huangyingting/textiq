@@ -1,17 +1,17 @@
 /**
  * Direct contract coverage for `SharePasscodeGate` (#1945).
  *
- * `SharePasscodeGate` is a plain (hookless) function component, so it can be
- * rendered directly with `renderToStaticMarkup` without any module-hook or
- * harness scaffolding. These tests assert the unlock form's hidden field
- * wiring (shareId/mode/returnTo passed straight to the POST target), the
- * passcode input's length constraints sourced from `@/lib/share-passcode`,
- * and the "invalid"/"limited" error-message gating (including the no-error
- * default render).
+ * These tests assert the unlock form's hidden field wiring (shareId/mode/
+ * returnTo passed straight to the POST target), single-flight submission and
+ * pending secret ownership, passcode constraints sourced from
+ * `@/lib/share-passcode`, and the "invalid"/"limited" error-message gating.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+
+import "@/test/react-render-harness";
 
 import {
   MAX_SHARE_PASSCODE_LENGTH,
@@ -21,6 +21,46 @@ import {
 import { SharePasscodeGate } from "./share-passcode-gate";
 
 describe("SharePasscodeGate", () => {
+  test("claims the first native submit synchronously and locks the passcode until navigation", () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        <SharePasscodeGate
+          shareId="share-1"
+          mode="view"
+          returnTo="/share/share-1"
+        />,
+      );
+    });
+
+    try {
+      const form = renderer.root.findByType("form");
+      const onSubmit = form.props.onSubmit as
+        ((event: { preventDefault(): void }) => void) | undefined;
+      assert.ok(onSubmit, "the native POST needs a client submission boundary");
+
+      let firstPrevented = 0;
+      let repeatedPrevented = 0;
+      act(() => {
+        onSubmit({ preventDefault: () => (firstPrevented += 1) });
+        onSubmit({ preventDefault: () => (repeatedPrevented += 1) });
+      });
+
+      assert.equal(firstPrevented, 0);
+      assert.equal(repeatedPrevented, 1);
+      assert.equal(renderer.root.findByType("form").props["aria-busy"], true);
+      assert.equal(
+        renderer.root.findByProps({ name: "passcode" }).props.readOnly,
+        true,
+      );
+      const submit = renderer.root.findByType("button");
+      assert.equal(submit.props.disabled, true);
+      assert.equal(submit.children.join(""), "Unlocking…");
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("renders the unlock form action/method and hidden shareId/mode/returnTo fields", () => {
     const html = renderToStaticMarkup(
       <SharePasscodeGate

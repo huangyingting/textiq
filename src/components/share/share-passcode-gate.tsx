@@ -1,3 +1,7 @@
+"use client";
+
+import { useRef, useState, type FormEvent } from "react";
+
 import {
   MAX_SHARE_PASSCODE_LENGTH,
   MIN_SHARE_PASSCODE_LENGTH,
@@ -16,6 +20,19 @@ export function SharePasscodeGate({
   returnTo: string;
   error?: "invalid" | "limited";
 }) {
+  const submissionClaimedRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (submissionClaimedRef.current) {
+      event.preventDefault();
+      return;
+    }
+
+    submissionClaimedRef.current = true;
+    setSubmitting(true);
+  };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-ds-surface-sunken px-4 py-10">
       <section className="w-full max-w-sm rounded-lg border border-ds-border-subtle bg-ds-surface-base p-6 shadow-ds-raised">
@@ -28,6 +45,8 @@ export function SharePasscodeGate({
         <form
           method="post"
           action="/api/share-passcode/unlock"
+          aria-busy={submitting}
+          onSubmit={handleSubmit}
           className="mt-5 space-y-3"
         >
           <input type="hidden" name="shareId" value={shareId} />
@@ -42,6 +61,7 @@ export function SharePasscodeGate({
               minLength={MIN_SHARE_PASSCODE_LENGTH}
               maxLength={MAX_SHARE_PASSCODE_LENGTH}
               autoComplete="current-password"
+              readOnly={submitting}
               className="mt-1 w-full rounded-md border border-ds-border-subtle bg-ds-surface-sunken px-3 py-2 text-sm text-ds-text-primary outline-none focus:border-ds-border-strong"
             />
           </label>
@@ -54,9 +74,10 @@ export function SharePasscodeGate({
           )}
           <button
             type="submit"
-            className="w-full rounded-md bg-ds-accent px-3 py-2 text-sm font-semibold text-ds-text-on-accent hover:opacity-90"
+            disabled={submitting}
+            className="w-full rounded-md bg-ds-accent px-3 py-2 text-sm font-semibold text-ds-text-on-accent hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
           >
-            Unlock
+            {submitting ? "Unlocking…" : "Unlock"}
           </button>
         </form>
       </section>

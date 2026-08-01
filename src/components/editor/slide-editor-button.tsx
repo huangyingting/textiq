@@ -229,7 +229,11 @@ interface SlideEditorButtonProps {
   iconOnly?: boolean;
 }
 
-export function SlideEditorButton({
+export function SlideEditorButton(props: SlideEditorButtonProps) {
+  return <SlideEditorButtonForDocument key={props.documentId} {...props} />;
+}
+
+function SlideEditorButtonForDocument({
   documentId,
   initialDeckJson,
   deckPort,
