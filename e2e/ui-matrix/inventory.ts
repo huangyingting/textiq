@@ -241,7 +241,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
     owners: ["presentation", "accessibility"],
     coverage:
-      "Shortcut and editor focus restoration, required-profile forced-colors focus and mobile inspector stacking, plus mobile Edit/Add slide geometry, hit testing, and pointer activation.",
+      "Shortcut and editor focus restoration, required-profile forced-colors focus and mobile/tablet inspector stacking, plus mobile Edit/Add slide geometry, hit testing, and pointer activation.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],

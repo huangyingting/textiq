@@ -108,53 +108,62 @@ test.describe("presentation focus and mobile control regressions", () => {
     });
   });
 
-  test("mobile inspector sheet stays above the filmstrip and bottom dock @required-profile", async ({
-    page,
-  }, testInfo) => {
-    const editor = await openSeededSlideEditor(page, 390, 844);
-    await editor.getByRole("button", { name: "Edit slide" }).click();
+  for (const viewport of [
+    { name: "mobile", width: 390, height: 844 },
+    { name: "tablet", width: 834, height: 1112 },
+  ]) {
+    test(`responsive inspector sheet stays above the filmstrip and bottom dock at ${viewport.name} width @required-profile`, async ({
+      page,
+    }, testInfo) => {
+      const editor = await openSeededSlideEditor(
+        page,
+        viewport.width,
+        viewport.height,
+      );
+      await editor.getByRole("button", { name: "Edit slide" }).click();
 
-    const inspector = page.getByRole("dialog", { name: "Slide inspector" });
-    await expect(inspector).toBeVisible();
+      const inspector = page.getByRole("dialog", { name: "Slide inspector" });
+      await expect(inspector).toBeVisible();
 
-    for (const obscuredSurface of [
-      editor.locator('[aria-label="Slide filmstrip"]'),
-      editor.locator('[data-slide-bottom-dock="true"]'),
-    ]) {
-      const inspectorBox = await requiredBox(inspector);
-      const surfaceBox = await requiredBox(obscuredSurface);
-      expect(rectanglesOverlap(inspectorBox, surfaceBox)).toBe(true);
+      for (const obscuredSurface of [
+        editor.locator('[aria-label="Slide filmstrip"]'),
+        editor.locator('[data-slide-bottom-dock="true"]'),
+      ]) {
+        const inspectorBox = await requiredBox(inspector);
+        const surfaceBox = await requiredBox(obscuredSurface);
+        expect(rectanglesOverlap(inspectorBox, surfaceBox)).toBe(true);
 
-      const hit = await obscuredSurface.evaluate((surface) => {
-        const inspector = document.querySelector(
-          '[role="dialog"][aria-label="Slide inspector"]',
-        );
-        const rect = surface.getBoundingClientRect();
-        const topmost = document.elementFromPoint(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-        );
-        return {
-          inspectorOwnsHit: Boolean(
-            inspector && topmost && inspector.contains(topmost),
-          ),
-          topmostLabel:
-            topmost?.getAttribute("aria-label") ??
-            topmost?.textContent?.trim().slice(0, 80) ??
-            topmost?.tagName ??
-            "none",
-        };
+        const hit = await obscuredSurface.evaluate((surface) => {
+          const inspector = document.querySelector(
+            '[role="dialog"][aria-label="Slide inspector"]',
+          );
+          const rect = surface.getBoundingClientRect();
+          const topmost = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return {
+            inspectorOwnsHit: Boolean(
+              inspector && topmost && inspector.contains(topmost),
+            ),
+            topmostLabel:
+              topmost?.getAttribute("aria-label") ??
+              topmost?.textContent?.trim().slice(0, 80) ??
+              topmost?.tagName ??
+              "none",
+          };
+        });
+        expect(
+          hit.inspectorOwnsHit,
+          `topmost element was ${hit.topmostLabel}`,
+        ).toBe(true);
+      }
+
+      await page.screenshot({
+        path: testInfo.outputPath(`${viewport.name}-inspector-layering.png`),
       });
-      expect(
-        hit.inspectorOwnsHit,
-        `topmost element was ${hit.topmostLabel}`,
-      ).toBe(true);
-    }
-
-    await page.screenshot({
-      path: testInfo.outputPath("mobile-inspector-layering.png"),
     });
-  });
+  }
 
   for (const viewport of [
     { width: 390, height: 844 },
