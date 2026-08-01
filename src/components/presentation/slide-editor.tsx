@@ -437,6 +437,7 @@ export function SlideEditor({
   const pkg = themePackage ?? NEUTRAL_THEME_PACKAGE;
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(true);
+  const deckRef = useRef(deck);
   const themeCatalogEntries = useMemo(
     () =>
       mergeThemePackageCatalogEntries([
@@ -479,6 +480,10 @@ export function SlideEditor({
       insertImagePendingRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    deckRef.current = deck;
+  }, [deck]);
 
   const {
     inlineEditNodeId,
@@ -548,6 +553,10 @@ export function SlideEditor({
   );
   const [snapToGuides, setSnapToGuides] = useState(true);
   const [clipboardNodes, setClipboardNodes] = useState<SlideChildNode[]>([]);
+  const clipboardNodesRef = useRef(clipboardNodes);
+  useEffect(() => {
+    clipboardNodesRef.current = clipboardNodes;
+  }, [clipboardNodes]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [brandKitAuthoringOpen, setBrandKitAuthoringOpen] = useState(false);
   const themePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -1022,7 +1031,7 @@ export function SlideEditor({
       ? await onUploadImage(file)
       : { src: await readImageFileAsDataUrl(file) };
     return createDeckWithUploadedImageAsset({
-      deck,
+      deck: deckRef.current,
       upload,
       fileName: file.name,
       fileType: file.type,
@@ -1117,16 +1126,22 @@ export function SlideEditor({
       setToolbarError(null);
       return;
     }
+    const targetSlideId = activeSlide.id;
     const pickResult = await runVisualPickerMutation({
       onPickVisual,
       onPicked: (picked) => {
         if (!mountedRef.current) return;
-        const deckWithAsset = deckWithPickedVisualAsset(deck, picked);
+        const currentDeck = deckRef.current;
+        const targetSlide = currentDeck.slides.find(
+          (slide) => slide.id === targetSlideId,
+        );
+        if (!targetSlide) return;
+        const deckWithAsset = deckWithPickedVisualAsset(currentDeck, picked);
         const node = defaultVisualNode(
-          nextLayeredZIndex(activeSlide, "visual"),
+          nextLayeredZIndex(targetSlide, "visual"),
         );
         if (node.type !== "visual") return;
-        const result = insertNode(deckWithAsset, activeSlide.id, {
+        const result = insertNode(deckWithAsset, targetSlideId, {
           ...node,
           content: {
             ...node.content,
@@ -1152,20 +1167,30 @@ export function SlideEditor({
       setStageAnnouncement("No visual picker is configured for this editor.");
       return;
     }
+    const targetSlideId = activeSlide.id;
+    const targetNodeId = selectedNode.id;
     const pickResult = await runVisualPickerMutation({
       onPickVisual,
       onPicked: (picked) => {
         if (!mountedRef.current) return;
+        const currentDeck = deckRef.current;
+        const targetSlide = currentDeck.slides.find(
+          (slide) => slide.id === targetSlideId,
+        );
+        const targetNode = targetSlide
+          ? findNodeById(targetSlide.children, targetNodeId)
+          : undefined;
+        if (!targetSlide || targetNode?.type !== "visual") return;
         onDeckChange(
           updateNodeContent(
-            deckWithPickedVisualAsset(deck, picked),
-            activeSlide.id,
-            selectedNode.id,
+            deckWithPickedVisualAsset(currentDeck, picked),
+            targetSlideId,
+            targetNodeId,
             visualContentPatchFromPick(picked),
           ),
         );
-        setSelection((s) => setSelectedNodeIds(s, [selectedNode.id]));
-        focusSelectedNodeSoon(selectedNode.id);
+        setSelection((s) => setSelectedNodeIds(s, [targetNodeId]));
+        focusSelectedNodeSoon(targetNodeId);
       },
     });
     if (!mountedRef.current) return;
@@ -1265,14 +1290,20 @@ export function SlideEditor({
 
   async function handlePasteNodes() {
     if (!activeSlide) return;
+    const targetSlideId = activeSlide.id;
     const clipboard = await readTextIqNodeClipboard();
     if (!mountedRef.current) return;
+    const currentDeck = deckRef.current;
+    const targetSlide = currentDeck.slides.find(
+      (slide) => slide.id === targetSlideId,
+    );
+    if (!targetSlide) return;
     const resolved = resolveExternalTextIqNodePaste({
       osPayload: clipboard.textIqPayload,
       hasImage: clipboard.image !== null,
       html: clipboard.html,
       plainText: clipboard.plainText,
-      memoryNodes: clipboardNodes,
+      memoryNodes: clipboardNodesRef.current,
     });
     if (resolved.source === "invalid") {
       setStageAnnouncement("TextIQ clipboard payload could not be pasted.");
@@ -1301,12 +1332,16 @@ export function SlideEditor({
           );
           return;
         }
+        const latestTargetSlide = uploadedImage.deckWithAsset.slides.find(
+          (slide) => slide.id === targetSlideId,
+        );
+        if (!latestTargetSlide) return;
         const result = insertNode(
           uploadedImage.deckWithAsset,
-          activeSlide.id,
+          targetSlideId,
           clipboardImageNode(
             { assetId: uploadedImage.assetId, alt: uploadedImage.alt },
-            nextLayeredZIndex(activeSlide, "image"),
+            nextLayeredZIndex(latestTargetSlide, "image"),
           ),
         );
         onDeckChange(result.deck);
@@ -1328,11 +1363,11 @@ export function SlideEditor({
       if (!rawText) return;
       const node = clipboardTextNode(
         rawText,
-        nextLayeredZIndex(activeSlide, "text"),
+        nextLayeredZIndex(targetSlide, "text"),
         { html: resolved.source === "html" },
       );
       if (!node) return;
-      const result = insertNode(deck, activeSlide.id, node);
+      const result = insertNode(currentDeck, targetSlideId, node);
       onDeckChange(result.deck);
       setSelection((s) => setSelectedNodeIds(s, [result.nodeId]));
       focusSelectedNodeSoon(result.nodeId);
@@ -1341,7 +1376,7 @@ export function SlideEditor({
       return;
     }
     if (resolved.nodes.length === 0) return;
-    const result = pasteNodes(deck, activeSlide.id, resolved.nodes);
+    const result = pasteNodes(currentDeck, targetSlideId, resolved.nodes);
     onDeckChange(result.deck);
     if (result.nodeIds.length > 0) {
       setSelection((s) => setSelectedNodeIds(s, result.nodeIds));
@@ -1393,11 +1428,11 @@ export function SlideEditor({
     const result = cutNodes(deck, activeSlide.id, selectedIds);
     if (result.nodes.length === 0) return;
     setClipboardNodes(result.nodes);
+    applySelectionDeletion(selectedIds, result.deck);
     const writeResult = await writeTextIqNodesToClipboard(result.nodes, {
       renderPng: selectedNodesPngRenderer(selectedIds),
     });
     if (!mountedRef.current) return;
-    applySelectionDeletion(selectedIds, result.deck);
     setStageAnnouncement(
       clipboardWriteAnnouncement("Cut", result.nodes.length, writeResult),
     );

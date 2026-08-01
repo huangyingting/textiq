@@ -240,6 +240,16 @@ export and pending visual picker: unmounting or changing documents invalidates
 late renderer results before they can download a file, and closes unresolved
 picker requests without updating a detached surface.
 
+Stage clipboard mutations preserve the newest deck snapshot across browser
+clipboard latency. Cut removes the selected nodes synchronously before its
+best-effort system clipboard write, so a late write can only update the live
+announcement. Paste retains the initiating slide identity but applies the
+resolved clipboard payload to the latest deck value, preserving edits that
+arrive while clipboard permission or content reads are pending.
+Visual insertion and replacement follow the same rule: they retain their
+initiating slide and node identities, then merge the selected visual into the
+latest deck snapshot when the picker settles.
+
 Fine-grained selected-element formatting stays out of the top toolbar. The
 canvas popover and inspector continue to own text style, object-specific
 editing, arrangement, effects, notes, layers, and detailed source review for the
@@ -549,5 +559,6 @@ refs must carry explicit `blockKind`.
 - [`src/lib/presentation/stage-chrome.test.ts`](../../src/lib/presentation/stage-chrome.test.ts)
 - [`src/lib/presentation/slide-editor-collaboration-state.test.ts`](../../src/lib/presentation/slide-editor-collaboration-state.test.ts)
 - [`src/components/presentation/slide-canvas-render.test.ts`](../../src/components/presentation/slide-canvas-render.test.ts)
+- [`src/components/presentation/slide-editor-keyboard-command-path.test.ts`](../../src/components/presentation/slide-editor-keyboard-command-path.test.ts)
 - [`src/lib/presentation/slide-autosave-scheduler.test.ts`](../../src/lib/presentation/slide-autosave-scheduler.test.ts)
 - [`e2e/presentation/slides-smoke.spec.ts`](../../e2e/presentation/slides-smoke.spec.ts)

@@ -10,10 +10,15 @@ import {
 } from "react-test-renderer";
 
 import type { Deck, SlideChildNode } from "@/lib/presentation/schema";
+import type {
+  SlideEditorProps,
+  SlideEditorVisualPickResult,
+} from "./slide-editor";
 import {
   buildDeck,
   buildShapeNode,
   buildSlide,
+  buildVisualNode,
 } from "@/test/builders/presentation-deck";
 
 const require = createRequire(import.meta.url);
@@ -62,6 +67,71 @@ type KeyboardEventStub = {
   target: EventTarget | null;
   defaultPrevented: boolean;
 };
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
+class TestClipboardItem {
+  readonly types: string[];
+
+  constructor(readonly data: Record<string, Blob>) {
+    this.types = Object.keys(data);
+  }
+
+  async getType(type: string): Promise<Blob> {
+    return this.data[type] ?? new Blob();
+  }
+}
+
+function installClipboard(
+  clipboard: Partial<{
+    read: () => Promise<ClipboardItem[]>;
+    write: (items: ClipboardItem[]) => Promise<void>;
+  }>,
+): () => void {
+  const previousNavigator = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "navigator",
+  );
+  const previousClipboardItem = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "ClipboardItem",
+  );
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    writable: true,
+    value: {
+      clipboard,
+      permissions: {
+        query: async () => ({ state: "granted" }),
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "ClipboardItem", {
+    configurable: true,
+    writable: true,
+    value: TestClipboardItem,
+  });
+
+  return () => {
+    if (previousNavigator) {
+      Object.defineProperty(globalThis, "navigator", previousNavigator);
+    } else {
+      delete (globalThis as { navigator?: unknown }).navigator;
+    }
+    if (previousClipboardItem) {
+      Object.defineProperty(globalThis, "ClipboardItem", previousClipboardItem);
+    } else {
+      delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
+    }
+  };
+}
 
 function shapeNode(
   id: string,
@@ -123,6 +193,21 @@ function rotationDeck(): Deck {
     buildSlide(
       "content",
       [shapeNode("box", "Box", { x: 10, y: 10, w: 20, h: 10 }, 1)],
+      { id: "slide-1" },
+    ),
+  ]);
+}
+
+function visualDeck(): Deck {
+  return buildDeck([
+    buildSlide(
+      "content",
+      [
+        buildVisualNode({
+          id: "visual-node",
+          content: { visualId: "original-visual" },
+        }),
+      ],
       { id: "slide-1" },
     ),
   ]);
@@ -216,18 +301,24 @@ function installBrowserGlobals(): () => void {
   };
 }
 
-async function renderSlideEditor(initialDeck: Deck) {
+async function renderSlideEditor(
+  initialDeck: Deck,
+  overrides: Pick<SlideEditorProps, "onPickVisual"> = {},
+) {
   const SlideEditor = await getSlideEditor();
   const restore = installBrowserGlobals();
   let currentDeck = initialDeck;
   const deckChanges: Deck[] = [];
+  let setDeckFromTest: ((nextDeck: Deck) => void) | undefined;
 
   function StatefulSlideEditor() {
     const [deck, setDeck] = useState(initialDeck);
+    setDeckFromTest = setDeck;
     currentDeck = deck;
     return createElement(SlideEditor, {
       documentId: "keyboard-command-path",
       deck,
+      ...overrides,
       onDeckChange: (nextDeck) => {
         deckChanges.push(nextDeck);
         currentDeck = nextDeck;
@@ -248,6 +339,10 @@ async function renderSlideEditor(initialDeck: Deck) {
     deckChanges,
     get currentDeck() {
       return currentDeck;
+    },
+    updateDeck(update: (deck: Deck) => Deck) {
+      assert.ok(setDeckFromTest, "expected the stateful editor to be mounted");
+      act(() => setDeckFromTest?.(update(currentDeck)));
     },
     press(key: string, options: Partial<KeyboardEventStub> = {}) {
       const event = keyEvent(key, options);
@@ -311,6 +406,291 @@ function findNode(deck: Deck, id: string): SlideChildNode {
 }
 
 describe("SlideEditor keyboard command path", () => {
+  test("a visual replacement settling after a newer deck update preserves the newer content", async () => {
+    const visualPick = deferred<SlideEditorVisualPickResult | undefined>();
+    const editor = await renderSlideEditor(visualDeck(), {
+      onPickVisual: () => visualPick.promise,
+    });
+
+    try {
+      editor.press("Tab");
+      const [replaceVisualSurface] = editor.renderer.root.findAll(
+        (node) => typeof node.props.onReplaceVisual === "function",
+      );
+      assert.ok(
+        replaceVisualSurface,
+        "expected a replace-visual command surface",
+      );
+      act(() => {
+        void replaceVisualSurface.props.onReplaceVisual();
+      });
+
+      editor.updateDeck((deck) => ({
+        ...deck,
+        slides: deck.slides.map((slide) =>
+          slide.id === "slide-1"
+            ? {
+                ...slide,
+                children: [
+                  ...slide.children,
+                  shapeNode(
+                    "collaborator-node",
+                    "Collaborator node",
+                    { x: 50, y: 50, w: 20, h: 10 },
+                    2,
+                  ),
+                ],
+              }
+            : slide,
+        ),
+      }));
+
+      await act(async () => {
+        visualPick.resolve({ visualId: "replacement-visual" });
+        await visualPick.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "collaborator-node",
+        ),
+        true,
+      );
+      const replaced = editor.currentDeck.slides[0]?.children.find(
+        (node) => node.id === "visual-node",
+      );
+      assert.equal(replaced?.type, "visual");
+      if (replaced?.type === "visual") {
+        assert.equal(replaced.content.visualId, "replacement-visual");
+      }
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  test("a visual pick settling after a newer deck update preserves the newer content", async () => {
+    const visualPick = deferred<SlideEditorVisualPickResult | undefined>();
+    let visualPicks = 0;
+    const editor = await renderSlideEditor(rotationDeck(), {
+      onPickVisual: () => {
+        visualPicks += 1;
+        return visualPick.promise;
+      },
+    });
+
+    try {
+      const [insertVisualSurface] = editor.renderer.root.findAll(
+        (node) => typeof node.props.onInsertVisual === "function",
+      );
+      assert.ok(
+        insertVisualSurface,
+        "expected an insert-visual command surface",
+      );
+      act(() => insertVisualSurface.props.onInsertVisual());
+      assert.equal(visualPicks, 1);
+
+      editor.updateDeck((deck) => ({
+        ...deck,
+        slides: deck.slides.map((slide) =>
+          slide.id === "slide-1"
+            ? {
+                ...slide,
+                children: [
+                  ...slide.children,
+                  shapeNode(
+                    "collaborator-node",
+                    "Collaborator node",
+                    { x: 50, y: 50, w: 20, h: 10 },
+                    2,
+                  ),
+                ],
+              }
+            : slide,
+        ),
+      }));
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "collaborator-node",
+        ),
+        true,
+      );
+
+      await act(async () => {
+        visualPick.resolve({ visualId: "picked-visual" });
+        await visualPick.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "collaborator-node",
+        ),
+        true,
+      );
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) =>
+            node.type === "visual" && node.content.visualId === "picked-visual",
+        ),
+        true,
+      );
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  test("a cut settling after a newer deck update preserves the newer content", async () => {
+    const clipboardWrite = deferred<void>();
+    let clipboardWrites = 0;
+    const restoreClipboard = installClipboard({
+      write: () => {
+        clipboardWrites += 1;
+        return clipboardWrite.promise;
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      editor.press("Tab");
+      const cutEvent = editor.press("x", { ctrlKey: true });
+      assert.equal(cutEvent.defaultPrevented, true);
+
+      await act(async () => {
+        for (
+          let attempt = 0;
+          attempt < 10 && clipboardWrites === 0;
+          attempt += 1
+        ) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(clipboardWrites, 1);
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "box",
+        ),
+        false,
+      );
+
+      editor.updateDeck((deck) => ({
+        ...deck,
+        slides: deck.slides.map((slide) =>
+          slide.id === "slide-1"
+            ? {
+                ...slide,
+                children: [
+                  ...slide.children,
+                  shapeNode(
+                    "collaborator-node",
+                    "Collaborator node",
+                    { x: 50, y: 50, w: 20, h: 10 },
+                    2,
+                  ),
+                ],
+              }
+            : slide,
+        ),
+      }));
+
+      await act(async () => {
+        clipboardWrite.resolve();
+        await clipboardWrite.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "box",
+        ),
+        false,
+      );
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "collaborator-node",
+        ),
+        true,
+      );
+    } finally {
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
+  test("a paste settling after a newer deck update preserves the newer content", async () => {
+    const clipboardRead = deferred<ClipboardItem[]>();
+    let clipboardReads = 0;
+    const restoreClipboard = installClipboard({
+      read: () => {
+        clipboardReads += 1;
+        return clipboardRead.promise;
+      },
+    });
+    const editor = await renderSlideEditor(rotationDeck());
+
+    try {
+      const pasteEvent = editor.press("v", { ctrlKey: true });
+      assert.equal(pasteEvent.defaultPrevented, true);
+
+      await act(async () => {
+        for (
+          let attempt = 0;
+          attempt < 10 && clipboardReads === 0;
+          attempt += 1
+        ) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      });
+      assert.equal(clipboardReads, 1);
+
+      editor.updateDeck((deck) => ({
+        ...deck,
+        slides: deck.slides.map((slide) =>
+          slide.id === "slide-1"
+            ? {
+                ...slide,
+                children: [
+                  ...slide.children,
+                  shapeNode(
+                    "collaborator-node",
+                    "Collaborator node",
+                    { x: 50, y: 50, w: 20, h: 10 },
+                    2,
+                  ),
+                ],
+              }
+            : slide,
+        ),
+      }));
+
+      await act(async () => {
+        clipboardRead.resolve([
+          new TestClipboardItem({
+            "text/plain": new Blob(["Pasted text"], { type: "text/plain" }),
+          }) as unknown as ClipboardItem,
+        ]);
+        await clipboardRead.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      });
+
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.id === "collaborator-node",
+        ),
+        true,
+      );
+      assert.equal(
+        editor.currentDeck.slides[0]?.children.some(
+          (node) => node.type === "text",
+        ),
+        true,
+      );
+    } finally {
+      editor.cleanup();
+      restoreClipboard();
+    }
+  });
+
   test("creates a connector from c and Enter through the editor root keydown handler", async () => {
     const editor = await renderSlideEditor(connectorDeck());
     try {
