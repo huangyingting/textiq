@@ -132,7 +132,9 @@ the same controlled editor surface. The bottom dock also compacts for narrow
 viewports: rail toggle, Notes, and zoom stay reachable; source, save,
 diagnostics, presence, and mode details collapse into a keyboard-reachable
 status popover only when they carry useful information. The dock applies bottom
-safe-area padding when pinned to the viewport edge.
+safe-area padding when pinned to the viewport edge. While the inspector sheet
+is open, its modal stacking context owns the lower viewport above the slide rail
+and bottom dock so underlying controls cannot show through or intercept input.
 Desktop and mobile status surfaces announce save state with live regions:
 steady-state save labels are polite updates, and save failures are assertive.
 

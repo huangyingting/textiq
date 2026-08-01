@@ -2940,7 +2940,9 @@ export function SlideEditor({
       {/* ------------------------------------------------------------------ */}
       {/* Editor surface (stage + inspector — rail moved to bottom filmstrip)  */}
       {/* ------------------------------------------------------------------ */}
-      <div className="relative isolate flex min-h-0 flex-1 overflow-hidden bg-ds-surface-recessed">
+      <div
+        className={`relative isolate flex min-h-0 flex-1 overflow-hidden bg-ds-surface-recessed${effectiveInspectorSheetOpen ? " z-modal" : ""}`}
+      >
         {/* ------------------------------------------------------------------ */}
         {/* Main Stage                                                          */}
         {/* ------------------------------------------------------------------ */}
