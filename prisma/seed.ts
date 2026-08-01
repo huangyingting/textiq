@@ -2,11 +2,9 @@ import "dotenv/config";
 
 import { Prisma } from "../src/generated/prisma/client";
 import { markdownToLexicalStateObject } from "../src/lib/content/from-markdown";
-import {
-  createDocumentWithCanonicalContent,
-  updateDocumentWithCanonicalContent,
-} from "../src/lib/document/document-write-port";
+import { createDocumentWithCanonicalContent } from "../src/lib/document/document-write-port";
 import { buildSeedContentJson } from "../src/lib/lexical/seed-content";
+import { syncSeededDemoDocument } from "../src/lib/onboarding/seed-demo-document-state";
 import { FIXTURES } from "../src/lib/visual/fixtures";
 import {
   VISUAL_KIND_TO_PRISMA,
@@ -95,8 +93,8 @@ async function main() {
     demoVisual.id,
   ) as unknown as Prisma.InputJsonValue;
 
-  await updateDocumentWithCanonicalContent(prisma, {
-    where: { id: demoDocument.id },
+  await syncSeededDemoDocument(prisma, {
+    documentId: demoDocument.id,
     contentSnapshot: contentJsonValue,
   });
 
