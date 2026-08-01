@@ -57,6 +57,12 @@ Share, embed, present, and asset requests use the shared access-decision
 taxonomy from [../security/access-and-sharing.md](../security/access-and-sharing.md).
 Missing shares return concealed 404 decisions. Disabled or expired shares return
 the denial semantics selected by the share-access policy.
+Mode policy is evaluated before the optional passcode challenge: disabling
+presentation or embedding keeps that route concealed as 404 even when the
+share link otherwise remains active. An enabled protected route renders the
+shared passcode gate with its concrete `view`, `present`, or `embed` mode; a
+successful unlock returns only to the validated requested path. The unlock
+cookie stays bound to the share id and current passcode hash.
 
 Browser-rendered denied share, embed, and present pages must show the shared
 not-found fallback (`404` / `Page not found`) while keeping the response status
@@ -80,6 +86,10 @@ references missing visual ids silently.
 
 Public viewers then render through the same presentation primitives documented
 in [../presentation/rendering-and-export.md](../presentation/rendering-and-export.md).
+Public presentation navigation is owned by the mounted React viewer. Its
+keyboard and hash listeners are registered through lifecycle-aware hooks and
+are removed when client-side navigation leaves the present route, so slide
+shortcuts cannot intercept keys or rewrite hashes on the destination page.
 
 The read-only share page enhances each rendered visual into a semantic dialog
 trigger. Pointer click, Enter, and Space open an enlarged clone; Escape,
@@ -116,6 +126,9 @@ decision.
 6. Public presentation output reconciles deck refs with available visuals.
 7. Share-page visuals expose keyboard-operable dialog semantics and restore
    focus and scrolling after dismissal.
+8. Public presentation keyboard and hash listeners do not outlive the viewer.
+9. Disabled public modes are concealed before passcode challenge, and unlock
+   redirects stay on validated share, present, or embed paths.
 
 ## Primary Tests
 

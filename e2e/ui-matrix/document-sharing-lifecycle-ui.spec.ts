@@ -40,6 +40,30 @@ async function expectPublicDocument(
   await expect(page.getByText("Read-only", { exact: true })).toBeVisible();
 }
 
+async function unlockPasscodeRoute({
+  page,
+  path,
+  passcode,
+  mode,
+}: {
+  page: Page;
+  path: string;
+  passcode: string;
+  mode: "view" | "embed" | "present";
+}): Promise<void> {
+  const response = await page.goto(path);
+  expect(response?.status()).toBe(200);
+  await expect(
+    page.getByRole("heading", { name: "Passcode required" }),
+  ).toBeVisible();
+  await expect(page.locator('input[name="mode"]')).toHaveValue(mode);
+  await page.getByLabel("Passcode").fill(passcode);
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === path && url.search === "",
+  );
+}
+
 async function installShareBrowserCapture(page: Page): Promise<void> {
   await page.evaluate(() => {
     const browserWindow = window as typeof window & {
@@ -363,14 +387,73 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await expectPublicDocument(publicPage, fixture.title, fixture.content);
 
       const sharePath = new URL(initialShareUrl).pathname;
-      const embedResponse = await publicPage.goto(
-        sharePath.replace("/share/", "/embed/"),
-      );
+      const embedPath = sharePath.replace("/share/", "/embed/");
+      const presentPath = sharePath.replace("/share/", "/present/");
+      const presentEmbedPath = `${presentPath}/embed`;
+      const embedResponse = await publicPage.goto(embedPath);
       expect(embedResponse?.status()).toBe(404);
-      const presentResponse = await publicPage.goto(
-        sharePath.replace("/share/", "/present/"),
-      );
+      const presentResponse = await publicPage.goto(presentPath);
       expect(presentResponse?.status()).toBe(404);
+      const presentEmbedResponse = await publicPage.goto(presentEmbedPath);
+      expect(presentEmbedResponse?.status()).toBe(404);
+
+      await dialog.getByRole("switch", { name: "Allow presentation" }).click();
+      await mutationExpect(
+        dialog.getByRole("switch", { name: "Allow presentation" }),
+      ).toHaveAttribute("aria-checked", "true");
+
+      await anonymousContext.clearCookies();
+      await unlockPasscodeRoute({
+        page: publicPage,
+        path: presentPath,
+        passcode: fixture.passcode,
+        mode: "present",
+      });
+      const presentRegion = publicPage.getByRole("region", {
+        name: new RegExp(`^Presentation: ${fixture.title}$`),
+      });
+      await expect(presentRegion).toBeVisible({ timeout: 20_000 });
+      await expect(presentRegion.getByText(fixture.content)).toBeVisible();
+
+      await anonymousContext.clearCookies();
+      const independentlyDeniedEmbed = await publicPage.goto(presentEmbedPath);
+      expect(independentlyDeniedEmbed?.status()).toBe(404);
+
+      await dialog.getByRole("switch", { name: "Allow embedding" }).click();
+      await mutationExpect(
+        dialog.getByRole("switch", { name: "Allow embedding" }),
+      ).toHaveAttribute("aria-checked", "true");
+
+      await anonymousContext.clearCookies();
+      await unlockPasscodeRoute({
+        page: publicPage,
+        path: presentEmbedPath,
+        passcode: fixture.passcode,
+        mode: "embed",
+      });
+      const presentEmbedRegion = publicPage.getByRole("region", {
+        name: new RegExp(`^Presentation: ${fixture.title}$`),
+      });
+      await expect(presentEmbedRegion).toBeVisible({ timeout: 20_000 });
+      await expect(presentEmbedRegion.getByText(fixture.content)).toBeVisible();
+      await expect(publicPage.getByLabel("Presentation controls")).toHaveCount(
+        0,
+      );
+
+      await anonymousContext.clearCookies();
+      await unlockPasscodeRoute({
+        page: publicPage,
+        path: embedPath,
+        passcode: fixture.passcode,
+        mode: "embed",
+      });
+      await expect(publicPage.getByText(fixture.content)).toBeVisible();
+      await expect(
+        publicPage.getByRole("heading", { name: fixture.title }),
+      ).toHaveCount(0);
+      await expect(
+        publicPage.getByText("Read-only", { exact: true }),
+      ).toHaveCount(0);
 
       await dialog.getByRole("button", { name: "Clear" }).click();
       await mutationExpect(

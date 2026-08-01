@@ -34,6 +34,42 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
+  test("public present keyboard listeners release after client-side navigation", async ({
+    page,
+  }) => {
+    const response = await page.goto(profilePresentPath());
+    expect(response?.status()).toBe(200);
+    await expect(
+      page.getByRole("region", { name: /^Presentation/ }),
+    ).toBeVisible({ timeout: 20_000 });
+
+    const attribution = page.getByRole("link", {
+      name: "Made with TextIQ — create your own document",
+    });
+    await expect(attribution).toBeVisible();
+    await attribution.evaluate((link) => link.removeAttribute("target"));
+    await attribution.click();
+
+    await expect(page).toHaveURL(/\/signup$/);
+    await expect(
+      page.getByRole("heading", { name: "Create your account" }),
+    ).toBeVisible();
+
+    const keyResult = await page.evaluate(() => {
+      const event = new KeyboardEvent("keydown", {
+        key: " ",
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      return {
+        defaultPrevented: event.defaultPrevented,
+        hash: window.location.hash,
+      };
+    });
+    expect(keyResult).toEqual({ defaultPrevented: false, hash: "" });
+  });
+
   test("presentation embed route suppresses top HUD chrome and renders the first slide", async ({
     page,
   }) => {
