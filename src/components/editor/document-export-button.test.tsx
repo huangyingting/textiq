@@ -152,6 +152,22 @@ function mountButton(editor: LexicalEditor, props: Props): ReactTestRenderer {
   return renderer;
 }
 
+function updateButton(
+  renderer: ReactTestRenderer,
+  editor: LexicalEditor,
+  props: Props,
+): void {
+  act(() => {
+    renderer.update(
+      createElement(
+        LexicalComposerContext.Provider,
+        { value: composerContextFor(editor) },
+        createElement(DocumentExportButton, props),
+      ),
+    );
+  });
+}
+
 /** Recursively flattens a `ReactTestInstance` subtree into visible text. */
 function textOf(node: ReactTestInstance | string | number): string {
   if (typeof node === "string" || typeof node === "number") {
@@ -575,6 +591,83 @@ describe("DocumentExportButton", () => {
     } finally {
       if (renderer.toJSON() !== null) act(() => renderer.unmount());
       restoreTelemetry();
+      globalThis.fetch = originalFetch;
+      restoreDom();
+    }
+  });
+
+  test("switching documents invalidates a pending PPTX fetch and unlocks the replacement export control", async () => {
+    const restoreDom = installFakeDom();
+    const oldFetch = createDeferred<{
+      ok: false;
+      deckJson: null;
+      revisionToken: null;
+      error: string;
+      failure: { code: "document_not_found"; retryable: false };
+    }>();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ entitlements: getEntitlements("pro") }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    const editor = makeEditor();
+    const fetchedDocumentIds: string[] = [];
+    const deckPort = stubDeckPort((documentId) => {
+      fetchedDocumentIds.push(documentId);
+      return oldFetch.promise;
+    });
+    const renderer = mountButton(
+      editor,
+      baseProps({ documentId: "doc-old", deckPort }),
+    );
+    try {
+      await act(async () => {
+        await waitForAsyncDrain();
+      });
+      globalThis.fetch = originalFetch;
+
+      act(() => findExportButton(renderer).props.onClick());
+      let settled!: Promise<void>;
+      act(() => {
+        settled = findPptxMenuItem(renderer).props.onClick();
+      });
+      assert.deepEqual(fetchedDocumentIds, ["doc-old"]);
+      assert.equal(findExportButton(renderer).props.disabled, true);
+
+      updateButton(
+        renderer,
+        editor,
+        baseProps({
+          documentId: "doc-new",
+          documentTitle: "Replacement document",
+          deckPort,
+        }),
+      );
+
+      assert.equal(findExportButton(renderer).props.disabled, false);
+      assert.equal(textOf(findExportButton(renderer)), "Export");
+
+      oldFetch.resolve({
+        ok: false,
+        deckJson: null,
+        revisionToken: null,
+        error: "old document disappeared",
+        failure: { code: "document_not_found", retryable: false },
+      });
+      await act(async () => {
+        await settled;
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        renderer.root.findAll((instance) => instance.props.role === "alert")
+          .length,
+        0,
+      );
+      assert.equal(findExportButton(renderer).props.disabled, false);
+    } finally {
+      act(() => renderer.unmount());
       globalThis.fetch = originalFetch;
       restoreDom();
     }

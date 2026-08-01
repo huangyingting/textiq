@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { createElement } from "react";
 import { act, type ReactTestRenderer } from "react-test-renderer";
+import { LexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
 import {
   $getRoot,
@@ -30,7 +31,10 @@ import {
   installFakeDom,
   makeHeadlessEditor,
   mountWithComposer,
+  composerContextFor,
+  createDeferred,
   unmount,
+  waitForAsyncDrain,
 } from "@/test/lexical-component-harness";
 
 import { ImportPlugin } from "./import-plugin";
@@ -73,6 +77,36 @@ function findDialog(renderer: ReactTestRenderer) {
   return renderer.root.findAll(
     (instance) => instance.type === "div" && instance.props.role === "dialog",
   );
+}
+
+function findFileInput(renderer: ReactTestRenderer) {
+  return renderer.root.findByProps({
+    "aria-label": "Import document file",
+  });
+}
+
+function findToolbarImportButton(renderer: ReactTestRenderer) {
+  return renderer.root.find(
+    (instance) =>
+      instance.type === "button" && instance.props["aria-label"] === "Import",
+  );
+}
+
+function updatePlugin(
+  renderer: ReactTestRenderer,
+  editor: LexicalEditor,
+  documentId: string,
+  importFile: Parameters<typeof ImportPlugin>[0]["importFile"],
+) {
+  act(() => {
+    renderer.update(
+      createElement(
+        LexicalComposerContext.Provider,
+        { value: composerContextFor(editor) },
+        createElement(ImportPlugin, { documentId, importFile }),
+      ),
+    );
+  });
 }
 
 function triggerImport(renderer: ReactTestRenderer, markdown: string) {
@@ -257,5 +291,66 @@ describe("ImportPlugin", () => {
 
     assert.equal(rootText(editor), "Existing content");
     assert.equal(findDialog(renderer as ReactTestRenderer).length, 0);
+  });
+
+  test("switching documents invalidates a pending parse before it can lock or replace the new editor", async () => {
+    restoreDom = installFakeDom();
+    const editor = makeEditor();
+    const oldParse = createDeferred<{
+      ok: true;
+      data: { markdown: string };
+    }>();
+    const parsedDocumentIds: string[] = [];
+    const parseImportFile = (documentId: string) => {
+      parsedDocumentIds.push(documentId);
+      return oldParse.promise;
+    };
+    renderer = mountWithComposer(
+      editor,
+      createElement(ImportPlugin, {
+        documentId: "doc-old",
+        importFile: parseImportFile,
+      }),
+    );
+
+    const target = {
+      files: [new File(["old"], "old.md", { type: "text/markdown" })],
+      value: "old.md",
+    };
+    let settled!: Promise<void>;
+    act(() => {
+      settled = findFileInput(renderer as ReactTestRenderer).props.onChange({
+        target,
+      });
+    });
+    assert.deepEqual(parsedDocumentIds, ["doc-old"]);
+    assert.equal(
+      findToolbarImportButton(renderer as ReactTestRenderer).props.disabled,
+      true,
+    );
+
+    updatePlugin(renderer, editor, "doc-new", async (documentId) => {
+      parsedDocumentIds.push(documentId);
+      return { ok: true, data: { markdown: "# New" } };
+    });
+
+    assert.equal(
+      findToolbarImportButton(renderer as ReactTestRenderer).props.disabled,
+      false,
+    );
+    assert.equal(rootText(editor), "");
+
+    oldParse.resolve({ ok: true, data: { markdown: "# Stale old import" } });
+    await act(async () => {
+      await settled;
+      await waitForAsyncDrain();
+    });
+
+    assert.equal(rootText(editor), "");
+    assert.equal(findDialog(renderer as ReactTestRenderer).length, 0);
+    assert.equal(
+      findToolbarImportButton(renderer as ReactTestRenderer).props.disabled,
+      false,
+    );
   });
 });

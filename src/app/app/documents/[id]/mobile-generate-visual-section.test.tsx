@@ -467,6 +467,65 @@ test("a selection move during generation keeps the candidate bound to its origin
   }
 });
 
+test("a failed regeneration keeps prior candidates bound to their original source block and text", async () => {
+  const editor = makeEditor();
+  const { firstParagraphKey, secondParagraphKey, secondTextKey } =
+    selectFirstOfTwoParagraphs(editor);
+  const { renderer, unmount } = mount(editor);
+
+  try {
+    editor.focus = (() => undefined) as typeof editor.focus;
+    stubFetch(async () =>
+      fakeResponse(200, { candidates: [FIXTURES.flowchart] }),
+    );
+    await act(async () => {
+      findButton(renderer).props.onClick();
+      await flush();
+    });
+
+    act(() => {
+      editor.update(
+        () => {
+          const secondText = $getNodeByKey(secondTextKey);
+          assert.ok($isTextNode(secondText));
+          secondText.select(0, secondText.getTextContentSize());
+        },
+        { discrete: true },
+      );
+    });
+
+    stubFetch(async () => fakeResponse(500, { error: "Generation failed" }));
+    await act(async () => {
+      findButton(renderer).props.onClick();
+      await flush();
+    });
+
+    const priorCandidate = renderer.root.findByProps({
+      "aria-label": "Select variation 1 of 1",
+    });
+    await act(async () => {
+      priorCandidate.props.onClick();
+      await flush();
+    });
+
+    editor.getEditorState().read(() => {
+      const first = $getNodeByKey(firstParagraphKey);
+      const second = $getNodeByKey(secondParagraphKey);
+      const inserted = first?.getNextSibling();
+      assert.ok(
+        inserted && $isVisualNode(inserted),
+        "expected the prior candidate after its original source block",
+      );
+      assert.equal(second?.getNextSibling(), null);
+      if (inserted && $isVisualNode(inserted)) {
+        assert.equal(inserted.getVisual().sourceText, "First source block");
+      }
+    });
+  } finally {
+    unmount();
+  }
+});
+
 test("a deleted source block leaves recoverable feedback instead of discarding the candidate", async () => {
   const editor = makeEditor();
   const { firstParagraphKey, secondParagraphKey, secondTextKey } =

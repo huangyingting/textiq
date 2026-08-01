@@ -73,18 +73,24 @@ function ImportConfirmDialog({
  * import itself is tagged so autosave persists it — see
  * `useInsertImportedMarkdown`.
  */
-export function ImportPlugin({
-  documentId,
-  importFile: parseImportFile,
-  iconOnly = false,
-}: {
+interface ImportPluginProps {
   documentId: string;
   importFile: (
     documentId: string,
     file: File,
   ) => Promise<ImportActionResult<{ markdown: string }>>;
   iconOnly?: boolean;
-}) {
+}
+
+export function ImportPlugin(props: ImportPluginProps) {
+  return <ImportPluginForDocument key={props.documentId} {...props} />;
+}
+
+function ImportPluginForDocument({
+  documentId,
+  importFile: parseImportFile,
+  iconOnly = false,
+}: ImportPluginProps) {
   const [editor] = useLexicalComposerContext();
   const insertMarkdown = useInsertImportedMarkdown();
   const importTriggerRef = useRef<HTMLButtonElement>(null);

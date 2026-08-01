@@ -450,7 +450,9 @@ The top editor chrome owns whole-document import and export workflows:
   parse failures, transport failures, and editor-apply failures retain direct
   retry and dismiss controls. Unmounting the toolbar invalidates a pending
   parse, preventing its late result from mutating a detached editor or emitting
-  false settlement telemetry.
+  false settlement telemetry. The owning `ImportPlugin` is keyed by document,
+  so switching documents also clears pending upload/confirmation state and
+  prevents an old parse from replacing the new editor.
 - [`DocumentExportButton`](../../src/components/editor/document-export-button.tsx)
   owns PDF, PPTX, infographic PNG, and infographic PDF output. All formats share
   one synchronous export boundary, so duplicate or competing menu activation
@@ -459,7 +461,10 @@ The top editor chrome owns whole-document import and export workflows:
   dismissible feedback and release the boundary for retry. Unmounting the
   toolbar invalidates the active export after any pending fetch, dynamic
   renderer load, font load, or render step; late work cannot continue into a
-  download, publish settlement telemetry, or update detached UI state.
+  download, publish settlement telemetry, or update detached UI state. The
+  boundary is also scoped to document identity: switching documents remounts
+  an idle export control immediately, and late work from the prior document
+  cannot lock or publish feedback into the replacement.
 - PPTX export asks the injected deck port for the freshest saved deck and uses
   the page-load deck only as the documented fallback. Next.js redirect and
   not-found control flow from import/export ports is rethrown to the framework;
@@ -581,6 +586,8 @@ Tests live next to the code they cover as `*.test.ts`, e.g.:
 - [`editor-context.test.ts`](../../src/lib/lexical/editor-context.test.ts) — selection derivation
 - [`text-formatting.test.ts`](../../src/lib/lexical/text-formatting.test.ts) — format commands at the document layer
 - [`insert-visual.test.ts`](../../src/lib/lexical/insert-visual.test.ts) — deterministic insert in a headless editor
+- [`import-plugin.test.tsx`](../../src/app/app/documents/%5Bid%5D/import-plugin.test.tsx) — import confirmation and document-identity ownership
+- [`document-export-button.test.tsx`](../../src/components/editor/document-export-button.test.tsx) — export operation and document-identity ownership
 - [`visual-edit-roundtrip.test.ts`](../../src/lib/lexical/visual-edit-roundtrip.test.ts) — transform → `setVisual` → serialize round-trip
 - [`transforms.style.test.ts`](../../src/lib/visual/transforms.style.test.ts), [`transforms.kind.test.ts`](../../src/lib/visual/transforms.kind.test.ts), [`schema.test.ts`](../../src/lib/visual/schema.test.ts), [`fixtures.test.ts`](../../src/lib/visual/fixtures.test.ts) — pure data layer
 

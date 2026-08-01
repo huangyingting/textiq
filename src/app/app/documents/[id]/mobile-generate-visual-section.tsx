@@ -8,7 +8,10 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { GeneratedCandidatesPanel } from "@/components/visual/generated-candidates-panel";
 import { useEditorContext } from "@/lib/lexical/editor-context";
-import { generateTargetForContext } from "@/lib/visual/generate";
+import {
+  generateTargetForContext,
+  stampSourceText,
+} from "@/lib/visual/generate";
 import type { Visual } from "@/lib/visual/schema";
 
 import { $createVisualNode } from "@/lib/lexical/visual-node";
@@ -25,7 +28,6 @@ export function GenerateVisualSection() {
     generatedVisualsBySection,
     generate,
     setGeneratedVisualsBySection,
-    stampGeneratedVisual,
   } = useVisualGeneration();
   const candidates = generatedVisualsBySection.ai ?? [];
   const generatedTargetRef = useRef<typeof target>(null);
@@ -34,7 +36,6 @@ export function GenerateVisualSection() {
   const runGenerate = useCallback(async () => {
     if (!target) return;
     const requestTarget = target;
-    generatedTargetRef.current = null;
     setInsertError(null);
     const result = await generate(requestTarget, { append: false });
     if (result.ok) {
@@ -46,7 +47,7 @@ export function GenerateVisualSection() {
     (visual: Visual) => {
       const generatedTarget = generatedTargetRef.current;
       if (!generatedTarget) return;
-      const toInsert = stampGeneratedVisual(visual);
+      const toInsert = stampSourceText(visual, generatedTarget.text);
       let inserted = false;
       editor.update(() => {
         const top = $getNodeByKey(generatedTarget.blockKey);
@@ -67,7 +68,7 @@ export function GenerateVisualSection() {
       setGeneratedVisualsBySection({});
       editor.focus();
     },
-    [editor, setGeneratedVisualsBySection, stampGeneratedVisual],
+    [editor, setGeneratedVisualsBySection],
   );
 
   if (!target) return null;

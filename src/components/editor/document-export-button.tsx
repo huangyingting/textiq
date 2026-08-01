@@ -70,7 +70,11 @@ const WIDTH_PRESET_LIST = (
  * that PPTX export and watermark removal are gated correctly for free, Plus,
  * and Pro users (issue #93).
  */
-export function DocumentExportButton({
+export function DocumentExportButton({ ...props }: DocumentExportButtonProps) {
+  return <DocumentExportButtonForDocument key={props.documentId} {...props} />;
+}
+
+function DocumentExportButtonForDocument({
   documentTitle,
   documentId,
   deckPort,
