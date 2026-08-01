@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "The visual subsystem owns visual schemas, kind capabilities, renderer/export support, transformations, and AI prompt constraints. Persistence of visual nodes and Visual rows is documented in ../data-model/visual-mirror.md; editor lifecycle is documented in ../editor/document-editor.md."
 ---
 
@@ -88,7 +88,9 @@ PDF, and PPTX. Same-event duplicate activation is ignored, and while export is
 pending the dialog reports busy state and locks Download, Cancel, backdrop,
 close-button, and Escape dismissal. Ordinary renderer failures retain the
 dialog with explicit dismissible feedback so the user can adjust settings and
-retry.
+retry. Unmounting the export surface invalidates the active renderer operation;
+its late result cannot download a file, emit settlement telemetry, or close a
+replacement surface.
 
 Social copy-image and native-share actions likewise share one image-operation
 boundary. Copy and share cannot race the same SVG rasterization; both buttons
@@ -119,4 +121,5 @@ coarse pointers.
 - [`src/lib/visual/transforms.kind.test.ts`](../../src/lib/visual/transforms.kind.test.ts)
 - [`src/lib/visual/transforms.theme.test.ts`](../../src/lib/visual/transforms.theme.test.ts)
 - [`src/lib/visual/pptx-shapes.test.ts`](../../src/lib/visual/pptx-shapes.test.ts)
+- [`src/components/visual/export-dialog.test.tsx`](../../src/components/visual/export-dialog.test.tsx)
 - [`src/components/visual/resize.test.ts`](../../src/components/visual/resize.test.ts)

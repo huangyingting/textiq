@@ -1,7 +1,7 @@
 ---
 Type: "architecture"
 Status: "current"
-Last updated: "2026-07-31"
+Last updated: "2026-08-01"
 description: "The import subsystem parses uploaded .md, .html, .docx, .pptx, and .pdf files into Markdown-compatible text that can be converted into the current Lexical document JSON. It is a public, server-side parsing surface, so validation and abuse controls are part of the design contract."
 ---
 
@@ -59,6 +59,9 @@ mounted while work is pending and synchronously guard the workflow so a second
 input change cannot start a concurrent create or parse. Client-side oversized
 file rejection and malformed/transport response failures remain retryable.
 Failed editor parses offer direct retry and dismiss actions.
+If the editor import surface unmounts while parsing, it invalidates ownership of
+that request; a late result cannot reach the editor apply callback or emit a
+success/failure settlement for the abandoned surface.
 
 Replacing a non-empty editor document requires a modal confirmation. The shared
 dialog primitive provides initial focus, Tab containment, Escape and backdrop
@@ -135,6 +138,8 @@ blank imported document accidentally.
    upload or parse settles.
 9. Non-empty editor replacement is modal, cancellable without mutation, and
    restores focus to the initiating import control.
+10. Unmounted import surfaces ignore late parser outcomes and do not apply
+    content or settlement telemetry.
 
 ## Primary Tests
 
@@ -150,4 +155,5 @@ blank imported document accidentally.
 - [`src/lib/import/pptx.test.ts`](../../src/lib/import/pptx.test.ts)
 - [`src/lib/import/pdf.test.ts`](../../src/lib/import/pdf.test.ts)
 - [`src/lib/import/application-service.test.ts`](../../src/lib/import/application-service.test.ts)
+- [`src/components/editor/import-button.test.tsx`](../../src/components/editor/import-button.test.tsx)
 - [`e2e/import/import-roundtrip.spec.ts`](../../e2e/import/import-roundtrip.spec.ts)

@@ -2,7 +2,7 @@
 
 import { Upload, X } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
-import { useCallback, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import type { ImportActionError, ImportActionResult } from "@/lib/action-ports";
@@ -58,7 +58,18 @@ export function ImportButton({
   const [state, setState] = useState<ImportButtonState>({ status: "idle" });
   const isUploading = state.status === "uploading";
   const inputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  const importOperationIdRef = useRef(0);
   const isUploadingRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      importOperationIdRef.current += 1;
+      isUploadingRef.current = false;
+    };
+  }, []);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -83,6 +94,7 @@ export function ImportButton({
       }
 
       isUploadingRef.current = true;
+      const operationId = ++importOperationIdRef.current;
       setState({ status: "uploading" });
       const startedAt = performance.now();
       emitProductTelemetry("product.import.started", {
@@ -96,9 +108,27 @@ export function ImportButton({
         try {
           result = await importFile(file);
         } catch (error) {
-          setState({ status: "idle" });
+          if (
+            mountedRef.current &&
+            importOperationIdRef.current === operationId
+          ) {
+            setState({ status: "idle" });
+          }
           unstable_rethrow(error);
+          if (
+            !mountedRef.current ||
+            importOperationIdRef.current !== operationId
+          ) {
+            return;
+          }
           result = { ok: false, error: networkError() };
+        }
+
+        if (
+          !mountedRef.current ||
+          importOperationIdRef.current !== operationId
+        ) {
+          return;
         }
 
         if (!result.ok) {
@@ -117,8 +147,19 @@ export function ImportButton({
         try {
           onImport(result.data.markdown);
         } catch (error) {
-          setState({ status: "idle" });
+          if (
+            mountedRef.current &&
+            importOperationIdRef.current === operationId
+          ) {
+            setState({ status: "idle" });
+          }
           unstable_rethrow(error);
+          if (
+            !mountedRef.current ||
+            importOperationIdRef.current !== operationId
+          ) {
+            return;
+          }
           emitProductTelemetry("product.import.failed", {
             durationBucket: bucketDurationMs(performance.now() - startedAt),
             failureReason: "apply_failed",
@@ -141,7 +182,12 @@ export function ImportButton({
         });
         setState({ status: "idle" });
       } finally {
-        isUploadingRef.current = false;
+        if (
+          mountedRef.current &&
+          importOperationIdRef.current === operationId
+        ) {
+          isUploadingRef.current = false;
+        }
       }
     },
     [importFile, onImport],

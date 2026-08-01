@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This subsystem covers document creation, duplication, dashboard listing, search, tags, favorites, trash, and dashboard-load maintenance. Editor content state is documented in ../editor/; persisted document and deck shapes are documented in ../data-model/."
 ---
 
@@ -153,8 +153,11 @@ remove activation cannot issue duplicate or competing writes before React
 commits disabled state. Pending controls expose busy status and remain locked.
 Failed adds retain the typed tag for generic retry/dismiss recovery, removal
 failures preserve the chip, and Next redirect/not-found control flow is rethrown
-to the framework. The deterministic browser lifecycle forces an add transport
-failure and proves a double-activated retry produces exactly one durable write.
+to the framework. Tag editor state is scoped to the active document: changing
+documents resets chips, draft, error, and pending state immediately, and late
+results from the previous document cannot overwrite or lock the new document.
+The deterministic browser lifecycle forces an add transport failure and proves
+a double-activated retry produces exactly one durable write.
 
 Favorite toggles ignore soft-deleted documents. Trash is a soft delete that
 sets `deletedAt`; restore clears `deletedAt`. Dashboard-load maintenance purges
@@ -174,7 +177,9 @@ Pending actions suppress duplicate activation and lock dismissal. Ordinary
 Server Action failures remain inline with generic retry/dismiss controls, while
 Next redirect/not-found control flow is rethrown. Successful removal focuses
 the stable trash region and immediately renders the empty state when the final
-visible row is removed.
+visible row is removed. Each row owns its pending action until settlement;
+unmounting it invalidates late completion so detached rows cannot remove or
+focus parent UI.
 
 ## Invariants
 
@@ -202,8 +207,10 @@ visible row is removed.
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/app/app/document-card.test.tsx`](../../src/app/app/document-card.test.tsx)
+- [`src/app/app/trash/trash-list.test.tsx`](../../src/app/app/trash/trash-list.test.tsx)
 - [`src/lib/document/query.test.ts`](../../src/lib/document/query.test.ts)
 - [`src/lib/document/tags.test.ts`](../../src/lib/document/tags.test.ts)
+- [`src/app/app/documents/[id]/tag-control.test.tsx`](../../src/app/app/documents/[id]/tag-control.test.tsx)
 - [`src/lib/dashboard/view-model.test.ts`](../../src/lib/dashboard/view-model.test.ts)
 - [`e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts)
 - [`e2e/ui-matrix/document-metadata-history-ui.spec.ts`](../../e2e/ui-matrix/document-metadata-history-ui.spec.ts)

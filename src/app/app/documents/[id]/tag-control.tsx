@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { DocumentTag } from "@/lib/document/tags";
 
@@ -20,63 +20,83 @@ const REMOVE_ERROR = "Couldn't remove the tag. Please try again.";
  * access-scoped `addTag`/`removeTag` server actions, which return the document's
  * refreshed tag list so the chips stay in sync across collaborators on reload.
  */
-export function TagControl({
-  documentId,
-  initialTags,
-  allTags,
-  editable = true,
-}: {
+type TagControlProps = {
   documentId: string;
   initialTags: DocumentTag[];
   allTags: DocumentTag[];
   editable?: boolean;
-}) {
+};
+
+export function TagControl(props: TagControlProps) {
+  return <TagControlForDocument key={props.documentId} {...props} />;
+}
+
+function TagControlForDocument({
+  documentId,
+  initialTags,
+  allTags,
+  editable = true,
+}: TagControlProps) {
   const [tags, setTags] = useState<DocumentTag[]>(initialTags);
   const [input, setInput] = useState("");
   const [actionError, setActionError] = useState<TagMutationError | null>(null);
   const [pendingKind, setPendingKind] = useState<TagMutationKind | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const mutationIdRef = useRef(0);
   const mutationInFlightRef = useRef(false);
   const listId = useId();
-  const mutationBusy = isPending || pendingKind !== null;
+  const mutationBusy = pendingKind !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationIdRef.current += 1;
+      mutationInFlightRef.current = false;
+    };
+  }, []);
 
   // Suggest the user's tags that aren't already on this document.
   const suggestions = allTags.filter(
     (tag) => !tags.some((current) => current.id === tag.id),
   );
 
-  const runMutation = (
+  const runMutation = async (
     kind: TagMutationKind,
     failure: TagMutationError,
     mutation: () => Promise<DocumentTag[]>,
-  ) => {
+  ): Promise<void> => {
     if (mutationInFlightRef.current) return;
 
     mutationInFlightRef.current = true;
+    const mutationId = ++mutationIdRef.current;
     setActionError(null);
     setPendingKind(kind);
-    startTransition(async () => {
-      try {
-        setTags(await mutation());
-        if (kind === "add") setInput("");
-      } catch (error) {
-        unstable_rethrow(error);
-        setActionError(failure);
-      } finally {
+    try {
+      const nextTags = await mutation();
+      if (!mountedRef.current || mutationIdRef.current !== mutationId) return;
+      setTags(nextTags);
+      if (kind === "add") setInput("");
+    } catch (error) {
+      unstable_rethrow(error);
+      if (!mountedRef.current || mutationIdRef.current !== mutationId) return;
+      setActionError(failure);
+    } finally {
+      if (mountedRef.current && mutationIdRef.current === mutationId) {
         mutationInFlightRef.current = false;
         setPendingKind(null);
       }
-    });
+    }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async (): Promise<void> => {
     const name = input.trim();
     if (!name) return;
-    runMutation("add", { kind: "add" }, () => addTag(documentId, name));
+    await runMutation("add", { kind: "add" }, () => addTag(documentId, name));
   };
 
-  const handleRemove = (tagId: string) => {
-    runMutation("remove", { kind: "remove", tagId }, () =>
+  const handleRemove = async (tagId: string): Promise<void> => {
+    await runMutation("remove", { kind: "remove", tagId }, () =>
       removeTag(documentId, tagId),
     );
   };
@@ -123,7 +143,7 @@ export function TagControl({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                handleAdd();
+                return handleAdd();
               }
             }}
             onBlur={handleAdd}
@@ -154,8 +174,8 @@ export function TagControl({
             type="button"
             disabled={mutationBusy}
             onClick={() => {
-              if (actionError.kind === "add") handleAdd();
-              else handleRemove(actionError.tagId);
+              if (actionError.kind === "add") return handleAdd();
+              return handleRemove(actionError.tagId);
             }}
             className="rounded-full border border-ds-danger-border px-2 py-0.5 font-medium transition hover:bg-ds-danger-surface disabled:opacity-50"
           >

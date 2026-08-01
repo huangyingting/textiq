@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
 import type { OnboardingStep } from "@/lib/onboarding/checklist";
@@ -22,11 +22,22 @@ interface OnboardingChecklistProps {
  * all tracked steps does not auto-dismiss it.
  */
 export function OnboardingChecklist({ steps }: OnboardingChecklistProps) {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
+  const mountedRef = useRef(true);
+  const dismissOperationIdRef = useRef(0);
   const dismissInFlightRef = useRef(false);
   const doneCount = steps.filter((s) => s.done).length;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      dismissOperationIdRef.current += 1;
+      dismissInFlightRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     emitProductTelemetry("product.onboarding.activation", {
@@ -37,26 +48,41 @@ export function OnboardingChecklist({ steps }: OnboardingChecklistProps) {
     });
   }, [doneCount, steps.length]);
 
-  function handleDismiss() {
+  async function handleDismiss(): Promise<void> {
     if (dismissInFlightRef.current) return;
 
     dismissInFlightRef.current = true;
+    const operationId = ++dismissOperationIdRef.current;
     setError(null);
-    startTransition(async () => {
-      try {
-        await dismissOnboarding();
-        emitProductTelemetry("product.onboarding.dismissed", {
-          completedStepCount: doneCount,
-          stepCount: steps.length,
-        });
-        setIsDismissed(true);
-      } catch (dismissError) {
-        unstable_rethrow(dismissError);
-        setError("Could not dismiss the checklist. Please try again.");
-      } finally {
-        dismissInFlightRef.current = false;
+    setIsPending(true);
+    try {
+      await dismissOnboarding();
+      if (
+        !mountedRef.current ||
+        dismissOperationIdRef.current !== operationId
+      ) {
+        return;
       }
-    });
+      emitProductTelemetry("product.onboarding.dismissed", {
+        completedStepCount: doneCount,
+        stepCount: steps.length,
+      });
+      setIsDismissed(true);
+    } catch (dismissError) {
+      unstable_rethrow(dismissError);
+      if (
+        !mountedRef.current ||
+        dismissOperationIdRef.current !== operationId
+      ) {
+        return;
+      }
+      setError("Could not dismiss the checklist. Please try again.");
+    } finally {
+      if (mountedRef.current && dismissOperationIdRef.current === operationId) {
+        dismissInFlightRef.current = false;
+        setIsPending(false);
+      }
+    }
   }
 
   if (isDismissed) return null;

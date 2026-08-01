@@ -342,6 +342,46 @@ describe("OnboardingChecklist", () => {
     }
   });
 
+  test("unmounting invalidates a pending dismiss and suppresses its late success telemetry", async () => {
+    const { events, restore } = captureTelemetry();
+    const pendingDismiss = createDeferred<void>();
+    globalForActions.__onboardingActionsTestState.dismissImpl = () =>
+      pendingDismiss.promise;
+    const { renderer, root } = mountChecklist(buildSteps());
+    try {
+      act(() => {
+        root
+          .findByProps({
+            "aria-label": "Dismiss onboarding checklist",
+          })
+          .props.onClick();
+      });
+      assert.equal(
+        root.findByProps({
+          "aria-label": "Getting started checklist",
+        }).props["aria-busy"],
+        true,
+      );
+
+      act(() => renderer.unmount());
+      pendingDismiss.resolve();
+      await act(async () => {
+        await flush();
+        await flush();
+      });
+
+      assert.equal(
+        events.filter(
+          (event) => event.eventName === "product.onboarding.dismissed",
+        ).length,
+        0,
+      );
+    } finally {
+      if (renderer.toJSON() !== null) act(() => renderer.unmount());
+      restore();
+    }
+  });
+
   test("a failed dismiss stays inline, redacts details, can be dismissed, and retries without duplicate writes", async () => {
     const { events, restore } = captureTelemetry();
     const privateFailure = new Error("private onboarding storage detail");
@@ -444,21 +484,15 @@ describe("OnboardingChecklist", () => {
     };
     const { renderer, root } = mountChecklist(buildSteps());
     try {
-      await assert.rejects(
-        () =>
-          Promise.resolve(
-            act(async () => {
-              root
-                .findByProps({
-                  "aria-label": "Dismiss onboarding checklist",
-                })
-                .props.onClick();
-              await flush();
-              await flush();
-            }),
-          ),
-        controlFlowError,
-      );
+      await assert.rejects(async () => {
+        await act(async () => {
+          await root
+            .findByProps({
+              "aria-label": "Dismiss onboarding checklist",
+            })
+            .props.onClick();
+        });
+      }, controlFlowError);
       assert.deepEqual(
         globalForActions.__onboardingActionsTestState.rethrowCalls,
         [controlFlowError],

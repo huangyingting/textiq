@@ -414,6 +414,47 @@ describe("TrashList", () => {
     });
   });
 
+  test("unmounting invalidates a pending restore before its late result reaches parent removal or focus", async () => {
+    await withPortalDom(async () => {
+      const deferred = createDeferred<void>();
+      globalForActions.__trashListActionsTestState.restoreImpl = () =>
+        deferred.promise;
+      const originalRequestAnimationFrame = window.requestAnimationFrame;
+      let focusRequestCount = 0;
+      window.requestAnimationFrame = (callback: FrameRequestCallback) => {
+        focusRequestCount += 1;
+        void callback;
+        return focusRequestCount;
+      };
+      const renderer = mount([doc()]);
+      let pendingCall!: Promise<void>;
+      try {
+        act(() => {
+          restoreButtonFor(renderer, "Quarterly Plan").props.onClick();
+        });
+        act(() => {
+          pendingCall = dialogButton(renderer, "Restore").props.onClick();
+        });
+        assert.deepEqual(
+          globalForActions.__trashListActionsTestState.restoreCalls,
+          ["doc-1"],
+        );
+
+        act(() => renderer.unmount());
+        deferred.resolve();
+        await act(async () => {
+          await pendingCall;
+          await waitForAsyncDrain();
+        });
+
+        assert.equal(focusRequestCount, 0);
+      } finally {
+        if (renderer.toJSON() !== null) act(() => renderer.unmount());
+        window.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+    });
+  });
+
   test("a rejected restore stays inline with generic copy, can be dismissed, and retries successfully", async () => {
     await withPortalDom(async () => {
       const privateFailure = new Error("private restore detail");
@@ -647,17 +688,11 @@ describe("TrashList", () => {
           restoreButtonFor(renderer, "Quarterly Plan").props.onClick();
         });
 
-        await assert.rejects(
-          () =>
-            Promise.resolve(
-              act(async () => {
-                dialogButton(renderer, "Restore").props.onClick();
-                await waitForAsyncDrain();
-                await waitForAsyncDrain();
-              }),
-            ),
-          controlFlowError,
-        );
+        await assert.rejects(async () => {
+          await act(async () => {
+            await dialogButton(renderer, "Restore").props.onClick();
+          });
+        }, controlFlowError);
         assert.deepEqual(
           globalForActions.__trashListActionsTestState.rethrowCalls,
           [controlFlowError],

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This subsystem covers sign-in, account creation, provider linking, account settings, self-serve recovery, email verification, export, and deletion. Route authorization and document/workspace capabilities live in ../security/; this document covers how a user becomes and remains an authenticated account."
 ---
 
@@ -64,7 +64,9 @@ Onboarding dismissal uses a synchronous in-flight guard so repeated header or
 footer activation persists once. Ordinary failures remain in the checklist as
 generic retry/dismiss feedback; successful dismissal removes the checklist
 immediately and emits completion telemetry only after persistence. Next
-redirect/not-found control flow is not converted into a local error.
+redirect/not-found control flow is not converted into a local error. Unmounting
+the dashboard invalidates an in-flight dismissal, so its late completion cannot
+update detached UI or emit a misleading dismissal event.
 
 Google sign-in is enabled only when both Google client env vars are present.
 OAuth sign-ins must include an email. The JWT callback links the OAuth profile
@@ -149,6 +151,7 @@ that no personal-data findings remain. Operational DSAR steps live in
 - [`src/lib/auth/email-verification-service.test.ts`](../../src/lib/auth/email-verification-service.test.ts)
 - [`src/lib/auth/single-use-token.test.ts`](../../src/lib/auth/single-use-token.test.ts)
 - [`src/lib/settings/view-model.test.ts`](../../src/lib/settings/view-model.test.ts)
+- [`src/app/app/onboarding-checklist.test.tsx`](../../src/app/app/onboarding-checklist.test.tsx)
 - [`src/lib/account/export.test.ts`](../../src/lib/account/export.test.ts)
 - [`src/lib/account/deletion-service.test.ts`](../../src/lib/account/deletion-service.test.ts)
 - [`e2e/ui-matrix/account-lifecycle-ui.spec.ts`](../../e2e/ui-matrix/account-lifecycle-ui.spec.ts)

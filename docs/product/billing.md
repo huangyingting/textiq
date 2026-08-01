@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
@@ -116,7 +116,10 @@ boundary suppresses repeated plan-change or cancellation activation before
 React can render the pending state, disables every competing billing action,
 and reports the specific operation in progress. Framework redirect/not-found
 control flow is rethrown instead of being converted to ordinary billing
-feedback, and inline feedback can be dismissed before retrying.
+feedback, and inline feedback can be dismissed before retrying. Checkout and
+portal handoffs remain owned by the mounted billing surface; leaving that
+surface invalidates the active operation so a late provider response cannot
+navigate the user away from their newer route.
 
 ## Subscription Writes
 

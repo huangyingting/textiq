@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "The localization subsystem owns typed UI message catalogs, locale resolution, and the gate that keeps the language switcher hidden until enough user-facing surfaces are translated."
 ---
 
@@ -73,6 +73,8 @@ accessible, dismissible retryable error instead of reporting success. A locale
 write has one synchronous in-flight boundary, so repeated activation cannot
 submit duplicate cookie mutations. Framework redirect and not-found control
 flow remains owned by Next.js rather than being converted into persistence
+feedback. Unmounting the switcher invalidates the active write's UI ownership;
+a late completion cannot refresh a detached route tree or publish stale local
 feedback.
 
 ## Adding A Surface
@@ -101,3 +103,4 @@ When localizing a new surface:
 ## Primary Tests
 
 - [`src/lib/i18n/i18n.test.ts`](../../src/lib/i18n/i18n.test.ts)
+- [`src/components/language-switcher.test.tsx`](../../src/components/language-switcher.test.tsx)

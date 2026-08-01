@@ -390,6 +390,31 @@ describe("LanguageSwitcher", () => {
     await act(async () => renderer.unmount());
   });
 
+  test("unmounting invalidates a pending locale write and suppresses its late refresh", async () => {
+    let resolveCookie!: (result: LocaleActionResult) => void;
+    state().setLocaleCookieImpl = () =>
+      new Promise((resolve) => {
+        resolveCookie = resolve;
+      });
+
+    const renderer = mount();
+    act(() => trigger(renderer).props.onClick());
+    act(() => options(renderer)[1].props.onClick());
+    assert.equal(trigger(renderer).props.disabled, true);
+
+    act(() => renderer.unmount());
+    resolveCookie({ ok: true, data: undefined });
+    await act(async () => {
+      await waitForTransitionToSettle();
+    });
+
+    assert.equal(state().routerRefreshCount, 0);
+    assert.deepEqual(state().calls, [
+      ["setLocaleOptimistic", "es"],
+      ["setLocaleCookie", "es"],
+    ]);
+  });
+
   test("an explicit persistence failure rolls back to the confirmed locale and displays the action error", async () => {
     state().setLocaleCookieImpl = async () => ({
       ok: false,

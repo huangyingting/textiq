@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -108,21 +108,36 @@ export function BillingActions({
   const [isError, setIsError] = useState(false);
   const [pendingAction, setPendingAction] =
     useState<PendingBillingAction | null>(null);
+  const mountedRef = useRef(true);
+  const actionOperationIdRef = useRef(0);
   const actionInFlightRef = useRef(false);
   const mutationBusy = pendingAction !== null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      actionOperationIdRef.current += 1;
+      actionInFlightRef.current = false;
+    };
+  }, []);
 
   async function runAction(
     pending: PendingBillingAction,
     action: () => Promise<ActionResult<BillingActionData>>,
-  ) {
+  ): Promise<void> {
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
+    const operationId = ++actionOperationIdRef.current;
     setMessage(null);
     setIsError(false);
     setPendingAction(pending);
     try {
       const outcome = await resolveBillingActionOutcome(action);
+      if (!mountedRef.current || actionOperationIdRef.current !== operationId) {
+        return;
+      }
       if (outcome.redirectUrl) {
         window.location.href = outcome.redirectUrl;
         return;
@@ -130,19 +145,21 @@ export function BillingActions({
       setMessage(outcome.message);
       setIsError(outcome.isError);
     } finally {
-      actionInFlightRef.current = false;
-      setPendingAction(null);
+      if (mountedRef.current && actionOperationIdRef.current === operationId) {
+        actionInFlightRef.current = false;
+        setPendingAction(null);
+      }
     }
   }
 
-  function handleChange(targetPlan: Plan) {
-    runAction({ kind: "change", targetPlan }, () =>
+  async function handleChange(targetPlan: Plan): Promise<void> {
+    await runAction({ kind: "change", targetPlan }, () =>
       actionPort.changePlan(targetPlan),
     );
   }
 
-  function handleCancel() {
-    runAction({ kind: "cancel" }, actionPort.cancelSubscription);
+  async function handleCancel(): Promise<void> {
+    await runAction({ kind: "cancel" }, actionPort.cancelSubscription);
   }
 
   const pendingLabel =

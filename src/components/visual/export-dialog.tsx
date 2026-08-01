@@ -209,7 +209,18 @@ export function ExportDialog({
   >(undefined);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const exportOperationIdRef = useRef(0);
   const exportInFlightRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportOperationIdRef.current += 1;
+      exportInFlightRef.current = false;
+    };
+  }, []);
 
   const effectiveWatermark = canRemoveWatermark
     ? (watermarkOverride ?? defaultWatermark)
@@ -275,6 +286,7 @@ export function ExportDialog({
   const handleExport = useCallback(async () => {
     if (exportInFlightRef.current) return;
     exportInFlightRef.current = true;
+    const operationId = ++exportOperationIdRef.current;
     setError(null);
     setExporting(true);
     const startedAt = performance.now();
@@ -348,6 +360,10 @@ export function ExportDialog({
           break;
       }
 
+      if (!mountedRef.current || exportOperationIdRef.current !== operationId) {
+        return;
+      }
+
       if (!blob) {
         emitProductTelemetry("product.export.failed", {
           durationBucket: bucketDurationMs(performance.now() - startedAt),
@@ -372,6 +388,9 @@ export function ExportDialog({
       });
       onClose();
     } catch {
+      if (!mountedRef.current || exportOperationIdRef.current !== operationId) {
+        return;
+      }
       emitProductTelemetry("product.export.failed", {
         durationBucket: bucketDurationMs(performance.now() - startedAt),
         exportKind: "visual",
@@ -380,8 +399,10 @@ export function ExportDialog({
       });
       setError(`${formatLabel(format)} export failed`);
     } finally {
-      exportInFlightRef.current = false;
-      setExporting(false);
+      if (mountedRef.current && exportOperationIdRef.current === operationId) {
+        exportInFlightRef.current = false;
+        setExporting(false);
+      }
     }
   }, [
     format,

@@ -301,4 +301,40 @@ describe("ImportButton", () => {
       act(() => renderer.unmount());
     }
   });
+
+  test("unmounting invalidates a pending parse before its late result reaches the editor", async () => {
+    let resolveImport!: (value: {
+      ok: true;
+      data: { markdown: string };
+    }) => void;
+    const imported: string[] = [];
+    const renderer = mountImportButton({
+      onImport: (markdown) => imported.push(markdown),
+      importFile: () =>
+        new Promise((resolve) => {
+          resolveImport = resolve;
+        }),
+    });
+    const target = {
+      files: [new File(["late"], "late.md", { type: "text/markdown" })],
+      value: "late.md",
+    };
+    let pendingChange!: Promise<void>;
+    act(() => {
+      pendingChange = findInput(renderer).props.onChange({
+        target,
+      } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+    assert.equal(target.value, "");
+    assert.equal(findImportButton(renderer).props.disabled, true);
+
+    act(() => renderer.unmount());
+    resolveImport({ ok: true, data: { markdown: "# Late result" } });
+    await act(async () => {
+      await pendingChange;
+      await waitForAsyncDrain();
+    });
+
+    assert.deepEqual(imported, []);
+  });
 });

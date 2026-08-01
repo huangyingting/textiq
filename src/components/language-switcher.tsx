@@ -60,8 +60,19 @@ export function LanguageSwitcher() {
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
+  const mountedRef = useRef(true);
+  const localeOperationIdRef = useRef(0);
   const inFlightLocaleRef = useRef<Locale | null>(null);
   const busy = pendingLocale !== null || isPending;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      localeOperationIdRef.current += 1;
+      inFlightLocaleRef.current = null;
+    };
+  }, []);
 
   const closeMenu = (restoreFocus = false) => {
     setOpen(false);
@@ -97,6 +108,7 @@ export function LanguageSwitcher() {
     }
     const confirmedLocale = locale;
     inFlightLocaleRef.current = next;
+    const operationId = ++localeOperationIdRef.current;
     setPendingLocale(next);
     closeMenu(true);
     setError(null);
@@ -107,6 +119,12 @@ export function LanguageSwitcher() {
           () => setLocaleCookie(next),
           t("languageSwitcher.persistenceError"),
         );
+        if (
+          !mountedRef.current ||
+          localeOperationIdRef.current !== operationId
+        ) {
+          return;
+        }
         if (!result.ok) {
           setLocaleOptimistic(confirmedLocale);
           setError(result.error);
@@ -114,8 +132,13 @@ export function LanguageSwitcher() {
         }
         router.refresh();
       } finally {
-        inFlightLocaleRef.current = null;
-        setPendingLocale(null);
+        if (
+          mountedRef.current &&
+          localeOperationIdRef.current === operationId
+        ) {
+          inFlightLocaleRef.current = null;
+          setPendingLocale(null);
+        }
       }
     });
   };

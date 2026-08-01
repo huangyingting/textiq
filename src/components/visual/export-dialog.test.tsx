@@ -575,6 +575,53 @@ describe("ExportDialog", () => {
     });
   });
 
+  test("unmounting invalidates a pending export before its late result downloads or closes", async () => {
+    await withExportDom(async () => {
+      let resolveExport!: (blob: Blob | null) => void;
+      let closed = 0;
+      const renderer = mountWithPortalDom(
+        <ExportDialog
+          open
+          onClose={() => {
+            closed += 1;
+          }}
+          getSvgElement={fakeSvg}
+          filename="chart"
+        />,
+      );
+      globalForExport.__exportDialogTestState.pngImpl = () =>
+        new Promise((resolve) => {
+          resolveExport = resolve;
+        });
+      let exportCall!: Promise<void>;
+      act(() => {
+        const downloadButton = renderer.root.find(
+          (node) =>
+            node.type === "button" && textOf(node).includes("Download PNG"),
+        );
+        exportCall = downloadButton.props.onClick();
+      });
+      assert.equal(
+        globalForExport.__exportDialogTestState.pngCalls.length,
+        2,
+        "one preview plus one active export",
+      );
+
+      act(() => renderer.unmount());
+      resolveExport(new Blob(["png-bytes"], { type: "image/png" }));
+      await act(async () => {
+        await exportCall;
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        globalForExport.__exportDialogTestState.downloadCalls.length,
+        0,
+      );
+      assert.equal(closed, 0);
+    });
+  });
+
   test("PNG export: a null blob surfaces 'PNG export failed' without closing", async () => {
     await withExportDom(async () => {
       let closed = 0;

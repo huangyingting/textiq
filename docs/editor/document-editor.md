@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "The document editor pairs a Lexical rich-text surface with visual blocks and document table editing, plus context-aware surfaces such as floating toolbars, a mobile bottom sheet, insert menus, and per-visual editing popovers. This document explains how those pieces fit together and how to extend them safely."
 ---
 
@@ -448,7 +448,9 @@ The top editor chrome owns whole-document import and export workflows:
   duplicate file-change events before React renders pending state. A parse is
   counted as successful only after the editor apply callback completes. Typed
   parse failures, transport failures, and editor-apply failures retain direct
-  retry and dismiss controls.
+  retry and dismiss controls. Unmounting the toolbar invalidates a pending
+  parse, preventing its late result from mutating a detached editor or emitting
+  false settlement telemetry.
 - [`DocumentExportButton`](../../src/components/editor/document-export-button.tsx)
   owns PDF, PPTX, infographic PNG, and infographic PDF output. All formats share
   one synchronous export boundary, so duplicate or competing menu activation

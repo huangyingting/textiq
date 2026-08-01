@@ -306,6 +306,71 @@ describe("BillingActions", () => {
     }
   });
 
+  test("unmounting invalidates a pending checkout handoff before its late result can navigate", async () => {
+    const attempt =
+      deferred<Awaited<ReturnType<BillingActionPort["changePlan"]>>>();
+    const actionPort: BillingActionPort = {
+      changePlan: () => attempt.promise,
+      cancelSubscription: async () => ({
+        ok: true,
+        data: { message: "Cancelled." },
+      }),
+    };
+    const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "window",
+    );
+    const fakeWindow = {
+      location: { href: "https://app.example/settings/billing" },
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: fakeWindow,
+      writable: true,
+    });
+    let renderer!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        renderer = create(
+          <BillingActions
+            currentPlan="free"
+            cancelAtPeriodEnd={false}
+            actionPort={actionPort}
+          />,
+        );
+      });
+      act(() => {
+        buttonByText(renderer, /^Plus/).props.onClick();
+      });
+      assert.equal(buttonByText(renderer, /^Plus/).props.disabled, true);
+
+      act(() => renderer.unmount());
+      attempt.resolve({
+        ok: true,
+        data: {
+          message: "Redirecting…",
+          redirectUrl: "https://billing.example/checkout",
+        },
+      });
+      await act(async () => {
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+
+      assert.equal(
+        fakeWindow.location.href,
+        "https://app.example/settings/billing",
+      );
+    } finally {
+      if (renderer?.toJSON() !== null) act(() => renderer.unmount());
+      if (originalWindowDescriptor) {
+        Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, "window");
+      }
+    }
+  });
+
   test("cancellation shares the mutation boundary and exposes contextual pending feedback", async () => {
     const attempt =
       deferred<Awaited<ReturnType<BillingActionPort["cancelSubscription"]>>>();

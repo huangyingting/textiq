@@ -273,6 +273,95 @@ describe("TagControl", () => {
     }
   });
 
+  test("switching documents resets pending state and ignores the old document's late add result", async () => {
+    let resolveOldAdd!: (tags: DocumentTag[]) => void;
+    globalForActions.__tagControlActionsTestState.addImpl = (
+      documentId,
+      name,
+    ) => {
+      if (documentId === "doc-1") {
+        return new Promise((resolve) => {
+          resolveOldAdd = resolve;
+        });
+      }
+      return Promise.resolve([
+        tag("doc-2-initial", "Planning"),
+        tag("doc-2-added", name),
+      ]);
+    };
+    const renderer = mount({
+      documentId: "doc-1",
+      initialTags: [tag("doc-1-initial", "Roadmap")],
+    });
+    try {
+      act(() => {
+        renderer.root
+          .findByProps({ "aria-label": "Add a tag" })
+          .props.onChange({ target: { value: "Old draft" } });
+      });
+      await act(async () => {
+        renderer.root
+          .findByProps({ "aria-label": "Add a tag" })
+          .props.onKeyDown({ key: "Enter", preventDefault() {} });
+        await waitForAsyncDrain();
+      });
+      assert.equal(
+        renderer.root.findByProps({ role: "group" }).props["aria-busy"],
+        true,
+      );
+
+      act(() => {
+        renderer.update(
+          <TagControl
+            documentId="doc-2"
+            initialTags={[tag("doc-2-initial", "Planning")]}
+            allTags={[]}
+          />,
+        );
+      });
+
+      assert.match(textOf(renderer.root), /Planning/);
+      assert.doesNotMatch(textOf(renderer.root), /Roadmap/);
+      assert.equal(
+        renderer.root.findByProps({ role: "group" }).props["aria-busy"],
+        false,
+      );
+      const newDocumentInput = renderer.root.findByProps({
+        "aria-label": "Add a tag",
+      });
+      assert.equal(newDocumentInput.props.disabled, false);
+      assert.equal(newDocumentInput.props.value, "");
+
+      act(() => {
+        newDocumentInput.props.onChange({ target: { value: "Launch" } });
+      });
+      await act(async () => {
+        renderer.root
+          .findByProps({ "aria-label": "Add a tag" })
+          .props.onKeyDown({ key: "Enter", preventDefault() {} });
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.deepEqual(globalForActions.__tagControlActionsTestState.addCalls, [
+        { documentId: "doc-1", name: "Old draft" },
+        { documentId: "doc-2", name: "Launch" },
+      ]);
+      assert.match(textOf(renderer.root), /Planning/);
+      assert.match(textOf(renderer.root), /Launch/);
+
+      await act(async () => {
+        resolveOldAdd([tag("doc-1-late", "Stale result")]);
+        await waitForAsyncDrain();
+        await waitForAsyncDrain();
+      });
+      assert.match(textOf(renderer.root), /Planning/);
+      assert.match(textOf(renderer.root), /Launch/);
+      assert.doesNotMatch(textOf(renderer.root), /Stale result/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+
   test("blurring the input with text also commits addTag", async () => {
     globalForActions.__tagControlActionsTestState.addImpl = async (
       _id,
@@ -485,11 +574,9 @@ describe("TagControl", () => {
       await assert.rejects(
         async () => {
           await act(async () => {
-            renderer.root
+            await renderer.root
               .findByProps({ "aria-label": "Add a tag" })
               .props.onKeyDown({ key: "Enter", preventDefault() {} });
-            await waitForAsyncDrain();
-            await waitForAsyncDrain();
           });
         },
         (error: unknown) => error === redirectError,

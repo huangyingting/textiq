@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow } from "next/navigation";
-import { useRef, useState, useTransition, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { Button, Dialog } from "@/components/ui";
 
@@ -146,10 +146,21 @@ function TrashRow({
     kind: TrashActionKind;
     message: string;
   } | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
+  const mountedRef = useRef(true);
+  const actionOperationIdRef = useRef(0);
   const actionInFlightRef = useRef(false);
   const restoreTriggerRef = useRef<HTMLButtonElement>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      actionOperationIdRef.current += 1;
+      actionInFlightRef.current = false;
+    };
+  }, []);
 
   const closeDialog = (kind: TrashActionKind) => {
     if (actionInFlightRef.current) return;
@@ -158,24 +169,36 @@ function TrashRow({
     else setDeleteOpen(false);
   };
 
-  const runAction = (kind: TrashActionKind, action: () => Promise<void>) => {
+  const runAction = async (
+    kind: TrashActionKind,
+    action: () => Promise<void>,
+  ): Promise<void> => {
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
+    const operationId = ++actionOperationIdRef.current;
     setActionError(null);
-    startTransition(async () => {
-      try {
-        await action();
-        if (kind === "restore") setRestoreOpen(false);
-        else setDeleteOpen(false);
-        onRemoved(doc.id);
-      } catch (error) {
-        unstable_rethrow(error);
-        setActionError({ kind, message: ACTION_COPY[kind].error });
-      } finally {
-        actionInFlightRef.current = false;
+    setIsPending(true);
+    try {
+      await action();
+      if (!mountedRef.current || actionOperationIdRef.current !== operationId) {
+        return;
       }
-    });
+      if (kind === "restore") setRestoreOpen(false);
+      else setDeleteOpen(false);
+      onRemoved(doc.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      if (!mountedRef.current || actionOperationIdRef.current !== operationId) {
+        return;
+      }
+      setActionError({ kind, message: ACTION_COPY[kind].error });
+    } finally {
+      if (mountedRef.current && actionOperationIdRef.current === operationId) {
+        actionInFlightRef.current = false;
+        setIsPending(false);
+      }
+    }
   };
 
   const handleRestore = () =>
