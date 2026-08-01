@@ -235,6 +235,8 @@ test("presentation control workflows use isolated deterministic documents", () =
       "themeVersions",
       "touch",
       "group",
+      "default",
+      "default",
     ],
   );
   assert.ok(fixtures.every((fixture) => fixture.deckRevisionToken.length > 0));

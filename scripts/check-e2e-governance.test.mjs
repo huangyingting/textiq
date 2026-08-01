@@ -206,6 +206,18 @@ test("e2e governance: rejects browser activation workarounds", () => {
   }
 });
 
+test("e2e governance: accepts explicitly allowed browser event dispatch", () => {
+  const findings = scanText(
+    "e2e/example.spec.ts",
+    [
+      "// e2e-governance-allow dispatch-event: direct dispatch is required to inspect cancellation.",
+      "element.dispatchEvent(new KeyboardEvent('keydown'));",
+    ].join("\n"),
+  );
+
+  assert.deepEqual(findings, []);
+});
+
 test("e2e governance: accepts real Playwright pointer and keyboard activation", () => {
   assert.deepEqual(
     scanText(

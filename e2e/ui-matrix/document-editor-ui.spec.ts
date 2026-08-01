@@ -20,6 +20,7 @@ async function selectSeededDocumentText(page: Page) {
       range.selectNodeContents(element);
       selection?.removeAllRanges();
       selection?.addRange(range);
+      // e2e-governance-allow dispatch-event: Range mutation does not emit selectionchange, so the editor must be notified explicitly.
       document.dispatchEvent(new Event("selectionchange"));
     });
 }
@@ -36,6 +37,7 @@ async function placeCaretAtEndOfSeededDocumentText(page: Page) {
       range.collapse(false);
       selection?.removeAllRanges();
       selection?.addRange(range);
+      // e2e-governance-allow dispatch-event: Range mutation does not emit selectionchange, so the editor must be notified explicitly.
       document.dispatchEvent(new Event("selectionchange"));
     });
 }

@@ -61,6 +61,7 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
         bubbles: true,
         cancelable: true,
       });
+      // e2e-governance-allow dispatch-event: direct dispatch exposes cancellation so this regression can prove the stale listener is gone.
       document.body.dispatchEvent(event);
       return {
         defaultPrevented: event.defaultPrevented,

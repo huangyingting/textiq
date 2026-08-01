@@ -394,6 +394,15 @@ commands, hit testing, and the subtree's position in its parent stacking context
 - Modifier-click selection toggles membership in the selection set and should
   not start drag tracking.
 
+### Guide Snapping Ownership
+
+The top-toolbar snap toggle is editor-session state and starts enabled on every
+editor mount. Disabling it gates alignment and custom-guide snapping and clears
+transient snap feedback, but it does not hide grid, ruler, or custom-guide
+overlays and does not write deck state. Grid, ruler, custom-guide visibility,
+and custom-guide positions are separate document-scoped local-storage
+preferences; they survive reload, while the snap toggle returns to enabled.
+
 When group behavior and semantic hit-testing disagree, progressive selection
 context is the authority: an unselected group resolves to group-level selection;
 an already selected group can resolve to member-level selection.

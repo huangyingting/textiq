@@ -249,6 +249,7 @@ export function SlideEditorTopToolbar({
             onClose={() => setDeckChromeToolbarOpen(false)}
             aria-label="Slide master controls"
             portal
+            restoreFocusOnClose
             className="max-h-[calc(100vh-6rem)] w-[22rem] overflow-y-auto p-0"
             trigger={
               <DeckToolbarIconButton

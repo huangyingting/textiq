@@ -14,6 +14,7 @@ import {
   presentationTestFixture,
 } from "../helpers/presentation-fixtures";
 import {
+  E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
   profileDocPath,
   profileOwnerCredentials,
@@ -45,7 +46,9 @@ async function openPresentationFixture(
     | "builtInTheme"
     | "customThemeAuthoring"
     | "versionedCustomTheme"
-    | "groupLayerOrder",
+    | "groupLayerOrder"
+    | "slideRatio"
+    | "slideMaster",
 ): Promise<{ editor: Locator; canvas: Locator }> {
   await login(
     page,
@@ -86,6 +89,31 @@ function expectFrameEqual(actual: FramePercent, expected: FramePercent) {
   expectPercent(actual.y, expected.y);
   expectPercent(actual.width, expected.width);
   expectPercent(actual.height, expected.height);
+}
+
+async function expectCanvasRatio(
+  canvas: Locator,
+  expectedRatio: number,
+): Promise<void> {
+  await waitForStableSlideStage(canvas);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  expect(Math.abs(box!.width / box!.height - expectedRatio)).toBeLessThan(
+    0.015,
+  );
+}
+
+async function selectSlideRatio(
+  page: Page,
+  ratio: "16:9" | "4:3" | "1:1",
+): Promise<void> {
+  const trigger = page.getByRole("button", { name: "Slide ratio" });
+  await trigger.click();
+  const listbox = page.getByRole("listbox", { name: "Slide ratio" });
+  await expect(listbox).toBeVisible();
+  await listbox.getByRole("option", { name: ratio, exact: true }).click();
+  await expect(listbox).toHaveCount(0);
+  await expect(trigger).toContainText(ratio);
 }
 
 async function expectSaved(page: Page): Promise<void> {
@@ -205,6 +233,10 @@ test.describe("presentation editing controls", () => {
     await expectSaved(page);
     const grid = editor.getByRole("button", { name: "Toggle grid overlay" });
     const rulers = editor.getByRole("button", { name: "Toggle rulers" });
+    const snapToGuides = editor.getByRole("button", {
+      name: "Toggle snap to guides",
+    });
+    await expect(snapToGuides).toHaveAttribute("aria-pressed", "true");
 
     await grid.click();
     await rulers.click();
@@ -287,6 +319,32 @@ test.describe("presentation editing controls", () => {
     await waitForSlideAutosave(page);
     expectPercent((await framePercent(target, canvas)).x, initial.x);
 
+    await snapToGuides.click();
+    await expect(snapToGuides).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      editor.getByText("Snap to guides off", { exact: true }),
+    ).toBeAttached();
+    const unsnappedByToggle = await waitForSlideAutosaveAfter(page, () =>
+      dragNodeCenterNearXGuide({
+        page,
+        editor,
+        canvas,
+        node: target,
+        guideCenterPct: 36.5,
+        expectSnapGuide: false,
+      }),
+    );
+    expectPercent(unsnappedByToggle.x + unsnappedByToggle.width / 2, 36.5);
+    expect(Math.abs(unsnappedByToggle.x - snapped.x)).toBeGreaterThan(0.35);
+    await editor.getByRole("button", { name: "Undo", exact: true }).click();
+    await waitForSlideAutosave(page);
+    expectPercent((await framePercent(target, canvas)).x, initial.x);
+    await snapToGuides.click();
+    await expect(snapToGuides).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      editor.getByText("Snap to guides on", { exact: true }),
+    ).toBeAttached();
+
     await editor.getByRole("button", { name: "Manage custom guides" }).click();
     customGuides = page.getByRole("dialog", { name: "Custom guides" });
     await expect(customGuides).toBeVisible();
@@ -315,8 +373,11 @@ test.describe("presentation editing controls", () => {
     expectPercent(unsnapped.x + unsnapped.width / 2, 36.5);
     expect(Math.abs(unsnapped.x - snapped.x)).toBeGreaterThan(0.35);
 
+    await snapToGuides.click();
+    await expect(snapToGuides).toHaveAttribute("aria-pressed", "false");
     await page.reload();
     await waitForStableSlideStage(canvas);
+    await expect(snapToGuides).toHaveAttribute("aria-pressed", "true");
     await expect(
       editor.locator('[data-precision-guides-overlay="true"]'),
     ).toHaveCount(0);
@@ -382,6 +443,189 @@ test.describe("presentation editing controls", () => {
     await expect(
       picker.getByRole("option", { name: /Iridescent Gradient/ }),
     ).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("slide ratio preserves percent geometry through undo, redo, reload, and public rendering", async ({
+    page,
+  }, testInfo) => {
+    const { editor, canvas } = await openPresentationFixture(
+      page,
+      testInfo,
+      "slideRatio",
+    );
+    const ratioTrigger = page.getByRole("button", { name: "Slide ratio" });
+    const title = canvas.locator(
+      '[data-node-id="fixture-title"][role="button"]',
+    );
+    const initialGeometry = await framePercent(title, canvas);
+
+    await expect(ratioTrigger).toContainText("16:9");
+    await expectCanvasRatio(canvas, 16 / 9);
+
+    await selectSlideRatio(page, "4:3");
+    await expectCanvasRatio(canvas, 4 / 3);
+    expectFrameEqual(await framePercent(title, canvas), initialGeometry);
+
+    await editor.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(ratioTrigger).toContainText("16:9");
+    await expectCanvasRatio(canvas, 16 / 9);
+    expectFrameEqual(await framePercent(title, canvas), initialGeometry);
+
+    await editor.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect(ratioTrigger).toContainText("4:3");
+    await expectCanvasRatio(canvas, 4 / 3);
+    expectFrameEqual(await framePercent(title, canvas), initialGeometry);
+
+    await selectSlideRatio(page, "1:1");
+    await expectCanvasRatio(canvas, 1);
+    expectFrameEqual(await framePercent(title, canvas), initialGeometry);
+    await waitForSlideAutosave(page);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await expect(ratioTrigger).toContainText("1:1");
+    await expectCanvasRatio(canvas, 1);
+    expectFrameEqual(await framePercent(title, canvas), initialGeometry);
+
+    await ratioTrigger.click();
+    const ratioListbox = page.getByRole("listbox", { name: "Slide ratio" });
+    await expect(
+      ratioListbox.getByRole("option", { name: "1:1", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Escape");
+    await expect(ratioListbox).toHaveCount(0);
+
+    const publicPage = await page.context().newPage();
+    const response = await publicPage.goto(
+      profilePresentPath(PRESENTATION_CONTROL_FIXTURES.slideRatio, testInfo),
+    );
+    expect(response?.status()).toBe(200);
+    const publicCanvas = publicPage
+      .locator('[data-public-present-viewer] [data-slide-canvas="true"]')
+      .first();
+    await expect(publicCanvas).toBeVisible({ timeout: 30_000 });
+    await expectCanvasRatio(publicCanvas, 1);
+    await publicPage.close();
+  });
+
+  test("slide master preserves deck defaults and slide overrides through history, reload, and public rendering", async ({
+    page,
+  }, testInfo) => {
+    const { editor, canvas } = await openPresentationFixture(
+      page,
+      testInfo,
+      "slideMaster",
+    );
+    const masterTrigger = editor.getByRole("button", { name: "Slide master" });
+    const footer = canvas.locator('[data-node-id="deck-chrome-footer"]');
+    const pageNumber = canvas.locator(
+      '[data-node-id="deck-chrome-pageNumber"]',
+    );
+    const deckFooterText = "E2E deck footer";
+    const firstSlideFooterText = "E2E first-slide footer";
+
+    await masterTrigger.click();
+    let master = page.getByRole("dialog", { name: "Slide master controls" });
+    await expect(master).toBeVisible();
+    await master.getByLabel("Deck default footer").check();
+    await master
+      .getByRole("textbox", { name: /Deck-level footer copied/ })
+      .fill(deckFooterText);
+    const pageNumberToggle = master.getByRole("combobox", {
+      name: "Deck default page number",
+    });
+    const pageNumberFormat = master.getByRole("combobox", {
+      name: "Format",
+      exact: true,
+    });
+    await expect(pageNumberToggle).toBeVisible();
+    await pageNumberToggle.selectOption("on");
+    await expect(pageNumberFormat).toBeVisible();
+    await pageNumberFormat.selectOption("number-total");
+    await expect(footer).toContainText(deckFooterText);
+    await expect(pageNumber).toContainText("1 / 2");
+
+    const footerOverride = master.getByRole("combobox", {
+      name: "Footer",
+      exact: true,
+    });
+    await expect(footerOverride).toBeVisible();
+    await footerOverride.selectOption("override");
+    await master
+      .getByPlaceholder("Footer text")
+      .last()
+      .fill(firstSlideFooterText);
+    await expect(footer).toContainText(firstSlideFooterText);
+
+    await page.keyboard.press("Escape");
+    await expect(master).toHaveCount(0);
+    await expect(masterTrigger).toBeFocused();
+
+    const filmstrip = editor.locator('[aria-label="Slide filmstrip"]');
+    const firstSlide = filmstrip.getByRole("button", {
+      name: `Slide 1: ${E2E_PROFILE_FIXTURE.slideTitleText}`,
+    });
+    const secondSlide = filmstrip.getByRole("button", {
+      name: `Slide 2: ${E2E_PROFILE_FIXTURE.slideTwoTitleText}`,
+    });
+    await secondSlide.click();
+    await expect(footer).toContainText(deckFooterText);
+    await expect(pageNumber).toContainText("2 / 2");
+
+    await editor.getByRole("button", { name: "Undo", exact: true }).click();
+    await firstSlide.click();
+    await expect(footer).toContainText(deckFooterText);
+    await editor.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect(footer).toContainText(firstSlideFooterText);
+    await waitForSlideAutosave(page);
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(canvas);
+    await expect(footer).toContainText(firstSlideFooterText);
+    await expect(pageNumber).toContainText("1 / 2");
+    await masterTrigger.click();
+    master = page.getByRole("dialog", { name: "Slide master controls" });
+    await expect(master.getByLabel("Deck default footer")).toBeChecked();
+    await expect(
+      master.getByRole("textbox", { name: /Deck-level footer copied/ }),
+    ).toHaveValue(deckFooterText);
+    await expect(
+      master.getByRole("combobox", { name: "Footer", exact: true }),
+    ).toHaveValue("override");
+    await expect(master.getByPlaceholder("Footer text").last()).toHaveValue(
+      firstSlideFooterText,
+    );
+    await page.keyboard.press("Escape");
+    await expect(masterTrigger).toBeFocused();
+
+    const publicPage = await page.context().newPage();
+    const response = await publicPage.goto(
+      profilePresentPath(PRESENTATION_CONTROL_FIXTURES.slideMaster, testInfo),
+    );
+    expect(response?.status()).toBe(200);
+    const activePublicCanvas = () =>
+      publicPage
+        .locator(
+          '[data-public-present-viewer] [aria-hidden="false"] [data-slide-canvas="true"]',
+        )
+        .first();
+    await expect(activePublicCanvas()).toBeVisible({ timeout: 30_000 });
+    await expect(
+      activePublicCanvas().locator('[data-node-id="deck-chrome-footer"]'),
+    ).toContainText(firstSlideFooterText);
+    await expect(
+      activePublicCanvas().locator('[data-node-id="deck-chrome-pageNumber"]'),
+    ).toContainText("1 / 2");
+
+    await publicPage.getByRole("button", { name: "Next slide" }).last().click();
+    await expect(
+      activePublicCanvas().locator('[data-node-id="deck-chrome-footer"]'),
+    ).toContainText(deckFooterText);
+    await expect(
+      activePublicCanvas().locator('[data-node-id="deck-chrome-pageNumber"]'),
+    ).toContainText("2 / 2");
+    await publicPage.close();
   });
 
   test("custom theme authoring saves, re-enters the picker, applies, and persists", async ({

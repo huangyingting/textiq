@@ -20,7 +20,7 @@ app.
 | `e2e/presentation/slides-conflict-recovery.spec.ts`     | Real two-session deck CAS conflicts covering keep-mine/use-server recovery and reload persistence                               |
 | `e2e/presentation/overlap-selection-regression.spec.ts` | Deterministic overlapping-node selection, stacking, grouping, locking, editing, deletion, and Layers parity                     |
 | `e2e/presentation/pointer-interactions.spec.ts`         | Real pointer drag coverage for filmstrip reorder, node transforms, connector snapping, and persistence                          |
-| `e2e/presentation/presentation-controls.spec.ts`        | Multi-select Arrange, precision guides, built-in themes, and custom theme authoring                                             |
+| `e2e/presentation/presentation-controls.spec.ts`        | Arrange/group controls, precision guides, themes, slide ratio, and Slide master history/persistence/public-render lifecycles    |
 | `e2e/presentation/touch-controls.spec.ts`               | Chromium mobile touch taps for text selection and mobile inspector navigation                                                   |
 | `e2e/ui-matrix/account-lifecycle-ui.spec.ts`            | Signup, onboarding failure recovery/deletion, profile persistence, export, password rotation, recovery failures, and safeguards |
 | `e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts` | Search/favorite failure recovery, persistence, duplicate/rename, delete/undo, trash restore, and permanent deletion             |

@@ -166,7 +166,11 @@ export function scanText(filePath, text) {
       }
     }
     findings.push(...scanRawApiRequests(normalized, text));
-    findings.push(...scanUnsafeBrowserActivations(normalized, text));
+    findings.push(
+      ...scanUnsafeBrowserActivations(normalized, text).filter(
+        (item) => !isApprovedFinding(normalized, lines, item),
+      ),
+    );
   }
 
   if (FIXTURE_FACTORY_FILES.has(normalized)) {

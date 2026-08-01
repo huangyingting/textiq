@@ -171,6 +171,16 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2e-isolated-group-layers",
     "group",
   ),
+  slideRatio: presentationFixture(
+    "e2eisolatedslideratio00001",
+    "e2eisolatedshr28",
+    "e2e-isolated-slide-ratio",
+  ),
+  slideMaster: presentationFixture(
+    "e2eisolatedslidemaster0001",
+    "e2eisolatedshr29",
+    "e2e-isolated-slide-master",
+  ),
 } as const;
 
 export type PresentationTestFixtureName =
@@ -217,6 +227,8 @@ export const PRESENTATION_CONTROL_FIXTURES = {
   versionedCustomTheme: "versionedCustomTheme",
   touchControls: "touchControls",
   groupLayerOrder: "groupLayerOrder",
+  slideRatio: "slideRatio",
+  slideMaster: "slideMaster",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
 export const E2E_CUSTOM_THEME_FIXTURE = {

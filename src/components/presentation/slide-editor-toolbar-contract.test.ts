@@ -61,6 +61,7 @@ describe("SlideEditor toolbar command ownership", () => {
       topToolbarSource.includes('aria-label="Slide master controls"'),
       true,
     );
+    assert.equal(topToolbarSource.includes("restoreFocusOnClose"), true);
   });
 
   test("routes slide master updates through existing deck and slide patch handlers", () => {

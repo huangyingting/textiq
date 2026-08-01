@@ -223,6 +223,11 @@ Theme | Ratio | Deck chrome | Snap || Source | Rebuild || More | Undo Redo | Pre
 Toolbar popovers that execute commands expose menu semantics
 (`role="menu"`/`menuitem*`) and keyboard traversal so assistive technology gets
 the same command contract as pointer users.
+Dialog-style toolbar popovers restore focus to their opener when Escape or an
+outside pointer action closes them. Slide master uses that dialog lifecycle for
+deck-wide chrome defaults and selected-slide overrides; those mutations share
+the editor history/autosave contract and render through the same public deck
+projection after persistence.
 
 Manual save, regenerate, present/share, and all export formats share one
 synchronous toolbar-operation boundary. Duplicate or competing activation is
