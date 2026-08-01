@@ -36,7 +36,7 @@ import type { ReactTestInstance } from "react-test-renderer";
 import { mountWithPortalDom, withPortalDom } from "@/test/portal-dom";
 import { textOf, waitForAsyncDrain } from "@/test/render-text";
 import { buildVisual, buildVisualNode } from "@/test/builders/visual";
-import { FloatingSurface } from "@/components/ui";
+import { ColorPicker, FloatingSurface } from "@/components/ui";
 import type { BrandStyle } from "@/lib/brand/schema";
 import type { GenerateResult } from "@/lib/visual/generate";
 import type { VisualGenerationActionPort } from "@/lib/action-ports";
@@ -221,6 +221,29 @@ describe("VisualContextPopover — panel-mode rendering & accessibility", () => 
 });
 
 describe("VisualContextPopover — panel switching (open/close)", () => {
+  test("panel color pickers use the nested-menu tier above their host sheet", () => {
+    withPortalDom(() => {
+      stubFetch();
+      const { renderer } = renderPopover({ selectedNodeId: "node-1" });
+      try {
+        act(() => {
+          (
+            findToolbarButton(renderer.root, "Colors").props
+              .onClick as () => void
+          )();
+        });
+        const pickers = renderer.root.findAllByType(ColorPicker);
+        assert.ok(pickers.length > 0);
+        assert.equal(
+          pickers.every((picker) => picker.props.layer === "menu"),
+          true,
+        );
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("clicking a toolbar item opens its section and flips the aria-label to Hide; clicking again closes it", () => {
     withPortalDom(() => {
       stubFetch();
@@ -955,6 +978,7 @@ describe("VisualContextPopover — float mode wiring", () => {
         const surface = renderer.root.findByType(FloatingSurface);
         assert.equal(surface.props.role, "region");
         assert.equal(surface.props["aria-label"], "Visual controls");
+        assert.equal(surface.props.layer, "canvas");
         assert.equal(surface.props.closeOnClickAway, false);
         assert.equal(surface.props.style.width, 400);
         assert.equal(surface.props.clampToViewport, true);

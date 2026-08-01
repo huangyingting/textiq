@@ -61,6 +61,7 @@ import {
 } from "lexical";
 
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
+import { FloatingSurface } from "@/components/ui";
 import {
   $getDocumentTableStateForKey,
   type DocumentTableControlState,
@@ -671,6 +672,11 @@ describe("FloatingTableToolbar", () => {
     });
     const toolbars = findToolbars(renderer as ReactTestRenderer);
     assert.equal(toolbars.length, 1);
+    assert.equal(
+      (renderer as ReactTestRenderer).root.findByType(FloatingSurface).props
+        .layer,
+      "canvas",
+    );
     assert.equal(toolbars[0]?.props["aria-label"], "Table editing");
     const label = (renderer as ReactTestRenderer).root.find(
       (instance) =>

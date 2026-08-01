@@ -401,6 +401,7 @@ describe("ExportDialog", () => {
         const colorField = renderer.root.findByProps({
           "aria-label": "Custom background color",
         });
+        assert.equal(colorField.props.layer, "menu");
         act(() => {
           (colorField.props.onChange as (hex: string) => void)("#112233");
         });

@@ -7,6 +7,7 @@ import React, {
 } from "react";
 
 import { ContextToolbar, type ContextToolbarProps } from "./context-toolbar";
+import { ContextToolbarColorInput } from "./context-toolbar-primitives";
 import type { SlideChildNode } from "@/lib/presentation/schema";
 import type { StyleObject, StylePatch } from "@/lib/presentation/style-schema";
 import {
@@ -348,6 +349,15 @@ function valueForNumber(label: string) {
     }[label] ?? 1
   );
 }
+
+test("context toolbar color pickers use the dropdown tier below panels and reserve tooltip", () => {
+  const element = ContextToolbarColorInput({
+    label: "Slide background",
+    value: "#ffffff",
+    onChange: () => undefined,
+  });
+  assert.equal(element.props.layer, "dropdown");
+});
 
 function exerciseToolbarTree(tree: ReactNode) {
   const labels: string[] = [];

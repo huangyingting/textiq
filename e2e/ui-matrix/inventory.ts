@@ -522,13 +522,18 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
     owners: ["editor", "documents"],
     coverage:
-      "Deterministic document body editability, slide-entry navigation, and viewer read-only affordance removal.",
-    runMode: "advisory-ci",
+      "Deterministic document body editability, slide-entry navigation, viewer read-only affordance removal, and required-profile mobile editing-sheet nested-overlay hit testing.",
+    runMode: "required-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded viewer"],
-    devices: ["Desktop Chrome"],
-    ciStatus: "advisory deterministic E2E workflow",
-    sourceRefs: ["e2e/ui-matrix/README.md", "docs/editor/document-editor.md"],
+    devices: ["Desktop Chrome", "390x844 mobile"],
+    ciStatus:
+      "required mobile overlay case plus advisory deterministic E2E coverage",
+    sourceRefs: [
+      "e2e/ui-matrix/README.md",
+      "docs/editor/document-editor.md",
+      ".github/workflows/e2e-deterministic.yml",
+    ],
   },
   {
     spec: "e2e/ui-matrix/presentation-ui.spec.ts",

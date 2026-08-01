@@ -537,6 +537,7 @@ export function ExportDialog({
                           color={options.customBackground ?? "#ffffff"}
                           onChange={setCustomBackground}
                           aria-label="Custom background color"
+                          layer="menu"
                         />
                         <span className="font-mono text-xs text-ds-text-muted">
                           {options.customBackground ?? "#ffffff"}

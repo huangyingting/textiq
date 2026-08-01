@@ -69,6 +69,7 @@ import { LexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { $isVisualNode, VisualNode } from "@/lib/lexical/visual-node";
 import { FIXTURES } from "@/lib/visual/fixtures";
+import { FloatingSurface } from "@/components/ui";
 
 import {
   composerContextFor,
@@ -402,6 +403,11 @@ describe("BlockSparkPlugin", () => {
         "Hello",
       );
       assert.equal(findDialogs(renderer as ReactTestRenderer).length, 1);
+      assert.equal(
+        (renderer as ReactTestRenderer).root.findByType(FloatingSurface).props
+          .layer,
+        "canvas",
+      );
       const reopenedButton = findGutterButton(renderer as ReactTestRenderer)!;
       assert.equal(reopenedButton.props["aria-expanded"], true);
     });

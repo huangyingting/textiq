@@ -756,6 +756,8 @@ describe("source review and context menu render surfaces", () => {
       assert.equal(stageNodeMenuLabel(textNode), "Text: Menu label");
       assert.equal(stageNodeMenuLabel(connectorNode), "Connector");
       assert.match(textHtml, /Select layer/);
+      assert.match(textHtml, /\bz-canvas\b/);
+      assert.doesNotMatch(textHtml, /\bz-dropdown\b/);
       assert.match(textHtml, /Current/);
       assert.match(textHtml, /left:8/);
       assert.match(textHtml, /Ctrl\+C/);

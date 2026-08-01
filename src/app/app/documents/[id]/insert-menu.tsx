@@ -411,6 +411,7 @@ export function InsertMenuPlugin() {
         }}
         position={position}
         role="presentation"
+        layer="canvas"
         radius="lg"
         elevation="overlay"
         keepSelection

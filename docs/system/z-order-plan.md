@@ -1,7 +1,7 @@
 ---
 type: "plan"
-status: "active — phase 1 landed (canvas/menu layers); migration phases pending"
-last_updated: "2026-07-07"
+status: "completed — semantic layer migration and browser regression coverage landed"
+last_updated: "2026-08-01"
 description: "A single, semantic z-order system for TextIQ app chrome. Adds a canvas/editing-overlay layer and a nested-menu layer so selection-anchored surfaces (context toolbar) stop covering side panels and dialogs, and menus opened inside panels/dialogs stop being clipped behind them."
 ---
 
@@ -133,12 +133,18 @@ Rules:
 
 ## Phased Rollout
 
-1. **Phase 1 (landed): additive tokens.** Add `canvas`/`menu` to the scale and
-   `UI_LAYER`. Non-breaking; nothing changes visually until adopted.
-2. **Phase 2: fix the reported bug.** Context toolbar → `canvas`; inspector
-   claims `panel`.
-3. **Phase 3: nested menus.** Move panel/dialog-hosted menus to `menu`.
-4. **Phase 4: reserve `tooltip`, document invariants, add regression coverage.**
+1. **Phase 1 (landed): additive tokens.** Added `canvas`/`menu` to the scale and
+   `UI_LAYER`.
+2. **Phase 2 (landed): canvas and panel ownership.** Context, text, table,
+   insert, visual-generation, visual-context, and stage-context surfaces use
+   `canvas`; desktop/mobile inspectors claim `panel`.
+3. **Phase 3 (landed): nested menus.** Shared select menus and color pickers
+   hosted by a panel or modal use `menu`, including the mobile text-format
+   sheet, embedded visual controls, and export dialog.
+4. **Phase 4 (landed): tooltip reservation and regression coverage.** Color
+   pickers no longer borrow `tooltip`; focused component tests pin semantic
+   layer assignments, and the required deterministic browser profile verifies
+   the mobile sheet picker is topmost and independently dismissible.
 
 ## Risks
 

@@ -580,6 +580,7 @@ export function BlockSparkPlugin() {
         position={{ top: PANEL_GAP, left: PANEL_GAP }}
         role="dialog"
         aria-label="Insert a visual for this block"
+        layer="canvas"
         radius="lg"
         elevation="overlay"
         closeOnClickAway={false}

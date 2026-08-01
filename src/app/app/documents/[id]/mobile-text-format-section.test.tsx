@@ -339,6 +339,7 @@ test("the text-color tool reflects a real pre-set style and apply/reset patch re
     const textColor = renderer.root.findByProps({ "aria-label": "Text color" });
     assert.equal(textColor.props.color, "#ff0000");
     assert.equal(textColor.props.active, true);
+    assert.equal(textColor.props.layer, "menu");
 
     await act(async () => {
       textColor.props.onChange("#00ff00");

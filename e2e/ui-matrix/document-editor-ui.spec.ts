@@ -255,7 +255,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
       isMobile: true,
     });
 
-    test("selected text uses the mobile editing sheet and restores its trigger on Escape", async ({
+    test("selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape @required-profile", async ({
       page,
     }) => {
       await openProfileDocument(page);
@@ -278,6 +278,37 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
       await expect(
         sheet.getByRole("toolbar", { name: "Text formatting" }),
       ).toBeVisible();
+
+      await sheet.getByRole("button", { name: "Text color" }).click();
+      const colorPicker = page.getByRole("dialog", {
+        name: "Text color picker",
+      });
+      await expect(colorPicker).toBeVisible();
+      const layerOrder = await colorPicker.evaluate((picker, sheetLabel) => {
+        const sheet = document.querySelector(
+          `[role="dialog"][aria-label="${sheetLabel}"]`,
+        );
+        return {
+          picker: Number.parseInt(getComputedStyle(picker).zIndex, 10),
+          sheet: sheet
+            ? Number.parseInt(getComputedStyle(sheet).zIndex, 10)
+            : Number.NaN,
+        };
+      }, "Editing panel");
+      expect(layerOrder.picker).toBeGreaterThan(layerOrder.sheet);
+      const pickerOwnsCenterHit = await colorPicker.evaluate((picker) => {
+        const rect = picker.getBoundingClientRect();
+        const topmost = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return Boolean(topmost && picker.contains(topmost));
+      });
+      expect(pickerOwnsCenterHit).toBe(true);
+
+      await page.keyboard.press("Escape");
+      await expect(colorPicker).toHaveCount(0);
+      await expect(sheet).toBeVisible();
 
       await page.keyboard.press("Escape");
       await expect(sheet).toHaveCount(0);

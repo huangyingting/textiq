@@ -38,6 +38,7 @@ import {
   cx,
   FOCUS_RING,
   type SegmentedOption,
+  type UILayer,
 } from "@/components/ui";
 import { VISUAL_KIND_META } from "@/lib/lexical/tool-registry";
 import {
@@ -289,15 +290,22 @@ function ColorField({
   label,
   color,
   onChange,
+  layer,
 }: {
   label: string;
   color: string;
   onChange: (value: string) => void;
+  layer: UILayer;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-[var(--ds-text-primary,#18181b)]">
       <span className="text-[var(--ds-text-muted,#6f7d83)]">{label}</span>
-      <ColorPicker color={color} aria-label={label} onChange={onChange} />
+      <ColorPicker
+        color={color}
+        aria-label={label}
+        onChange={onChange}
+        layer={layer}
+      />
     </div>
   );
 }
@@ -306,10 +314,12 @@ function CompactColorField({
   label,
   color,
   onChange,
+  layer,
 }: {
   label: string;
   color: string;
   onChange: (value: string) => void;
+  layer: UILayer;
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-1">
@@ -318,6 +328,7 @@ function CompactColorField({
         aria-label={label}
         onChange={onChange}
         size="sm"
+        layer={layer}
       />
       <span className="max-w-full truncate text-[10px] text-[var(--ds-text-muted,#6f7d83)]">
         {label}
@@ -706,6 +717,7 @@ function PopoverShell({
       position={coords}
       role="region"
       aria-label="Visual controls"
+      layer="canvas"
       elevation="popover"
       radius="lg"
       closeOnEscape
@@ -802,6 +814,7 @@ export function VisualContextPopover({
     [visual.nodes, selectedNodeId],
   );
   const componentContext = selectedNode !== null;
+  const nestedPickerLayer: UILayer = mode === "panel" ? "menu" : "dropdown";
   const effectiveActiveSection: MenuSection | null =
     componentContext &&
     activeSection !== "colors" &&
@@ -949,6 +962,7 @@ export function VisualContextPopover({
               <CompactColorField
                 label="Fill"
                 color={selectedNode.color ?? style.nodeFill}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     {
@@ -964,6 +978,7 @@ export function VisualContextPopover({
               <CompactColorField
                 label="Stroke"
                 color={selectedNode.stroke ?? style.nodeStroke}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     {
@@ -979,6 +994,7 @@ export function VisualContextPopover({
               <CompactColorField
                 label="Text"
                 color={selectedNode.textColor ?? style.nodeText}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     {
@@ -1175,6 +1191,7 @@ export function VisualContextPopover({
               <ColorField
                 label="Background"
                 color={style.background}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     { op: "visual.set_style", patch: { background: v } },
@@ -1185,6 +1202,7 @@ export function VisualContextPopover({
               <ColorField
                 label="Node fill"
                 color={style.nodeFill}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     { op: "visual.set_style", patch: { nodeFill: v } },
@@ -1195,6 +1213,7 @@ export function VisualContextPopover({
               <ColorField
                 label="Node stroke"
                 color={style.nodeStroke}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     { op: "visual.set_style", patch: { nodeStroke: v } },
@@ -1205,6 +1224,7 @@ export function VisualContextPopover({
               <ColorField
                 label="Text"
                 color={style.nodeText}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     { op: "visual.set_style", patch: { nodeText: v } },
@@ -1215,6 +1235,7 @@ export function VisualContextPopover({
               <ColorField
                 label="Edge"
                 color={style.edgeColor}
+                layer={nestedPickerLayer}
                 onChange={(v) =>
                   runVisualEdit(
                     { op: "visual.set_style", patch: { edgeColor: v } },

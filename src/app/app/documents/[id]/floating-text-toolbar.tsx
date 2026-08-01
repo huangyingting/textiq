@@ -219,6 +219,7 @@ export function FloatingTextToolbar() {
       position={coords}
       role="toolbar"
       aria-label="Text formatting"
+      layer="canvas"
       elevation="overlay"
       radius="lg"
       keepSelection

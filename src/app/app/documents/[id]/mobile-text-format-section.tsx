@@ -94,6 +94,7 @@ function SheetColorToolButton({
             active={active}
             aria-label={tool.label}
             size="sm"
+            layer="menu"
             icon={
               Icon ? <Icon aria-hidden="true" className="h-4 w-4" /> : undefined
             }

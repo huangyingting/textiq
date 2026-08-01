@@ -40,6 +40,7 @@ import { LexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { registerRichText } from "@lexical/rich-text";
 
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
+import { FloatingSurface } from "@/components/ui";
 
 import {
   composerContextFor,
@@ -224,6 +225,11 @@ describe("FloatingTextToolbar", () => {
     });
 
     assert.equal(findToolbar(renderer as ReactTestRenderer).length, 1);
+    assert.equal(
+      (renderer as ReactTestRenderer).root.findByType(FloatingSurface).props
+        .layer,
+      "canvas",
+    );
     assert.ok(
       findToolButton(renderer as ReactTestRenderer, "Bold"),
       "expected a Bold tool button",

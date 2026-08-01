@@ -88,6 +88,28 @@ test("disabling an open ColorPicker closes it without reopening when re-enabled"
   });
 });
 
+test("ColorPicker reserves tooltip layering and honors semantic nested-menu overrides", () => {
+  withPortalDom(() => {
+    const renderer = mountWithPortalDom(
+      renderPicker({ triggerChrome: "toolbar" }),
+    );
+    try {
+      act(() => trigger(renderer).props.onClick());
+      const dialog = pickerDialogs(renderer)[0];
+      assert.ok(dialog);
+      assert.match(String(dialog.props.className), /\bz-dropdown\b/);
+      assert.doesNotMatch(String(dialog.props.className), /\bz-tooltip\b/);
+
+      act(() => renderer.update(renderPicker({ layer: "menu" })));
+      const nestedDialog = pickerDialogs(renderer)[0];
+      assert.ok(nestedDialog);
+      assert.match(String(nestedDialog.props.className), /\bz-menu\b/);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+});
+
 test("closing ColorPicker during a custom-color drag removes global pointer listeners", () => {
   withPortalDom(() => {
     const listeners = new Map<string, Set<EventListener>>();

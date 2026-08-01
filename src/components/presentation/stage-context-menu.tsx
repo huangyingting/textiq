@@ -197,7 +197,7 @@ export function StageNodeContextMenu({
       }}
       style={{ position: "fixed", left, top }}
       className={cx(
-        "z-dropdown w-80 max-w-[calc(100vw-16px)] p-1.5",
+        "z-canvas w-80 max-w-[calc(100vw-16px)] p-1.5",
         MENU_CHROME,
       )}
       role="menu"

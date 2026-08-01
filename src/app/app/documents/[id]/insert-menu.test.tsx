@@ -297,6 +297,11 @@ describe("InsertMenuPlugin", () => {
       });
 
       assert.equal(findListboxes(renderer as ReactTestRenderer).length, 1);
+      assert.equal(
+        (renderer as ReactTestRenderer).root.findByType(FloatingSurface).props
+          .layer,
+        "canvas",
+      );
       assert.ok(findOptionByLabel(renderer as ReactTestRenderer, "Heading 1"));
       assert.ok(findOptionByLabel(renderer as ReactTestRenderer, "Table"));
     });

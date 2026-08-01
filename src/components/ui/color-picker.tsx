@@ -159,7 +159,7 @@ export type ColorPickerProps = {
   disabled?: boolean;
   /** Use shared toolbar button chrome for icon-only toolbar triggers. */
   triggerChrome?: "swatch" | "toolbar";
-  /** Portal z-layer for the picker popover. Defaults from triggerChrome. */
+  /** Portal z-layer for the picker popover. Defaults to `dropdown`. */
   layer?: UILayer;
   /** Whether to expose the custom HSV/hex controls. Defaults to true. */
   allowCustom?: boolean;
@@ -501,7 +501,7 @@ export function ColorPicker({
         position={coords}
         role="dialog"
         aria-label={`${ariaLabel} picker`}
-        layer={layer ?? (triggerChrome === "toolbar" ? "tooltip" : "dropdown")}
+        layer={layer ?? "dropdown"}
         elevation="popover"
         radius="lg"
         clickAwayIgnoreRef={triggerRef}

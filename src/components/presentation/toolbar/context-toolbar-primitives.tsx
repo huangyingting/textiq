@@ -122,7 +122,7 @@ export function ContextToolbarColorInput({
       aria-label={label}
       size="sm"
       triggerChrome="swatch"
-      layer="tooltip"
+      layer="dropdown"
       preserveSelection
     />
   );

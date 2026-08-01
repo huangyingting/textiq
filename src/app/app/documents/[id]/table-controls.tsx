@@ -468,6 +468,7 @@ export function FloatingTableToolbar({ editable }: { editable: boolean }) {
       open={visible}
       position={coords}
       role="presentation"
+      layer="canvas"
       elevation="overlay"
       radius="lg"
       closeOnEscape={false}
