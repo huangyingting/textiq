@@ -89,8 +89,10 @@ export function VisualCard({
   const [editor] = useLexicalComposerContext();
 
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<SVGSVGElement | null>(null);
   const suppressPreviewClickRef = useRef(false);
+  const restorePreviewFocusRef = useRef(false);
 
   // Register this card's SVG getter in the document-level export registry so
   // the whole-document export can include every visual in reading order.
@@ -99,6 +101,7 @@ export function VisualCard({
   const [editable, setEditable] = useState(() => editor.isEditable());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [focusFirstTool, setFocusFirstTool] = useState(false);
   // Whether this card's editing controls are open. Local state (not a Lexical
   // NodeSelection) so it survives collaborative updates — see the component doc.
   const [open, setOpen] = useState(false);
@@ -331,13 +334,18 @@ export function VisualCard({
   // Opens this card's editing controls. Visibility is local state; the
   // editor-root click-away above closes any other open visual, giving
   // single-active-visual semantics without a (collab-stripped) NodeSelection.
-  const selectVisual = useCallback((nodeId?: string | null) => {
-    setSelectedNodeId(nodeId ?? null);
-    setSelectedEdgeId(null);
-    setOpen(true);
-  }, []);
+  const selectVisual = useCallback(
+    (nodeId?: string | null, focusFirstTool = false) => {
+      setFocusFirstTool(focusFirstTool);
+      setSelectedNodeId(nodeId ?? null);
+      setSelectedEdgeId(null);
+      setOpen(true);
+    },
+    [],
+  );
 
   const selectPreviewEdge = useCallback((edgeId: string) => {
+    setFocusFirstTool(false);
     setSelectedNodeId(null);
     setSelectedEdgeId(edgeId);
     setOpen(true);
@@ -364,8 +372,15 @@ export function VisualCard({
 
   // Closes the controls (Escape / × / click-away).
   const closeControls = useCallback(() => {
+    restorePreviewFocusRef.current = true;
     setOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (showControls || !restorePreviewFocusRef.current) return;
+    restorePreviewFocusRef.current = false;
+    previewRef.current?.focus();
+  }, [showControls]);
 
   // Sync the close callback and selected-node id with the editing bottom-sheet
   // (touch fallback) so it can render the visual controls and forward close
@@ -668,6 +683,7 @@ export function VisualCard({
       ) : editable ? (
         <div className="group relative" aria-busy={activeQuickAction !== null}>
           <div
+            ref={previewRef}
             role="button"
             tabIndex={0}
             aria-label="Edit visual"
@@ -681,12 +697,12 @@ export function VisualCard({
                 suppressPreviewClickRef.current = false;
                 return;
               }
-              selectVisual(null);
+              selectVisual(null, false);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                selectVisual(null);
+                selectVisual(null, true);
               }
             }}
             className={`${cardClass} block w-full cursor-pointer text-left hover:border-[var(--ds-border-strong,rgba(0,0,0,0.2))] ${FOCUS_RING}`}
@@ -878,6 +894,7 @@ export function VisualCard({
           currentSourceText={currentSourceText}
           onApplyBrandToAll={applyBrandToAll}
           onDuplicate={duplicateVisual}
+          focusFirstTool={focusFirstTool}
         />
       ) : null}
     </motion.div>

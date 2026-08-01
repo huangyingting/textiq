@@ -47,6 +47,7 @@ import {
   COMMAND_PRIORITY_LOW,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
   type LexicalEditor,
 } from "lexical";
 import { $isListNode, ListItemNode, ListNode } from "@lexical/list";
@@ -67,6 +68,7 @@ import { LexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
 import { EditorContextProvider } from "@/lib/lexical/editor-context";
 import { INSERT_VISUAL_COMMAND } from "@/lib/lexical/commands";
+import { FloatingSurface } from "@/components/ui";
 
 import {
   composerContextFor,
@@ -197,6 +199,10 @@ function findListboxes(renderer: ReactTestRenderer): ReactTestInstance[] {
     (instance) =>
       typeof instance.type === "string" && instance.props.role === "listbox",
   );
+}
+
+function floatingSurfaceOpen(renderer: ReactTestRenderer): boolean {
+  return renderer.root.findByType(FloatingSurface).props.open as boolean;
 }
 
 function findOptions(renderer: ReactTestRenderer): ReactTestInstance[] {
@@ -529,6 +535,35 @@ describe("InsertMenuPlugin", () => {
       // own `open` prop never becomes true — this is a from-scratch closed
       // render, not a same-tree transition, so it's safe to assert directly.
       assert.equal(findListboxes(renderer as ReactTestRenderer).length, 0);
+    });
+  });
+
+  test("slash mode: Escape dismisses the unchanged trigger and a new trigger can reopen", () => {
+    restoreDom = installFakeDom();
+    const editor = makeEditor();
+    withElementRects(editor, () => {
+      withMatchMedia(true, () => {
+        renderer = mountMenu(editor);
+      });
+      selectParagraph(editor, "/head");
+      assert.equal(floatingSurfaceOpen(renderer as ReactTestRenderer), true);
+
+      let prevented = false;
+      let handled = false;
+      act(() => {
+        handled = editor.dispatchCommand(KEY_ESCAPE_COMMAND, {
+          preventDefault: () => {
+            prevented = true;
+          },
+        } as KeyboardEvent);
+      });
+
+      assert.equal(handled, true);
+      assert.equal(prevented, true);
+      assert.equal(floatingSurfaceOpen(renderer as ReactTestRenderer), false);
+
+      selectParagraph(editor, "/head");
+      assert.equal(floatingSurfaceOpen(renderer as ReactTestRenderer), true);
     });
   });
 

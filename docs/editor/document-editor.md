@@ -158,6 +158,24 @@ Most text/insert/visual surfaces consume the registry through
 Both surfaces are dumb renderers: they own positioning and keyboard handling but
 delegate all behavior to `tool.run(...)` / `tool.apply(...)`.
 
+Keyboard interaction is part of each surface contract:
+
+- With a text range selected, plain Tab moves from the editor into the current
+  roving item in the portalled text-format toolbar. Arrow keys wrap, Home/End
+  jump to the first/last tool, and Escape returns focus to the editor without
+  discarding the selection. Running a format command returns focus to the
+  editor so typing can continue.
+- The fine-pointer `+` menu takes focus when opened and supports clamped Arrow
+  navigation, Enter, and Escape. The slash menu keeps focus in the editor while
+  filtering from the current `/query`; Arrow keys change the active option and
+  Enter commits it. Escape dismisses the exact unchanged block/text trigger
+  while preserving the typed query. Changing the query or moving to another
+  block makes slash suggestions eligible again.
+- Activating an editable visual preview with Enter or Space moves focus into
+  the first tool after the portalled visual-controls region mounts. Escape
+  closes that region and restores focus to the remounted visual preview;
+  pointer click-away leaves focus with the pointer target instead.
+
 Document table editing is not registry-driven because table controls need richer
 table-local state (row/column counts, final-row/final-column guards, and header
 row state) from [`table-controls.ts`](../../src/lib/lexical/table-controls.ts).

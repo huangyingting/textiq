@@ -33,6 +33,7 @@ import {
   $isRangeSelection,
   $isTextNode,
   $getSelection,
+  KEY_TAB_COMMAND,
   type LexicalEditor,
 } from "lexical";
 import { LexicalComposerContext } from "@lexical/react/LexicalComposerContext";
@@ -307,7 +308,7 @@ describe("FloatingTextToolbar", () => {
     });
   });
 
-  test("ArrowRight roves the tabbable button forward and Escape returns focus to the editor", () => {
+  test("Tab enters the toolbar, ArrowRight roves forward, and Escape returns focus to the editor", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();
     let editorFocusCalls = 0;
@@ -384,6 +385,26 @@ describe("FloatingTextToolbar", () => {
           typeof instance.props.onFocus === "function",
       );
 
+      let tabPrevented = false;
+      let tabHandled = false;
+      act(() => {
+        tabHandled = editor.dispatchCommand(KEY_TAB_COMMAND, {
+          shiftKey: false,
+          preventDefault: () => {
+            tabPrevented = true;
+          },
+        } as KeyboardEvent);
+      });
+      assert.equal(tabHandled, true, "expected Tab to enter the toolbar");
+      assert.equal(tabPrevented, true, "expected Tab default to be prevented");
+      const buttons = renderer!.root.findAll((i) => i.type === "button");
+      const firstWrapper = wrapperFor(buttons[0]);
+      assert.equal(
+        (globalThis.document as unknown as { activeElement: unknown })
+          .activeElement,
+        firstWrapper,
+      );
+
       let prevented = false;
       act(() => {
         toolbar.props.onKeyDown({
@@ -394,13 +415,12 @@ describe("FloatingTextToolbar", () => {
         });
       });
       assert.equal(prevented, true, "expected ArrowRight to be handled");
-      // The first button (index 0) should now have received focus.
-      const buttons = renderer!.root.findAll((i) => i.type === "button");
-      const firstWrapper = wrapperFor(buttons[0]);
+      // Tab entered at the first button, so ArrowRight advances to the second.
+      const secondWrapper = wrapperFor(buttons[1]);
       assert.equal(
         (globalThis.document as unknown as { activeElement: unknown })
           .activeElement,
-        firstWrapper,
+        secondWrapper,
       );
 
       act(() => {

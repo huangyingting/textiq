@@ -673,6 +673,8 @@ export type VisualContextPopoverProps = {
   mode?: "float" | "panel";
   /** Duplicate this visual node (shown in the toolbar header). */
   onDuplicate?: () => void;
+  /** Move keyboard-open focus into the first visual tool after portal mount. */
+  focusFirstTool?: boolean;
   /** Route-owned AI visual generation port. Defaults to the document route API. */
   visualGenerationPort?: VisualGenerationActionPort;
 };
@@ -747,10 +749,18 @@ export function VisualContextPopover({
   onApplyBrandToAll,
   mode = "float",
   onDuplicate,
+  focusFirstTool = false,
   visualGenerationPort = routeVisualGenerationPort,
 }: VisualContextPopoverProps) {
   const measureRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!focusFirstTool) return;
+    toolbarRef.current
+      ?.querySelector<HTMLElement>("button:not(:disabled)")
+      ?.focus();
+  }, [focusFirstTool]);
 
   // Drill-down navigation: null = main menu, string = active submenu section
   const [activeSection, setActiveSection] = useState<MenuSection | null>(null);

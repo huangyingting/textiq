@@ -438,6 +438,55 @@ describe("VisualCard", () => {
     assert.equal(findByAriaLabel(renderer!, "Edit visual"), null);
   });
 
+  test("keyboard activation requests initial tool focus and closing restores the preview", () => {
+    restoreDom = installFakeDom();
+    const editor = makeEditor();
+    const key = insertVisualNode(editor, FIXTURES.list);
+    let previewFocusCalls = 0;
+    const previewNode = {
+      focus: () => {
+        previewFocusCalls += 1;
+      },
+    };
+    const createNodeMock = (element: ReactElement) => {
+      const props = (element as { props?: Record<string, unknown> }).props;
+      if (props?.["aria-label"] === "Edit visual") return previewNode;
+      if (props?.["data-visual-chrome"]) {
+        return { contains: () => true };
+      }
+      return {};
+    };
+
+    withMatchMediaFine(() => {
+      renderer = mountCard(
+        editor,
+        { nodeKey: key, visual: FIXTURES.list },
+        createNodeMock,
+      );
+    });
+
+    let prevented = false;
+    act(() => {
+      findByAriaLabel(renderer!, "Edit visual")!.props.onKeyDown({
+        key: "Enter",
+        preventDefault: () => {
+          prevented = true;
+        },
+      });
+    });
+    assert.equal(prevented, true);
+
+    const popover = findVisualContextPopover(renderer!)!;
+    assert.ok(popover);
+    assert.equal(popover.props.focusFirstTool, true);
+
+    act(() => {
+      popover.props.onClose();
+    });
+    assert.ok(findByAriaLabel(renderer!, "Edit visual"));
+    assert.equal(previewFocusCalls, 1);
+  });
+
   test("registerEditableListener flipping non-editable while open closes the controls", () => {
     restoreDom = installFakeDom();
     const editor = makeEditor();

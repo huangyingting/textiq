@@ -97,7 +97,7 @@ export function InsertMenuPlugin() {
 
   // Derive the slash trigger from the snapshot: a collapsed caret in a block
   // whose text is "/" optionally followed by a non-whitespace filter.
-  const slash = useMemo(() => {
+  const rawSlash = useMemo(() => {
     if (!ctx.editable || ctx.kind === "range" || ctx.kind === "visual") {
       return null;
     }
@@ -105,6 +105,19 @@ export function InsertMenuPlugin() {
     const match = /^\/(\S*)$/.exec(text);
     return match ? { query: match[1].toLowerCase() } : null;
   }, [ctx.editable, ctx.kind, ctx.blockText]);
+  const slashTriggerKey = rawSlash
+    ? JSON.stringify([ctx.blockKey ?? "", ctx.blockText ?? ""])
+    : null;
+  const [dismissedSlashKey, setDismissedSlashKey] = useState<string | null>(
+    null,
+  );
+  if (dismissedSlashKey !== null && dismissedSlashKey !== slashTriggerKey) {
+    setDismissedSlashKey(null);
+  }
+  const slash =
+    rawSlash !== null && dismissedSlashKey !== slashTriggerKey
+      ? rawSlash
+      : null;
 
   // The "+" gutter button shows on an empty paragraph (only when no menu is
   // open, and only on fine-pointer/desktop devices — it's a hover affordance).
@@ -201,11 +214,13 @@ export function InsertMenuPlugin() {
   // Refs keep the Lexical key-command handlers (slash mode) free of stale
   // closures.
   const slashActiveRef = useRef(false);
+  const slashTriggerKeyRef = useRef<string | null>(slashTriggerKey);
   const flatToolsRef = useRef(flatTools);
   const activeIndexRef = useRef(safeActive);
   const commitRef = useRef(commit);
   useEffect(() => {
     slashActiveRef.current = mode === "slash" && slashHasMatches;
+    slashTriggerKeyRef.current = slashTriggerKey;
     flatToolsRef.current = flatTools;
     activeIndexRef.current = safeActive;
     commitRef.current = commit;
@@ -265,10 +280,12 @@ export function InsertMenuPlugin() {
       ),
       editor.registerCommand(
         KEY_ESCAPE_COMMAND,
-        () => {
+        (event) => {
           if (!slashActiveRef.current) {
             return false;
           }
+          event?.preventDefault();
+          setDismissedSlashKey(slashTriggerKeyRef.current);
           closeMenu();
           editor.focus();
           return true;

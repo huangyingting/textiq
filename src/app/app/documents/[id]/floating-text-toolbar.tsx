@@ -1,8 +1,10 @@
 "use client";
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { COMMAND_PRIORITY_HIGH, KEY_TAB_COMMAND } from "lexical";
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -81,6 +83,34 @@ export function FloatingTextToolbar() {
       ),
     [],
   );
+
+  // The toolbar is portalled after the editor subtree. Without an explicit
+  // handoff, pressing Tab from a text selection reaches later controls inside
+  // the document (for example, an embedded visual) before it can reach this
+  // contextual toolbar. Consume plain Tab only while the toolbar is visible
+  // and move focus to its current roving item; Shift+Tab and modified Tab keep
+  // their native behavior.
+  useEffect(() => {
+    if (!visible) return;
+
+    return editor.registerCommand(
+      KEY_TAB_COMMAND,
+      (event) => {
+        if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+          return false;
+        }
+        const items = getItems();
+        if (items.length === 0) return false;
+
+        event.preventDefault();
+        const active = Math.min(rovingIndex, items.length - 1);
+        setRovingIndex(active);
+        items[active]?.focus();
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, getItems, rovingIndex, visible]);
 
   // Reset the roving cursor when the toolbar closes so it reopens at the first
   // tool. Uses the render-phase "adjust state" pattern (no setState in effect).
