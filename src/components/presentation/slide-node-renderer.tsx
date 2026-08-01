@@ -245,7 +245,37 @@ export function interactiveNodeCursor({
 // Text node content
 // ---------------------------------------------------------------------------
 
-function runStyle(run: TextRun): React.CSSProperties {
+function fittedFontSize(
+  fontSizePt: number | null | undefined,
+  maxFontSizeCqh?: number,
+): string | undefined {
+  if (fontSizePt === null || fontSizePt === undefined) return undefined;
+  if (maxFontSizeCqh === undefined) return `${fontSizePt}pt`;
+  return `min(${fontSizePt}pt, ${maxFontSizeCqh}cqh)`;
+}
+
+function textLineCount(content: TextContent): number {
+  return content.paragraphs.reduce((count, paragraph) => {
+    const text =
+      paragraph.runs && paragraph.runs.length > 0
+        ? paragraph.runs.map((run) => run.text).join("")
+        : paragraph.text;
+    return count + Math.max(1, text.split(/\r?\n/).length);
+  }, 0);
+}
+
+export function textNodeMaxFontSizeCqh(
+  content: TextContent,
+  lineHeight = 1.5,
+): number {
+  const safeLineHeight =
+    Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : 1.5;
+  return Number(
+    (100 / (Math.max(1, textLineCount(content)) * safeLineHeight)).toFixed(4),
+  );
+}
+
+function runStyle(run: TextRun, maxFontSizeCqh?: number): React.CSSProperties {
   const color = sanitizeInlineTextColor(run.localStyle?.color);
   const fontSizePt = sanitizeInlineTextFontSizePt(run.localStyle?.fontSizePt);
   const fontFamily = sanitizeInlineTextFontFamily(run.localStyle?.fontFamily);
@@ -264,14 +294,19 @@ function runStyle(run: TextRun): React.CSSProperties {
       : {}),
     ...(run.code ? { fontFamily: "monospace" } : {}),
     ...(color ? { color } : {}),
-    ...(fontSizePt !== null ? { fontSize: `${fontSizePt}pt` } : {}),
+    ...(fontSizePt !== null
+      ? { fontSize: fittedFontSize(fontSizePt, maxFontSizeCqh) }
+      : {}),
     ...(fontFamily ? { fontFamily } : {}),
   };
 }
 
-function renderTextRuns(runs: readonly TextRun[]): JSX.Element[] {
+function renderTextRuns(
+  runs: readonly TextRun[],
+  maxFontSizeCqh?: number,
+): JSX.Element[] {
   return runs.map((run, i) => {
-    const style = runStyle(run);
+    const style = runStyle(run, maxFontSizeCqh);
     const link = normalizeInlineTextLink(run.link);
     return link ? (
       <a
@@ -375,10 +410,14 @@ function resolveOrderedListMarkers(
 
 function TextNodeContent({
   content,
+  fontSizePt,
+  lineHeight,
   paragraphSpacingPt,
   verticalAlign,
 }: {
   content: TextContent;
+  fontSizePt?: number;
+  lineHeight?: number;
   paragraphSpacingPt?: number;
   verticalAlign?: "top" | "middle" | "bottom";
 }): JSX.Element {
@@ -387,6 +426,7 @@ function TextNodeContent({
       ? `${paragraphSpacingPt}pt`
       : undefined;
   const orderedListMarkers = resolveOrderedListMarkers(content.paragraphs);
+  const maxFontSizeCqh = textNodeMaxFontSizeCqh(content, lineHeight);
 
   return (
     <div
@@ -394,6 +434,7 @@ function TextNodeContent({
       style={{
         display: "flex",
         flexDirection: "column",
+        fontSize: fittedFontSize(fontSizePt, maxFontSizeCqh),
         justifyContent: textVerticalAlignToJustifyContent(verticalAlign),
       }}
     >
@@ -422,7 +463,7 @@ function TextNodeContent({
           ) : null}
           <span>
             {para.runs && para.runs.length > 0
-              ? renderTextRuns(para.runs)
+              ? renderTextRuns(para.runs, maxFontSizeCqh)
               : para.text}
           </span>
         </p>
@@ -1110,6 +1151,7 @@ export const SlideNodeRenderer = memo(function SlideNodeRenderer({
         })
       : {}),
     boxSizing: "border-box",
+    ...(content.type === "text" ? { containerType: "size" } : {}),
     cursor: interactiveNodeCursor({
       hasPointerHandler: onPointerDown !== undefined,
       locked: isLocked,
@@ -1297,6 +1339,8 @@ function renderContent(
       return (
         <TextNodeContent
           content={content.content}
+          fontSizePt={style.text?.fontSizePt}
+          lineHeight={style.text?.lineHeight}
           paragraphSpacingPt={style.text?.paragraphSpacingPt}
           verticalAlign={style.text?.verticalAlign}
         />

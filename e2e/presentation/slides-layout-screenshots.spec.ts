@@ -53,17 +53,55 @@ async function settleLayout(page: Page): Promise<void> {
   });
 }
 
-async function locatorExists(locator: Locator): Promise<boolean> {
-  try {
-    return (await locator.count()) > 0;
-  } catch {
-    return false;
-  }
-}
-
 async function activate(locator: Locator): Promise<void> {
   await locator.focus();
   await locator.press("Enter");
+}
+
+async function requiredBox(locator: Locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return box!;
+}
+
+function rectanglesOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return !(
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y
+  );
+}
+
+async function locatorOwnsCenterHit(locator: Locator): Promise<boolean> {
+  return locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const topmost = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+    return Boolean(topmost && element.contains(topmost));
+  });
+}
+
+async function locatorContentMetrics(locator: Locator) {
+  return locator.evaluate((element) => {
+    const content = element.firstElementChild as HTMLElement | null;
+    const paragraph = content?.querySelector("p");
+    const contentStyle = content ? getComputedStyle(content) : null;
+    return {
+      clientHeight: content?.clientHeight ?? 0,
+      contentBottom: content?.getBoundingClientRect().bottom ?? 0,
+      fontSize: contentStyle?.fontSize ?? "",
+      lineHeight: contentStyle?.lineHeight ?? "",
+      paragraphBottom: paragraph?.getBoundingClientRect().bottom ?? 0,
+      paragraphTop: paragraph?.getBoundingClientRect().top ?? 0,
+      scrollHeight: content?.scrollHeight ?? 0,
+    };
+  });
 }
 
 function throwFixtureUnavailable(reason: string): never {
@@ -134,18 +172,14 @@ async function openEditor(page: Page): Promise<Locator> {
   return editor;
 }
 
-async function clickByName(page: Page, name: string | RegExp): Promise<void> {
+async function activateButton(
+  page: Page,
+  name: string | RegExp,
+): Promise<void> {
   const control = page.getByRole("button", { name }).first();
-  if (!(await locatorExists(control))) {
-    return;
-  }
-
-  try {
-    await control.click({ timeout: 2_000 });
-    await settleLayout(page);
-  } catch {
-    return;
-  }
+  await expect(control).toBeVisible();
+  await activate(control);
+  await settleLayout(page);
 }
 
 async function expectLayoutState(
@@ -192,7 +226,12 @@ for (const viewport of VIEWPORTS) {
 
     test(`rail hidden (${viewport.name})`, async ({ page }) => {
       const screenshotRoot = await openEditor(page);
-      await clickByName(page, /hide slide thumbnails/i);
+      await activateButton(page, "Hide slide thumbnails");
+      await expect(
+        screenshotRoot.getByRole("button", {
+          name: "Show slide thumbnails",
+        }),
+      ).toHaveAttribute("aria-pressed", "false");
       await expectLayoutState(
         screenshotRoot,
         `editor-${viewport.name}-rail-hidden.png`,
@@ -201,30 +240,53 @@ for (const viewport of VIEWPORTS) {
 
     test(`notes expanded (${viewport.name})`, async ({ page }) => {
       const screenshotRoot = await openEditor(page);
-      await clickByName(page, /^notes$/i);
+      await activateButton(page, /^notes$/i);
+      await expect(screenshotRoot.getByLabel("Speaker notes")).toBeVisible();
       await expectLayoutState(
         screenshotRoot,
         `editor-${viewport.name}-notes-expanded.png`,
       );
     });
 
-    test(`right panel open with selection (${viewport.name})`, async ({
+    test(`right panel open with selection (${viewport.name}) @required-profile`, async ({
       page,
     }) => {
       const screenshotRoot = await openEditor(page);
-
-      const stage = screenshotRoot
-        .locator(
-          '[data-slide-stage-shell="true"], [data-slide-stage-viewport="true"], [data-slide-stage-frame="true"]',
-        )
-        .first();
-      await stage.click({ position: { x: 5, y: 5 } });
+      const titleNode = screenshotRoot.getByRole("button", {
+        name: "Text: Release Gate Fixture Slide",
+      });
+      await expect(titleNode).toBeVisible();
+      const titleMetrics = await locatorContentMetrics(titleNode);
+      expect(
+        titleMetrics.scrollHeight,
+        JSON.stringify(titleMetrics),
+      ).toBeLessThanOrEqual(titleMetrics.clientHeight + 1);
+      const contextToolbar = page.getByRole("toolbar", {
+        name: "Context toolbar",
+      });
+      await expect(contextToolbar).toBeVisible();
+      expect(await locatorOwnsCenterHit(titleNode)).toBe(true);
+      if (viewport.name !== "desktop") {
+        expect(
+          rectanglesOverlap(
+            await requiredBox(titleNode),
+            await requiredBox(contextToolbar),
+          ),
+        ).toBe(false);
+      }
+      await titleNode.click();
+      await expect(titleNode).toHaveAttribute("aria-pressed", "true");
       await settleLayout(page);
 
-      await clickByName(
-        page,
-        /(arrange|details|layers|properties|panel|edit slide)/i,
-      );
+      await activateButton(page, "Open Text inspector");
+      const inspector =
+        viewport.name === "desktop"
+          ? screenshotRoot.getByRole("region", { name: "Inspector" })
+          : page.getByRole("dialog", { name: "Text inspector" });
+      await expect(inspector).toBeVisible();
+      await expect(
+        inspector.getByLabel("Inspector panel", { exact: true }),
+      ).toHaveValue("text");
 
       await expectLayoutState(
         screenshotRoot,

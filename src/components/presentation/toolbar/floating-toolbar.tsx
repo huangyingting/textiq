@@ -122,6 +122,23 @@ function contextToolbarMenuLabel({
       return "Object menu";
   }
 }
+
+export function contextToolbarTop({
+  slideTop,
+  stageTop,
+  toolbarHeight,
+}: {
+  slideTop: number;
+  stageTop: number | null;
+  toolbarHeight: number;
+}): number {
+  const aboveSlide = slideTop - toolbarHeight - TOOLBAR_GAP;
+  if (stageTop !== null && aboveSlide >= stageTop + EDGE_INSET) {
+    return aboveSlide;
+  }
+  return slideTop + TOOLBAR_GAP;
+}
+
 const CONTEXT_TOOLBAR_TEXT_ROLES = [
   "title",
   "subtitle",
@@ -342,6 +359,11 @@ function getSlideAnchorRect(): DOMRect | null {
 function getSlideAnchorElement(): HTMLElement | null {
   if (typeof document === "undefined") return null;
   return document.querySelector<HTMLElement>('[data-slide-stage-frame="true"]');
+}
+
+function getSlideStageShellElement(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  return document.querySelector<HTMLElement>('[data-slide-stage-shell="true"]');
 }
 
 function getSelectionElements(selectedIds: string[]): HTMLElement[] {
@@ -865,17 +887,24 @@ export function ContextToolbar({
   function updateToolbarPosition() {
     if (!visible) return;
     // All context toolbars (text, shape, element, and slide selection) anchor to
-    // the slide frame's top-center — the slide-selection toolbar position — so
-    // the toolbar sits in one stable, predictable place regardless of selection.
+    // the slide frame's top-center. Prefer the unused stage space above the
+    // frame so compact layouts do not cover or intercept title content.
     const targetRect = getSlideAnchorRect();
     if (!targetRect) return;
     const toolbarEl = toolbarRef.current;
     const toolbarWidth = toolbarEl?.offsetWidth ?? 320;
+    const toolbarHeight = toolbarEl?.offsetHeight ?? 32;
+    const stageTop =
+      getSlideStageShellElement()?.getBoundingClientRect().top ?? null;
     const left = Math.max(
       EDGE_INSET,
       targetRect.left + targetRect.width / 2 - toolbarWidth / 2,
     );
-    const top = targetRect.top + TOOLBAR_GAP;
+    const top = contextToolbarTop({
+      slideTop: targetRect.top,
+      stageTop,
+      toolbarHeight,
+    });
     if (
       prevPositionRef.current.top !== top ||
       prevPositionRef.current.left !== left
@@ -919,8 +948,10 @@ export function ContextToolbar({
     const observedNodes = new Set<HTMLElement>();
     const toolbarNode = toolbarRef.current;
     const slideAnchorNode = getSlideAnchorElement();
+    const stageShellNode = getSlideStageShellElement();
     if (toolbarNode) observedNodes.add(toolbarNode);
     if (slideAnchorNode) observedNodes.add(slideAnchorNode);
+    if (stageShellNode) observedNodes.add(stageShellNode);
     for (const node of getSelectionElements(selectedIds)) {
       observedNodes.add(node);
     }

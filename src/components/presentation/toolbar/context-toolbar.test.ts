@@ -6,6 +6,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import {
   buildSlideToolInsertActions,
   ContextToolbar,
+  contextToolbarTop,
   contextToolbarTextRoleFontSizePt,
   isContextToolbarInlineTextCommandEnabled,
   isContextToolbarTextRole,
@@ -67,6 +68,41 @@ function createHookRenderer() {
 function toolbarFixtureNode(node: unknown): SlideChildNode {
   return node as unknown as SlideChildNode;
 }
+
+describe("context toolbar placement", () => {
+  test("uses free stage space above the slide when the toolbar fits", () => {
+    assert.equal(
+      contextToolbarTop({
+        slideTop: 286,
+        stageTop: 40,
+        toolbarHeight: 40,
+      }),
+      234,
+    );
+  });
+
+  test("falls back inside the slide when the space above is too tight", () => {
+    assert.equal(
+      contextToolbarTop({
+        slideTop: 65,
+        stageTop: 40,
+        toolbarHeight: 40,
+      }),
+      77,
+    );
+  });
+
+  test("preserves the inside fallback when no stage shell is available", () => {
+    assert.equal(
+      contextToolbarTop({
+        slideTop: 120,
+        stageTop: null,
+        toolbarHeight: 40,
+      }),
+      132,
+    );
+  });
+});
 
 function expandToolbarTree(
   node: ReactNode,

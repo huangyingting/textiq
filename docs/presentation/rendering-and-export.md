@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-01"
 description: "This document describes how authored decks render in the editor, present mode, public viewers, and export pipeline. For the deck JSON shape, see ../data-model/deck.md. For theme/layout resolution, see theme-packages.md."
 ---
 
@@ -61,7 +61,7 @@ Supported element rendering:
 
 | Node        | Runtime behavior                                                                                                               |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `text`      | Paragraph content, rich text runs, fit mode, role/style binding, local style, and rotation.                                    |
+| `text`      | Paragraph content, rich text runs, fit mode, role/style binding, local style, responsive height fitting, and rotation.         |
 | `visual`    | Renders visual placeholders or resolved visual image assets with channel-color defaults.                                       |
 | `image`     | Renders deck image assets with fit/crop/alt metadata and missing-asset diagnostics.                                            |
 | `shape`     | Renders shape geometry, fill/stroke/effect style, opacity, and rotation; labels are separate `text` nodes.                     |
@@ -78,6 +78,11 @@ consumption.
 When a container-rendered node uses `fill.type: "image"`, the renderer draws the
 fill as a separate overlay layer and applies `fill.opacity` there so node
 content does not fade with the background image.
+Browser text nodes retain their authored point size whenever it fits. On a
+compact rendered canvas, the shared node renderer caps that display size from
+the node's own height, explicit paragraph/line count, and line height so text is
+not clipped by its authored frame. This is a display-only fit: the stored style
+and PPTX/export point size remain unchanged.
 
 ## Present Mode
 

@@ -1,6 +1,7 @@
 export {
   buildSlideToolInsertActions,
   ContextToolbar,
+  contextToolbarTop,
   contextToolbarTextRoleFontSizePt,
   isContextToolbarInlineTextCommandEnabled,
   isContextToolbarTextRole,

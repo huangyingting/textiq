@@ -342,7 +342,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/slides-layout-screenshots.spec.ts",
     owners: ["presentation", "visual"],
     coverage:
-      "Slide editor shell screenshots across desktop, tablet, mobile, rail, notes, and panel states.",
+      "Slide editor shell screenshots across desktop, tablet, mobile, rail, notes, and panel states; required-profile selection asserts fitted title text, unobstructed center hit-testing, non-desktop toolbar separation, and the routed Text inspector.",
     runMode: "advisory-ci",
     prerequisites: [
       "E2E_PROFILE=1 or E2E_SLIDES_LAYOUT_SCREENSHOTS=1",

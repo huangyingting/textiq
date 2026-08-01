@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   SlideNodeRenderer,
   styleObjectToContainerCss,
+  textNodeMaxFontSizeCqh,
 } from "./slide-node-renderer";
 import { fillStyleToCss } from "./fill-style-css";
 import type { ResolvedRenderNode } from "@/lib/presentation/render-tree";
@@ -379,6 +380,29 @@ describe("SlideNodeRenderer media rendering", () => {
 });
 
 describe("SlideNodeRenderer content variants", () => {
+  test("caps responsive text by authored line count and node height", () => {
+    const content = {
+      paragraphs: [
+        { id: "p1", text: "Release gate" },
+        { id: "p2", text: "Second line" },
+      ],
+    };
+    assert.equal(textNodeMaxFontSizeCqh(content, 1.25), 40);
+    assert.equal(
+      textNodeMaxFontSizeCqh({ paragraphs: [content.paragraphs[0]!] }),
+      66.6667,
+    );
+
+    const html = renderNode(
+      node(
+        { type: "text", content },
+        { style: { text: { fontSizePt: 32, lineHeight: 1.25 } } },
+      ),
+    );
+    assert.match(html, /container-type:size/);
+    assert.match(html, /font-size:min\(32pt, 40cqh\)/);
+  });
+
   test("renders paragraph lists, links, code runs, and rich text CSS", () => {
     const html = renderNode(
       node(
@@ -607,7 +631,16 @@ describe("SlideNodeRenderer content variants", () => {
                 id: "row-2",
                 cells: [
                   { text: "Growth" },
-                  { text: "15%", runs: [{ text: "15%", bold: true }] },
+                  {
+                    text: "15%",
+                    runs: [
+                      {
+                        text: "15%",
+                        bold: true,
+                        localStyle: { fontSizePt: 18 },
+                      },
+                    ],
+                  },
                 ],
               },
             ],
@@ -630,6 +663,7 @@ describe("SlideNodeRenderer content variants", () => {
     assert.match(html, /Metric/);
     assert.match(html, /Growth/);
     assert.match(html, /font-weight:bold/);
+    assert.match(html, /font-size:18pt/);
     assert.match(html, /background-color:#f8fafc/);
   });
 

@@ -457,11 +457,14 @@ conflict state, or leave a visual-picker promise unresolved.
 
 ## Popover Runtime
 
-The canvas popover always anchors to the slide frame's top-center — the same
-position the slide-selection toolbar uses — so the context toolbar sits in one
-stable, predictable place regardless of what is selected (text, shape, element,
-or slide). Text edit mode keeps the same anchor and hides object actions so a
-caret edit cannot accidentally delete or reorder the whole node.
+The canvas popover always anchors to the slide frame's top-center regardless of
+what is selected (text, shape, element, or slide). When the stage has enough
+space above the frame, the toolbar uses that free space so it cannot cover or
+intercept compact-canvas title content. Tight layouts fall back to the stable
+inside-frame position. The toolbar observes both the frame and stage shell so
+responsive reflows recompute the placement. Text edit mode keeps the same
+anchor and hides object actions so a caret edit cannot accidentally delete or
+reorder the whole node.
 
 Single-node popovers expose frequent kind-specific verbs: text styling and
 list controls, shape color, connector routing/dash/arrowheads, image replace and
