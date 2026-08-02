@@ -127,6 +127,11 @@ export function profileAssetSharePath(
   return `${profileAssetPath()}?shareId=${E2E_PROFILE_FIXTURE.shareId}&shareMode=${mode}`;
 }
 
+/** Protected asset URL for the isolated public-share lifecycle document. */
+export function profileShareLifecycleAssetPath(): string {
+  return `/api/slide-assets/${E2E_PROFILE_FIXTURE.documentShareLifecycle.id}/${fixtureAssetChecksum()}.png`;
+}
+
 /** Protected slide-asset URL for the seeded asset on the PRIVATE document. */
 export function profilePrivateAssetPath(): string {
   return `/api/slide-assets/${E2E_PROFILE_FIXTURE.privateDocumentId}/${fixtureAssetChecksum()}.png`;

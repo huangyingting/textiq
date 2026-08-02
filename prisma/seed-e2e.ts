@@ -516,6 +516,34 @@ async function main() {
   await writeAssetBytes(storageKey, pngBytes);
   const assetUrl = `/api/slide-assets/${storageKey}`;
 
+  const shareLifecycleStorageKey = deriveStorageKey(
+    shareLifecycle.id,
+    checksum,
+    "image/png",
+  );
+  await writeAssetBytes(shareLifecycleStorageKey, pngBytes);
+  await prisma.asset.upsert({
+    where: { storageKey: shareLifecycleStorageKey },
+    update: {
+      documentId: shareLifecycle.id,
+      workspaceId: null,
+      brandId: null,
+      mimeType: "image/png",
+      byteSize: pngBytes.byteLength,
+      checksum,
+      originalName: "share-lifecycle-fixture.png",
+      deletedAt: null,
+    },
+    create: {
+      documentId: shareLifecycle.id,
+      mimeType: "image/png",
+      byteSize: pngBytes.byteLength,
+      checksum,
+      storageKey: shareLifecycleStorageKey,
+      originalName: "share-lifecycle-fixture.png",
+    },
+  });
+
   // -------------------------------------------------------------------------
   // 5. Document — create/refresh with share policy, contentJson, and deckJson.
   //    Done in two steps so the embedded visual id is stable and the Asset can

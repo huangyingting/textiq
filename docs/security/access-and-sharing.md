@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-07-31"
+last_updated: "2026-08-02"
 description: "This document defines document-level access control and public share behavior. It covers authenticated app permissions, public share/embed/present routes, and collaboration upgrade authorization."
 ---
 
@@ -191,8 +191,10 @@ The deterministic owner/public browser lifecycle starts from an isolated
 private document, enables its link, persists metadata, discovery, expiry, and
 mode policy, verifies public/embed/presentation clipboard payloads and isolated
 social intents, verifies passcode failure and success, proves disabled public
-modes return privacy-preserving 404s, rotates the URL, revokes the old URL,
-disables sharing, and verifies the final state after reload.
+modes return privacy-preserving 404s, proves share-bound asset bytes follow the
+same passcode, expiry, rotation, and disablement lifecycle, rotates the URL,
+revokes the old URL, disables sharing, and verifies the final state after
+reload.
 
 ## Collaboration Authorization
 

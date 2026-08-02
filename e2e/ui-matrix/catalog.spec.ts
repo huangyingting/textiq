@@ -16,7 +16,8 @@ test.describe("UI matrix catalog", () => {
     expect(summary.bySubsystem["auth-public"].total).toBe(40);
     expect(summary.bySubsystem["document-editor"].total).toBe(45);
     expect(summary.bySubsystem["workspace-billing-brand"].total).toBe(55);
-    expect(summary.byStatus.automated).toBe(158);
+    expect(summary.byStatus.automated).toBe(159);
+    expect(summary.byStatus.blocked).toBe(32);
     expect(summary.byStatus.catalog).toBe(170);
   });
 

@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 20, manual: 16, blocked: 4, catalog: 20 },
+    statusCounts: { automated: 21, manual: 16, blocked: 3, catalog: 20 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -2554,6 +2554,32 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "PUBLIC-018",
+    subsystem: "public-render-share",
+    area: "share-bound asset lifecycle",
+    title:
+      "share-bound asset lifecycle follows passcode, expiry, rotation, and disablement",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+      "docs/presentation/assets.md",
+    ],
+    tags: [
+      "anonymous",
+      "asset-authorization",
+      "passcode",
+      "expiry",
+      "rotation",
+      "revocation",
+    ],
+    automation: {
+      spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      test: "owner configures, expires, protects, rotates, and disables a public share",
+    },
+  },
+  {
     id: "PUBLIC-021",
     subsystem: "public-render-share",
     area: "valid public present route",
@@ -3139,19 +3165,21 @@ if (AUTOMATED_CASES_BY_ID.size !== AUTOMATED_CASES.length) {
   throw new Error("Automated UI matrix case IDs must be unique");
 }
 
-function statusFor(plan: SubsystemPlan, zeroBasedIndex: number): UiCaseStatus {
+function statusFor(
+  plan: SubsystemPlan,
+  zeroBasedNonAutomatedIndex: number,
+): UiCaseStatus {
   const generatedCounts: Record<UiCaseStatus, number> = {
     ...plan.statusCounts,
     automated: 0,
-    catalog: plan.statusCounts.catalog + plan.statusCounts.automated,
   };
   let cursor = 0;
   for (const status of STATUS_ORDER) {
     cursor += generatedCounts[status];
-    if (zeroBasedIndex < cursor) return status;
+    if (zeroBasedNonAutomatedIndex < cursor) return status;
   }
   throw new Error(
-    `Status plan for ${plan.subsystem} does not cover case ${zeroBasedIndex + 1}`,
+    `Status plan for ${plan.subsystem} does not cover non-automated case ${zeroBasedNonAutomatedIndex + 1}`,
   );
 }
 
@@ -3176,9 +3204,9 @@ function buildCases(): UiTestCase[] {
       );
     }
 
+    let nonAutomatedIndex = 0;
     return Array.from({ length: plan.total }, (_, index): UiTestCase => {
       const oneBased = index + 1;
-      const status = statusFor(plan, index);
       const area = plan.areas[index % plan.areas.length]!;
       const subject =
         plan.subjects[
@@ -3199,6 +3227,8 @@ function buildCases(): UiTestCase[] {
         }
         return automatedCase;
       }
+      const status = statusFor(plan, nonAutomatedIndex);
+      nonAutomatedIndex += 1;
       return {
         id,
         subsystem: plan.subsystem,

@@ -5,6 +5,7 @@ import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
   profileOwnerCredentials,
+  profileShareLifecycleAssetPath,
 } from "../helpers/profile";
 import { waitForDocumentEditorReady } from "../helpers/readiness";
 
@@ -294,6 +295,23 @@ test.describe("UI matrix: document sharing lifecycle", () => {
     });
     const publicPage = await anonymousContext.newPage();
     try {
+      const initialShareSegment = new URL(initialShareUrl).pathname.replace(
+        /^\/share\//,
+        "",
+      );
+      expect(initialShareSegment).not.toBe("");
+      const boundAssetPath = (shareSegment: string) =>
+        `${profileShareLifecycleAssetPath()}?shareId=${encodeURIComponent(shareSegment)}&shareMode=present`;
+      const initialBoundAssetPath = boundAssetPath(initialShareSegment);
+      const activeAsset = await anonymousContext.request.get(
+        initialBoundAssetPath,
+      );
+      expect(activeAsset.status()).toBe(200);
+      expect(activeAsset.headers()["content-type"] ?? "").toContain(
+        "image/png",
+      );
+      expect((await activeAsset.body()).byteLength).toBeGreaterThan(0);
+
       await publicPage.goto(initialShareUrl);
       await expectPublicDocument(publicPage, fixture.title, fixture.content);
 
@@ -405,6 +423,11 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toHaveAttribute("aria-checked", "true");
 
       await anonymousContext.clearCookies();
+      const lockedAsset = await anonymousContext.request.get(
+        initialBoundAssetPath,
+      );
+      expect(lockedAsset.status()).toBe(403);
+      expect(await lockedAsset.text()).toMatch(/forbidden/i);
       await unlockPasscodeRoute({
         page: publicPage,
         path: presentPath,
@@ -416,6 +439,11 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       });
       await expect(presentRegion).toBeVisible({ timeout: 20_000 });
       await expect(presentRegion.getByText(fixture.content)).toBeVisible();
+      const unlockedAsset = await anonymousContext.request.get(
+        initialBoundAssetPath,
+      );
+      expect(unlockedAsset.status()).toBe(200);
+      expect((await unlockedAsset.body()).byteLength).toBeGreaterThan(0);
 
       await anonymousContext.clearCookies();
       const independentlyDeniedEmbed = await publicPage.goto(presentEmbedPath);
@@ -482,6 +510,11 @@ test.describe("UI matrix: document sharing lifecycle", () => {
           `${expiredPath} leaked the document content`,
         ).not.toContain(fixture.content);
       }
+      const expiredAsset = await anonymousContext.request.get(
+        initialBoundAssetPath,
+      );
+      expect(expiredAsset.status()).toBe(403);
+      expect(await expiredAsset.text()).toMatch(/forbidden/i);
 
       await dialog.getByRole("button", { name: "Clear" }).click();
       await mutationExpect(
@@ -502,9 +535,18 @@ test.describe("UI matrix: document sharing lifecycle", () => {
         timeout: 20_000,
       });
       const rotatedShareUrl = await rotatedShareLink.inputValue();
+      const rotatedShareSegment = new URL(rotatedShareUrl).pathname.replace(
+        /^\/share\//,
+        "",
+      );
+      const rotatedBoundAssetPath = boundAssetPath(rotatedShareSegment);
 
       const oldLinkResponse = await publicPage.goto(initialShareUrl);
       expect(oldLinkResponse?.status()).toBe(404);
+      const rotatedOldAsset = await anonymousContext.request.get(
+        initialBoundAssetPath,
+      );
+      expect(rotatedOldAsset.status()).toBe(403);
       await publicPage.goto(rotatedShareUrl);
       await expect(
         publicPage.getByRole("heading", { name: "Passcode required" }),
@@ -516,6 +558,10 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toBeVisible();
       const disabledLinkResponse = await publicPage.goto(rotatedShareUrl);
       expect(disabledLinkResponse?.status()).toBe(404);
+      const disabledAsset = await anonymousContext.request.get(
+        rotatedBoundAssetPath,
+      );
+      expect(disabledAsset.status()).toBe(403);
 
       await page.reload();
       await waitForDocumentEditorReady(page);
