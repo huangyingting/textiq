@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 15, manual: 48, blocked: 10, catalog: 107 },
+    statusCounts: { automated: 28, manual: 48, blocked: 10, catalog: 94 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -1128,6 +1128,240 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/slide-delete-persistence.spec.ts",
       test: "generated first-save deck delete rotates its null token and survives reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-074",
+    subsystem: "presentation-editor",
+    area: "multi-select Arrange",
+    title:
+      "multi-select Arrange distributes three named nodes with undo, redo, and persistence",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["multi-select", "arrange", "history"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "multi-select Arrange distributes three named nodes with undo, redo, and persistence",
+    },
+  },
+  {
+    id: "PRES-EDIT-075",
+    subsystem: "presentation-editor",
+    area: "precision guide preferences",
+    title:
+      "precision guide preferences persist locally and custom guide visibility controls snapping",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["precision-guides", "snapping", "local-persistence"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "precision guide preferences persist locally and custom guide visibility controls snapping",
+    },
+  },
+  {
+    id: "PRES-EDIT-076",
+    subsystem: "presentation-editor",
+    area: "built-in theme selection",
+    title:
+      "built-in theme selection preserves geometry and survives undo, redo, and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["built-in-theme", "geometry", "history"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "built-in theme selection preserves geometry and survives undo, redo, and reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-077",
+    subsystem: "presentation-editor",
+    area: "slide ratio",
+    title:
+      "slide ratio preserves percent geometry through undo, redo, reload, and public rendering",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["slide-ratio", "geometry", "public-parity"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "slide ratio preserves percent geometry through undo, redo, reload, and public rendering",
+    },
+  },
+  {
+    id: "PRES-EDIT-078",
+    subsystem: "presentation-editor",
+    area: "slide master",
+    title:
+      "slide master preserves deck defaults and slide overrides through history, reload, and public rendering",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["slide-master", "overrides", "public-parity"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "slide master preserves deck defaults and slide overrides through history, reload, and public rendering",
+    },
+  },
+  {
+    id: "PRES-EDIT-079",
+    subsystem: "presentation-editor",
+    area: "document source review",
+    title:
+      "document source review refreshes stale content through history, reload, and public rendering",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["source-review", "stale-content", "public-parity"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "document source review refreshes stale content through history, reload, and public rendering",
+    },
+  },
+  {
+    id: "PRES-EDIT-080",
+    subsystem: "presentation-editor",
+    area: "source review navigation",
+    title:
+      "source review navigation, dismiss, unlink, and relink actions preserve reversible state",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["source-review", "unlink-relink", "reversible-state"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "source review navigation, dismiss, unlink, and relink actions preserve reversible state",
+    },
+  },
+  {
+    id: "PRES-EDIT-081",
+    subsystem: "presentation-editor",
+    area: "speaker notes",
+    title:
+      "speaker notes preserve slide scope through history, reload, and presenter mode",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["speaker-notes", "slide-scope", "presenter-mode"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "speaker notes preserve slide scope through history, reload, and presenter mode",
+    },
+  },
+  {
+    id: "PRES-EDIT-082",
+    subsystem: "presentation-editor",
+    area: "deck diagnostics review",
+    title:
+      "deck diagnostics review traps focus, navigates, repairs, and persists an empty state",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["diagnostics", "focus-trap", "repair"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "deck diagnostics review traps focus, navigates, repairs, and persists an empty state",
+    },
+  },
+  {
+    id: "PRES-EDIT-083",
+    subsystem: "presentation-editor",
+    area: "custom theme authoring",
+    title:
+      "custom theme authoring saves, re-enters the picker, applies, and persists",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["custom-theme", "picker", "persistence"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "custom theme authoring saves, re-enters the picker, applies, and persists",
+    },
+  },
+  {
+    id: "PRES-EDIT-084",
+    subsystem: "presentation-editor",
+    area: "latest same-id catalog snapshot",
+    title:
+      "latest same-id catalog snapshot applies over the active exact version and survives reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["theme-catalog", "version-update", "reload"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "latest same-id catalog snapshot applies over the active exact version and survives reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-085",
+    subsystem: "presentation-editor",
+    area: "theme customization and custom guides",
+    title:
+      "theme customization and custom guides restore their stable triggers across close paths",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["focus-restoration", "theme-customization", "custom-guides"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "theme customization and custom guides restore their stable triggers across close paths",
+    },
+  },
+  {
+    id: "PRES-EDIT-086",
+    subsystem: "presentation-editor",
+    area: "creates, persists, nests",
+    title:
+      "creates, persists, nests, reorders, and recursively ungroups UI-authored groups",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/presentation-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["groups", "nested-groups", "recursive-ungroup"],
+    automation: {
+      spec: "e2e/presentation/presentation-controls.spec.ts",
+      test: "creates, persists, nests, reorders, and recursively ungroups UI-authored groups",
     },
   },
   {

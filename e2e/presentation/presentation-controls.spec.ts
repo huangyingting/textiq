@@ -1213,21 +1213,23 @@ test.describe("presentation editing controls", () => {
       name: "Customize theme",
     });
 
-    for (const closeWith of ["button", "escape", "button"] as const) {
-      const picker = await openThemePicker(page);
-      await picker
-        .getByRole("button", { name: "Customize theme", exact: true })
-        .click();
-      await expect(customizeDialog).toBeVisible();
-      if (closeWith === "escape") {
-        await page.keyboard.press("Escape");
-      } else {
-        await customizeDialog
-          .getByRole("button", { name: "Close", exact: true })
+    for (const [index, closeWith] of ["button", "escape", "button"].entries()) {
+      await test.step(`theme authoring close ${index + 1} via ${closeWith}`, async () => {
+        const picker = await openThemePicker(page);
+        await picker
+          .getByRole("button", { name: "Customize theme", exact: true })
           .click();
-      }
-      await expect(customizeDialog).toHaveCount(0);
-      await expect(deckTheme).toBeFocused();
+        await expect(customizeDialog).toBeVisible();
+        if (closeWith === "escape") {
+          await page.keyboard.press("Escape");
+        } else {
+          await customizeDialog
+            .getByRole("button", { name: "Close", exact: true })
+            .click();
+        }
+        await expect(customizeDialog).toHaveCount(0);
+        await expect(deckTheme).toBeFocused();
+      });
     }
 
     const guidesTrigger = editor.getByRole("button", {
