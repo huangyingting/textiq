@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 43, manual: 48, blocked: 10, catalog: 79 },
+    statusCounts: { automated: 53, manual: 48, blocked: 10, catalog: 69 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -119,7 +119,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-RENDER",
     subsystem: "presentation-render-export",
     total: 120,
-    statusCounts: { automated: 18, manual: 35, blocked: 8, catalog: 59 },
+    statusCounts: { automated: 19, manual: 35, blocked: 8, catalog: 58 },
     refs: [
       "docs/presentation/rendering-and-export.md",
       "docs/presentation/assets.md",
@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 16, manual: 16, blocked: 4, catalog: 24 },
+    statusCounts: { automated: 19, manual: 16, blocked: 4, catalog: 21 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -228,7 +228,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "AUTH",
     subsystem: "auth-public",
     total: 40,
-    statusCounts: { automated: 15, manual: 10, blocked: 2, catalog: 13 },
+    statusCounts: { automated: 16, manual: 10, blocked: 2, catalog: 12 },
     refs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
     areas: [
       "home page",
@@ -269,7 +269,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 22, manual: 15, blocked: 4, catalog: 4 },
+    statusCounts: { automated: 23, manual: 15, blocked: 4, catalog: 3 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -311,7 +311,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "WORKSPACE",
     subsystem: "workspace-billing-brand",
     total: 55,
-    statusCounts: { automated: 11, manual: 15, blocked: 5, catalog: 24 },
+    statusCounts: { automated: 13, manual: 15, blocked: 5, catalog: 22 },
     refs: [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
@@ -613,6 +613,23 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/auth/authenticated-nested-routes.spec.ts",
       test: "running secure profile isolates the private-key descriptor from runner, app, Playwright, and Chromium",
+    },
+  },
+  {
+    id: "AUTH-028",
+    subsystem: "auth-public",
+    area: "unauthenticated access to /app",
+    title: "unauthenticated access to /app redirects to login",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["anonymous", "protected-route", "login-redirect"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "unauthenticated access to /app redirects to login",
     },
   },
   {
@@ -1003,6 +1020,23 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/editor/document-editor-profile.spec.ts",
       test: "mobile editor chrome keeps key slide and collaboration actions reachable",
+    },
+  },
+  {
+    id: "DOC-EDIT-042",
+    subsystem: "document-editor",
+    area: "document editor route",
+    title: "app document editor route does not return a server error",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["anonymous", "unknown-document", "graceful-response"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "app document editor route does not return a server error",
     },
   },
   {
@@ -1775,6 +1809,182 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "PRES-EDIT-102",
+    subsystem: "presentation-editor",
+    area: "navigate to the Slides editor",
+    title: "authenticated user can navigate to the Slides editor",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "document-entry", "canonical-route"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "authenticated user can navigate to the Slides editor",
+    },
+  },
+  {
+    id: "PRES-EDIT-103",
+    subsystem: "presentation-editor",
+    area: "edit a slide title",
+    title: "edit a slide title, save, and reload to verify persistence",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/autosave-and-commands.md",
+    ],
+    tags: ["seeded-owner", "inline-edit", "reload-persistence"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "edit a slide title, save, and reload to verify persistence",
+    },
+  },
+  {
+    id: "PRES-EDIT-104",
+    subsystem: "presentation-editor",
+    area: "inline selection formatting",
+    title:
+      "inline selection formatting stays in edit mode and survives history and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "rich-text", "history-reload"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "inline selection formatting stays in edit mode and survives history and reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-105",
+    subsystem: "presentation-editor",
+    area: "inline list conversion and indentation",
+    title:
+      "inline list conversion and indentation stay editable through history and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "inline-lists", "history-reload"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "inline list conversion and indentation stay editable through history and reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-106",
+    subsystem: "presentation-editor",
+    area: "table cells and structure",
+    title:
+      "table cells and structure stay keyboard-editable through history and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "table-editing", "keyboard-history"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "table cells and structure stay keyboard-editable through history and reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-107",
+    subsystem: "presentation-editor",
+    area: "export menu or dialog",
+    title: "export menu or dialog is reachable from the Slides editor",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["seeded-owner", "export-menu", "accessible-actions"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "export menu or dialog is reachable from the Slides editor",
+    },
+  },
+  {
+    id: "PRES-EDIT-108",
+    subsystem: "presentation-editor",
+    area: "stage keyboard traversal",
+    title:
+      "presentation stage keyboard traversal, resize shortcuts, and live announcements are behavioral",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/system/slide-canvas-keyboard-accessibility.md",
+    ],
+    tags: ["seeded-owner", "keyboard-resize", "live-announcements"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "presentation stage keyboard traversal, resize shortcuts, and live announcements are behavioral",
+    },
+  },
+  {
+    id: "PRES-EDIT-109",
+    subsystem: "presentation-editor",
+    area: "toolbar controls",
+    title: "slide editor toolbar controls are reachable by accessible role",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "toolbar", "accessible-role"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "slide editor toolbar controls are reachable by accessible role",
+    },
+  },
+  {
+    id: "PRES-EDIT-110",
+    subsystem: "presentation-editor",
+    area: "add slide template picker",
+    title:
+      "add slide template picker traps focus and supports keyboard insertion",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "focus-trap", "keyboard-insertion"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "add slide template picker traps focus and supports keyboard insertion",
+    },
+  },
+  {
+    id: "PRES-EDIT-111",
+    subsystem: "presentation-editor",
+    area: "visual picker modal",
+    title:
+      "presentation visual picker modal traps focus and restores invoking focus",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "visual-picker", "focus-restoration"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "presentation visual picker modal traps focus and restores invoking focus",
+    },
+  },
+  {
     id: "PRES-RENDER-044",
     subsystem: "presentation-render-export",
     area: "public present route",
@@ -2087,6 +2297,23 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "PRES-RENDER-062",
+    subsystem: "presentation-render-export",
+    area: "open present mode",
+    title: "authenticated user can open present mode",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["seeded-owner", "present-navigation", "document-language"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "authenticated user can open present mode",
+    },
+  },
+  {
     id: "PUBLIC-021",
     subsystem: "public-render-share",
     area: "valid public present route",
@@ -2367,6 +2594,58 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "PUBLIC-037",
+    subsystem: "public-render-share",
+    area: "unknown present link",
+    title: "unknown present link returns 404",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "present-route", "safe-404"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "unknown present link returns 404",
+    },
+  },
+  {
+    id: "PUBLIC-038",
+    subsystem: "public-render-share",
+    area: "unknown /present/<slug>/embed path",
+    title: "unknown /present/<slug>/embed path returns 404",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "present-embed", "safe-404"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "unknown /present/<slug>/embed path returns 404",
+    },
+  },
+  {
+    id: "PUBLIC-039",
+    subsystem: "public-render-share",
+    area: "root-layout language",
+    title:
+      "present-route 404 exposes root-layout language after navigation readiness",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "safe-404", "document-language"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "present-route 404 exposes root-layout language after navigation readiness",
+    },
+  },
+  {
     id: "WORKSPACE-021",
     subsystem: "workspace-billing-brand",
     area: "dashboard search and favorite controls",
@@ -2559,6 +2838,37 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/editor/document-editor-profile.spec.ts",
       test: "dashboard sort by date created changes the sort URL param and preserves all documents",
+    },
+  },
+  {
+    id: "WORKSPACE-032",
+    subsystem: "workspace-billing-brand",
+    area: "main landmark and a non-empty page title",
+    title: "workspace page has a main landmark and a non-empty page title",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-smoke.spec.ts",
+      "docs/system/design-system.md",
+    ],
+    tags: ["seeded-owner", "landmark", "document-title"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "workspace page has a main landmark and a non-empty page title",
+    },
+  },
+  {
+    id: "WORKSPACE-033",
+    subsystem: "workspace-billing-brand",
+    area: "create-document control",
+    title: "authenticated workspace exposes a visible create-document control",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/presentation/slides-smoke.spec.ts", "docs/documents/README.md"],
+    tags: ["seeded-owner", "workspace", "create-document"],
+    automation: {
+      spec: "e2e/presentation/slides-smoke.spec.ts",
+      test: "authenticated workspace exposes a visible create-document control",
     },
   },
 ];

@@ -164,7 +164,7 @@ async function waitForPresentTarget(page: Page): Promise<Page | null> {
 
 function skipOptionalSlidesFixture(reason: string): never {
   // e2e-governance-allow test-skip: optional slides smoke fixtures may be absent in local runs.
-  test.skip(true, reason);
+  test.info().skip(true, reason);
   throw new Error(reason);
 }
 
