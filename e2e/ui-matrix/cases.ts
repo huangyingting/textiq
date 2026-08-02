@@ -228,7 +228,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "AUTH",
     subsystem: "auth-public",
     total: 40,
-    statusCounts: { automated: 0, manual: 10, blocked: 2, catalog: 28 },
+    statusCounts: { automated: 4, manual: 10, blocked: 2, catalog: 24 },
     refs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
     areas: [
       "home page",
@@ -269,7 +269,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 0, manual: 15, blocked: 4, catalog: 26 },
+    statusCounts: { automated: 8, manual: 15, blocked: 4, catalog: 18 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -362,10 +362,238 @@ const PLANS: SubsystemPlan[] = [
   },
 ];
 
+const AUTOMATED_CASES: UiTestCase[] = [
+  {
+    id: "AUTH-013",
+    subsystem: "auth-public",
+    area: "public home, login, and signup",
+    title:
+      "public home, login, and signup expose primary unauthenticated controls",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/auth-public-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["anonymous", "auth-controls", "desktop"],
+    automation: {
+      spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
+      test: "public home, login, and signup expose primary unauthenticated controls",
+    },
+  },
+  {
+    id: "AUTH-014",
+    subsystem: "auth-public",
+    area: "protected routes",
+    title: "root and deep protected routes redirect with callbackUrl intact",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/auth-public-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["anonymous", "auth-redirect", "callback-url"],
+    automation: {
+      spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
+      test: "root and deep protected routes redirect with callbackUrl intact",
+    },
+  },
+  {
+    id: "AUTH-015",
+    subsystem: "auth-public",
+    area: "Google OAuth CTA",
+    title:
+      "Google OAuth CTA matches provider configuration on login and signup",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/auth-public-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["anonymous", "oauth-configuration", "desktop"],
+    automation: {
+      spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
+      test: "Google OAuth CTA matches provider configuration on login and signup",
+    },
+  },
+  {
+    id: "AUTH-016",
+    subsystem: "auth-public",
+    area: "invalid credentials",
+    title:
+      "invalid credentials stay generic and a successful retry preserves the deep callback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/auth-public-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["seeded-owner", "credential-retry", "callback-url"],
+    automation: {
+      spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
+      test: "invalid credentials stay generic and a successful retry preserves the deep callback",
+    },
+  },
+  {
+    id: "DOC-EDIT-020",
+    subsystem: "document-editor",
+    area: "owner document editor",
+    title:
+      "owner document editor renders the body surface and slide entry point",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "document-body", "slide-entry"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "owner document editor renders the body surface and slide entry point",
+    },
+  },
+  {
+    id: "DOC-EDIT-021",
+    subsystem: "document-editor",
+    area: "selected text",
+    title:
+      "selected text exposes a keyboard-operable formatting toolbar and restores editor focus",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "formatting-toolbar"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "selected text exposes a keyboard-operable formatting toolbar and restores editor focus",
+    },
+  },
+  {
+    id: "DOC-EDIT-022",
+    subsystem: "document-editor",
+    area: "slash insert filtering",
+    title:
+      "slash insert filtering supports keyboard navigation and Escape dismissal",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "insert-menu"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "slash insert filtering supports keyboard navigation and Escape dismissal",
+    },
+  },
+  {
+    id: "DOC-EDIT-023",
+    subsystem: "document-editor",
+    area: "visual editing",
+    title:
+      "visual editing transfers keyboard focus into its tools and restores the preview on Escape",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "visual-controls"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "visual editing transfers keyboard focus into its tools and restores the preview on Escape",
+    },
+  },
+  {
+    id: "DOC-EDIT-024",
+    subsystem: "document-editor",
+    area: "table controls",
+    title:
+      "table controls mutate structure and require confirmation before deletion",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "table-editing", "confirmation"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "table controls mutate structure and require confirmation before deletion",
+    },
+  },
+  {
+    id: "DOC-EDIT-025",
+    subsystem: "document-editor",
+    area: "open slide editor link",
+    title: "open slide editor link reaches the canonical presentation route",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "presentation-navigation", "canonical-route"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "open slide editor link reaches the canonical presentation route",
+    },
+  },
+  {
+    id: "DOC-EDIT-026",
+    subsystem: "document-editor",
+    area: "viewer",
+    title: "viewer sees a read-only document with edit-only controls removed",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-viewer", "read-only", "authorization"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "viewer sees a read-only document with edit-only controls removed",
+    },
+  },
+  {
+    id: "DOC-EDIT-027",
+    subsystem: "document-editor",
+    area: "selected text",
+    title:
+      "selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-editor-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "mobile", "nested-overlay"],
+    automation: {
+      spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
+      test: "selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape",
+    },
+  },
+];
+
+const AUTOMATED_CASES_BY_ID = new Map(
+  AUTOMATED_CASES.map((testCase) => [testCase.id, testCase]),
+);
+if (AUTOMATED_CASES_BY_ID.size !== AUTOMATED_CASES.length) {
+  throw new Error("Automated UI matrix case IDs must be unique");
+}
+
 function statusFor(plan: SubsystemPlan, zeroBasedIndex: number): UiCaseStatus {
+  const generatedCounts: Record<UiCaseStatus, number> = {
+    ...plan.statusCounts,
+    automated: 0,
+    catalog: plan.statusCounts.catalog + plan.statusCounts.automated,
+  };
   let cursor = 0;
   for (const status of STATUS_ORDER) {
-    cursor += plan.statusCounts[status];
+    cursor += generatedCounts[status];
     if (zeroBasedIndex < cursor) return status;
   }
   throw new Error(
@@ -408,6 +636,15 @@ function buildCases(): UiTestCase[] {
           Math.floor(index / plan.interactions.length) % plan.variants.length
         ]!;
       const id = `${plan.prefix}-${String(oneBased).padStart(3, "0")}`;
+      const automatedCase = AUTOMATED_CASES_BY_ID.get(id);
+      if (automatedCase) {
+        if (automatedCase.subsystem !== plan.subsystem) {
+          throw new Error(
+            `Automated case ${id} belongs to ${automatedCase.subsystem}, expected ${plan.subsystem}`,
+          );
+        }
+        return automatedCase;
+      }
       return {
         id,
         subsystem: plan.subsystem,
@@ -463,4 +700,21 @@ if (summary.total !== UI_TEST_CASE_TOTAL) {
   throw new Error(
     `UI matrix expected ${UI_TEST_CASE_TOTAL} cases, found ${summary.total}`,
   );
+}
+for (const plan of PLANS) {
+  const actual = summary.bySubsystem[plan.subsystem];
+  for (const status of STATUS_ORDER) {
+    if (actual?.[status] !== plan.statusCounts[status]) {
+      throw new Error(
+        `${plan.subsystem} expected ${plan.statusCounts[status]} ${status} cases, found ${actual?.[status] ?? 0}`,
+      );
+    }
+  }
+}
+for (const automatedCase of AUTOMATED_CASES) {
+  if (!UI_TEST_CASES.includes(automatedCase)) {
+    throw new Error(
+      `Automated case ${automatedCase.id} does not replace a generated catalog case`,
+    );
+  }
 }
