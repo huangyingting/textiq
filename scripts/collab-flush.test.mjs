@@ -5,6 +5,7 @@
  *  - no-op behavior when the internal secret / flush URL is missing.
  *  - a successful flush POSTs the base64 update + secret header and does NOT
  *    record a failure.
+ *  - a deleted document's 404 is a terminal skip, not a recovery failure.
  *  - a non-2xx response records a failure in the observability ring and bumps
  *    the failure counter (and the attempt counter).
  *  - a thrown fetch (network error) records a failure and never re-throws.
@@ -156,6 +157,30 @@ describe("createEvictionFlusher: successful flush", () => {
 
 describe("createEvictionFlusher: failed flush observability", () => {
   beforeEach(resetObservability);
+
+  it("treats a deleted document's 404 as a terminal skip", async () => {
+    const lines = [];
+    console.info = (line) => lines.push(String(line));
+    const flush = createEvictionFlusher({
+      flushUrl: "http://app/api/collab/flush",
+      internalSecret: "s3cret",
+      fetchImpl: async () => ({ ok: false, status: 404 }),
+    });
+
+    await flush(ROOM, UPDATE);
+
+    assert.equal(flushStats().flushAttempts, 1);
+    assert.equal(flushStats().flushFailures, 0);
+    assert.equal(recentFlushFailures().length, 0);
+    assert.equal(lines.length, 2);
+    const result = JSON.parse(lines[1]);
+    assert.equal(result.scope, "collab.flush.result");
+    assert.equal(result.ok, true);
+    assert.equal(result.persisted, false);
+    assert.equal(result.skipped, true);
+    assert.equal(result.status, 404);
+    assert.equal(result.skipReason, "document-not-found");
+  });
 
   it("records a failure on a non-2xx response (never pretends success)", async () => {
     const flush = createEvictionFlusher({

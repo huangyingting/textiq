@@ -19,7 +19,7 @@ export type UiTestCase = {
   tags: string[];
   automation?: {
     spec: string;
-    assertion: string;
+    test: string;
   };
 };
 
@@ -33,7 +33,6 @@ type SubsystemPlan = {
   subjects: string[];
   interactions: string[];
   variants: string[];
-  automatedSpec: string;
 };
 
 const STATUS_ORDER: UiCaseStatus[] = [
@@ -43,12 +42,15 @@ const STATUS_ORDER: UiCaseStatus[] = [
   "catalog",
 ];
 
+// These generated combinations are release-planning inventory, not execution
+// evidence. Promote a case only by defining an exact automation test identity;
+// the inventory checker rejects spec-only or otherwise uncontracted claims.
 const PLANS: SubsystemPlan[] = [
   {
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 32, manual: 48, blocked: 10, catalog: 90 },
+    statusCounts: { automated: 0, manual: 48, blocked: 10, catalog: 122 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -112,13 +114,12 @@ const PLANS: SubsystemPlan[] = [
       "dirty deck",
       "saved deck",
     ],
-    automatedSpec: "e2e/ui-matrix/presentation-ui.spec.ts",
   },
   {
     prefix: "PRES-RENDER",
     subsystem: "presentation-render-export",
     total: 120,
-    statusCounts: { automated: 22, manual: 35, blocked: 8, catalog: 55 },
+    statusCounts: { automated: 0, manual: 35, blocked: 8, catalog: 77 },
     refs: [
       "docs/presentation/rendering-and-export.md",
       "docs/presentation/assets.md",
@@ -172,13 +173,12 @@ const PLANS: SubsystemPlan[] = [
       "present mode",
       "download flow",
     ],
-    automatedSpec: "e2e/ui-matrix/presentation-ui.spec.ts",
   },
   {
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 14, manual: 16, blocked: 4, catalog: 26 },
+    statusCounts: { automated: 0, manual: 16, blocked: 4, catalog: 40 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -223,13 +223,12 @@ const PLANS: SubsystemPlan[] = [
       "mobile",
       "request API",
     ],
-    automatedSpec: "e2e/ui-matrix/public-render-ui.spec.ts",
   },
   {
     prefix: "AUTH",
     subsystem: "auth-public",
     total: 40,
-    statusCounts: { automated: 10, manual: 10, blocked: 2, catalog: 18 },
+    statusCounts: { automated: 0, manual: 10, blocked: 2, catalog: 28 },
     refs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
     areas: [
       "home page",
@@ -265,13 +264,12 @@ const PLANS: SubsystemPlan[] = [
       "desktop",
       "mobile",
     ],
-    automatedSpec: "e2e/ui-matrix/auth-public-ui.spec.ts",
   },
   {
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 10, manual: 15, blocked: 4, catalog: 16 },
+    statusCounts: { automated: 0, manual: 15, blocked: 4, catalog: 26 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -308,13 +306,12 @@ const PLANS: SubsystemPlan[] = [
       "rejects unauthorized edit",
     ],
     variants: ["owner", "viewer", "desktop", "mobile", "keyboard", "pointer"],
-    automatedSpec: "e2e/ui-matrix/document-editor-ui.spec.ts",
   },
   {
     prefix: "WORKSPACE",
     subsystem: "workspace-billing-brand",
     total: 55,
-    statusCounts: { automated: 10, manual: 15, blocked: 5, catalog: 25 },
+    statusCounts: { automated: 0, manual: 15, blocked: 5, catalog: 35 },
     refs: [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
@@ -362,7 +359,6 @@ const PLANS: SubsystemPlan[] = [
       "pro plan",
       "desktop",
     ],
-    automatedSpec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
   },
 ];
 
@@ -426,13 +422,6 @@ function buildCases(): UiTestCase[] {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, ""),
         ),
-        automation:
-          status === "automated"
-            ? {
-                spec: plan.automatedSpec,
-                assertion: `${plan.subsystem} representative smoke covers ${area} / ${subject}`,
-              }
-            : undefined,
       };
     });
   });

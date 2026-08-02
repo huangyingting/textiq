@@ -639,7 +639,7 @@ export const UI_MATRIX_MANUAL_GAPS = [
   {
     id: "FULL-500-BROWSER-MATRIX",
     owner: "ui matrix",
-    gap: "The 500-case catalog is intentionally not expanded into 500 browser tests; representative automated slices are promoted only when fixtures and selectors are stable.",
+    gap: "The generated 500-case planning catalog has no case-level automation claims yet. Existing runnable browser specs remain evidence for their inventoried flows, but a catalog case is promoted only after it names an exact contracted test with deterministic fixtures and stable selectors.",
     status: "catalog",
     sourceRefs: ["e2e/ui-matrix/cases.ts", "e2e/ui-matrix/README.md"],
   },

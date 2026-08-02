@@ -2,9 +2,9 @@
 
 Type: test-strategy
 Status: current
-Last updated: 2026-07-31
+Last updated: 2026-08-02
 
-This directory contains the source-backed Playwright UI matrix inventory, a generated 500-case catalog, and representative browser specs. The catalog is broader than the runnable browser subset so release planning can track manual, blocked, and future automated cases without turning E2E into a slow/flaky 500-browser-test suite.
+This directory contains the source-backed Playwright spec inventory, a generated 500-case planning catalog, and representative browser specs. Catalog status is not execution evidence: runnable coverage is recorded separately, and a generated case is promoted only after it has an exact contracted Playwright test identity.
 
 ## Sources reviewed
 
@@ -29,19 +29,19 @@ This directory contains the source-backed Playwright UI matrix inventory, a gene
 
 ## Source-backed catalog distribution
 
-The 500-case catalog is generated from `e2e/ui-matrix/cases.ts`; this README section is rendered and checked by `scripts/check-ui-matrix-inventory.mjs`.
+The 500-case planning catalog is generated from `e2e/ui-matrix/cases.ts`; runnable browser evidence is inventoried separately and this README section is rendered and checked by `scripts/check-ui-matrix-inventory.mjs`.
 
 | Subsystem                  | Total | Automated | Manual | Blocked | Catalog |
 | -------------------------- | ----- | --------- | ------ | ------- | ------- |
-| auth-public                | 40    | 10        | 10     | 2       | 18      |
-| document-editor            | 45    | 10        | 15     | 4       | 16      |
-| presentation-editor        | 180   | 32        | 48     | 10      | 90      |
-| presentation-render-export | 120   | 22        | 35     | 8       | 55      |
-| public-render-share        | 60    | 14        | 16     | 4       | 26      |
-| workspace-billing-brand    | 55    | 10        | 15     | 5       | 25      |
-| Total                      | 500   | 98        | 139    | 33      | 230     |
+| auth-public                | 40    | 0         | 10     | 2       | 28      |
+| document-editor            | 45    | 0         | 15     | 4       | 26      |
+| presentation-editor        | 180   | 0         | 48     | 10      | 122     |
+| presentation-render-export | 120   | 0         | 35     | 8       | 77      |
+| public-render-share        | 60    | 0         | 16     | 4       | 40      |
+| workspace-billing-brand    | 55    | 0         | 15     | 5       | 35      |
+| Total                      | 500   | 0         | 139    | 33      | 328     |
 
-`automated` means covered by a representative runnable spec in this directory or the deterministic profile. `manual` means human exploratory or release-gate validation is still expected. `blocked` means product hooks, deterministic fixture coverage, or stable selectors are missing. `catalog` means planned coverage that is not currently a release gate.
+`automated` requires an exact Playwright test identity backed by a source-scanned registration contract; naming a representative spec is not enough. `manual` means human exploratory or release-gate validation is still expected. `blocked` means product hooks, deterministic fixture coverage, or stable selectors are missing. `catalog` means planned coverage that is not currently a release gate.
 
 ## Playwright spec inventory
 
@@ -122,9 +122,9 @@ Mapped specs with an exact contract must contain only the proven Playwright regi
 
 ## Known manual, blocked, and catalog gaps
 
-| ID                      | Owner     | Status  | Gap                                                                                                                                                                  | Sources                                             |
-| ----------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| FULL-500-BROWSER-MATRIX | ui matrix | catalog | The 500-case catalog is intentionally not expanded into 500 browser tests; representative automated slices are promoted only when fixtures and selectors are stable. | `e2e/ui-matrix/cases.ts`, `e2e/ui-matrix/README.md` |
+| ID                      | Owner     | Status  | Gap                                                                                                                                                                                                                                                                                         | Sources                                             |
+| ----------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| FULL-500-BROWSER-MATRIX | ui matrix | catalog | The generated 500-case planning catalog has no case-level automation claims yet. Existing runnable browser specs remain evidence for their inventoried flows, but a catalog case is promoted only after it names an exact contracted test with deterministic fixtures and stable selectors. | `e2e/ui-matrix/cases.ts`, `e2e/ui-matrix/README.md` |
 
 ## Drift guard
 
@@ -141,4 +141,4 @@ The import spec contract is exactly six proven registrations: one DOCX case, fou
 DB_PROVIDER=sqlite DATABASE_URL="file:./prisma/dev.db" AUTH_SECRET=browser-qa-placeholder-secret E2E_PROFILE=1 BILLING_UNLIMITED_CREDITS=1 npm run test:e2e:profile -- e2e/ui-matrix/*.spec.ts
 ```
 
-Do not run the full 500 catalog as individual browser scenarios. Promote cases from `manual`, `blocked`, or `catalog` to `automated` only when deterministic fixtures, stable roles/labels, and readiness signals exist.
+Do not treat the full 500-case planning catalog as individual browser scenarios or completed coverage. Promote cases from `manual`, `blocked`, or `catalog` to `automated` only when they name an exact source-scanned Playwright test and deterministic fixtures, stable roles/labels, and readiness signals exist.

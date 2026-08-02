@@ -191,7 +191,7 @@ export function renderInventoryMarkdown({
     GENERATED_START,
     "## Source-backed catalog distribution",
     "",
-    "The 500-case catalog is generated from `e2e/ui-matrix/cases.ts`; this README section is rendered and checked by `scripts/check-ui-matrix-inventory.mjs`.",
+    "The 500-case planning catalog is generated from `e2e/ui-matrix/cases.ts`; runnable browser evidence is inventoried separately and this README section is rendered and checked by `scripts/check-ui-matrix-inventory.mjs`.",
     "",
     markdownTable(
       ["Subsystem", "Total", "Automated", "Manual", "Blocked", "Catalog"],
@@ -208,7 +208,7 @@ export function renderInventoryMarkdown({
       ],
     ),
     "",
-    "`automated` means covered by a representative runnable spec in this directory or the deterministic profile. `manual` means human exploratory or release-gate validation is still expected. `blocked` means product hooks, deterministic fixture coverage, or stable selectors are missing. `catalog` means planned coverage that is not currently a release gate.",
+    "`automated` requires an exact Playwright test identity backed by a source-scanned registration contract; naming a representative spec is not enough. `manual` means human exploratory or release-gate validation is still expected. `blocked` means product hooks, deterministic fixture coverage, or stable selectors are missing. `catalog` means planned coverage that is not currently a release gate.",
     "",
     "## Playwright spec inventory",
     "",
@@ -1552,6 +1552,7 @@ export function validateUiMatrixInventory({
   manualGaps,
   caseSummary,
   automatedSpecs,
+  automatedCases = [],
   readmeText,
 }) {
   const findings = [];
@@ -1583,6 +1584,29 @@ export function validateUiMatrixInventory({
   }
   for (const spec of automatedCompare.missing) {
     findings.push({ rule: "automated-spec-not-in-inventory", item: spec });
+  }
+  const contractedTests = new Set(
+    specInventory.flatMap((entry) =>
+      (entry.expectedTests ?? []).map(
+        (expectedTest) => `${entry.spec}\u0000${expectedTest.test}`,
+      ),
+    ),
+  );
+  for (const testCase of automatedCases) {
+    if (!testCase.automation?.test) {
+      findings.push({
+        rule: "automated-case-missing-test-identity",
+        item: testCase.id,
+      });
+      continue;
+    }
+    const automationKey = `${testCase.automation.spec}\u0000${testCase.automation.test}`;
+    if (!contractedTests.has(automationKey)) {
+      findings.push({
+        rule: "automated-case-test-not-contracted",
+        item: `${testCase.id}: ${testCase.automation.spec} :: ${testCase.automation.test}`,
+      });
+    }
   }
 
   const rendered = renderInventoryMarkdown({
@@ -1621,6 +1645,9 @@ async function loadDefaultInventory(repoRoot) {
     manualGaps: inventoryModule.UI_MATRIX_MANUAL_GAPS,
     caseSummary: casesModule.summarizeUiCases(),
     automatedSpecs,
+    automatedCases: casesModule.UI_TEST_CASES.filter(
+      (testCase) => testCase.status === "automated",
+    ),
   };
 }
 

@@ -134,7 +134,13 @@ function writeCliFixture(
   { missingSpec = false, missingMarkers = false } = {},
 ) {
   mkdirSync(join(root, "e2e", "ui-matrix"), { recursive: true });
-  writeFileSync(join(root, "e2e", "one.spec.ts"), "");
+  writeFileSync(
+    join(root, "e2e", "one.spec.ts"),
+    [
+      'import { test } from "@playwright/test";',
+      'test("one exact test", async () => {});',
+    ].join("\n"),
+  );
   if (missingSpec) {
     writeFileSync(join(root, "e2e", "missing.spec.ts"), "");
   }
@@ -142,7 +148,13 @@ function writeCliFixture(
     join(root, "e2e", "ui-matrix", "inventory.ts"),
     [
       "export const UI_MATRIX_SPEC_INVENTORY = [",
-      JSON.stringify(specEntry("e2e/one.spec.ts")),
+      JSON.stringify({
+        ...specEntry("e2e/one.spec.ts"),
+        expectedTestCount: 1,
+        expectedTests: [
+          { test: "one exact test", profiles: ["deterministic-profile"] },
+        ],
+      }),
       "];",
       "export const UI_MATRIX_MANUAL_GAPS = [",
       JSON.stringify(manualGap()),
@@ -152,7 +164,7 @@ function writeCliFixture(
   writeFileSync(
     join(root, "e2e", "ui-matrix", "cases.ts"),
     [
-      "export const UI_TEST_CASES = [{ status: 'automated', automation: { spec: 'e2e/one.spec.ts' } }];",
+      "export const UI_TEST_CASES = [{ id: 'CASE-001', status: 'automated', automation: { spec: 'e2e/one.spec.ts', test: 'one exact test' } }];",
       "export function summarizeUiCases() {",
       "return { total: 1, byStatus: { automated: 1, manual: 0, blocked: 0, catalog: 0 }, bySubsystem: { presentation: { total: 1, automated: 1, manual: 0, blocked: 0, catalog: 0 } } };",
       "}",
@@ -196,6 +208,69 @@ test("ui matrix inventory: fails when an e2e spec is missing from the matrix", (
   assert.deepEqual(result.findings, [
     { rule: "missing-spec-inventory", item: "e2e/missing.spec.ts" },
   ]);
+});
+
+test("ui matrix inventory: rejects automated cases without exact contracted test identities", (t) => {
+  const root = createTestFixtureRoot("ui-matrix-automation-evidence", t);
+  mkdirSync(join(root, "e2e"), { recursive: true });
+  writeFileSync(join(root, "e2e", "one.spec.ts"), "");
+  const entry = {
+    ...specEntry("e2e/one.spec.ts"),
+    expectedTests: [
+      { test: "does the exact thing", profiles: ["deterministic-profile"] },
+    ],
+  };
+
+  const missingIdentity = validateUiMatrixInventory({
+    repoRoot: root,
+    specInventory: [entry],
+    manualGaps: [],
+    caseSummary: CASE_SUMMARY,
+    automatedSpecs: [entry.spec],
+    automatedCases: [
+      { id: "CASE-001", status: "automated", automation: { spec: entry.spec } },
+    ],
+  });
+  assert.deepEqual(missingIdentity.findings, [
+    { rule: "automated-case-missing-test-identity", item: "CASE-001" },
+  ]);
+
+  const vagueIdentity = validateUiMatrixInventory({
+    repoRoot: root,
+    specInventory: [entry],
+    manualGaps: [],
+    caseSummary: CASE_SUMMARY,
+    automatedSpecs: [entry.spec],
+    automatedCases: [
+      {
+        id: "CASE-002",
+        status: "automated",
+        automation: { spec: entry.spec, test: "representative smoke" },
+      },
+    ],
+  });
+  assert.deepEqual(vagueIdentity.findings, [
+    {
+      rule: "automated-case-test-not-contracted",
+      item: "CASE-002: e2e/one.spec.ts :: representative smoke",
+    },
+  ]);
+
+  const exactIdentity = validateUiMatrixInventory({
+    repoRoot: root,
+    specInventory: [entry],
+    manualGaps: [],
+    caseSummary: CASE_SUMMARY,
+    automatedSpecs: [entry.spec],
+    automatedCases: [
+      {
+        id: "CASE-003",
+        status: "automated",
+        automation: { spec: entry.spec, test: "does the exact thing" },
+      },
+    ],
+  });
+  assert.deepEqual(exactIdentity.findings, []);
 });
 
 test("ui matrix inventory: reports stale, duplicate, and missing source refs", (t) => {

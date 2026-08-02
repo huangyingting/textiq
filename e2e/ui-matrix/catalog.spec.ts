@@ -16,23 +16,30 @@ test.describe("UI matrix catalog @required-profile", () => {
     expect(summary.bySubsystem["auth-public"].total).toBe(40);
     expect(summary.bySubsystem["document-editor"].total).toBe(45);
     expect(summary.bySubsystem["workspace-billing-brand"].total).toBe(55);
-    expect(summary.byStatus.automated).toBe(98);
+    expect(summary.byStatus.automated).toBe(0);
+    expect(summary.byStatus.catalog).toBe(328);
   });
 
-  test("keeps every automated case tied to a runnable Playwright spec", () => {
+  test("keeps every automated case tied to an exact contracted Playwright test", () => {
     const automatedCases = UI_TEST_CASES.filter(
       (testCase) => testCase.status === "automated",
     );
-    const inventoriedSpecs = new Set<string>(
-      UI_MATRIX_SPEC_INVENTORY.map((entry) => entry.spec),
+    const contractedTests = new Set<string>(
+      UI_MATRIX_SPEC_INVENTORY.flatMap((entry) =>
+        ("expectedTests" in entry ? entry.expectedTests : []).map(
+          (expectedTest) => `${entry.spec}\u0000${expectedTest.test}`,
+        ),
+      ),
     );
 
-    expect(automatedCases.length).toBe(98);
     for (const testCase of automatedCases) {
-      expect(testCase.automation?.spec).toMatch(
-        /^e2e\/ui-matrix\/.*\.spec\.ts$/,
-      );
-      expect(inventoriedSpecs.has(testCase.automation!.spec)).toBe(true);
+      expect(testCase.automation?.test).toBeTruthy();
+      expect(
+        contractedTests.has(
+          `${testCase.automation!.spec}\u0000${testCase.automation!.test}`,
+        ),
+      ).toBe(true);
+      expect(testCase.automation?.spec).toMatch(/^e2e\/.*\.spec\.ts$/);
       expect(testCase.refs.length).toBeGreaterThan(0);
       expect(testCase.title).toContain(testCase.area);
     }

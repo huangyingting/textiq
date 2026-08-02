@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "current"
-last_updated: "2026-08-01"
+last_updated: "2026-08-02"
 description: "Real-time collaborative editing (multiple cursors, presence, conflict-free merges) is powered by a self-hosted Yjs websocket sync server, scripts/collab-server.mjs. The browser editor connects to it through useLexicalCollaboration. The application-level room/readiness/access contract is documented in ../collaboration/README.md."
 ---
 
@@ -411,3 +411,7 @@ Shutdown emits structured `collab.server.shutdown` start/finish records. A
 finish record with `ok: false` means a runtime layer failed to close and sets a
 non-zero process exit code. Individual recovery flush failures continue to use
 the existing `collab.flush.result` diagnostics and remain best-effort.
+A document may be deleted while its disconnected room is still waiting for
+eviction. In that terminal case the endpoint returns `404`; the flusher records
+an informational `document-not-found` skip and does not increment
+`flushFailures`, because recovery must never recreate the deleted row.

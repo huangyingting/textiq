@@ -16,6 +16,9 @@
  *    logs a single clear warning at construction time, so dev without the secret
  *    still runs (it just skips the recovery snapshot).
  *  - Errors never throw out of the callback — eviction must always complete.
+ *  - A 404 is terminal success: the document was deleted while its room was
+ *    awaiting eviction, so the recovery snapshot must be discarded rather
+ *    than counted as an operational failure or used to recreate the row.
  *  - Structured logs carry only safe ids/flags, never document content.
  *
  * Runs under plain Node (no TS path aliases), like the rest of `scripts/*.mjs`.
@@ -102,6 +105,25 @@ export function createEvictionFlusher(options = {}) {
         }),
         signal: abortController.signal,
       });
+
+      if (res.status === 404) {
+        logScriptInfo(
+          "collab.flush.result",
+          "eviction flush skipped: document no longer exists",
+          {
+            room: roomName,
+            docId,
+            dirty: true,
+            flushAttempt: true,
+            ok: true,
+            persisted: false,
+            skipped: true,
+            status: res.status,
+            skipReason: "document-not-found",
+          },
+        );
+        return;
+      }
 
       if (!res.ok) {
         const failureReason = `http_${res.status}`;
