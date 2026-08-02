@@ -8,7 +8,6 @@ import {
 import {
   e2eProfileEnabled,
   profileAssetSharePath,
-  fixturePngBuffer,
   profileAssetPath,
   profileDocPath,
   profileOwnerCredentials,
@@ -17,9 +16,14 @@ import {
   profileViewerCredentials,
 } from "../helpers/profile";
 import {
-  waitForSlideAutosave,
+  waitForSlideAutosaveAfter,
   waitForStableSlideStage,
 } from "../helpers/readiness";
+
+const REPLACEMENT_PNG_BUFFER = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 /**
  * Slide image upload + protected asset access-control E2E (Epic #517, #521).
@@ -169,11 +173,22 @@ test.describe("slide image upload round-trip", () => {
       "upload: inspector image file input not found after selecting element",
     ).toHaveCount(1, { timeout: 10_000 });
 
-    await fileInput.first().setInputFiles({
-      name: "uploaded-fixture.png",
-      mimeType: "image/png",
-      buffer: fixturePngBuffer(),
-    });
+    await page.getByRole("button", { name: "Open Image inspector" }).click();
+    const replaceImage = page.getByRole("button", { name: "Replace image" });
+    await expect(replaceImage).toBeVisible();
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      replaceImage.click(),
+    ]);
+    await waitForSlideAutosaveAfter(page, () =>
+      fileChooser.setFiles({
+        name: "uploaded-fixture.png",
+        mimeType: "image/png",
+        // Deliberately differs from the seeded fixture. Re-uploading the seeded
+        // bytes would let a no-op replacement pass the reload/render checks.
+        buffer: REPLACEMENT_PNG_BUFFER,
+      }),
+    );
 
     // No product upload error should be surfaced by the inspector.
     // Exclude Next.js's #__next-route-announcer__ live region, which always
@@ -183,7 +198,6 @@ test.describe("slide image upload round-trip", () => {
       "upload: inspector reported an upload error",
     ).toHaveCount(0, { timeout: 15_000 });
 
-    await waitForSlideAutosave(page);
     await page.reload();
 
     // Verify the rendered slide still resolves a protected asset URL by loading
@@ -226,6 +240,10 @@ test.describe("slide image upload round-trip", () => {
       assetResponse.status(),
       "upload: protected asset URL did not resolve to servable bytes",
     ).toBe(200);
+    expect(
+      Buffer.from(await assetResponse.body()).equals(REPLACEMENT_PNG_BUFFER),
+      "upload: reloaded protected asset must serve the replacement bytes",
+    ).toBe(true);
 
     const presentRegion = page.getByRole("region", { name: /^Presentation/ });
     await expect(

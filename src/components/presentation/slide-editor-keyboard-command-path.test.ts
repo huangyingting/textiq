@@ -21,6 +21,7 @@ import {
   buildVisualNode,
 } from "@/test/builders/presentation-deck";
 
+// e2e-governance-allow oversized-test reason=one stateful editor harness covers interdependent upload, clipboard, visual, and keyboard command paths without duplicating browser mocks.
 const require = createRequire(import.meta.url);
 const reactDom = require("react-dom") as {
   createPortal: (children: ReactNode) => ReactNode;
