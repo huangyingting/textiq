@@ -645,6 +645,119 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome", "390x844 mobile", "412x915 mobile"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+    expectedTestCount: 8,
+    expectedTests: [
+      {
+        test: "shortcut help restores the current opener across Escape, Close, and reopen cycles",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "closing the full slide editor restores focus to the document toolbar opener",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "forced-colors keeps the focused stage node visibly outlined",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "responsive inspector sheet stays above the filmstrip and bottom dock at mobile width",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "responsive inspector sheet stays above the filmstrip and bottom dock at tablet width",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "mobile Edit slide and Add slide controls stay independently actionable at 390x844",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "mobile Edit slide and Add slide controls stay independently actionable at 412x915",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "desktop keeps Add slide actionable without rendering the mobile Edit slide control",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "shortcut help restores the current opener across Escape, Close, and reopen cycles",
+        surface:
+          "shortcut-help dismissal and opener-specific focus restoration",
+        viewport: "1280x900 desktop",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "closing the full slide editor restores focus to the document toolbar opener",
+        surface:
+          "full slide-editor close and document-opener focus restoration",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "forced-colors keeps the focused stage node visibly outlined @required-profile",
+        surface: "forced-colors stage-node focus indicator",
+        viewport: "1280x900 desktop with forced colors",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "responsive inspector sheet stays above the filmstrip and bottom dock at mobile width @required-profile",
+        surface: "mobile inspector stacking and center-point hit testing",
+        viewport: "390x844 mobile",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "responsive inspector sheet stays above the filmstrip and bottom dock at tablet width @required-profile",
+        surface: "tablet inspector stacking and center-point hit testing",
+        viewport: "834x1112 tablet",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "mobile Edit slide and Add slide controls stay independently actionable at 390x844",
+        surface:
+          "390x844 Edit/Add geometry, hit testing, activation, and text inspector",
+        viewport: "390x844 mobile",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "mobile Edit slide and Add slide controls stay independently actionable at 412x915",
+        surface:
+          "412x915 Edit/Add geometry, hit testing, activation, and text inspector",
+        viewport: "412x915 mobile",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "desktop keeps Add slide actionable without rendering the mobile Edit slide control",
+        surface: "desktop Add-slide hit target and mobile-control suppression",
+        viewport: "1280x900 desktop",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/present-export.spec.ts",

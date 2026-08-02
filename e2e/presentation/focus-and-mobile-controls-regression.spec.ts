@@ -1,4 +1,10 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import {
@@ -108,126 +114,35 @@ test.describe("presentation focus and mobile control regressions", () => {
     });
   });
 
-  for (const viewport of [
-    { name: "mobile", width: 390, height: 844 },
-    { name: "tablet", width: 834, height: 1112 },
-  ]) {
-    test(`responsive inspector sheet stays above the filmstrip and bottom dock at ${viewport.name} width @required-profile`, async ({
+  test("responsive inspector sheet stays above the filmstrip and bottom dock at mobile width @required-profile", async ({
+    page,
+  }, testInfo) => {
+    await expectResponsiveInspectorStacking(page, testInfo, "mobile", 390, 844);
+  });
+
+  test("responsive inspector sheet stays above the filmstrip and bottom dock at tablet width @required-profile", async ({
+    page,
+  }, testInfo) => {
+    await expectResponsiveInspectorStacking(
       page,
-    }, testInfo) => {
-      const editor = await openSeededSlideEditor(
-        page,
-        viewport.width,
-        viewport.height,
-      );
-      await editor.getByRole("button", { name: "Edit slide" }).click();
+      testInfo,
+      "tablet",
+      834,
+      1112,
+    );
+  });
 
-      const inspector = page.getByRole("dialog", { name: "Slide inspector" });
-      await expect(inspector).toBeVisible();
+  test("mobile Edit slide and Add slide controls stay independently actionable at 390x844", async ({
+    page,
+  }) => {
+    await expectMobileSlideControls(page, 390, 844);
+  });
 
-      for (const obscuredSurface of [
-        editor.locator('[aria-label="Slide filmstrip"]'),
-        editor.locator('[data-slide-bottom-dock="true"]'),
-      ]) {
-        const inspectorBox = await requiredBox(inspector);
-        const surfaceBox = await requiredBox(obscuredSurface);
-        expect(rectanglesOverlap(inspectorBox, surfaceBox)).toBe(true);
-
-        const hit = await obscuredSurface.evaluate((surface) => {
-          const inspector = document.querySelector(
-            '[role="dialog"][aria-label="Slide inspector"]',
-          );
-          const rect = surface.getBoundingClientRect();
-          const topmost = document.elementFromPoint(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-          );
-          return {
-            inspectorOwnsHit: Boolean(
-              inspector && topmost && inspector.contains(topmost),
-            ),
-            topmostLabel:
-              topmost?.getAttribute("aria-label") ??
-              topmost?.textContent?.trim().slice(0, 80) ??
-              topmost?.tagName ??
-              "none",
-          };
-        });
-        expect(
-          hit.inspectorOwnsHit,
-          `topmost element was ${hit.topmostLabel}`,
-        ).toBe(true);
-      }
-
-      await page.screenshot({
-        path: testInfo.outputPath(`${viewport.name}-inspector-layering.png`),
-      });
-    });
-  }
-
-  for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 412, height: 915 },
-  ]) {
-    test(`mobile Edit slide and Add slide controls stay independently actionable at ${viewport.width}x${viewport.height}`, async ({
-      page,
-    }) => {
-      const editor = await openSeededSlideEditor(
-        page,
-        viewport.width,
-        viewport.height,
-      );
-      const editSlide = editor.getByRole("button", { name: "Edit slide" });
-      const addSlide = editor.getByRole("button", { name: "Add slide" });
-
-      await expect(editSlide).toBeVisible();
-      await expect(addSlide).toBeVisible();
-      const editBox = await requiredBox(editSlide);
-      const addBox = await requiredBox(addSlide);
-      expect(rectanglesOverlap(editBox, addBox)).toBe(false);
-      await expectCenterHit(editSlide);
-      await expectCenterHit(addSlide);
-
-      await editSlide.click();
-      const slideInspector = page.getByRole("dialog", {
-        name: "Slide inspector",
-      });
-      await expect(slideInspector).toBeVisible();
-      await slideInspector
-        .getByRole("button", { name: "Close slide inspector" })
-        .click();
-      await expect(slideInspector).toHaveCount(0);
-
-      await addSlide.click();
-      const addSlideDialog = page.getByRole("dialog", {
-        name: "Add semantic slide",
-      });
-      await expect(addSlideDialog).toBeVisible();
-      await addSlideDialog.getByRole("button", { name: "Close" }).click();
-      await expect(addSlideDialog).toHaveCount(0);
-
-      const firstStageNode = editor
-        .locator(
-          '[data-slide-stage-viewport="true"] [data-node-id][role="button"]',
-        )
-        .first();
-      await firstStageNode.focus();
-      await firstStageNode.press("Enter");
-      const editText = editor.getByRole("button", { name: "Edit text" });
-      await expect(editText).toBeVisible();
-      await editText.click();
-      const textInspector = page.getByRole("dialog", {
-        name: "Text inspector",
-      });
-      await expect(textInspector).toBeVisible();
-      await textInspector
-        .getByRole("button", { name: "Show Arrange inspector panel" })
-        .click();
-      await expect(
-        textInspector.getByRole("heading", { name: "Geometry" }),
-      ).toBeVisible();
-    });
-  }
+  test("mobile Edit slide and Add slide controls stay independently actionable at 412x915", async ({
+    page,
+  }) => {
+    await expectMobileSlideControls(page, 412, 915);
+  });
 
   test("desktop keeps Add slide actionable without rendering the mobile Edit slide control", async ({
     page,
@@ -246,6 +161,113 @@ test.describe("presentation focus and mobile control regressions", () => {
     ).toBeVisible();
   });
 });
+
+async function expectResponsiveInspectorStacking(
+  page: Page,
+  testInfo: TestInfo,
+  viewportName: "mobile" | "tablet",
+  width: number,
+  height: number,
+): Promise<void> {
+  const editor = await openSeededSlideEditor(page, width, height);
+  await editor.getByRole("button", { name: "Edit slide" }).click();
+
+  const inspector = page.getByRole("dialog", { name: "Slide inspector" });
+  await expect(inspector).toBeVisible();
+
+  for (const obscuredSurface of [
+    editor.locator('[aria-label="Slide filmstrip"]'),
+    editor.locator('[data-slide-bottom-dock="true"]'),
+  ]) {
+    const inspectorBox = await requiredBox(inspector);
+    const surfaceBox = await requiredBox(obscuredSurface);
+    expect(rectanglesOverlap(inspectorBox, surfaceBox)).toBe(true);
+
+    const hit = await obscuredSurface.evaluate((surface) => {
+      const inspector = document.querySelector(
+        '[role="dialog"][aria-label="Slide inspector"]',
+      );
+      const rect = surface.getBoundingClientRect();
+      const topmost = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      );
+      return {
+        inspectorOwnsHit: Boolean(
+          inspector && topmost && inspector.contains(topmost),
+        ),
+        topmostLabel:
+          topmost?.getAttribute("aria-label") ??
+          topmost?.textContent?.trim().slice(0, 80) ??
+          topmost?.tagName ??
+          "none",
+      };
+    });
+    expect(
+      hit.inspectorOwnsHit,
+      `topmost element was ${hit.topmostLabel}`,
+    ).toBe(true);
+  }
+
+  await page.screenshot({
+    path: testInfo.outputPath(`${viewportName}-inspector-layering.png`),
+  });
+}
+
+async function expectMobileSlideControls(
+  page: Page,
+  width: number,
+  height: number,
+): Promise<void> {
+  const editor = await openSeededSlideEditor(page, width, height);
+  const editSlide = editor.getByRole("button", { name: "Edit slide" });
+  const addSlide = editor.getByRole("button", { name: "Add slide" });
+
+  await expect(editSlide).toBeVisible();
+  await expect(addSlide).toBeVisible();
+  const editBox = await requiredBox(editSlide);
+  const addBox = await requiredBox(addSlide);
+  expect(rectanglesOverlap(editBox, addBox)).toBe(false);
+  await expectCenterHit(editSlide);
+  await expectCenterHit(addSlide);
+
+  await editSlide.click();
+  const slideInspector = page.getByRole("dialog", {
+    name: "Slide inspector",
+  });
+  await expect(slideInspector).toBeVisible();
+  await slideInspector
+    .getByRole("button", { name: "Close slide inspector" })
+    .click();
+  await expect(slideInspector).toHaveCount(0);
+
+  await addSlide.click();
+  const addSlideDialog = page.getByRole("dialog", {
+    name: "Add semantic slide",
+  });
+  await expect(addSlideDialog).toBeVisible();
+  await addSlideDialog.getByRole("button", { name: "Close" }).click();
+  await expect(addSlideDialog).toHaveCount(0);
+
+  const firstStageNode = editor
+    .locator('[data-slide-stage-viewport="true"] [data-node-id][role="button"]')
+    .first();
+  await firstStageNode.focus();
+  await firstStageNode.press("Enter");
+  const editText = editor.getByRole("button", { name: "Edit text" });
+  await expect(editText).toBeVisible();
+  await editText.click();
+  const textInspector = page.getByRole("dialog", {
+    name: "Text inspector",
+  });
+  await expect(textInspector).toBeVisible();
+  await textInspector
+    .getByRole("button", { name: "Show Arrange inspector panel" })
+    .click();
+  await expect(
+    textInspector.getByRole("heading", { name: "Geometry" }),
+  ).toBeVisible();
+}
 
 async function openSeededSlideEditor(
   page: Page,

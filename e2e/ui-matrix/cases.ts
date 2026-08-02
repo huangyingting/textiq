@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 35, manual: 48, blocked: 10, catalog: 87 },
+    statusCounts: { automated: 43, manual: 48, blocked: 10, catalog: 79 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -1629,6 +1629,149 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/editor/document-editor-profile.spec.ts",
       test: "slide editor bottom dock stays compact and keyboard reachable across viewports",
+    },
+  },
+  {
+    id: "PRES-EDIT-094",
+    subsystem: "presentation-editor",
+    area: "shortcut help",
+    title:
+      "shortcut help restores the current opener across Escape, Close, and reopen cycles",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "focus-restoration", "shortcut-dialog"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "shortcut help restores the current opener across Escape, Close, and reopen cycles",
+    },
+  },
+  {
+    id: "PRES-EDIT-095",
+    subsystem: "presentation-editor",
+    area: "full slide editor",
+    title:
+      "closing the full slide editor restores focus to the document toolbar opener",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "route-close", "focus-restoration"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "closing the full slide editor restores focus to the document toolbar opener",
+    },
+  },
+  {
+    id: "PRES-EDIT-096",
+    subsystem: "presentation-editor",
+    area: "forced-colors",
+    title: "forced-colors keeps the focused stage node visibly outlined",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/system/slide-canvas-keyboard-accessibility.md",
+    ],
+    tags: ["seeded-owner", "forced-colors", "focus-indicator"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "forced-colors keeps the focused stage node visibly outlined",
+    },
+  },
+  {
+    id: "PRES-EDIT-097",
+    subsystem: "presentation-editor",
+    area: "mobile width",
+    title:
+      "responsive inspector sheet stays above the filmstrip and bottom dock at mobile width",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "mobile", "inspector-stacking"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "responsive inspector sheet stays above the filmstrip and bottom dock at mobile width",
+    },
+  },
+  {
+    id: "PRES-EDIT-098",
+    subsystem: "presentation-editor",
+    area: "tablet width",
+    title:
+      "responsive inspector sheet stays above the filmstrip and bottom dock at tablet width",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "tablet", "inspector-stacking"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "responsive inspector sheet stays above the filmstrip and bottom dock at tablet width",
+    },
+  },
+  {
+    id: "PRES-EDIT-099",
+    subsystem: "presentation-editor",
+    area: "390x844",
+    title:
+      "mobile Edit slide and Add slide controls stay independently actionable at 390x844",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "mobile", "hit-testing"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "mobile Edit slide and Add slide controls stay independently actionable at 390x844",
+    },
+  },
+  {
+    id: "PRES-EDIT-100",
+    subsystem: "presentation-editor",
+    area: "412x915",
+    title:
+      "mobile Edit slide and Add slide controls stay independently actionable at 412x915",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "mobile", "hit-testing"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "mobile Edit slide and Add slide controls stay independently actionable at 412x915",
+    },
+  },
+  {
+    id: "PRES-EDIT-101",
+    subsystem: "presentation-editor",
+    area: "desktop",
+    title:
+      "desktop keeps Add slide actionable without rendering the mobile Edit slide control",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "desktop", "control-suppression"],
+    automation: {
+      spec: "e2e/presentation/focus-and-mobile-controls-regression.spec.ts",
+      test: "desktop keeps Add slide actionable without rendering the mobile Edit slide control",
     },
   },
   {

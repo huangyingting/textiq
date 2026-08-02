@@ -16,8 +16,8 @@ test.describe("UI matrix catalog @required-profile", () => {
     expect(summary.bySubsystem["auth-public"].total).toBe(40);
     expect(summary.bySubsystem["document-editor"].total).toBe(45);
     expect(summary.bySubsystem["workspace-billing-brand"].total).toBe(55);
-    expect(summary.byStatus.automated).toBe(117);
-    expect(summary.byStatus.catalog).toBe(211);
+    expect(summary.byStatus.automated).toBe(125);
+    expect(summary.byStatus.catalog).toBe(203);
   });
 
   test("keeps every automated case tied to an exact contracted Playwright test", () => {
