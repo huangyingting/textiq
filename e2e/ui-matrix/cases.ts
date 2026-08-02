@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 28, manual: 48, blocked: 10, catalog: 94 },
+    statusCounts: { automated: 35, manual: 48, blocked: 10, catalog: 87 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -269,7 +269,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 14, manual: 15, blocked: 4, catalog: 12 },
+    statusCounts: { automated: 22, manual: 15, blocked: 4, catalog: 4 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -311,7 +311,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "WORKSPACE",
     subsystem: "workspace-billing-brand",
     total: 55,
-    statusCounts: { automated: 7, manual: 15, blocked: 5, catalog: 28 },
+    statusCounts: { automated: 11, manual: 15, blocked: 5, catalog: 24 },
     refs: [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
@@ -864,6 +864,148 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "DOC-EDIT-034",
+    subsystem: "document-editor",
+    area: "seeded document editor",
+    title: "opens the seeded document editor with deterministic content",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "body-hydration", "document-statistics"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "opens the seeded document editor with deterministic content",
+    },
+  },
+  {
+    id: "DOC-EDIT-035",
+    subsystem: "document-editor",
+    area: "reload and browser back-forward navigation",
+    title:
+      "document editor survives reload and browser back-forward navigation",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "reload", "browser-history"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "document editor survives reload and browser back-forward navigation",
+    },
+  },
+  {
+    id: "DOC-EDIT-036",
+    subsystem: "document-editor",
+    area: "non-mutating panels",
+    title: "editor chrome exposes non-mutating panels and share metadata",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "style-history", "share-metadata"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "editor chrome exposes non-mutating panels and share metadata",
+    },
+  },
+  {
+    id: "DOC-EDIT-037",
+    subsystem: "document-editor",
+    area: "import and export controls",
+    title:
+      "editor import and export controls expose non-destructive menu states",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "import-focus", "export-menu"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "editor import and export controls expose non-destructive menu states",
+    },
+  },
+  {
+    id: "DOC-EDIT-038",
+    subsystem: "document-editor",
+    area: "read-only mode",
+    title:
+      "viewer can open the seeded document in read-only mode without owner controls",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-viewer", "read-only", "control-suppression"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "viewer can open the seeded document in read-only mode without owner controls",
+    },
+  },
+  {
+    id: "DOC-EDIT-039",
+    subsystem: "document-editor",
+    area: "autosave status live region",
+    title:
+      "editor autosave status live region is present and reports a known save state",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "autosave", "live-region"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "editor autosave status live region is present and reports a known save state",
+    },
+  },
+  {
+    id: "DOC-EDIT-040",
+    subsystem: "document-editor",
+    area: "copy and regenerate link controls",
+    title:
+      "share dialog exposes copy and regenerate link controls alongside share metadata",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "share-link", "rotation"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "share dialog exposes copy and regenerate link controls alongside share metadata",
+    },
+  },
+  {
+    id: "DOC-EDIT-041",
+    subsystem: "document-editor",
+    area: "mobile editor chrome",
+    title:
+      "mobile editor chrome keeps key slide and collaboration actions reachable",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "mobile", "action-reachability"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "mobile editor chrome keeps key slide and collaboration actions reachable",
+    },
+  },
+  {
     id: "PRES-EDIT-059",
     subsystem: "presentation-editor",
     area: "canonical slide editor route",
@@ -1362,6 +1504,131 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/presentation-controls.spec.ts",
       test: "creates, persists, nests, reorders, and recursively ungroups UI-authored groups",
+    },
+  },
+  {
+    id: "PRES-EDIT-087",
+    subsystem: "presentation-editor",
+    area: "slide editor opens",
+    title:
+      "slide editor opens, exposes controls and insert panels, then closes cleanly",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "editor-shell", "insert-panels"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "slide editor opens, exposes controls and insert panels, then closes cleanly",
+    },
+  },
+  {
+    id: "PRES-EDIT-088",
+    subsystem: "presentation-editor",
+    area: "slide rail duplicate, delete, and reorder actions",
+    title:
+      "slide rail duplicate, delete, and reorder actions mutate deck state and persist after reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "slide-rail", "reload-persistence"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "slide rail duplicate, delete, and reorder actions mutate deck state and persist after reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-089",
+    subsystem: "presentation-editor",
+    area: "rapid slide edit and delete",
+    title:
+      "rapid slide edit and delete cannot race Save now or regeneration into stale rollback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/autosave-and-commands.md",
+    ],
+    tags: ["seeded-owner", "save-race", "regeneration"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "rapid slide edit and delete cannot race Save now or regeneration into stale rollback",
+    },
+  },
+  {
+    id: "PRES-EDIT-090",
+    subsystem: "presentation-editor",
+    area: "create-edit-save-reopen-export-share roundtrip",
+    title:
+      "deckpresentation create-edit-save-reopen-export-share roundtrip stays deterministic",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["seeded-owner", "anonymous-public", "roundtrip"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "deckpresentation create-edit-save-reopen-export-share roundtrip stays deterministic",
+    },
+  },
+  {
+    id: "PRES-EDIT-091",
+    subsystem: "presentation-editor",
+    area: "undo and redo",
+    title:
+      "slide editor undo and redo keep deck state, autosave status, and focus coherent",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/autosave-and-commands.md",
+    ],
+    tags: ["seeded-owner", "history", "focus-restoration"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "slide editor undo and redo keep deck state, autosave status, and focus coherent",
+    },
+  },
+  {
+    id: "PRES-EDIT-092",
+    subsystem: "presentation-editor",
+    area: "context toolbar Escape",
+    title: "context toolbar Escape restores focus to the selected stage target",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/slide-stage-interactions.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "focus-restoration"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "context toolbar Escape restores focus to the selected stage target",
+    },
+  },
+  {
+    id: "PRES-EDIT-093",
+    subsystem: "presentation-editor",
+    area: "bottom dock",
+    title:
+      "slide editor bottom dock stays compact and keyboard reachable across viewports",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "responsive", "keyboard"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "slide editor bottom dock stays compact and keyboard reachable across viewports",
     },
   },
   {
@@ -2077,6 +2344,78 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/workspace-lifecycle-ui.spec.ts",
       test: "owner, editor, and viewer recover invite failures and complete the workspace lifecycle",
+    },
+  },
+  {
+    id: "WORKSPACE-028",
+    subsystem: "workspace-billing-brand",
+    area: "search, filters, sorting, favorites, and safe actions",
+    title:
+      "dashboard search, filters, sorting, favorites, and safe actions are deterministic",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/documents/README.md",
+    ],
+    tags: ["seeded-owner", "dashboard", "safe-actions"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "dashboard search, filters, sorting, favorites, and safe actions are deterministic",
+    },
+  },
+  {
+    id: "WORKSPACE-029",
+    subsystem: "workspace-billing-brand",
+    area: "search, history, and template picker controls",
+    title:
+      "dashboard search, history, and template picker controls are reachable",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/documents/README.md",
+    ],
+    tags: ["seeded-owner", "browser-history", "template-picker"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "dashboard search, history, and template picker controls are reachable",
+    },
+  },
+  {
+    id: "WORKSPACE-030",
+    subsystem: "workspace-billing-brand",
+    area: "mobile authenticated navigation drawer",
+    title:
+      "mobile authenticated navigation drawer reaches workspace and brand routes",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/system/design-system.md",
+    ],
+    tags: ["seeded-owner", "mobile", "workspace-brand-routes"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "mobile authenticated navigation drawer reaches workspace and brand routes",
+    },
+  },
+  {
+    id: "WORKSPACE-031",
+    subsystem: "workspace-billing-brand",
+    area: "sort by date created",
+    title:
+      "dashboard sort by date created changes the sort URL param and preserves all documents",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-editor-profile.spec.ts",
+      "docs/documents/README.md",
+    ],
+    tags: ["seeded-owner", "dashboard-sort", "url-state"],
+    automation: {
+      spec: "e2e/editor/document-editor-profile.spec.ts",
+      test: "dashboard sort by date created changes the sort URL param and preserves all documents",
     },
   },
 ];
