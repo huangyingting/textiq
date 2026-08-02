@@ -1202,7 +1202,7 @@ const AUTOMATED_CASES: UiTestCase[] = [
   {
     id: "PRES-EDIT-126",
     subsystem: "presentation-editor",
-    area: "connector endpoint keyboard editing",
+    area: "keyboard connector endpoint editing",
     title:
       "keyboard connector endpoint editing free-draws both ends and persists",
     status: "automated",
