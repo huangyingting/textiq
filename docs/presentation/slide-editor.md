@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-08-01"
+last_updated: "2026-08-02"
 description: "This document describes the runtime architecture of the slide editor. It is about interaction and UI ownership, not the persisted deck schema. For the JSON contract, see ../data-model/deck.md. For detailed stage hit-testing, hover preselection, overlap handling, connector targeting, and pointer state rules, see slide-stage-interactions.md."
 ---
 
@@ -372,10 +372,12 @@ editor shell keeps thin wiring around those helpers.
 - **Announcements:** a visually-hidden `aria-live="polite"` region in the stage
   announces selection, move, resize and delete results (`announce*` builders);
   focused elements show a distinct `focus-visible` ring.
-- **Connectors (interim):** with two connectable elements selected, `C` inserts a
-  default-endpoint connector; with a connector selected, `C` / `Shift+C` cycle its
-  end / start endpoint anchor. Free-draw routing remains pointer-only and is
-  tracked in #1574.
+- **Connectors:** with two connectable elements selected, `C` inserts a
+  default-endpoint connector; with a connector selected, `C` / `Shift+C` cycle
+  its end / start bound anchor. `Enter` starts endpoint editing, Arrow keys move
+  the active endpoint by `1%`, `Shift+Arrow` moves it by `5%`, and `Tab` switches
+  start/end. Moving detaches the active endpoint into a free point while
+  preserving the opposite endpoint and connector frame geometry.
 - **Help:** `?` (or View > Keyboard shortcuts) opens the shortcut help dialog
   (`canvasShortcutHelp` in `src/lib/presentation/canvas-shortcut-help.ts`).
 

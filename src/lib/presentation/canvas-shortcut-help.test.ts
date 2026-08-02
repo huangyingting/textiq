@@ -29,6 +29,20 @@ describe("canvasShortcutHelp (#535)", () => {
       flat.some((e) => e.description === "Select next overlapping element"),
       false,
     );
+    assert.ok(
+      flat.some((e) => e.description.includes("switch connector endpoint")),
+    );
+    assert.ok(
+      flat.some((e) =>
+        e.description.includes("active connector endpoint by 1%"),
+      ),
+    );
+    assert.ok(flat.some((e) => e.description.includes("connector endpoints")));
+    assert.ok(
+      flat.some((e) =>
+        e.description.includes("Finish connector endpoint editing"),
+      ),
+    );
   });
 
   test("uses ⌘ on mac and Ctrl elsewhere", () => {

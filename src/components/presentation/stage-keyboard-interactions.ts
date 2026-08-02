@@ -22,10 +22,17 @@ const KEYBOARD_CONNECTOR_ANCHORS: readonly ConnectorAnchor[] = [
   "right",
 ];
 
-export interface KeyboardConnectorModePresentation {
-  sourceId: string;
-  targetId: string | null;
-}
+export type KeyboardConnectorModePresentation =
+  | {
+      kind: "create";
+      sourceId: string;
+      targetId: string | null;
+    }
+  | {
+      kind: "edit";
+      connectorId: string;
+      endpoint: "from" | "to";
+    };
 
 export type KeyboardConnectableNodePresentation = SlideChildNode & {
   layout: LayoutBox;
@@ -82,7 +89,7 @@ export function startKeyboardConnectorModePresentation(
 ): KeyboardConnectorModePresentation | null {
   if (!findNodeById(nodes, sourceId)) return null;
   const [target] = orderedKeyboardConnectorTargets(nodes, sourceId);
-  return target ? { sourceId, targetId: target.id } : null;
+  return target ? { kind: "create", sourceId, targetId: target.id } : null;
 }
 
 export function nextKeyboardConnectorTargetIdPresentation(
@@ -207,6 +214,60 @@ export function detachConnectorEndpointPresentation(
     ),
     connector.layout.frame,
   );
+}
+
+function clampSlidePercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+export function moveKeyboardConnectorEndpointPresentation({
+  nodes,
+  connector,
+  endpoint,
+  delta,
+}: {
+  nodes: readonly SlideChildNode[];
+  connector: Extract<SlideChildNode, { type: "connector" }> & {
+    layout: LayoutBox;
+  };
+  endpoint: "from" | "to";
+  delta: { x: number; y: number };
+}): {
+  frame: LayoutBox["frame"];
+  from: ConnectorEndpoint;
+  to: ConnectorEndpoint;
+} {
+  const resolveNodeFrame = (nodeId: string) =>
+    findNodeById(nodes, nodeId)?.layout?.frame;
+  const fromPoint = connectorEndpointSlidePoint(
+    connector.content.from,
+    connector.layout.frame,
+    resolveNodeFrame,
+  );
+  const toPoint = connectorEndpointSlidePoint(
+    connector.content.to,
+    connector.layout.frame,
+    resolveNodeFrame,
+  );
+  const activePoint = endpoint === "from" ? fromPoint : toPoint;
+  const movedPoint = {
+    x: clampSlidePercent(activePoint.x + delta.x),
+    y: clampSlidePercent(activePoint.y + delta.y),
+  };
+  const nextFromPoint = endpoint === "from" ? movedPoint : fromPoint;
+  const nextToPoint = endpoint === "to" ? movedPoint : toPoint;
+  const frame = connectorFrameFromSlidePoints(nextFromPoint, nextToPoint);
+  return {
+    frame,
+    from:
+      endpoint === "from" || connector.content.from.kind === "point"
+        ? connectorEndpointFromSlidePoint(nextFromPoint, frame)
+        : connector.content.from,
+    to:
+      endpoint === "to" || connector.content.to.kind === "point"
+        ? connectorEndpointFromSlidePoint(nextToPoint, frame)
+        : connector.content.to,
+  };
 }
 
 export function cycleConnectorEndpointAnchorPresentation(

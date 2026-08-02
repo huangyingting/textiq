@@ -366,6 +366,77 @@ test.describe("presentation pointer interactions", () => {
     );
   });
 
+  test("keyboard connector endpoint editing free-draws both ends and persists", async ({
+    page,
+  }, testInfo) => {
+    const editor = await openPointerFixture(
+      page,
+      testInfo,
+      POINTER_INTERACTION_FIXTURES.connectorSnap,
+    );
+    const insertConnector = page
+      .getByRole("toolbar", { name: "Context toolbar" })
+      .getByRole("button", { name: "Insert connector", exact: true })
+      .first();
+    await expect(insertConnector).toBeVisible();
+    await insertConnector.click();
+
+    const connector = editor
+      .locator(`${STAGE_NODE_SELECTOR}[data-node-type="connector"]`)
+      .first();
+    await expect(connector).toBeVisible();
+    await expect(connector).toHaveAttribute("aria-pressed", "true");
+
+    let inspector = await selectInspectorPanel(page, editor, "arrange");
+    const initialGeometry = await readGeometry(inspector);
+    const liveRegion = editor
+      .locator('.sr-only[aria-live="polite"][aria-atomic="true"]')
+      .first();
+
+    await connector.focus();
+    await page.keyboard.press("Enter");
+    await expect(liveRegion).toHaveText(
+      "Editing connector end endpoint. Use Arrow keys to move, Shift+Arrow for 5%, Tab to switch endpoints, Enter or Escape to finish.",
+    );
+
+    await waitForSlideAutosaveAfter(page, async () => {
+      await page.keyboard.press("Shift+ArrowRight");
+      await expect(liveRegion).toHaveText(
+        "Moved connector end endpoint right by 5%",
+      );
+      await page.keyboard.press("Tab");
+      await expect(liveRegion).toHaveText("Editing connector start endpoint");
+      await page.keyboard.press("Shift+ArrowUp");
+      await expect(liveRegion).toHaveText(
+        "Moved connector start endpoint up by 5%",
+      );
+      await page.keyboard.press("Enter");
+      await expect(liveRegion).toHaveText(
+        "Connector endpoint editing finished",
+      );
+    });
+
+    const committedGeometry = await readGeometry(inspector);
+    expect(committedGeometry.width).toBeGreaterThan(initialGeometry.width);
+    expect(committedGeometry.height).not.toBe(initialGeometry.height);
+    inspector = await selectInspectorPanel(page, editor, "line");
+    await expect(
+      inspector.getByRole("combobox", { name: "from endpoint kind" }),
+    ).toHaveValue("point");
+    await expect(
+      inspector.getByRole("combobox", { name: "to endpoint kind" }),
+    ).toHaveValue("point");
+
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await waitForStableSlideStage(
+      editor.locator('[data-slide-canvas="true"]').first(),
+    );
+    await connector.click();
+    inspector = await selectInspectorPanel(page, editor, "arrange");
+    await expect.poll(() => readGeometry(inspector)).toEqual(committedGeometry);
+  });
+
   test("image crop handles, inspector values, history, reset, and reload stay in sync", async ({
     page,
   }, testInfo) => {

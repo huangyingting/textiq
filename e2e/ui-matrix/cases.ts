@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 67, manual: 48, blocked: 10, catalog: 55 },
+    statusCounts: { automated: 68, manual: 48, blocked: 10, catalog: 54 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -1197,6 +1197,24 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/pointer-interactions.spec.ts",
       test: "connector endpoint pointer drag snaps to a node and persists the binding",
+    },
+  },
+  {
+    id: "PRES-EDIT-126",
+    subsystem: "presentation-editor",
+    area: "connector endpoint keyboard editing",
+    title:
+      "keyboard connector endpoint editing free-draws both ends and persists",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/pointer-interactions.spec.ts",
+      "docs/system/slide-canvas-keyboard-accessibility.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "connector", "accessibility"],
+    automation: {
+      spec: "e2e/presentation/pointer-interactions.spec.ts",
+      test: "keyboard connector endpoint editing free-draws both ends and persists",
     },
   },
   {

@@ -1,7 +1,7 @@
 ---
 type: "design"
 status: "current"
-last_updated: "2026-07-17"
+last_updated: "2026-08-02"
 description: "This document defines how the slide editor stage should choose, preview, select, move, resize, and edit Deck nodes when many nodes overlap. It is the interaction contract for the presentation slide editor stage, not the persisted deck schema."
 ---
 
@@ -430,18 +430,18 @@ coordinates:
 
 | Key / chord           | Behavior                                                                                                                                             |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter`               | Coordinate-less double-click for a single selected node: text edit, table edit, or group entry; locked nodes do nothing.                             |
+| `Enter`               | Coordinate-less activation for a single selected node: text edit, table edit, group entry, or connector endpoint edit mode; locked nodes do nothing. |
 | `Escape`              | Unwinds the deepest active state first: table edit, group, selection, then editor close request. Inline text edit consumes Escape inside the editor. |
-| Arrow keys            | Nudge selected nodes by `1%`; `Shift+Arrow` nudges by `5%`. Locked selected nodes are ignored by mutation helpers.                                   |
+| Arrow keys            | Nudge selected nodes by `1%`; `Shift+Arrow` nudges by `5%`. In connector endpoint edit mode, move and detach the active endpoint by the same steps.  |
 | `Alt+Arrow`           | Resize selected unlocked layout entries by the same step size; aspect-locked nodes preserve aspect ratio.                                            |
-| `Tab` / `Shift+Tab`   | Traverse the stage roving-tabindex order. Arrow keys do not perform focus traversal on the stage.                                                    |
+| `Tab` / `Shift+Tab`   | Traverse the stage roving-tabindex order; while editing connector endpoints, switch between the end and start endpoint.                              |
 | Space / `Shift+Space` | Select the focused node or toggle it into/out of the selection.                                                                                      |
 | `Ctrl/Cmd+A`          | Select all selectable nodes for the current selection mode.                                                                                          |
 | `Ctrl/Cmd+G`          | Group selection; `Ctrl/Cmd+Shift+G` ungroups.                                                                                                        |
 | Delete / Backspace    | Delete selected nodes.                                                                                                                               |
 | `Ctrl/Cmd+D`          | Duplicate selected nodes and select the duplicates.                                                                                                  |
 | `Shift+F10` / Menu    | Open the focused node menu at its center. When overlap candidates exist, `Select next overlapping element` receives initial focus.                   |
-| `C` / `Shift+C`       | Keyboard connector flow when connector preconditions are met.                                                                                        |
+| `C` / `Shift+C`       | Create a connector from selected nodes or cycle a selected connector's end / start bound anchor.                                                     |
 
 Inline text editing and table-cell editing own their editing keys while active;
 the stage must not intercept arrows, typing, or editing shortcuts from those

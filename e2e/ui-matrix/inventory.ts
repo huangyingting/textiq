@@ -1037,14 +1037,14 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/presentation/pointer-interactions.spec.ts",
     owners: ["presentation", "accessibility"],
     coverage:
-      "Real Chromium pointer drag coverage for filmstrip reorder, node resize/rotation with undo, connector endpoint snapping, and image crop handles, bounds, history, and autosave/reload persistence.",
+      "Real Chromium interaction coverage for filmstrip reorder, node resize/rotation with undo, connector endpoint pointer snapping and keyboard free-draw, and image crop handles, bounds, history, and autosave/reload persistence.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner"],
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
-    expectedTestCount: 4,
+    expectedTestCount: 5,
     expectedTests: [
       {
         test: "filmstrip pointer drag reorders slides and persists without a post-drag click rollback",
@@ -1056,6 +1056,10 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       },
       {
         test: "connector endpoint pointer drag snaps to a node and persists the binding",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "keyboard connector endpoint editing free-draws both ends and persists",
         profiles: ["deterministic-profile"],
       },
       {
@@ -1085,6 +1089,16 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       {
         test: "connector endpoint pointer drag snaps to a node and persists the binding",
         surface: "connector endpoint drag, snap, and binding persistence",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "keyboard connector endpoint editing free-draws both ends and persists",
+        surface:
+          "connector endpoint keyboard routing, announcements, and persistence",
         viewport: "Desktop Chrome",
         auth: "seeded owner",
         profile: "normal deterministic profile (E2E_PROFILE=1)",

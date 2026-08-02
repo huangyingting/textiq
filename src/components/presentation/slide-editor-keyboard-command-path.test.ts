@@ -1405,6 +1405,97 @@ describe("SlideEditor keyboard command path", () => {
     }
   });
 
+  test("free-draws both connector endpoints from the editor root keyboard path", async () => {
+    const editor = await renderSlideEditor(deckWithSelectedConnectorFirst());
+    try {
+      editor.press("Tab");
+      const startEvent = editor.press("Enter");
+
+      assert.equal(startEvent.defaultPrevented, true);
+      assert.equal(
+        editor.liveRegionText(),
+        "Editing connector end endpoint. Use Arrow keys to move, Shift+Arrow for 5%, Tab to switch endpoints, Enter or Escape to finish.",
+      );
+
+      const moveEndEvent = editor.press("ArrowRight");
+      assert.equal(moveEndEvent.defaultPrevented, true);
+      let connector = findNode(editor.currentDeck, "connector-1");
+      assert.equal(connector.type, "connector");
+      if (connector.type !== "connector") {
+        assert.fail("expected a connector");
+      }
+      assert.deepEqual(connector.content.from, {
+        kind: "node",
+        nodeId: "source",
+        anchor: "right",
+      });
+      assert.deepEqual(connector.content.to, {
+        kind: "point",
+        point: { x: 100, y: 0 },
+      });
+      assert.deepEqual(connector.layout?.frame, {
+        x: 30,
+        y: 25,
+        w: 41,
+        h: 1,
+      });
+      assert.equal(
+        editor.liveRegionText(),
+        "Moved connector end endpoint right by 1%",
+      );
+
+      const switchEvent = editor.press("Tab");
+      assert.equal(switchEvent.defaultPrevented, true);
+      assert.equal(editor.liveRegionText(), "Editing connector start endpoint");
+
+      const moveStartEvent = editor.press("ArrowUp", { shiftKey: true });
+      assert.equal(moveStartEvent.defaultPrevented, true);
+      connector = findNode(editor.currentDeck, "connector-1");
+      assert.equal(connector.type, "connector");
+      if (connector.type !== "connector") {
+        assert.fail("expected a connector");
+      }
+      assert.deepEqual(connector.content.from, {
+        kind: "point",
+        point: { x: 0, y: 0 },
+      });
+      assert.deepEqual(connector.content.to, {
+        kind: "point",
+        point: { x: 100, y: 100 },
+      });
+      assert.deepEqual(connector.layout?.frame, {
+        x: 30,
+        y: 20,
+        w: 41,
+        h: 5,
+      });
+      assert.equal(
+        editor.liveRegionText(),
+        "Moved connector start endpoint up by 5%",
+      );
+
+      const finishEvent = editor.press("Enter");
+      assert.equal(finishEvent.defaultPrevented, true);
+      assert.equal(
+        editor.liveRegionText(),
+        "Connector endpoint editing finished",
+      );
+      assert.equal(editor.deckChanges.length, 2);
+
+      const restartEvent = editor.press("Enter");
+      const escapeEvent = editor.press("Escape");
+      assert.equal(restartEvent.defaultPrevented, true);
+      assert.equal(escapeEvent.defaultPrevented, true);
+      assert.equal(
+        editor.liveRegionText(),
+        "Connector endpoint editing finished",
+      );
+      assert.equal(editor.deckChanges.length, 2);
+    } finally {
+      editor.cleanup();
+    }
+  });
+
   test("updates rotation and the live region for shifted bracket shortcuts through the editor root keydown handler", async () => {
     const editor = await renderSlideEditor(rotationDeck());
     try {

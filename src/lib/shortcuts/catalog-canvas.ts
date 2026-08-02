@@ -48,28 +48,30 @@ export const CANVAS_SHORTCUTS: readonly ShortcutEntry[] = [
       altKey: "forbidden",
       shiftKey: "optional",
     },
-    description: "Select next / previous element",
+    description:
+      "Select next / previous element; switch connector endpoint while editing",
   }),
   canvasShortcut({
     id: "canvas.selection.clear",
     group: "Selection",
     tokens: ["Escape"],
     match: bareKey("Escape", false),
-    description: "Clear selection / release canvas focus",
+    description:
+      "Finish connector endpoint editing; otherwise clear selection / release canvas focus",
   }),
   canvasShortcut({
     id: "canvas.move.step",
     group: "Move & resize",
     tokens: ["Arrow"],
     match: arrowKey(),
-    description: "Move selection by 1%",
+    description: "Move selection or active connector endpoint by 1%",
   }),
   canvasShortcut({
     id: "canvas.move.large-step",
     group: "Move & resize",
     tokens: ["Shift", "Arrow"],
     match: shiftArrowKey(),
-    description: "Move selection by 5%",
+    description: "Move selection or active connector endpoint by 5%",
   }),
   canvasShortcut({
     id: "canvas.resize.step",
@@ -120,7 +122,7 @@ export const CANVAS_SHORTCUTS: readonly ShortcutEntry[] = [
     group: "Edit",
     tokens: ["Enter"],
     match: bareKey("Enter", false),
-    description: "Edit text / enter group",
+    description: "Edit text, table, or connector endpoints; enter group",
   }),
   canvasShortcut({
     id: "canvas.edit.delete",

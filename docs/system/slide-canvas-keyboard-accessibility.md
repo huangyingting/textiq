@@ -1,15 +1,14 @@
 ---
 type: "adr"
-status: "accepted with connector caveat"
-last_updated: "2026-08-01"
+status: "accepted"
+last_updated: "2026-08-02"
 description: "Architecture decision record for slide canvas keyboard accessibility, roving focus, selection shortcuts, keyboard manipulation, and release-gate evidence boundaries."
 ---
 
 # 2. Canvas keyboard accessibility for the slide editor
 
-- **Status:** Accepted with connector caveat — direct `SlideEditor` interaction
-  tests now cover R1–R3; AC-5 remains partially deferred only for arbitrary
-  keyboard free-draw connector routing
+- **Status:** Accepted — direct `SlideEditor` interaction tests cover R1–R3 and
+  arbitrary keyboard connector endpoint routing
 - **Date:** 2026-06-23
 - **Epic:** #517 — Release Gate Automation and Critical Flow E2E Coverage
 - **Issue:** #522
@@ -71,7 +70,7 @@ The canvas already supports a non-trivial keyboard model:
   - Current source anchors: `src/components/presentation/inline-text-editor.tsx`,
     `src/lib/presentation/rich-text.ts`.
 
-### Remaining keyboard caveats (verified in code)
+### Closed keyboard gaps (verified in code)
 
 - **Keyboard resize is now implemented.** The original gap was closed by the
   R1 work below; current resize behavior lives in the slide editor keyboard
@@ -79,12 +78,15 @@ The canvas already supports a non-trivial keyboard model:
   - Current source anchors: `src/components/presentation/slide-editor.tsx`,
     `src/lib/presentation/editor-commands.ts`,
     `src/lib/presentation/selection-geometry.ts`.
-- **Free-draw keyboard connector authoring remains deferred.** Keyboard users can
-  create a connector between two selected connectable elements and cycle
-  endpoint anchors, but arbitrary free-draw connector routing remains pointer
-  only and is tracked by A1.
+- **Free-draw keyboard connector authoring is implemented.** Keyboard users can
+  create a connector between two selected connectable elements, cycle bound
+  endpoint anchors, and press **Enter** on a connector to edit either endpoint.
+  **Arrow** / **Shift+Arrow** detaches and moves the active endpoint by `1%` /
+  `5%`, **Tab** switches endpoints, and **Enter** or **Escape** exits the mode.
   - Current source anchors: `src/components/presentation/stage-keyboard-interactions.ts`,
-    `src/lib/presentation/connector-geometry.ts`.
+    `src/components/presentation/use-stage-gesture-controller.ts`,
+    `src/components/presentation/stage-keyboard-interactions.test.ts`,
+    `src/components/presentation/slide-editor-keyboard-command-path.test.ts`.
 - **Traversal and announcement paths are directly covered.** R2/R3 added
   reading-order traversal, focus restoration, and stage announcements;
   `slide-editor-keyboard-command-path.test.ts` now drives those paths through
@@ -96,10 +98,9 @@ The canvas already supports a non-trivial keyboard model:
 
 ## Decision
 
-For the **next accessibility bar** we split the gaps into **required** work
-(blocks the next a11y sign-off) and **accepted** limitations (documented,
-deferred with rationale and a revisit point). The release gate's AC-5 item is
-re-pointed at this ADR.
+For the **next accessibility bar** we split the gaps into required work and an
+initially accepted connector limitation. All of that work is now delivered, and
+the release gate's AC-5 item points at this ADR and its automated evidence.
 
 ### Required before the next accessibility bar
 
@@ -130,36 +131,36 @@ pure `canvasShortcutHelp` helper in `src/lib/presentation/canvas-shortcut-help.t
 
 **User impact now:** keyboard-only and screen-reader users can focus, select,
 move, **resize**, rotate selected nodes, delete, duplicate and group elements,
-traverse deterministically, and keep their place after every edit.
+traverse deterministically, free-draw connector endpoints, and keep their place
+after every edit.
 
-### Accepted limitations (deferred with rationale)
+### Connector parity completion
 
-- **A1 — Keyboard connector drawing/reattachment.** 🟡 **Partially implemented**
-  (#534). The accessible interim path now ships: with exactly two connectable
+- **A1 — Keyboard connector drawing/endpoint editing.** ✅ **Implemented**
+  (#534, follow-up to #1574). With exactly two connectable
   elements selected, **C** inserts a connector with default endpoints bound to
   both (facing anchors via `buildConnectorBetween`); with a connector selected,
   **C** / **Shift+C** cycle its end / start endpoint among the candidate anchors
-  (`cycleEndpointAnchor`). **Still deferred:** free-draw connector authoring
-  with arbitrary routing remains pointer-only and is tracked in #1574. **User
-  impact:** keyboard users can connect and rebind elements but cannot free-draw
-  an arbitrary path; mitigated by default-endpoint insertion + anchor cycling +
-  nudging.
-  These limitations remain recorded as release-gate **AC-5** warnings (Part 3 of
-  `docs/operations/release-gate.md`) until #1574 is closed.
+  (`cycleEndpointAnchor`). Pressing **Enter** on a connector enters endpoint edit
+  mode. The active endpoint starts at the connector end, **Tab** switches start
+  and end, **Arrow** / **Shift+Arrow** moves the active endpoint by `1%` / `5%`,
+  and **Enter** or **Escape** exits. The first movement converts a bound endpoint
+  to a free point, preserves the opposite endpoint in slide coordinates,
+  renormalizes the connector frame, clamps movement to the slide, restores
+  focus, and announces every transition.
 
 ### Ownership and timing
 
 - **Owner:** Accessibility / QA (Ghost) with the Presentation surface owner.
 - **Time-box:** R1–R3 shipped in the canvas keyboard accessibility wave
-  (issues #530–#535), together with the A1 interim subset (connector
-  create/reattach). Free-draw connector authoring (#1574) is revisited in a
-  later wave; AC-5 stays an explicit, signed-off release warning for that
-  remaining gap.
+  (issues #530–#535), followed by keyboard rotation (#1575) and free endpoint
+  routing (the gap tracked by #1574). AC-5 now has automated command-path and
+  pure-geometry evidence with no deferred keyboard portion.
 
 ## Consequences
 
-- The release gate's AC-5 item now points at this ADR; R1–R3 ship and AC-5 is a
-  narrowed warning covering only the accepted A1 free-draw limitation (#1574).
+- The release gate's AC-5 item now points at this ADR; R1–R3 and A1 ship, so the
+  former connector warning is removed.
 - R1–R3 are additive to the existing keyboard model and pure helper coverage for
   accessible names, nudge/step geometry, selection, and stage state. They do not
   change the persisted Deck schema.
@@ -173,8 +174,9 @@ traverse deterministically, and keep their place after every edit.
   Direct `SlideEditor` coverage in
   `src/components/presentation/slide-editor-keyboard-command-path.test.ts`
   additionally verifies reading-order Tab traversal, keyboard move/resize and
-  rotation, deletion focus restoration, and durable operation announcements.
-  Only free-draw connector parity remains pending under #1574.
+  rotation, free connector endpoint routing, deletion focus restoration, and
+  durable operation announcements. Pure connector geometry coverage verifies
+  bound-to-free conversion, frame renormalization, and slide-bound clamping.
 
 ## Implementation issues (delivered)
 
@@ -189,9 +191,9 @@ The wave delivered these (status in parentheses):
    after move/resize/delete/duplicate/group (#532 R2 — ✅ shipped).
 4. **Selection and move/resize screen-reader announcements** — visible focus +
    `aria-live` updates for selection and operation results (#533 R3 — ✅ shipped).
-5. **Keyboard connector create/reattach** — connect two selected elements and
-   rebind endpoints to anchors via keyboard (#534 A1 — 🟡 interim subset shipped;
-   free-draw tracked in #1574).
+5. **Keyboard connector create/endpoint editing** — connect two selected
+   elements, cycle bound anchors, and free-draw either endpoint with keyboard
+   movement (#534 A1 and the gap tracked by #1574 — ✅ shipped).
 6. **In-product canvas keyboard shortcut help** — surface the keyboard model in
    the slide editor help overlay (#535 — ✅ shipped).
 7. **Keyboard rotation for SlideEditor** — rotate selected nodes with
@@ -199,7 +201,6 @@ The wave delivered these (status in parentheses):
 
 ## Rollback
 
-This ADR is documentation. If the required scope proves infeasible in the
-targeted wave, the rollback is to keep AC-5 as an explicit, signed-off release
-warning (Part 3 of the release gate) and re-time R1–R3 — no code change is
-required to revert.
+If endpoint edit mode regresses, remove the mode and restore AC-5 as an explicit
+release warning while preserving the existing connector insertion and bound
+anchor cycling paths. Do not change the persisted Deck schema for that rollback.

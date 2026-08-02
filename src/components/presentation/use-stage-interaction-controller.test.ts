@@ -54,7 +54,11 @@ describe("stageInteractionReducer", () => {
       point: { x: 60, y: 70 },
     };
     const state = withInitialState({
-      keyboardConnectorMode: { sourceId: "node-a", targetId: "node-b" },
+      keyboardConnectorMode: {
+        kind: "create",
+        sourceId: "node-a",
+        targetId: "node-b",
+      },
       moveGestureDraft,
       activeResizeHandle: { nodeId: "node-a", handle: "se" },
       resizeGestureDraft: { nodeId: "node-a", frame },
@@ -85,6 +89,7 @@ describe("stageInteractionReducer", () => {
     assert.equal(next.activeRotationNodeId, state.activeRotationNodeId);
     assert.equal(next.activeConnectorEndpoint, state.activeConnectorEndpoint);
     assert.deepEqual(next.keyboardConnectorMode, {
+      kind: "create",
       sourceId: "node-a",
       targetId: "node-b",
     });

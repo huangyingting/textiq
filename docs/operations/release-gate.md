@@ -1,7 +1,7 @@
 ---
 type: "runbook"
 status: "active gate"
-last_updated: "2026-08-01"
+last_updated: "2026-08-02"
 description: "Release gate and readiness checklist for system stabilization, validation evidence, local release checks, known release caveats, rollback criteria, and foundation release readiness."
 ---
 
@@ -313,7 +313,7 @@ For each flow below, check the indicated owner: **A** = automated test,
 | AC-2 | Decorative canvas elements aria-hidden                  | **A**           | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | AC-3 | Icon-only toolbar controls labelled                     | **A**           | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | AC-4 | Modal dialog semantics                                  | **A**           | `a11y-helpers.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| AC-5 | Canvas keyboard resize / traversal / announcements      | **A** + **D**   | `slide-editor-keyboard-command-path.test.ts` drives the real editor root through reading-order traversal, move, resize, rotation, deletion, replacement focus, and durable live announcements. Helper/render evidence remains in `selection-traversal.test.ts`, `slide-canvas-render.test.ts`, and `canvas-a11y.test.ts`. Only arbitrary keyboard free-draw connector routing remains deferred under #1574.                                                                                                                                              |
+| AC-5 | Canvas keyboard manipulation and announcements          | **A**           | `slide-editor-keyboard-command-path.test.ts` drives the real editor root through reading-order traversal, move, resize, rotation, free connector endpoint routing, deletion, replacement focus, and durable live announcements. `stage-keyboard-interactions.test.ts` verifies bound-to-free endpoint conversion, frame renormalization, and slide-bound clamping. Helper/render evidence remains in `selection-traversal.test.ts`, `slide-canvas-render.test.ts`, and `canvas-a11y.test.ts`.                                                            |
 | AC-6 | Content-first deck outline and per-node slide semantics | **A**           | `slide-canvas-render.test.ts` verifies the screen-reader deck outline, active slide/current-node semantics, per-node narration labels, image labels, and missing-content fallbacks from the presentation outline adapter. This is reading/orientation evidence; it does not replace AC-5 editing-interaction evidence.                                                                                                                                                                                                                                   |
 | AC-7 | Stage reduced-motion and focus-visible conformance      | **A** + **E2E** | `slide-canvas-render.test.ts` verifies reduced-motion guards and design-system `FOCUS_RING` focus-visible styling for outline entries, focusable stage nodes, locked/grouped nodes, and editable table cells. The `@required-profile` case in `e2e/presentation/focus-and-mobile-controls-regression.spec.ts` emulates forced colors in Chromium, focuses a real stage node, verifies its visible system outline, and captures the rendered node for review. A human should still inspect the artifact against the active theme before release sign-off. |
 
@@ -328,8 +328,8 @@ For each flow below, check the indicated owner: **A** = automated test,
    `npm run docs:check`, `npm run format:check`, and `npm run build` — all green.
 2. Every critical flow marked **A** above has its corresponding test passing.
 3. Authorization denials (A-1 through A-6) all passing.
-4. Keyboard and content-first accessibility checks (the automated portion of
-   AC-5, plus AC-6 and AC-7) have passing evidence and any required
+4. Keyboard and content-first accessibility checks (AC-5, AC-6, and AC-7) have
+   passing evidence and any required
    high-contrast manual review recorded.
 5. No structured diagnostic emitting `severity: "fatal"` in the automated test
    run.
@@ -338,12 +338,6 @@ For each flow below, check the indicated owner: **A** = automated test,
 
 - A flow marked **M** (manual smoke) failed: document the failure and its risk level;
   the responsible engineer signs off that it is safe to proceed.
-- The remaining canvas keyboard limitation (**D**) is arbitrary free-draw
-  connector routing. Confirm it is recorded in `a11y-helpers.test.ts`, in
-  [Slide canvas keyboard accessibility](../system/slide-canvas-keyboard-accessibility.md),
-  and the deferred-risk list. Direct `SlideEditor` tests now cover the required
-  resize, traversal, focus-restoration, and live-announcement paths; keep only
-  the connector free-draw portion of **AC-5** deferred under #1574.
 - Slide patch-save flow (**S-2**) is not a release path: `saveDeckPatch`/`patchDeck`
   are closed, and automated deck persistence is covered by full-snapshot
   `saveDeckJson` checks (#1740).

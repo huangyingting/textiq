@@ -67,9 +67,11 @@ import {
   connectorFrameForEndpointsPresentation,
   cycleConnectorEndpointAnchorPresentation,
   isKeyboardConnectableNode,
+  moveKeyboardConnectorEndpointPresentation,
   nextKeyboardConnectorTargetIdPresentation,
   selectedKeyboardConnectablePair,
   startKeyboardConnectorModePresentation,
+  type KeyboardConnectorModePresentation,
 } from "./stage-keyboard-interactions";
 import {
   createNodeMovePreview,
@@ -313,7 +315,7 @@ export interface StageGestureControllerArgs {
   firstSelectedId: string | undefined;
   focusedNodeId: string | null;
   inlineEditNodeId: string | null;
-  keyboardConnectorMode: { sourceId: string; targetId: string | null } | null;
+  keyboardConnectorMode: KeyboardConnectorModePresentation | null;
   marqueeFrame: unknown | null;
   selectedIds: string[];
   selectedNode: SlideChildNode | undefined;
@@ -367,7 +369,7 @@ export interface StageGestureControllerArgs {
   setFocusedNodeId: Dispatch<SetStateAction<string | null>>;
   setHoveredNodeId: Dispatch<SetStateAction<string | null>>;
   setKeyboardConnectorMode: Dispatch<
-    SetStateAction<{ sourceId: string; targetId: string | null } | null>
+    SetStateAction<KeyboardConnectorModePresentation | null>
   >;
   setMarqueeFrame: Dispatch<
     SetStateAction<{ x: number; y: number; w: number; h: number } | null>
@@ -580,6 +582,83 @@ export function useStageGestureController(
 
   function handleKeyboardConnectorModeKey(event: StageKeyboardEvent): boolean {
     if (!activeSlide || !keyboardConnectorMode) return false;
+    if (keyboardConnectorMode.kind === "edit") {
+      const connector = findNodeById(
+        activeSlide.children,
+        keyboardConnectorMode.connectorId,
+      );
+      if (
+        connector?.type !== "connector" ||
+        !connector.layout ||
+        connector.locked ||
+        selectedIds.length !== 1 ||
+        selectedIds[0] !== connector.id
+      ) {
+        setKeyboardConnectorMode(null);
+        return false;
+      }
+      if (event.key === "Escape" || event.key === "Enter") {
+        event.preventDefault();
+        setKeyboardConnectorMode(null);
+        focusSelectedNodeSoon(connector.id);
+        setStageAnnouncement("Connector endpoint editing finished");
+        return true;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const endpoint =
+          keyboardConnectorMode.endpoint === "from" ? "to" : "from";
+        setKeyboardConnectorMode({
+          kind: "edit",
+          connectorId: connector.id,
+          endpoint,
+        });
+        focusSelectedNodeSoon(connector.id);
+        setStageAnnouncement(
+          `Editing connector ${endpoint === "from" ? "start" : "end"} endpoint`,
+        );
+        return true;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return false;
+      const step = event.shiftKey ? 5 : 1;
+      const deltaByKey: Record<
+        string,
+        { x: number; y: number; direction: string } | undefined
+      > = {
+        ArrowLeft: { x: -step, y: 0, direction: "left" },
+        ArrowRight: { x: step, y: 0, direction: "right" },
+        ArrowUp: { x: 0, y: -step, direction: "up" },
+        ArrowDown: { x: 0, y: step, direction: "down" },
+      };
+      const delta = deltaByKey[event.key];
+      if (!delta) return false;
+      event.preventDefault();
+      const moved = moveKeyboardConnectorEndpointPresentation({
+        nodes: activeSlide.children,
+        connector: connector as Extract<
+          SlideChildNode,
+          { type: "connector" }
+        > & { layout: LayoutBox },
+        endpoint: keyboardConnectorMode.endpoint,
+        delta,
+      });
+      const withContent = updateNodeContent(
+        deck,
+        activeSlide.id,
+        connector.id,
+        { from: moved.from, to: moved.to },
+      );
+      onDeckChange(
+        updateNodeLayout(withContent, activeSlide.id, connector.id, {
+          frame: moved.frame,
+        }),
+      );
+      focusSelectedNodeSoon(connector.id);
+      setStageAnnouncement(
+        `Moved connector ${keyboardConnectorMode.endpoint === "from" ? "start" : "end"} endpoint ${delta.direction} by ${step}%`,
+      );
+      return true;
+    }
     const source = findNodeById(
       activeSlide.children,
       keyboardConnectorMode.sourceId,
@@ -626,7 +705,11 @@ export function useStageGestureController(
       direction,
     );
     if (!targetId) return true;
-    setKeyboardConnectorMode({ sourceId: source.id, targetId });
+    setKeyboardConnectorMode({
+      kind: "create",
+      sourceId: source.id,
+      targetId,
+    });
     setSelection((s) => setSelectedNodeIds(s, [targetId, source.id]));
     setFocusedNodeId(targetId);
     focusSelectedNodeSoon(targetId);
@@ -710,7 +793,7 @@ export function useStageGestureController(
         activeSlide.children,
         connectorSource.id,
       );
-      if (!mode?.targetId) {
+      if (mode?.kind !== "create" || !mode.targetId) {
         setStageAnnouncement("No connector targets available");
         return true;
       }
@@ -1778,6 +1861,18 @@ export function useStageGestureController(
       }
       if (selectedNode.type === "table") {
         handleEnterTableEdit(selectedNode.id);
+        event.preventDefault();
+        return;
+      }
+      if (selectedNode.type === "connector" && selectedNode.layout) {
+        setKeyboardConnectorMode({
+          kind: "edit",
+          connectorId: selectedNode.id,
+          endpoint: "to",
+        });
+        setStageAnnouncement(
+          "Editing connector end endpoint. Use Arrow keys to move, Shift+Arrow for 5%, Tab to switch endpoints, Enter or Escape to finish.",
+        );
         event.preventDefault();
         return;
       }
