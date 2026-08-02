@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 5, manual: 48, blocked: 10, catalog: 117 },
+    statusCounts: { automated: 15, manual: 48, blocked: 10, catalog: 107 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -949,6 +949,185 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/touch-controls.spec.ts",
       test: "Chromium touch taps select text and navigate the mobile text inspector",
+    },
+  },
+  {
+    id: "PRES-EDIT-064",
+    subsystem: "presentation-editor",
+    area: "reorders, persists, cycles",
+    title:
+      "reorders, persists, cycles, groups, filters locked layers, edits, deletes, and matches Layers",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/overlap-selection-regression.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "overlap-selection", "layers"],
+    automation: {
+      spec: "e2e/presentation/overlap-selection-regression.spec.ts",
+      test: "reorders, persists, cycles, groups, filters locked layers, edits, deletes, and matches Layers",
+    },
+  },
+  {
+    id: "PRES-EDIT-065",
+    subsystem: "presentation-editor",
+    area: "filmstrip pointer drag",
+    title:
+      "filmstrip pointer drag reorders slides and persists without a post-drag click rollback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/pointer-interactions.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "pointer-drag", "filmstrip"],
+    automation: {
+      spec: "e2e/presentation/pointer-interactions.spec.ts",
+      test: "filmstrip pointer drag reorders slides and persists without a post-drag click rollback",
+    },
+  },
+  {
+    id: "PRES-EDIT-066",
+    subsystem: "presentation-editor",
+    area: "resize and rotation handles",
+    title:
+      "resize and rotation handles update geometry, undo, and persist committed pointer changes",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/pointer-interactions.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "resize", "rotation"],
+    automation: {
+      spec: "e2e/presentation/pointer-interactions.spec.ts",
+      test: "resize and rotation handles update geometry, undo, and persist committed pointer changes",
+    },
+  },
+  {
+    id: "PRES-EDIT-067",
+    subsystem: "presentation-editor",
+    area: "connector endpoint pointer drag",
+    title:
+      "connector endpoint pointer drag snaps to a node and persists the binding",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/pointer-interactions.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "connector", "binding"],
+    automation: {
+      spec: "e2e/presentation/pointer-interactions.spec.ts",
+      test: "connector endpoint pointer drag snaps to a node and persists the binding",
+    },
+  },
+  {
+    id: "PRES-EDIT-068",
+    subsystem: "presentation-editor",
+    area: "image crop handles",
+    title:
+      "image crop handles, inspector values, history, reset, and reload stay in sync",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/pointer-interactions.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "image-crop", "history"],
+    automation: {
+      spec: "e2e/presentation/pointer-interactions.spec.ts",
+      test: "image crop handles, inspector values, history, reset, and reload stay in sync",
+    },
+  },
+  {
+    id: "PRES-EDIT-069",
+    subsystem: "presentation-editor",
+    area: "owner fetches protected bytes",
+    title:
+      "owner fetches protected bytes; anonymous denied for private, allowed for shared",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slide-asset-upload.spec.ts",
+      "docs/presentation/assets.md",
+    ],
+    tags: ["asset-authorization", "anonymous-public", "required-profile"],
+    automation: {
+      spec: "e2e/presentation/slide-asset-upload.spec.ts",
+      test: "owner fetches protected bytes; anonymous denied for private, allowed for shared",
+    },
+  },
+  {
+    id: "PRES-EDIT-070",
+    subsystem: "presentation-editor",
+    area: "an unrelated authenticated user",
+    title: "an unrelated authenticated user is denied the private asset",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slide-asset-upload.spec.ts",
+      "docs/presentation/assets.md",
+    ],
+    tags: ["asset-authorization", "cross-account", "private-asset"],
+    automation: {
+      spec: "e2e/presentation/slide-asset-upload.spec.ts",
+      test: "an unrelated authenticated user is denied the private asset",
+    },
+  },
+  {
+    id: "PRES-EDIT-071",
+    subsystem: "presentation-editor",
+    area: "uploads via the inspector",
+    title:
+      "uploads via the inspector and the reloaded slide resolves the protected asset",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slide-asset-upload.spec.ts",
+      "docs/presentation/assets.md",
+    ],
+    tags: ["seeded-owner", "image-upload", "required-profile"],
+    automation: {
+      spec: "e2e/presentation/slide-asset-upload.spec.ts",
+      test: "uploads via the inspector and the reloaded slide resolves the protected asset",
+    },
+  },
+  {
+    id: "PRES-EDIT-072",
+    subsystem: "presentation-editor",
+    area: "canonical seeded deck delete",
+    title:
+      "canonical seeded deck delete autosaves and survives a direct slides-route reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slide-delete-persistence.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "slide-delete", "autosave"],
+    automation: {
+      spec: "e2e/presentation/slide-delete-persistence.spec.ts",
+      test: "canonical seeded deck delete autosaves and survives a direct slides-route reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-073",
+    subsystem: "presentation-editor",
+    area: "generated first-save deck delete",
+    title:
+      "generated first-save deck delete rotates its null token and survives reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slide-delete-persistence.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "first-save", "revision-token"],
+    automation: {
+      spec: "e2e/presentation/slide-delete-persistence.spec.ts",
+      test: "generated first-save deck delete rotates its null token and survives reload",
     },
   },
   {

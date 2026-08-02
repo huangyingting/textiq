@@ -418,6 +418,25 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "reorders, persists, cycles, groups, filters locked layers, edits, deletes, and matches Layers",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "reorders, persists, cycles, groups, filters locked layers, edits, deletes, and matches Layers",
+        surface:
+          "overlapping stage-node selection, layers, grouping, and persistence",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/pointer-interactions.spec.ts",
@@ -430,6 +449,63 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+    expectedTestCount: 4,
+    expectedTests: [
+      {
+        test: "filmstrip pointer drag reorders slides and persists without a post-drag click rollback",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "resize and rotation handles update geometry, undo, and persist committed pointer changes",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "connector endpoint pointer drag snaps to a node and persists the binding",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "image crop handles, inspector values, history, reset, and reload stay in sync",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "filmstrip pointer drag reorders slides and persists without a post-drag click rollback",
+        surface: "filmstrip pointer reorder and persistence",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "resize and rotation handles update geometry, undo, and persist committed pointer changes",
+        surface: "stage resize and rotation pointer controls with history",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "connector endpoint pointer drag snaps to a node and persists the binding",
+        surface: "connector endpoint drag, snap, and binding persistence",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "image crop handles, inspector values, history, reset, and reload stay in sync",
+        surface: "image crop pointer controls, inspector, history, and reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/presentation-controls.spec.ts",
@@ -575,6 +651,50 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome", "request API"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/assets.md"],
+    expectedTestCount: 3,
+    expectedTests: [
+      {
+        test: "owner fetches protected bytes; anonymous denied for private, allowed for shared",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+      {
+        test: "an unrelated authenticated user is denied the private asset",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "uploads via the inspector and the reloaded slide resolves the protected asset",
+        profiles: ["deterministic-profile", "required-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "owner fetches protected bytes; anonymous denied for private, allowed for shared @required-profile",
+        surface: "owner and public slide-asset authorization",
+        viewport: "Playwright request context",
+        auth: "seeded owner and anonymous public",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+      {
+        test: "an unrelated authenticated user is denied the private asset",
+        surface: "cross-account private slide-asset denial",
+        viewport: "Playwright request context",
+        auth: "unrelated authenticated user",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "uploads via the inspector and the reloaded slide resolves the protected asset @required-profile",
+        surface: "slide-inspector image upload and protected-asset reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "required",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/slide-delete-persistence.spec.ts",
@@ -587,6 +707,37 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+    expectedTestCount: 2,
+    expectedTests: [
+      {
+        test: "canonical seeded deck delete autosaves and survives a direct slides-route reload",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "generated first-save deck delete rotates its null token and survives reload",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "canonical seeded deck delete autosaves and survives a direct slides-route reload",
+        surface: "canonical deck slide deletion, autosave, and reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "generated first-save deck delete rotates its null token and survives reload",
+        surface: "first-save deck deletion, token rotation, and reload",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/slides-layout-screenshots.spec.ts",
