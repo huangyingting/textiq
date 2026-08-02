@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 import { UI_TEST_CASES, UI_TEST_CASE_TOTAL, summarizeUiCases } from "./cases";
 import { UI_MATRIX_SPEC_INVENTORY } from "./inventory";
 
-test.describe("UI matrix catalog @required-profile", () => {
-  test("catalogs exactly 500 subsystem UI cases with unique IDs", () => {
+test.describe("UI matrix catalog", () => {
+  test("catalogs exactly 500 subsystem UI cases with unique IDs @required-profile", () => {
     const ids = new Set(UI_TEST_CASES.map((testCase) => testCase.id));
     const summary = summarizeUiCases();
 
@@ -16,11 +16,11 @@ test.describe("UI matrix catalog @required-profile", () => {
     expect(summary.bySubsystem["auth-public"].total).toBe(40);
     expect(summary.bySubsystem["document-editor"].total).toBe(45);
     expect(summary.bySubsystem["workspace-billing-brand"].total).toBe(55);
-    expect(summary.byStatus.automated).toBe(145);
-    expect(summary.byStatus.catalog).toBe(183);
+    expect(summary.byStatus.automated).toBe(157);
+    expect(summary.byStatus.catalog).toBe(171);
   });
 
-  test("keeps every automated case tied to an exact contracted Playwright test", () => {
+  test("keeps every automated case tied to an exact contracted Playwright test @required-profile", () => {
     const automatedCases = UI_TEST_CASES.filter(
       (testCase) => testCase.status === "automated",
     );

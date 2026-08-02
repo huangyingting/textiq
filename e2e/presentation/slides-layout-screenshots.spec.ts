@@ -31,11 +31,13 @@ const USE_PROFILE_LAYOUT_FIXTURE =
 const EDITOR_PATH =
   process.env.E2E_SLIDES_EDITOR_PATH ?? profileLayoutDocPath();
 
-const VIEWPORTS = [
-  { name: "desktop", width: 1280, height: 800 },
-  { name: "tablet", width: 834, height: 1112 },
-  { name: "mobile", width: 390, height: 844 },
-] as const;
+const VIEWPORTS = {
+  desktop: { name: "desktop", width: 1280, height: 800 },
+  tablet: { name: "tablet", width: 834, height: 1112 },
+  mobile: { name: "mobile", width: 390, height: 844 },
+} as const;
+
+type LayoutViewport = (typeof VIEWPORTS)[keyof typeof VIEWPORTS];
 
 const SCREENSHOT_OPTIONS = {
   maxDiffPixelRatio: 0.02,
@@ -202,96 +204,163 @@ async function expectLayoutState(
   }
 }
 
-for (const viewport of VIEWPORTS) {
-  test.describe(`slides layout screenshots — ${viewport.name}`, () => {
-    test.describe.configure({ timeout: 90_000 });
-
-    test.beforeEach(({ page }) => {
-      test.skip(
-        !LAYOUT_SCREENSHOTS_ENABLED,
-        "Set E2E_PROFILE=1 (deterministic gate) or E2E_SLIDES_LAYOUT_SCREENSHOTS=1 to run slide layout screenshots",
-      );
-      page.setViewportSize({ width: viewport.width, height: viewport.height });
-    });
-
-    test(`base editor layout (${viewport.name}) @required-profile`, async ({
-      page,
-    }) => {
-      const screenshotRoot = await openEditor(page);
-      await expectLayoutState(
-        screenshotRoot,
-        `editor-${viewport.name}-base.png`,
-      );
-    });
-
-    test(`rail hidden (${viewport.name})`, async ({ page }) => {
-      const screenshotRoot = await openEditor(page);
-      await activateButton(page, "Hide slide thumbnails");
-      await expect(
-        screenshotRoot.getByRole("button", {
-          name: "Show slide thumbnails",
-        }),
-      ).toHaveAttribute("aria-pressed", "false");
-      await expectLayoutState(
-        screenshotRoot,
-        `editor-${viewport.name}-rail-hidden.png`,
-      );
-    });
-
-    test(`notes expanded (${viewport.name})`, async ({ page }) => {
-      const screenshotRoot = await openEditor(page);
-      await activateButton(page, /^notes$/i);
-      await expect(screenshotRoot.getByLabel("Speaker notes")).toBeVisible();
-      await expectLayoutState(
-        screenshotRoot,
-        `editor-${viewport.name}-notes-expanded.png`,
-      );
-    });
-
-    test(`right panel open with selection (${viewport.name}) @required-profile`, async ({
-      page,
-    }) => {
-      const screenshotRoot = await openEditor(page);
-      const titleNode = screenshotRoot.getByRole("button", {
-        name: "Text: Release Gate Fixture Slide",
-      });
-      await expect(titleNode).toBeVisible();
-      const titleMetrics = await locatorContentMetrics(titleNode);
-      expect(
-        titleMetrics.scrollHeight,
-        JSON.stringify(titleMetrics),
-      ).toBeLessThanOrEqual(titleMetrics.clientHeight + 1);
-      const contextToolbar = page.getByRole("toolbar", {
-        name: "Context toolbar",
-      });
-      await expect(contextToolbar).toBeVisible();
-      expect(await locatorOwnsCenterHit(titleNode)).toBe(true);
-      if (viewport.name !== "desktop") {
-        expect(
-          rectanglesOverlap(
-            await requiredBox(titleNode),
-            await requiredBox(contextToolbar),
-          ),
-        ).toBe(false);
-      }
-      await titleNode.click();
-      await expect(titleNode).toHaveAttribute("aria-pressed", "true");
-      await settleLayout(page);
-
-      await activateButton(page, "Open Text inspector");
-      const inspector =
-        viewport.name === "desktop"
-          ? screenshotRoot.getByRole("region", { name: "Inspector" })
-          : page.getByRole("dialog", { name: "Text inspector" });
-      await expect(inspector).toBeVisible();
-      await expect(
-        inspector.getByLabel("Inspector panel", { exact: true }),
-      ).toHaveValue("text");
-
-      await expectLayoutState(
-        screenshotRoot,
-        `editor-${viewport.name}-panel-open.png`,
-      );
-    });
+async function openEditorAtViewport(
+  page: Page,
+  viewport: LayoutViewport,
+): Promise<Locator> {
+  await page.setViewportSize({
+    width: viewport.width,
+    height: viewport.height,
   });
+  return openEditor(page);
 }
+
+async function expectBaseEditorLayout(
+  page: Page,
+  viewport: LayoutViewport,
+): Promise<void> {
+  const screenshotRoot = await openEditorAtViewport(page, viewport);
+  await expectLayoutState(screenshotRoot, `editor-${viewport.name}-base.png`);
+}
+
+async function expectRailHiddenLayout(
+  page: Page,
+  viewport: LayoutViewport,
+): Promise<void> {
+  const screenshotRoot = await openEditorAtViewport(page, viewport);
+  await activateButton(page, "Hide slide thumbnails");
+  await expect(
+    screenshotRoot.getByRole("button", {
+      name: "Show slide thumbnails",
+    }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expectLayoutState(
+    screenshotRoot,
+    `editor-${viewport.name}-rail-hidden.png`,
+  );
+}
+
+async function expectNotesExpandedLayout(
+  page: Page,
+  viewport: LayoutViewport,
+): Promise<void> {
+  const screenshotRoot = await openEditorAtViewport(page, viewport);
+  await activateButton(page, /^notes$/i);
+  await expect(screenshotRoot.getByLabel("Speaker notes")).toBeVisible();
+  await expectLayoutState(
+    screenshotRoot,
+    `editor-${viewport.name}-notes-expanded.png`,
+  );
+}
+
+async function expectRightPanelLayout(
+  page: Page,
+  viewport: LayoutViewport,
+): Promise<void> {
+  const screenshotRoot = await openEditorAtViewport(page, viewport);
+  const titleNode = screenshotRoot.getByRole("button", {
+    name: "Text: Release Gate Fixture Slide",
+  });
+  await expect(titleNode).toBeVisible();
+  const titleMetrics = await locatorContentMetrics(titleNode);
+  expect(
+    titleMetrics.scrollHeight,
+    JSON.stringify(titleMetrics),
+  ).toBeLessThanOrEqual(titleMetrics.clientHeight + 1);
+  const contextToolbar = page.getByRole("toolbar", {
+    name: "Context toolbar",
+  });
+  await expect(contextToolbar).toBeVisible();
+  expect(await locatorOwnsCenterHit(titleNode)).toBe(true);
+  if (viewport.name !== "desktop") {
+    expect(
+      rectanglesOverlap(
+        await requiredBox(titleNode),
+        await requiredBox(contextToolbar),
+      ),
+    ).toBe(false);
+  }
+  await titleNode.click();
+  await expect(titleNode).toHaveAttribute("aria-pressed", "true");
+  await settleLayout(page);
+
+  await activateButton(page, "Open Text inspector");
+  const inspector =
+    viewport.name === "desktop"
+      ? screenshotRoot.getByRole("region", { name: "Inspector" })
+      : page.getByRole("dialog", { name: "Text inspector" });
+  await expect(inspector).toBeVisible();
+  await expect(
+    inspector.getByLabel("Inspector panel", { exact: true }),
+  ).toHaveValue("text");
+
+  await expectLayoutState(
+    screenshotRoot,
+    `editor-${viewport.name}-panel-open.png`,
+  );
+}
+
+test.describe("slides layout screenshots", () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test.beforeEach(() => {
+    test.skip(
+      !LAYOUT_SCREENSHOTS_ENABLED,
+      "Set E2E_PROFILE=1 (deterministic gate) or E2E_SLIDES_LAYOUT_SCREENSHOTS=1 to run slide layout screenshots",
+    );
+  });
+
+  test("base editor layout (desktop) @required-profile", async ({ page }) => {
+    await expectBaseEditorLayout(page, VIEWPORTS.desktop);
+  });
+
+  test("rail hidden (desktop)", async ({ page }) => {
+    await expectRailHiddenLayout(page, VIEWPORTS.desktop);
+  });
+
+  test("notes expanded (desktop)", async ({ page }) => {
+    await expectNotesExpandedLayout(page, VIEWPORTS.desktop);
+  });
+
+  test("right panel open with selection (desktop) @required-profile", async ({
+    page,
+  }) => {
+    await expectRightPanelLayout(page, VIEWPORTS.desktop);
+  });
+
+  test("base editor layout (tablet) @required-profile", async ({ page }) => {
+    await expectBaseEditorLayout(page, VIEWPORTS.tablet);
+  });
+
+  test("rail hidden (tablet)", async ({ page }) => {
+    await expectRailHiddenLayout(page, VIEWPORTS.tablet);
+  });
+
+  test("notes expanded (tablet)", async ({ page }) => {
+    await expectNotesExpandedLayout(page, VIEWPORTS.tablet);
+  });
+
+  test("right panel open with selection (tablet) @required-profile", async ({
+    page,
+  }) => {
+    await expectRightPanelLayout(page, VIEWPORTS.tablet);
+  });
+
+  test("base editor layout (mobile) @required-profile", async ({ page }) => {
+    await expectBaseEditorLayout(page, VIEWPORTS.mobile);
+  });
+
+  test("rail hidden (mobile)", async ({ page }) => {
+    await expectRailHiddenLayout(page, VIEWPORTS.mobile);
+  });
+
+  test("notes expanded (mobile)", async ({ page }) => {
+    await expectNotesExpandedLayout(page, VIEWPORTS.mobile);
+  });
+
+  test("right panel open with selection (mobile) @required-profile", async ({
+    page,
+  }) => {
+    await expectRightPanelLayout(page, VIEWPORTS.mobile);
+  });
+});
