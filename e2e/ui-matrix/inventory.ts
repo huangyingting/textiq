@@ -1803,6 +1803,39 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/README.md", "docs/presentation/slide-editor.md"],
+    expectedTestCount: 2,
+    expectedTests: [
+      {
+        test: "Keep my version overwrites the newer server deck and persists on reload",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "Use server version discards stale local edits, clears history, and persists on reload",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "Keep my version overwrites the newer server deck and persists on reload",
+        surface:
+          "two-session CAS conflict keep-mine overwrite, history, and reload",
+        viewport: "Desktop Chrome in two isolated contexts",
+        auth: "seeded owner and seeded Pro editor",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "Use server version discards stale local edits, clears history, and persists on reload",
+        surface:
+          "two-session CAS conflict server acceptance, theme hydration, history reset, and reload",
+        viewport: "Desktop Chrome in two isolated contexts",
+        auth: "seeded owner and seeded Pro editor",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/presentation/touch-controls.spec.ts",

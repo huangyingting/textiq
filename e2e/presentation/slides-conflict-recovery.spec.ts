@@ -387,19 +387,6 @@ const useServerConflictTest = async ({
   }
 };
 
-const conflictTests = [
-  {
-    title:
-      "Keep my version overwrites the newer server deck and persists on reload",
-    run: keepMineConflictTest,
-  },
-  {
-    title:
-      "Use server version discards stale local edits, clears history, and persists on reload",
-    run: useServerConflictTest,
-  },
-] as const;
-
 test.describe("slide deck conflict recovery", () => {
   test.skip(
     !e2eProfileEnabled(),
@@ -407,11 +394,13 @@ test.describe("slide deck conflict recovery", () => {
   );
   test.setTimeout(120_000);
 
-  const orderedTests =
-    process.env.E2E_CONFLICT_TEST_ORDER === "reverse"
-      ? [...conflictTests].reverse()
-      : conflictTests;
-  for (const conflictTest of orderedTests) {
-    test(conflictTest.title, conflictTest.run);
-  }
+  test(
+    "Keep my version overwrites the newer server deck and persists on reload",
+    keepMineConflictTest,
+  );
+
+  test(
+    "Use server version discards stale local edits, clears history, and persists on reload",
+    useServerConflictTest,
+  );
 });

@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 53, manual: 48, blocked: 10, catalog: 69 },
+    statusCounts: { automated: 55, manual: 48, blocked: 10, catalog: 67 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -1982,6 +1982,42 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/slides-smoke.spec.ts",
       test: "presentation visual picker modal traps focus and restores invoking focus",
+    },
+  },
+  {
+    id: "PRES-EDIT-112",
+    subsystem: "presentation-editor",
+    area: "Keep my version",
+    title:
+      "Keep my version overwrites the newer server deck and persists on reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-conflict-recovery.spec.ts",
+      "docs/presentation/autosave-and-commands.md",
+    ],
+    tags: ["two-session", "cas-conflict", "keep-mine"],
+    automation: {
+      spec: "e2e/presentation/slides-conflict-recovery.spec.ts",
+      test: "Keep my version overwrites the newer server deck and persists on reload",
+    },
+  },
+  {
+    id: "PRES-EDIT-113",
+    subsystem: "presentation-editor",
+    area: "Use server version",
+    title:
+      "Use server version discards stale local edits, clears history, and persists on reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/slides-conflict-recovery.spec.ts",
+      "docs/presentation/autosave-and-commands.md",
+    ],
+    tags: ["two-session", "cas-conflict", "server-version"],
+    automation: {
+      spec: "e2e/presentation/slides-conflict-recovery.spec.ts",
+      test: "Use server version discards stale local edits, clears history, and persists on reload",
     },
   },
   {
