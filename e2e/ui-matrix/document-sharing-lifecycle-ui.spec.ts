@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { credentialGatedRequest } from "../helpers/credential-gate";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -293,6 +294,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
     const anonymousContext = await browser.newContext({
       baseURL: test.info().project.use.baseURL as string,
     });
+    const publicRequest = credentialGatedRequest(anonymousContext);
     const publicPage = await anonymousContext.newPage();
     try {
       const initialShareSegment = new URL(initialShareUrl).pathname.replace(
@@ -303,9 +305,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       const boundAssetPath = (shareSegment: string) =>
         `${profileShareLifecycleAssetPath()}?shareId=${encodeURIComponent(shareSegment)}&shareMode=present`;
       const initialBoundAssetPath = boundAssetPath(initialShareSegment);
-      const activeAsset = await anonymousContext.request.get(
-        initialBoundAssetPath,
-      );
+      const activeAsset = await publicRequest.get(initialBoundAssetPath);
       expect(activeAsset.status()).toBe(200);
       expect(activeAsset.headers()["content-type"] ?? "").toContain(
         "image/png",
@@ -423,9 +423,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toHaveAttribute("aria-checked", "true");
 
       await anonymousContext.clearCookies();
-      const lockedAsset = await anonymousContext.request.get(
-        initialBoundAssetPath,
-      );
+      const lockedAsset = await publicRequest.get(initialBoundAssetPath);
       expect(lockedAsset.status()).toBe(403);
       expect(await lockedAsset.text()).toMatch(/forbidden/i);
       await unlockPasscodeRoute({
@@ -439,9 +437,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       });
       await expect(presentRegion).toBeVisible({ timeout: 20_000 });
       await expect(presentRegion.getByText(fixture.content)).toBeVisible();
-      const unlockedAsset = await anonymousContext.request.get(
-        initialBoundAssetPath,
-      );
+      const unlockedAsset = await publicRequest.get(initialBoundAssetPath);
       expect(unlockedAsset.status()).toBe(200);
       expect((await unlockedAsset.body()).byteLength).toBeGreaterThan(0);
 
@@ -510,9 +506,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
           `${expiredPath} leaked the document content`,
         ).not.toContain(fixture.content);
       }
-      const expiredAsset = await anonymousContext.request.get(
-        initialBoundAssetPath,
-      );
+      const expiredAsset = await publicRequest.get(initialBoundAssetPath);
       expect(expiredAsset.status()).toBe(403);
       expect(await expiredAsset.text()).toMatch(/forbidden/i);
 
@@ -543,9 +537,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
 
       const oldLinkResponse = await publicPage.goto(initialShareUrl);
       expect(oldLinkResponse?.status()).toBe(404);
-      const rotatedOldAsset = await anonymousContext.request.get(
-        initialBoundAssetPath,
-      );
+      const rotatedOldAsset = await publicRequest.get(initialBoundAssetPath);
       expect(rotatedOldAsset.status()).toBe(403);
       await publicPage.goto(rotatedShareUrl);
       await expect(
@@ -558,9 +550,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toBeVisible();
       const disabledLinkResponse = await publicPage.goto(rotatedShareUrl);
       expect(disabledLinkResponse?.status()).toBe(404);
-      const disabledAsset = await anonymousContext.request.get(
-        rotatedBoundAssetPath,
-      );
+      const disabledAsset = await publicRequest.get(rotatedBoundAssetPath);
       expect(disabledAsset.status()).toBe(403);
 
       await page.reload();
