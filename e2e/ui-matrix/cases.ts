@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 19, manual: 16, blocked: 4, catalog: 21 },
+    statusCounts: { automated: 20, manual: 16, blocked: 4, catalog: 20 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -2680,7 +2680,8 @@ const AUTOMATED_CASES: UiTestCase[] = [
     id: "PUBLIC-028",
     subsystem: "public-render-share",
     area: "owner configures",
-    title: "owner configures, protects, rotates, and disables a public share",
+    title:
+      "owner configures, expires, protects, rotates, and disables a public share",
     status: "automated",
     priority: "P0",
     refs: [
@@ -2690,7 +2691,7 @@ const AUTOMATED_CASES: UiTestCase[] = [
     tags: ["seeded-owner", "anonymous-public", "share-lifecycle"],
     automation: {
       spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
-      test: "owner configures, protects, rotates, and disables a public share",
+      test: "owner configures, expires, protects, rotates, and disables a public share",
     },
   },
   {
@@ -2883,6 +2884,24 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/presentation/slides-smoke.spec.ts",
       test: "present-route 404 exposes root-layout language after navigation readiness",
+    },
+  },
+  {
+    id: "PUBLIC-041",
+    subsystem: "public-render-share",
+    area: "expired public routes",
+    title:
+      "expired public routes return privacy-preserving 404s until the owner clears expiry",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["anonymous", "expired-link", "privacy-404", "owner-recovery"],
+    automation: {
+      spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      test: "owner configures, expires, protects, rotates, and disables a public share",
     },
   },
   {

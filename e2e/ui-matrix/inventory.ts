@@ -2367,7 +2367,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
     owners: ["documents", "public-render", "security"],
     coverage:
-      "Deterministic owner share transport-failure recovery with duplicate suppression, enablement, viewport-reachable policy controls, clipboard payloads, opener-isolated social intents, metadata and mode persistence, passcode failure/unlock, link rotation, revocation, and public-route enforcement.",
+      "Deterministic owner share transport-failure recovery with duplicate suppression, enablement, viewport-reachable policy controls, clipboard payloads, opener-isolated social intents, metadata and mode persistence, passcode failure/unlock, expired-link privacy enforcement and recovery, link rotation, revocation, and public-route enforcement.",
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "anonymous public"],
@@ -2380,15 +2380,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     expectedTestCount: 1,
     expectedTests: [
       {
-        test: "owner configures, protects, rotates, and disables a public share",
+        test: "owner configures, expires, protects, rotates, and disables a public share",
         profiles: ["deterministic-profile"],
       },
     ],
     tests: [
       {
-        test: "owner configures, protects, rotates, and disables a public share",
+        test: "owner configures, expires, protects, rotates, and disables a public share",
         surface:
-          "private-to-public sharing, protection, rotation, and revocation",
+          "private-to-public sharing, expiration, protection, rotation, and revocation",
         viewport: "Desktop Chrome",
         auth: "seeded owner and anonymous public",
         profile: "normal deterministic profile (E2E_PROFILE=1)",

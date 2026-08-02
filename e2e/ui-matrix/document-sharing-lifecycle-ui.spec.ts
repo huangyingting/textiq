@@ -129,7 +129,7 @@ test.describe("UI matrix: document sharing lifecycle", () => {
   );
   test.setTimeout(180_000);
 
-  test("owner configures, protects, rotates, and disables a public share", async ({
+  test("owner configures, expires, protects, rotates, and disables a public share", async ({
     browser,
     page,
   }) => {
@@ -457,12 +457,45 @@ test.describe("UI matrix: document sharing lifecycle", () => {
         publicPage.getByText("Read-only", { exact: true }),
       ).toHaveCount(0);
 
+      const expiredValue = "2000-01-01T00:00";
+      await dialog.getByLabel("Link expiry date and time").fill(expiredValue);
+      await mutationExpect(
+        dialog.getByLabel("Link expiry date and time"),
+      ).toHaveValue(expiredValue);
+
+      await anonymousContext.clearCookies();
+      for (const expiredPath of [
+        sharePath,
+        embedPath,
+        presentPath,
+        presentEmbedPath,
+      ]) {
+        const expiredResponse = await publicPage.goto(expiredPath);
+        expect(expiredResponse?.status(), expiredPath).toBe(404);
+        const expiredBody = await publicPage.locator("body").innerText();
+        expect(
+          expiredBody,
+          `${expiredPath} leaked the document title`,
+        ).not.toContain(fixture.title);
+        expect(
+          expiredBody,
+          `${expiredPath} leaked the document content`,
+        ).not.toContain(fixture.content);
+      }
+
       await dialog.getByRole("button", { name: "Clear" }).click();
       await mutationExpect(
         dialog.getByText(
           "No expiry — the link works until disabled or regenerated.",
         ),
       ).toBeVisible();
+
+      await anonymousContext.clearCookies();
+      await publicPage.goto(initialShareUrl);
+      await expect(
+        publicPage.getByRole("heading", { name: "Passcode required" }),
+      ).toBeVisible();
+
       await dialog.getByRole("button", { name: "Regenerate link" }).click();
       const rotatedShareLink = dialog.getByLabel("Public share link");
       await expect(rotatedShareLink).not.toHaveValue(initialShareUrl, {
