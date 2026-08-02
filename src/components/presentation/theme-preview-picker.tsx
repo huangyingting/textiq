@@ -1,7 +1,14 @@
 "use client";
 
 import { Check, ChevronDown, Search } from "lucide-react";
-import { useMemo, useRef, useState, type CSSProperties, type Ref } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Ref,
+} from "react";
 
 import { Popover } from "@/components/ui/popover";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
@@ -166,6 +173,7 @@ export function ThemePreviewPicker({
   "aria-label": ariaLabel,
 }: ThemePreviewPickerProps) {
   const [open, setOpen] = useState(false);
+  const customizePendingRef = useRef(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ThemeFilter>("all");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -198,6 +206,12 @@ export function ThemePreviewPicker({
   };
 
   const closePicker = () => setPickerOpen(false);
+
+  useEffect(() => {
+    if (open || !customizePendingRef.current) return;
+    customizePendingRef.current = false;
+    onCustomize?.();
+  }, [onCustomize, open]);
 
   const selectTheme = (entry: ThemePackageCatalogEntry) => {
     onChange({
@@ -373,8 +387,8 @@ export function ThemePreviewPicker({
           <button
             type="button"
             onClick={() => {
+              customizePendingRef.current = true;
               closePicker();
-              onCustomize();
             }}
             className={cx(
               "w-full rounded-ds-md border border-ds-border-subtle px-3 py-2 text-xs font-semibold text-ds-text-primary hover:bg-ds-state-hover",

@@ -424,6 +424,13 @@ function forwardHttpRequest({
   upstreamSocket,
 }) {
   return new Promise((resolvePromise) => {
+    let settled = false;
+    const finish = () => {
+      upstreamSocket.destroy();
+      if (settled) return;
+      settled = true;
+      resolvePromise();
+    };
     const upstream = createHttpRequest(
       {
         agent: false,
@@ -453,7 +460,7 @@ function forwardHttpRequest({
             });
           }
           response.end();
-          resolvePromise();
+          finish();
           return;
         }
         response.writeHead(
@@ -462,13 +469,19 @@ function forwardHttpRequest({
           headers,
         );
         upstreamResponse.pipe(response);
-        upstreamResponse.once("end", resolvePromise);
+        upstreamResponse.once("end", finish);
+        upstreamResponse.once("aborted", finish);
+        upstreamResponse.once("error", finish);
       },
     );
     upstream.once("error", () => {
       if (!response.headersSent) response.writeHead(502);
       response.end();
-      resolvePromise();
+      finish();
+    });
+    response.once("close", () => {
+      upstream.destroy();
+      finish();
     });
     upstream.end(body);
   });
@@ -501,6 +514,16 @@ async function forwardWebSocketUpgrade({ head, request, socket, state }) {
     upstream.pipe(socket);
     upstream.once("error", () => socket.destroy());
     socket.once("error", () => upstream.destroy());
+    upstream.once("end", () => {
+      upstream.destroy();
+      socket.end();
+    });
+    socket.once("end", () => {
+      socket.destroy();
+      upstream.end();
+    });
+    upstream.once("close", () => socket.destroy());
+    socket.once("close", () => upstream.destroy());
   } catch (error) {
     if (
       error instanceof Error &&

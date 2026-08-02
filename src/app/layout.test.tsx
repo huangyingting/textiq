@@ -200,6 +200,7 @@ function childrenOf(element: ElementLike): ReactNode {
 
 describe("RootLayout", () => {
   test("exposes the marketing metadata title/description", () => {
+    assert.equal(String(metadata.metadataBase), "http://localhost:4000/");
     assert.equal(metadata.title, "TextIQ — Text to Visuals");
     assert.match(
       String(metadata.description),

@@ -14,6 +14,7 @@ import {
 } from "@/lib/app-shell/theme";
 import { LocaleProvider } from "@/lib/i18n/locale-context";
 import { getLocale } from "@/lib/i18n/server";
+import { app } from "@/lib/env";
 
 // Design-system font setup: self-host Inter and wire it to --font-sans.
 // Serif (Georgia) and mono (Menlo) come from system stacks, so only Inter downloads.
@@ -23,6 +24,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(app.url()),
   title: "TextIQ — Text to Visuals",
   description:
     "Turn plain text into AI-generated, editable visuals: flowcharts, mind maps, infographics, charts, and concept diagrams.",

@@ -41,6 +41,11 @@ type LoginActionsTestState = {
     action: () => Promise<unknown>,
     onBlocked: (retryAfterSecs: number | undefined) => unknown,
   ) => Promise<unknown>;
+  logError: (
+    scope: string,
+    error: Error,
+    context: Record<string, unknown>,
+  ) => void;
 };
 
 const globalForActions = globalThis as typeof globalThis & {
@@ -75,6 +80,15 @@ const stubbedModules = new Map<string, string>([
       }
       export function retryMessage(retryAfterSecs, fallback) {
         return fallback ?? "Too many attempts. Please wait a moment and try again.";
+      }
+    `,
+  ],
+  [
+    "@/lib/log",
+    `
+      export function logError(scope, error, context) {
+        globalThis.__loginActionsTestState.calls.push(["logError", scope, error, context]);
+        return globalThis.__loginActionsTestState.logError(scope, error, context);
       }
     `,
   ],
@@ -125,6 +139,7 @@ function createDefaultState(): LoginActionsTestState {
     async withAbuseBudget(_namespace, _subject, action) {
       return action();
     },
+    logError() {},
   };
 }
 
@@ -232,9 +247,37 @@ describe("authenticate", () => {
     assert.ok(!result?.includes("internal"));
   });
 
-  it("rethrows non-AuthError failures instead of swallowing them", async () => {
+  it("contains non-AuthError failures as a retryable message and logs only canonical context", async () => {
     state().signIn = async () => {
-      throw new Error("database down");
+      throw new Error("database down with secret-bearing diagnostics");
+    };
+
+    const result = await loginActions.authenticate(
+      undefined,
+      makeFormData({ email: "user@example.com", password: "secret123" }),
+    );
+
+    assert.equal(result, "Could not log in. Please try again.");
+    const [logCall] = callsOf("logError");
+    assert.equal(logCall[1], "auth.login");
+    assert.equal((logCall[2] as Error).name, "LoginError");
+    assert.equal(
+      (logCall[2] as Error).message,
+      "Could not complete login operation.",
+    );
+    assert.deepEqual(logCall[3], { code: "LOGIN_FAILED" });
+    assert.doesNotMatch(
+      JSON.stringify(logCall),
+      /database down|secret-bearing/,
+    );
+  });
+
+  it("rethrows framework redirects so successful sign-in navigation remains intact", async () => {
+    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: "NEXT_REDIRECT;push;/app;307;",
+    });
+    state().signIn = async () => {
+      throw redirectError;
     };
 
     await assert.rejects(
@@ -243,8 +286,9 @@ describe("authenticate", () => {
           undefined,
           makeFormData({ email: "user@example.com", password: "secret123" }),
         ),
-      /database down/,
+      (error) => error === redirectError,
     );
+    assert.equal(callsOf("logError").length, 0);
   });
 
   it("returns undefined (no redirect thrown here — signIn performs it) on success", async () => {

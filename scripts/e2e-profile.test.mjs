@@ -72,6 +72,7 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(env.E2E_PROFILE_APP_URL, "http://127.0.0.1:4002");
   assert.equal(env.PLAYWRIGHT_BROWSERS_PATH, "0");
   assert.equal(env.NODE_ENV, "production");
+  assert.equal(env.E2E_PROFILE_MOCK_BILLING, "1");
   assert.equal(env.PORT, "4002");
   assert.equal(env.E2E_PROFILE_READINESS_URL, "http://127.0.0.1:4001/ready");
   assert.equal(env.HOST, "127.0.0.1");

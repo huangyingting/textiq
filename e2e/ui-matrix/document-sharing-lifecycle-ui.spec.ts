@@ -379,9 +379,11 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       ).toBeVisible();
       await publicPage.getByLabel("Passcode").fill("incorrect-passcode");
       await publicPage.getByRole("button", { name: "Unlock" }).click();
-      await expect(publicPage.getByRole("alert")).toHaveText(
-        "Incorrect passcode. Please try again.",
-      );
+      await expect(
+        publicPage.getByRole("alert").filter({
+          hasText: "Incorrect passcode. Please try again.",
+        }),
+      ).toHaveText("Incorrect passcode. Please try again.");
       await publicPage.getByLabel("Passcode").fill(fixture.passcode);
       await publicPage.getByRole("button", { name: "Unlock" }).click();
       await expectPublicDocument(publicPage, fixture.title, fixture.content);

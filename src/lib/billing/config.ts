@@ -14,6 +14,7 @@ import { parseBooleanFlag } from "@/lib/config/flags";
  * explicitly opts in.
  */
 export const BILLING_UNLIMITED_CREDITS_ENV = "BILLING_UNLIMITED_CREDITS";
+export const E2E_PROFILE_MOCK_BILLING_ENV = "E2E_PROFILE_MOCK_BILLING";
 
 export type BillingProviderKind = "stripe" | "mock";
 
@@ -52,6 +53,23 @@ export function isProductionEnv(
 }
 
 /**
+ * Allows the authenticated, SQLite-only browser profile to exercise paid-plan
+ * lifecycle UI against the local provider while the app itself runs with
+ * production React/Next semantics. Every condition is required so setting a
+ * single test-looking variable in a real deployment cannot enable mock grants.
+ */
+export function isE2EProfileMockBillingAllowed(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    env.E2E_PROFILE === "1" &&
+    env[E2E_PROFILE_MOCK_BILLING_ENV] === "1" &&
+    env.DB_PROVIDER === "sqlite" &&
+    env.DATABASE_URL?.startsWith("file:") === true
+  );
+}
+
+/**
  * Pure decision: which billing provider should be used for the given env?
  *
  * - Stripe is "configured" when `STRIPE_SECRET_KEY` is set → use Stripe.
@@ -63,6 +81,8 @@ export function decideBillingProvider(
   env: Record<string, string | undefined> = process.env,
 ): BillingProviderKind {
   if (env.STRIPE_SECRET_KEY) return "stripe";
+
+  if (isE2EProfileMockBillingAllowed(env)) return "mock";
 
   if (isProductionEnv(env)) {
     throw new BillingMisconfiguredError(

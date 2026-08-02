@@ -307,6 +307,8 @@ test("ThemePreviewPicker labels unavailable values and opens customization after
   )[0];
   (customize.props.onClick as () => void)();
 
+  assert.equal(customizeCalls, 0);
+  tree = harness.run(render);
   assert.equal(customizeCalls, 1);
   assert.deepEqual(openChanges, [true, false]);
   harness.cleanup();

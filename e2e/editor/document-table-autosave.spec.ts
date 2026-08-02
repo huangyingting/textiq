@@ -33,25 +33,27 @@ test("sustained document and table edits persist after saved state and reload", 
   const marker =
     `Autosave regression ${testInfo.project.name} ` +
     `${testInfo.repeatEachIndex}-${testInfo.workerIndex}`;
+  const typeLikeFastUser = (value: string) =>
+    page.keyboard.type(value, { delay: 100 });
   await body.click();
   await expect(body).toBeFocused();
-  await page.keyboard.type("/h1");
+  await typeLikeFastUser("/h1");
   await page.keyboard.press("Enter");
-  await page.keyboard.type(marker);
+  await typeLikeFastUser(marker);
   await page.keyboard.press("Enter");
-  await page.keyboard.type(
+  await typeLikeFastUser(
     "A sustained paragraph written without pausing for the autosave debounce.",
   );
   await page.keyboard.press("Enter");
-  await page.keyboard.type("/h2");
+  await typeLikeFastUser("/h2");
   await page.keyboard.press("Enter");
-  await page.keyboard.type("Table details");
+  await typeLikeFastUser("Table details");
   await page.keyboard.press("Enter");
-  await page.keyboard.type(
+  await typeLikeFastUser(
     "The table below must retain both its structure and every cell value.",
   );
   await page.keyboard.press("Enter");
-  await page.keyboard.type("/table");
+  await typeLikeFastUser("/table");
   await page.keyboard.press("Enter");
 
   const table = body.locator("table").first();
@@ -81,7 +83,7 @@ test("sustained document and table edits persist after saved state and reload", 
   await waitForDocumentAutosaveAfter(page, async () => {
     for (const [index, value] of cellValues.entries()) {
       await cells.nth(index).click();
-      await page.keyboard.type(value);
+      await typeLikeFastUser(value);
     }
   });
 

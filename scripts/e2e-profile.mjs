@@ -191,6 +191,7 @@ export function buildE2EProfileEnv(
     NODE_ENV: "production",
     E2E_PROFILE_APP_URL: appUrl.origin,
     E2E_PROFILE: "1",
+    E2E_PROFILE_MOCK_BILLING: "1",
     E2E_PROFILE_PRECOMPILE_EMAIL:
       env.E2E_PROFILE_PRECOMPILE_EMAIL ??
       env.E2E_USER_EMAIL ??

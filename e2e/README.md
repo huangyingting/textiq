@@ -109,6 +109,7 @@ profile, which supplies its own seeded credentials:
 | `E2E_PROFILE_READINESS_URL`     | self-contained profile             | Separate credential-free lifecycle URL (default `http://localhost:4001/ready`)                               |
 | `E2E_PROFILE_APP_URL`           | self-contained profile             | Internal IPv4 app listener (default `http://localhost:4002`)                                                 |
 | `E2E_PROFILE_PRECOMPILE_ROUTES` | self-contained profile             | JSON route contracts compiled and body-validated before Playwright dispatches tests                          |
+| `E2E_PROFILE_MOCK_BILLING`      | self-contained profile             | Internal SQLite-only opt-in used to exercise billing lifecycles in the production build                      |
 | `E2E_INSTALL_BROWSER_DEPS`      | self-contained profile             | `1` to install Playwright OS dependencies with Chromium                                                      |
 | `E2E_PROFILE_GREP`              | deterministic profile              | Optional grep for a bounded required-profile slice such as `@required-profile`                               |
 | `E2E_USER_EMAIL/PASSWORD`       | profile seed, slides               | Override the seeded owner login                                                                              |

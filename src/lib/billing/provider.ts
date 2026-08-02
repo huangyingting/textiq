@@ -16,6 +16,7 @@ import type { Plan } from "@/lib/billing/catalog";
 import * as billingConfig from "@/lib/billing/config";
 export const {
   decideBillingProvider,
+  isE2EProfileMockBillingAllowed,
   isProductionEnv,
   BillingMisconfiguredError,
 } = billingConfig;

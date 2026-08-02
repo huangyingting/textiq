@@ -744,7 +744,6 @@ export function SlideEditor({
 
   function closeBrandKitAuthoring() {
     setBrandKitAuthoringOpen(false);
-    queueMicrotask(() => themePickerTriggerRef.current?.focus());
   }
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -2744,6 +2743,7 @@ export function SlideEditor({
             onBrandKitSaved?.(result);
           }}
           onClose={closeBrandKitAuthoring}
+          restoreFocusRef={themePickerTriggerRef}
         />
       ) : null}
 

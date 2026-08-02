@@ -21,7 +21,10 @@ import {
   markSubscriptionCancelAtPeriodEnd,
 } from "@/lib/billing/service";
 import type { BillingProvider, ChangePlanResult } from "@/lib/billing/provider";
-import { isProductionEnv } from "@/lib/billing/config";
+import {
+  isE2EProfileMockBillingAllowed,
+  isProductionEnv,
+} from "@/lib/billing/config";
 
 type MockBillingProviderDeps = {
   applyLocalPlanChange?: typeof applyLocalPlanChange;
@@ -41,7 +44,7 @@ export function isMockPlanChangeAllowed(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (targetPlan === "free") return true;
-  return !isProductionEnv(env);
+  return !isProductionEnv(env) || isE2EProfileMockBillingAllowed(env);
 }
 
 export class MockBillingProvider implements BillingProvider {

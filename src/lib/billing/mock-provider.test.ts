@@ -249,6 +249,30 @@ describe("MockBillingProvider", () => {
       }
     });
 
+    it("grants paid plans only for the explicit SQLite production profile", async () => {
+      const env = process.env as Record<string, string | undefined>;
+      const previous = { ...process.env };
+      env.NODE_ENV = "production";
+      env.E2E_PROFILE = "1";
+      env.E2E_PROFILE_MOCK_BILLING = "1";
+      env.DB_PROVIDER = "sqlite";
+      env.DATABASE_URL = "file:/tmp/textiq-e2e.db";
+      const calls: Array<{ userId: string; plan: Plan }> = [];
+      try {
+        const provider = new MockBillingProvider({
+          applyLocalPlanChange: async (userId, plan) => {
+            calls.push({ userId, plan });
+          },
+        });
+        const result = await provider.changePlan("user-mock", "plus");
+
+        assert.deepEqual(calls, [{ userId: "user-mock", plan: "plus" }]);
+        assert.strictEqual(result.success, true);
+      } finally {
+        process.env = previous;
+      }
+    });
+
     it("cancelSubscriptionImmediately is a no-op for the mock provider", async () => {
       const provider = new MockBillingProvider();
 

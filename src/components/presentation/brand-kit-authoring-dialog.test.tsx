@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import { createReactRenderHarness } from "@/test/react-render-harness";
+import { Dialog } from "@/components/ui";
 
 import { BrandKitAuthoringDialog } from "./brand-kit-authoring-dialog";
 import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
@@ -41,12 +42,9 @@ test("BrandKitAuthoringDialog is modal, responsive, and wires save completion", 
     }),
   );
 
-  const dialog = findElement(
-    tree,
-    (element) => element.props.role === "dialog",
-  );
+  const dialog = findElement(tree, (element) => element.type === Dialog);
   assert.ok(dialog);
-  assert.equal(dialog.props["aria-modal"], "true");
+  assert.equal(dialog.props.open, true);
   assert.equal(dialog.props["aria-labelledby"], "brand-kit-authoring-title");
   assert.match(String(dialog.props.className), /max-w-6xl/);
   assert.match(String(dialog.props.className), /sm:max-h/);

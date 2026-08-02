@@ -88,6 +88,25 @@ test("HTTPS transport forwards credentials only after pinned same-channel authen
   );
 });
 
+test("HTTP forwarding releases every verified upstream socket after its response", async (t) => {
+  const fixture = await createTransportFixture();
+  t.after(() => fixture.close());
+
+  for (let index = 0; index < 12; index += 1) {
+    const response = await rawPinnedRequest(
+      fixture,
+      `/socket-lifecycle/${index}`,
+    );
+    assert.equal(response.status, 200);
+  }
+
+  await waitForCondition(
+    () => fixture.transport.state.activeSockets.size === 0,
+    "verified upstream sockets to close",
+  );
+  assert.equal(fixture.transport.state.activeSockets.size, 0);
+});
+
 test("redirect containment rewrites only normalized internal app targets", () => {
   const appOrigin = new URL("http://localhost:4402");
   const externalOrigin = new URL("https://localhost:4400");
@@ -677,6 +696,10 @@ test("WSS and app-listener takeover never expose cookies before upstream ownersh
   assert.equal(upgradedCookie, "session=wss-normal");
   channel.agent.destroy();
   channel.socket.destroy();
+  await waitForCondition(
+    () => websocket.transport.state.activeSockets.size === 0,
+    "verified websocket sockets to close",
+  );
 
   let hostileBytes = 0;
   let originalApp;
@@ -1289,4 +1312,13 @@ async function waitForOutput(predicate, timeoutMs = 5_000) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
   }
   throw new Error("Timed out waiting for hostile peer fixture output.");
+}
+
+async function waitForCondition(predicate, label, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+  throw new Error(`Timed out waiting for ${label}.`);
 }

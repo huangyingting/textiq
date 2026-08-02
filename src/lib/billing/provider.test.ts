@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   decideBillingProvider,
   getBillingProvider,
+  isE2EProfileMockBillingAllowed,
   isProductionEnv,
   shouldCancelSubscription,
   BillingMisconfiguredError,
@@ -58,6 +59,33 @@ describe("decideBillingProvider", () => {
       BillingMisconfiguredError,
     );
   });
+
+  it("allows only the explicit SQLite production profile to use mock billing", () => {
+    const profileEnv = {
+      NODE_ENV: "production",
+      E2E_PROFILE: "1",
+      E2E_PROFILE_MOCK_BILLING: "1",
+      DB_PROVIDER: "sqlite",
+      DATABASE_URL: "file:/tmp/textiq-e2e.db",
+    };
+    assert.strictEqual(isE2EProfileMockBillingAllowed(profileEnv), true);
+    assert.strictEqual(decideBillingProvider(profileEnv), "mock");
+
+    for (const key of [
+      "E2E_PROFILE",
+      "E2E_PROFILE_MOCK_BILLING",
+      "DB_PROVIDER",
+      "DATABASE_URL",
+    ] as const) {
+      const incomplete: Record<string, string | undefined> = { ...profileEnv };
+      delete incomplete[key];
+      assert.strictEqual(isE2EProfileMockBillingAllowed(incomplete), false);
+      assert.throws(
+        () => decideBillingProvider(incomplete),
+        BillingMisconfiguredError,
+      );
+    }
+  });
 });
 
 describe("isMockPlanChangeAllowed", () => {
@@ -91,6 +119,19 @@ describe("isMockPlanChangeAllowed", () => {
     assert.strictEqual(
       isMockPlanChangeAllowed("pro", { NODE_ENV: "production" }),
       false,
+    );
+  });
+
+  it("allows paid plans only in the explicit SQLite production profile", () => {
+    assert.strictEqual(
+      isMockPlanChangeAllowed("plus", {
+        NODE_ENV: "production",
+        E2E_PROFILE: "1",
+        E2E_PROFILE_MOCK_BILLING: "1",
+        DB_PROVIDER: "sqlite",
+        DATABASE_URL: "file:/tmp/textiq-e2e.db",
+      }),
+      true,
     );
   });
 });

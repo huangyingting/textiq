@@ -1,7 +1,7 @@
 ---
 type: "contract"
 status: "current"
-last_updated: "2026-08-01"
+last_updated: "2026-08-02"
 description: "This document describes plan entitlements, hold-on-reserve usage-ledger semantics, idempotency-key hashing and cutover, reconciliation, billing provider selection, and subscription state."
 ---
 
@@ -102,6 +102,11 @@ not by billing plans.
 - Stripe when `STRIPE_SECRET_KEY` is set.
 - Mock provider in non-production when Stripe is not configured.
 - Fail closed in production without Stripe or when configured Stripe cannot load.
+
+The managed browser profile is the sole production-mode exception: mock billing
+is enabled only when `E2E_PROFILE=1`, `E2E_PROFILE_MOCK_BILLING=1`,
+`DB_PROVIDER=sqlite`, and `DATABASE_URL` is a `file:` URL. Missing any condition
+restores the normal production fail-closed behavior.
 
 The provider interface owns plan change, period-end cancellation, and immediate
 subscription cancellation for account deletion.
