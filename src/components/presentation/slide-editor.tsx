@@ -837,6 +837,7 @@ export function SlideEditor({
     focusStageViewportSoon,
     focusEditorRootSoon,
     focusStageNodeSoon,
+    cancelPendingStageNodeFocus,
   } = useStageFocusController({
     editorRootRef,
     deck,
@@ -2429,6 +2430,7 @@ export function SlideEditor({
     activeCropHandle,
     activeRotationNodeId,
     activeConnectorEndpoint,
+    cancelPendingStageNodeFocus,
     enterInlineEdit,
     requestInlineEditCommit,
     clearTableEditing,

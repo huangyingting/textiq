@@ -372,7 +372,7 @@ test.describe("presentation pointer interactions", () => {
     const editor = await openPointerFixture(
       page,
       testInfo,
-      POINTER_INTERACTION_FIXTURES.connectorSnap,
+      POINTER_INTERACTION_FIXTURES.connectorKeyboard,
     );
     const insertConnector = page
       .getByRole("toolbar", { name: "Context toolbar" })

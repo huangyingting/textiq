@@ -335,6 +335,7 @@ export interface StageGestureControllerArgs {
   ) => void;
   requestInlineEditCommit: () => void;
   clearTableEditing: () => void;
+  cancelPendingStageNodeFocus: () => void;
   focusSelectedNodeSoon: (nodeId: string) => void;
   focusStageNodeSoon: (nodeId: string) => void;
   handleCopyNodes: () => void;
@@ -468,6 +469,7 @@ export function useStageGestureController(
     enterInlineEdit,
     requestInlineEditCommit,
     clearTableEditing,
+    cancelPendingStageNodeFocus,
     focusSelectedNodeSoon,
     focusStageNodeSoon,
     handleCopyNodes,
@@ -829,6 +831,7 @@ export function useStageGestureController(
     const rect = canvasElement.getBoundingClientRect();
     if (!hasUsableCanvasArea(rect)) return;
 
+    cancelPendingStageNodeFocus();
     if (inlineEditNodeId) requestInlineEditCommit();
 
     event.preventDefault();
@@ -1098,6 +1101,7 @@ export function useStageGestureController(
     if (!activeSlide || event.button !== 0 || isEditableTarget(event.target)) {
       return;
     }
+    cancelPendingStageNodeFocus();
     const hits = semanticHitsFromEvent(event, {
       order: "visual",
       selectedNodeBonus: false,

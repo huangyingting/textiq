@@ -49,6 +49,39 @@ export function focusStageNode(
   focusGeometryRegistry.focus(focusGeometryTargets.stageNode(nodeId));
 }
 
+export interface DeferredStageNodeFocusController {
+  cancel: () => void;
+  schedule: (nodeId: string) => void;
+}
+
+/**
+ * Keeps only the latest deferred stage-node focus request. Pointer gestures can
+ * cancel the pending request when newer user intent supersedes a command's
+ * post-render focus restoration.
+ */
+export function createDeferredStageNodeFocusController(
+  focusNode: (nodeId: string) => void,
+): DeferredStageNodeFocusController {
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+  const cancel = () => {
+    if (timeoutId === null) return;
+    globalThis.clearTimeout(timeoutId);
+    timeoutId = null;
+  };
+
+  return {
+    cancel,
+    schedule: (nodeId) => {
+      cancel();
+      timeoutId = globalThis.setTimeout(() => {
+        timeoutId = null;
+        focusNode(nodeId);
+      }, 0);
+    },
+  };
+}
+
 /**
  * Finds the slide index that owns a node id (searching nested group children),
  * or, failing that, the index of a slide whose own id matches. Returns -1 when
@@ -116,16 +149,31 @@ export function useStageFocusController({
     useState<StageFitSize | null>(null);
   const stageViewportRef = useRef<HTMLDivElement | null>(null);
   const lastUndoRedoFocusTokenRef = useRef<number | null>(null);
+  const deferredStageNodeFocus = useMemo(
+    () =>
+      createDeferredStageNodeFocusController((nodeId) =>
+        focusStageNode(focusGeometryRegistry, nodeId),
+      ),
+    [focusGeometryRegistry],
+  );
 
   const handleCanvasRef = useCallback((el: HTMLDivElement | null) => {
     setCanvasElement(el);
   }, []);
 
   const focusStageNodeSoon = useCallback(
-    (nodeId: string) => {
-      window.setTimeout(() => focusStageNode(focusGeometryRegistry, nodeId), 0);
-    },
-    [focusGeometryRegistry],
+    (nodeId: string) => deferredStageNodeFocus.schedule(nodeId),
+    [deferredStageNodeFocus],
+  );
+
+  const cancelPendingStageNodeFocus = useCallback(
+    () => deferredStageNodeFocus.cancel(),
+    [deferredStageNodeFocus],
+  );
+
+  useEffect(
+    () => () => deferredStageNodeFocus.cancel(),
+    [deferredStageNodeFocus],
   );
 
   const focusEditorRootSoon = useCallback(() => {
@@ -245,5 +293,6 @@ export function useStageFocusController({
     focusStageViewportSoon,
     focusEditorRootSoon,
     focusStageNodeSoon,
+    cancelPendingStageNodeFocus,
   };
 }

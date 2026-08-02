@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import type { Deck } from "@/lib/presentation/schema";
 
 import {
+  createDeferredStageNodeFocusController,
   findSlideIndexForFocus,
   focusStageNode,
 } from "./use-stage-focus-controller";
@@ -76,4 +77,30 @@ test("focusStageNode delegates to the focus geometry registry target", () => {
   );
 
   assert.deepEqual(focused, ["stage:node:node-1"]);
+});
+
+test("deferred stage focus keeps only the latest request", async () => {
+  const focused: string[] = [];
+  const controller = createDeferredStageNodeFocusController((nodeId) => {
+    focused.push(nodeId);
+  });
+
+  controller.schedule("stale-node");
+  controller.schedule("latest-node");
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 10));
+
+  assert.deepEqual(focused, ["latest-node"]);
+});
+
+test("deferred stage focus can be canceled by newer pointer intent", async () => {
+  const focused: string[] = [];
+  const controller = createDeferredStageNodeFocusController((nodeId) => {
+    focused.push(nodeId);
+  });
+
+  controller.schedule("command-selected-node");
+  controller.cancel();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 10));
+
+  assert.deepEqual(focused, []);
 });

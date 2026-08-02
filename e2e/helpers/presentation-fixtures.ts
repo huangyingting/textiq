@@ -118,6 +118,11 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr13",
     "e2e-isolated-pointer-connector",
   ),
+  pointerConnectorKeyboard: presentationFixture(
+    "e2eisolatedpointerkey0001",
+    "e2eisolatedshr38",
+    "e2e-isolated-pointer-keyboard",
+  ),
   conflictKeepMine: presentationFixture(
     "e2eisolatedconflictkeep001",
     "e2eisolatedshr14",
@@ -262,6 +267,7 @@ export const POINTER_INTERACTION_FIXTURES = {
   filmstripReorder: "pointerFilmstripReorder",
   nodeGeometry: "pointerNodeGeometry",
   connectorSnap: "pointerConnectorSnap",
+  connectorKeyboard: "pointerConnectorKeyboard",
   imageCrop: "imageCrop",
 } as const satisfies Record<string, PresentationTestFixtureName>;
 
