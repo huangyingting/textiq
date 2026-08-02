@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 4, manual: 48, blocked: 10, catalog: 118 },
+    statusCounts: { automated: 5, manual: 48, blocked: 10, catalog: 117 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 8, manual: 16, blocked: 4, catalog: 32 },
+    statusCounts: { automated: 16, manual: 16, blocked: 4, catalog: 24 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -228,7 +228,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "AUTH",
     subsystem: "auth-public",
     total: 40,
-    statusCounts: { automated: 12, manual: 10, blocked: 2, catalog: 16 },
+    statusCounts: { automated: 15, manual: 10, blocked: 2, catalog: 13 },
     refs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
     areas: [
       "home page",
@@ -269,7 +269,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 10, manual: 15, blocked: 4, catalog: 16 },
+    statusCounts: { automated: 14, manual: 15, blocked: 4, catalog: 12 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -562,6 +562,60 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "AUTH-025",
+    subsystem: "auth-public",
+    area: "dashboard-linked document",
+    title:
+      "dashboard-linked document, billing, and slide routes render after login",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/auth/authenticated-nested-routes.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["seeded-owner", "authenticated-routes", "required-profile"],
+    automation: {
+      spec: "e2e/auth/authenticated-nested-routes.spec.ts",
+      test: "dashboard-linked document, billing, and slide routes render after login",
+    },
+  },
+  {
+    id: "AUTH-026",
+    subsystem: "auth-public",
+    area: "real HTTPS login",
+    title:
+      "real HTTPS login keeps the Auth.js session cookie secure and isolates the proxy key",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/auth/authenticated-nested-routes.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["secure-cookie", "https", "proxy-isolation"],
+    automation: {
+      spec: "e2e/auth/authenticated-nested-routes.spec.ts",
+      test: "real HTTPS login keeps the Auth.js session cookie secure and isolates the proxy key",
+    },
+  },
+  {
+    id: "AUTH-027",
+    subsystem: "auth-public",
+    area: "running secure profile",
+    title:
+      "running secure profile isolates the private-key descriptor from runner, app, Playwright, and Chromium",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/auth/authenticated-nested-routes.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["private-key", "process-boundary", "required-profile"],
+    automation: {
+      spec: "e2e/auth/authenticated-nested-routes.spec.ts",
+      test: "running secure profile isolates the private-key descriptor from runner, app, Playwright, and Chromium",
+    },
+  },
+  {
     id: "DOC-EDIT-020",
     subsystem: "document-editor",
     area: "owner document editor",
@@ -740,6 +794,76 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "DOC-EDIT-030",
+    subsystem: "document-editor",
+    area: "block bids",
+    title: "block bids survive edit, autosave, and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/block-id-preservation.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "block-id", "autosave"],
+    automation: {
+      spec: "e2e/editor/block-id-preservation.spec.ts",
+      test: "block bids survive edit, autosave, and reload",
+    },
+  },
+  {
+    id: "DOC-EDIT-031",
+    subsystem: "document-editor",
+    area: "inserted document source",
+    title: "inserted document source persists the originating block bid",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/block-id-preservation.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "source-insertion", "block-id"],
+    automation: {
+      spec: "e2e/editor/block-id-preservation.spec.ts",
+      test: "inserted document source persists the originating block bid",
+    },
+  },
+  {
+    id: "DOC-EDIT-032",
+    subsystem: "document-editor",
+    area: "duplicate document",
+    title:
+      "duplicate document gets independent block ids and remapped source refs",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/block-id-preservation.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "document-duplication", "source-remapping"],
+    automation: {
+      spec: "e2e/editor/block-id-preservation.spec.ts",
+      test: "duplicate document gets independent block ids and remapped source refs",
+    },
+  },
+  {
+    id: "DOC-EDIT-033",
+    subsystem: "document-editor",
+    area: "sustained document and table edits",
+    title:
+      "sustained document and table edits persist after saved state and reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/editor/document-table-autosave.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "table-editing", "autosave"],
+    automation: {
+      spec: "e2e/editor/document-table-autosave.spec.ts",
+      test: "sustained document and table edits persist after saved state and reload",
+    },
+  },
+  {
     id: "PRES-EDIT-059",
     subsystem: "presentation-editor",
     area: "canonical slide editor route",
@@ -807,6 +931,24 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/presentation-ui.spec.ts",
       test: "bottom dock zoom controls change canvas geometry without entering deck history",
+    },
+  },
+  {
+    id: "PRES-EDIT-063",
+    subsystem: "presentation-editor",
+    area: "Chromium touch taps",
+    title:
+      "Chromium touch taps select text and navigate the mobile text inspector",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/presentation/touch-controls.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "touch", "mobile-inspector"],
+    automation: {
+      spec: "e2e/presentation/touch-controls.spec.ts",
+      test: "Chromium touch taps select text and navigate the mobile text inspector",
     },
   },
   {
@@ -965,6 +1107,146 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
       test: "owner configures, protects, rotates, and disables a public share",
+    },
+  },
+  {
+    id: "PUBLIC-029",
+    subsystem: "public-render-share",
+    area: "unknown and malformed public routes",
+    title:
+      "unknown and malformed public routes return 404 without leaking fixture content",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "request-api", "privacy-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "unknown and malformed public routes return 404 without leaking fixture content",
+    },
+  },
+  {
+    id: "PUBLIC-030",
+    subsystem: "public-render-share",
+    area: "unknown /share link",
+    title: "unknown /share link renders the not-found fallback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "share-route", "safe-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "unknown /share link renders the not-found fallback",
+    },
+  },
+  {
+    id: "PUBLIC-031",
+    subsystem: "public-render-share",
+    area: "unknown /present link",
+    title: "unknown /present link renders the not-found fallback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "present-route", "safe-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "unknown /present link renders the not-found fallback",
+    },
+  },
+  {
+    id: "PUBLIC-032",
+    subsystem: "public-render-share",
+    area: "unknown /embed link",
+    title: "unknown /embed link renders the not-found fallback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "embed-route", "safe-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "unknown /embed link renders the not-found fallback",
+    },
+  },
+  {
+    id: "PUBLIC-033",
+    subsystem: "public-render-share",
+    area: "unknown /present/<share>/embed",
+    title: "unknown /present/<share>/embed renders the not-found fallback",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "present-embed", "safe-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "unknown /present/<share>/embed renders the not-found fallback",
+    },
+  },
+  {
+    id: "PUBLIC-034",
+    subsystem: "public-render-share",
+    area: "slug-prefixed unknown share ID",
+    title:
+      "slug-prefixed unknown share ID resolves to the safe 404 fallback without leaking content",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "slug-prefixed", "privacy-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "slug-prefixed unknown share ID resolves to the safe 404 fallback without leaking content",
+    },
+  },
+  {
+    id: "PUBLIC-035",
+    subsystem: "public-render-share",
+    area: "malformed share ID",
+    title:
+      "malformed share ID resolves to the safe 404 fallback without leaking content",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "malformed-id", "privacy-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "malformed share ID resolves to the safe 404 fallback without leaking content",
+    },
+  },
+  {
+    id: "PUBLIC-036",
+    subsystem: "public-render-share",
+    area: "fallback 404 page",
+    title:
+      "fallback 404 page does not render document editor or presentation regions",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/public-render/share-fallback.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "private-ui-suppression", "safe-404"],
+    automation: {
+      spec: "e2e/public-render/share-fallback.spec.ts",
+      test: "fallback 404 page does not render document editor or presentation regions",
     },
   },
   {
