@@ -188,7 +188,7 @@ export function buildE2EProfileEnv(
     E2E_PROFILE_TLS_CA_CERT_FILE: join(runtimeDir, "proxy-ca.pem"),
     E2E_PROFILE_BROWSER_HOME: join(runtimeDir, "browser-home"),
     PLAYWRIGHT_BROWSERS_PATH: env.PLAYWRIGHT_BROWSERS_PATH ?? "0",
-    NODE_EXTRA_CA_CERTS: join(runtimeDir, "proxy-ca.pem"),
+    NODE_ENV: "production",
     E2E_PROFILE_APP_URL: appUrl.origin,
     E2E_PROFILE: "1",
     E2E_PROFILE_PRECOMPILE_EMAIL:
@@ -233,7 +233,6 @@ export function buildE2EProfileEnv(
     E2E_PROFILE_EXPLICIT_SPECS: JSON.stringify(explicitSpecs),
     E2E_WEB_SERVER: "0",
     E2E_PROFILE_EXTERNAL_SERVER: "1",
-    E2E_PROFILE_SERVER: env.E2E_PROFILE_SERVER ?? "dev",
     E2E_WEB_SERVER_COMMAND: "node scripts/e2e-app-server-cli.mjs",
     E2E_WEB_SERVER_TIMEOUT_MS: env.E2E_WEB_SERVER_TIMEOUT_MS ?? "480000",
     E2E_REUSE_EXISTING_SERVER: "1",
@@ -410,6 +409,7 @@ export function buildE2EProfileSteps(env = process.env, playwrightArgs = []) {
     ["Generate Prisma client", "npm", ["run", "db:generate"]],
     ["Push SQLite schema", "npm", ["run", "db:push"]],
     ["Seed deterministic profile", "npm", ["run", "db:seed:e2e"]],
+    ["Build production app", "npm", ["run", "build"]],
     [
       "Install Chromium",
       "npx",
@@ -605,9 +605,12 @@ export async function runE2EProfile({
   let exitCode;
   try {
     configSnapshot = captureConfig(repoRoot);
-    tlsIdentity = provisionTls(env, { repoRoot });
     for (const [label, command, args] of steps) {
       if (label === "Run deterministic E2E profile") {
+        // `next build` replaces its dist directory, which is also the isolated
+        // profile runtime directory. Provision TLS only after the build so its
+        // public certificates and Chromium trust store survive until startup.
+        tlsIdentity = provisionTls(env, { repoRoot });
         await closeReservations(reservations);
         reservations = [];
         serverProcess = spawnServer({
@@ -921,6 +924,7 @@ export function provisionE2ETlsIdentity(
       readFileSync(certFile),
     );
     env.E2E_PROFILE_TLS_KEY_FD = "3";
+    env.NODE_EXTRA_CA_CERTS = caCertFile;
     return { keyDescriptor };
   } catch (error) {
     safeClose(caKeyDescriptor, close);

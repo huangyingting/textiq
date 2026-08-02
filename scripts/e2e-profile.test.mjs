@@ -71,6 +71,7 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(env.E2E_PROFILE_HOSTNAME, hostname);
   assert.equal(env.E2E_PROFILE_APP_URL, "http://127.0.0.1:4002");
   assert.equal(env.PLAYWRIGHT_BROWSERS_PATH, "0");
+  assert.equal(env.NODE_ENV, "production");
   assert.equal(env.PORT, "4002");
   assert.equal(env.E2E_PROFILE_READINESS_URL, "http://127.0.0.1:4001/ready");
   assert.equal(env.HOST, "127.0.0.1");
@@ -81,7 +82,7 @@ test("self-contained profile separates HTTPS origin, app listener, and readiness
   assert.equal(env.E2E_WEB_SERVER, "0");
   assert.equal(env.E2E_REUSE_EXISTING_SERVER, "1");
   assert.equal(env.E2E_PROFILE_EXTERNAL_SERVER, "1");
-  assert.equal(env.NODE_EXTRA_CA_CERTS, env.E2E_PROFILE_TLS_CA_CERT_FILE);
+  assert.equal(env.NODE_EXTRA_CA_CERTS, undefined);
   assert.equal(env.GOOGLE_CLIENT_ID, "");
   assert.equal(env.GOOGLE_CLIENT_SECRET, "");
   assert.equal(env.ACCOUNT_EXPORT_RATE_LIMIT, "100");
@@ -338,6 +339,7 @@ test("runner isolates the key FD to its managed secure server before Playwright"
   let closedReservations = 0;
   let closedKey = false;
   let stoppedServer = false;
+  let tlsProvisionedAfterBuild = false;
   const serverProcess = { exitCode: null, pid: 4321, signalCode: null };
   await runE2EProfile({
     argv: ["node", "scripts/e2e-profile.mjs", "--workers=2"],
@@ -352,8 +354,20 @@ test("runner isolates the key FD to its managed secure server before Playwright"
       closedReservations += value.length;
     },
     provisionTls: (env) => {
+      assert.deepEqual(
+        calls.map((call) => call.args.join(" ")),
+        [
+          "run db:generate",
+          "run db:push",
+          "run db:seed:e2e",
+          "run build",
+          "playwright install chromium",
+        ],
+      );
       env.E2E_PROFILE_TLS_SPKI_PIN = "A".repeat(43) + "=";
       env.E2E_PROFILE_TLS_KEY_FD = "3";
+      env.NODE_EXTRA_CA_CERTS = env.E2E_PROFILE_TLS_CA_CERT_FILE;
+      tlsProvisionedAfterBuild = true;
       return { keyDescriptor: 99 };
     },
     closeDescriptor: (descriptor) => {
@@ -361,11 +375,17 @@ test("runner isolates the key FD to its managed secure server before Playwright"
       closedKey = true;
     },
     runCommand: (command, args, options) => {
-      calls.push({ command, args, options });
+      calls.push({
+        command,
+        args,
+        options: { ...options, env: { ...options.env } },
+      });
       return { status: 0 };
     },
     spawnServer: ({ env, keyDescriptor }) => {
+      assert.equal(tlsProvisionedAfterBuild, true);
       assert.equal(env.E2E_PROFILE_TLS_KEY_FD, "3");
+      assert.equal(env.NODE_EXTRA_CA_CERTS, env.E2E_PROFILE_TLS_CA_CERT_FILE);
       assert.equal(keyDescriptor, 99);
       return serverProcess;
     },
@@ -389,6 +409,7 @@ test("runner isolates the key FD to its managed secure server before Playwright"
       "run db:generate",
       "run db:push",
       "run db:seed:e2e",
+      "run build",
       "playwright install chromium",
       "node_modules/@playwright/test/cli.js test --workers=2",
     ],
@@ -397,7 +418,8 @@ test("runner isolates the key FD to its managed secure server before Playwright"
   assert.equal("E2E_PROFILE_TLS_KEY_FD" in calls.at(-1).options.env, false);
   assert.equal(calls.at(-1).options.env.E2E_WEB_SERVER, "0");
   assert.equal(calls.at(-1).options.env.E2E_REUSE_EXISTING_SERVER, "1");
-  assert.equal(calls[2].options.env.E2E_PROFILE_TLS_KEY_FD, "3");
+  assert.equal(calls[2].options.env.E2E_PROFILE_TLS_KEY_FD, undefined);
+  assert.equal(calls[2].options.env.NODE_EXTRA_CA_CERTS, undefined);
   assert.equal(closedKey, true);
   assert.equal(stoppedServer, true);
 });
@@ -766,7 +788,7 @@ test("profile process helpers cover reservation and command error paths", async 
   );
 });
 
-test("command plan keeps database generation, push, seed, browser install, then Playwright", () => {
+test("command plan builds the seeded production app before browser install and Playwright", () => {
   const steps = buildE2EProfileSteps({}, [
     "e2e/auth/authenticated-nested-routes.spec.ts",
   ]);
@@ -776,6 +798,7 @@ test("command plan keeps database generation, push, seed, browser install, then 
       "Generate Prisma client",
       "Push SQLite schema",
       "Seed deterministic profile",
+      "Build production app",
       "Install Chromium",
       "Run deterministic E2E profile",
     ],

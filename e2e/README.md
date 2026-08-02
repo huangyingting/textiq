@@ -106,7 +106,6 @@ profile, which supplies its own seeded credentials:
 | `E2E_WEB_SERVER_COMMAND`        | config                             | Server command when `E2E_WEB_SERVER=1` (defaults to `npm run dev`)                                           |
 | `E2E_WEB_SERVER_TIMEOUT_MS`     | config                             | Server readiness timeout override (defaults to 240000)                                                       |
 | `E2E_REUSE_EXISTING_SERVER`     | config                             | Override Playwright server reuse (`1`/`true` or `0`/`false`)                                                 |
-| `E2E_PROFILE_SERVER`            | self-contained profile             | Labels the self-contained profile server mode (defaults to `dev`)                                            |
 | `E2E_PROFILE_READINESS_URL`     | self-contained profile             | Separate credential-free lifecycle URL (default `http://localhost:4001/ready`)                               |
 | `E2E_PROFILE_APP_URL`           | self-contained profile             | Internal IPv4 app listener (default `http://localhost:4002`)                                                 |
 | `E2E_PROFILE_PRECOMPILE_ROUTES` | self-contained profile             | JSON route contracts compiled and body-validated before Playwright dispatches tests                          |
@@ -304,8 +303,9 @@ Direct `E2E_PROFILE=1 playwright test` invocation fails before tests when the
 managed secure server is unavailable.
 
 It generates the Prisma client, pushes the SQLite schema, seeds the deterministic
-fixture, installs Chromium, starts the dedicated proxy/app process tree, and
-then runs Playwright in existing-server mode. CI uses the same required hard gate in
+fixture, builds an isolated Next.js production app, installs Chromium, starts the
+dedicated proxy/app process tree in production mode, and then runs Playwright in
+existing-server mode. CI uses the same required hard gate in
 `.github/workflows/e2e-deterministic.yml`; profile failures fail the workflow.
 The wrapper normalizes `E2E_BASE_URL`, exports it to Playwright and the auth/app
 runtime variables, hard-sets the server bind to `127.0.0.1`, pins reuse to the
@@ -320,8 +320,8 @@ credential-less fast gate and CI stay green.
 
 The deterministic profile is bounded for CI: it runs without config-level
 retries, has an 18-minute Playwright global timeout inside a 40-minute workflow
-job (including dependency install, database setup, browser provisioning, and the
-no-build dev server), and the required CI job uses
+job (including dependency install, database setup, the isolated production
+build, and browser provisioning), and the required CI job uses
 `E2E_PROFILE_GREP=@required-profile` to run the stabilized critical-flow slice.
 Run `npm run test:e2e:profile` without that grep for the broader deterministic
 profile. The remaining opt-in UI-matrix specs can be supplied explicitly when
