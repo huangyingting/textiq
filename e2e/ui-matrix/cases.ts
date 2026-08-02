@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 7, manual: 16, blocked: 4, catalog: 33 },
+    statusCounts: { automated: 8, manual: 16, blocked: 4, catalog: 32 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -228,7 +228,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "AUTH",
     subsystem: "auth-public",
     total: 40,
-    statusCounts: { automated: 4, manual: 10, blocked: 2, catalog: 24 },
+    statusCounts: { automated: 12, manual: 10, blocked: 2, catalog: 16 },
     refs: ["e2e/README.md", "docs/security/access-and-sharing.md"],
     areas: [
       "home page",
@@ -269,7 +269,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "DOC-EDIT",
     subsystem: "document-editor",
     total: 45,
-    statusCounts: { automated: 8, manual: 15, blocked: 4, catalog: 18 },
+    statusCounts: { automated: 10, manual: 15, blocked: 4, catalog: 16 },
     refs: [
       "docs/editor/document-editor.md",
       "docs/editor/comments-and-anchors.md",
@@ -311,7 +311,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "WORKSPACE",
     subsystem: "workspace-billing-brand",
     total: 55,
-    statusCounts: { automated: 5, manual: 15, blocked: 5, catalog: 30 },
+    statusCounts: { automated: 7, manual: 15, blocked: 5, catalog: 28 },
     refs: [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
@@ -432,6 +432,133 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/auth-public-ui.spec.ts",
       test: "invalid credentials stay generic and a successful retry preserves the deep callback",
+    },
+  },
+  {
+    id: "AUTH-017",
+    subsystem: "auth-public",
+    area: "recovery and verification pages",
+    title: "recovery and verification pages expose safe public failure states",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/ui-matrix/account-lifecycle-ui.spec.ts", "docs/auth/README.md"],
+    tags: ["anonymous", "password-recovery", "email-verification"],
+    automation: {
+      spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+      test: "recovery and verification pages expose safe public failure states",
+    },
+  },
+  {
+    id: "AUTH-018",
+    subsystem: "auth-public",
+    area: "settings",
+    title:
+      "seeded owner can inspect settings and download a scoped data export",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/ui-matrix/account-lifecycle-ui.spec.ts", "docs/auth/README.md"],
+    tags: ["seeded-owner", "settings", "account-export"],
+    automation: {
+      spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+      test: "seeded owner can inspect settings and download a scoped data export",
+    },
+  },
+  {
+    id: "AUTH-019",
+    subsystem: "auth-public",
+    area: "new account",
+    title:
+      "new account signs up, recovers onboarding dismissal, persists it, and deletes cleanly",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/ui-matrix/account-lifecycle-ui.spec.ts", "docs/auth/README.md"],
+    tags: ["signup", "onboarding", "account-deletion"],
+    automation: {
+      spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+      test: "new account signs up, recovers onboarding dismissal, persists it, and deletes cleanly",
+    },
+  },
+  {
+    id: "AUTH-020",
+    subsystem: "auth-public",
+    area: "isolated account",
+    title:
+      "isolated account persists profile edits and rotates credentials with explicit re-login",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/ui-matrix/account-lifecycle-ui.spec.ts", "docs/auth/README.md"],
+    tags: ["isolated-account", "profile", "password-rotation"],
+    automation: {
+      spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+      test: "isolated account persists profile edits and rotates credentials with explicit re-login",
+    },
+  },
+  {
+    id: "AUTH-021",
+    subsystem: "auth-public",
+    area: "password failures",
+    title:
+      "password failures preserve the session and deletion stays confirmation-gated",
+    status: "automated",
+    priority: "P0",
+    refs: ["e2e/ui-matrix/account-lifecycle-ui.spec.ts", "docs/auth/README.md"],
+    tags: ["seeded-owner", "password-failure", "deletion-confirmation"],
+    automation: {
+      spec: "e2e/ui-matrix/account-lifecycle-ui.spec.ts",
+      test: "password failures preserve the session and deletion stays confirmation-gated",
+    },
+  },
+  {
+    id: "AUTH-022",
+    subsystem: "auth-public",
+    area: "desktop themes",
+    title: "desktop themes update every persistence channel and survive reload",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/app-shell-ui.spec.ts",
+      "docs/system/design-system.md",
+    ],
+    tags: ["seeded-owner", "theme", "persistence"],
+    automation: {
+      spec: "e2e/ui-matrix/app-shell-ui.spec.ts",
+      test: "desktop themes update every persistence channel and survive reload",
+    },
+  },
+  {
+    id: "AUTH-023",
+    subsystem: "auth-public",
+    area: "desktop user and shortcut menus",
+    title: "desktop user and shortcut menus close accessibly and ignore typing",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/app-shell-ui.spec.ts",
+      "docs/commands/actions-and-shortcuts.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "focus-restoration"],
+    automation: {
+      spec: "e2e/ui-matrix/app-shell-ui.spec.ts",
+      test: "desktop user and shortcut menus close accessibly and ignore typing",
+    },
+  },
+  {
+    id: "AUTH-024",
+    subsystem: "auth-public",
+    area: "mobile drawer",
+    title:
+      "mobile drawer composes theme and shortcut overlays without duplicates or overflow",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/app-shell-ui.spec.ts",
+      "docs/system/design-system.md",
+      "docs/commands/actions-and-shortcuts.md",
+    ],
+    tags: ["seeded-owner", "mobile", "nested-overlays"],
+    automation: {
+      spec: "e2e/ui-matrix/app-shell-ui.spec.ts",
+      test: "mobile drawer composes theme and shortcut overlays without duplicates or overflow",
     },
   },
   {
@@ -574,6 +701,42 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
       test: "selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape",
+    },
+  },
+  {
+    id: "DOC-EDIT-028",
+    subsystem: "document-editor",
+    area: "owner and viewer",
+    title:
+      "owner and viewer recover comment failure and complete the persisted lifecycle",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts",
+      "docs/editor/comments-and-anchors.md",
+    ],
+    tags: ["owner-viewer", "comments", "failure-recovery"],
+    automation: {
+      spec: "e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts",
+      test: "owner and viewer recover comment failure and complete the persisted lifecycle",
+    },
+  },
+  {
+    id: "DOC-EDIT-029",
+    subsystem: "document-editor",
+    area: "tag and restore failures",
+    title:
+      "tag and restore failures recover once before persistence and reversible reload",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
+      "docs/editor/document-editor.md",
+    ],
+    tags: ["seeded-owner", "tags", "version-restore"],
+    automation: {
+      spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
+      test: "tag and restore failures recover once before persistence and reversible reload",
     },
   },
   {
@@ -788,6 +951,23 @@ const AUTOMATED_CASES: UiTestCase[] = [
     },
   },
   {
+    id: "PUBLIC-028",
+    subsystem: "public-render-share",
+    area: "owner configures",
+    title: "owner configures, protects, rotates, and disables a public share",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      "docs/security/access-and-sharing.md",
+    ],
+    tags: ["seeded-owner", "anonymous-public", "share-lifecycle"],
+    automation: {
+      spec: "e2e/ui-matrix/document-sharing-lifecycle-ui.spec.ts",
+      test: "owner configures, protects, rotates, and disables a public share",
+    },
+  },
+  {
     id: "WORKSPACE-021",
     subsystem: "workspace-billing-brand",
     area: "dashboard search and favorite controls",
@@ -872,6 +1052,42 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
       test: "Pro editor creates, uploads, reloads, edits, and deletes a brand",
+    },
+  },
+  {
+    id: "WORKSPACE-026",
+    subsystem: "workspace-billing-brand",
+    area: "search and favorite failure recovery",
+    title:
+      "search and favorite failure recovery, duplicate, rename, undo, trash restore, and permanent delete persist",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts",
+      "docs/documents/README.md",
+    ],
+    tags: ["seeded-owner", "dashboard", "document-lifecycle"],
+    automation: {
+      spec: "e2e/ui-matrix/dashboard-document-lifecycle-ui.spec.ts",
+      test: "search and favorite failure recovery, duplicate, rename, undo, trash restore, and permanent delete persist",
+    },
+  },
+  {
+    id: "WORKSPACE-027",
+    subsystem: "workspace-billing-brand",
+    area: "owner, editor, and viewer",
+    title:
+      "owner, editor, and viewer recover invite failures and complete the workspace lifecycle",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/workspace-lifecycle-ui.spec.ts",
+      "docs/security/workspaces.md",
+    ],
+    tags: ["workspace-roles", "invites", "lifecycle"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-lifecycle-ui.spec.ts",
+      test: "owner, editor, and viewer recover invite failures and complete the workspace lifecycle",
     },
   },
 ];

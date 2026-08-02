@@ -447,6 +447,77 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/auth/README.md"],
+    expectedTestCount: 5,
+    expectedTests: [
+      {
+        test: "recovery and verification pages expose safe public failure states",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "seeded owner can inspect settings and download a scoped data export",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "new account signs up, recovers onboarding dismissal, persists it, and deletes cleanly",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "isolated account persists profile edits and rotates credentials with explicit re-login",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "password failures preserve the session and deletion stays confirmation-gated",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "recovery and verification pages expose safe public failure states",
+        surface: "password recovery and email verification failure states",
+        viewport: "Desktop Chrome",
+        auth: "anonymous",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "seeded owner can inspect settings and download a scoped data export",
+        surface: "account settings and scoped data export",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "new account signs up, recovers onboarding dismissal, persists it, and deletes cleanly",
+        surface:
+          "signup, onboarding recovery, persistence, and account deletion",
+        viewport: "Desktop Chrome",
+        auth: "new signup account",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "isolated account persists profile edits and rotates credentials with explicit re-login",
+        surface: "profile persistence and password rotation",
+        viewport: "Desktop Chrome",
+        auth: "isolated account-mutation user",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "password failures preserve the session and deletion stays confirmation-gated",
+        surface: "password failure containment and account-deletion safeguards",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/ui-matrix/app-shell-ui.spec.ts",
@@ -462,6 +533,51 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "e2e/ui-matrix/README.md",
       "docs/system/design-system.md",
       "docs/commands/actions-and-shortcuts.md",
+    ],
+    expectedTestCount: 3,
+    expectedTests: [
+      {
+        test: "desktop themes update every persistence channel and survive reload",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "desktop user and shortcut menus close accessibly and ignore typing",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "mobile drawer composes theme and shortcut overlays without duplicates or overflow",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "desktop themes update every persistence channel and survive reload",
+        surface: "app-shell theme selection and persistence",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "desktop user and shortcut menus close accessibly and ignore typing",
+        surface: "user-menu and keyboard-shortcut focus lifecycle",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "mobile drawer composes theme and shortcut overlays without duplicates or overflow",
+        surface:
+          "mobile navigation drawer with nested theme and shortcut overlays",
+        viewport: "390x844 mobile",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
     ],
   },
   {
@@ -564,6 +680,24 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/documents/README.md"],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "search and favorite failure recovery, duplicate, rename, undo, trash restore, and permanent delete persist",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "search and favorite failure recovery, duplicate, rename, undo, trash restore, and permanent delete persist",
+        surface: "dashboard and trash document lifecycle",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/ui-matrix/document-comments-lifecycle-ui.spec.ts",
@@ -578,6 +712,25 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/editor/comments-and-anchors.md",
+    ],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "owner and viewer recover comment failure and complete the persisted lifecycle",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "owner and viewer recover comment failure and complete the persisted lifecycle",
+        surface:
+          "anchored comment creation, reply, resolution, and deletion lifecycle",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner and seeded viewer",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
     ],
   },
   {
@@ -594,6 +747,25 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "e2e/ui-matrix/README.md",
       "docs/security/access-and-sharing.md",
     ],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "owner configures, protects, rotates, and disables a public share",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "owner configures, protects, rotates, and disables a public share",
+        surface:
+          "private-to-public sharing, protection, rotation, and revocation",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner and anonymous public",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/ui-matrix/document-metadata-history-ui.spec.ts",
@@ -609,6 +781,24 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "e2e/ui-matrix/README.md",
       "docs/documents/README.md",
       "docs/editor/document-editor.md",
+    ],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "tag and restore failures recover once before persistence and reversible reload",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "tag and restore failures recover once before persistence and reversible reload",
+        surface: "document tags and reversible version restoration",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
     ],
   },
   {
@@ -941,6 +1131,25 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/security/workspaces.md"],
+    expectedTestCount: 1,
+    expectedTests: [
+      {
+        test: "owner, editor, and viewer recover invite failures and complete the workspace lifecycle",
+        profiles: ["deterministic-profile"],
+      },
+    ],
+    tests: [
+      {
+        test: "owner, editor, and viewer recover invite failures and complete the workspace lifecycle",
+        surface:
+          "workspace creation, invites, role changes, membership, and deletion",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner, seeded editor, and seeded viewer",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+    ],
   },
   {
     spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
@@ -1043,7 +1252,7 @@ export const UI_MATRIX_MANUAL_GAPS = [
   {
     id: "FULL-500-BROWSER-MATRIX",
     owner: "ui matrix",
-    gap: "The generated 500-case planning catalog has no case-level automation claims yet. Existing runnable browser specs remain evidence for their inventoried flows, but a catalog case is promoted only after it names an exact contracted test with deterministic fixtures and stable selectors.",
+    gap: "The generated 500-case planning catalog is only partially tied to case-level automation. Existing runnable browser specs remain evidence for their inventoried flows, but a catalog case is promoted only after it names an exact contracted test with deterministic fixtures and stable selectors.",
     status: "catalog",
     sourceRefs: ["e2e/ui-matrix/cases.ts", "e2e/ui-matrix/README.md"],
   },
