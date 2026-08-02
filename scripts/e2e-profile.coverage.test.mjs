@@ -11,6 +11,7 @@ import test from "node:test";
 
 import {
   buildE2EProfileEnv,
+  buildE2EProfileSteps,
   captureE2EProfileConfigFiles,
   closeE2EProfilePortReservations,
   detectLiveE2EServer,
@@ -146,7 +147,12 @@ test("profile live-server, listing, run, and cleanup failure paths are observabl
     processEnv: {},
     stdout: (line) => listed.push(line),
   });
-  assert.equal(listed.length, 5);
+  assert.deepEqual(
+    listed,
+    buildE2EProfileSteps({}, []).map(
+      ([label, command, args]) => `${label}: ${command} ${args.join(" ")}`,
+    ),
+  );
 
   const exits = [];
   await runE2EProfile({
@@ -176,9 +182,8 @@ test("profile live-server, listing, run, and cleanup failure paths are observabl
     closeReservations: async (reservations) =>
       earlyFailureCalls.push(["close", reservations.length]),
     captureConfig: () => ({}),
-    provisionTls: (env) => {
-      env.E2E_PROFILE_TLS_KEY_FD = "3";
-      env.E2E_PROFILE_TLS_SPKI_PIN = "A".repeat(43) + "=";
+    provisionTls: () => {
+      earlyFailureCalls.push(["provision"]);
       return { keyDescriptor: 77 };
     },
     closeDescriptor: (descriptor) =>
@@ -190,10 +195,13 @@ test("profile live-server, listing, run, and cleanup failure paths are observabl
     exit: (code) => earlyFailureCalls.push(["exit", code]),
     stdout: () => {},
   });
-  assert.deepEqual(
-    earlyFailureCalls.filter(([kind]) => kind === "descriptor"),
-    [["descriptor", 77]],
-  );
+  assert.deepEqual(earlyFailureCalls, [
+    ["close", 1],
+    ["stop"],
+    ["cleanup"],
+    ["restore"],
+    ["exit", 4],
+  ]);
 
   const calls = [];
   await runE2EProfile({
@@ -213,11 +221,12 @@ test("profile live-server, listing, run, and cleanup failure paths are observabl
     closeDescriptor: (descriptor) => calls.push(["descriptor", descriptor]),
     spawnServer: () => ({ pid: 123, exitCode: null, signalCode: null }),
     waitForServer: async () => {},
-    runCommand: (_command, _args, options) => {
+    runCommand: (command, args, options) => {
       calls.push(["run", options.env.E2E_PROFILE_TLS_KEY_FD ?? "playwright"]);
-      return calls.filter(([kind]) => kind === "run").length === 5
-        ? { status: 9 }
-        : { status: 0 };
+      const isPlaywrightRun =
+        command === process.execPath &&
+        args[0] === join("node_modules", "@playwright", "test", "cli.js");
+      return { status: isPlaywrightRun ? 9 : 0 };
     },
     stopServer: async () => calls.push(["stop"]),
     cleanup: (path, options) =>
