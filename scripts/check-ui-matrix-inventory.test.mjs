@@ -271,6 +271,28 @@ test("ui matrix inventory: rejects automated cases without exact contracted test
     ],
   });
   assert.deepEqual(exactIdentity.findings, []);
+
+  const missingSourceReference = validateUiMatrixInventory({
+    repoRoot: root,
+    specInventory: [entry],
+    manualGaps: [],
+    caseSummary: CASE_SUMMARY,
+    automatedSpecs: [entry.spec],
+    automatedCases: [
+      {
+        id: "CASE-004",
+        status: "automated",
+        refs: ["docs/missing.md"],
+        automation: { spec: entry.spec, test: "does the exact thing" },
+      },
+    ],
+  });
+  assert.deepEqual(missingSourceReference.findings, [
+    {
+      rule: "automated-case-missing-source-reference",
+      item: "CASE-004: docs/missing.md",
+    },
+  ]);
 });
 
 test("ui matrix inventory: reports stale, duplicate, and missing source refs", (t) => {

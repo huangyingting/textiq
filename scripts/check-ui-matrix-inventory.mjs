@@ -1593,6 +1593,15 @@ export function validateUiMatrixInventory({
     ),
   );
   for (const testCase of automatedCases) {
+    for (const sourceRef of testCase.refs ?? []) {
+      const sourcePath = referencePath(sourceRef);
+      if (sourcePath && !existsSync(join(repoRoot, sourcePath))) {
+        findings.push({
+          rule: "automated-case-missing-source-reference",
+          item: `${testCase.id}: ${sourceRef}`,
+        });
+      }
+    }
     if (!testCase.automation?.test) {
       findings.push({
         rule: "automated-case-missing-test-identity",

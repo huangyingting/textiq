@@ -50,7 +50,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-EDIT",
     subsystem: "presentation-editor",
     total: 180,
-    statusCounts: { automated: 0, manual: 48, blocked: 10, catalog: 122 },
+    statusCounts: { automated: 4, manual: 48, blocked: 10, catalog: 118 },
     refs: [
       "docs/presentation/slide-editor.md",
       "docs/presentation/slide-stage-interactions.md",
@@ -119,7 +119,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PRES-RENDER",
     subsystem: "presentation-render-export",
     total: 120,
-    statusCounts: { automated: 0, manual: 35, blocked: 8, catalog: 77 },
+    statusCounts: { automated: 1, manual: 35, blocked: 8, catalog: 76 },
     refs: [
       "docs/presentation/rendering-and-export.md",
       "docs/presentation/assets.md",
@@ -178,7 +178,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "PUBLIC",
     subsystem: "public-render-share",
     total: 60,
-    statusCounts: { automated: 0, manual: 16, blocked: 4, catalog: 40 },
+    statusCounts: { automated: 7, manual: 16, blocked: 4, catalog: 33 },
     refs: [
       "docs/public-render/README.md",
       "docs/security/access-and-sharing.md",
@@ -311,7 +311,7 @@ const PLANS: SubsystemPlan[] = [
     prefix: "WORKSPACE",
     subsystem: "workspace-billing-brand",
     total: 55,
-    statusCounts: { automated: 0, manual: 15, blocked: 5, catalog: 35 },
+    statusCounts: { automated: 5, manual: 15, blocked: 5, catalog: 30 },
     refs: [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
@@ -574,6 +574,304 @@ const AUTOMATED_CASES: UiTestCase[] = [
     automation: {
       spec: "e2e/ui-matrix/document-editor-ui.spec.ts",
       test: "selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape",
+    },
+  },
+  {
+    id: "PRES-EDIT-059",
+    subsystem: "presentation-editor",
+    area: "canonical slide editor route",
+    title:
+      "canonical slide editor route renders shell, stage, and deck actions",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/presentation-ui.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "editor-shell", "deck-actions"],
+    automation: {
+      spec: "e2e/ui-matrix/presentation-ui.spec.ts",
+      test: "canonical slide editor route renders shell, stage, and deck actions",
+    },
+  },
+  {
+    id: "PRES-EDIT-060",
+    subsystem: "presentation-editor",
+    area: "command palette",
+    title: "command palette filters and runs insert and panel commands",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/presentation-ui.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "keyboard", "commands"],
+    automation: {
+      spec: "e2e/ui-matrix/presentation-ui.spec.ts",
+      test: "command palette filters and runs insert and panel commands",
+    },
+  },
+  {
+    id: "PRES-EDIT-061",
+    subsystem: "presentation-editor",
+    area: "filmstrip",
+    title: "filmstrip exposes both seeded slides and their controls",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/presentation-ui.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "filmstrip", "slide-controls"],
+    automation: {
+      spec: "e2e/ui-matrix/presentation-ui.spec.ts",
+      test: "filmstrip exposes both seeded slides and their controls",
+    },
+  },
+  {
+    id: "PRES-EDIT-062",
+    subsystem: "presentation-editor",
+    area: "bottom dock zoom controls",
+    title:
+      "bottom dock zoom controls change canvas geometry without entering deck history",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/presentation-ui.spec.ts",
+      "docs/presentation/slide-editor.md",
+    ],
+    tags: ["seeded-owner", "zoom", "history-isolation"],
+    automation: {
+      spec: "e2e/ui-matrix/presentation-ui.spec.ts",
+      test: "bottom dock zoom controls change canvas geometry without entering deck history",
+    },
+  },
+  {
+    id: "PRES-RENDER-044",
+    subsystem: "presentation-render-export",
+    area: "public present route",
+    title:
+      "public present route exposes first-slide content and navigation controls",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/presentation-ui.spec.ts",
+      "docs/presentation/rendering-and-export.md",
+    ],
+    tags: ["anonymous", "public-present", "navigation"],
+    automation: {
+      spec: "e2e/ui-matrix/presentation-ui.spec.ts",
+      test: "public present route exposes first-slide content and navigation controls",
+    },
+  },
+  {
+    id: "PUBLIC-021",
+    subsystem: "public-render-share",
+    area: "valid public present route",
+    title: "valid public present route renders seeded slide content",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "public-present", "seeded-content"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "valid public present route renders seeded slide content",
+    },
+  },
+  {
+    id: "PUBLIC-022",
+    subsystem: "public-render-share",
+    area: "public present keyboard listeners",
+    title:
+      "public present keyboard listeners release after client-side navigation",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "keyboard", "listener-cleanup"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "public present keyboard listeners release after client-side navigation",
+    },
+  },
+  {
+    id: "PUBLIC-023",
+    subsystem: "public-render-share",
+    area: "presentation embed route",
+    title:
+      "presentation embed route suppresses top HUD chrome and renders the first slide",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "embed", "chrome-free"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "presentation embed route suppresses top HUD chrome and renders the first slide",
+    },
+  },
+  {
+    id: "PUBLIC-024",
+    subsystem: "public-render-share",
+    area: "unknown share and present routes",
+    title:
+      "unknown share and present routes return safe 404s without fixture leaks",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "safe-404", "privacy"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "unknown share and present routes return safe 404s without fixture leaks",
+    },
+  },
+  {
+    id: "PUBLIC-025",
+    subsystem: "public-render-share",
+    area: "share-bound slide assets",
+    title:
+      "share-bound slide assets require an active present or embed binding",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "asset-authorization", "share-binding"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "share-bound slide assets require an active present or embed binding",
+    },
+  },
+  {
+    id: "PUBLIC-026",
+    subsystem: "public-render-share",
+    area: "valid public share route",
+    title: "valid public share route renders a read-only document surface",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "read-only", "public-share"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "valid public share route renders a read-only document surface",
+    },
+  },
+  {
+    id: "PUBLIC-027",
+    subsystem: "public-render-share",
+    area: "public share visuals",
+    title: "public share visuals expose an accessible lightbox lifecycle",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/public-render-ui.spec.ts",
+      "docs/public-render/README.md",
+    ],
+    tags: ["anonymous", "mobile", "lightbox-accessibility"],
+    automation: {
+      spec: "e2e/ui-matrix/public-render-ui.spec.ts",
+      test: "public share visuals expose an accessible lightbox lifecycle",
+    },
+  },
+  {
+    id: "WORKSPACE-021",
+    subsystem: "workspace-billing-brand",
+    area: "dashboard search and favorite controls",
+    title:
+      "dashboard search and favorite controls are available for the seeded owner",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      "docs/documents/README.md",
+    ],
+    tags: ["seeded-owner", "dashboard", "search-favorites"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      test: "dashboard search and favorite controls are available for the seeded owner",
+    },
+  },
+  {
+    id: "WORKSPACE-022",
+    subsystem: "workspace-billing-brand",
+    area: "billing credits panel",
+    title: "billing credits panel reflects the sqlite E2E environment gate",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      "docs/product/billing.md",
+    ],
+    tags: ["seeded-owner", "billing", "credits"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      test: "billing credits panel reflects the sqlite E2E environment gate",
+    },
+  },
+  {
+    id: "WORKSPACE-023",
+    subsystem: "workspace-billing-brand",
+    area: "billing upgrades",
+    title:
+      "billing upgrades, cancellation, downgrade, persistence, and mobile layout work end to end",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      "docs/product/billing.md",
+    ],
+    tags: ["isolated-user", "billing-lifecycle", "mobile"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      test: "billing upgrades, cancellation, downgrade, persistence, and mobile layout work end to end",
+    },
+  },
+  {
+    id: "WORKSPACE-024",
+    subsystem: "workspace-billing-brand",
+    area: "free owner",
+    title: "free owner sees the Brand Studio upgrade gate",
+    status: "automated",
+    priority: "P1",
+    refs: [
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      "docs/product/brand-studio.md",
+    ],
+    tags: ["seeded-owner", "free-plan", "brand-gate"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      test: "free owner sees the Brand Studio upgrade gate",
+    },
+  },
+  {
+    id: "WORKSPACE-025",
+    subsystem: "workspace-billing-brand",
+    area: "Pro editor",
+    title: "Pro editor creates, uploads, reloads, edits, and deletes a brand",
+    status: "automated",
+    priority: "P0",
+    refs: [
+      "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      "docs/product/brand-studio.md",
+    ],
+    tags: ["seeded-editor", "pro-plan", "brand-lifecycle"],
+    automation: {
+      spec: "e2e/ui-matrix/workspace-billing-brand-ui.spec.ts",
+      test: "Pro editor creates, uploads, reloads, edits, and deletes a brand",
     },
   },
 ];
