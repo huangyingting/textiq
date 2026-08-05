@@ -17,6 +17,7 @@ import { NodeSourcePanel } from "./node-source-panel";
 import { SlideControlsPanel } from "./slide-controls-panel";
 import { SlideSettingsPanel } from "./slide-settings-panel";
 import { StyleBindingPanel } from "./style-binding-panel";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import { makeDiagnostic } from "@/lib/presentation/diagnostics";
 import type { PresentationDiagnostic } from "@/lib/presentation/diagnostics";
 import type { SlideChildNode, SlideNode } from "@/lib/presentation/schema";
@@ -123,25 +124,27 @@ describe("inspector panels render and wire controls", () => {
 
     const html = render(element);
     assert.match(html, /Font family/);
-    assert.match(html, /Theme default/);
-    for (const font of SLIDE_FONT_OPTIONS) {
-      assert.match(
-        html,
-        new RegExp(font.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-      );
-    }
 
     const fontSelect = findElement(
       element,
       (candidate) =>
-        candidate.type === "select" &&
+        candidate.type === SelectMenu &&
+        candidate.props["aria-label"] === "Font family" &&
         candidate.props.value === "source-serif-4",
     );
     assert.ok(fontSelect);
+    const fontOptions = fontSelect.props.options as readonly SelectMenuOption[];
+    assert.ok(fontOptions.some((option) => option.value === ""));
+    for (const font of SLIDE_FONT_OPTIONS) {
+      assert.ok(
+        fontOptions.some((option) => option.value === font.id),
+        `expected font option ${font.id}`,
+      );
+    }
     const onChange = fontSelect.props.onChange as
-      ((event: { currentTarget: { value: string } }) => void) | undefined;
+      ((value: string) => void) | undefined;
     assert.ok(onChange);
-    onChange?.({ currentTarget: { value: "jetbrains-mono" } });
+    onChange?.("jetbrains-mono");
 
     assert.deepEqual(updates.at(-1), {
       text: { fontFamily: nextFontFamily },

@@ -1,6 +1,6 @@
 "use client";
 
-import { FOCUS_RING, cx } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import type {
   InspectorPanelId,
   InspectorPanelOption,
@@ -31,27 +31,24 @@ export function InspectorPanelSelect({
   diagnosticsCount,
   onChange,
 }: InspectorPanelSelectProps) {
+  const options: SelectMenuOption[] = panels.map((panel) => ({
+    value: panel.id,
+    label: optionLabel(panel, diagnosticsCount),
+  }));
   return (
-    <label className="flex min-w-0 items-center gap-1.5 text-[11px] text-ds-text-muted">
+    <div
+      id={id}
+      className="flex min-w-0 items-center gap-1.5 text-[11px] text-ds-text-muted"
+    >
       <span className="sr-only">Inspector panel</span>
-      <select
-        id={id}
+      <SelectMenu
         aria-label="Inspector panel"
+        variant="field"
         value={value}
-        onChange={(event) =>
-          onChange(event.currentTarget.value as InspectorPanelId)
-        }
-        className={cx(
-          "h-7 max-w-36 rounded-[var(--ds-radius-sm,6px)] border border-ds-border-subtle bg-ds-surface px-2 text-xs font-medium text-ds-text-primary outline-none",
-          FOCUS_RING,
-        )}
-      >
-        {panels.map((panel) => (
-          <option key={panel.id} value={panel.id}>
-            {optionLabel(panel, diagnosticsCount)}
-          </option>
-        ))}
-      </select>
-    </label>
+        options={options}
+        onChange={(next) => onChange(next as InspectorPanelId)}
+        buttonClassName="h-7 max-w-36"
+      />
+    </div>
   );
 }

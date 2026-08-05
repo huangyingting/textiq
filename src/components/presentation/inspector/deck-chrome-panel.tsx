@@ -8,6 +8,7 @@ import type {
   SlideDeckChromeOverrides,
   SlideProps,
 } from "@/lib/presentation/schema";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import {
   EditorActionButton,
   EditorField,
@@ -15,6 +16,52 @@ import {
   editorControlClass,
   parseEditorNumberInput,
 } from "./editor-primitives";
+
+const LOGO_PLACEMENT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "top-left", label: "Top left" },
+  { value: "top-right", label: "Top right" },
+  { value: "bottom-left", label: "Bottom left" },
+  { value: "bottom-right", label: "Bottom right" },
+];
+
+const CHROME_SIZE_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+];
+
+const OVERRIDE_ALIGN_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
+const FOOTER_ALIGN_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "left", label: "Footer left" },
+  { value: "center", label: "Footer centered" },
+  { value: "right", label: "Footer right" },
+];
+
+const PAGE_NUMBER_FORMAT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "number", label: "1" },
+  { value: "number-total", label: "1 / total" },
+];
+
+const PAGE_NUMBER_PLACEMENT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "bottom-left", label: "Bottom left" },
+  { value: "bottom-center", label: "Bottom center" },
+  { value: "bottom-right", label: "Bottom right" },
+];
+
+const WATERMARK_LAYOUT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "center", label: "Center" },
+  { value: "diagonal", label: "Diagonal" },
+];
+
+const ON_OFF_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "off", label: "Off" },
+  { value: "on", label: "On" },
+];
 
 const CHROME_KINDS: DeckChromeKind[] = [
   "logo",
@@ -128,37 +175,30 @@ function renderOverrideFields(
           onChange={(event) => onPatch({ assetId: event.currentTarget.value })}
           className={editorControlClass("col-span-2 font-mono")}
         />
-        <select
+        <SelectMenu
+          aria-label="Logo placement"
+          variant="field"
           value={stringField(value, "placement", "top-right")}
-          onChange={(event) =>
+          options={LOGO_PLACEMENT_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              placement: event.currentTarget.value as NonNullable<
+              placement: next as NonNullable<
                 DeckChromeConfig["logo"]
               >["placement"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="top-left">Top left</option>
-          <option value="top-right">Top right</option>
-          <option value="bottom-left">Bottom left</option>
-          <option value="bottom-right">Bottom right</option>
-        </select>
-        <select
+        />
+        <SelectMenu
+          aria-label="Logo size"
+          variant="field"
           value={stringField(value, "size", "medium")}
-          onChange={(event) =>
+          options={CHROME_SIZE_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              size: event.currentTarget.value as NonNullable<
-                DeckChromeConfig["logo"]
-              >["size"],
+              size: next as NonNullable<DeckChromeConfig["logo"]>["size"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="small">Small</option>
-          <option value="medium">Medium</option>
-          <option value="large">Large</option>
-        </select>
+        />
       </div>
     );
   }
@@ -173,21 +213,17 @@ function renderOverrideFields(
           onChange={(event) => onPatch({ text: event.currentTarget.value })}
           className={editorControlClass("col-span-2")}
         />
-        <select
+        <SelectMenu
+          aria-label="Footer align"
+          variant="field"
           value={stringField(value, "align", "center")}
-          onChange={(event) =>
+          options={OVERRIDE_ALIGN_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              align: event.currentTarget.value as NonNullable<
-                DeckChromeConfig["footer"]
-              >["align"],
+              align: next as NonNullable<DeckChromeConfig["footer"]>["align"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-        </select>
+        />
       </div>
     );
   }
@@ -196,35 +232,32 @@ function renderOverrideFields(
     return (
       <div className="col-span-2 ml-2 grid grid-cols-2 gap-2 border-l border-ds-border-subtle pl-2">
         {enabledControl}
-        <select
+        <SelectMenu
+          aria-label="Page number format"
+          variant="field"
           value={stringField(value, "format", "number")}
-          onChange={(event) =>
+          options={PAGE_NUMBER_FORMAT_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              format: event.currentTarget.value as NonNullable<
+              format: next as NonNullable<
                 DeckChromeConfig["pageNumber"]
               >["format"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="number">1</option>
-          <option value="number-total">1 / total</option>
-        </select>
-        <select
+        />
+        <SelectMenu
+          aria-label="Page number placement"
+          variant="field"
           value={stringField(value, "placement", "bottom-right")}
-          onChange={(event) =>
+          options={PAGE_NUMBER_PLACEMENT_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              placement: event.currentTarget.value as NonNullable<
+              placement: next as NonNullable<
                 DeckChromeConfig["pageNumber"]
               >["placement"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="bottom-left">Bottom left</option>
-          <option value="bottom-center">Bottom center</option>
-          <option value="bottom-right">Bottom right</option>
-        </select>
+        />
       </div>
     );
   }
@@ -239,35 +272,30 @@ function renderOverrideFields(
           onChange={(event) => onPatch({ text: event.currentTarget.value })}
           className={editorControlClass("col-span-2")}
         />
-        <select
+        <SelectMenu
+          aria-label="Watermark layout"
+          variant="field"
           value={stringField(value, "layoutMode", "diagonal")}
-          onChange={(event) =>
+          options={WATERMARK_LAYOUT_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              layoutMode: event.currentTarget.value as NonNullable<
+              layoutMode: next as NonNullable<
                 DeckChromeConfig["watermark"]
               >["layoutMode"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="center">Center</option>
-          <option value="diagonal">Diagonal</option>
-        </select>
-        <select
+        />
+        <SelectMenu
+          aria-label="Watermark size"
+          variant="field"
           value={stringField(value, "size", "medium")}
-          onChange={(event) =>
+          options={CHROME_SIZE_OPTIONS}
+          onChange={(next) =>
             onPatch({
-              size: event.currentTarget.value as NonNullable<
-                DeckChromeConfig["watermark"]
-              >["size"],
+              size: next as NonNullable<DeckChromeConfig["watermark"]>["size"],
             })
           }
-          className={editorControlClass()}
-        >
-          <option value="small">Small</option>
-          <option value="medium">Medium</option>
-          <option value="large">Large</option>
-        </select>
+        />
       </div>
     );
   }
@@ -371,49 +399,42 @@ export function DeckChromePanel({
           />
         </EditorField>
         <div className="grid grid-cols-2 gap-2">
-          <EditorField id={idFor("logo-placement")} label="Logo placement">
-            <select
-              id={idFor("logo-placement")}
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            <span>Logo placement</span>
+            <SelectMenu
+              aria-label="Logo placement"
+              variant="field"
               value={chrome?.logo?.placement ?? "top-right"}
-              onChange={(event) =>
+              options={LOGO_PLACEMENT_OPTIONS}
+              onChange={(next) =>
                 onUpdateChrome({
                   logo: {
                     ...(chrome?.logo ?? {}),
-                    placement: event.currentTarget.value as NonNullable<
+                    placement: next as NonNullable<
                       DeckChromeConfig["logo"]
                     >["placement"],
                   },
                 })
               }
-              className={editorControlClass()}
-            >
-              <option value="top-left">Top left</option>
-              <option value="top-right">Top right</option>
-              <option value="bottom-left">Bottom left</option>
-              <option value="bottom-right">Bottom right</option>
-            </select>
-          </EditorField>
-          <EditorField id={idFor("logo-size")} label="Logo size">
-            <select
-              id={idFor("logo-size")}
+            />
+          </div>
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            <span>Logo size</span>
+            <SelectMenu
+              aria-label="Logo size"
+              variant="field"
               value={chrome?.logo?.size ?? "medium"}
-              onChange={(event) =>
+              options={CHROME_SIZE_OPTIONS}
+              onChange={(next) =>
                 onUpdateChrome({
                   logo: {
                     ...(chrome?.logo ?? {}),
-                    size: event.currentTarget.value as NonNullable<
-                      DeckChromeConfig["logo"]
-                    >["size"],
+                    size: next as NonNullable<DeckChromeConfig["logo"]>["size"],
                   },
                 })
               }
-              className={editorControlClass()}
-            >
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-            </select>
-          </EditorField>
+            />
+          </div>
         </div>
       </div>
 
@@ -453,85 +474,77 @@ export function DeckChromePanel({
           className={editorControlClass()}
         />
       </EditorField>
-      <select
+      <SelectMenu
+        aria-label="Footer align"
+        variant="field"
         value={chrome?.footer?.align ?? "center"}
-        onChange={(event) =>
+        options={FOOTER_ALIGN_OPTIONS}
+        onChange={(next) =>
           onUpdateChrome({
             footer: {
               ...(chrome?.footer ?? {}),
-              align: event.currentTarget.value as NonNullable<
-                DeckChromeConfig["footer"]
-              >["align"],
+              align: next as NonNullable<DeckChromeConfig["footer"]>["align"],
             },
           })
         }
-        className={editorControlClass()}
-      >
-        <option value="left">Footer left</option>
-        <option value="center">Footer centered</option>
-        <option value="right">Footer right</option>
-      </select>
+      />
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Deck default page number
-          <select
+          <SelectMenu
+            aria-label="Deck default page number"
+            variant="field"
             value={isConfigured(chrome?.pageNumber) ? "on" : "off"}
-            onChange={(event) =>
+            options={ON_OFF_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 pageNumber: {
                   ...(chrome?.pageNumber ?? {}),
-                  enabled: event.currentTarget.value === "on",
+                  enabled: next === "on",
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="off">Off</option>
-            <option value="on">On</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          />
+        </div>
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Format
-          <select
+          <SelectMenu
+            aria-label="Format"
+            variant="field"
             value={chrome?.pageNumber?.format ?? "number"}
-            onChange={(event) =>
+            options={PAGE_NUMBER_FORMAT_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 pageNumber: {
                   ...(chrome?.pageNumber ?? {}),
-                  format: event.currentTarget.value as NonNullable<
+                  format: next as NonNullable<
                     DeckChromeConfig["pageNumber"]
                   >["format"],
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="number">1</option>
-            <option value="number-total">1 / total</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          />
+        </div>
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Placement
-          <select
+          <SelectMenu
+            aria-label="Placement"
+            variant="field"
             value={chrome?.pageNumber?.placement ?? "bottom-right"}
-            onChange={(event) =>
+            options={PAGE_NUMBER_PLACEMENT_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 pageNumber: {
                   ...(chrome?.pageNumber ?? {}),
-                  placement: event.currentTarget.value as NonNullable<
+                  placement: next as NonNullable<
                     DeckChromeConfig["pageNumber"]
                   >["placement"],
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="bottom-left">Bottom left</option>
-            <option value="bottom-center">Bottom center</option>
-            <option value="bottom-right">Bottom right</option>
-          </select>
-        </label>
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-[auto_1fr] items-center gap-2 text-xs text-ds-text-secondary">
@@ -573,68 +586,64 @@ export function DeckChromePanel({
         />
       </EditorField>
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Watermark layout
-          <select
+          <SelectMenu
+            aria-label="Watermark layout"
+            variant="field"
             value={chrome?.watermark?.layoutMode ?? "diagonal"}
-            onChange={(event) =>
+            options={WATERMARK_LAYOUT_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 watermark: {
                   ...(chrome?.watermark ?? {}),
-                  layoutMode: event.currentTarget.value as NonNullable<
+                  layoutMode: next as NonNullable<
                     DeckChromeConfig["watermark"]
                   >["layoutMode"],
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="center">Center</option>
-            <option value="diagonal">Diagonal</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          />
+        </div>
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Watermark size
-          <select
+          <SelectMenu
+            aria-label="Watermark size"
+            variant="field"
             value={chrome?.watermark?.size ?? "medium"}
-            onChange={(event) =>
+            options={CHROME_SIZE_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 watermark: {
                   ...(chrome?.watermark ?? {}),
-                  size: event.currentTarget.value as NonNullable<
+                  size: next as NonNullable<
                     DeckChromeConfig["watermark"]
                   >["size"],
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-        </label>
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Deck default border
-          <select
+          <SelectMenu
+            aria-label="Deck default border"
+            variant="field"
             value={isConfigured(chrome?.border) ? "on" : "off"}
-            onChange={(event) =>
+            options={ON_OFF_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 border: {
                   ...(chrome?.border ?? {}),
-                  enabled: event.currentTarget.value === "on",
+                  enabled: next === "on",
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="off">Off</option>
-            <option value="on">On</option>
-          </select>
-        </label>
+          />
+        </div>
         <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Border color
           <input
@@ -672,24 +681,23 @@ export function DeckChromePanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Deck default safe area
-          <select
+          <SelectMenu
+            aria-label="Deck default safe area"
+            variant="field"
             value={isConfigured(chrome?.safeArea) ? "on" : "off"}
-            onChange={(event) =>
+            options={ON_OFF_OPTIONS}
+            onChange={(next) =>
               onUpdateChrome({
                 safeArea: {
                   ...(chrome?.safeArea ?? {}),
-                  enabled: event.currentTarget.value === "on",
+                  enabled: next === "on",
                 },
               })
             }
-            className={editorControlClass()}
-          >
-            <option value="off">Off</option>
-            <option value="on">On</option>
-          </select>
-        </label>
+          />
+        </div>
         <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Safe area color
           <input
@@ -741,34 +749,37 @@ export function DeckChromePanel({
         const mode = override?.mode ?? "inherit";
         const overrideValue =
           override?.mode === "override" && override.value ? override.value : {};
+        const modeOptions: SelectMenuOption[] = [
+          { value: "inherit", label: "Use deck default" },
+          { value: "disabled", label: "Disable on slide" },
+          { value: "override", label: "Override on slide" },
+          ...(mode === "detached"
+            ? [{ value: "detached", label: "Detached local copy" }]
+            : []),
+        ];
         return (
           <div
             key={kind}
             className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs text-ds-text-secondary"
           >
             <label htmlFor={idFor(`override-${kind}`)}>{LABELS[kind]}</label>
-            <select
-              id={idFor(`override-${kind}`)}
+            <SelectMenu
+              aria-label={`${LABELS[kind]} override mode`}
+              variant="field"
+              buttonClassName="w-32"
               value={mode}
-              onChange={(event) =>
+              options={modeOptions}
+              onChange={(next) =>
                 onUpdateSlideProps({
                   deckChrome: nextOverrides(
                     deckChromeOverrides,
                     kind,
-                    event.currentTarget.value as ChromeOverrideMode,
+                    next as ChromeOverrideMode,
                     chrome?.[kind],
                   ),
                 })
               }
-              className={editorControlClass("w-32")}
-            >
-              <option value="inherit">Use deck default</option>
-              <option value="disabled">Disable on slide</option>
-              <option value="override">Override on slide</option>
-              {mode === "detached" ? (
-                <option value="detached">Detached local copy</option>
-              ) : null}
-            </select>
+            />
             {mode === "override"
               ? renderOverrideFields(kind, overrideValue, (patch) =>
                   onUpdateSlideProps({

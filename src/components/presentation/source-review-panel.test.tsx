@@ -4,6 +4,7 @@ import * as React from "react";
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { SelectMenu } from "@/components/ui/select-menu";
 import type { SourceBlockIndexEntry } from "@/lib/presentation/block-index";
 import type { SourceReviewItem } from "@/lib/presentation/source-links";
 import {
@@ -85,12 +86,12 @@ function collectSelectHandlers(node: ReactNode): ((value: string) => void)[] {
   if (Array.isArray(node)) return node.flatMap(collectSelectHandlers);
   if (!isValidElement(node)) return [];
   const props = node.props as {
-    onChange?: (event: { currentTarget: { value: string } }) => void;
+    onChange?: (value: string) => void;
     children?: ReactNode;
   };
   return [
-    ...(node.type === "select" && typeof props.onChange === "function"
-      ? [(value: string) => props.onChange?.({ currentTarget: { value } })]
+    ...(node.type === SelectMenu && typeof props.onChange === "function"
+      ? [(value: string) => props.onChange?.(value)]
       : []),
     ...collectSelectHandlers(props.children),
   ];

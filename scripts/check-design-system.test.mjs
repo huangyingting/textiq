@@ -89,6 +89,72 @@ test("design-system check: flags non-DS neutral utility classes", () => {
   assert.equal(findings[1].match, "text-gray-900");
 });
 
+test("design-system check: flags native <select> in feature components", () => {
+  const findings = scanText(
+    "src/components/example.tsx",
+    '<select value={value} onChange={onChange}>\n  <option value="a">A</option>\n</select>',
+  );
+
+  const selectFindings = findings.filter(
+    (finding) => finding.rule === "native-select",
+  );
+  assert.equal(selectFindings.length, 1);
+  assert.equal(selectFindings[0].match, "<select");
+});
+
+test("design-system check: flags a native <select> whose tag spans lines", () => {
+  const findings = scanText(
+    "src/app/app/example.tsx",
+    "<select\n  value={value}\n>",
+  );
+
+  const selectFindings = findings.filter(
+    (finding) => finding.rule === "native-select",
+  );
+  assert.equal(selectFindings.length, 1);
+});
+
+test("design-system check: does not confuse other tags for native <select>", () => {
+  const findings = scanText(
+    "src/components/example.tsx",
+    "<SelectMenu />\n<selectItems />\n// mentions the word select in a comment",
+  );
+
+  assert.deepEqual(
+    findings.filter((finding) => finding.rule === "native-select"),
+    [],
+  );
+});
+
+test("design-system check: allows native <select> in shared UI primitives", () => {
+  const findings = scanText("src/components/ui/select-menu.tsx", "<select />");
+
+  assert.deepEqual(
+    findings.filter((finding) => finding.rule === "native-select"),
+    [],
+  );
+});
+
+test("design-system check: ignores native <select> in test and non-JSX files", () => {
+  const testFindings = scanText(
+    "src/components/example.test.tsx",
+    "<select />",
+  );
+  const nonJsxFindings = scanText(
+    "src/lib/example.ts",
+    "collection.select(row);",
+  );
+
+  assert.deepEqual(
+    testFindings.filter((finding) => finding.rule === "native-select"),
+    [],
+  );
+  assert.deepEqual(
+    nonJsxFindings.filter((finding) => finding.rule === "native-select"),
+    [],
+  );
+});
+
 test("design-system check: skips token-owned chrome files but still scans z-index", () => {
   assert.deepEqual(
     scanText(

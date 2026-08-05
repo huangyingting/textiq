@@ -4,6 +4,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 
 import { Button } from "@/components/ui/button";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import type { BrandKitDraftV1 } from "@/lib/presentation/brand-kit/schema";
 import type {
@@ -35,6 +36,17 @@ export type BrandKitAuthoringPanelProps = {
   onSaved?: (result: Extract<SaveBrandKitDraftResult, { ok: true }>) => void;
   onClose: () => void;
 };
+
+const DECORATION_BACKGROUND_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "none", label: "None" },
+  { value: "subtle", label: "Subtle" },
+  { value: "expressive", label: "Expressive" },
+];
+
+const DECORATION_CHROME_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "default", label: "Default" },
+  { value: "minimal", label: "Minimal" },
+];
 
 function readPathValue(draft: BrandKitDraftV1, path: string): string {
   const value = path
@@ -432,56 +444,54 @@ export function BrandKitAuthoringPanel({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ds-text-muted">
               Decorations
             </h3>
-            <label className="block text-xs font-medium text-ds-text-secondary">
+            <div className="block text-xs font-medium text-ds-text-secondary">
               Background
-              <select
-                value={state.draft.decorations?.background ?? "subtle"}
-                disabled={state.saving}
-                onChange={(event) =>
-                  setState((current) =>
-                    updateBrandKitDecoration(
-                      current,
-                      "background",
-                      event.currentTarget.value as
-                        "none" | "subtle" | "expressive",
-                    ),
-                  )
-                }
-                className={cx(
-                  "mt-1 h-8 w-full rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                <option value="none">None</option>
-                <option value="subtle">Subtle</option>
-                <option value="expressive">Expressive</option>
-              </select>
+              <div className="mt-1">
+                <SelectMenu
+                  aria-label="Background"
+                  variant="field"
+                  value={state.draft.decorations?.background ?? "subtle"}
+                  options={DECORATION_BACKGROUND_OPTIONS}
+                  onChange={(next) =>
+                    setState((current) =>
+                      updateBrandKitDecoration(
+                        current,
+                        "background",
+                        next as "none" | "subtle" | "expressive",
+                      ),
+                    )
+                  }
+                  buttonClassName={
+                    state.saving ? "pointer-events-none opacity-40" : undefined
+                  }
+                />
+              </div>
               {fieldDiagnostics(state, "decorations.background")}
-            </label>
-            <label className="block text-xs font-medium text-ds-text-secondary">
+            </div>
+            <div className="block text-xs font-medium text-ds-text-secondary">
               Chrome
-              <select
-                value={state.draft.decorations?.chrome ?? "default"}
-                disabled={state.saving}
-                onChange={(event) =>
-                  setState((current) =>
-                    updateBrandKitDecoration(
-                      current,
-                      "chrome",
-                      event.currentTarget.value as "default" | "minimal",
-                    ),
-                  )
-                }
-                className={cx(
-                  "mt-1 h-8 w-full rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary",
-                  FOCUS_RING,
-                )}
-              >
-                <option value="default">Default</option>
-                <option value="minimal">Minimal</option>
-              </select>
+              <div className="mt-1">
+                <SelectMenu
+                  aria-label="Chrome"
+                  variant="field"
+                  value={state.draft.decorations?.chrome ?? "default"}
+                  options={DECORATION_CHROME_OPTIONS}
+                  onChange={(next) =>
+                    setState((current) =>
+                      updateBrandKitDecoration(
+                        current,
+                        "chrome",
+                        next as "default" | "minimal",
+                      ),
+                    )
+                  }
+                  buttonClassName={
+                    state.saving ? "pointer-events-none opacity-40" : undefined
+                  }
+                />
+              </div>
               {fieldDiagnostics(state, "decorations.chrome")}
-            </label>
+            </div>
           </div>
         </section>
 

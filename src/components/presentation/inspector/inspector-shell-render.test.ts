@@ -285,7 +285,7 @@ describe("InspectorShell render affordances", () => {
     assert.match(html, /Speaker Notes/);
     assert.match(html, /Speaker note text/);
     assert.match(html, /aria-label="Inspector panel"/);
-    assert.match(html, /<option value="notes" selected="">Notes<\/option>/);
+    assert.match(html, /<span class="[^"]*">Notes<\/span>/);
   });
 
   test("incompatible initialPanel falls back to the multi-select arrange panel", () => {
@@ -301,6 +301,7 @@ describe("InspectorShell render affordances", () => {
 
   test("diagnostics panel option displays a count", () => {
     const html = renderInspector({
+      initialPanel: "diagnostics",
       diagnostics: [
         makeDiagnostic("missing-asset", "error", "Missing asset"),
         makeDiagnostic(
@@ -396,6 +397,7 @@ describe("InspectorShell render affordances", () => {
     const html = renderInspector({
       initialPanel: "slide",
       activeTemplate: { layouts: [{ id: "default" }, { id: "hero" }] },
+      activeLayoutId: "hero",
     });
 
     assert.match(html, /Slide Controls/);

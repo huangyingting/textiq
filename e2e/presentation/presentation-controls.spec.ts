@@ -1,3 +1,4 @@
+// e2e-governance-allow oversized-test: migrating native <select> assertions to the shared SelectMenu trigger/listbox pattern added multi-line interactions; splitting this deck-controls suite would fragment its shared fixtures.
 import {
   expect,
   test,
@@ -7,6 +8,10 @@ import {
 } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import {
+  chooseFromSelectMenu,
+  INSPECTOR_PANEL_LABEL as PANEL_LABEL,
+} from "../helpers/select-menu";
 import {
   E2E_CUSTOM_THEME_FIXTURE,
   E2E_VERSIONED_THEME_FIXTURE,
@@ -175,9 +180,7 @@ test.describe("presentation editing controls", () => {
       .click();
     const inspector = editor.getByRole("region", { name: "Inspector" });
     await expect(inspector).toBeVisible();
-    await inspector
-      .getByRole("combobox", { name: "Inspector panel" })
-      .selectOption("arrange");
+    await chooseFromSelectMenu(page, inspector, "Inspector panel", "Arrange");
     await expect(
       inspector.getByRole("heading", { name: "Arrange 3 nodes" }),
     ).toBeVisible();
@@ -289,9 +292,12 @@ test.describe("presentation editing controls", () => {
     await editor.getByRole("button", { name: "Manage custom guides" }).click();
     let customGuides = page.getByRole("dialog", { name: "Custom guides" });
     await expect(customGuides).toBeVisible();
-    await customGuides
-      .getByRole("combobox", { name: "Guide orientation" })
-      .selectOption({ label: "Vertical" });
+    await chooseFromSelectMenu(
+      page,
+      customGuides,
+      "Guide orientation",
+      "Vertical",
+    );
     await customGuides.getByLabel("Guide position (%)").fill("37");
     await customGuides.getByRole("button", { name: "Add guide" }).click();
     await expect(customGuides.getByText(/vertical.*37%/i)).toBeVisible();
@@ -538,26 +544,31 @@ test.describe("presentation editing controls", () => {
     await master
       .getByRole("textbox", { name: /Deck-level footer copied/ })
       .fill(deckFooterText);
-    const pageNumberToggle = master.getByRole("combobox", {
+    const pageNumberToggle = master.getByRole("button", {
       name: "Deck default page number",
     });
-    const pageNumberFormat = master.getByRole("combobox", {
+    const pageNumberFormat = master.getByRole("button", {
       name: "Format",
       exact: true,
     });
     await expect(pageNumberToggle).toBeVisible();
-    await pageNumberToggle.selectOption("on");
+    await chooseFromSelectMenu(page, master, "Deck default page number", "On");
     await expect(pageNumberFormat).toBeVisible();
-    await pageNumberFormat.selectOption("number-total");
+    await chooseFromSelectMenu(page, master, "Format", "1 / total");
     await expect(footer).toContainText(deckFooterText);
     await expect(pageNumber).toContainText("1 / 2");
 
-    const footerOverride = master.getByRole("combobox", {
-      name: "Footer",
+    const footerOverride = master.getByRole("button", {
+      name: "Footer override mode",
       exact: true,
     });
     await expect(footerOverride).toBeVisible();
-    await footerOverride.selectOption("override");
+    await chooseFromSelectMenu(
+      page,
+      master,
+      "Footer override mode",
+      "Override on slide",
+    );
     await master
       .getByPlaceholder("Footer text")
       .last()
@@ -598,8 +609,8 @@ test.describe("presentation editing controls", () => {
       master.getByRole("textbox", { name: /Deck-level footer copied/ }),
     ).toHaveValue(deckFooterText);
     await expect(
-      master.getByRole("combobox", { name: "Footer", exact: true }),
-    ).toHaveValue("override");
+      master.getByRole("button", { name: "Footer override mode", exact: true }),
+    ).toContainText("Override on slide");
     await expect(master.getByPlaceholder("Footer text").last()).toHaveValue(
       firstSlideFooterText,
     );
@@ -710,8 +721,8 @@ test.describe("presentation editing controls", () => {
     await expect(sourceNode).toHaveAttribute("aria-pressed", "true");
     const inspector = page.getByRole("region", { name: "Inspector" });
     await expect(
-      inspector.getByRole("combobox", { name: "Inspector panel" }),
-    ).toHaveValue("source");
+      inspector.getByRole("button", { name: "Inspector panel" }),
+    ).toContainText("Source");
     await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
 
     await waitForSlideAutosaveAfter(page, () =>
@@ -811,8 +822,8 @@ test.describe("presentation editing controls", () => {
 
     const inspector = page.getByRole("region", { name: "Inspector" });
     await expect(
-      inspector.getByRole("combobox", { name: "Inspector panel" }),
-    ).toHaveValue("source");
+      inspector.getByRole("button", { name: "Inspector panel" }),
+    ).toContainText("Source");
     await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
 
     const sourcePopupPromise = page.waitForEvent("popup");
@@ -885,14 +896,25 @@ test.describe("presentation editing controls", () => {
     await expect(sourceReviewHeading).toBeVisible();
     await expect(inspector.getByText("Stale", { exact: true })).toBeVisible();
 
-    await waitForSlideAutosaveAfter(page, () =>
-      editor
-        .getByRole("combobox", {
+    await waitForSlideAutosaveAfter(page, async () => {
+      await editor
+        .getByRole("button", {
           name: "Relink source for Slide 1, fixture-title",
           exact: true,
         })
-        .selectOption(`text:${E2E_PROFILE_FIXTURE.documentBodyBlockId}`),
-    );
+        .click();
+      const listbox = page.getByRole("listbox", {
+        name: "Relink source for Slide 1, fixture-title",
+      });
+      await listbox
+        .getByRole("option", {
+          name: new RegExp(
+            `\\(text:${E2E_PROFILE_FIXTURE.documentBodyBlockId}\\)`,
+          ),
+        })
+        .click();
+      await expect(listbox).toHaveCount(0);
+    });
     await expect(sourceReviewHeading).toHaveCount(0);
     await expect(sourceNode).toContainText(refreshedText);
     await expect(inspector.getByText("Fresh", { exact: true })).toBeVisible();
@@ -1338,9 +1360,12 @@ test.describe("presentation grouped layer controls", () => {
         .click();
       const inspector = editor.getByRole("region", { name: "Inspector" });
       await expect(inspector).toBeVisible();
-      await inspector
-        .getByRole("combobox", { name: "Inspector panel" })
-        .selectOption(panel);
+      await chooseFromSelectMenu(
+        page,
+        inspector,
+        "Inspector panel",
+        PANEL_LABEL[panel],
+      );
       return inspector;
     };
 

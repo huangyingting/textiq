@@ -120,6 +120,10 @@ The check rejects:
   `z-panel`, `z-modal`, `z-menu`, or `z-toast`;
 - raw arbitrary hex color classes in feature components, such as
   `bg-[#ffffff]`; add or reuse a semantic token/theme utility instead.
+- native `<select>` elements in `src/app` and `src/components` feature code; use
+  the shared `SelectMenu` primitive from `@/components/ui` so every dropdown
+  shares one style, font, and keyboard/pointer behavior. The rule skips test
+  files and the `src/components/ui/` primitives layer.
 
 Pick the z tier by **what the surface is**, not by "what it must beat":
 canvas/selection-anchored editing overlays use `canvas`; side panels use `panel`;

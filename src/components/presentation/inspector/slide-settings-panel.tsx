@@ -5,6 +5,14 @@ import type { JSX } from "react";
 import type { NodeSourceMetadata, SlideNode } from "@/lib/presentation/schema";
 import type { StylePatch } from "@/lib/presentation/style-schema";
 import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
+
+const BACKGROUND_TYPE_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "solid", label: "Solid" },
+  { value: "linearGradient", label: "Linear gradient" },
+  { value: "radialGradient", label: "Radial gradient" },
+  { value: "image", label: "Image asset" },
+];
 
 export interface SlideSettingsPanelProps {
   slide: SlideNode;
@@ -206,23 +214,18 @@ export function SlideSettingsPanel({
       </label>
       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
         <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Background type
-            <select
+            <SelectMenu
+              aria-label="Background type"
+              variant="field"
               value={slide.localStyle?.slide?.background?.type ?? "solid"}
-              onChange={(event) => {
-                onUpdateLocalStyle(
-                  slideBackgroundPatchForType(slide, event.currentTarget.value),
-                );
+              options={BACKGROUND_TYPE_OPTIONS}
+              onChange={(next) => {
+                onUpdateLocalStyle(slideBackgroundPatchForType(slide, next));
               }}
-              className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="solid">Solid</option>
-              <option value="linearGradient">Linear gradient</option>
-              <option value="radialGradient">Radial gradient</option>
-              <option value="image">Image asset</option>
-            </select>
-          </label>
+            />
+          </div>
           {slide.localStyle?.slide?.background?.type === "image" ? (
             <>
               <div className="overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-ds-surface-raised">

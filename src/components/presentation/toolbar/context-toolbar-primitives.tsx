@@ -10,9 +10,15 @@ import {
   Table2,
   Type as TypeIcon,
 } from "lucide-react";
-import type { RefObject, ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  type RefObject,
+  type ReactNode,
+} from "react";
 
 import { ColorPicker } from "@/components/ui/color-picker";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import type {
@@ -143,24 +149,39 @@ export function ContextToolbarSelect({
   width?: string;
   disabled?: boolean;
 }) {
+  const options: SelectMenuOption[] = Children.toArray(children).flatMap(
+    (child) => {
+      if (!isValidElement(child) || child.type !== "option") return [];
+      const optionProps = child.props as {
+        value?: string;
+        children?: ReactNode;
+        disabled?: boolean;
+      };
+      return [
+        {
+          value: String(optionProps.value ?? ""),
+          label: optionProps.children,
+          disabled: optionProps.disabled,
+        },
+      ];
+    },
+  );
   return (
-    <label className="flex items-center gap-1 text-[11px] text-ds-text-muted">
+    <div className="flex items-center gap-1 text-[11px] text-ds-text-muted">
       <span className="sr-only">{label}</span>
-      <select
+      <SelectMenu
         aria-label={label}
-        title={label}
+        variant="field"
         value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        className={cx(
-          "h-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none",
+        options={options}
+        onChange={onChange}
+        buttonClassName={cx(
+          "h-7",
           width,
-          FOCUS_RING,
+          disabled ? "pointer-events-none opacity-40" : undefined,
         )}
-      >
-        {children}
-      </select>
-    </label>
+      />
+    </div>
   );
 }
 

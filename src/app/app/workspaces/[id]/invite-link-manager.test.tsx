@@ -19,6 +19,7 @@ import { before, beforeEach, describe, test } from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { Button } from "@/components/ui/button";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { FIELD_CONTROL, PANEL_CHROME, cx } from "@/components/ui/tokens";
 import "@/test/react-render-harness";
 
@@ -67,6 +68,7 @@ const globalForTest = globalThis as typeof globalThis & {
   __inviteLinkManagerTestState: TestState;
   __inviteLinkManagerUiBridge: {
     Button: unknown;
+    SelectMenu: unknown;
     FIELD_CONTROL: string;
     PANEL_CHROME: string;
     cx: typeof cx;
@@ -129,6 +131,7 @@ function createDefaultState(): TestState {
 globalForTest.__inviteLinkManagerTestState = createDefaultState();
 globalForTest.__inviteLinkManagerUiBridge = {
   Button,
+  SelectMenu,
   FIELD_CONTROL,
   PANEL_CHROME,
   cx,
@@ -160,6 +163,7 @@ const stubbedModules = new Map<string, string>([
     "@/components/ui",
     `
       export const Button = globalThis.__inviteLinkManagerUiBridge.Button;
+      export const SelectMenu = globalThis.__inviteLinkManagerUiBridge.SelectMenu;
       export const FIELD_CONTROL = globalThis.__inviteLinkManagerUiBridge.FIELD_CONTROL;
       export const PANEL_CHROME = globalThis.__inviteLinkManagerUiBridge.PANEL_CHROME;
       export const cx = globalThis.__inviteLinkManagerUiBridge.cx;
@@ -615,16 +619,16 @@ describe("InviteLinkManager", () => {
     try {
       const roleSelect = renderer.root.find(
         (instance) =>
-          instance.type === "select" && instance.props.value === "EDITOR",
+          instance.type === SelectMenu && instance.props.value === "EDITOR",
       );
       act(() => {
-        roleSelect.props.onChange({ target: { value: "VIEWER" } });
+        roleSelect.props.onChange("VIEWER");
       });
       const expirySelect = renderer.root.findByProps({
         "aria-label": "Invite link expiry",
       });
       act(() => {
-        expirySelect.props.onChange({ target: { value: "7" } });
+        expirySelect.props.onChange("7");
       });
       const maxUsesInput = renderer.root.findByProps({
         "aria-label": "Maximum uses (leave blank for unlimited)",

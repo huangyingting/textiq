@@ -8,6 +8,7 @@ import {
 } from "@playwright/test";
 
 import { login, type Credentials } from "../helpers/auth";
+import { chooseFromSelectMenu } from "../helpers/select-menu";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -40,6 +41,18 @@ async function openAuthenticatedSession(
   }
 }
 
+const INVITE_ROLE_LABEL: Record<"EDITOR" | "VIEWER", string> = {
+  EDITOR: "Editor",
+  VIEWER: "Viewer",
+};
+
+const INVITE_EXPIRY_LABEL: Record<string, string> = {
+  "0": "Never expires",
+  "1": "Expires in 1 day",
+  "7": "Expires in 7 days",
+  "30": "Expires in 30 days",
+};
+
 function memberRow(page: Page, email: string): Locator {
   return page
     .locator("li")
@@ -56,10 +69,18 @@ async function createInvite(
   role: "EDITOR" | "VIEWER",
   options: { expiry?: string; maxUses?: string } = {},
 ): Promise<string> {
-  await page.getByLabel("Invite member role").selectOption(role);
-  await page
-    .getByLabel("Invite link expiry")
-    .selectOption(options.expiry ?? "0");
+  await chooseFromSelectMenu(
+    page,
+    page,
+    "Invite member role",
+    INVITE_ROLE_LABEL[role],
+  );
+  await chooseFromSelectMenu(
+    page,
+    page,
+    "Invite link expiry",
+    INVITE_EXPIRY_LABEL[options.expiry ?? "0"],
+  );
   const maxUses = page.getByLabel("Maximum uses (leave blank for unlimited)");
   await maxUses.fill(options.maxUses ?? "");
   await page.getByRole("button", { name: "Create invite link" }).click();
@@ -170,8 +191,13 @@ test.describe("UI matrix: workspace lifecycle", () => {
       }
       await route.continue();
     });
-    await page.getByLabel("Invite member role").selectOption("VIEWER");
-    await page.getByLabel("Invite link expiry").selectOption("1");
+    await chooseFromSelectMenu(page, page, "Invite member role", "Viewer");
+    await chooseFromSelectMenu(
+      page,
+      page,
+      "Invite link expiry",
+      "Expires in 1 day",
+    );
     await page.getByRole("button", { name: "Create invite link" }).click();
     const createAlert = page.getByRole("alert").filter({
       hasText: "Could not create invite link. Please try again.",

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { EditorToolbarButton } from "@/components/editor/toolbar-button";
 import { Popover } from "@/components/ui/popover";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { Switch } from "@/components/ui/switch";
 import { SocialShareMenu } from "@/components/share/social-share-menu";
 import {
@@ -629,23 +630,27 @@ function ShareButtonForDocument({
           <h4 className="mb-2 text-xs font-semibold text-ds-text-primary">
             Public preview privacy
           </h4>
-          <label className="mb-2 flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="mb-2 flex flex-col gap-1 text-xs text-ds-text-secondary">
             Social preview metadata
-            <select
+            <SelectMenu
+              aria-label="Social preview metadata"
+              variant="field"
               value={shareState.metadataMode}
-              onChange={(event) =>
+              options={[
+                { value: "generic", label: "Generic TextIQ preview" },
+                { value: "title", label: "Document title only" },
+                { value: "title-excerpt", label: "Title and excerpt" },
+              ]}
+              buttonClassName={
+                isMutating ? "pointer-events-none opacity-60" : undefined
+              }
+              onChange={(next) =>
                 handleMetadataModeChange(
-                  event.target.value as "generic" | "title" | "title-excerpt",
+                  next as "generic" | "title" | "title-excerpt",
                 )
               }
-              disabled={isMutating}
-              className="rounded-md border border-ds-border-subtle bg-ds-surface-sunken px-2 py-1 text-xs outline-none"
-            >
-              <option value="generic">Generic TextIQ preview</option>
-              <option value="title">Document title only</option>
-              <option value="title-excerpt">Title and excerpt</option>
-            </select>
-          </label>
+            />
+          </div>
           <div className="mt-2 flex items-center justify-between">
             <span
               className="text-xs text-ds-text-secondary"

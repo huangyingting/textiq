@@ -2,6 +2,7 @@
 
 import process from "node:process";
 import {
+  extensionOf,
   makeShouldScanFile,
   scanRepositoryRoots,
   toPosix,
@@ -17,6 +18,8 @@ const RAW_RADIUS_ARBITRARY_CLASS =
 const RAW_SHADOW_ARBITRARY_CLASS = /\bshadow-\[(?!var\()[^\]]+\]/g;
 const NON_DS_NEUTRAL_CLASS =
   /\b(?:bg|text|border|ring)-(?:slate|gray|zinc|neutral|stone)-\d{2,3}(?:\/\d{1,3})?\b/g;
+const NATIVE_SELECT_ELEMENT = /<select(?=[\s/>]|$)/g;
+const JSX_EXTENSIONS = new Set([".tsx", ".jsx"]);
 
 const shouldScanFile = makeShouldScanFile({
   sourceExtensions: SOURCE_EXTENSIONS,
@@ -44,6 +47,21 @@ function shouldScanRawChrome(filePath) {
   return true;
 }
 
+function shouldScanNativeSelect(filePath) {
+  const normalized = toPosix(filePath);
+  if (!JSX_EXTENSIONS.has(extensionOf(normalized))) {
+    return false;
+  }
+  if (/\.(?:test|spec)\.[jt]sx?$/.test(normalized)) {
+    return false;
+  }
+  // The shared UI primitives layer owns any sanctioned low-level controls.
+  if (normalized.startsWith("src/components/ui/")) {
+    return false;
+  }
+  return true;
+}
+
 function finding(filePath, lineNumber, columnNumber, rule, match) {
   return { filePath, lineNumber, columnNumber, rule, match };
 }
@@ -53,6 +71,7 @@ export function scanText(filePath, text) {
   const lines = text.split(/\r?\n/);
   const scanHex = shouldScanRawHex(filePath);
   const scanChrome = shouldScanRawChrome(filePath);
+  const scanNativeSelect = shouldScanNativeSelect(filePath);
 
   lines.forEach((line, lineIndex) => {
     for (const match of line.matchAll(RAW_Z_CLASS)) {
@@ -65,6 +84,20 @@ export function scanText(filePath, text) {
           match[0],
         ),
       );
+    }
+
+    if (scanNativeSelect) {
+      for (const match of line.matchAll(NATIVE_SELECT_ELEMENT)) {
+        findings.push(
+          finding(
+            filePath,
+            lineIndex + 1,
+            (match.index ?? 0) + 1,
+            "native-select",
+            match[0],
+          ),
+        );
+      }
     }
 
     if (!scanHex) {
@@ -153,7 +186,9 @@ function main() {
         ? "Use a named semantic z utility from globals.css (for example z-raised, z-canvas, z-panel, z-modal, z-menu, z-toast)."
         : item.rule === "raw-hex-class"
           ? "Move raw hex colors into the DS token/theme layer; feature class names must use semantic utilities."
-          : "Use DS radius, elevation, and neutral utilities instead of raw chrome classes.";
+          : item.rule === "native-select"
+            ? "Use the shared SelectMenu primitive from @/components/ui instead of a native <select> so controls stay visually and behaviorally consistent."
+            : "Use DS radius, elevation, and neutral utilities instead of raw chrome classes.";
     console.error(
       `${item.filePath}:${item.lineNumber}:${item.columnNumber} ${item.rule} ${item.match} — ${guidance}`,
     );

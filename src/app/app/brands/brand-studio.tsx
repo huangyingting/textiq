@@ -20,6 +20,8 @@ import {
   Dialog,
   IconButton,
   ColorPicker,
+  SelectMenu,
+  type SelectMenuOption,
   cx,
   FOCUS_RING,
 } from "@/components/ui";
@@ -555,10 +557,32 @@ function BrandForm({
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ds-text-muted,#6f7d83)]">
           Font
         </span>
-        <select
+        <SelectMenu
+          aria-label="Font"
+          variant="field"
           value={form.fontFamily ?? ""}
-          onChange={(e) => {
-            const nextFontFamily = e.target.value || null;
+          options={[
+            { value: "", label: "System default" },
+            ...BRAND_WEB_FONTS.map((f): SelectMenuOption => ({
+              value: f.cssFamily,
+              label: f.name,
+            })),
+            ...(form.fontFamily &&
+            !BRAND_WEB_FONTS.some((f) => f.cssFamily === form.fontFamily)
+              ? [
+                  {
+                    value: form.fontFamily,
+                    label: `Custom: ${form.fontFamily}`,
+                  } satisfies SelectMenuOption,
+                ]
+              : []),
+          ]}
+          buttonClassName={cx(
+            "h-9 px-3 text-sm",
+            formBusy && "pointer-events-none opacity-60",
+          )}
+          onChange={(next) => {
+            const nextFontFamily = next || null;
             setForm((current) => {
               const keepsUploadedFont =
                 nextFontFamily !== null &&
@@ -574,23 +598,7 @@ function BrandForm({
               };
             });
           }}
-          disabled={formBusy}
-          className={cx(
-            "h-9 rounded-[var(--ds-radius-md,10px)] border bg-[var(--ds-surface-base,#fff)] px-3 text-sm text-[var(--ds-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-focus-ring,#6366f1)]",
-            "border-[var(--ds-border-subtle,rgba(0,0,0,0.08))]",
-          )}
-        >
-          <option value="">System default</option>
-          {BRAND_WEB_FONTS.map((f) => (
-            <option key={f.id} value={f.cssFamily}>
-              {f.name}
-            </option>
-          ))}
-          {form.fontFamily &&
-            !BRAND_WEB_FONTS.some((f) => f.cssFamily === form.fontFamily) && (
-              <option value={form.fontFamily}>Custom: {form.fontFamily}</option>
-            )}
-        </select>
+        />
 
         {/* Custom font upload — Pro-only (fontUpload entitlement) */}
         {canFontUpload && (

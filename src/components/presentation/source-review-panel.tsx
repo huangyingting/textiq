@@ -11,6 +11,7 @@ import {
   sourceReviewActionDescriptor,
   type SourceReviewActionType,
 } from "@/lib/presentation/review-action-descriptors";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 
 export interface SourceReviewPanelProps {
   items: readonly SourceReviewItem[];
@@ -278,35 +279,32 @@ export function SourceReviewPanel({
                         {refreshDescriptor.shortLabel ??
                           refreshDescriptor.label}
                       </button>
-                      <select
+                      <SelectMenu
                         aria-label={sourceReviewActionAriaLabel(
                           "relink-source",
                           item,
                         )}
-                        defaultValue=""
-                        disabled={Boolean(relinkDescriptor.disabledReason)}
-                        title={relinkDescriptor.disabledReason}
-                        onChange={(event) => {
+                        variant="field"
+                        value=""
+                        options={[
+                          { value: "", label: "Relink…" },
+                          ...relinkOptions.map((block): SelectMenuOption => ({
+                            value: `${block.kind}:${block.id}`,
+                            label: `${block.displayLabel} (${block.kind}:${block.id})`,
+                          })),
+                        ]}
+                        onChange={(next) => {
                           const block = relinkOptions.find(
-                            (option) =>
-                              `${option.kind}:${option.id}` ===
-                              event.currentTarget.value,
+                            (option) => `${option.kind}:${option.id}` === next,
                           );
                           if (block) onRelink(item.slideId, item.nodeId, block);
-                          event.currentTarget.value = "";
                         }}
-                        className="rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-1.5 py-0.5 text-[11px] text-ds-text-secondary disabled:opacity-40"
-                      >
-                        <option value="">Relink…</option>
-                        {relinkOptions.map((block) => (
-                          <option
-                            key={`${block.kind}:${block.id}`}
-                            value={`${block.kind}:${block.id}`}
-                          >
-                            {block.displayLabel} ({block.kind}:{block.id})
-                          </option>
-                        ))}
-                      </select>
+                        buttonClassName={
+                          relinkDescriptor.disabledReason
+                            ? "pointer-events-none opacity-40"
+                            : undefined
+                        }
+                      />
                       <button
                         type="button"
                         aria-label={sourceReviewActionAriaLabel(

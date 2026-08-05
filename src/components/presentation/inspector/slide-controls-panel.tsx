@@ -23,7 +23,7 @@ import type {
   SlideDensity,
   SlideEmphasis,
 } from "@/lib/presentation/schema";
-import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 
 // ---------------------------------------------------------------------------
 // Option lists
@@ -102,26 +102,27 @@ function ControlSelect<T extends string>({
   onChange: (v: T) => void;
 }): JSX.Element {
   const disabledSet = new Set(disabledOptions ?? []);
+  const selectOptions: SelectMenuOption[] = [
+    { value: "", label: "—", disabled: true },
+    ...options.map((opt) => ({
+      value: opt,
+      label: opt,
+      disabled: disabledSet.has(opt),
+    })),
+  ];
   return (
     <div className="flex items-center justify-between gap-2">
       <label htmlFor={id} className="shrink-0 text-xs text-ds-text-secondary">
         {label}
       </label>
-      <select
-        id={id}
+      <SelectMenu
+        aria-label={label}
+        variant="field"
         value={value ?? ""}
-        onChange={(e) => onChange(e.currentTarget.value as T)}
-        className={`w-36 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-[12px] text-ds-text-primary outline-none ${FOCUS_RING}`}
-      >
-        <option value="" disabled>
-          —
-        </option>
-        {options.map((opt) => (
-          <option key={opt} value={opt} disabled={disabledSet.has(opt)}>
-            {opt}
-          </option>
-        ))}
-      </select>
+        options={selectOptions}
+        onChange={(next) => onChange(next as T)}
+        buttonClassName="w-36"
+      />
     </div>
   );
 }

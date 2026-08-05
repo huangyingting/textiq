@@ -4,6 +4,7 @@ import { Grid3x3, ListPlus, Ruler, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Popover } from "@/components/ui/popover";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
 import { STAGE_CHROME_Z_INDEX } from "@/lib/presentation/stage-chrome";
 import type { StageGuideInput } from "@/lib/presentation/stage-guides";
@@ -12,6 +13,11 @@ import { DeckToolbarIconButton } from "./toolbar/deck-toolbar";
 import type { PrecisionGuidePreferences } from "./precision-guides-storage";
 
 const PRECISION_RULER_TICKS = [0, 25, 50, 75, 100] as const;
+
+const GUIDE_ORIENTATION_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "x", label: "Vertical" },
+  { value: "y", label: "Horizontal" },
+];
 
 function guideOrientationLabel(axis: StageGuideInput["axis"]): string {
   return axis === "x" ? "vertical" : "horizontal";
@@ -127,23 +133,18 @@ export function PrecisionGuideToolbarControls({
         </button>
 
         <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-          <label className="text-xs font-medium text-ds-text-secondary">
+          <div className="text-xs font-medium text-ds-text-secondary">
             Orientation
-            <select
-              aria-label="Guide orientation"
-              value={axis}
-              onChange={(event) =>
-                setAxis(event.currentTarget.value as StageGuideInput["axis"])
-              }
-              className={cx(
-                "mt-1 h-8 w-full rounded-ds-sm border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary",
-                FOCUS_RING,
-              )}
-            >
-              <option value="x">Vertical</option>
-              <option value="y">Horizontal</option>
-            </select>
-          </label>
+            <div className="mt-1">
+              <SelectMenu
+                aria-label="Guide orientation"
+                variant="field"
+                value={axis}
+                options={GUIDE_ORIENTATION_OPTIONS}
+                onChange={(next) => setAxis(next as StageGuideInput["axis"])}
+              />
+            </div>
+          </div>
           <label className="text-xs font-medium text-ds-text-secondary">
             Position (%)
             <input

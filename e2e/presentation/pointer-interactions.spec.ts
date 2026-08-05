@@ -9,6 +9,10 @@ import {
 import { login } from "../helpers/auth";
 import { POINTER_INTERACTION_FIXTURES } from "../helpers/presentation-fixtures";
 import {
+  chooseFromSelectMenu,
+  INSPECTOR_PANEL_LABEL as PANEL_LABEL,
+} from "../helpers/select-menu";
+import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
   profileDocPath,
@@ -79,9 +83,12 @@ async function selectInspectorPanel(
       .click();
   }
   await expect(inspector).toBeVisible();
-  await inspector
-    .getByRole("combobox", { name: "Inspector panel" })
-    .selectOption(panel);
+  await chooseFromSelectMenu(
+    page,
+    inspector,
+    "Inspector panel",
+    PANEL_LABEL[panel],
+  );
   return inspector;
 }
 
@@ -311,8 +318,8 @@ test.describe("presentation pointer interactions", () => {
     await waitForSlideAutosave(page);
     let inspector = await selectInspectorPanel(page, editor, "line");
     await expect(
-      inspector.getByRole("combobox", { name: "to endpoint kind" }),
-    ).toHaveValue("point");
+      inspector.getByRole("button", { name: "to endpoint kind" }),
+    ).toContainText("Point");
 
     const targetNode = editor
       .locator(`${STAGE_NODE_SELECTOR}[data-node-id="fixture-image"]`)
@@ -341,14 +348,14 @@ test.describe("presentation pointer interactions", () => {
     await page.mouse.up();
 
     await expect(
-      inspector.getByRole("combobox", { name: "to endpoint kind" }),
-    ).toHaveValue("node");
+      inspector.getByRole("button", { name: "to endpoint kind" }),
+    ).toContainText("Node");
     await expect(inspector.getByLabel("to node id")).toHaveValue(
       "fixture-image",
     );
     await expect(
-      inspector.getByRole("combobox", { name: "to anchor" }),
-    ).toHaveValue("center");
+      inspector.getByRole("button", { name: "to anchor" }),
+    ).toContainText("center");
     await waitForSlideAutosave(page);
 
     await page.reload();
@@ -359,8 +366,8 @@ test.describe("presentation pointer interactions", () => {
     await connector.click();
     inspector = await selectInspectorPanel(page, editor, "line");
     await expect(
-      inspector.getByRole("combobox", { name: "to endpoint kind" }),
-    ).toHaveValue("node");
+      inspector.getByRole("button", { name: "to endpoint kind" }),
+    ).toContainText("Node");
     await expect(inspector.getByLabel("to node id")).toHaveValue(
       "fixture-image",
     );
@@ -421,11 +428,11 @@ test.describe("presentation pointer interactions", () => {
     expect(committedGeometry.height).not.toBe(initialGeometry.height);
     inspector = await selectInspectorPanel(page, editor, "line");
     await expect(
-      inspector.getByRole("combobox", { name: "from endpoint kind" }),
-    ).toHaveValue("point");
+      inspector.getByRole("button", { name: "from endpoint kind" }),
+    ).toContainText("Point");
     await expect(
-      inspector.getByRole("combobox", { name: "to endpoint kind" }),
-    ).toHaveValue("point");
+      inspector.getByRole("button", { name: "to endpoint kind" }),
+    ).toContainText("Point");
 
     await page.reload();
     await expect(editor).toBeVisible({ timeout: 30_000 });

@@ -8,6 +8,7 @@ import {
   Dialog,
   FIELD_CONTROL,
   PANEL_CHROME,
+  SelectMenu,
   cx,
 } from "@/components/ui";
 
@@ -27,6 +28,11 @@ const roleLabels: Record<InvitableWorkspaceRole, string> = {
   EDITOR: "Editor",
   VIEWER: "Viewer",
 };
+
+const inviteRoleOptions = [
+  { value: "EDITOR", label: "Editor" },
+  { value: "VIEWER", label: "Viewer" },
+] as const;
 
 const expiryOptions = [
   { value: "0", label: "Never expires" },
@@ -265,40 +271,39 @@ function InviteLinkManagerForWorkspace({
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <SelectMenu
+            aria-label="Invite member role"
+            variant="field"
             value={selectedRole}
-            disabled={mutationBusy}
-            onChange={(event) => {
-              const parsedRole = parsePersistedWorkspaceMemberRole(
-                event.target.value,
-              );
+            options={inviteRoleOptions}
+            buttonClassName={cx(
+              "h-10 flex-1 px-3",
+              FIELD_CONTROL,
+              mutationBusy && "pointer-events-none opacity-60",
+            )}
+            onChange={(next) => {
+              const parsedRole = parsePersistedWorkspaceMemberRole(next);
               if (parsedRole.success) {
                 clearCreateFeedback();
                 setSelectedRole(parsedRole.value);
               }
             }}
-            className={cx("h-10 flex-1 px-3", FIELD_CONTROL)}
-            aria-label="Invite member role"
-          >
-            <option value="EDITOR">Editor</option>
-            <option value="VIEWER">Viewer</option>
-          </select>
-          <select
-            value={expiryDays}
-            disabled={mutationBusy}
-            onChange={(event) => {
-              clearCreateFeedback();
-              setExpiryDays(event.target.value);
-            }}
-            className={cx("h-10 flex-1 px-3", FIELD_CONTROL)}
+          />
+          <SelectMenu
             aria-label="Invite link expiry"
-          >
-            {expiryOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            variant="field"
+            value={expiryDays}
+            options={expiryOptions}
+            buttonClassName={cx(
+              "h-10 flex-1 px-3",
+              FIELD_CONTROL,
+              mutationBusy && "pointer-events-none opacity-60",
+            )}
+            onChange={(next) => {
+              clearCreateFeedback();
+              setExpiryDays(next);
+            }}
+          />
           <input
             type="number"
             min={1}

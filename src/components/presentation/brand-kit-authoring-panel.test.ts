@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { createDefaultBrandKitDraft } from "./brand-kit-authoring-controller";
 import { BrandKitAuthoringPanel } from "./brand-kit-authoring-panel";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { createReactRenderHarness } from "@/test/react-render-harness";
 import type { SaveBrandKitDraftResult } from "@/lib/action-ports";
 
@@ -62,6 +63,13 @@ function changeValue(element: ElementLike, value: string): void {
     ((event: { currentTarget: { value: string } }) => void) | undefined;
   assert.equal(typeof onChange, "function");
   onChange?.({ currentTarget: { value } });
+}
+
+function changeSelectValue(element: ElementLike, value: string): void {
+  const onChange = element.props.onChange as
+    ((value: string) => void) | undefined;
+  assert.equal(typeof onChange, "function");
+  onChange?.(value);
 }
 
 function deferred<T>() {
@@ -194,20 +202,20 @@ test("BrandKitAuthoringPanel updates editable fields and saves valid drafts", as
     "Aptos",
   );
   tree = render();
-  changeValue(
+  changeSelectValue(
     firstElement(
       tree,
       (element) =>
-        element.type === "select" && element.props.value === "subtle",
+        element.type === SelectMenu && element.props.value === "subtle",
     ),
     "expressive",
   );
   tree = render();
-  changeValue(
+  changeSelectValue(
     firstElement(
       tree,
       (element) =>
-        element.type === "select" && element.props.value === "default",
+        element.type === SelectMenu && element.props.value === "default",
     ),
     "minimal",
   );

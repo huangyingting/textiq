@@ -17,13 +17,18 @@ import type { StyleRef, StyleBinding } from "@/lib/presentation/style-schema";
 type StyleVariantId = string;
 import { STYLE_REFS } from "@/lib/presentation/style-registry";
 
-import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 
 // ---------------------------------------------------------------------------
 // Style ref options
 // ---------------------------------------------------------------------------
 
 const STYLE_REF_OPTIONS: StyleRef[] = [...STYLE_REFS];
+
+const STYLE_REF_SELECT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "", label: "— unbound —", disabled: true },
+  ...STYLE_REF_OPTIONS.map((ref) => ({ value: ref, label: ref })),
+];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -53,14 +58,14 @@ export function StyleBindingPanel({
   const currentRef = binding?.ref ?? "";
   const currentVariant = binding?.variant ?? "default";
 
-  function handleRefChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const ref = e.currentTarget.value as StyleRef;
+  function handleRefChange(next: string) {
+    const ref = next as StyleRef;
     onChangeStyleBinding({ ref, variant: "default" });
   }
 
-  function handleVariantChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  function handleVariantChange(next: string) {
     if (!binding) return;
-    const variant = e.currentTarget.value as StyleVariantId;
+    const variant = next as StyleVariantId;
     onChangeStyleBinding({ ...binding, variant });
   }
 
@@ -68,6 +73,11 @@ export function StyleBindingPanel({
     "default",
     ...availableVariants.filter((v) => v !== "default"),
   ];
+
+  const variantSelectOptions: SelectMenuOption[] = variantOptions.map((v) => ({
+    value: v,
+    label: v,
+  }));
 
   return (
     <section className="flex flex-col gap-2 px-3 py-2.5">
@@ -91,21 +101,13 @@ export function StyleBindingPanel({
         >
           Style ref
         </label>
-        <select
-          id="presentation-style-ref"
+        <SelectMenu
+          aria-label="Style ref"
+          variant="field"
           value={currentRef}
+          options={STYLE_REF_SELECT_OPTIONS}
           onChange={handleRefChange}
-          className={`w-full rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-[13px] text-ds-text-primary outline-none ${FOCUS_RING}`}
-        >
-          <option value="" disabled>
-            — unbound —
-          </option>
-          {STYLE_REF_OPTIONS.map((ref) => (
-            <option key={ref} value={ref}>
-              {ref}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       {currentRef && (
@@ -116,18 +118,13 @@ export function StyleBindingPanel({
           >
             Variant
           </label>
-          <select
-            id="presentation-style-variant"
+          <SelectMenu
+            aria-label="Variant"
+            variant="field"
             value={currentVariant}
+            options={variantSelectOptions}
             onChange={handleVariantChange}
-            className={`w-full rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-[13px] text-ds-text-primary outline-none ${FOCUS_RING}`}
-          >
-            {variantOptions.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       )}
     </section>

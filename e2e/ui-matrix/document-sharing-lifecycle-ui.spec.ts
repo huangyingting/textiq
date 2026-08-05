@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import { credentialGatedRequest } from "../helpers/credential-gate";
+import { chooseFromSelectMenu } from "../helpers/select-menu";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -315,12 +316,15 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await publicPage.goto(initialShareUrl);
       await expectPublicDocument(publicPage, fixture.title, fixture.content);
 
-      await dialog
-        .getByLabel("Social preview metadata")
-        .selectOption("title-excerpt");
+      await chooseFromSelectMenu(
+        page,
+        dialog,
+        "Social preview metadata",
+        "Title and excerpt",
+      );
       await mutationExpect(
-        dialog.getByLabel("Social preview metadata"),
-      ).toHaveValue("title-excerpt");
+        dialog.getByRole("button", { name: "Social preview metadata" }),
+      ).toContainText("Title and excerpt");
       await dialog
         .getByRole("switch", { name: "Allow search indexing" })
         .click();

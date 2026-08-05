@@ -22,6 +22,7 @@ import {
   SlideSettingsPanel,
   StyleBindingPanel,
 } from "./inspector";
+import { SelectMenu } from "@/components/ui/select-menu";
 import {
   buildImageNode,
   buildShapeNode,
@@ -260,11 +261,16 @@ function withFakeHooks<T>(renderComponent: () => T): T {
   return renderWithTestRenderer(renderComponent);
 }
 
+type CollectedHandler = {
+  handler: (arg?: unknown) => void;
+  isSelectMenu: boolean;
+};
+
 function collectHandlers(
   node: ReactNode,
   propName: string,
-  handlers: ((event?: unknown) => void)[] = [],
-): ((event?: unknown) => void)[] {
+  handlers: CollectedHandler[] = [],
+): CollectedHandler[] {
   if (Array.isArray(node)) {
     for (const child of node) collectHandlers(child, propName, handlers);
     return handlers;
@@ -272,7 +278,10 @@ function collectHandlers(
   if (!isValidElement(node)) return handlers;
   const props = node.props as Record<string, unknown>;
   if (typeof props[propName] === "function") {
-    handlers.push(props[propName] as (event?: unknown) => void);
+    handlers.push({
+      handler: props[propName] as (arg?: unknown) => void,
+      isSelectMenu: node.type === SelectMenu,
+    });
   }
   collectHandlers(props.children as ReactNode, propName, handlers);
   return handlers;
@@ -301,19 +310,23 @@ function invokePanelHandlers(node: ReactNode): number {
     },
   };
   const handlers = [
-    ...collectHandlers(node, "onChange").flatMap((handler) =>
-      changeValues.map(
-        (value) => () =>
-          handler({
-            currentTarget: {
-              value,
-              checked: true,
-            },
-          }),
+    ...collectHandlers(node, "onChange").flatMap(({ handler, isSelectMenu }) =>
+      changeValues.map((value) =>
+        isSelectMenu
+          ? () => handler(value)
+          : () =>
+              handler({
+                currentTarget: {
+                  value,
+                  checked: true,
+                },
+              }),
       ),
     ),
     ...collectHandlers(node, "onClick").map(
-      (handler) => () => handler(clickEvent),
+      ({ handler }) =>
+        () =>
+          handler(clickEvent),
     ),
   ];
   for (const handler of handlers) handler();
@@ -601,7 +614,7 @@ describe("presentation inspector components", () => {
       html,
       /id="deck-chrome-toolbar-footer-enabled" type="checkbox" checked=""/,
     );
-    assert.match(html, /id="deck-chrome-toolbar-override-logo"/);
+    assert.match(html, /for="deck-chrome-toolbar-override-logo"/);
   });
 
   test("renders inspector shell route panels for slide, node, multi-select, decoration, and diagnostics contexts", () => {

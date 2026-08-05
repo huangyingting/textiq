@@ -13,6 +13,7 @@ import type {
 } from "@/lib/presentation/schema";
 import { updateTableCellContent } from "@/lib/presentation/table-cell-editing";
 import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import {
   parseFiniteNumberInput,
   sanitizePercentPoint,
@@ -44,6 +45,31 @@ const CONNECTOR_ANCHORS: ConnectorAnchor[] = [
   "bottom",
   "left",
 ];
+
+const SHAPE_MENU_OPTIONS: readonly SelectMenuOption[] = SHAPE_OPTIONS.map(
+  (shape) => ({ value: shape, label: shape }),
+);
+
+const IMAGE_FIT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "contain", label: "contain" },
+  { value: "cover", label: "cover" },
+  { value: "fill", label: "fill" },
+  { value: "none", label: "none" },
+];
+
+const CONNECTOR_ROUTING_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "straight", label: "straight" },
+  { value: "curved", label: "curved" },
+  { value: "elbow", label: "step" },
+];
+
+const CONNECTOR_ENDPOINT_KIND_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "point", label: "Point" },
+  { value: "node", label: "Node" },
+];
+
+const CONNECTOR_ANCHOR_OPTIONS: readonly SelectMenuOption[] =
+  CONNECTOR_ANCHORS.map((anchor) => ({ value: anchor, label: anchor }));
 
 export function textValue(content: TextContent): string {
   return content.paragraphs.map((paragraph) => paragraph.text).join("\n");
@@ -238,24 +264,20 @@ export function NodeContentPanel({
         </label>
       ) : null}
       {node.type === "shape" ? (
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Shape
-          <select
+          <SelectMenu
+            aria-label="Shape"
+            variant="field"
             value={node.content.shape}
-            onChange={(event) =>
+            options={SHAPE_MENU_OPTIONS}
+            onChange={(next) =>
               onUpdateContent({
-                shape: event.currentTarget.value as ShapeKind,
+                shape: next as ShapeKind,
               })
             }
-            className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-          >
-            {SHAPE_OPTIONS.map((shape) => (
-              <option key={shape} value={shape}>
-                {shape}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
       ) : null}
       {node.type === "image" ? (
         <>
@@ -293,21 +315,16 @@ export function NodeContentPanel({
           >
             Replace image
           </button>
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Fit
-            <select
+            <SelectMenu
+              aria-label="Fit"
+              variant="field"
               value={node.content.fit ?? "cover"}
-              onChange={(event) =>
-                onUpdateContent({ fit: event.currentTarget.value })
-              }
-              className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="contain">contain</option>
-              <option value="cover">cover</option>
-              <option value="fill">fill</option>
-              <option value="none">none</option>
-            </select>
-          </label>
+              options={IMAGE_FIT_OPTIONS}
+              onChange={(next) => onUpdateContent({ fit: next })}
+            />
+          </div>
           <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Alt text
             <input
@@ -512,38 +529,32 @@ export function NodeContentPanel({
             </div>
           ))}
           <div className="grid grid-cols-2 gap-2 rounded-ds-sm border border-ds-border-subtle p-2">
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Target row
-              <select
-                value={tableRowIndex}
-                onChange={(event) =>
-                  setTargetRowIndex(Number(event.currentTarget.value))
-                }
-                className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-              >
-                {node.content.rows.map((row, index) => (
-                  <option key={row.id} value={index}>
-                    Row {index + 1}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+              <SelectMenu
+                aria-label="Target row"
+                variant="field"
+                value={String(tableRowIndex)}
+                options={node.content.rows.map((_row, index) => ({
+                  value: String(index),
+                  label: `Row ${index + 1}`,
+                }))}
+                onChange={(next) => setTargetRowIndex(Number(next))}
+              />
+            </div>
+            <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Target column
-              <select
-                value={tableColumnIndex}
-                onChange={(event) =>
-                  setTargetColumnIndex(Number(event.currentTarget.value))
-                }
-                className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-              >
-                {node.content.columns.map((column, index) => (
-                  <option key={column.id} value={index}>
-                    {column.label || `Column ${index + 1}`}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <SelectMenu
+                aria-label="Target column"
+                variant="field"
+                value={String(tableColumnIndex)}
+                options={node.content.columns.map((column, index) => ({
+                  value: String(index),
+                  label: column.label || `Column ${index + 1}`,
+                }))}
+                onChange={(next) => setTargetColumnIndex(Number(next))}
+              />
+            </div>
             <button
               type="button"
               onClick={() =>
@@ -713,20 +724,16 @@ export function NodeContentPanel({
       ) : null}
       {node.type === "connector" ? (
         <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Routing
-            <select
+            <SelectMenu
+              aria-label="Routing"
+              variant="field"
               value={node.content.routing ?? "straight"}
-              onChange={(event) =>
-                onUpdateContent({ routing: event.currentTarget.value })
-              }
-              className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="straight">straight</option>
-              <option value="curved">curved</option>
-              <option value="elbow">step</option>
-            </select>
-          </label>
+              options={CONNECTOR_ROUTING_OPTIONS}
+              onChange={(next) => onUpdateContent({ routing: next })}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {(["from", "to"] as const).map((side) => {
               const endpoint = node.content[side];
@@ -738,11 +745,13 @@ export function NodeContentPanel({
                   <span className="text-xs font-medium text-ds-text-secondary">
                     {side}
                   </span>
-                  <select
-                    value={endpoint.kind}
+                  <SelectMenu
                     aria-label={`${side} endpoint kind`}
-                    onChange={(event) => {
-                      const kind = event.currentTarget.value;
+                    variant="field"
+                    value={endpoint.kind}
+                    options={CONNECTOR_ENDPOINT_KIND_OPTIONS}
+                    onChange={(next) => {
+                      const kind = next;
                       onUpdateContent({
                         [side]:
                           kind === "node"
@@ -756,11 +765,7 @@ export function NodeContentPanel({
                               },
                       });
                     }}
-                    className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-                  >
-                    <option value="point">Point</option>
-                    <option value="node">Node</option>
-                  </select>
+                  />
                   {endpoint.kind === "point" ? (
                     <>
                       <input
@@ -816,26 +821,20 @@ export function NodeContentPanel({
                         }
                         className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
                       />
-                      <select
-                        value={endpoint.anchor}
+                      <SelectMenu
                         aria-label={`${side} anchor`}
-                        onChange={(event) =>
+                        variant="field"
+                        value={endpoint.anchor}
+                        options={CONNECTOR_ANCHOR_OPTIONS}
+                        onChange={(next) =>
                           onUpdateContent({
                             [side]: {
                               ...endpoint,
-                              anchor: event.currentTarget
-                                .value as ConnectorAnchor,
+                              anchor: next as ConnectorAnchor,
                             },
                           })
                         }
-                        className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-                      >
-                        {CONNECTOR_ANCHORS.map((anchor) => (
-                          <option key={anchor} value={anchor}>
-                            {anchor}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </>
                   )}
                 </div>

@@ -18,6 +18,7 @@ import type { SourceLinkClassification } from "@/lib/presentation/source-links";
 import type { StyleBinding, StylePatch } from "@/lib/presentation/style-schema";
 
 import { InspectorShell, type InspectorShellProps } from "./inspector-shell";
+import { SelectMenu } from "@/components/ui/select-menu";
 import {
   NodeSourcePanel,
   sourceStatus,
@@ -321,12 +322,10 @@ test("InspectorShell final panel select, notes, decoration, and fallback panels 
   const panelSelect = findAll(
     notes,
     (element) =>
-      element.type === "select" &&
+      element.type === SelectMenu &&
       element.props["aria-label"] === "Inspector panel",
   )[0];
-  (panelSelect.props.onChange as (event: unknown) => void)({
-    currentTarget: { value: "layers" },
-  });
+  (panelSelect.props.onChange as (value: string) => void)("layers");
 
   const fallback = renderInspector(recorder, {
     selectedNode: textNode,
@@ -415,10 +414,10 @@ test("InspectorShell final adjust and effects panels emit image and style patche
   const fit = findAll(
     adjust,
     (element) =>
-      element.type === "select" &&
+      element.type === SelectMenu &&
       element.props["aria-label"] !== "Inspector panel",
   )[0];
-  (fit.props.onChange as (event: unknown) => void)(changeEvent("fill"));
+  (fit.props.onChange as (value: string) => void)("fill");
   for (const input of findAll(adjust, (element) => element.type === "input")) {
     if (input.props.type === "range" || input.props.type === "number") {
       (input.props.onChange as (event: unknown) => void)(changeEvent("8"));
@@ -434,18 +433,14 @@ test("InspectorShell final adjust and effects panels emit image and style patche
   const selects = findAll(
     glowEffects,
     (element) =>
-      element.type === "select" &&
+      element.type === SelectMenu &&
       element.props["aria-label"] !== "Inspector panel",
   );
   const effectSelect = selects[0];
   for (const value of ["blur", "glow", "glass", "none"]) {
-    (effectSelect.props.onChange as (event: unknown) => void)(
-      changeEvent(value),
-    );
+    (effectSelect.props.onChange as (value: string) => void)(value);
   }
-  (selects[1].props.onChange as (event: unknown) => void)(
-    changeEvent("screen"),
-  );
+  (selects[1].props.onChange as (value: string) => void)("screen");
   for (const input of findAll(
     glowEffects,
     (element) => element.type === "input",
@@ -537,8 +532,11 @@ test("NodeSourcePanel final statuses and relink controls cover source branches",
     changeEvent("block-3"),
   );
   (inputs[2].props.onChange as (event: unknown) => void)(changeEvent("", true));
-  const kindSelect = findAll(panel, (element) => element.type === "select")[0];
-  (kindSelect.props.onChange as (event: unknown) => void)(changeEvent("image"));
+  const kindSelect = findAll(
+    panel,
+    (element) => element.type === SelectMenu,
+  )[0];
+  (kindSelect.props.onChange as (value: string) => void)("image");
   clickButtons(panel, [
     "Mark updated",
     "Update from document",

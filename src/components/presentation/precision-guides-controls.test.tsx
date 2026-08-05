@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 
+import { SelectMenu } from "@/components/ui/select-menu";
 import { createReactRenderHarness } from "@/test/react-render-harness";
 
 import { PrecisionGuideToolbarControls } from "./precision-guides-controls";
@@ -80,8 +81,12 @@ test("custom guide controls expose accessible roles and invoke operations", () =
     tree,
     (element) => element.props["aria-label"] === "Guide orientation",
   )[0];
-  assert.equal(orientation.type, "select");
+  assert.equal(orientation.type, SelectMenu);
   assert.equal(orientation.props.value, "x");
+  assert.deepEqual(orientation.props.options, [
+    { value: "x", label: "Vertical" },
+    { value: "y", label: "Horizontal" },
+  ]);
 
   const position = collectElements(
     tree,

@@ -9,6 +9,7 @@ import type {
 import type { SourceBlockIndexEntry } from "@/lib/presentation/block-index";
 import type { SourceLinkClassification } from "@/lib/presentation/source-links";
 import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 
 export interface NodeSourcePanelProps {
   node: SlideChildNode;
@@ -26,6 +27,11 @@ const BLOCK_KIND_OPTIONS: NonNullable<NodeSourceMetadata["blockKind"]>[] = [
   "visual",
   "table",
   "image",
+];
+
+const BLOCK_KIND_MENU_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "", label: "Unspecified" },
+  ...BLOCK_KIND_OPTIONS.map((kind) => ({ value: kind, label: kind })),
 ];
 
 export function sourceStatus(
@@ -156,27 +162,20 @@ export function NodeSourcePanel({
           className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 font-mono text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+      <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
         Kind
-        <select
+        <SelectMenu
+          aria-label="Kind"
+          variant="field"
           value={source?.blockKind ?? ""}
-          onChange={(event) =>
+          options={BLOCK_KIND_MENU_OPTIONS}
+          onChange={(next) =>
             updateSource({
-              blockKind: event.currentTarget.value as NonNullable<
-                NodeSourceMetadata["blockKind"]
-              >,
+              blockKind: next as NonNullable<NodeSourceMetadata["blockKind"]>,
             })
           }
-          className={`rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 py-1.5 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-        >
-          <option value="">Unspecified</option>
-          {BLOCK_KIND_OPTIONS.map((kind) => (
-            <option key={kind} value={kind}>
-              {kind}
-            </option>
-          ))}
-        </select>
-      </label>
+        />
+      </div>
       <label className="flex items-center gap-1.5 text-xs text-ds-text-secondary">
         <input
           type="checkbox"

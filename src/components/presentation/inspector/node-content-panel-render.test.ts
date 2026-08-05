@@ -10,6 +10,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { NodeContentPanel } from "./node-content-panel";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import type { SlideChildNode, TableContent } from "@/lib/presentation/schema";
 import { createReactRenderHarness } from "@/test/react-render-harness";
 
@@ -136,15 +137,31 @@ describe("NodeContentPanel render coverage", () => {
     assert.match(textHtml, /Second line/);
     assert.match(textHtml, /Text content\s*<textarea/);
 
-    const shapeHtml = renderPanel(
-      baseNode({
-        id: "shape-1",
-        type: "shape",
-        content: { shape: "diamond" },
+    const shapeNode = baseNode({
+      id: "shape-1",
+      type: "shape",
+      content: { shape: "diamond" },
+    });
+    const shapeHtml = renderPanel(shapeNode);
+    // SelectMenu renders a closed button showing only the selected label, so
+    // assert the selected shape is visible and inspect the element tree for the
+    // Shape select with its full option list.
+    assert.match(shapeHtml, /diamond/);
+    const shapeElement = withMockUseState(() =>
+      NodeContentPanel({
+        node: shapeNode,
+        onUpdateContent: () => undefined,
       }),
     );
-    assert.match(shapeHtml, /<select/);
-    assert.match(shapeHtml, /diamond/);
+    const shapeSelect = elements(shapeElement).find(
+      (element) =>
+        element.type === SelectMenu && element.props["aria-label"] === "Shape",
+    );
+    assert.ok(shapeSelect);
+    assert.equal(shapeSelect.props.value, "diamond");
+    const shapeOptions = shapeSelect.props
+      .options as readonly SelectMenuOption[];
+    assert.ok(shapeOptions.some((option) => option.value === "diamond"));
   });
 
   test("renders image replace affordances with fit, alt, crop, and debug ids", () => {

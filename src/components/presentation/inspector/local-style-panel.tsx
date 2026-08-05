@@ -5,11 +5,52 @@ import type { JSX } from "react";
 import type { SlideChildNode } from "@/lib/presentation/schema";
 import type { StyleObject, StylePatch } from "@/lib/presentation/style-schema";
 import { FOCUS_RING } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import {
   matchSlideFont,
   SLIDE_FONT_OPTIONS,
   slideFontCssStack,
 } from "@/lib/presentation/slide-fonts";
+
+const TEXT_WEIGHT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "300", label: "Light" },
+  { value: "400", label: "Regular" },
+  { value: "600", label: "Semibold" },
+  { value: "700", label: "Bold" },
+];
+
+const TEXT_ALIGN_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
+const CONNECTOR_DASH_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "solid", label: "Solid" },
+  { value: "dashed", label: "Dashed" },
+  { value: "dotted", label: "Dotted" },
+];
+
+const CONNECTOR_ARROW_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "none", label: "None" },
+  { value: "arrow", label: "Arrow" },
+  { value: "filled", label: "Filled" },
+];
+
+const VISUAL_THEME_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "default", label: "Default" },
+  { value: "accent", label: "Accent" },
+  { value: "muted", label: "Muted" },
+  { value: "contrast", label: "Contrast" },
+];
+
+const FONT_FAMILY_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "", label: "Theme default", disabled: true },
+  ...SLIDE_FONT_OPTIONS.map((font) => ({
+    value: font.id,
+    label: <span style={{ fontFamily: font.value }}>{font.label}</span>,
+  })),
+];
 import {
   clampToRange,
   parseFiniteNumberInput,
@@ -242,46 +283,34 @@ export function LocalStylePanel({
                 className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Font family
-              <select
+              <SelectMenu
+                aria-label="Font family"
+                variant="field"
                 value={selectedFontId}
-                onChange={(event) => {
-                  const cssStack = slideFontCssStack(event.currentTarget.value);
+                options={FONT_FAMILY_OPTIONS}
+                buttonClassName={
+                  selectedFont ? undefined : "text-ds-text-muted"
+                }
+                onChange={(next) => {
+                  const cssStack = slideFontCssStack(next);
                   if (!cssStack) return;
                   onUpdateLocalStyle({
                     text: { fontFamily: cssStack },
                   });
                 }}
-                className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-                style={
-                  selectedFont
-                    ? { fontFamily: selectedFont.cssStack }
-                    : undefined
-                }
-              >
-                <option value="" disabled>
-                  Theme default
-                </option>
-                {SLIDE_FONT_OPTIONS.map((font) => (
-                  <option
-                    key={font.id}
-                    value={font.id}
-                    style={{ fontFamily: font.value }}
-                  >
-                    {font.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+              />
+            </div>
+            <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Weight
-              <select
-                value={textWeight ?? 400}
-                onChange={(event) => {
-                  const parsed = parseFiniteNumberInput(
-                    event.currentTarget.value,
-                  );
+              <SelectMenu
+                aria-label="Weight"
+                variant="field"
+                value={String(textWeight ?? 400)}
+                options={TEXT_WEIGHT_OPTIONS}
+                onChange={(next) => {
+                  const parsed = parseFiniteNumberInput(next);
                   if (parsed === undefined) return;
                   onUpdateLocalStyle({
                     text: {
@@ -289,33 +318,24 @@ export function LocalStylePanel({
                     },
                   });
                 }}
-                className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-              >
-                <option value={300}>Light</option>
-                <option value={400}>Regular</option>
-                <option value={600}>Semibold</option>
-                <option value={700}>Bold</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+              />
+            </div>
+            <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
               Align
-              <select
+              <SelectMenu
+                aria-label="Align"
+                variant="field"
                 value={textAlign ?? "left"}
-                onChange={(event) =>
+                options={TEXT_ALIGN_OPTIONS}
+                onChange={(next) =>
                   onUpdateLocalStyle({
                     text: {
-                      align: event.currentTarget.value as
-                        "left" | "center" | "right",
+                      align: next as "left" | "center" | "right",
                     },
                   })
                 }
-                className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-              >
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </label>
+              />
+            </div>
           </div>
           <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Line height
@@ -481,91 +501,79 @@ export function LocalStylePanel({
               className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Dash
-            <select
+            <SelectMenu
+              aria-label="Dash"
+              variant="field"
               value={connectorDash ?? "solid"}
-              onChange={(event) =>
+              options={CONNECTOR_DASH_OPTIONS}
+              onChange={(next) =>
                 onUpdateLocalStyle({
                   connector: {
                     ...node.localStyle?.connector,
                     stroke: {
                       color: currentConnectorStrokeColor,
                       widthPt: connectorWidth,
-                      dash: event.currentTarget.value as
-                        "solid" | "dashed" | "dotted",
+                      dash: next as "solid" | "dashed" | "dotted",
                     },
                   },
                 })
               }
-              className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="solid">Solid</option>
-              <option value="dashed">Dashed</option>
-              <option value="dotted">Dotted</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            />
+          </div>
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Start arrow
-            <select
+            <SelectMenu
+              aria-label="Start arrow"
+              variant="field"
               value={connectorStartArrow ?? "none"}
-              onChange={(event) =>
+              options={CONNECTOR_ARROW_OPTIONS}
+              onChange={(next) =>
                 onUpdateLocalStyle({
                   connector: {
                     ...node.localStyle?.connector,
-                    startArrow: event.currentTarget.value as
-                      "none" | "arrow" | "filled",
+                    startArrow: next as "none" | "arrow" | "filled",
                   },
                 })
               }
-              className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="none">None</option>
-              <option value="arrow">Arrow</option>
-              <option value="filled">Filled</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+            />
+          </div>
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             End arrow
-            <select
+            <SelectMenu
+              aria-label="End arrow"
+              variant="field"
               value={connectorEndArrow ?? "arrow"}
-              onChange={(event) =>
+              options={CONNECTOR_ARROW_OPTIONS}
+              onChange={(next) =>
                 onUpdateLocalStyle({
                   connector: {
                     ...node.localStyle?.connector,
-                    endArrow: event.currentTarget.value as
-                      "none" | "arrow" | "filled",
+                    endArrow: next as "none" | "arrow" | "filled",
                   },
                 })
               }
-              className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="none">None</option>
-              <option value="arrow">Arrow</option>
-              <option value="filled">Filled</option>
-            </select>
-          </label>
+            />
+          </div>
         </div>
       ) : null}
       {canEditVisual ? (
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+          <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
             Visual theme
-            <select
+            <SelectMenu
+              aria-label="Visual theme"
+              variant="field"
               value={node.localStyle?.visual?.styleThemeId ?? "default"}
-              onChange={(event) =>
+              options={VISUAL_THEME_OPTIONS}
+              onChange={(next) =>
                 onUpdateLocalStyle({
-                  visual: { styleThemeId: event.currentTarget.value },
+                  visual: { styleThemeId: next },
                 })
               }
-              className={`h-8 rounded-ds-md border border-ds-border-subtle bg-ds-surface px-2 text-xs text-ds-text-primary outline-none ${FOCUS_RING}`}
-            >
-              <option value="default">Default</option>
-              <option value="accent">Accent</option>
-              <option value="muted">Muted</option>
-              <option value="contrast">Contrast</option>
-            </select>
-          </label>
+            />
+          </div>
           <label className="flex items-center gap-1.5 self-end text-xs text-ds-text-secondary">
             <input
               type="checkbox"

@@ -1568,9 +1568,9 @@ describe("BrandStudio", () => {
               .props.onClick();
           });
           act(() => {
-            renderer.root.findByType("select").props.onChange({
-              target: { value: "" },
-            });
+            renderer.root
+              .findByProps({ "aria-label": "Font" })
+              .props.onChange("");
           });
           await act(async () => {
             findButtonByText(renderer.root, /Save changes/).props.onClick();

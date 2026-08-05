@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { chooseFromSelectMenu } from "../helpers/select-menu";
 import {
   e2eProfileEnabled,
   profileDocPath,
@@ -79,9 +80,7 @@ test.describe("overlapping stage selection regression", () => {
       .getByRole("button", { name: "Open Text inspector" })
       .click();
     const inspector = editor.getByRole("region", { name: "Inspector" });
-    await inspector
-      .getByRole("combobox", { name: "Inspector panel" })
-      .selectOption("layers");
+    await chooseFromSelectMenu(page, inspector, "Inspector panel", "Layers");
     const overlapLayerLabels = () =>
       inspector
         .getByRole("button", {
@@ -215,9 +214,7 @@ test.describe("overlapping stage selection regression", () => {
       .getByRole("toolbar", { name: "Context toolbar" })
       .getByRole("button", { name: "Open Text inspector" })
       .click();
-    await inspector
-      .getByRole("combobox", { name: "Inspector panel" })
-      .selectOption("layers");
+    await chooseFromSelectMenu(page, inspector, "Inspector panel", "Layers");
     await inspector
       .getByRole("button", { name: "Earlier high z", exact: true })
       .click();

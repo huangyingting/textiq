@@ -51,6 +51,7 @@ import {
 } from "@/lib/presentation/current-object-command-descriptors";
 
 import { cx } from "@/components/ui/tokens";
+import { SelectMenu, type SelectMenuOption } from "@/components/ui/select-menu";
 import type {
   SelectionAlignMode,
   SelectionDistributeMode,
@@ -81,6 +82,29 @@ const DEFAULT_SHADOW: ShadowStyle = {
   color: DEFAULT_SHADOW_COLOR,
   opacity: DEFAULT_SHADOW_OPACITY,
 };
+
+const IMAGE_FIT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "contain", label: "contain" },
+  { value: "cover", label: "cover" },
+  { value: "fill", label: "fill" },
+  { value: "none", label: "none" },
+];
+
+const EFFECT_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "none", label: "None" },
+  { value: "blur", label: "Blur" },
+  { value: "glow", label: "Glow" },
+  { value: "glass", label: "Glass" },
+];
+
+const BLEND_MODE_OPTIONS: readonly SelectMenuOption[] = [
+  { value: "normal", label: "Normal" },
+  { value: "multiply", label: "Multiply" },
+  { value: "screen", label: "Screen" },
+  { value: "overlay", label: "Overlay" },
+  { value: "darken", label: "Darken" },
+  { value: "lighten", label: "Lighten" },
+];
 
 // ---------------------------------------------------------------------------
 // Sub-panel wrappers
@@ -417,22 +441,16 @@ function AdjustPanel({
         <h4 className="text-[10px] font-bold uppercase tracking-[0.06em] text-ds-text-muted">
           Image Adjust
         </h4>
-        <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
           Fit mode
-          <select
+          <SelectMenu
+            aria-label="Fit mode"
+            variant="field"
             value={node.content.fit ?? "cover"}
-            onChange={(event) =>
-              onUpdateContent({ fit: event.currentTarget.value })
-            }
-            className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-          >
-            {(["contain", "cover", "fill", "none"] as const).map((fit) => (
-              <option key={fit} value={fit}>
-                {fit}
-              </option>
-            ))}
-          </select>
-        </label>
+            options={IMAGE_FIT_OPTIONS}
+            onChange={(next) => onUpdateContent({ fit: next })}
+          />
+        </div>
         <RangeField
           label="Opacity"
           value={opacity}
@@ -586,23 +604,20 @@ function renderEffectControls({
 }) {
   return (
     <>
-      <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+      <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
         Effect
-        <select
-          value={effect.kind}
-          onChange={(event) =>
+        <SelectMenu
+          aria-label="Effect"
+          variant="field"
+          value={effect.kind ?? "none"}
+          options={EFFECT_OPTIONS}
+          onChange={(next) =>
             onUpdateLocalStyle({
-              effect: resolveEffectForKind(event.currentTarget.value),
+              effect: resolveEffectForKind(next),
             })
           }
-          className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-        >
-          <option value="none">None</option>
-          <option value="blur">Blur</option>
-          <option value="glow">Glow</option>
-          <option value="glass">Glass</option>
-        </select>
-      </label>
+        />
+      </div>
       {effect.kind === "blur" ? (
         <RangeField
           label="Blur radius"
@@ -671,25 +686,20 @@ function renderBlendModeSelect({
   onUpdateLocalStyle: LocalStyleUpdater;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+    <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
       Blend mode
-      <select
+      <SelectMenu
+        aria-label="Blend mode"
+        variant="field"
         value={blendMode}
-        onChange={(event) =>
+        options={BLEND_MODE_OPTIONS}
+        onChange={(next) =>
           onUpdateLocalStyle({
-            blendMode: event.currentTarget.value as BlendMode,
+            blendMode: next as BlendMode,
           })
         }
-        className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-      >
-        <option value="normal">Normal</option>
-        <option value="multiply">Multiply</option>
-        <option value="screen">Screen</option>
-        <option value="overlay">Overlay</option>
-        <option value="darken">Darken</option>
-        <option value="lighten">Lighten</option>
-      </select>
-    </label>
+      />
+    </div>
   );
 }
 
@@ -1060,44 +1070,39 @@ export function InspectorShell({
               <h4 className="text-[10px] font-bold uppercase tracking-[0.06em] text-ds-text-muted">
                 Template
               </h4>
-              <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+              <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
                 Kind
-                <select
+                <SelectMenu
+                  aria-label="Kind"
+                  variant="field"
                   value={activeSlide.template.kind}
-                  onChange={(e) =>
-                    onReapplyTemplate(
-                      e.currentTarget.value as SemanticTemplateKind,
-                    )
+                  options={TEMPLATE_OPTIONS.map((t) => ({
+                    value: t.kind,
+                    label: t.label,
+                  }))}
+                  onChange={(next) =>
+                    onReapplyTemplate(next as SemanticTemplateKind)
                   }
-                  className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-                >
-                  {TEMPLATE_OPTIONS.map((t) => (
-                    <option key={t.kind} value={t.kind}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                />
+              </div>
               {activeTemplate && (
-                <label className="flex flex-col gap-1 text-xs text-ds-text-secondary">
+                <div className="flex flex-col gap-1 text-xs text-ds-text-secondary">
                   Layout
-                  <select
-                    value={activeLayoutId ?? activeTemplate.layouts[0]?.id}
-                    onChange={(e) =>
-                      onReapplyTemplate(
-                        activeSlide.template.kind,
-                        e.currentTarget.value,
-                      )
+                  <SelectMenu
+                    aria-label="Layout"
+                    variant="field"
+                    value={
+                      activeLayoutId ?? activeTemplate.layouts[0]?.id ?? ""
                     }
-                    className="rounded-[var(--ds-radius-md,8px)] border border-ds-border-subtle bg-ds-surface px-2 py-1 text-xs text-ds-text-primary"
-                  >
-                    {activeTemplate.layouts.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    options={activeTemplate.layouts.map((l) => ({
+                      value: l.id,
+                      label: l.id,
+                    }))}
+                    onChange={(next) =>
+                      onReapplyTemplate(activeSlide.template.kind, next)
+                    }
+                  />
+                </div>
               )}
             </section>
             <SlideControlsPanel
