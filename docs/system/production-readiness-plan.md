@@ -118,11 +118,6 @@ never reseed a developer's live database.
 
 ## Remaining release gates
 
-- Confirm GitHub's dependency-alert refresh after publishing batch 5. The
-  previous remote snapshot contained **33 alerts (4 critical, 22 high,
-  7 medium)**; local npm audit now reports zero vulnerabilities, including
-  development dependencies. Do not equate an older remote snapshot with the
-  current lockfile or dismiss an advisory to make a gate green.
 - Exercise Postgres transaction and constraint behavior against the deployment's
   supported database, with a backup/restore and migration rehearsal.
 - Confirm the intended account-admission policy before any invite-only rollout;
@@ -214,12 +209,14 @@ Final verification of the dependency and visual-review batches on 2026-10-23:
 | Check                                                               | Result                                                                                                                         |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Dependency integrity                                                | Zero npm vulnerabilities, including development dependencies; 702 registry signatures and 192 attestations verified            |
+| Hosted dependency alerts                                            | GitHub's API reports zero open Dependabot alerts after publication; the previous snapshot had 33 alerts                        |
 | Prisma validation                                                   | Both provider schemas valid; generated SQLite schema matches the Postgres source                                               |
 | `npm run lint`                                                      | Full ESLint and repository governance checks passed                                                                            |
 | `npm run typecheck`                                                 | Application and document-persistence contracts passed, including after browser-profile configuration restoration               |
 | `npm test`                                                          | All 8,094 source tests and 708 script tests passed; coverage, breadth, ownership-map, and naming gates passed                  |
 | `npm run test:e2e:profile -- --workers=1 --trace=retain-on-failure` | All 177 maintained Chromium tests across 32 files passed against the production build and isolated SQLite database; no retries |
 | Runtime dependency smoke                                            | All 10 checked runtime modules resolve and the generated Prisma client exists; this is not a fresh omit-dev installation       |
+| `npm run docs:check`                                                | Source inventory, browser inventory, links, index reachability, and formatting passed                                          |
 
 Seven reproduced feature/recovery defects were repaired, along with the
 inspector-stacking regression caught during refactoring. Native list replacement,
@@ -227,6 +224,10 @@ responsive typography, touch targets, persisted comments and edits, document
 boundary navigation, and retry recovery now have maintained regression coverage.
 The temporary visual gallery remains separate from the maintained test inventory.
 The profile restored its configuration and stopped its listeners after completion.
+
+The dependency and feature-review checkpoints were published as `399b9d44` and
+`fc58217b`. GitHub's post-publication alert refresh resolved the previous 33 open
+alerts (4 critical, 22 high, 7 medium); no alerts were manually dismissed.
 
 The initial green structural matrix alone did not establish correct visual
 placement or coarse-pointer usability. These expanded local checks still do not
