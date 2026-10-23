@@ -13,6 +13,8 @@ import { createPortal } from "react-dom";
 
 import { usePopMotion } from "@/components/motion/reveal";
 
+import { containsFloatingTarget } from "./floating-target";
+import { OverlayScope } from "./overlay-stack";
 import { cx, MENU_CHROME, UI_LAYER, type UILayer } from "./tokens";
 
 // Gap (px) between the trigger's edge and the panel.
@@ -255,20 +257,6 @@ export function Popover({
     [restorePreviouslyFocusedElement],
   );
 
-  // Escape closes the popover.
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
   // Pointer-down outside the container closes the popover. Capture phase keeps
   // toolbar popovers aligned with SelectMenu: a canvas pointer handler may
   // prevent the later mouse event, but it cannot suppress this close-away path.
@@ -276,8 +264,11 @@ export function Popover({
     if (!open) return;
     const onDocPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      const insideTrigger = containerRef.current?.contains(target) ?? false;
-      const insidePanel = panelRef.current?.contains(target) ?? false;
+      const insideTrigger = containsFloatingTarget(
+        containerRef.current,
+        target,
+      );
+      const insidePanel = containsFloatingTarget(panelRef.current, target);
       if (!insideTrigger && !insidePanel) {
         onClose();
       }
@@ -288,42 +279,44 @@ export function Popover({
   }, [open, onClose]);
 
   const panel = (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          ref={panelRef}
-          data-floating-panel="true"
-          role={role}
-          aria-label={ariaLabel}
-          initial={popMotion.initial}
-          animate={popMotion.animate}
-          exit={popMotion.exit}
-          transition={popMotion.transition}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerMove={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-          onMouseMove={(event) => event.stopPropagation()}
-          style={{
-            top: coords.top,
-            bottom: coords.bottom,
-            left: coords.left,
-            maxHeight: coords.maxHeight,
-          }}
-          className={cx(
-            "fixed max-w-[calc(100vw-1rem)]",
-            UI_LAYER[layer],
-            // Default sizing only when the caller doesn't supply its own.
-            // `cx` concatenates without Tailwind-merge, so a hardcoded
-            // default width/padding would otherwise override the caller's.
-            className ? undefined : "w-80 p-4",
-            MENU_CHROME,
-            className,
-          )}
-        >
-          {children}
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    <OverlayScope open={open} onEscape={onClose}>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            ref={panelRef}
+            data-floating-panel="true"
+            role={role}
+            aria-label={ariaLabel}
+            initial={popMotion.initial}
+            animate={popMotion.animate}
+            exit={popMotion.exit}
+            transition={popMotion.transition}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerMove={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onMouseMove={(event) => event.stopPropagation()}
+            style={{
+              top: coords.top,
+              bottom: coords.bottom,
+              left: coords.left,
+              maxHeight: coords.maxHeight,
+            }}
+            className={cx(
+              "fixed max-w-[calc(100vw-1rem)]",
+              UI_LAYER[layer],
+              // Default sizing only when the caller doesn't supply its own.
+              // `cx` concatenates without Tailwind-merge, so a hardcoded
+              // default width/padding would otherwise override the caller's.
+              className ? undefined : "w-80 p-4",
+              MENU_CHROME,
+              className,
+            )}
+          >
+            {children}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </OverlayScope>
   );
 
   return (

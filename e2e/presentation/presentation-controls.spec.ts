@@ -298,6 +298,20 @@ test.describe("presentation editing controls", () => {
       "Guide orientation",
       "Vertical",
     );
+    const orientation = customGuides.getByRole("button", {
+      name: "Guide orientation",
+      exact: true,
+    });
+    await orientation.press("ArrowDown");
+    await expect(
+      page.getByRole("listbox", { name: "Guide orientation" }),
+    ).toBeVisible();
+    await orientation.press("Escape");
+    await expect(
+      page.getByRole("listbox", { name: "Guide orientation" }),
+    ).toHaveCount(0);
+    await expect(customGuides).toBeVisible();
+    await expect(orientation).toBeFocused();
     await customGuides.getByLabel("Guide position (%)").fill("37");
     await customGuides.getByRole("button", { name: "Add guide" }).click();
     await expect(customGuides.getByText(/vertical.*37%/i)).toBeVisible();

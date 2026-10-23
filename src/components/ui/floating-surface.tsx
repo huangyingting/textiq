@@ -15,6 +15,8 @@ import { createPortal } from "react-dom";
 
 import { usePopMotion } from "@/components/motion/reveal";
 
+import { containsFloatingTarget } from "./floating-target";
+import { OverlayScope } from "./overlay-stack";
 import {
   cx,
   ELEVATION,
@@ -152,7 +154,7 @@ export function FloatingSurface({
     }
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      const insideSurface = ref.current?.contains(target) ?? false;
+      const insideSurface = containsFloatingTarget(ref.current, target);
       const insideIgnored =
         clickAwayIgnoreRef?.current?.contains(target) ?? false;
       if (!insideSurface && !insideIgnored) {
@@ -165,56 +167,43 @@ export function FloatingSurface({
       document.removeEventListener("mousedown", onPointerDown, capture);
   }, [open, closeOnClickAway, clickAwayIgnoreRef, onClose]);
 
-  useEffect(() => {
-    if (!open || !closeOnEscape) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        onClose?.();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, closeOnEscape, onClose]);
-
   if (!mounted) {
     return null;
   }
 
   return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          ref={ref}
-          data-floating-panel="true"
-          role={role}
-          aria-label={ariaLabel}
-          onMouseDown={
-            keepSelection ? (event) => event.preventDefault() : undefined
-          }
-          onPointerMove={(event) => event.stopPropagation()}
-          onMouseMove={(event) => event.stopPropagation()}
-          initial={popMotion.initial}
-          animate={popMotion.animate}
-          exit={popMotion.exit}
-          transition={popMotion.transition}
-          style={{ top: clamped.top, left: clamped.left, ...style }}
-          className={cx(
-            "fixed border",
-            UI_LAYER[layer],
-            SURFACE_BASE,
-            RADIUS[radius],
-            ELEVATION[elevation],
-            className,
-          )}
-        >
-          {children}
-        </motion.div>
-      ) : null}
-    </AnimatePresence>,
+    <OverlayScope open={open && closeOnEscape} onEscape={onClose}>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            ref={ref}
+            data-floating-panel="true"
+            role={role}
+            aria-label={ariaLabel}
+            onMouseDown={
+              keepSelection ? (event) => event.preventDefault() : undefined
+            }
+            onPointerMove={(event) => event.stopPropagation()}
+            onMouseMove={(event) => event.stopPropagation()}
+            initial={popMotion.initial}
+            animate={popMotion.animate}
+            exit={popMotion.exit}
+            transition={popMotion.transition}
+            style={{ top: clamped.top, left: clamped.left, ...style }}
+            className={cx(
+              "fixed border",
+              UI_LAYER[layer],
+              SURFACE_BASE,
+              RADIUS[radius],
+              ELEVATION[elevation],
+              className,
+            )}
+          >
+            {children}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </OverlayScope>,
     document.body,
   );
 }

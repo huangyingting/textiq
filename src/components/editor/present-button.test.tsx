@@ -266,9 +266,14 @@ function resolveDialogSurface(dialog: ElementLike) {
   const surface = (
     dialog.type as (props: Record<string, unknown>) => ReactNode
   )(dialog.props) as ElementLike;
-  return (surface.type as (props: Record<string, unknown>) => ReactNode)(
-    surface.props,
-  );
+  const portal = (
+    surface.type as (props: Record<string, unknown>) => ReactNode
+  )(surface.props) as React.ReactPortal;
+  assert.ok(isValidElement(portal.children));
+  const scope = portal.children as ElementLike;
+  assert.equal(typeof scope.type, "function");
+  (scope.type as (props: Record<string, unknown>) => ReactNode)(scope.props);
+  return portal;
 }
 
 function textContent(node: ReactNode): string {

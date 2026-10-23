@@ -12,6 +12,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import { credentialGatedRequest } from "../helpers/credential-gate";
+import { safeParseCurrentDeck } from "@/lib/document/deck-schema";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -301,6 +302,7 @@ test.describe("Block-id preservation", () => {
 
     const actionsButton = page.getByRole("button", {
       name: `Actions for ${original!.title}`,
+      exact: true,
     });
     await expect(actionsButton).toBeVisible({ timeout: 60_000 });
     await actionsButton.click();
@@ -341,6 +343,38 @@ test.describe("Block-id preservation", () => {
           !originalBids.includes(source.blockId),
       ),
     ).toBe(true);
+
+    const copiedDeck = safeParseCurrentDeck(duplicate!.deckJson);
+    expect(copiedDeck.success).toBe(true);
+    if (!copiedDeck.success) throw new Error("Duplicated deck is invalid.");
+    const copiedImages = Object.values(copiedDeck.data.assets.images).filter(
+      (image) => image.src.startsWith(`/api/slide-assets/${duplicate!.id}/`),
+    );
+    expect(copiedImages.length).toBeGreaterThan(0);
+    for (const image of copiedImages) {
+      const response = await credentialGatedRequest(page).get(image.src);
+      expect(response.status()).toBe(200);
+      expect((await response.body()).byteLength).toBeGreaterThan(0);
+    }
+    await page.goto(`/app/documents/${duplicate!.id}/slides`);
+    const copiedImage = page
+      .locator(
+        `[data-slide-canvas="true"] img[src^="/api/slide-assets/${duplicate!.id}/"]`,
+      )
+      .first();
+    await expect(copiedImage).toBeVisible();
+    await expect
+      .poll(() =>
+        copiedImage.evaluate(
+          (image) =>
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0,
+        ),
+      )
+      .toBe(true);
+    await page.reload();
+    await expect(copiedImage).toBeVisible();
 
     await page.goto("/app");
     const duplicateCard = page

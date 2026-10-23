@@ -827,12 +827,23 @@ describe("ShareButton", () => {
             }).props.onCheckedChange as (v: boolean) => Promise<void>
           )(false);
         });
-        await act(async () => {
-          await (
-            renderer.root.findByProps({ value: "title-excerpt" }).parent!.props
-              .onChange as (e: unknown) => Promise<void>
-          )({ target: { value: "title-excerpt" } });
+        act(() => {
+          (
+            findByAria(renderer.root, "Social preview metadata").props
+              .onClick as () => void
+          )();
         });
+        await act(async () => {
+          const option = renderer.root
+            .findAllByProps({ role: "option" })
+            .find((node) => textOf(node) === "Title and excerpt");
+          assert.ok(option, "metadata menu exposes the title/excerpt choice");
+          (option.findByType("button").props.onClick as () => void)();
+        });
+        assert.equal(
+          textOf(findByAria(renderer.root, "Social preview metadata")),
+          "Title and excerpt",
+        );
         await act(async () => {
           await (
             renderer.root.findByProps({

@@ -322,9 +322,9 @@ test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
       }),
     );
     const fontAssetUrl = (uploadBody as { url: string }).url;
-    await expect(page.getByRole("button", { name: "Font" })).toContainText(
-      `Custom: ${fixture.fontFamily}`,
-    );
+    await expect(
+      page.getByRole("button", { name: "Font", exact: true }),
+    ).toContainText(`Custom: ${fixture.fontFamily}`);
 
     const brandsPath = "/app/brands";
     const brandActionRoute = `**${brandsPath}`;

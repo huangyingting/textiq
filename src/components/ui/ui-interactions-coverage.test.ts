@@ -56,6 +56,7 @@ const functionComponentsToResolve = new Set([
   "Popover",
   "Tooltip",
   "OverlayProvider",
+  "OverlayScope",
   "ModalSurface",
   "DrawerSurface",
   "BottomSheetSurface",
@@ -353,7 +354,12 @@ function textContent(node: ReactNode): string {
 
 function resolveKnown(node: ReactNode): ReactNode {
   if (Array.isArray(node)) return node.map(resolveKnown);
-  if (!isValidElement(node)) return node;
+  if (!isValidElement(node)) {
+    const portal = node as React.ReactPortal | null;
+    return portal?.children
+      ? { ...portal, children: resolveKnown(portal.children) }
+      : node;
+  }
   const element = node as ElementLike;
   const type = element.type;
   if (

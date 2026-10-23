@@ -24,7 +24,8 @@ import { cx, ELEVATION, RADIUS, SURFACE_BASE } from "./tokens";
 
 type OverlayEntry = {
   id: string;
-  onEscape?: () => void;
+  parentId: string | null;
+  lockBody: boolean;
 };
 
 type OverlayStackContextValue = {
@@ -35,16 +36,17 @@ type OverlayStackContextValue = {
 const OverlayStackContext = createContext<OverlayStackContextValue | null>(
   null,
 );
+const OverlayParentContext = createContext<string | null>(null);
 
 export function OverlayProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<OverlayEntry[]>([]);
   const stackRef = useRef<OverlayEntry[]>(stack);
 
   const register = useCallback((entry: OverlayEntry) => {
-    const next = [
-      ...stackRef.current.filter((item) => item.id !== entry.id),
-      entry,
-    ];
+    const next = stackRef.current.filter((item) => item.id !== entry.id);
+    // Child effects register first on mount; keep their parent below them.
+    const childIndex = next.findIndex((item) => item.parentId === entry.id);
+    next.splice(childIndex < 0 ? next.length : childIndex, 0, entry);
     stackRef.current = next;
     setStack(next);
     return () => {
@@ -58,8 +60,9 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const bodyLocked = stack.some((entry) => entry.lockBody);
   useEffect(() => {
-    if (stack.length === 0) {
+    if (!bodyLocked) {
       return;
     }
     const previousOverflow = document.body.style.overflow;
@@ -67,7 +70,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [stack.length]);
+  }, [bodyLocked]);
 
   const value = useMemo<OverlayStackContextValue>(
     () => ({ register, isTop }),
@@ -81,10 +84,15 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function useOverlayStack(open: boolean, onEscape?: () => void) {
+function useOverlayStack(
+  open: boolean,
+  onEscape?: () => void,
+  lockBody = true,
+) {
   const explicitId = useId();
-  const fallbackId = useRef(`overlay-${explicitId}`);
+  const id = `overlay-${explicitId}`;
   const context = useContext(OverlayStackContext);
+  const parentId = useContext(OverlayParentContext);
   const register = context?.register;
   const isTop = context?.isTop;
   const onEscapeRef = useRef(onEscape);
@@ -97,8 +105,8 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
     if (!open || !register) {
       return;
     }
-    return register({ id: fallbackId.current });
-  }, [open, register]);
+    return register({ id, parentId, lockBody });
+  }, [open, register, id, parentId, lockBody]);
 
   useEffect(() => {
     if (!open) {
@@ -108,7 +116,7 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
       if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
-      if (isTop && !isTop(fallbackId.current)) {
+      if (isTop && !isTop(id)) {
         return;
       }
       event.preventDefault();
@@ -117,7 +125,28 @@ function useOverlayStack(open: boolean, onEscape?: () => void) {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isTop, open]);
+  }, [id, isTop, open]);
+
+  return id;
+}
+
+export function OverlayScope({
+  open,
+  onEscape,
+  lockBody = false,
+  children,
+}: {
+  open: boolean;
+  onEscape?: () => void;
+  lockBody?: boolean;
+  children: ReactNode;
+}) {
+  const id = useOverlayStack(open, onEscape, lockBody);
+  return (
+    <OverlayParentContext.Provider value={id}>
+      {children}
+    </OverlayParentContext.Provider>
+  );
 }
 
 function useFocusTrap(
@@ -219,51 +248,52 @@ export function ModalSurface({
 }: OverlaySurfaceProps) {
   const motionPreset = resolveOverlayMotion(Boolean(useReducedMotion())).modal;
   const { panelRef, onKeyDown } = useFocusTrap(open, restoreFocusRef);
-  useOverlayStack(open, onClose);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <div
-          data-floating-panel="true"
-          className={cx(
-            "fixed inset-0 z-modal flex justify-center p-4",
-            containerClassName ?? "items-center",
-          )}
-        >
+    <OverlayScope open={open} onEscape={onClose} lockBody>
+      <AnimatePresence>
+        {open ? (
           <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-ds-backdrop"
-            onClick={onClose}
-          />
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={ariaLabel}
-            aria-labelledby={labelledBy}
-            aria-busy={busy}
-            tabIndex={-1}
-            initial={motionPreset.initial}
-            animate={motionPreset.animate}
-            exit={motionPreset.exit}
-            transition={motionPreset.transition}
-            onKeyDown={onKeyDown}
+            data-floating-panel="true"
             className={cx(
-              "relative z-raised w-full max-w-lg border p-6 outline-none",
-              SURFACE_BASE,
-              RADIUS.lg,
-              ELEVATION.popover,
-              className,
+              "fixed inset-0 z-modal flex justify-center p-4",
+              containerClassName ?? "items-center",
             )}
           >
-            {children}
-          </motion.div>
-        </div>
-      ) : null}
-    </AnimatePresence>,
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-ds-backdrop"
+              onClick={onClose}
+            />
+            <motion.div
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={ariaLabel}
+              aria-labelledby={labelledBy}
+              aria-busy={busy}
+              tabIndex={-1}
+              initial={motionPreset.initial}
+              animate={motionPreset.animate}
+              exit={motionPreset.exit}
+              transition={motionPreset.transition}
+              onKeyDown={onKeyDown}
+              className={cx(
+                "relative z-raised w-full max-w-lg border p-6 outline-none",
+                SURFACE_BASE,
+                RADIUS.lg,
+                ELEVATION.popover,
+                className,
+              )}
+            >
+              {children}
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
+    </OverlayScope>,
     document.body,
   );
 }
@@ -278,47 +308,48 @@ export function DrawerSurface({
 }: OverlaySurfaceProps) {
   const motionPresets = resolveOverlayMotion(Boolean(useReducedMotion()));
   const { panelRef, onKeyDown } = useFocusTrap(open);
-  useOverlayStack(open, onClose);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            key="drawer-backdrop"
-            aria-hidden="true"
-            initial={motionPresets.backdrop.initial}
-            animate={motionPresets.backdrop.animate}
-            exit={motionPresets.backdrop.exit}
-            transition={motionPresets.backdrop.transition}
-            onClick={onClose}
-            className="fixed inset-0 z-overlay bg-ds-backdrop md:hidden"
-          />
-          <motion.div
-            key="drawer-panel"
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={ariaLabel}
-            aria-labelledby={labelledBy}
-            tabIndex={-1}
-            initial={motionPresets.drawer.initial}
-            animate={motionPresets.drawer.animate}
-            exit={motionPresets.drawer.exit}
-            transition={motionPresets.drawer.transition}
-            onKeyDown={onKeyDown}
-            className={cx(
-              "tiq-full-viewport fixed right-0 top-0 z-panel flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto border-l border-ds-border-strong bg-ds-surface-base shadow-ds-popover outline-none md:hidden",
-              className,
-            )}
-          >
-            {children}
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>,
+    <OverlayScope open={open} onEscape={onClose} lockBody>
+      <AnimatePresence>
+        {open ? (
+          <>
+            <motion.div
+              key="drawer-backdrop"
+              aria-hidden="true"
+              initial={motionPresets.backdrop.initial}
+              animate={motionPresets.backdrop.animate}
+              exit={motionPresets.backdrop.exit}
+              transition={motionPresets.backdrop.transition}
+              onClick={onClose}
+              className="fixed inset-0 z-overlay bg-ds-backdrop md:hidden"
+            />
+            <motion.div
+              key="drawer-panel"
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={ariaLabel}
+              aria-labelledby={labelledBy}
+              tabIndex={-1}
+              initial={motionPresets.drawer.initial}
+              animate={motionPresets.drawer.animate}
+              exit={motionPresets.drawer.exit}
+              transition={motionPresets.drawer.transition}
+              onKeyDown={onKeyDown}
+              className={cx(
+                "tiq-full-viewport fixed right-0 top-0 z-panel flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto border-l border-ds-border-strong bg-ds-surface-base shadow-ds-popover outline-none md:hidden",
+                className,
+              )}
+            >
+              {children}
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+    </OverlayScope>,
     document.body,
   );
 }
@@ -333,47 +364,48 @@ export function BottomSheetSurface({
 }: OverlaySurfaceProps) {
   const motionPresets = resolveOverlayMotion(Boolean(useReducedMotion()));
   const { panelRef, onKeyDown } = useFocusTrap(open);
-  useOverlayStack(open, onClose);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            key="bottom-sheet-backdrop"
-            aria-hidden="true"
-            initial={motionPresets.backdrop.initial}
-            animate={motionPresets.backdrop.animate}
-            exit={motionPresets.backdrop.exit}
-            transition={motionPresets.backdrop.transition}
-            onClick={onClose}
-            className="fixed inset-0 z-overlay bg-ds-backdrop"
-          />
-          <motion.div
-            key="bottom-sheet-panel"
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={ariaLabel}
-            aria-labelledby={labelledBy}
-            tabIndex={-1}
-            initial={motionPresets.sheet.initial}
-            animate={motionPresets.sheet.animate}
-            exit={motionPresets.sheet.exit}
-            transition={motionPresets.sheet.transition}
-            onKeyDown={onKeyDown}
-            className={cx(
-              "tiq-mobile-sheet fixed bottom-0 left-0 right-0 z-panel flex flex-col overflow-hidden rounded-t-ds-xl border-t border-ds-border-subtle bg-ds-surface-base shadow-ds-popover outline-none",
-              className,
-            )}
-          >
-            {children}
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>,
+    <OverlayScope open={open} onEscape={onClose} lockBody>
+      <AnimatePresence>
+        {open ? (
+          <>
+            <motion.div
+              key="bottom-sheet-backdrop"
+              aria-hidden="true"
+              initial={motionPresets.backdrop.initial}
+              animate={motionPresets.backdrop.animate}
+              exit={motionPresets.backdrop.exit}
+              transition={motionPresets.backdrop.transition}
+              onClick={onClose}
+              className="fixed inset-0 z-overlay bg-ds-backdrop"
+            />
+            <motion.div
+              key="bottom-sheet-panel"
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={ariaLabel}
+              aria-labelledby={labelledBy}
+              tabIndex={-1}
+              initial={motionPresets.sheet.initial}
+              animate={motionPresets.sheet.animate}
+              exit={motionPresets.sheet.exit}
+              transition={motionPresets.sheet.transition}
+              onKeyDown={onKeyDown}
+              className={cx(
+                "tiq-mobile-sheet fixed bottom-0 left-0 right-0 z-panel flex flex-col overflow-hidden rounded-t-ds-xl border-t border-ds-border-subtle bg-ds-surface-base shadow-ds-popover outline-none",
+                className,
+              )}
+            >
+              {children}
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+    </OverlayScope>,
     document.body,
   );
 }

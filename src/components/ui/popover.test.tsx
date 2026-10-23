@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import type { ReactElement } from "react";
-import { act, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
-import { mountWithPortalDom, withPortalDom } from "@/test/portal-dom";
+import {
+  createPortalNodeMock,
+  mountWithPortalDom,
+  withPortalDom,
+} from "@/test/portal-dom";
 import { Popover } from "./popover";
 
 const originalConsoleError = console.error.bind(console);
@@ -117,5 +121,88 @@ test("Popover restores opener focus when an open instance unmounts", () => {
       1,
       "removing an interactive popover must not strand focus in detached content",
     );
+  });
+});
+
+test("Popover keeps a portaled child menu interactive without accepting unrelated menus", () => {
+  withPortalDom(() => {
+    const listeners = new Map<string, EventListener>();
+    document.addEventListener = ((type: string, listener: EventListener) => {
+      listeners.set(type, listener);
+    }) as typeof document.addEventListener;
+    document.removeEventListener = (() =>
+      undefined) as typeof document.removeEventListener;
+    const trigger = createPortalNodeMock();
+    document.getElementById = ((id: string) =>
+      id === "child-trigger"
+        ? trigger
+        : null) as typeof document.getElementById;
+    const menu = {
+      getAttribute: () => "child-trigger",
+      ownerDocument: document,
+    };
+    const target = { nodeType: 1, closest: () => menu };
+    const closed: string[] = [];
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        <Popover
+          open
+          onClose={() => closed.push("closed")}
+          trigger={<button type="button">Open</button>}
+          aria-label="Parent actions"
+        >
+          <button type="button">Child menu</button>
+        </Popover>,
+        {
+          createNodeMock: () => ({
+            ...createPortalNodeMock(),
+            contains: (node: unknown) => node === trigger,
+          }),
+        },
+      );
+    });
+    try {
+      act(() => listeners.get("pointerdown")!({ target } as unknown as Event));
+      assert.deepEqual(
+        closed,
+        [],
+        "selecting a child menu must not dismiss its parent",
+      );
+
+      menu.getAttribute = () => "unrelated-trigger";
+      act(() => listeners.get("pointerdown")!({ target } as unknown as Event));
+      assert.deepEqual(closed, ["closed"]);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+});
+
+test("Popover leaves an Escape already handled by its child menu alone", () => {
+  withPortalDom(() => {
+    let keyListener: EventListener | undefined;
+    document.addEventListener = ((type: string, listener: EventListener) => {
+      if (type === "keydown") keyListener = listener;
+    }) as typeof document.addEventListener;
+    const closed: string[] = [];
+    const renderer = mountWithPortalDom(
+      <Popover open onClose={() => closed.push("closed")} trigger={null}>
+        Child
+      </Popover>,
+    );
+    try {
+      act(() =>
+        keyListener!({
+          key: "Escape",
+          defaultPrevented: true,
+          preventDefault() {},
+          stopPropagation() {},
+        } as unknown as Event),
+      );
+      assert.deepEqual(closed, []);
+    } finally {
+      act(() => renderer.unmount());
+    }
   });
 });

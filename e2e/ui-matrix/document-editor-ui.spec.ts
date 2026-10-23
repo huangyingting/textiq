@@ -65,7 +65,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   test("selected text exposes a keyboard-operable formatting toolbar and restores editor focus", async ({
     page,
   }) => {
-    await openProfileDocument(page);
+    await openProfileDocument(page, "documentTextFormatting");
     await selectSeededDocumentText(page);
 
     const body = page.getByRole("textbox", { name: "Document body" });
@@ -110,7 +110,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   test("slash insert filtering supports keyboard navigation and Escape dismissal", async ({
     page,
   }) => {
-    await openProfileDocument(page);
+    await openProfileDocument(page, "documentSlashInsert");
 
     const body = page.getByRole("textbox", { name: "Document body" });
     await placeCaretAtEndOfSeededDocumentText(page);
@@ -145,7 +145,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   test("visual editing transfers keyboard focus into its tools and restores the preview on Escape", async ({
     page,
   }) => {
-    await openProfileDocument(page);
+    await openProfileDocument(page, "documentVisualControls");
 
     const preview = page.getByRole("button", { name: "Edit visual" });
     await preview.focus();
@@ -170,7 +170,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
   test("table controls mutate structure and require confirmation before deletion", async ({
     page,
   }) => {
-    await openProfileDocument(page);
+    await openProfileDocument(page, "documentTableEditing");
 
     const body = page.getByRole("textbox", { name: "Document body" });
     await placeCaretAtEndOfSeededDocumentText(page);
@@ -258,7 +258,7 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
     test("selected text uses the mobile editing sheet, keeps its color picker above the sheet, and restores its trigger on Escape @required-profile", async ({
       page,
     }) => {
-      await openProfileDocument(page);
+      await openProfileDocument(page, "documentMobileFormatting");
       await selectSeededDocumentText(page);
 
       await expect(

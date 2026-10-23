@@ -376,9 +376,12 @@ test.describe("UI matrix: document sharing lifecycle", () => {
       await expect(dialog.getByLabel("Public share link")).toHaveValue(
         initialShareUrl,
       );
-      await expect(dialog.getByLabel("Social preview metadata")).toHaveValue(
-        "title-excerpt",
-      );
+      await expect(
+        dialog.getByRole("button", {
+          name: "Social preview metadata",
+          exact: true,
+        }),
+      ).toContainText("Title and excerpt");
       await expect(
         dialog.getByRole("switch", { name: "Allow search indexing" }),
       ).toHaveAttribute("aria-checked", "true");

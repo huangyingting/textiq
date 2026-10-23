@@ -291,8 +291,8 @@ async function expectRightPanelLayout(
       : page.getByRole("dialog", { name: "Text inspector" });
   await expect(inspector).toBeVisible();
   await expect(
-    inspector.getByLabel("Inspector panel", { exact: true }),
-  ).toHaveValue("text");
+    inspector.getByRole("button", { name: "Inspector panel", exact: true }),
+  ).toContainText("Text");
 
   await expectLayoutState(
     screenshotRoot,

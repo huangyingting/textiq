@@ -128,6 +128,116 @@ test("Escape closes only the nested FloatingSurface above a modal", () => {
   });
 });
 
+for (const surface of ["popover", "floating"] as const) {
+  test(`Escape preserves an existing modal when its ${surface} opens later`, () => {
+    withPortalDom(() => {
+      const documentEvents = installDocumentListeners();
+      const closed: string[] = [];
+      const render = (open: boolean) => (
+        <OverlayProvider>
+          <ModalSurface
+            open
+            onClose={() => closed.push("modal")}
+            aria-label="Parent dialog"
+          >
+            {surface === "popover" ? (
+              <Popover
+                open={open}
+                onClose={() => closed.push(surface)}
+                trigger={<button type="button">Actions</button>}
+                portal
+              >
+                Nested action
+              </Popover>
+            ) : (
+              <FloatingSurface
+                open={open}
+                onClose={() => closed.push(surface)}
+                position={{ top: 40, left: 40 }}
+              >
+                Nested action
+              </FloatingSurface>
+            )}
+          </ModalSurface>
+        </OverlayProvider>
+      );
+      const renderer = mountWithPortalDom(render(false));
+      try {
+        act(() => renderer.update(render(true)));
+        act(() => {
+          documentEvents.dispatchEscape();
+        });
+        assert.deepEqual(closed, [surface]);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+}
+
+test("transient surfaces participate in Escape ordering without locking body scroll", () => {
+  withPortalDom(() => {
+    const documentEvents = installDocumentListeners();
+    document.body.style.overflow = "clip";
+    let closed = false;
+    const renderer = mountWithPortalDom(
+      <OverlayProvider>
+        <FloatingSurface
+          open
+          onClose={() => {
+            closed = true;
+          }}
+          position={{ top: 40, left: 40 }}
+        >
+          Nested action
+        </FloatingSurface>
+      </OverlayProvider>,
+    );
+    try {
+      assert.equal(document.body.style.overflow, "clip");
+      act(() => {
+        documentEvents.dispatchEscape();
+      });
+      assert.equal(closed, true);
+    } finally {
+      act(() => renderer.unmount());
+    }
+    assert.equal(document.body.style.overflow, "clip");
+  });
+});
+
+test("initially open nested modals close their child before their parent", () => {
+  withPortalDom(() => {
+    const documentEvents = installDocumentListeners();
+    const closed: string[] = [];
+    const renderer = mountWithPortalDom(
+      <OverlayProvider>
+        <ModalSurface
+          open
+          onClose={() => closed.push("parent")}
+          aria-label="Parent dialog"
+        >
+          <ModalSurface
+            open
+            onClose={() => closed.push("child")}
+            aria-label="Child dialog"
+          >
+            Child
+          </ModalSurface>
+        </ModalSurface>
+      </OverlayProvider>,
+    );
+    try {
+      act(() => {
+        documentEvents.dispatchEscape();
+      });
+      assert.deepEqual(closed, ["child"]);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  });
+});
+
 function renderModalStack(
   secondOpen: boolean,
   onFirstClose: () => void,

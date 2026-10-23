@@ -46,6 +46,31 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr03",
     "e2e-isolated-undo-redo",
   ),
+  documentTextFormatting: presentationFixture(
+    "e2eisolateddocformat0001",
+    "e2eisolatedshr39",
+    "e2e-isolated-document-formatting",
+  ),
+  documentSlashInsert: presentationFixture(
+    "e2eisolateddocslash00001",
+    "e2eisolatedshr40",
+    "e2e-isolated-document-slash",
+  ),
+  documentVisualControls: presentationFixture(
+    "e2eisolateddocvisual0001",
+    "e2eisolatedshr41",
+    "e2e-isolated-document-visual",
+  ),
+  documentTableEditing: presentationFixture(
+    "e2eisolateddoctable00001",
+    "e2eisolatedshr42",
+    "e2e-isolated-document-table",
+  ),
+  documentMobileFormatting: presentationFixture(
+    "e2eisolateddocmobile001",
+    "e2eisolatedshr43",
+    "e2e-isolated-document-mobile",
+  ),
   blockIdPreservation: presentationFixture(
     "e2eisolatedblockids000001",
     "e2eisolatedshr27",
