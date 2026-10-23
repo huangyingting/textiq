@@ -159,6 +159,25 @@ test("#1253: collectDeckAssetRefs preserves assets.visuals registry refs", () =>
   assert.equal(refs.size, 2);
 });
 
+test("collectDeckAssetRefs retains registered images and files even before a node uses them", () => {
+  const refs = collectDeckAssetRefs({
+    schemaVersion: 7,
+    assets: {
+      images: {
+        "image-key": { id: "image-id", src: "/api/slide-assets/doc/image.png" },
+      },
+      files: {
+        "file-key": { id: "file-id", src: "/api/slide-assets/doc/file.bin" },
+      },
+    },
+    slides: [],
+  });
+  assert.deepEqual(
+    refs,
+    new Set(["image-key", "image-id", "file-key", "file-id"]),
+  );
+});
+
 test("#1395: collectDeckAssetRefs extracts deck chrome logo asset ids", () => {
   const deck = {
     schemaVersion: 7,

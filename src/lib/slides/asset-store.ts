@@ -28,11 +28,20 @@ export async function storeSlideAsset(opts: {
     originalName: meta.originalName,
     mimeToExt: MIME_TO_EXT,
     storage: adapter,
+    storeBeforeFind: true,
     async findExisting({ checksum }) {
       return prisma.asset.findFirst({
         where: { documentId, checksum },
-        select: { id: true, storageKey: true },
+        select: { id: true, storageKey: true, deletedAt: true },
       });
+    },
+    async updateExisting(existing) {
+      if (existing.deletedAt) {
+        await prisma.asset.update({
+          where: { id: existing.id },
+          data: { deletedAt: null },
+        });
+      }
     },
     async createAsset(input) {
       return prisma.asset.create({

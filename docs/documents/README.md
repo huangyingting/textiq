@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-08-01"
+last_updated: "2026-10-23"
 description: "This subsystem covers document creation, duplication, dashboard listing, search, tags, favorites, trash, and dashboard-load maintenance. Editor content state is documented in ../editor/; persisted document and deck shapes are documented in ../data-model/."
 ---
 
@@ -69,6 +69,13 @@ transaction. When `contentJson` exists, block ids are regenerated, the plain-tex
 search projection is rebuilt from the regenerated JSON, and a bid map is
 produced. Visual anchors and deck `sourceRef` values that point back to the
 source document are remapped to the new document id and regenerated block ids.
+
+For current presentations, referenced document-scoped assets are copied to fresh
+asset rows and storage keys owned by the duplicate. Registry identities, nested
+node references, chrome references, and protected URLs are remapped together;
+source share-link parameters are not inherited. External assets are unchanged.
+Storage or integrity failures roll back the database transaction and trigger
+cleanup of copied bytes, rather than publishing a successful but broken copy.
 
 If deck parsing fails during duplication, the original deck JSON is preserved
 rather than rewritten. Runtime schema repair is handled by the data-model and
@@ -219,6 +226,7 @@ focus parent UI.
 - [`scripts/prisma-boundary.test.mjs`](../../scripts/prisma-boundary.test.mjs)
 - [`type-tests/document-prisma-boundary/contract.ts`](../../type-tests/document-prisma-boundary/contract.ts)
 - [`src/lib/document/duplicate.test.ts`](../../src/lib/document/duplicate.test.ts)
+- [`src/lib/document/duplicate-media.integration.test.ts`](../../src/lib/document/duplicate-media.integration.test.ts)
 - [`src/lib/document/list.test.ts`](../../src/lib/document/list.test.ts)
 - [`src/app/app/document-card.test.tsx`](../../src/app/app/document-card.test.tsx)
 - [`src/app/app/use-optimistic-document-trash.test.tsx`](../../src/app/app/use-optimistic-document-trash.test.tsx)

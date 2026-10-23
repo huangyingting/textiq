@@ -56,7 +56,7 @@ export const ASSET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  *  - `deck.slides[n].backgroundAssetId`
  *  - `deck.slides[n].elements[m].assetId`  (ImageElement)
  *  - `deck.slides[n].children[*].content.assetId` (presentation image/visual nodes)
- *  - `deck.assets.visuals[*].id` and visual registry keys
+ *  - `deck.assets.{images,files,visuals}[*].id` and registry keys
  *  - `deck.chrome.logo.assetId`
  *  - `deck.theme.overrides.chrome.logo.assetId`
  *  - `deck.slides[n].props.deckChrome.logo.value.assetId`
@@ -65,7 +65,7 @@ export function collectDeckAssetRefs(deckJson: unknown): Set<string> {
   const refs = new Set<string>();
   try {
     if (!isPlainObject(deckJson)) return refs;
-    collectVisualRegistryAssetRefs(deckJson.assets, refs);
+    collectRegistryAssetRefs(deckJson.assets, refs);
     collectDeckChromeLogoAssetRefs(deckJson.chrome, refs);
     if (
       isPlainObject(deckJson.theme) &&
@@ -93,15 +93,15 @@ export function collectDeckAssetRefs(deckJson: unknown): Set<string> {
     // Safety net — must not throw.
   }
 
-  function collectVisualRegistryAssetRefs(
-    assets: unknown,
-    refs: Set<string>,
-  ): void {
-    if (!isPlainObject(assets) || !isPlainObject(assets.visuals)) return;
-    for (const [assetId, visualRef] of Object.entries(assets.visuals)) {
-      if (assetId) refs.add(assetId);
-      if (isPlainObject(visualRef) && typeof visualRef.id === "string") {
-        refs.add(visualRef.id);
+  function collectRegistryAssetRefs(assets: unknown, refs: Set<string>): void {
+    if (!isPlainObject(assets)) return;
+    for (const registry of [assets.images, assets.files, assets.visuals]) {
+      if (!isPlainObject(registry)) continue;
+      for (const [assetId, asset] of Object.entries(registry)) {
+        if (assetId) refs.add(assetId);
+        if (isPlainObject(asset) && typeof asset.id === "string") {
+          refs.add(asset.id);
+        }
       }
     }
   }

@@ -224,6 +224,75 @@ describe("storeSlideAsset — create path", () => {
 });
 
 describe("storeSlideAsset — checksum deduplication", () => {
+  it("restores bytes before reviving a soft-deleted asset on identical reupload", async (t) => {
+    const state: MemoryAdapterState = { writes: [] };
+    setDefaultStorageAdapter(memoryAdapter(state));
+    t.after(resetDefaultStorageAdapter);
+
+    const buffer = Buffer.from("reuploaded-slide-bytes");
+    const checksum = calculateAssetChecksum(buffer);
+    const storageKey = `doc-reupload/${checksum}.png`;
+    stubPrismaMethod(t, prisma.asset, "findFirst", async () => ({
+      id: "asset-retired",
+      storageKey,
+      deletedAt: new Date("2026-01-01"),
+    }));
+    const revived = stubPrismaMethod(
+      t,
+      prisma.asset,
+      "update",
+      async (args) => {
+        assert.deepEqual(state.writes, [storageKey]);
+        assert.deepEqual(args, {
+          where: { id: "asset-retired" },
+          data: { deletedAt: null },
+        });
+        return { id: "asset-retired" };
+      },
+    );
+    const created = stubPrismaMethod(t, prisma.asset, "create", async () => {
+      throw new Error("reupload must reuse the existing asset identity");
+    });
+
+    const result = await storeSlideAsset({
+      documentId: "doc-reupload",
+      buffer,
+      meta: { mimeType: "image/png", byteSize: buffer.byteLength, checksum },
+    });
+
+    assert.equal(result.assetId, "asset-retired");
+    assert.deepEqual(state.writes, [storageKey]);
+    assert.equal(revived.calls.length, 1);
+    assert.equal(created.calls.length, 0);
+  });
+
+  it("does not revive an asset when restoring its bytes fails", async (t) => {
+    const adapter = memoryAdapter({ writes: [] });
+    adapter.store = async () => {
+      throw new Error("storage unavailable");
+    };
+    setDefaultStorageAdapter(adapter);
+    t.after(resetDefaultStorageAdapter);
+    stubPrismaMethod(t, prisma.asset, "findFirst", async () => ({
+      id: "asset-retired",
+      storageKey: "doc-reupload/image.png",
+      deletedAt: new Date("2026-01-01"),
+    }));
+    const revived = stubPrismaMethod(t, prisma.asset, "update", async () => {
+      throw new Error("unavailable bytes must not be published");
+    });
+
+    await assert.rejects(
+      storeSlideAsset({
+        documentId: "doc-reupload",
+        buffer: Buffer.from("reuploaded-slide-bytes"),
+        meta: { mimeType: "image/png", byteSize: 1, checksum: "unused" },
+      }),
+      /storage unavailable/,
+    );
+    assert.equal(revived.calls.length, 0);
+  });
+
   it("returns the existing asset scoped to this document without creating a duplicate row", async (t) => {
     const state: MemoryAdapterState = { writes: [] };
     setDefaultStorageAdapter(memoryAdapter(state));
