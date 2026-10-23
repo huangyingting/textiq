@@ -76,8 +76,13 @@ modified code, typecheck shared contracts, and run the nearest subsystem tests.
 Use a separate SQLite database and profile-owned ports for browser execution;
 never reseed a developer's live database.
 
-## External release gates
+## Remaining release gates
 
+- Resolve the dependency release blocker: GitHub reports **33 open Dependabot
+  alerts (4 critical, 22 high, 7 medium)**, confirmed through the repository
+  alerts API on 2026-10-23 after pushing these batches. The changes above do not
+  upgrade dependencies or resolve these alerts. Triage their affected versions,
+  upgrade through supported paths, and rerun the owning checks before release.
 - Exercise Postgres transaction and constraint behavior against the deployment's
   supported database, with a backup/restore and migration rehearsal.
 - Confirm the intended account-admission policy before any invite-only rollout;
@@ -128,15 +133,18 @@ providers, live Postgres transactions, load, or every supported browser.
 
 ## Next planned release batches
 
-1. Run provider-parity and concurrency checks on an isolated Postgres deployment,
+1. Triage and remediate the open dependency alerts, prioritizing critical and
+   high severities. Keep dependency upgrades separate from the verified media
+   and interaction repairs; validate affected schemas, builds, and workflows.
+2. Run provider-parity and concurrency checks on an isolated Postgres deployment,
    including document-media rollback, billing/credit idempotency, and a
    migration/backup/restore rehearsal. Audit historical dangling asset references
    before designing any repair; this batch does not rewrite malformed old decks.
-2. Exercise configured external email, OAuth, Stripe, and AI-provider lifecycles
+3. Exercise configured external email, OAuth, Stripe, and AI-provider lifecycles
    with dedicated test accounts. Settle account-admission policy separately;
    adopting the auth proposal is not a prerequisite for public registration.
    Repeat account deletion and rejected sign-in under realistic concurrency,
    retaining traces for the intermittent observation above.
-3. Validate the deployment's durable media storage, retention workers,
+4. Validate the deployment's durable media storage, retention workers,
    collaboration recovery, monitoring, and realistic load. Run the supported
    browser/device matrix and visual review before production sign-off.
