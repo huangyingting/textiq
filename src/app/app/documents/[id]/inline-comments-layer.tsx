@@ -349,11 +349,27 @@ function InlineCommentsLayerForDocument({
         const block = commentBlockAtY(root, event.clientY);
         setHoverAnchor(block ? anchorPositionForBlock(block, root) : null);
       };
+      const onRootClick = (event: MouseEvent) => {
+        if (
+          activeAnchor ||
+          !("pointerType" in event) ||
+          (event.pointerType !== "touch" && event.pointerType !== "pen")
+        ) {
+          return;
+        }
+        const block = commentBlockAtY(root, event.clientY);
+        setHoverAnchor(block ? anchorPositionForBlock(block, root) : null);
+      };
+      const onInput = () => setHoverAnchor(null);
       window.addEventListener("mousemove", onMouseMove);
+      root.addEventListener("click", onRootClick);
+      root.addEventListener("input", onInput);
       const frame = requestAnimationFrame(refreshPositions);
       cleanupRoot = () => {
         cancelAnimationFrame(frame);
         window.removeEventListener("mousemove", onMouseMove);
+        root.removeEventListener("click", onRootClick);
+        root.removeEventListener("input", onInput);
       };
     });
 

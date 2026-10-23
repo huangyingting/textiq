@@ -36,6 +36,14 @@ function collectElements(node: ReactNode, elements: ReactElement[] = []) {
   }
   if (!isValidElement(node)) return elements;
   if (typeof node.type === "function") {
+    // Inspect wrapper children without directly invoking hook-bearing components.
+    if ("children" in (node.props as object)) {
+      collectElements(
+        (node.props as { children?: ReactNode }).children,
+        elements,
+      );
+      return elements;
+    }
     collectElements(
       (node.type as (props: unknown) => ReactNode)(node.props),
       elements,

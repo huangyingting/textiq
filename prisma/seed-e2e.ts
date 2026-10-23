@@ -759,6 +759,12 @@ async function main() {
   const activePresentationDocumentIds = presentationFixtures.map(
     (fixture) => fixture.documentId,
   );
+  await prisma.commentRead.deleteMany({
+    where: { documentId: { in: activePresentationDocumentIds } },
+  });
+  await prisma.comment.deleteMany({
+    where: { documentId: { in: activePresentationDocumentIds } },
+  });
   const staleFixtureCleanup = await cleanupStaleE2EPresentationFixtures(
     prisma,
     {

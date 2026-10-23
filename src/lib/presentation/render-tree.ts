@@ -28,6 +28,8 @@ import {
   flattenNodesInRenderOrder,
 } from "./render-order";
 
+export const PRESENTATION_REFERENCE_WIDTH_PX = 960;
+
 // ---------------------------------------------------------------------------
 // Resolved layout
 // ---------------------------------------------------------------------------

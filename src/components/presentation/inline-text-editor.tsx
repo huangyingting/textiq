@@ -6,9 +6,8 @@
  * Positioned absolutely over the node's layout frame (in canvas-percent
  * coordinates). Commits via `onCommit(paragraphs, frame?, textAlign?)`.
  *
- * Font resolution: uses basic CSS inherited from the slide canvas so the
- * visual experience is seamless during the enter/exit transition. A future
- * improvement can read ThemePackageV1 tokens for exact font matching.
+ * Typography uses resolved node styles in the same reference coordinate space
+ * as the slide canvas, preserving authored point sizes while the viewport scales.
  *
  * Handles the `textiq:inline-text-command-presentation` DOM event dispatched by the
  * context toolbar.
@@ -25,6 +24,7 @@ import {
 } from "react";
 
 import type { Paragraph } from "@/lib/presentation/schema";
+import { PRESENTATION_REFERENCE_WIDTH_PX } from "@/lib/presentation/render-tree";
 import {
   INLINE_TEXT_COMMAND_EVENT_,
   type InlineTextCommandPayload,
@@ -50,7 +50,7 @@ export interface InlineTextEditorPresentationProps {
   initialParagraphs: Paragraph[];
   /** Canvas-relative frame in percent units. */
   frame: { x: number; y: number; w: number; h: number };
-  /** Canvas element bounding rect (reserved for future px-based font matching). */
+  /** Physical canvas bounds used to match the design-space rendering scale. */
   canvasRect?: DOMRect;
   /** Resolved canvas text CSS for the node being edited. */
   textStyle?: CSSProperties;
@@ -144,6 +144,11 @@ export function InlineTextEditorPresentation({
 }: InlineTextEditorPresentationProps): JSX.Element {
   const editableRef = useRef<HTMLDivElement | null>(null);
   const preservedCommandRangeRef = useRef<Range | null>(null);
+  const scale =
+    canvasRect && canvasRect.width > 0
+      ? canvasRect.width / PRESENTATION_REFERENCE_WIDTH_PX
+      : 1;
+  const designHeight = canvasRect ? canvasRect.height / scale : 540;
   const adapter = useMemo(
     () =>
       createInlineTextDomAdapter({
@@ -156,7 +161,7 @@ export function InlineTextEditorPresentation({
     [nodeId],
   );
 
-  // Position in viewport-px derived from canvas-percent frame
+  // Position in design-space percentages.
   const style: CSSProperties = {
     position: "absolute",
     left: `${frame.x}%`,
@@ -165,11 +170,10 @@ export function InlineTextEditorPresentation({
     height: `${frame.h}%`,
     outline: "none",
     cursor: "text",
-    // Keep text transparent so it layers exactly over the canvas render
+    pointerEvents: "auto",
     zIndex: STAGE_CHROME_Z_INDEX.inlineEditor,
     boxSizing: "border-box",
     padding: "inherit",
-    // Match canvas font as best possible via inheritance
     font: "inherit",
     lineHeight: "inherit",
     color: "inherit",
@@ -186,7 +190,7 @@ export function InlineTextEditorPresentation({
     }
     const heightPct = Math.min(
       100 - frame.y,
-      Math.max(frame.h, (el.scrollHeight / canvasRect.height) * 100),
+      Math.max(frame.h, (el.scrollHeight / designHeight) * 100),
     );
     if (Math.abs(heightPct - frame.h) < 0.1) return undefined;
     return { ...frame, h: heightPct };
@@ -350,20 +354,34 @@ export function InlineTextEditorPresentation({
 
   return (
     <div
-      ref={editableRef}
-      contentEditable
-      suppressContentEditableWarning
-      data-inline-editor-presentation={nodeId}
-      role="textbox"
-      aria-label="Edit text"
-      aria-multiline="true"
-      style={style}
-      onInput={syncAutoHeight}
-      onKeyDown={handleKeyDown}
-      onCompositionStart={handleCompositionStart}
-      onCompositionEnd={handleCompositionEnd}
-      onFocus={restoreCommandSelection}
-      onBlur={handleBlur}
-    />
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: PRESENTATION_REFERENCE_WIDTH_PX,
+        height: designHeight,
+        transform: `scale(${scale})`,
+        transformOrigin: "top left",
+        pointerEvents: "none",
+        zIndex: STAGE_CHROME_Z_INDEX.inlineEditor,
+      }}
+    >
+      <div
+        ref={editableRef}
+        contentEditable
+        suppressContentEditableWarning
+        data-inline-editor-presentation={nodeId}
+        role="textbox"
+        aria-label="Edit text"
+        aria-multiline="true"
+        style={style}
+        onInput={syncAutoHeight}
+        onKeyDown={handleKeyDown}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
+        onFocus={restoreCommandSelection}
+        onBlur={handleBlur}
+      />
+    </div>
   );
 }

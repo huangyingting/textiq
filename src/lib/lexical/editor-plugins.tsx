@@ -22,6 +22,8 @@ import {
   $fullReconcile,
   $getRoot,
   $nodesOfType,
+  COMMAND_PRIORITY_HIGH,
+  KEY_DOWN_COMMAND,
   type EditorState,
   type LexicalEditor,
 } from "lexical";
@@ -40,6 +42,40 @@ import {
 } from "./use-collaboration-gate";
 
 type CollaborationProps = ComponentProps<typeof CollaborationPlugin>;
+
+export function registerDocumentBoundaryNavigation(editor: LexicalEditor) {
+  return editor.registerCommand(
+    KEY_DOWN_COMMAND,
+    (event) => {
+      if (
+        !editor.isEditable() ||
+        event.altKey ||
+        event.shiftKey ||
+        event.isComposing
+      ) {
+        return false;
+      }
+      const toEnd =
+        (event.ctrlKey && !event.metaKey && event.key === "End") ||
+        (event.metaKey && !event.ctrlKey && event.key === "ArrowDown");
+      const toStart =
+        (event.ctrlKey && !event.metaKey && event.key === "Home") ||
+        (event.metaKey && !event.ctrlKey && event.key === "ArrowUp");
+      if (!toEnd && !toStart) return false;
+      event.preventDefault();
+      if (toEnd) $getRoot().selectEnd();
+      else $getRoot().selectStart();
+      return true;
+    },
+    COMMAND_PRIORITY_HIGH,
+  );
+}
+
+function DocumentBoundaryNavigationPlugin() {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => registerDocumentBoundaryNavigation(editor), [editor]);
+  return null;
+}
 
 function EditableGatePlugin({ editable }: { editable: boolean }) {
   useEditableGate(editable);
@@ -211,7 +247,7 @@ function DocumentTablePlugin({
 
 function CoreRichTextPlugin({ ready }: { ready: boolean }) {
   return (
-    <div className="relative">
+    <div className="relative pr-6 lg:pr-0">
       <RichTextPlugin
         contentEditable={
           <ContentEditable
@@ -268,6 +304,9 @@ export function createCoreEditorPlugins({
       />
     )),
     createEditorPlugin("durable-block-ids", () => <DurableBlockIdPlugin />),
+    createEditorPlugin("document-boundary-navigation", () => (
+      <DocumentBoundaryNavigationPlugin />
+    )),
     createEditorPlugin("editable-gate", () => (
       <EditableGatePlugin editable={editable} />
     )),

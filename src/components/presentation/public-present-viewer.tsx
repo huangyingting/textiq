@@ -308,7 +308,7 @@ export function PublicPresentViewer({
         </div>
       </div>
 
-      <MadeWithBadge show={showAttribution} />
+      <MadeWithBadge show={showAttribution} abovePresentationControls />
     </div>
   );
 }

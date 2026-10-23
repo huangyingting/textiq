@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 import {
   E2E_PROFILE_FIXTURE,
@@ -6,8 +6,32 @@ import {
   profileDocPath,
   profilePresentPath,
 } from "../helpers/profile";
-import { waitForStableSlideStage } from "../helpers/readiness";
+import {
+  waitForSlideAutosaveAfter,
+  waitForStableSlideStage,
+} from "../helpers/readiness";
 import { loginAsProfileOwner } from "./helpers";
+
+async function textGeometry(node: Locator) {
+  return node.evaluate((element) => {
+    const paragraphs = element.querySelectorAll("p");
+    const lastParagraph = paragraphs.item(paragraphs.length - 1);
+    if (!lastParagraph) throw new Error("Slide text paragraph is missing.");
+    const range = document.createRange();
+    range.selectNodeContents(lastParagraph);
+    const lastLineBottom = range.getBoundingClientRect().bottom;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const firstText = walker.nextNode();
+    if (!firstText) throw new Error("Slide text is missing.");
+    range.setStart(firstText, 0);
+    range.setEnd(firstText, 1);
+    return {
+      bottom: element.getBoundingClientRect().bottom,
+      lastLineBottom,
+      glyphHeight: range.getBoundingClientRect().height,
+    };
+  });
+}
 
 test.describe("UI matrix: presentation shell, render, export, and status", () => {
   test.skip(
@@ -159,6 +183,10 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await expect(zoomSlider).toHaveValue("100");
     await expect(undo).toBeDisabled();
     const fitWidth = await stageFrameWidth();
+    const bodyText = canvas
+      .locator('[data-node-type="text"]')
+      .filter({ hasText: "Second deterministic point" });
+    const fitGlyphHeight = (await textGeometry(bodyText)).glyphHeight;
 
     await zoomSlider.focus();
     await page.keyboard.press("ArrowRight");
@@ -181,6 +209,9 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await waitForStableSlideStage(stageFrame);
     const zoomedWidth = await stageFrameWidth();
     expect(zoomedWidth / fitWidth).toBeCloseTo(1.5, 1);
+    expect(
+      (await textGeometry(bodyText)).glyphHeight / fitGlyphHeight,
+    ).toBeCloseTo(1.5, 1);
     await expect(undo).toBeDisabled();
 
     await zoomTrigger.click();
@@ -191,6 +222,9 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await waitForStableSlideStage(stageFrame);
     const minimumWidth = await stageFrameWidth();
     expect(minimumWidth / fitWidth).toBeCloseTo(0.25, 1);
+    expect(
+      (await textGeometry(bodyText)).glyphHeight / fitGlyphHeight,
+    ).toBeCloseTo(0.25, 1);
     await expect(undo).toBeDisabled();
 
     await zoomTrigger.click();
@@ -228,5 +262,82 @@ test.describe("UI matrix: presentation shell, render, export, and status", () =>
     await expect(
       page.getByRole("button", { name: "Next slide" }).last(),
     ).toBeVisible();
+  });
+
+  test("public slide text remains inside its frame at desktop and narrow widths", async ({
+    page,
+  }) => {
+    for (const width of [960, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(profilePresentPath());
+      const canvas = page.locator('[data-slide-canvas="true"]:visible').first();
+      await waitForStableSlideStage(canvas);
+      await page.evaluate(() => document.fonts.ready);
+      const body = canvas
+        .locator('[data-node-type="text"]')
+        .filter({ hasText: "Second deterministic point" });
+      const geometry = await textGeometry(body);
+      expect(geometry.lastLineBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+    }
+  });
+
+  test("responsive stage typography and inline editing use the same design scale", async ({
+    page,
+  }) => {
+    await loginAsProfileOwner(
+      page,
+      `${profileDocPath("responsiveSlideText", test.info())}/slides`,
+    );
+    const editor = page.locator('[data-slide-editor="true"]').first();
+    const canvas = editor
+      .locator('[data-slide-stage-viewport="true"] [data-slide-canvas="true"]')
+      .first();
+    let normalizedGlyphHeight: number | undefined;
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await waitForStableSlideStage(canvas);
+      await page.evaluate(() => document.fonts.ready);
+      const body = canvas
+        .locator('[data-node-type="text"]')
+        .filter({ hasText: "Second deterministic point" });
+      const geometry = await textGeometry(body);
+      expect(geometry.lastLineBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+      const canvasBox = await canvas.boundingBox();
+      if (!canvasBox) throw new Error("Slide canvas geometry is missing.");
+      const normalized = geometry.glyphHeight / canvasBox.width;
+      if (normalizedGlyphHeight !== undefined) {
+        expect(normalized).toBeCloseTo(normalizedGlyphHeight, 3);
+        await body.dblclick();
+        const inline = editor.getByRole("textbox", {
+          name: "Edit text",
+          exact: true,
+        });
+        await expect(inline).toBeVisible();
+        const editing = await textGeometry(inline);
+        expect(editing.glyphHeight).toBeCloseTo(geometry.glyphHeight, 0);
+        await inline.focus();
+        await expect(inline).toBeFocused();
+        const message =
+          "Responsive slide editing persists at the authored font size";
+        await waitForSlideAutosaveAfter(page, async () => {
+          await inline.press("ControlOrMeta+A");
+          await page.keyboard.insertText("Native keyboard replacement");
+          await expect(inline).toHaveText("Native keyboard replacement");
+          await inline.fill(message);
+          await expect(inline).toHaveText(message);
+          await page.keyboard.press("Escape");
+        });
+        await page.reload();
+        await expect(canvas.getByText(message, { exact: true })).toBeVisible();
+        const persisted = canvas
+          .locator('[data-node-type="text"]')
+          .filter({ hasText: message });
+        expect((await textGeometry(persisted)).glyphHeight).toBeCloseTo(
+          geometry.glyphHeight,
+          0,
+        );
+      }
+      normalizedGlyphHeight = normalized;
+    }
   });
 });

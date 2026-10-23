@@ -71,6 +71,21 @@ export const PRESENTATION_TEST_FIXTURES = {
     "e2eisolatedshr43",
     "e2e-isolated-document-mobile",
   ),
+  documentMobileComments: presentationFixture(
+    "e2eisolateddoccomments01",
+    "e2eisolatedshr44",
+    "e2e-isolated-document-comments",
+  ),
+  responsiveSlideText: presentationFixture(
+    "e2eisolatedresponsivetext1",
+    "e2eisolatedshr45",
+    "e2e-isolated-responsive-text",
+  ),
+  documentBoundaryNavigation: presentationFixture(
+    "e2eisolateddocboundary01",
+    "e2eisolatedshr46",
+    "e2e-isolated-document-boundary",
+  ),
   blockIdPreservation: presentationFixture(
     "e2eisolatedblockids000001",
     "e2eisolatedshr27",

@@ -732,6 +732,19 @@ body {
   .tiq-coarse-actions {
     opacity: 1;
   }
+
+  .tiq-coarse-action-pair {
+    gap: var(--ds-space-1);
+  }
+
+  .tiq-coarse-action-pair > button {
+    min-width: var(--tiq-touch-target-min);
+    min-height: var(--tiq-touch-target-min);
+  }
+
+  .tiq-coarse-action-pair > .tiq-touch-target {
+    position: static;
+  }
 }
 
 /* =============================================================================
@@ -827,6 +840,11 @@ body {
 /* =============================================================================
    App/layout utilities
    ========================================================================== */
+[data-inline-editor-presentation] [data-list-marker]::before {
+  content: attr(data-list-marker);
+  flex: 0 0 auto;
+}
+
 /*
  * Inline list editor (slide stage). Renders accent bullets / numbers with
  * pseudo-elements so markers never interfere with the contentEditable caret or

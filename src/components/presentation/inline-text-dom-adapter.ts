@@ -355,7 +355,7 @@ export function paragraphsToHtml(paragraphs: Paragraph[]): string {
       const indentStyle = indent > 0 ? `;padding-left:${indent * 1.5}em` : "";
       const marker =
         paragraph.list.kind === "number" ? numberMarkers[index] : "•";
-      return `<p data-list-kind="${paragraph.list.kind}"${indentAttr} style="display:flex;gap:0.4em;margin:0${indentStyle}"><span aria-hidden="true" contenteditable="false" style="flex:0 0 auto">${marker}</span><span>${text || "<br>"}</span></p>`;
+      return `<p data-list-kind="${paragraph.list.kind}" data-list-marker="${marker}"${indentAttr} style="display:flex;gap:0.4em;margin:0${indentStyle}"><span>${text || "<br>"}</span></p>`;
     })
     .join("");
 }

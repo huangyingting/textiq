@@ -22,6 +22,61 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+test.describe("UI matrix: coarse-pointer Brand Studio", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  test.skip(
+    !e2eProfileEnabled(),
+    "Set E2E_PROFILE=1 and seed the deterministic profile.",
+  );
+
+  test("palette editing and removal have distinct touch targets", async ({
+    page,
+  }) => {
+    await login(page, profileEditorCredentials(), "/app/brands");
+    await page.getByRole("button", { name: "New brand style" }).tap();
+    const color = page.getByRole("button", {
+      name: "Palette color 1",
+      exact: true,
+    });
+    const remove = page.getByRole("button", {
+      name: "Remove palette color 1",
+      exact: true,
+    });
+    const [colorBox, removeBox] = await Promise.all([
+      color.boundingBox(),
+      remove.boundingBox(),
+    ]);
+    expect(colorBox).not.toBeNull();
+    expect(removeBox).not.toBeNull();
+    if (!colorBox || !removeBox)
+      throw new Error("Palette touch targets are missing.");
+    expect(colorBox.width).toBeGreaterThanOrEqual(44);
+    expect(colorBox.height).toBeGreaterThanOrEqual(44);
+    expect(removeBox.width).toBeGreaterThanOrEqual(44);
+    expect(removeBox.height).toBeGreaterThanOrEqual(44);
+    expect(removeBox.y).toBeGreaterThanOrEqual(colorBox.y + colorBox.height);
+    await color.tap();
+    const picker = page.getByRole("dialog", { name: "Palette color 1 picker" });
+    await expect(picker).toBeVisible();
+    await picker.getByRole("button", { name: "#ef4444" }).tap();
+    await expect(
+      picker.getByRole("button", { name: "#ef4444" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    const count = await page
+      .getByRole("button", { name: /^Palette color \d+$/ })
+      .count();
+    await remove.tap();
+    await expect(
+      page.getByRole("button", { name: /^Palette color \d+$/ }),
+    ).toHaveCount(count - 1);
+  });
+});
+
 test.describe("UI matrix: workspace, billing, and brand surfaces", () => {
   test.skip(
     !e2eProfileEnabled(),

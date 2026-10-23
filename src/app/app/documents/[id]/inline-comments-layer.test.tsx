@@ -233,6 +233,7 @@ type Rect = { top: number; bottom: number; left: number; right: number };
 class FakeNode {}
 
 class FakeElement extends FakeNode {
+  listeners = createRegistry();
   children: FakeElement[];
   textContent: string;
   private rect: Rect;
@@ -270,6 +271,14 @@ class FakeElement extends FakeNode {
 
   getAttribute(name: string): string | null {
     return this.attributes[name] ?? null;
+  }
+
+  addEventListener(type: string, listener: Listener): void {
+    this.listeners.add(type, listener);
+  }
+
+  removeEventListener(type: string, listener: Listener): void {
+    this.listeners.remove(type, listener);
   }
 
   getBoundingClientRect(): Rect & { height: number } {
@@ -947,6 +956,50 @@ describe("comment dots — anchor positioning, filtering, resolution", () => {
 // ---------------------------------------------------------------------------
 
 describe("hover anchor — gutter detection", () => {
+  test("touch and pen clicks expose paragraph comments without requiring hover", () => {
+    for (const pointerType of ["touch", "pen"]) {
+      withCommentsDom(() => {
+        const root = buildRoot();
+        const { editor } = makeFakeEditor(root);
+        const renderer = mount(editor);
+        try {
+          act(() =>
+            root.listeners.fire("click", { pointerType, clientY: 250 }),
+          );
+          assert.ok(findAddButton(renderer.root));
+          act(() => root.listeners.fire("input"));
+          assert.equal(findAddButton(renderer.root), null);
+        } finally {
+          act(() => renderer.unmount());
+        }
+        assert.equal(root.listeners.size("click"), 0);
+        assert.equal(root.listeners.size("input"), 0);
+      });
+    }
+  });
+
+  test("mouse clicks and taps on visual blocks do not expose paragraph comments", () => {
+    withCommentsDom(() => {
+      const root = buildRoot();
+      const { editor } = makeFakeEditor(root);
+      const renderer = mount(editor);
+      try {
+        act(() =>
+          root.listeners.fire("click", { pointerType: "mouse", clientY: 250 }),
+        );
+        assert.equal(findAddButton(renderer.root), null);
+        act(() => root.listeners.fire("click", { clientY: 250 }));
+        assert.equal(findAddButton(renderer.root), null);
+        act(() =>
+          root.listeners.fire("click", { pointerType: "touch", clientY: 180 }),
+        );
+        assert.equal(findAddButton(renderer.root), null);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    });
+  });
+
   test("mousemove inside the right gutter over a fully-resolved anchor shows the add-comment icon there", () => {
     withCommentsDom((registry) => {
       const { editor } = makeFakeEditor(buildRoot());

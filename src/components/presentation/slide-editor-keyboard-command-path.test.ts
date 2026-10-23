@@ -228,6 +228,8 @@ function createNodeMock(
     addEventListener: () => undefined,
     blur: () => undefined,
     childNodes: [],
+    clientWidth: 960,
+    clientHeight: 540,
     click: () => undefined,
     contains: () => false,
     focus: () => {
@@ -260,6 +262,10 @@ function installBrowserGlobals(): () => void {
     "document",
   );
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousResizeObserver = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "ResizeObserver",
+  );
   const storage = new Map<string, string>();
   const fakeDocument = {
     activeElement: { focus: () => undefined },
@@ -300,6 +306,13 @@ function installBrowserGlobals(): () => void {
     writable: true,
     value: fakeWindow,
   });
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
   return () => {
     if (previousDocument) {
       Object.defineProperty(globalThis, "document", previousDocument);
@@ -310,6 +323,15 @@ function installBrowserGlobals(): () => void {
       Object.defineProperty(globalThis, "window", previousWindow);
     } else {
       delete (globalThis as { window?: unknown }).window;
+    }
+    if (previousResizeObserver) {
+      Object.defineProperty(
+        globalThis,
+        "ResizeObserver",
+        previousResizeObserver,
+      );
+    } else {
+      Reflect.deleteProperty(globalThis, "ResizeObserver");
     }
   };
 }

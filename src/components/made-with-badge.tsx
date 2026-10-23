@@ -11,14 +11,19 @@
 import Link from "next/link";
 
 import { publicAppUrl } from "@/lib/client-config";
+import { cx } from "@/components/ui/tokens";
 
 interface MadeWithBadgeProps {
   /** When false the badge renders nothing. Pass the result of
    * `shouldShowAttribution(ownerPlan)` from the server component. */
   show: boolean;
+  abovePresentationControls?: boolean;
 }
 
-export function MadeWithBadge({ show }: MadeWithBadgeProps) {
+export function MadeWithBadge({
+  show,
+  abovePresentationControls = false,
+}: MadeWithBadgeProps) {
   if (!show) return null;
 
   const appUrl = publicAppUrl();
@@ -29,8 +34,12 @@ export function MadeWithBadge({ show }: MadeWithBadgeProps) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Made with TextIQ — create your own document"
-      className="
-        fixed bottom-4 right-4 z-overlay
+      className={cx(
+        abovePresentationControls
+          ? "bottom-[calc(max(1rem,var(--tiq-safe-area-bottom))_+_3.5rem)] sm:bottom-4"
+          : "bottom-4",
+        `
+        fixed right-4 z-overlay
         flex items-center gap-1.5
         rounded-full
         border border-ds-border-subtle
@@ -46,7 +55,8 @@ export function MadeWithBadge({ show }: MadeWithBadgeProps) {
         focus-visible:outline-none
         focus-visible:ring-2
         focus-visible:ring-ds-focus
-      "
+      `,
+      )}
     >
       {/* Simple sparkle icon — inlined SVG, no extra dependency */}
       <svg

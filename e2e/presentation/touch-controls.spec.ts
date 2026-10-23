@@ -46,6 +46,24 @@ test.describe("presentation touch controls", () => {
       name: "Text inspector",
     });
     await expect(textInspector).toBeVisible();
+    const handles = editor
+      .locator('[data-slide-stage-viewport="true"]')
+      .locator("[data-resize-handle], [data-rotation-handle]");
+    expect(await handles.count()).toBeGreaterThan(0);
+    for (const handle of await handles.all()) {
+      const inspectorOwnsHit = await handle.evaluate((element) => {
+        const inspector = document.querySelector(
+          '[role="dialog"][aria-label="Text inspector"]',
+        );
+        const rect = element.getBoundingClientRect();
+        const topmost = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return Boolean(inspector && topmost && inspector.contains(topmost));
+      });
+      expect(inspectorOwnsHit).toBe(true);
+    }
     await textInspector
       .getByRole("button", { name: "Show Arrange inspector panel" })
       .tap();

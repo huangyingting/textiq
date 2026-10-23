@@ -543,9 +543,14 @@ describe("DocumentList", () => {
     await withPortalDom(async () => {
       installHistorySpy();
       let attempt = 0;
+      let resolveRetry!: () => void;
+      const retryResponse = new Promise<void>((resolve) => {
+        resolveRetry = resolve;
+      });
       globalForActions.__documentListActionsTestState.searchImpl = async () => {
         attempt += 1;
         if (attempt === 1) throw new Error("temporary search failure");
+        await retryResponse;
         return {
           results: [doc("recovered", { title: "Recovered result" })],
           hasMore: false,
@@ -569,9 +574,20 @@ describe("DocumentList", () => {
         const retry = renderer.root.find(
           (el) => el.type === "button" && textOf(el) === "Try search again",
         );
+        act(() => {
+          retry.props.onClick();
+          retry.props.onClick();
+        });
+        assert.equal(
+          renderer.root
+            .findByProps({ role: "alert" })
+            .find(
+              (el) => el.type === "button" && textOf(el) === "Try search again",
+            ).props.disabled,
+          true,
+        );
         await act(async () => {
-          retry.props.onClick();
-          retry.props.onClick();
+          resolveRetry();
           await waitForAsyncDrain();
           await waitForAsyncDrain();
         });

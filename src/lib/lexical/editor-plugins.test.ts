@@ -24,6 +24,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isValidElement, type ReactElement } from "react";
+import { createHeadlessEditor } from "@lexical/headless";
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
+  KEY_DOWN_COMMAND,
+} from "lexical";
 
 import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -34,7 +43,12 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 
-import { createCoreEditorPlugins } from "./editor-plugins";
+import {
+  createCoreEditorPlugins,
+  registerDocumentBoundaryNavigation,
+} from "./editor-plugins";
+import { VisualNode, $createVisualNode } from "./visual-node";
+import { createBlankVisual } from "@/lib/visual/blank";
 
 type ElementLike = ReactElement<Record<string, unknown>>;
 
@@ -81,6 +95,7 @@ test("createCoreEditorPlugins composes a stable, unique, ordered plugin id list"
       "rich-text",
       "collaboration",
       "durable-block-ids",
+      "document-boundary-navigation",
       "editable-gate",
       "local-fallback-seed",
       "document-stats",
@@ -238,4 +253,136 @@ test("rich-text plugin swaps its placeholder copy based on the ready flag", () =
 
   assert.equal(readyPlaceholder.props.children, "Start writing…");
   assert.equal(connectingPlaceholder.props.children, "Connecting…");
+});
+
+function documentKeyEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
+  return Object.assign(
+    new Event("keydown", { cancelable: true }),
+    {
+      key: "End",
+      code: overrides.key ?? "End",
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+    },
+    overrides,
+  ) as KeyboardEvent;
+}
+
+for (const shortcut of [
+  { name: "Control+End", key: "End", ctrlKey: true, toEnd: true },
+  { name: "Meta+ArrowDown", key: "ArrowDown", metaKey: true, toEnd: true },
+  { name: "Control+Home", key: "Home", ctrlKey: true, toEnd: false },
+  { name: "Meta+ArrowUp", key: "ArrowUp", metaKey: true, toEnd: false },
+]) {
+  test(`${shortcut.name} positions edits at the document boundary without changing content`, () => {
+    const editor = createHeadlessEditor({
+      nodes: [VisualNode],
+      onError(error) {
+        throw error;
+      },
+    });
+    editor.update(
+      () => {
+        $getRoot().append(
+          $createParagraphNode().append($createTextNode("Original paragraph")),
+          $createVisualNode(createBlankVisual("flowchart")),
+        );
+      },
+      { discrete: true },
+    );
+    const before = editor.getEditorState().toJSON();
+    const unregister = registerDocumentBoundaryNavigation(editor);
+    const event = documentKeyEvent(shortcut);
+    try {
+      editor.update(
+        () =>
+          assert.equal(editor.dispatchCommand(KEY_DOWN_COMMAND, event), true),
+        { discrete: true },
+      );
+      assert.equal(event.defaultPrevented, true);
+      assert.deepEqual(editor.getEditorState().toJSON(), before);
+      editor.update(
+        () => {
+          const selection = $getSelection();
+          assert.ok($isRangeSelection(selection));
+          if (shortcut.name === "Control+End") selection.insertParagraph();
+          selection.insertText("Boundary edit");
+          const children = $getRoot().getChildren();
+          assert.equal(
+            shortcut.toEnd
+              ? children.at(-1)?.getTextContent()
+              : children[0].getTextContent(),
+            shortcut.toEnd
+              ? "Boundary edit"
+              : "Boundary editOriginal paragraph",
+          );
+          assert.equal(
+            children.filter((child) => child.getType() === "visual").length,
+            1,
+          );
+        },
+        { discrete: true },
+      );
+    } finally {
+      unregister();
+    }
+  });
+}
+
+test("boundary navigation preserves native selection, composition, and read-only behavior and cleans up", () => {
+  for (const editable of [true, false]) {
+    const editor = createHeadlessEditor({
+      editable,
+      onError(error) {
+        throw error;
+      },
+    });
+    editor.update(
+      () => {
+        $getRoot().append(
+          $createParagraphNode().append($createTextNode("Original")),
+        );
+      },
+      { discrete: true },
+    );
+    const unregister = registerDocumentBoundaryNavigation(editor);
+    const variants = editable
+      ? [
+          { shiftKey: true },
+          { altKey: true },
+          { isComposing: true },
+          { ctrlKey: false },
+          { metaKey: true },
+          { key: "ArrowLeft" },
+        ]
+      : [{}];
+    try {
+      for (const variant of variants) {
+        const event = documentKeyEvent({
+          ctrlKey: true,
+          ...variant,
+        });
+        editor.update(
+          () => {
+            editor.dispatchCommand(KEY_DOWN_COMMAND, event);
+          },
+          { discrete: true },
+        );
+        assert.equal(event.defaultPrevented, false);
+      }
+    } finally {
+      unregister();
+    }
+    const event = documentKeyEvent({ ctrlKey: true });
+    editor.update(
+      () => {
+        editor.dispatchCommand(KEY_DOWN_COMMAND, event);
+      },
+      { discrete: true },
+    );
+    assert.equal(event.defaultPrevented, false);
+  }
 });

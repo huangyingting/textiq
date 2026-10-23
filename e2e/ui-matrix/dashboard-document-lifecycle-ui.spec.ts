@@ -9,6 +9,7 @@ import {
 } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { waitForDocumentEditorReady } from "../helpers/readiness";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
@@ -207,6 +208,8 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     await expect(
       page.getByRole("button", { name: `Unfavorite ${fixture.title}` }),
     ).toHaveAttribute("aria-pressed", "true");
+    await expect(favoriteAlert).toHaveCount(0);
+    await expect(page).toHaveURL(/\/app(?:\?.*)?$/);
     await expect(search).toHaveValue("source");
     await page.reload();
     await expect(
@@ -266,7 +269,8 @@ test.describe("UI matrix: dashboard document lifecycle", () => {
     await expect(page.getByText(fixture.content, { exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    await page.goBack();
+    await waitForDocumentEditorReady(page);
+    await page.goBack({ timeout: 15_000 });
     await expect(documentLink(page, fixture.renamedTitle)).toBeVisible({
       timeout: 30_000,
     });

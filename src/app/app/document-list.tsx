@@ -315,7 +315,6 @@ export function DocumentList({
                   disabled={isSearchPending}
                   onClick={() => {
                     if (!trimmedQuery) return;
-                    setSearchError(null);
                     executeSearch(trimmedQuery);
                   }}
                 >

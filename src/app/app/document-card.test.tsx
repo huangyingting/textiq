@@ -719,6 +719,15 @@ describe("DocumentCard", () => {
           retryButton.props.onClick();
           retryButton.props.onClick();
         });
+        assert.equal(
+          renderer.root
+            .findByProps({ role: "alert" })
+            .find(
+              (el) =>
+                el.type === "button" && textOf(el) === "Try favorite again",
+            ).props.disabled,
+          true,
+        );
         assert.deepEqual(
           globalForActions.__documentCardActionsTestState.favoriteCalls,
           ["doc-1", "doc-1", "doc-1"],
@@ -870,6 +879,15 @@ describe("DocumentCard", () => {
           retryButton.props.onClick();
           retryButton.props.onClick();
         });
+        assert.equal(
+          renderer.root
+            .findByProps({ role: "alert" })
+            .find(
+              (el) =>
+                el.type === "button" && textOf(el) === "Try duplicate again",
+            ).props.disabled,
+          true,
+        );
         assert.deepEqual(
           globalForActions.__documentCardActionsTestState.duplicateCalls,
           ["doc-1", "doc-1"],

@@ -8,6 +8,10 @@ import {
 } from "../helpers/profile";
 import { login } from "../helpers/auth";
 import { openProfileDocument } from "./helpers";
+import {
+  waitForDocumentAutosaveAfter,
+  waitForDocumentEditorReady,
+} from "../helpers/readiness";
 
 async function selectSeededDocumentText(page: Page) {
   const body = page.getByRole("textbox", { name: "Document body" });
@@ -60,6 +64,28 @@ test.describe("UI matrix: document editor contextual surfaces", () => {
       page.getByRole("link", { name: "Open slide editor" }),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Release Gate").first()).toBeVisible();
+  });
+
+  test("document-end navigation appends text after a final visual and preserves it on reload", async ({
+    page,
+  }) => {
+    await openProfileDocument(page, "documentBoundaryNavigation");
+    const body = page.getByRole("textbox", { name: "Document body" });
+    const message = "Document-end editing stays after the visual";
+    await waitForDocumentAutosaveAfter(page, async () => {
+      await body.focus();
+      await page.keyboard.press("Control+End");
+      await page.keyboard.press("Enter");
+      await page.keyboard.type(message);
+    });
+    await expect(body.locator(":scope > *").last()).toHaveText(message);
+    await expect(
+      body.getByText(E2E_PROFILE_FIXTURE.documentBodyText, { exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await waitForDocumentEditorReady(page);
+    await expect(body.locator(":scope > *").last()).toHaveText(message);
+    await expect(body.locator(":scope > *")).toHaveCount(3);
   });
 
   test("selected text exposes a keyboard-operable formatting toolbar and restores editor focus", async ({

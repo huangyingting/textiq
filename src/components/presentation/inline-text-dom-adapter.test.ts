@@ -122,7 +122,8 @@ test("inline text DOM adapter mounts rich HTML and commits serialized content on
     assert.match(container.innerHTML, /Unsafe &amp;/);
     assert.match(container.innerHTML, /&lt;tag&gt;/);
     assert.match(container.innerHTML, /data-list-kind="bullet"/);
-    assert.match(container.innerHTML, />•<\/span>/);
+    assert.match(container.innerHTML, /data-list-marker="•"/);
+    assert.doesNotMatch(container.innerHTML, /contenteditable="false"/);
 
     selectNodeContents(window, container.firstElementChild ?? container);
     adapter.applyCommand(container, { command: "align-center" });
@@ -352,10 +353,10 @@ test("inline text DOM adapter formats ordered list markers and empty paragraphs"
   ]);
 
   assert.match(html, /<br>/);
-  assert.match(html, />a\.<\/span>/);
-  assert.match(html, />B\.<\/span>/);
-  assert.match(html, />i\.<\/span>/);
-  assert.match(html, />1\.<\/span>/);
+  assert.match(html, /data-list-marker="a\."/);
+  assert.match(html, /data-list-marker="B\."/);
+  assert.match(html, /data-list-marker="i\."/);
+  assert.match(html, /data-list-marker="1\."/);
 });
 
 test("inline text DOM adapter applies and removes toolbar selection commands", () => {

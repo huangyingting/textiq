@@ -451,11 +451,11 @@ export function DocumentCard({
     if (actionInFlightRef.current) return;
 
     actionInFlightRef.current = true;
-    setActionError(null);
     setPendingKind(attempt.kind);
     startTransition(async () => {
       try {
         await action();
+        setActionError(null);
         onSuccess?.();
       } catch (error) {
         unstable_rethrow(error);

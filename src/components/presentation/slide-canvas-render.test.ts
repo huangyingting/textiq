@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import TestRenderer, { act, type ReactTestRenderer } from "react-test-renderer";
 
 import {
   DeckCanvas,
@@ -36,6 +37,82 @@ import type {
 import type { FillStyle, StyleObject } from "@/lib/presentation/style-schema";
 
 type ElementWithProps = ReactElement<Record<string, unknown>>;
+
+test("slide content scales from its untransformed layout width and disconnects its observer", () => {
+  const originalObserver = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "ResizeObserver",
+  );
+  const originalAct = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "IS_REACT_ACT_ENVIRONMENT",
+  );
+  const observers: Array<{
+    callback: (entries: Array<{ contentRect: { width: number } }>) => void;
+  }> = [];
+  let disconnects = 0;
+  Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+    configurable: true,
+    value: true,
+  });
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      constructor(
+        public callback: (
+          entries: Array<{ contentRect: { width: number } }>,
+        ) => void,
+      ) {
+        observers.push(this);
+      }
+      observe(viewport: { clientWidth: number }) {
+        assert.equal(viewport.clientWidth, 320);
+      }
+      disconnect() {
+        disconnects += 1;
+      }
+    },
+  });
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(SlideCanvas, {
+          slide: slide([
+            textNode("responsive-body", { x: 10, y: 20, w: 60, h: 30 }),
+          ]),
+        }),
+        { createNodeMock: () => ({ clientWidth: 320 }) },
+      );
+    });
+    assert.ok(renderer);
+    const content = renderer.root.findByProps({ "data-slide-content": "true" });
+    assert.equal(content.props.style.width, 960);
+    assert.equal(content.props.style.height, 540);
+    assert.equal(content.props.style.transform, `scale(${320 / 960})`);
+    const interactions = renderer.root.findByProps({
+      "data-slide-interactions": "true",
+    });
+    assert.equal(interactions.props.style.zIndex, 1);
+    assert.equal(interactions.props.style.transform, undefined);
+    assert.equal(observers.length, 1);
+    act(() => observers[0].callback([{ contentRect: { width: 480 } }]));
+    assert.equal(content.props.style.transform, "scale(0.5)");
+  } finally {
+    act(() => renderer?.unmount());
+    if (originalObserver)
+      Object.defineProperty(globalThis, "ResizeObserver", originalObserver);
+    else Reflect.deleteProperty(globalThis, "ResizeObserver");
+    if (originalAct)
+      Object.defineProperty(
+        globalThis,
+        "IS_REACT_ACT_ENVIRONMENT",
+        originalAct,
+      );
+    else Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  }
+  assert.equal(disconnects, 1);
+});
 
 // e2e-governance-allow oversized-test: presentation canvas parity coverage is still centralized here; split tracked separately.
 function textNode(

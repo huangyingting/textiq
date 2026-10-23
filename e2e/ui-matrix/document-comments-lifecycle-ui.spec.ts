@@ -11,6 +11,7 @@ import { login, type Credentials } from "../helpers/auth";
 import {
   E2E_PROFILE_FIXTURE,
   e2eProfileEnabled,
+  profileDocPath,
   profileOwnerCredentials,
   profileViewerCredentials,
 } from "../helpers/profile";
@@ -32,6 +33,7 @@ async function openAuthenticatedSession(
   const context = await browser.newContext({
     baseURL: test.info().project.use.baseURL as string,
   });
+
   const page = await context.newPage();
   try {
     await login(page, credentials, path);
@@ -333,5 +335,63 @@ test.describe("UI matrix: document comments lifecycle", () => {
     );
     dialog = await hoverAnchorAndOpen(page, ownerBody, fixture.editedContent);
     await expect(dialog.getByText(fixture.editedOwnerComment)).toHaveCount(0);
+  });
+});
+
+test.describe("UI matrix: coarse-pointer document comments", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  test.skip(
+    !e2eProfileEnabled(),
+    "Set E2E_PROFILE=1 and seed the deterministic profile.",
+  );
+
+  test("paragraph taps expose an unobscured comment action and persist the thread", async ({
+    page,
+  }) => {
+    await login(
+      page,
+      profileOwnerCredentials(),
+      profileDocPath("documentMobileComments", test.info()),
+    );
+    let body = await waitForDocumentEditorReady(page);
+    const paragraph = body
+      .locator(":scope > *")
+      .filter({ hasText: E2E_PROFILE_FIXTURE.documentBodyText })
+      .first();
+    await paragraph.tap();
+    const addComment = page.getByRole("button", {
+      name: "Add comment to this paragraph",
+    });
+    await expect(addComment).toBeVisible();
+    const actionBox = await addComment.boundingBox();
+    const bodyBox = await body.boundingBox();
+    expect(actionBox).not.toBeNull();
+    expect(bodyBox).not.toBeNull();
+    if (!actionBox || !bodyBox)
+      throw new Error("Comment action geometry is missing.");
+    expect(actionBox.x).toBeGreaterThanOrEqual(bodyBox.x + bodyBox.width);
+    expect(actionBox.x + actionBox.width).toBeLessThanOrEqual(390);
+    await addComment.tap();
+    let dialog = commentDialog(page);
+    await expect(dialog).toBeVisible();
+    const message = "Touch-created paragraph comment";
+    await dialog.getByRole("textbox", { name: "Inline comment" }).fill(message);
+    await dialog.getByRole("button", { name: "Comment", exact: true }).tap();
+    await expect(dialog).toHaveCount(0);
+    await page.reload();
+    body = await waitForDocumentEditorReady(page);
+    await expect(body).toContainText(E2E_PROFILE_FIXTURE.documentBodyText);
+    await page.getByRole("button", { name: "1 comment", exact: true }).tap();
+    dialog = commentDialog(page);
+    await expect(dialog.getByText(message, { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Close inline comment" }).tap();
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Document body" }),
+    ).toBeEditable();
   });
 });

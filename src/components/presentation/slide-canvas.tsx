@@ -14,9 +14,19 @@
  * The canvas is `position: relative` with an aspect ratio driven by the
  * `canvas` spec.  All children are positioned absolutely in canvas-percent
  * space so the layout is resolution-independent.
+ * Authored content scales from a fixed reference width; interaction chrome
+ * remains in viewport coordinates so handles keep their screen size.
  */
 
-import { memo, useId, type JSX } from "react";
+import {
+  memo,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type JSX,
+  type ReactNode,
+} from "react";
 
 import type {
   ResolvedSlideRenderTree,
@@ -24,7 +34,10 @@ import type {
   ResolvedRenderNode,
 } from "@/lib/presentation/render-tree";
 import { cx, FOCUS_RING } from "@/components/ui/tokens";
-import { getSlideRenderLists } from "@/lib/presentation/render-tree";
+import {
+  getSlideRenderLists,
+  PRESENTATION_REFERENCE_WIDTH_PX,
+} from "@/lib/presentation/render-tree";
 import { buildDeckOutline, type DeckOutline } from "@/lib/presentation";
 import type { CanvasSpec } from "@/lib/presentation/types";
 import type {
@@ -78,6 +91,43 @@ function canvasAspectRatio(canvas: CanvasSpec): number {
     return canvas.width / canvas.height;
   }
   return 16 / 9;
+}
+
+function ScaledSlideContent({
+  aspectRatio,
+  children,
+}: {
+  aspectRatio: number;
+  children: ReactNode;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(PRESENTATION_REFERENCE_WIDTH_PX);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    setWidth(viewport.clientWidth);
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(entry.contentRect.width),
+    );
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={viewportRef} className="absolute inset-0" style={{ zIndex: 1 }}>
+      <div
+        data-slide-content="true"
+        style={{
+          position: "relative",
+          width: PRESENTATION_REFERENCE_WIDTH_PX,
+          height: PRESENTATION_REFERENCE_WIDTH_PX / aspectRatio,
+          transform: `scale(${width / PRESENTATION_REFERENCE_WIDTH_PX})`,
+          transformOrigin: "top left",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -311,14 +361,7 @@ export const SlideCanvas = memo(function SlideCanvas({
           style={backgroundFillLayerStyle}
         />
       ) : null}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          width: "100%",
-          height: "100%",
-        }}
-      >
+      <ScaledSlideContent aspectRatio={aspectRatio}>
         {/* Decorations — rendered behind user nodes, aria-hidden */}
         {decorationNodes.map((node) => (
           <SlideNodeRenderer
@@ -400,8 +443,13 @@ export const SlideCanvas = memo(function SlideCanvas({
             hidden={isHiddenNode(node.id)}
           />
         ))}
-
-        {!preview ? (
+      </ScaledSlideContent>
+      {!preview ? (
+        <div
+          data-slide-interactions="true"
+          className="pointer-events-none absolute inset-0"
+          style={{ zIndex: 1 }}
+        >
           <SlideCanvasInteractionOverlay
             nodes={userNodes}
             selection={selection}
@@ -423,8 +471,8 @@ export const SlideCanvas = memo(function SlideCanvas({
             activeRotationNodeId={activeRotationNodeId}
             activeConnectorEndpoint={activeConnectorEndpoint}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
   if (preview || !deckOutline) return canvasElement;

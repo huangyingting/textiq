@@ -210,4 +210,39 @@ test.describe("UI matrix: public render, share, embed, and present", () => {
     await expect(dialog).toHaveCount(0);
     expect(pageErrors).toEqual([]);
   });
+
+  test.describe("coarse-pointer presentation navigation", () => {
+    test.use({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+
+    test("attribution leaves present and embed navigation reachable on narrow screens", async ({
+      page,
+    }) => {
+      for (const path of [profilePresentPath(), profilePresentEmbedPath()]) {
+        for (const width of [320, 390, 640]) {
+          await page.setViewportSize({ width, height: 844 });
+          await page.goto(path);
+          const region = page.getByRole("region", { name: /^Presentation/ });
+          await expect(region).toBeVisible({ timeout: 20_000 });
+          const next = region
+            .getByRole("button", { name: "Next slide" })
+            .last();
+          await next.tap();
+          await expect(page).toHaveURL(/#2$/);
+          await region
+            .getByRole("button", { name: "Previous slide" })
+            .last()
+            .tap();
+          await expect(
+            page
+              .getByText(E2E_PROFILE_FIXTURE.slideTitleText, { exact: false })
+              .first(),
+          ).toBeVisible();
+        }
+      }
+    });
+  });
 });

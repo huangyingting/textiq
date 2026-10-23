@@ -2351,16 +2351,20 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "seeded viewer"],
-    devices: ["Desktop Chrome"],
+    devices: ["Desktop Chrome", "390x844 touch"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/editor/comments-and-anchors.md",
     ],
-    expectedTestCount: 1,
+    expectedTestCount: 2,
     expectedTests: [
       {
         test: "owner and viewer recover comment failure and complete the persisted lifecycle",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "paragraph taps expose an unobscured comment action and persist the thread",
         profiles: ["deterministic-profile"],
       },
     ],
@@ -2371,6 +2375,16 @@ export const UI_MATRIX_SPEC_INVENTORY = [
           "anchored comment creation, reply, resolution, and deletion lifecycle",
         viewport: "Desktop Chrome",
         auth: "seeded owner and seeded viewer",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "paragraph taps expose an unobscured comment action and persist the thread",
+        surface:
+          "touch comment creation, gutter placement, and reload persistence",
+        viewport: "390x844 touch",
+        auth: "seeded owner",
         profile: "normal deterministic profile (E2E_PROFILE=1)",
         ciTier: "advisory",
         status: "automated",
@@ -2460,10 +2474,14 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "docs/editor/document-editor.md",
       ".github/workflows/e2e-deterministic.yml",
     ],
-    expectedTestCount: 8,
+    expectedTestCount: 9,
     expectedTests: [
       {
         test: "owner document editor renders the body surface and slide entry point",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "document-end navigation appends text after a final visual and preserves it on reload",
         profiles: ["deterministic-profile"],
       },
       {
@@ -2499,6 +2517,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       {
         test: "owner document editor renders the body surface and slide entry point",
         surface: "document body and slide-entry controls",
+        viewport: "Desktop Chrome",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "document-end navigation appends text after a final visual and preserves it on reload",
+        surface: "keyboard document-boundary navigation and durable insertion",
         viewport: "Desktop Chrome",
         auth: "seeded owner",
         profile: "normal deterministic profile (E2E_PROFILE=1)",
@@ -2578,13 +2605,13 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     runMode: "advisory-ci",
     prerequisites: ["E2E_PROFILE=1", "npm run db:seed:e2e"],
     roles: ["seeded owner", "anonymous public"],
-    devices: ["Desktop Chrome"],
+    devices: ["Desktop Chrome", "320px and 390px narrow"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: [
       "e2e/ui-matrix/README.md",
       "docs/presentation/slide-editor.md",
     ],
-    expectedTestCount: 5,
+    expectedTestCount: 7,
     expectedTests: [
       {
         test: "canonical slide editor route renders shell, stage, and deck actions",
@@ -2604,6 +2631,14 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       },
       {
         test: "public present route exposes first-slide content and navigation controls",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "public slide text remains inside its frame at desktop and narrow widths",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "responsive stage typography and inline editing use the same design scale",
         profiles: ["deterministic-profile"],
       },
     ],
@@ -2653,6 +2688,25 @@ export const UI_MATRIX_SPEC_INVENTORY = [
         ciTier: "advisory",
         status: "automated",
       },
+      {
+        test: "public slide text remains inside its frame at desktop and narrow widths",
+        surface: "responsive public slide typography and text bounds",
+        viewport: "960px, 390px, and 320px",
+        auth: "anonymous public",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "responsive stage typography and inline editing use the same design scale",
+        surface:
+          "scaled slide editing, native list selection, and reload persistence",
+        viewport: "1440px and 390px",
+        auth: "seeded owner",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
     ],
   },
   {
@@ -2666,7 +2720,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
     devices: ["Desktop Chrome", "390x844 mobile"],
     ciStatus: "advisory deterministic E2E workflow",
     sourceRefs: ["e2e/ui-matrix/README.md", "docs/public-render/README.md"],
-    expectedTestCount: 7,
+    expectedTestCount: 8,
     expectedTests: [
       {
         test: "valid public present route renders seeded slide content",
@@ -2694,6 +2748,10 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       },
       {
         test: "public share visuals expose an accessible lightbox lifecycle",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "attribution leaves present and embed navigation reachable on narrow screens",
         profiles: ["deterministic-profile"],
       },
     ],
@@ -2761,6 +2819,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
         ciTier: "advisory",
         status: "automated",
       },
+      {
+        test: "attribution leaves present and embed navigation reachable on narrow screens",
+        surface: "public present/embed attribution and navigation hit targets",
+        viewport: "320px, 390px, and 640px touch",
+        auth: "anonymous public",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
     ],
   },
   {
@@ -2817,7 +2884,7 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       "docs/product/billing.md",
       "docs/product/brand-studio.md",
     ],
-    expectedTestCount: 5,
+    expectedTestCount: 6,
     expectedTests: [
       {
         test: "dashboard search and favorite controls are available for the seeded owner",
@@ -2837,6 +2904,10 @@ export const UI_MATRIX_SPEC_INVENTORY = [
       },
       {
         test: "Pro editor creates, uploads, reloads, edits, and deletes a brand",
+        profiles: ["deterministic-profile"],
+      },
+      {
+        test: "palette editing and removal have distinct touch targets",
         profiles: ["deterministic-profile"],
       },
     ],
@@ -2882,6 +2953,15 @@ export const UI_MATRIX_SPEC_INVENTORY = [
         test: "Pro editor creates, uploads, reloads, edits, and deletes a brand",
         surface: "Pro Brand Studio upload and CRUD lifecycle",
         viewport: "390x844 mobile",
+        auth: "seeded Pro editor",
+        profile: "normal deterministic profile (E2E_PROFILE=1)",
+        ciTier: "advisory",
+        status: "automated",
+      },
+      {
+        test: "palette editing and removal have distinct touch targets",
+        surface: "Brand Studio coarse-pointer palette and removal controls",
+        viewport: "390x844 touch",
         auth: "seeded Pro editor",
         profile: "normal deterministic profile (E2E_PROFILE=1)",
         ciTier: "advisory",

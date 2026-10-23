@@ -488,7 +488,10 @@ function BrandForm({
         </span>
         <div className="flex flex-wrap items-center gap-2">
           {palette.map((color, i) => (
-            <div key={i} className="relative flex flex-col items-center">
+            <div
+              key={i}
+              className="tiq-coarse-action-pair relative flex flex-col items-center"
+            >
               <ColorPicker
                 key={`${i}:${formBusy}`}
                 color={color}
@@ -516,7 +519,7 @@ function BrandForm({
               onClick={addPaletteColor}
               disabled={formBusy}
               className={cx(
-                "flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed border-[var(--ds-border-subtle)] text-[var(--ds-text-muted)] hover:border-[var(--ds-accent)] hover:text-[var(--ds-accent)]",
+                "tiq-touch-target flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed border-[var(--ds-border-subtle)] text-[var(--ds-text-muted)] hover:border-[var(--ds-accent)] hover:text-[var(--ds-accent)]",
                 FOCUS_RING,
               )}
             >
@@ -652,7 +655,7 @@ function BrandForm({
         </span>
         <div className="flex items-center gap-3">
           {form.logoAssetUrl && (
-            <div className="relative">
+            <div className="tiq-coarse-action-pair relative flex flex-col items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={form.logoAssetUrl}
