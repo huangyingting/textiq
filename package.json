@@ -88,9 +88,9 @@
     "@lexical/table": "^0.48.0",
     "@lexical/utils": "^0.48.0",
     "@lexical/yjs": "^0.48.0",
-    "@prisma/adapter-better-sqlite3": "^7.9.1",
-    "@prisma/adapter-pg": "^7.9.1",
-    "@prisma/client": "^7.9.1",
+    "@prisma/adapter-better-sqlite3": "^7.10.1",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
@@ -102,12 +102,12 @@
     "lucide-react": "^1.24.0",
     "mammoth": "^1.12.0",
     "nanoid": "^6.0.0",
-    "next": "16.2.12",
+    "next": "16.4.3",
     "next-auth": "^5.0.0-beta.32",
     "pdf-parse": "^2.4.5",
     "pg": "^8.22.0",
     "pptxgenjs": "^4.0.1",
-    "prisma": "^7.9.1",
+    "prisma": "^7.10.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "server-only": "^0.0.1",
@@ -127,7 +127,7 @@
     "@types/ws": "^8.18.1",
     "c8": "^12.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.4.3",
     "eslint-config-prettier": "^10",
     "prettier": "^3.9.5",
     "react-test-renderer": "19.2.7",
@@ -137,8 +137,10 @@
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.25",
-      "sharp": "0.35.3"
+      "postcss": "8.5.25"
+    },
+    "pptxgenjs": {
+      "image-size": "2.0.4"
     }
   }
 }

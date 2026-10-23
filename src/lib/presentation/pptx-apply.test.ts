@@ -9,6 +9,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
+import JSZip from "jszip";
+
 import {
   textContentToPptxRuns,
   presentationShapeToName,
@@ -1282,6 +1284,51 @@ describe("applyPptxVisualOp", () => {
 // ---------------------------------------------------------------------------
 
 describe("PPTX assembly boundaries", () => {
+  test("applyPptxSpec preserves PNG bytes in image backgrounds and fitted images", async () => {
+    const spec: PptxDeckSpec = {
+      layout: "LAYOUT_WIDE",
+      slideW: 13.333,
+      slideH: 7.5,
+      diagnostics: [],
+      slides: [
+        {
+          id: "image-slide",
+          background: {
+            type: "background",
+            imageFill: {
+              kind: "image",
+              assetId: PPTX_FIDELITY_DATA_URI,
+              fit: "cover",
+            },
+          },
+          ops: (["contain", "cover"] as const).map((fit, index) => ({
+            type: "image",
+            id: `image-${fit}`,
+            assetId: PPTX_FIDELITY_DATA_URI,
+            x: index * 4,
+            y: 1,
+            w: 3,
+            h: 2,
+            fit,
+            zIndex: index,
+          })),
+        },
+      ],
+    };
+
+    const blob = await applyPptxSpec(spec);
+    assert.ok(blob);
+    const archive = await JSZip.loadAsync(await blob.arrayBuffer());
+    const images = archive.file(/^ppt\/media\/.*\.png$/);
+    assert.ok(images.length > 0, "PPTX must contain embedded PNG media");
+    const expected = Buffer.from(
+      await (await fetch(PPTX_FIDELITY_DATA_URI)).arrayBuffer(),
+    );
+    for (const image of images) {
+      assert.deepEqual(await image.async("nodebuffer"), expected);
+    }
+  });
+
   test("applyPptxSpec assembles slides, dispatches ops, and includes notes", async () => {
     const spec: PptxDeckSpec = {
       layout: "LAYOUT_WIDE",
