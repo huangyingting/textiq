@@ -1,7 +1,24 @@
-# Unified Design Specification: NextAuth + Invite-Only Account Admission Module
+---
+type: "plan"
+status: "proposed"
+last_updated: "2026-10-23"
+description: "Unimplemented account-admission proposal; distinct from TextIQ's current public registration and workspace membership invitations."
+---
 
-**Status:** Canonical Reference Specification  
-**Scope:** Cross-repository standard for all `/home/azadmin/*` Next.js + NextAuth + Prisma applications (`ReadWise`, `clueso`, `HelloInterview`, `Arcade`, `readwise.io`, `UniLink`, `Visdom`, `TextIQ`)
+# Invite-Only Account Admission Plan
+
+**This is not TextIQ's current account model.** TextIQ currently supports public
+credentials registration and OAuth account creation. Its `InviteLink` and
+`InviteLinkUse` models grant workspace membership; they do not gate account
+creation. The proposed `AccountInvitation`, `PasswordCredential`, organization,
+admin-console, and bootstrap-CLI contracts below are not implemented here.
+Current behavior is documented in [README.md](README.md) and defined by source,
+tests, and the Prisma schema.
+
+The retained cross-repository design and rollout notes below are historical
+proposal context, not independently verified evidence about other repositories
+or a claim that TextIQ implements this design. Adopting it requires an explicit
+product decision, data migration design, and credentials/OAuth/browser tests.
 
 ---
 
@@ -9,18 +26,18 @@
 
 We audited all **12 NextAuth repositories** under `/home/azadmin`, of which **8 implement invite-only or workspace invitation flows**:
 
-| Repository | NextAuth Version & Strategy | Prisma Invite & Credential Models | OAuth + Invite Gate Integration | Identified Gaps / Strengths |
-|---|---|---|---|---|
-| **`ReadWise`** *(Primary Reference)* | `^4.24.15` (`database` session) | `User`, `Account`, `Session`, `PasswordCredential`, `PendingRegistration`, `AccountInvitation`, `AccountEmailOutbox` | `authorizeSocialSignIn` in `callbacks.signIn` blocks uninvited OAuth sign-ups; allows existing linked `Account` or active-session email linking | **Strength:** Strictest `activeForEmail @unique` + SHA-256 `tokenHash @unique` + `Serializable` transaction claim |
-| **`HelloInterview`** | `^4.24.15` (`database` session) | `account_invitations`, `account_email_outbox`, `managed_accounts`, `managed_identities` | `admitSocialIdentity` in `callbacks.signIn` with `pg_advisory_xact_lock` | **Strength:** Auto-consumes a matching `PENDING` invitation when an invited user signs in directly via verified Google OAuth |
-| **`clueso`** | `^4.24.11` (`jwt` session) | `User`, `Account`, `Session`, `PasswordCredential`, `AccountInvitation`, `AccountEmailOutbox`, `AuditLog` | Multi-tenant workspace (`organizationId` + `role`) + `authorizeSocialSignIn` in `callbacks.signIn` | **Strength:** Supports both single-tenant and multi-tenant (`organizationId`, `role`) invitation claims |
-| **`Arcade`** | `^4.24.10` (`jwt` session) | `PasswordCredential`, `PendingRegistration`, `AccountInvitation`, `AccountEmailOutbox` | Cloned ReadWise `src/lib/account-admission/*`, `/invite/[token]`, `/api/admin/invitations/*` | **Gap:** `src/lib/auth.ts` `CredentialsProvider` was not wired to `PasswordCredential` / `authorizeSocialSignIn` |
-| **`readwise.io`** | `^4.24.15` (`jwt` session) | `AccountInvitation` (`tokenHash`, `role`, `status`, `expiresAt`) | `/invite/[token]` + `/admin/invitations` + `/api/auth/register` gate | **Gap:** `CredentialsProvider` needed strict `PasswordCredential` verification without auto-provisioning |
-| **`UniLink`** | `5.0.0-beta.32` (`database` session) | `ClosedTestInvitation`, `PlanShareInvitation`, `AuthorizationAudit` | Wraps `adapter.createUser` (`createAdmittedUser`) + `authorizeAccountSignIn` | **Gap:** Stored raw `token` instead of SHA-256 `tokenHash`; custom model name (`ClosedTestInvitation`) |
-| **`Visdom`** | `^5.0.0-beta.32` (`jwt` session) | `InviteCode`, `InviteRedemption`, `PendingSignup` | Parks uninvited OAuth sign-ins in `PendingSignup` cookie and redirects to `/finish-signup`; checks Azure AD tenant pinning | **Strength:** `microsoftEmailTrusted()` tenant guard prevents multi-tenant Azure AD spoofing |
-| **`TextIQ`** | `^5.0.0-beta.32` (`jwt` session) | `WorkspaceInvite` (`isRevoked`, `expiresAt`, `maxUses`, `useCount`) | `evaluateInviteAccess()` pure policy evaluator for `/app/join/[token]` | **Strength:** Clean pure-function policy evaluation (`revoked`, `expired`, `exhausted`, `invalid-role`) |
+| Repository                           | NextAuth Version & Strategy          | Prisma Invite & Credential Models                                                                                    | OAuth + Invite Gate Integration                                                                                                                 | Identified Gaps / Strengths                                                                                                  |
+| ------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **`ReadWise`** _(Primary Reference)_ | `^4.24.15` (`database` session)      | `User`, `Account`, `Session`, `PasswordCredential`, `PendingRegistration`, `AccountInvitation`, `AccountEmailOutbox` | `authorizeSocialSignIn` in `callbacks.signIn` blocks uninvited OAuth sign-ups; allows existing linked `Account` or active-session email linking | **Strength:** Strictest `activeForEmail @unique` + SHA-256 `tokenHash @unique` + `Serializable` transaction claim            |
+| **`HelloInterview`**                 | `^4.24.15` (`database` session)      | `account_invitations`, `account_email_outbox`, `managed_accounts`, `managed_identities`                              | `admitSocialIdentity` in `callbacks.signIn` with `pg_advisory_xact_lock`                                                                        | **Strength:** Auto-consumes a matching `PENDING` invitation when an invited user signs in directly via verified Google OAuth |
+| **`clueso`**                         | `^4.24.11` (`jwt` session)           | `User`, `Account`, `Session`, `PasswordCredential`, `AccountInvitation`, `AccountEmailOutbox`, `AuditLog`            | Multi-tenant workspace (`organizationId` + `role`) + `authorizeSocialSignIn` in `callbacks.signIn`                                              | **Strength:** Supports both single-tenant and multi-tenant (`organizationId`, `role`) invitation claims                      |
+| **`Arcade`**                         | `^4.24.10` (`jwt` session)           | `PasswordCredential`, `PendingRegistration`, `AccountInvitation`, `AccountEmailOutbox`                               | Cloned ReadWise `src/lib/account-admission/*`, `/invite/[token]`, `/api/admin/invitations/*`                                                    | **Gap:** `src/lib/auth.ts` `CredentialsProvider` was not wired to `PasswordCredential` / `authorizeSocialSignIn`             |
+| **`readwise.io`**                    | `^4.24.15` (`jwt` session)           | `AccountInvitation` (`tokenHash`, `role`, `status`, `expiresAt`)                                                     | `/invite/[token]` + `/admin/invitations` + `/api/auth/register` gate                                                                            | **Gap:** `CredentialsProvider` needed strict `PasswordCredential` verification without auto-provisioning                     |
+| **`UniLink`**                        | `5.0.0-beta.32` (`database` session) | `ClosedTestInvitation`, `PlanShareInvitation`, `AuthorizationAudit`                                                  | Wraps `adapter.createUser` (`createAdmittedUser`) + `authorizeAccountSignIn`                                                                    | **Gap:** Stored raw `token` instead of SHA-256 `tokenHash`; custom model name (`ClosedTestInvitation`)                       |
+| **`Visdom`**                         | `^5.0.0-beta.32` (`jwt` session)     | `InviteCode`, `InviteRedemption`, `PendingSignup`                                                                    | Parks uninvited OAuth sign-ins in `PendingSignup` cookie and redirects to `/finish-signup`; checks Azure AD tenant pinning                      | **Strength:** `microsoftEmailTrusted()` tenant guard prevents multi-tenant Azure AD spoofing                                 |
+| **`TextIQ`**                         | `^5.0.0-beta.32` (`jwt` session)     | `InviteLink`, `InviteLinkUse`                                                                                        | `evaluateInviteAccess()` evaluates workspace membership invitations at `/app/join/[token]`; registration remains public                         | **Gap:** Workspace invitations are not account-admission invitations                                                         |
 
-*(The remaining 4 NextAuth repositories—`EduLoop`, `Wallaby`, `Figure`, `MeetUp`—use NextAuth without invitation-gated admission, though `EduLoop` and `Wallaby` contribute the `sessionVersion` invalidation pattern incorporated below.)*
+_(The remaining 4 NextAuth repositories—`EduLoop`, `Wallaby`, `Figure`, `MeetUp`—use NextAuth without invitation-gated admission, though `EduLoop` and `Wallaby` contribute the `sessionVersion` invalidation pattern incorporated below.)_
 
 ---
 
@@ -173,9 +190,11 @@ model AccountEmailOutbox {
 ## 4. NextAuth + Invite-Only Interaction State Machine
 
 ### Flow 0: Root Administrator Bootstrap (Deployment CLI Only — Zero HTTP Surface)
+
 In `invitation-only` mode, public registration is blocked and only an `Admin` can issue invitations. To prevent any internet-exposed privilege-escalation attack surface, **no HTTP bootstrap API endpoint (`/api/auth/bootstrap`) or web bootstrap page (`/admin/bootstrap`) is ever exposed**.
 
 Instead, only the deployment operator with host/container shell access to the application and database can create or promote the root Administrator account via the CLI script:
+
 - **Command (`npm run bootstrap:admin`)**:
   ```bash
   printf '%s\n' 'StrongAdminPassword!' | npm run bootstrap:admin -- --email admin@acme.io --name "Root Admin" --password-stdin
@@ -187,6 +206,7 @@ Instead, only the deployment operator with host/container shell access to the ap
   4. **Subsequent Invitations via Admin Console**: Once bootstrapped via the deployment script, the Admin signs in at `/login` and issues one-time invitation links at `/admin/invitations` (`POST /api/admin/invitations`).
 
 ### Flow 1: Admin Invitation Lifecycle
+
 1. **Create (`createAccountInvitation`)**:
    - Normalizes email (`normalizeAccountEmail`), validates syntax, and runs `expirePendingInvitations(now)`.
    - Rejects with `409 already_member` if an active user with credentials already exists for `normalizedEmail`.
@@ -198,6 +218,7 @@ Instead, only the deployment operator with host/container shell access to the ap
    - Transitions `PENDING -> REVOKED`, sets `revokedAt = now`, and clears `activeForEmail = null` and `tokenHash = null`.
 
 ### Flow 2: Invitation Token Inspection & Password Registration
+
 1. **Inspect (`GET /api/auth/invitation?token=...`)**:
    - Computes `tokenHash = hashOpaqueToken(token)`.
    - If `status === "PENDING"` and `expiresAt <= now`, transitions row to `EXPIRED` and clears `activeForEmail`/`tokenHash`.
@@ -212,7 +233,9 @@ Instead, only the deployment operator with host/container shell access to the ap
      - Writes `AuditLog` (`account.invitation.accept`).
 
 ### Flow 3: NextAuth `callbacks.signIn` & `CredentialsProvider` Integration (`authorizeSocialSignIn`)
+
 When NextAuth executes a sign-in:
+
 1. **Credentials Sign-In (`account.provider === "credentials"`)**:
    - Looks up `User` + `PasswordCredential`.
    - Rejects if `User` does not exist, `User.status !== "active"`, or password verification fails.
@@ -250,6 +273,7 @@ src/lib/account-admission/
 ```
 
 And the same 5 REST endpoints + 2 UI routes + 1 deployment CLI script:
+
 - `scripts/bootstrap-admin.ts` (`npm run bootstrap:admin -- --email <email> --password-stdin`) — Deployment-only CLI script to create/promote the root Admin account (no HTTP bootstrap endpoint is exposed)
 - `GET/POST /api/admin/invitations` — List & create invitations (requires authenticated `Admin` session)
 - `DELETE /api/admin/invitations/[id]` — Revoke pending invitation (requires authenticated `Admin` session)
@@ -263,16 +287,16 @@ And the same 5 REST endpoints + 2 UI routes + 1 deployment CLI script:
 
 ## 6. Cross-Repository Rollout Matrix (`/home/azadmin`)
 
-All repositories under `/home/azadmin` using the `AccountInvitation` + `NextAuth` mechanism have been aligned to this specification:
+The other-repository entries below are historical rollout claims, not verified
+by this application review. TextIQ's current status is recorded explicitly:
 
-| Repository | `src/lib/account-admission/*` | NextAuth `signIn` + Credential Gate | CLI-Only Bootstrap Admin (`npm run bootstrap:admin` — No HTTP Endpoint) | Invitation Console (`/admin/invitations` + `/invite/[token]`) |
-|---|---|---|---|---|
-| **`/home/azadmin/clueso`** | Aligned (`errors`, `policy`, `tokens`, `passwords`, `bootstrap`, `invitations`, `registration`, `social`, `index`) | Aligned (`authorizeSocialSignIn` + `PasswordCredential`) | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`) | Aligned (`/admin/invitations`, `/invite/[token]`) |
-| **`/home/azadmin/ReadWise`** | Aligned (`src/lib/account-admission/*` + `src/lib/auth/bootstrap.ts`) | Aligned (`authorizeSocialSignIn` + `PasswordCredential`) | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`) | Aligned (`/admin/invitations`, `/invite/[token]`) |
-| **`/home/azadmin/Arcade`** | Aligned (`errors`, `policy`, `tokens`, `passwords`, `bootstrap`, `invitations`, `registration`, `credentials`, `social`, `index`) | Aligned (`authorizeSocialSignIn` + `PasswordCredential` in `src/lib/auth.ts`) | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`) | Aligned (`/admin/invitations`, `/invite/[token]`) |
-| **`/home/azadmin/readwise.io`** | Aligned (`src/lib/account-admission/index.ts` + `src/lib/invitations.ts`) | Aligned (`validateAndClaimInvitation` + `PasswordCredential`) | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`) | Aligned (`/admin/invitations`, `/invite/[token]`) |
-| **`/home/azadmin/HelloInterview`** | Aligned (`server/account-admission/*` + `server/auth/admission.ts`) | Aligned (`admitSocialIdentity`) | Aligned (`scripts/bootstrap-admin.ts`) | Aligned (`account_invitations`) |
-| **`/home/azadmin/UniLink`** | Aligned (`lib/auth/account-admission.ts` + `lib/auth/admin-bootstrap.ts`) | Aligned (`authorizeAccountSignIn` + `createAdmittedUser`) | Aligned (`scripts/bootstrap-admin.ts`) | Aligned (`ClosedTestInvitation`) |
-| **`/home/azadmin/Visdom`** | Aligned (`lib/invite.ts`, `lib/signup.ts`, `lib/pending-signup.ts`) | Aligned (`PendingSignup` OAuth gate + `microsoftEmailTrusted`) | Aligned (`scripts/seed-admin.ts` / `npm run bootstrap:admin`) | Aligned (`/admin/invites`, `/finish-signup`) |
-| **`/home/azadmin/TextIQ`** | Aligned (`src/lib/invite-access.ts`, `src/lib/workspace/invite-service.ts`) | Aligned (`evaluateInviteAccess`) | Aligned (CLI seed / Workspace Owner authority) | Aligned (`/app/join/[token]`) |
-
+| Repository                         | `src/lib/account-admission/*`                                                                                                     | NextAuth `signIn` + Credential Gate                                           | CLI-Only Bootstrap Admin (`npm run bootstrap:admin` — No HTTP Endpoint) | Invitation Console (`/admin/invitations` + `/invite/[token]`)          |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **`/home/azadmin/clueso`**         | Aligned (`errors`, `policy`, `tokens`, `passwords`, `bootstrap`, `invitations`, `registration`, `social`, `index`)                | Aligned (`authorizeSocialSignIn` + `PasswordCredential`)                      | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`)             | Aligned (`/admin/invitations`, `/invite/[token]`)                      |
+| **`/home/azadmin/ReadWise`**       | Aligned (`src/lib/account-admission/*` + `src/lib/auth/bootstrap.ts`)                                                             | Aligned (`authorizeSocialSignIn` + `PasswordCredential`)                      | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`)             | Aligned (`/admin/invitations`, `/invite/[token]`)                      |
+| **`/home/azadmin/Arcade`**         | Aligned (`errors`, `policy`, `tokens`, `passwords`, `bootstrap`, `invitations`, `registration`, `credentials`, `social`, `index`) | Aligned (`authorizeSocialSignIn` + `PasswordCredential` in `src/lib/auth.ts`) | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`)             | Aligned (`/admin/invitations`, `/invite/[token]`)                      |
+| **`/home/azadmin/readwise.io`**    | Aligned (`src/lib/account-admission/index.ts` + `src/lib/invitations.ts`)                                                         | Aligned (`validateAndClaimInvitation` + `PasswordCredential`)                 | Aligned (`scripts/bootstrap-admin.ts` + `bootstrapAdmin()`)             | Aligned (`/admin/invitations`, `/invite/[token]`)                      |
+| **`/home/azadmin/HelloInterview`** | Aligned (`server/account-admission/*` + `server/auth/admission.ts`)                                                               | Aligned (`admitSocialIdentity`)                                               | Aligned (`scripts/bootstrap-admin.ts`)                                  | Aligned (`account_invitations`)                                        |
+| **`/home/azadmin/UniLink`**        | Aligned (`lib/auth/account-admission.ts` + `lib/auth/admin-bootstrap.ts`)                                                         | Aligned (`authorizeAccountSignIn` + `createAdmittedUser`)                     | Aligned (`scripts/bootstrap-admin.ts`)                                  | Aligned (`ClosedTestInvitation`)                                       |
+| **`/home/azadmin/Visdom`**         | Aligned (`lib/invite.ts`, `lib/signup.ts`, `lib/pending-signup.ts`)                                                               | Aligned (`PendingSignup` OAuth gate + `microsoftEmailTrusted`)                | Aligned (`scripts/seed-admin.ts` / `npm run bootstrap:admin`)           | Aligned (`/admin/invites`, `/finish-signup`)                           |
+| **`/home/azadmin/TextIQ`**         | Not implemented; existing helpers only manage workspace invitations                                                               | Account registration/OAuth are not invitation-gated                           | Proposed CLI is not implemented; no HTTP bootstrap endpoint is exposed  | `/app/join/[token]` grants workspace membership, not account admission |

@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-06-26"
+last_updated: "2026-10-23"
 description: "This document describes database-provider resolution, Prisma client setup, and the high-level relational model. JSON payload contracts remain in deck.md and visual-mirror.md."
 ---
 
@@ -27,10 +27,11 @@ the high-level relational model. JSON payload contracts remain in
 
 The app supports Postgres and SQLite behind one Prisma client path.
 
-| Setting                | Effective provider | URL behavior                                                            |
-| ---------------------- | ------------------ | ----------------------------------------------------------------------- |
-| `DB_PROVIDER=postgres` | Postgres           | `DATABASE_URL` is required by callers that open the client.             |
-| anything else or unset | SQLite             | `DATABASE_URL` wins when set; otherwise `file:./prisma/dev.db` is used. |
+| Setting                       | Effective provider | URL behavior                                                            |
+| ----------------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `DB_PROVIDER=postgres`        | Postgres           | `DATABASE_URL` is required by callers that open the client.             |
+| `DB_PROVIDER=sqlite` or unset | SQLite             | `DATABASE_URL` wins when set; otherwise `file:./prisma/dev.db` is used. |
+| Any other explicit value      | Rejected           | Configuration fails instead of silently selecting a different database. |
 
 `src/lib/db-provider.ts` is the app runtime source of truth. `prisma.config.ts`
 duplicates the provider rule because Prisma CLI loads outside the app TS path

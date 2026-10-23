@@ -21,6 +21,7 @@ describe the current system.
 | [z-order-plan.md](z-order-plan.md)                               | Semantic z-order system: layer scale, canvas/menu tiers, and overlay-stacking migration plan.              |
 | [identity-and-payload-naming.md](identity-and-payload-naming.md) | Durable identity taxonomy, asset URL vocabulary, and payload/result suffix playbook.                       |
 | [architecture-decisions.md](architecture-decisions.md)           | Architecture Decision Records (ADRs), accepted-decision index, supersession fields, and source-drift rule. |
+| [production-readiness-plan.md](production-readiness-plan.md)     | Evidence-led review, scoped refactoring batches, validation results, and external release gates.           |
 
 ## Contract Groups
 

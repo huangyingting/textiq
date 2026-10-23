@@ -1,7 +1,7 @@
 ---
 type: "architecture"
 status: "current"
-last_updated: "2026-08-01"
+last_updated: "2026-10-23"
 description: "This subsystem covers sign-in, account creation, provider linking, account settings, self-serve recovery, email verification, export, and deletion. Route authorization and document/workspace capabilities live in ../security/; this document covers how a user becomes and remains an authenticated account."
 ---
 
@@ -47,6 +47,11 @@ user's credential-rotation stamp on `session.user.sessionInvalidatedAt`. Route
 authorization uses only the presence of an authenticated user at the proxy
 layer; document/workspace authorization is resolved later by the security
 helpers.
+
+The [invite-only account-admission plan](invite-only-admission-plan.md) is a
+proposal, not an implemented contract. Workspace invitations grant membership to
+a workspace and do not restrict account registration or first-time OAuth
+sign-in.
 
 ## Account Creation And Sign-In
 
