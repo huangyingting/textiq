@@ -136,6 +136,9 @@
     "typescript": "^6"
   },
   "overrides": {
+    "@lexical/headless": {
+      "happy-dom": "21.0.4"
+    },
     "next": {
       "postcss": "8.5.25"
     },
