@@ -25,7 +25,7 @@ function canvasAspectRatio(canvas: CanvasSpec): number {
   return width / height;
 }
 
-function thumbnailMetrics(canvas: CanvasSpec) {
+export function thumbnailMetrics(canvas: CanvasSpec) {
   const aspectRatio = canvasAspectRatio(canvas);
   const thumbnailWidthPx = Math.max(
     48,

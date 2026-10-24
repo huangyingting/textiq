@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Window } from "happy-dom";
 
 import { Filmstrip, type FilmstripProps } from "./filmstrip";
 import { FilmstripSlide } from "./filmstrip-slide";
@@ -268,6 +269,107 @@ describe("Filmstrip ARIA pattern and keyboard behavior", () => {
     assert.match(html, /Duplicate slide 2/);
     assert.match(html, /Delete slide 2/);
     assert.match(html, /aria-current="true"/);
+  });
+
+  test("places the add tile after the last slide inside the scrolling list at matching thumbnail dimensions", () => {
+    const window = new Window();
+    try {
+      for (const [width, height, thumbnailWidth] of [
+        [100, 56.25, 128],
+        [100, 75, 96],
+        [56.25, 100, 48],
+        [0, 0, 128],
+      ] as const) {
+        const tree = renderTree();
+        tree.canvas.width = width;
+        tree.canvas.height = height;
+        window.document.body.innerHTML = renderToStaticMarkup(
+          createElement(Filmstrip, filmstripProps({ renderTree: tree })),
+        );
+        const list = window.document.querySelector(
+          'ol[aria-label="Slide thumbnails"]',
+        );
+        const addButton = window.document.querySelector(
+          'button[aria-label="Add slide"]',
+        );
+        assert.ok(list);
+        assert.ok(addButton);
+        const addTile = addButton.parentElement;
+        const lastSlide = list.querySelector('[data-slide-index="2"]');
+        assert.ok(addTile instanceof window.HTMLElement);
+        assert.ok(lastSlide instanceof window.HTMLElement);
+        assert.equal(list.lastElementChild, addTile);
+        assert.equal(lastSlide.nextElementSibling, addTile);
+        assert.equal(addTile.style.width, `${thumbnailWidth}px`);
+        assert.equal(addTile.style.width, lastSlide.style.width);
+        assert.ok(addTile.classList.contains("h-[72px]"));
+        assert.ok(lastSlide.classList.contains("h-[72px]"));
+        assert.ok(addButton.classList.contains("h-full"));
+        assert.ok(addButton.classList.contains("w-full"));
+        assert.ok(list.classList.contains("overflow-x-auto"));
+        assert.equal(addTile.hasAttribute("data-slide-index"), false);
+      }
+    } finally {
+      window.close();
+    }
+  });
+
+  test("add tile preserves insertion and does not trigger slide keyboard commands", () => {
+    let insertions = 0;
+    const selected: number[] = [];
+    const deleted: string[] = [];
+    const moved: string[] = [];
+    const renderer = createReactRenderHarness();
+    const element = renderer.run(() =>
+      Filmstrip(
+        filmstripProps({
+          onInsertSlide: () => insertions++,
+          onSelectSlide: (index) => selected.push(index),
+          onDeleteSlide: (id) => deleted.push(id),
+          onMoveSlide: (id) => moved.push(id),
+        }),
+      ),
+    );
+    const list = findElement(element, (candidate) => candidate.type === "ol");
+    const addButton = findElement(
+      element,
+      (candidate) => candidate.props["aria-label"] === "Add slide",
+    );
+    assert.ok(list);
+    assert.ok(addButton);
+    (addButton.props.onClick as () => void)();
+    assert.equal(insertions, 1);
+
+    const onKeyDown = list.props.onKeyDown as (
+      event: KeyboardEvent<HTMLOListElement>,
+    ) => void;
+    withFilmstripHTMLElement(() => {
+      for (const key of [
+        "Enter",
+        " ",
+        "Home",
+        "End",
+        "Delete",
+        "Backspace",
+        "ArrowLeft",
+        "ArrowRight",
+      ]) {
+        onKeyDown(
+          reactKeyboardEvent<HTMLOListElement>({
+            key,
+            altKey: true,
+            target: addButton,
+            currentTarget: list,
+            preventDefault: () =>
+              assert.fail("add tile keys must retain native button behavior"),
+          }),
+        );
+      }
+    });
+    assert.deepEqual(selected, []);
+    assert.deepEqual(deleted, []);
+    assert.deepEqual(moved, []);
+    renderer.cleanup();
   });
 
   test("slide button accessible name includes title when present and falls back to index only for untitled slides", () => {

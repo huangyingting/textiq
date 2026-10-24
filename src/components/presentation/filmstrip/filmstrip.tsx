@@ -30,7 +30,11 @@ import {
   createFocusGeometryRegistry,
   focusGeometryTargets,
 } from "../focus-geometry-registry";
-import { FilmstripSlide, FilmstripThumbnailCanvas } from "./filmstrip-slide";
+import {
+  FilmstripSlide,
+  FilmstripThumbnailCanvas,
+  thumbnailMetrics,
+} from "./filmstrip-slide";
 import { useFilmstripDrag } from "./use-filmstrip-drag";
 
 export interface FilmstripProps {
@@ -109,6 +113,7 @@ export function Filmstrip({
       event.target instanceof HTMLElement
         ? event.target.closest<HTMLElement>("[data-slide-index]")
         : null;
+    if (!focusedCell && event.target !== event.currentTarget) return;
     const focusedIndex = focusedCell?.dataset.slideIndex
       ? Number(focusedCell.dataset.slideIndex)
       : activeSlideIndex;
@@ -266,23 +271,28 @@ export function Filmstrip({
                 className="my-1 w-0.5 shrink-0 rounded-full bg-ds-accent-fill"
               />
             ) : null}
+            <li
+              className="grid h-[72px] shrink-0 place-items-center"
+              style={{
+                width: thumbnailMetrics(renderTree.canvas).thumbnailWidthPx,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Add slide"
+                disabled={collapsed}
+                tabIndex={collapsed ? -1 : 0}
+                onClick={onInsertSlide}
+                className={cx(
+                  "flex h-full w-full items-center justify-center gap-1 rounded-ds-sm border border-dashed border-ds-border-subtle text-ds-text-muted transition-colors hover:border-ds-border hover:text-ds-text-primary disabled:pointer-events-none",
+                  FOCUS_RING,
+                )}
+              >
+                <Plus size={16} aria-hidden />
+                <span className="text-xs">Add</span>
+              </button>
+            </li>
           </ol>
-          <button
-            type="button"
-            aria-label="Add slide"
-            disabled={collapsed}
-            tabIndex={collapsed ? -1 : 0}
-            onClick={onInsertSlide}
-            className={cx(
-              "flex h-full min-h-[72px] w-14 shrink-0 items-center justify-center rounded-[var(--ds-radius-sm,6px)] border border-dashed border-ds-border-subtle text-ds-text-muted transition-colors hover:border-ds-border hover:text-ds-text-primary disabled:pointer-events-none",
-              FOCUS_RING,
-            )}
-          >
-            <Plus size={16} aria-hidden />
-            <span className="sr-only sm:not-sr-only sm:ml-1 sm:text-xs">
-              Add
-            </span>
-          </button>
         </div>
       </div>
     </div>
